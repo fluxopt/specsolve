@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - docs(api): a dual is the rate at which the optimal objective rises with its row's right side, on every sink ([#1774](https://github.com/fluxopt/specsolve/pull/1774))
+
 ## 0.2.0 (2026-09-25)
 
 A saved answer now records which layout it was written in and which specsolve
