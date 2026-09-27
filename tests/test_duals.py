@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 
 import numpy as np
+import polars as pl
 import pytest
 
 import specsolve as sps
@@ -150,3 +151,52 @@ def test_reading_back_an_unknown_name_says_what_was_built(asked, expected):
     sources = {'t': [0, 1, 2], 'lim': pl.DataFrame({'t': [0, 1, 2], 'value': [10.0, 10.0, 10.0]})}
     with sps.solve(RAMP_BLOCK, sources) as sol, pytest.raises(KeyError, match=re.escape(expected)):
         sol.dual(asked)
+
+
+#: One row, "p is at least 2 + b", written each way round, with how raising `b`
+#: moves the row's right side against its left: `+1` where it raises
+#: `rhs - lhs`, `-1` where it lowers it.
+WRITTEN = [
+    pytest.param('p >= 2 + b', 1, id='b-on-the-right'),
+    pytest.param('2 + b <= p', -1, id='b-on-the-left'),
+    pytest.param('-p <= -2 - b', -1, id='negated'),
+    pytest.param('p - b >= 2', 1, id='b-moved-to-the-left'),
+    pytest.param('p == 2 + b', 1, id='an-equality'),
+    pytest.param('2 + b == p', -1, id='an-equality-the-other-way-round'),
+]
+
+
+def _floor_model(row: str, sense: str) -> dict[str, object]:
+    return {
+        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'parameters': {'b': {'dims': ['snapshot']}},
+        'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
+        'constraints': {'floor': {'dims': ['snapshot'], 'expression': row}},
+        'objective': {'sense': sense, 'expression': 'sum(3 * p)' if sense == 'minimize' else 'sum(-3 * p)'},
+    }
+
+
+@pytest.mark.parametrize('sense', ['minimize', 'maximize'])
+@pytest.mark.parametrize(('row', 'moves'), WRITTEN)
+def test_a_dual_is_the_rate_of_the_optimum_in_its_rows_right_side(
+    solver_name: str, row: str, moves: int, sense: str
+) -> None:
+    """The sign mathspec defines `dual(c)` with: read `lhs <= rhs` as `lhs <= rhs + d`, and the dual is the rate in `d`.
+
+    The same for every comparator and under either sense, so which side a
+    term is written on decides the sign. A finite difference in `b` is that
+    rate times how `b` moves the right side, and the row binds, so the
+    difference is exact.
+    """
+    step = 1e-3
+
+    def solved(b: float) -> tuple[float, float]:
+        sources = {'snapshot': pl.DataFrame({'snapshot': [0]}), 'b': pl.DataFrame({'snapshot': [0], 'value': [b]})}
+        with sps.solve(_floor_model(row, sense), sources, solver_name) as answer:
+            return answer.objective, answer.dual('floor')['value'].item()
+
+    objective, dual = solved(1.0)
+    rate = (solved(1.0 + step)[0] - objective) / step
+    assert dual == pytest.approx(moves * rate, abs=1e-6), (
+        f'{row} under {sense}: the dual is {dual}, and the optimum moves {rate} per unit of b'
+    )
