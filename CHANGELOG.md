@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- fix(engine): a divisor, a power's base or an exponent that is a sum is taken as its total rather than summand by summand ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+- fix(engine): a divisor, a power's base or an exponent that is a sum is taken as its total rather than summand by summand ([#1779](https://github.com/fluxopt/specsolve/pull/1779))
 
 ## 0.2.0 (2026-09-25)
 
