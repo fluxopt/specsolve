@@ -61,23 +61,14 @@ if TYPE_CHECKING:
     from specsolve.relational.engines.polars.labels import Labelled
 
 
-#: The one group a scalar fragment's rows fall into when [`_totalled`][] adds
-#: them up. The spaces make it unrepresentable as a declared name.
-_SCALAR_GROUP = '__scalar group__'
-
-
 def _totalled(p: TermFragment) -> pl.LazyFrame:
-    """Const fragment *p* added up to one ``cval`` per coordinate, null where no row has a value.
+    """Const fragment *p* added up to one ``cval`` per coordinate, null where any of its rows is.
 
-    A scalar groups on a column rather than on no key: polars answers a
-    keyless aggregate over no rows with one row of zero, which would turn a
-    coordinate with no rows into a zero.
+    A null summand is a divisor's hole under the sum, so the total keeps it
+    for the refusal rather than adding up the rest.
     """
-    total = pl.when(pl.col('cval').is_not_null().any()).then(pl.col('cval').sum()).alias('cval')
-    if p.dims:
-        return p.frame.group_by(p.dims).agg(total)
-    grouped = p.frame.with_columns(pl.lit(0, dtype=pl.Int8).alias(_SCALAR_GROUP)).group_by(_SCALAR_GROUP)
-    return grouped.agg(total).drop(_SCALAR_GROUP)
+    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
+    return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -498,12 +489,12 @@ class PolarsCompiler:
 
         ``/`` and ``**`` do not distribute over a sum, and a sum reaches them
         still holding one row per summand ([`_sum_fragment`][]), so an operand
-        with a reduction under it is added up first, at a build as at a read.
-        One without holds one row per coordinate already, and is not scanned
-        again: at a build that scan is as long as the operand. The total is null where no
-        row has a value, so a divisor with a hole still reports it rather than
-        dividing by a zero the fill invented, and a coordinate with no rows
-        stays without one. Several pieces are an operand that adds, which the
+        with a reduction under it is added up first ([`_totalled`][]), at a
+        build as at a read. One without holds one row per coordinate already,
+        and is not scanned again: at a build that scan is as long as the
+        operand. Several pieces are added up null where no piece has a value,
+        so a divisor with a hole still reports it rather than dividing by a
+        zero the fill invented. Several pieces are an operand that adds, which the
         language refuses at a build: there they pass through, as does an
         operand carrying a variable, for the plan-boundary assert behind it.
         """

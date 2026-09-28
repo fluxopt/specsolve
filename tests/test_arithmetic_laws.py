@@ -39,6 +39,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+import specsolve as sps
 from specsolve.errors import DataError
 from tests.conftest import law_data, law_spec, override
 from tests.differential import RTOL, both_lanes_refuse, differential
@@ -614,3 +615,21 @@ def test_an_operand_that_is_a_sum_is_taken_whole(constraint, expected):
     spec = override(WHOLE_SUM, **{'constraints.c': {'dims': ['t'], 'expression': constraint}})
     with differential(spec, WHOLE_SUM_DATA, lp=True) as run:
         assert run.oracle == pytest.approx(expected, rel=RTOL), 'the optimum reads the sum as its total, 3'
+
+
+def test_a_sparse_divisor_under_a_summed_divisor_is_still_refused():
+    """A null summand is a divisor's hole, so adding the sum up keeps it null rather than skipping it.
+
+    `w / d` has no value at `b`. Added up by skipping nulls, the outer divisor
+    read 2 instead of refusing, and the build solved `x / 2 >= 1` with no error.
+    """
+    spec = override(
+        WHOLE_SUM,
+        **{
+            'parameters.d': {'dims': ['g']},
+            'constraints.c': {'dims': ['t'], 'expression': 'x / sum(w / d, over=g) >= 1'},
+        },
+    )
+    data = WHOLE_SUM_DATA | {'d': pl.DataFrame({'g': ['a'], 'value': [1.0]})}
+    with pytest.raises(DataError, match='used as a divisor'):
+        sps.build(spec, data).close()
