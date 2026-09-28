@@ -286,13 +286,18 @@ def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
     assert frame['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
 
 
-def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions_words():
+@pytest.mark.parametrize(
+    'expression',
+    [pytest.param('out / fixed', id='the-parameter'), pytest.param('out / (fixed * chosen)', id='beside-a-variable')],
+)
+def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions_words(expression):
     """A missing parameter row is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
 
     Before #1775 it read a constraint's message: that the constraint would stop
-    constraining, and to mask the coordinates out with a `where`.
+    constraining, and to mask the coordinates out with a `where`. It also named
+    the variable in the divisor as a parameter.
     """
-    spec = override(SIZED, **{'expressions.q': 'out / fixed'})
+    spec = override(SIZED, **{'expressions.q': expression})
     with pytest.raises(DataError, match="named expression 'q': parameter 'fixed'") as refused:
         sps.solve(spec, ABSENT_AT_C).evaluate('q')
     assert 'where' not in str(refused.value), 'a named expression takes no where, so the message cannot advise one'
