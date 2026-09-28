@@ -385,7 +385,9 @@ def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False)
     yields a *null* coefficient instead of silently dropping the term. The row
     may still be masked out downstream, taking the null with it: the question
     is not whether the divisor is dense but whether it is defined where the
-    model divides by it.
+    model divides by it. A coordinate where the divisor is *absent* is not
+    that question — the quotient is absent there too — so it leaves the frame
+    here, before any check could count its null as a short parameter.
 
     At a build *c* is variable-free and contributes no absence: a sparse
     coefficient zeroes a term, it does not unmake the variable underneath it.
@@ -402,6 +404,9 @@ def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False)
     right = c.frame.rename({'cval': _RHS})
     how = 'left' if divide else 'inner'
     joined = a.frame.join(right, on=shared, how=how) if shared else a.frame.join(right, how='cross')
+    if divide:
+        for presence in c.presences:
+            joined = presence.restrict(joined, presence.keys(c.dims))
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs

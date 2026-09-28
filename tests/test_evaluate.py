@@ -161,3 +161,13 @@ def test_only_the_expression_asked_for_is_compiled(monkeypatch):
     assert compiled == ["named expression 'served'"], (
         'four expressions are declared and one is asked for, so exactly that one compiles'
     )
+
+
+def test_a_quotient_is_absent_where_its_divisor_is_zero():
+    """With no solve the data is the only source of a zero, and the quotient has no row there; before #1775 it read `inf`."""
+    spec = {**SPEC, 'parameters': {**SPEC['parameters'], 'weight': {'dims': ['generator']}}}
+    data = sources() | {'weight': pl.DataFrame({'generator': GENERATORS, 'value': [2.0, 0.0]})}
+    frame = sps.evaluate(spec, data, 'cost / weight')
+    assert dict(zip(frame['generator'], frame['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
+        'gas divides by zero, so it has no row'
+    )

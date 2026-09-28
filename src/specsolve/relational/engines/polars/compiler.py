@@ -173,12 +173,17 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: program.Expression, context: str, *, quadratic: bool = False) -> CompiledExpression:
+    def expression(
+        self, expr: program.Expression, context: str, *, quadratic: bool = False, reported: bool = False
+    ) -> CompiledExpression:
         """Compile an expression into term, quadratic and const fragments.
 
         *quadratic* is the position's ceiling, passed by the caller that knows
         it: the objective can hold a product of two variables and a constraint
-        row cannot. The language has already refused what it refuses
+        row cannot. *reported* is set by the caller that reads a value rather
+        than building a row, where a quotient divides by its divisor's total
+        and is absent wherever that total is zero ([`_read_divisor`][]). The
+        language has already refused what it refuses
         (``mathspec.degree``), so this is the **plan-boundary backstop** —
         a degree-2 node arriving by any other route dies here rather than
         becoming a term whose second variable is silently dropped.
@@ -242,7 +247,7 @@ class PolarsCompiler:
             b = self._added_up(b)
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
-            inv = b.consts[0]
+            inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
             quads = tuple(join_mul(q, inv, 'quad', divide=True) for q in a.quads)
             consts = tuple(join_mul(x, inv, 'const', divide=True) for x in a.consts)
@@ -474,6 +479,29 @@ class PolarsCompiler:
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
         frame = held.frame.select(*dims).with_columns(held.share(solution.dual).alias('cval'))
         return TermFragment(dims, frame, 'const', presences=(Presence(_presence(held, dims, 'row'), dims),))
+
+    def _read_divisor(self, divisor: TermFragment) -> TermFragment:
+        """*divisor* as one total per coordinate, absent wherever that total is zero.
+
+        A sum reaches a divisor still holding one row per summand, and a read
+        divides by the total, so the rows are added up first, null where no
+        row has a value. The presence admits every coordinate but the zeros,
+        rather than every coordinate the total has: a divisor parameter short
+        of a row has to stay a null for the refusal to find, since a missing
+        row is not absence.
+        """
+        valued = pl.col('cval').is_not_null().any()
+        total = pl.when(valued).then(pl.col('cval').sum()).alias('cval')
+        summed = divisor.frame.group_by(divisor.dims).agg(total) if divisor.dims else divisor.frame.select(total)
+        zeros = summed.filter(pl.col('cval') == 0)
+        if divisor.dims:
+            present = masked(self.scope, divisor.dims, None).select(*divisor.dims)
+            present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
+        else:
+            count = zeros.select(pl.len().alias('__zeros__'))
+            present = pl.LazyFrame({PRESENT: [True]}).join(count, how='cross').filter(pl.col('__zeros__') == 0)
+            present = present.select(PRESENT)
+        return replace(divisor, frame=summed, presences=(*divisor.presences, Presence(present, divisor.dims)))
 
     def _added_up(self, compiled: CompiledExpression) -> CompiledExpression:
         """*compiled* as one const fragment where a read gave it several — a divisor or a power's side that adds.

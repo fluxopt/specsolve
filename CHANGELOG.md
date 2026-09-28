@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(api): a reported quotient is absent where its divisor is absent or zero, and a divisor that is a sum divides as its total ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+
 ## 0.2.0 (2026-09-25)
 
 A saved answer now records which layout it was written in and which specsolve
