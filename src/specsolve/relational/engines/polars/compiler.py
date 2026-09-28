@@ -61,6 +61,25 @@ if TYPE_CHECKING:
     from specsolve.relational.engines.polars.labels import Labelled
 
 
+#: The one group a scalar fragment's rows fall into when [`_totalled`][] adds
+#: them up. The spaces make it unrepresentable as a declared name.
+_SCALAR_GROUP = '__scalar group__'
+
+
+def _totalled(p: TermFragment) -> pl.LazyFrame:
+    """Const fragment *p* added up to one ``cval`` per coordinate, null where no row has a value.
+
+    A scalar groups on a column rather than on no key: polars answers a
+    keyless aggregate over no rows with one row of zero, which would turn a
+    coordinate with no rows into a zero.
+    """
+    total = pl.when(pl.col('cval').is_not_null().any()).then(pl.col('cval').sum()).alias('cval')
+    if p.dims:
+        return p.frame.group_by(p.dims).agg(total)
+    grouped = p.frame.with_columns(pl.lit(0, dtype=pl.Int8).alias(_SCALAR_GROUP)).group_by(_SCALAR_GROUP)
+    return grouped.agg(total).drop(_SCALAR_GROUP)
+
+
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
     """The coordinates a declaration's rows exist at.
 
@@ -230,16 +249,15 @@ class PolarsCompiler:
             )
             return CompiledExpression(terms, consts, quads)
 
-        def quotient(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+        def quotient(e: program.Divide) -> CompiledExpression:
             """``a / b``, where *b* is one variable-free factor.
 
             That it is *one* is ``degree.check_binary``'s answer, given at load
             with no data attached, so a divisor that adds never reaches a plan
-            from the math. A read holds an entry to no degree and has every
-            factor as a value, so there *b* is first added up to the one value
-            per coordinate the join wants.
+            from the math. *b* is still added up first, to the one value per
+            coordinate the join wants: a sum reaches it one row per summand.
             """
-            b = self._added_up(b)
+            a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor)
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
             inv = b.consts[0]
@@ -248,16 +266,16 @@ class PolarsCompiler:
             consts = tuple(join_mul(x, inv, 'const', divide=True) for x in a.consts)
             return CompiledExpression(terms, consts, quads)
 
-        def power(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+        def power(e: program.Power) -> CompiledExpression:
             """``a ** b``, where neither side carries a variable.
 
             The language refuses one that does in the math (``mathspec.degree``),
             before a plan exists to carry it, so a variable under a power is an
             invariant here rather than a refusal — folding its coefficient into
             a base is what the assert stands in front of. At a read a variable
-            is its value, and a side that adds is added up first, as a divisor is.
+            is its value, and each side is added up first, as a divisor is.
             """
-            a, b = self._added_up(a), self._added_up(b)
+            a, b = self._added_up(ev(e.base), e.base), self._added_up(ev(e.exponent), e.exponent)
             assert not (a.terms or a.quads or b.terms or b.quads), (
                 f'in {context}: a power over variables reached the compiler'
             )
@@ -377,9 +395,9 @@ class PolarsCompiler:
             if isinstance(e, program.Multiply):
                 return product(ev(e.left), ev(e.right))
             if isinstance(e, program.Divide):
-                return quotient(ev(e.numerator), ev(e.divisor))
+                return quotient(e)
             if isinstance(e, program.Power):
-                return power(ev(e.base), ev(e.exponent))
+                return power(e)
             if isinstance(e, program.Sum):
                 return shaped(e, lambda p: self._sum_fragment(p, e.over, context))
             if isinstance(e, program.GroupSum):
@@ -475,19 +493,29 @@ class PolarsCompiler:
         frame = held.frame.select(*dims).with_columns(held.share(solution.dual).alias('cval'))
         return TermFragment(dims, frame, 'const', presences=(Presence(_presence(held, dims, 'row'), dims),))
 
-    def _added_up(self, compiled: CompiledExpression) -> CompiledExpression:
-        """*compiled* as one const fragment where a read gave it several — a divisor or a power's side that adds.
+    def _added_up(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
+        """*compiled* as one const fragment with one value per coordinate — a divisor, or a power's base or exponent.
 
-        Only a read reaches several: at a build the language has refused a
-        divisor or a base that adds, so there the operand passes through and
-        the plan-boundary assert behind it keeps that claim. Null where no
-        piece has a value, so a divisor with a hole still reports it rather
-        than dividing by a zero the fill invented.
+        ``/`` and ``**`` do not distribute over a sum, and a sum reaches them
+        still holding one row per summand ([`_sum_fragment`][]), so an operand
+        with a reduction under it is added up first, at a build as at a read.
+        One without holds one row per coordinate already, and is not scanned
+        again: at a build that scan is as long as the operand. The total is null where no
+        row has a value, so a divisor with a hole still reports it rather than
+        dividing by a zero the fill invented, and a coordinate with no rows
+        stays without one. Several pieces are an operand that adds, which the
+        language refuses at a build: there they pass through, as does an
+        operand carrying a variable, for the plan-boundary assert behind it.
         """
-        if self.solution is None or len(compiled.consts) <= 1:
+        if compiled.terms or compiled.quads:
             return compiled
-        assert not (compiled.terms or compiled.quads), 'a read compiles every variable to its value'
         fragments = compiled.consts
+        if len(fragments) == 1:
+            if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
+                return compiled
+            return CompiledExpression((), (replace(fragments[0], frame=_totalled(fragments[0])),))
+        if self.solution is None:
+            return compiled
         dims, restrictions = self.scope.spanned(fragments), absence_restrictions(fragments)
         carrier = masked(self.scope, dims, None)
         for restriction in restrictions:
