@@ -36,6 +36,7 @@ it, so its behaviour was a claim rather than a result.
 
 from __future__ import annotations
 
+import polars as pl
 import pytest
 
 from specsolve.errors import DataError
@@ -580,3 +581,36 @@ def test_a_sparse_divisor_has_an_escape(patch, expected):
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )
+
+
+#: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent
+#: taken summand by summand reads 1/2 + 1/1, 2² + 1² or 2² + 2¹ instead.
+WHOLE_SUM = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'parameters': {'w': {'dims': ['g']}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+}
+WHOLE_SUM_DATA = {'g': ['a', 'b'], 't': [0], 'w': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 1.0]})}
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'expected'),
+    [
+        pytest.param('x / sum(w, over=g) >= 1', 3.0, id='a-divisor'),
+        pytest.param('x >= 6 / sum(w, over=g)', 2.0, id='a-divisor-on-the-constant-side'),
+        pytest.param('x * sum(w, over=g) ** 2 >= 18', 2.0, id='a-base'),
+        pytest.param('x * 2 ** sum(w, over=g) >= 16', 2.0, id='an-exponent'),
+    ],
+)
+def test_an_operand_that_is_a_sum_is_taken_whole(constraint, expected):
+    """Division and a power do not distribute over a sum, so the sum is added up before either reads it.
+
+    `*` distributes, which is why a sum can stay one row per summand until the
+    row is assembled; `/` and `**` do not. Before #1777 the relational lane
+    divided by, or raised, each summand and added the results, and solved a
+    different model with no error: 0.667 for the divisor, 3.6 for the base.
+    """
+    spec = override(WHOLE_SUM, **{'constraints.c': {'dims': ['t'], 'expression': constraint}})
+    with differential(spec, WHOLE_SUM_DATA, lp=True) as run:
+        assert run.oracle == pytest.approx(expected, rel=RTOL), 'the optimum reads the sum as its total, 3'

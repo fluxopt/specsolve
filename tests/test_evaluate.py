@@ -171,3 +171,19 @@ def test_a_quotient_is_absent_where_its_divisor_is_zero():
     assert dict(zip(frame['generator'], frame['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
         'gas divides by zero, so it has no row'
     )
+
+
+@pytest.mark.parametrize(
+    ('expression', 'expected'),
+    [
+        pytest.param('sum(cost) ** 2', 51.0**2, id='a-base'),
+        pytest.param('2 ** sum(cost / 50)', 2.0**1.02, id='an-exponent'),
+        pytest.param('102 / sum(cost)', 2.0, id='a-divisor'),
+    ],
+)
+def test_an_operand_that_is_a_sum_is_taken_whole(expression, expected):
+    """`sum(cost)` is 51, and a power or a quotient reads that total rather than each summand.
+
+    Before #1777 `sum(cost) ** 2` read 1² + 50².
+    """
+    assert evaluate(expression)['value'].to_list() == pytest.approx([expected]), 'the sum is taken whole'
