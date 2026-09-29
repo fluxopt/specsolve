@@ -9,7 +9,7 @@ fraction of the claim.
 | tier | the claim | the harness |
 |---|---|---|
 | **corpus sweeps** | every model in the repo loads, round-trips, stays inside the language, and its gallery page is current | `conftest.SPEC_PATHS` (= `tools.constructs.models()`) — one list, so a model added anywhere is covered the day it lands |
-| **differential** | the same YAML means the same thing on the linopy lane and the relational one — the same objective, and the same shape in columns and rows — and in the written LP file, with `lp=True` | `tests.differential.differential()`; importing it *is* the `[linopy]` guard |
+| **differential** | the same YAML means the same thing on the linopy lane and the relational one — the same objective, and the same shape in columns and rows — and in the written LP file, with `lp=True` | `tests.differential.differential()`; importing it *is* the `[linopy]` guard. `at_a_point()` for a read: no solver, every coordinate compared |
 | **probes** | one mechanism each, pinned on the smallest model whose data can reach it | `conftest.DISPATCH_SPEC` + `override`, or a purpose-built module constant |
 | **goldens** | an example prints what the docs show | `conftest.run_example` + `assert_golden`; regenerate with `--update-golden` |
 
@@ -31,7 +31,11 @@ solutions, so comparing answers compares which vertex a solver happened to
 reach: `genx_piecewise_fuel` agrees on the objective to nine decimals and
 disagrees on a quarter of one dual vector, while its two matrices are
 identical to the entry ([#992]). Duals and primals are therefore **never**
-compared lane to lane.
+compared lane to lane. A read at a point is the exception that proves
+it: `at_a_point()` holds every variable at a seeded value rather than asking a
+solver for one, so the point is the test's choice, and each lane's value of an
+expression at it is a claim about the lane alone. That comparison sees a term in
+a row that never binds, which an objective cannot.
 
 A *recorded* dual is a different claim: that this instance has a **unique**
 one, which is a property of the instance and something a port designs for

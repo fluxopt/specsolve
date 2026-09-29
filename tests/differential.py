@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import polars as pl
 import pytest
 
 import specsolve as sps
@@ -42,10 +43,10 @@ from specsolve.lanes import lowered
 from specsolve.relational.engines.polars.engine import PolarsEngine
 from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file
-from tests.oracle import linopy, specsolve_linopy
+from tests.oracle import linopy, specsolve_linopy, xr
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
     from specsolve.relational.engines.polars.engine import Result
 
@@ -139,6 +140,85 @@ def differential(
                 )
 
             yield Agreement(oracle=oracle, model=m, result=result, engine=engine, lp=lp_path)
+
+
+@contextmanager
+def at_a_point(
+    spec: str | Path | dict[str, Any], sources: Mapping[str, Any]
+) -> Iterator[Callable[[str | Mapping[str, Any]], pl.DataFrame]]:
+    """Both lanes with every variable held at one chosen point; yield a reader that asserts they agree.
+
+    No solver runs. Each variable takes a seeded value at every coordinate it
+    exists at, the linopy lane reads it as ``.solution`` and the relational
+    lane through ``Model.evaluator``, so ``read(expression)`` values the
+    expression on both and returns the relational frame once the two are the
+    same frame: the same coordinates, the same values to ``RTOL``.
+
+    That is the claim :func:`differential` cannot make. An objective only sees
+    a row that binds, and a coefficient only a column that moves; a read at a
+    point sees every coordinate of every term, at any degree, and needs no data
+    that keeps a model feasible.
+    """
+    model = schema_of(spec).expand()
+    m = specsolve_linopy.build(model, dict(sources))
+    point = _hold(m)
+    with sps.build(model, dict(sources)) as built:
+        relational = built.evaluator(point, None, 'a chosen point has no duals')
+
+        def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
+            ours = relational(expression)
+            theirs = _frame(specsolve_linopy.evaluate(m, model, expression, dict(sources)))
+            assert by_coordinate(ours) == pytest.approx(by_coordinate(theirs), rel=RTOL), (
+                f'the lanes read `{expression}` differently at {_pointby_coordinate(point)} — '
+                f'relational {by_coordinate(ours)}, linopy {by_coordinate(theirs)}'
+            )
+            return ours
+
+        yield read
+
+
+def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
+    """Set a seeded value on every variable of *m* where it exists, and return the same point as frames.
+
+    A value on the quarter grid in ``[-2, 2]``, never zero: a failure prints
+    short numbers, and a zero only arises where an expression makes one, which
+    is the case a quotient has to answer. The masked coordinates stay NaN, as a
+    solve leaves them, and have no row in the frame, as a saved solution has
+    none. Marking *m* solved is what lets the lane's ``.solution`` be read.
+    """
+    rng = np.random.default_rng(1203)
+    point = {}
+    for name, variable in m.variables.items():
+        labels = variable.labels
+        values = rng.integers(1, 9, labels.shape) * rng.choice([-1, 1], labels.shape) / 4
+        held = labels.copy(data=values).where(labels != -1)
+        variable.solution = held
+        point[name] = _frame(held)
+    m.status = 'ok'
+    m.termination_condition = 'optimal'
+    return point
+
+
+def _frame(values: xr.DataArray) -> pl.DataFrame:
+    """A linopy-lane value as the relational lane's ``(dims…, value)`` frame, with no row where it is absent."""
+    if not values.dims:
+        return pl.DataFrame({'value': [float(values)]}).filter(pl.col('value').is_not_nan())
+    table = values.rename('value').to_dataframe().reset_index()[[*values.dims, 'value']]
+    return pl.from_pandas(table).filter(pl.col('value').is_not_nan())
+
+
+def by_coordinate(frame: pl.DataFrame) -> dict[tuple[str, ...], float]:
+    """*frame*'s values keyed by coordinate, dims sorted by name and labels as text.
+
+    The lanes order a result's dims differently and type an ``int`` label
+    differently, and neither is a difference in the value.
+    """
+    dims = sorted(c for c in frame.columns if c != 'value')
+    return {tuple(str(label) for label in row[:-1]): row[-1] for row in frame.select(*dims, 'value').iter_rows()}
+
+
+def _pointby_coordinate(point: Mapping[str, pl.DataFrame]) -> dict[str, dict[tuple[str, ...], float]]:
+    return {name: by_coordinate(frame) for name, frame in point.items()}
 
 
 def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:
