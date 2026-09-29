@@ -1,18 +1,10 @@
 """``Spec.to_yaml`` gives back the same model — held over the whole corpus.
 
-The method is three lines; **this file is the deliverable**. A `to_yaml` that
-drifts from what the engine builds is worse than none: a reviewer would be
-reading a model that never ran, and nothing about the output would look wrong.
-
-The ways it could drift are all quiet. A field gaining a default, a validator
-normalising a value, an alias, a dict that stops preserving order — each turns
-the dumped file into a *different* model while every existing test still
-passes, because every existing test builds from the original.
-
-So the property is checked against the corpus rather than a fixture: every
-example and every ported model, which between them exercise every construct the
-language has (`docs/examples/index.md` generates the coverage table from exactly
-this set).
+A field gaining a default, a validator normalising a value, an alias, a dict
+that stops preserving order: each turns the dumped file into a *different*
+model while every test that builds from the original still passes. The property
+is checked against every example and every ported model, which between them
+exercise every construct the language has.
 """
 
 from __future__ import annotations
@@ -31,9 +23,7 @@ if TYPE_CHECKING:
 
 
 def test_the_corpus_is_not_empty():
-    """A guard on the guard: the parametrised tests below pass vacuously if
-    ``constructs.models()`` stops finding anything, which a directory rename
-    would do silently."""
+    """The parametrised tests below pass vacuously if ``constructs.models()`` finds nothing."""
     assert len(SPEC_PATHS) >= 10, f'the model corpus looks wrong: {SPEC_PATHS}'
 
 
@@ -49,13 +39,7 @@ def test_a_model_survives_a_round_trip(path: Path):
 
 @pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_two_out_forms_agree(path: Path):
-    """`to_dict` is what `to_yaml` writes, so a caller cannot get two answers.
-
-    The rule lives on the model's *serializer*, so pydantic's own methods carry
-    it too. A helper beside them would have left `model_dump` — public, and not
-    ours to remove — describing the same model with different content, and
-    which one a consumer got would depend on which name they reached for.
-    """
+    """`to_dict`, `model_dump` and what `to_yaml` writes agree, so a caller cannot get two answers."""
     spec = to_spec(path)
     assert pyyaml.safe_load(spec.to_yaml()) == spec.to_dict()
     assert spec.model_dump() == spec.to_dict(), "pydantic's own dump has to agree too"
@@ -64,24 +48,14 @@ def test_the_two_out_forms_agree(path: Path):
 
 @pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_dump_is_stable(path: Path):
-    """Dumping twice gives the same bytes.
-
-    Not pedantry: an unstable dump means a framework that emits a model for
-    review produces a different file on every run, so the diff a reviewer is
-    supposed to read is noise.
-    """
+    """Dumping twice gives the same bytes, so a model emitted for review diffs cleanly."""
     once = to_spec(path).to_yaml()
     twice = to_spec(pyyaml.safe_load(once)).to_yaml()
     assert once == twice, f'{path} dumps differently the second time'
 
 
 def test_a_dict_built_model_gets_a_file():
-    """The case this exists for: a model that never had a file.
-
-    #30 and #29 were closed in favour of frameworks building a dict and handing
-    it over. This is what keeps that path honest against hard rule 5 — the dict
-    gets a reviewable file, and it is the same spec.
-    """
+    """A model built as a dict gets a reviewable file, and it is the same spec."""
     built = {
         'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['t']}},
@@ -107,14 +81,7 @@ def test_a_declared_version_survives():
 @pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.stem)
 def test_the_review_copy_states_the_objective_sense(path: Path):
     """`sense` is emitted even at its default — the one word a reviewer must
-    not have to infer.
-
-    It round-trips either way, since absent means minimize. What it does not do
-    either way is *read*: an objective with no direction makes the reviewer
-    know a default to know whether the model minimises or maximises, and every
-    model in the corpus writes it, so dropping it made the review copy differ
-    from the file in the place that matters most.
-    """
+    not have to infer."""
     spec = to_spec(path)
     if spec.objective is None:
         pytest.skip('no objective to state')
@@ -123,12 +90,7 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
 
 
 def test_absence_is_dropped_and_values_are_kept():
-    """The whole rule, both halves.
-
-    Judging *defaults* would need a list of which ones matter, and that list is
-    a second copy of the schema — it drifted on its first day, keeping `version`
-    and `sense` while dropping `dtype`. Absence needs no list.
-    """
+    """The whole rule, both halves: absence is dropped, every value is kept, default or not."""
     text = to_spec(
         {
             'dimensions': {'t': {'dtype': 'int'}},

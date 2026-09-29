@@ -1,19 +1,11 @@
 """``position(dim)`` — a boundary named by where a row sits, not by the label there.
 
-A recurrence needs its first position seeded, and every seeding clause in the
-corpus used to name the label that happened to sit there (``snapshot == 0``).
-That is correct only while the instance starts at zero: relabel the horizon and
-the clause matches nothing, so the row it was to seed is never written and the
-recurrence is left unanchored.
-
-The failure is loud but names nothing about its cause — an infeasible solve —
-which is why the relabel is the test that matters here, and why an
-out-of-range position is an error rather than a mask that is false everywhere.
-
-Both lanes read the position off the coordinate order they already hold: the
-dim table's ``ord`` relationally, the master index on the linopy side. So the
-one thing a single-lane test could not see is whether the two orders agree,
-which every case below checks differentially.
+A seeding clause that names a label (``snapshot == 0``) is correct only while
+the instance starts at zero: relabel the horizon and the clause matches
+nothing, so the row it was to seed is never written. Both lanes read the
+position off the coordinate order they hold — the dim table's ``ord``
+relationally, the master index on the linopy side — so every case below checks
+differentially that the two orders agree.
 """
 
 from __future__ import annotations
@@ -69,8 +61,7 @@ objective:
   description: revenue from what is released
 """
 
-#: Deliberately not starting at zero — the whole point of the construct. A
-#: clause written `snapshot == 0` matches nothing on this horizon.
+#: Not starting at zero: a clause written `snapshot == 0` matches nothing here.
 SNAPSHOTS = [4, 5, 6]
 
 
@@ -120,16 +111,12 @@ def test_the_label_that_happens_to_be_first_is_not_the_rule():
 
 
 def test_the_hardcoded_label_is_what_this_replaces():
-    """Written the old way, the relabelled horizon seeds no row — and solves.
+    """A clause naming the label seeds no row on the relabelled horizon, and solves (#707).
 
-    This is the failure #707 was filed for, and it is the silent kind. The
-    seeding clause matches nothing, the recurrence's own first row is dropped
-    because the level it shifts from does not exist, and the first period's
-    release is left in no constraint at all. The solve comes back `optimal`
-    with an objective four times the true one.
-
-    Held here so the replacement has something to be better than, and so the
-    number says how wrong it was rather than that it was wrong.
+    The seeding clause matches nothing, the recurrence's own first row is
+    dropped because the level it shifts from does not exist, and the first
+    period's release is left in no constraint at all. The solve comes back
+    `optimal` with an objective four times the true one.
     """
     sources = _inputs()
     hardcoded = pyyaml.safe_load(SPEC.replace('position(snapshot) == 0', 'snapshot == 0'))
@@ -199,11 +186,8 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
 def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     """Counting along an axis the constraint does not range over is a frame error.
 
-    `index(dim, i)` compared two coordinates and needed its own rule for the
-    pair naming different dimensions. `position(dim)` yields an integer, so
-    there is no pair and no cross-label comparison left to refuse — what
-    remains is the ordinary dim-algebra rule every where-comparison meets, and
-    it is the one that speaks.
+    `position(dim)` yields an integer, so the ordinary dim-algebra rule every
+    where-comparison meets is the one that speaks.
     """
     spec = SPEC.replace(
         'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}',
@@ -277,8 +261,7 @@ def _masked(where: str) -> list[int]:
 
     Read off the primal rather than the plan: minimising a positive price holds
     `soc` at zero everywhere the row was not built, so what comes back non-zero
-    is exactly the mask — which is the thing under test, and the one an engine
-    could get wrong on its own.
+    is exactly the mask.
     """
     with differential(MASK.replace('WHERE', where), _grouped_sources()) as run:
         rows = run.result.primal('soc').filter(pl.col('value') > 1e-9)
@@ -297,7 +280,7 @@ def test_a_negative_position_is_each_group_s_last():
     """`-1` per group — the tail an ungrouped `index` cannot reach.
 
     With periods of different lengths there is no single position that is the
-    last of both, which is why this is the case that decided the design.
+    last of both.
     """
     assert _masked('position(snapshot, by=period_of, within=period) == -1') == [11, 22]
 
@@ -493,8 +476,8 @@ def test_a_filled_partitioned_edge_builds_every_row():
 def test_the_axis_wrap_is_a_different_model():
     """The same balance wrapped over the horizon leaks across the boundary.
 
-    This is what `by=` is for, and it is not a convenience: without it winter
-    opens on summer's closing level, which is feasible, higher, and wrong.
+    Without `by=`, winter opens on summer's closing level, which is feasible,
+    higher, and wrong.
     """
     with differential(_partitioned("edge='wrap'"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the horizon as one cycle, worth 6 more to winter'
@@ -521,10 +504,9 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
     second a predecessor — the first — and write a balance row about a season
     that does not exist. Under a wrap it would close them onto each other.
 
-    Each edge policy is its own case, because a numeric one is the case that
-    used to read "reached nothing" as "the shift vacated this" and fill it
-    (#1061). The bare edge drops each season's first row as well, so its
-    omission count is higher.
+    Each edge policy is its own case: a numeric edge must not read "reached
+    nothing" as "the shift vacated this" and fill it (#1061). The bare edge
+    drops each season's first row as well, so its omission count is higher.
     """
     sources = _seasons_sources()
     snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]

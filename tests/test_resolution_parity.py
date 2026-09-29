@@ -1,10 +1,8 @@
 """The scoping divergences, checked against the oracle lane itself.
 
-The rules themselves are mathspec's and are swept there. This module checks
-the thing that actually mattered: that the *linopy* lane refuses what the
-relational lane refuses, in the same place, for the same reason. Before
-resolution was a pass, each of these built a model on one lane and raised on
-the other.
+The rules are mathspec's and are swept there. This module checks that the
+linopy lane refuses what the relational lane refuses, in the same place, for the
+same reason.
 """
 
 from __future__ import annotations
@@ -44,10 +42,7 @@ def test_both_lanes_refuse_the_same_where(tmp_path, dispatch_spec_inputs, where,
 def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispatch_spec_inputs):
     """A constraint whose two sides are both constants decides nothing (#1171).
 
-    Was: the relational lane built the model quietly with no such row, while
-    the linopy lane raised linopy's own `TypeError` at build — one language,
-    two answers, and neither of them said what was wrong with the file. It is
-    decidable with no data attached, so it is decided where the file is read.
+    It is decidable with no data attached, so both lanes refuse it at load.
     """
     data = dispatch_spec_inputs
     path = dispatch_spec_path(tmp_path, **{'constraints.balance.expression': 'p_max <= 1'})
@@ -59,10 +54,10 @@ def test_both_lanes_refuse_a_comparison_that_carries_no_variable(tmp_path, dispa
         sps.check(path)
 
 
-#: Where-strings that must build *identically* on both lanes. Chosen to cover
-#: every resolved predicate type — see the exhaustiveness test below. The dim
-#: comparisons are deliberately always-true: a mask that removes every variable
-#: from a constraint row exposes a separate divergence, pinned below.
+#: Where-strings that must build *identically* on both lanes, covering every
+#: resolved predicate type (see the exhaustiveness test below). The dim
+#: comparisons are always-true: a mask that removes every variable from a
+#: constraint row is pinned separately below.
 ACCEPTED = [
     'True',
     'p_max',
@@ -72,32 +67,21 @@ ACCEPTED = [
     'NOT p_max > 150',
     'p_max > 0 AND snapshot >= 0',
     'p_max > 0 OR snapshot >= 0',
-    #: The literal is folded away at load, so this is `p_max > 0` by the time
-    #: either lane sees it — the claim being that a file may say it.
+    #: Folded to `p_max > 0` at load; the claim is that a file may say it.
     'p_max > 0 AND True',
-    #: The one position a literal survives to: alone, and false. `True` alone
-    #: is no mask at all and arrives as `None`.
+    #: The one position a literal survives to: alone, and false.
     'False',
-    #: The three that read past one comparison against a literal: two
-    #: parameters compared, with arithmetic on a side, a count reducing a
-    #: dimension away, and the same predicate read at the neighbouring
-    #: coordinate. Always-true for the reason above.
+    #: Two parameters compared, with arithmetic on a side, a count reducing a
+    #: dimension away, and a predicate read at the neighbouring coordinate.
     'p_max > cost',
     'p_max >= 0.5 * p_max',
     'count(load, over=snapshot) >= 1',
     'p_max OR shift(p_max, along=generator, offset=1)',
 ]
 
-#: Predicates this sweep cannot host, with where they are checked instead. The
-#: sweep masks ``variables.p.where`` on the dispatch model, and a bare variable
-#: name fits neither slot: in a variable's own where it is a self-reference
-#: (rejected at load), and on ``balance`` it spans a dim the constraint does not
-#: (a DimensionError, correctly — reducing it needs an `all`-reduction, #469).
-#: The four relation predicates fit the slot but not the *model*: dispatch
-#: declares no relation, and giving it one changes a fixture the rest of this
-#: file shares. They sweep a network carrying both relation kinds and a partial
-#: one, differentially against the same oracle.
-#: Mapped rather than skipped so the coverage guard below still names a test.
+#: Predicates this sweep cannot host, with the test that checks each instead. A
+#: bare variable name is a self-reference in ``p``'s own where and spans a dim
+#: ``balance`` does not (#469); dispatch declares no relation.
 COVERED_ELSEWHERE = {
     'VariableDefined': ('tests/test_relational.py::test_a_bare_variable_name_in_a_where_asks_whether_it_exists'),
     'RelationComparison': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
@@ -131,26 +115,18 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_spec_inputs, where):
 
 
 def test_every_resolved_predicate_is_parity_tested():
-    """The guard that would have caught the DimDefined hole.
-
-    `DimDefined` shipped in #62 lowering to `program.BooleanLiteral(True)`, which discarded
-    the dimension — so unlike `DimensionComparison`, nothing checked it against the frame's
-    dims, and a bare dimension name outside `dims` raised eagerly and built
-    relationally. No test touched it. This one fails if any resolved predicate
-    is not exercised by ACCEPTED above, so a new node cannot arrive untested.
-    """
+    """Every resolved predicate is exercised by ACCEPTED or COVERED_ELSEWHERE, so a new node cannot arrive untested."""
     import dataclasses
     from typing import get_args
 
     from mathspec import program, to_spec
 
-    # resolved-only: the Unresolved* nodes left the union with the parser
     expected = set(get_args(program.Predicate))
     covered: set[type] = set()
 
     def walk(node):
         if node is None:
-            return  # `where: "True"` normalises away, which is the mask no lane has to read
+            return
         covered.add(type(node))
         for field in dataclasses.fields(node):
             child = getattr(node, field.name)
@@ -170,20 +146,11 @@ def test_every_resolved_predicate_is_parity_tested():
 
 
 def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_spec_inputs):
-    """A masked *variable* can orphan an unmasked *constraint* row — and both
-    lanes now agree that such a row is not built.
+    """A masked *variable* can orphan an unmasked *constraint* row, and neither lane builds it.
 
     `where: "snapshot > 0"` on `p` leaves `balance` at snapshot 0 with no
-    terms. This was an xfail: linopy handed the solver three rows of four while
-    the relational lane kept the fourth as `0 == 80` and reported Infeasible —
-    one lane answering a question the other refused.
-
-    The rule is now stated at the level the property lives at rather than per
-    provenance, so the lanes reach it independently: linopy's own invariant is
-    the same one (`labels != -1` and at least one var), which is why it needed
-    no shim to agree.
-
-    The omission is asserted too. Dropping a declared row is only defensible
+    terms; kept, the row reads `0 == 80` and the model is infeasible. The
+    omission is asserted too: dropping a declared row is only defensible
     because the build says it happened.
     """
     data = dispatch_spec_inputs
@@ -203,8 +170,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_spec_inputs)
 
 #: A dimension the data leaves with **no members**, and a variable reduced over
 #: it. The empty sum is a number, so the row it lands in asserts something about
-#: constants alone — the same shape a masked variable leaves behind, reached by
-#: the one provenance that removes the term axis itself.
+#: constants alone.
 EMPTY_AXIS_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'int'}},
     'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool'}},
@@ -222,13 +188,8 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
     """The same rule as above, reached where the *dimension* is empty (#1108).
 
     A reduction over a set with no members is `0`, so `sum(w, over=k) == 1`
-    is a row about constants alone and neither lane builds it. Was: the
-    relational lane solved, and the linopy lane raised linopy's `Both sides of
-    the constraint are constant` before any mask could speak — so a component
-    library, whose whole shape is one program covering features a given system
-    does not use, could not use the oracle lane at all.
-
-    The two senses are one property: the shape decides, not the comparison.
+    is a row about constants alone and neither lane builds it, whatever the
+    sense.
     """
     spec = override(EMPTY_AXIS_SPEC, **{'constraints.convex.expression': f'sum(w, over=k) {sense} 1'})
     data = {
@@ -267,14 +228,8 @@ EMPTY_FOREACH_SPEC = {
 def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either_lane():
     """The rule of the test above, reached from the term the sum keeps.
 
-    Here the sum reduces a full dimension while its term carries the empty
-    one, so every row of the result is empty. The relational lane builds
-    zero rows; the linopy lane never got that far — linopy's ``sum`` dies in
-    xarray's stack (``cannot reshape array of size 0``) whenever another
-    dimension of the summed expression is empty — which kept every
-    cycle-free rung of the PyPSA ladder off the model-for-model comparison.
-    The sum now comes back as the term-free expression it is, and the block
-    falls to the same rule as the test above.
+    The sum reduces a full dimension while its term carries the empty one, so
+    every row of the result is empty and neither lane builds the block.
     """
     data = {
         't': pd.Index([0, 1], name='t', dtype='int64'),
@@ -307,8 +262,7 @@ BOOL_MASK_SPEC = {
 
 def test_a_bool_parameter_is_a_mask_on_both_lanes():
     """A bool parameter reads as its own value: true masks in, false masks out,
-    and an absent row masks out. Was: the relational lane raised
-    `isfinite(BOOLEAN)` at build, and the linopy lane read false as true.
+    and an absent row masks out.
     """
     data = {
         't': [0, 1, 2],
@@ -338,15 +292,7 @@ SCALAR_ROW_SPEC = {
 def test_the_empty_coordinate_builds_on_both_lanes():
     """A scalar row, a scalar column and a scalar value, in one model (#320).
 
-    Was: the linopy lane built all three and solved; the relational lane raised
-    `constraint 'budget_row' has no dims`, and with that guard gone,
-    `variable 'slack' has no dims (scalars: use dims of size 1)`. So the same
-    file was two languages, against hard rule 3 — and the hint pointed at the
-    dummy dimension the declaration rules now say is never how a scalar is
-    written.
-
-    Underneath both guards `_coordinate_product` asserted that no declaration
-    arrives dimensionless. A product over nothing has one coordinate, not none.
+    A product over no dimensions has one coordinate, not none.
     """
     data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
 
@@ -367,17 +313,8 @@ def test_the_empty_coordinate_builds_on_both_lanes():
 def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objective):
     """Absence spreads through arithmetic at no dimension either (#340).
 
-    Was: the relational lane kept `budget_row` and enforced `sum(x) <= budget`
-    — a constraint the language says should not exist — because a scalar
-    variable's presence was `select()` over no dims, and polars cannot hold a
-    frame with rows and no columns. Present and absent collapsed to the same
-    `(0, 0)` at the moment presence was built, so nothing downstream could
-    restrict on it. Later refused at load instead, which traded a silent wrong
-    answer for a loud divergence; this is the answer.
-
-    The two rungs are the whole property: the mask is data, so the *same file*
-    must drop the row or keep it depending only on what `budget` turns out to
-    be.
+    The mask is data, so the *same file* drops the row or keeps it depending
+    only on what `budget` turns out to be.
     """
     spec = override(SCALAR_ROW_SPEC, **{'variables.slack.where': f'budget > {threshold}'})
     data = {'f': ['a', 'b', 'c'], 'cost': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}), 'budget': 120.0}
@@ -403,13 +340,7 @@ DATETIME_SPEC = {
 
 
 def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
-    """A quoted ISO date in a `where`, which had no spelling at all (#460).
-
-    `snapshot > 2030-01-01` and its quoted form both failed to parse, and
-    `snapshot > 0` parsed into a comparison against the *epoch* — so a datetime
-    dimension was usable exactly as long as nothing about the model was
-    conditional on time. There was no way to name a boundary.
-    """
+    """A quoted ISO date in a `where` names a boundary on a datetime dimension (#460)."""
     path = tmp_path / 'm.yaml'
     path.write_text(pyyaml.safe_dump(DATETIME_SPEC))
     days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
