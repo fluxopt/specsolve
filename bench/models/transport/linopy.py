@@ -1,17 +1,8 @@
 """`transport` as a linopy user writes it — `examples/ports/references/linopy/transport.py`.
 
-The reviewed idiomatic form (#681), against the ladder's parquet. Its one
-modelling decision is argued there and repeated because it is what this case
-measures: the YAML groups by the relations it declared — `sum(p, by=gen_bus, over=generator, into=bus)` —
-where this builds the bus x generator and bus x line incidence matrices and
-multiplies through them. linopy's `groupby` could carry the generator half but
-not the flows, since a bus no line enters vanishes from a grouped sum, so the
-script keeps one idiom for both halves.
-
-**The incidence matrices are dense**, which is the cost this case exists to
-show: the product they multiply through is bus x generator x snapshot, and at
-the upper rungs that is the linopy lane's materialisation problem rather than a
-mistake in the formulation.
+The same model against the ladder's parquet. Where the YAML groups by its
+declared relations, this multiplies through dense bus x generator and bus x
+line incidence matrices, so the product is bus x generator x snapshot.
 """
 
 from __future__ import annotations

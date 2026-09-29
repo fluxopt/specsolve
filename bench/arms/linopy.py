@@ -1,28 +1,17 @@
-"""linopy, hand-written — the arm a reader means when they see the name.
+"""linopy, hand-written.
 
-Not the linopy oracle in `tests/linopy_lane`: that reads our YAML and would
-measure our own lowering on top of linopy's work, which is why it left the
-ladder (#1268). Here the model is
-typed out per case in `bench/models/<case>/linopy.py`, the way linopy's own
-docs and this repo's `examples/ports/references/linopy/` write it — the same
-scripts the gallery publishes, which is what makes this arm's formulations
-reviewable rather than a strawman.
+The model is typed out per case in `bench/models/<case>/linopy.py`, the way
+`examples/ports/references/linopy/` writes it, and read from parquet with
+pandas.
 
-**The parquet is read with pandas**, not polars: linopy's inputs are pandas and
-xarray, so a polars read plus a conversion would charge it for a hop its users
-do not take. Each arm reads the way its own library expects.
+Three defaults are switched off:
 
-**Three defaults are switched off, and they are load-bearing:**
-
-- `set_names=False` on both solver hand-offs. linopy names every variable and
-  constraint while our sinks name nothing, so the default would time a feature
-  only one arm's model carries — naming is **82% of linopy's HiGHS hand-off**
-  (0.11s against 0.02s at 200k variables) and 35% of its Gurobi one.
-- `progress=False` on the LP writer. Its default is `m._xCounter > 10_000`, so
-  every rung above `xs` renders tqdm bars no other arm draws — ~7% of the write
-  at 10M variables, and stderr noise in a harness that parses stdout.
-- `io_api='lp-polars'`, its fastest writer rather than its default one. The
-  correction runs against us, which is the direction an honest harness errs in.
+- `set_names=False` on both solver hand-offs, because specsolve's sinks name
+  nothing; naming is 82% of linopy's HiGHS hand-off (0.11s against 0.02s at
+  200k variables) and 35% of its Gurobi one.
+- `progress=False` on the LP writer, whose tqdm bars cost ~7% of the write at
+  10M variables and write to stderr.
+- `io_api='lp-polars'`, its fastest writer rather than its default one.
 """
 
 from __future__ import annotations
@@ -39,10 +28,7 @@ if TYPE_CHECKING:
 #: Every sink linopy can hand a model to — the same three as ours.
 SINKS = ('lp', 'highs', 'gurobi')
 
-#: What has to be importable for this arm to run. The `codspeed` environment
-#: deliberately leaves `dev` out — it resolves linopy from a git branch and the
-#: job measured no linopy model until this arm existed — so an absent library
-#: has to skip the cell with its reason rather than error the run.
+#: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('linopy',)
 
 #: Which formulation module in `bench/models/<case>/` this arm builds from.
@@ -87,26 +73,12 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
 
 
 def window_setup(sink: str, prepared: Prepared) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Nothing to hold between windows, so nothing is built before the clock.
-
-    The other arm carries a model and a loaded solver out of its setup. linopy
-    carries nothing, because a rebuild is what its next window does, so this
-    hands :func:`window` the same lightweight token :func:`prepare` produced and
-    the whole rebuild lands inside the measurement. That asymmetry is the rung's
-    finding rather than a handicap arranged here.
-    """
+    """Nothing to hold between windows, so the whole rebuild lands inside the measurement."""
     return (sink, prepared), {}
 
 
 def window(sink: str, prepared: Prepared) -> Counts:
-    """Every window is a fresh build, because linopy has no verb for a second one.
-
-    Not a handicap arranged here. linopy's model is constructed from its data,
-    and a driver holding new numbers constructs another one — which is what its
-    own docs, PyPSA and `examples/ports/references/linopy/` all do. So the
-    comparison this rung draws is between re-attaching and rebuilding, and
-    rebuilding is linopy's honest answer rather than a slow path chosen for it.
-    """
+    """Every window is a fresh build, because linopy has no verb for a second one."""
     return build_and_emit(sink, prepared)
 
 
@@ -116,12 +88,7 @@ def build_only(prepared: Prepared) -> Counts:
 
 
 def objective(prepared: Prepared) -> float:
-    """Solve, and return what the arms are checked against.
-
-    ``status`` is linopy's coarse rollup; the solver's own verdict rides on
-    ``termination_condition``, and checking the wrong one turns a vocabulary
-    mismatch into a parity failure.
-    """
+    """Solve, and return what the arms are checked against."""
     m = _built(prepared)
     m.solve(solver_name='highs', output_flag=False)
     if m.status != 'ok':
