@@ -95,6 +95,17 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
+def reported_divisor_message(name: str, missing: int) -> str:
+    """The message for a divisor parameter a reported expression reads short of a row."""
+    return (
+        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
+        f'the expression divides at. A missing parameter row is not absence, so the quotient '
+        f'is not dropped there, and there is no number to divide by.\n'
+        f'  Supply the missing rows.\n'
+        f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """The message for a bound parameter missing values at some coordinates."""
     return (

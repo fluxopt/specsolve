@@ -225,8 +225,98 @@ def test_a_divisor_that_adds_keeps_its_hole():
     )
     covered = pl.DataFrame({'snapshot': [0, 1], 'value': [2.0, 3.0]})
     result = sps.solve(spec, sources() | {'scale': covered, 'other': covered})
-    with pytest.raises(DataError, match='used as a divisor but covers 1 fewer'):
+    with pytest.raises(DataError, match='used as a divisor but has no row at 1 of the coordinates'):
         result.evaluate('holed')
+
+
+SIZED = {
+    'dimensions': {'g': {'dtype': 'str'}},
+    'parameters': {
+        'fixed': {'dims': ['g']},
+        'sizable': {'dims': ['g'], 'dtype': 'bool'},
+        'out': {'dims': ['g']},
+    },
+    'variables': {'chosen': {'dims': ['g'], 'where': 'sizable', 'bounds': {'lower': 0, 'upper': 10}}},
+    'expressions': {
+        'size': {'dims': ['g'], 'cases': {'given': {'when': 'fixed', 'expression': 'fixed'}}, 'otherwise': 'chosen'},
+    },
+    'constraints': {'enough': {'dims': ['g'], 'where': 'sizable', 'expression': 'chosen >= out'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(chosen, over=g)'},
+}
+
+
+def sized(fixed: dict[str, float], out: dict[str, float]) -> dict[str, pl.DataFrame]:
+    """`chosen` exists at `b` alone and solves to `out[b]`; `size` is `fixed` where it is given, else `chosen`."""
+    return {
+        'g': pl.DataFrame({'g': ['a', 'b', 'c']}),
+        'fixed': pl.DataFrame({'g': list(fixed), 'value': list(fixed.values())}),
+        'sizable': pl.DataFrame({'g': ['b'], 'value': [True]}),
+        'out': pl.DataFrame({'g': list(out), 'value': list(out.values())}),
+    }
+
+
+ABSENT_AT_C = sized({'a': 4.0}, {'a': 2.0, 'b': 5.0, 'c': 1.0})
+GIVEN_ZERO_AT_C = sized({'a': 4.0, 'c': 0.0}, {'a': 2.0, 'b': 5.0, 'c': 1.0})
+SOLVED_ZERO_AT_B = sized({'a': 4.0, 'c': 2.0}, {'a': 2.0, 'b': 0.0, 'c': 1.0})
+
+
+@pytest.mark.parametrize(
+    ('data', 'expression', 'expected'),
+    [
+        pytest.param(ABSENT_AT_C, 'out / size', {'a': 0.5, 'b': 1.0}, id='absent-through-cases'),
+        pytest.param(ABSENT_AT_C, 'out / chosen', {'b': 1.0}, id='absent-variable'),
+        pytest.param(ABSENT_AT_C, '1 + out / size', {'a': 1.5, 'b': 2.0}, id='absent-beside-a-constant'),
+        pytest.param(GIVEN_ZERO_AT_C, 'out / size', {'a': 0.5, 'b': 1.0}, id='zero-in-the-data'),
+        pytest.param(GIVEN_ZERO_AT_C, '1 + out / size', {'a': 1.5, 'b': 2.0}, id='zero-beside-a-constant'),
+        pytest.param(SOLVED_ZERO_AT_B, 'out / size', {'a': 0.5, 'c': 0.5}, id='zero-from-the-solve'),
+    ],
+)
+def test_a_quotient_is_absent_where_its_divisor_is_absent_or_zero(data, expression, expected):
+    """A reported quotient has no row where its divisor is absent, or is zero however it got there.
+
+    Before #1775, an absent divisor was refused as if a parameter were short of
+    a row, and a zero one read `inf`, or `nan` over a zero numerator.
+    """
+    frame = sps.solve(override(SIZED, **{'expressions.q': expression}), data).evaluate('q')
+    got = dict(zip(frame['g'], frame['value'], strict=True))
+    assert got == pytest.approx(expected), 'the coordinate whose divisor is absent or zero has no row, not inf'
+
+
+def test_a_zero_summand_does_not_make_a_divisor_that_is_a_sum_zero():
+    """`sum(fixed, over=g)` is 4 + 0: the zero rule reads the total, so every coordinate divides by 4 and none is absent."""
+    spec = override(SIZED, **{'expressions.q': 'out / sum(fixed, over=g)'})
+    frame = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
+    got = dict(zip(frame['g'], frame['value'], strict=True))
+    assert got == pytest.approx({'a': 0.5, 'b': 1.25, 'c': 0.25}), 'out divided by the total 4, at every coordinate'
+
+
+@pytest.mark.parametrize('data', [pytest.param(ABSENT_AT_C, id='absent'), pytest.param(GIVEN_ZERO_AT_C, id='zero')])
+def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
+    """A summand with no value is one summand fewer, so the sum reads `a` and `b` and stands.
+
+    Before #1775 the absent summand was refused as a short parameter, and the
+    zero one made the whole sum `inf`.
+    """
+    frame = sps.solve(override(SIZED, **{'expressions.q': 'sum(out / size, over=g)'}), data).evaluate('q')
+    assert frame['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
+
+
+@pytest.mark.parametrize(
+    'expression',
+    [pytest.param('out / fixed', id='the-parameter'), pytest.param('out / (fixed * chosen)', id='beside-a-variable')],
+)
+def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions_words(expression):
+    """A missing parameter row is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
+
+    Before #1775 it read a constraint's message: that the constraint would stop
+    constraining, and to mask the coordinates out with a `where`. It also named
+    the variable in the divisor as a parameter.
+    """
+    spec = override(SIZED, **{'expressions.q': expression})
+    with pytest.raises(DataError, match="named expression 'q': parameter 'fixed'") as refused:
+        sps.solve(spec, ABSENT_AT_C).evaluate('q')
+    assert 'where' not in str(refused.value), 'a named expression takes no where, so the message cannot advise one'
+    assert 'constrain' not in str(refused.value), 'a reported entry constrains nothing'
 
 
 @pytest.mark.parametrize('crossed', [pytest.param('p * r', id='a-product'), pytest.param('p ** r', id='a-power')])

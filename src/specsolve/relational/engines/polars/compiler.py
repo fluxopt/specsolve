@@ -183,13 +183,17 @@ class PolarsCompiler:
     # expressions → fragments
     # ------------------------------------------------------------------
 
-    def expression(self, expr: program.Expression, context: str, *, quadratic: bool = False) -> CompiledExpression:
+    def expression(
+        self, expr: program.Expression, context: str, *, quadratic: bool = False, reported: bool = False
+    ) -> CompiledExpression:
         """Compile an expression into term, quadratic and const fragments.
 
         *quadratic* is the position's ceiling, passed by the caller that knows
         it: the objective can hold a product of two variables and a constraint
-        row cannot. The language has already refused what it refuses
-        (``mathspec.degree``), so this is the **plan-boundary backstop** —
+        row cannot. *reported* is set by the caller that reads a value rather
+        than building a row, where a quotient is absent wherever its divisor
+        is zero ([`_read_divisor`][]). The language has already refused what
+        it refuses (``mathspec.degree``), so this is the **plan-boundary backstop** —
         a degree-2 node arriving by any other route dies here rather than
         becoming a term whose second variable is silently dropped.
 
@@ -251,7 +255,7 @@ class PolarsCompiler:
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor)
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a divisor that adds is refused at load'
-            inv = b.consts[0]
+            inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
             quads = tuple(join_mul(q, inv, 'quad', divide=True) for q in a.quads)
             consts = tuple(join_mul(x, inv, 'const', divide=True) for x in a.consts)
@@ -483,6 +487,24 @@ class PolarsCompiler:
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
         frame = held.frame.select(*dims).with_columns(held.share(solution.dual).alias('cval'))
         return TermFragment(dims, frame, 'const', presences=(Presence(_presence(held, dims, 'row'), dims),))
+
+    def _read_divisor(self, divisor: TermFragment) -> TermFragment:
+        """*divisor* absent wherever it is zero, which is how a reported quotient reads a zero divisor.
+
+        *divisor* is already one value per coordinate ([`_added_up`][]). The
+        presence admits every coordinate but the zeros, rather than every
+        coordinate the divisor has: a divisor parameter short of a row has to
+        stay a null for the refusal to find, since a missing row is not absence.
+        """
+        zeros = divisor.frame.filter(pl.col('cval') == 0)
+        if divisor.dims:
+            present = masked(self.scope, divisor.dims, None).select(*divisor.dims)
+            present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
+        else:
+            count = zeros.select(pl.len().alias('__zeros__'))
+            present = pl.LazyFrame({PRESENT: [True]}).join(count, how='cross').filter(pl.col('__zeros__') == 0)
+            present = present.select(PRESENT)
+        return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
 
     def _added_up(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
         """*compiled* as one const fragment with one value per coordinate — a divisor, or a power's base or exponent.
