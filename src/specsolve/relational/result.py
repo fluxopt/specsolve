@@ -585,6 +585,12 @@ class Result:
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``.
 
+        Each is the rate at which the optimal objective rises as the row's
+        right side rises: of ``lhs <= rhs``, the rate in ``d`` of
+        ``lhs <= rhs + d``. That is mathspec's definition of ``dual(c)``, and
+        it holds for every comparator, under either sense and on every sink,
+        so which side a term is written on decides the sign.
+
         [`primal`][]'s shape and order, over constraint rows. Duals exist only
         where a solver ran here: a model written to a file and solved elsewhere
         never passes back through this package. Reduced costs and slacks are
