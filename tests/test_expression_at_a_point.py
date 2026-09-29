@@ -77,11 +77,8 @@ def _data() -> dict[str, Any]:
 #: What the lanes read differently today. Strict: a fix turns its case red until
 #: its entry here goes.
 DIVERGENCES = {
-    'sum((y) + (w), over=f)': (
-        'the relational lane keeps w[b] where y is absent, in a read and in a built row alike; '
-        'the summand is absent there, so the sum skips it (test_arithmetic_laws: #311)'
-    ),
-    'sum((w) + (y), over=f)': 'the same, operands swapped',
+    'sum((y) + (w), over=f)': '#1782: the relational lane keeps w[b] where y is absent, so the sum does not skip it',
+    'sum((w) + (y), over=f)': '#1782: the same, operands swapped',
 }
 
 #: Every twentieth rewrite joins the depth-two space in the census below.
@@ -153,12 +150,11 @@ OPERATORS = [
     pytest.param('x / w', id='divide-by-a-parameter'),
     pytest.param('w / x', id='divide-by-a-variable'),
     pytest.param('x / y', id='divide-by-a-masked-variable'),
+    pytest.param('x / (w * y)', id='divide-by-a-parameter-times-a-masked-variable'),
     pytest.param(
         'x / (x - x)',
         id='divide-by-zero',
-        marks=pytest.mark.xfail(
-            reason='the linopy lane reads inf where #1776 made a reported quotient by zero absent', strict=True
-        ),
+        marks=pytest.mark.xfail(reason='#1783: the linopy lane reads a quotient by zero as inf', strict=True),
     ),
     pytest.param('sum(x / y, over=f)', id='sum-of-a-quotient-by-a-masked-variable'),
     pytest.param('sum(x / y + x, over=f)', id='sum-of-a-quotient-by-a-masked-variable-beside-a-present-term'),
