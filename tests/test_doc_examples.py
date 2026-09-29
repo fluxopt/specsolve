@@ -48,6 +48,7 @@ TRACKED = [
     'docs/run.md',
     'docs/howto/warm-start.md',
     'docs/howto/fix-relax-remove.md',
+    'docs/howto/solvers.md',
     'docs/howto/parallel.md',
     'docs/howto/debug.md',
     'docs/howto/archiving.md',

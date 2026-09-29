@@ -80,13 +80,6 @@ Each answer is a polars table keyed by the declaration's labels. The dual is
 the cost of the last generator on: 10 at snapshot 0, where wind alone covers
 the load, and 50 at the other three.
 
-To hand the model to another tool instead, write it. The suffix picks the
-format:
-
-```python
-sps.write('dispatch.yaml', sources, 'dispatch.lp')
-```
-
 ## Where next
 
 | | |
@@ -94,6 +87,7 @@ sps.write('dispatch.yaml', sources, 'dispatch.lp')
 | [Tables in, tables out](tables.md) | the next lesson: parquet in, tables out, and an archive to query |
 | [Preparing the data](howto/data.md) | from files to the tables above |
 | [The verbs](reference/api.md) · [The data contract](reference/data.md) | what every call takes, returns and refuses |
+| [Choosing a solver](howto/solvers.md) | another solver, or a file for a tool specsolve has no solver for |
 | [Language reference](https://mathspec.readthedocs.io/en/latest/reference/language/) · [the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/) | what a file may contain, and where it stops |
 | [Debug a wrong answer](howto/debug.md) | when it solves and the number is wrong, or it does not solve |
 | [Examples](examples/index.md) | every model in the repository |

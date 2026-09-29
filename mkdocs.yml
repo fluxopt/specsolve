@@ -29,6 +29,7 @@ nav:
       - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
       - Warm-starting a re-solve: howto/warm-start.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
+      - Choosing a solver: howto/solvers.md
       - Running a sweep in parallel: howto/parallel.md
       - Archiving a solve: howto/archiving.md
       - Reading a directory of runs: howto/warehouse.md
