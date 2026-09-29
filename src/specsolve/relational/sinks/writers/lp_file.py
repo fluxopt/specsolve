@@ -1,12 +1,7 @@
 """The ``lp_file`` sink: the model as LP text.
 
-Portability, debugging, and the differential oracle. Every section is a lazy
-frame sunk straight into the open file, so the rendered text is polars' to
-stream and no byte is written twice.
-
-**Every section is written in label order.** A solver does not care, but a
-reader diffing two LP files does, and so does anyone checking that a model
-builds the same bytes twice.
+Every section is a lazy frame sunk straight into the open file, in label
+order, so a model writes the same bytes twice.
 """
 
 from __future__ import annotations
@@ -25,14 +20,8 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
 
 
-#: A section is text, so this format excludes no combination and curvature
-#: costs it nothing — and every construct the language can reach is a section
-#: this writer emits, quadratic rows included. What a descriptor declares is
-#: what [`write_lp_file`][] **emits**.
-#:
-#: What no descriptor promises is that the solver reading the file back parses
-#: what was written — that is a property of a *reader*, and HiGHS's refuses two
-#: of these sections (docs/about/benchmarks.md#sink-capabilities).
+#: Every construct the language can reach, quadratic rows included. A reader
+#: may still refuse a section: HiGHS's refuses two.
 LP_FILE_CAPABILITIES = Capabilities(
     supports={
         'integrality': 'native',
@@ -44,31 +33,22 @@ LP_FILE_CAPABILITIES = Capabilities(
 )
 
 
-#: How the LP format spells each comparison, read off [`SENSE_CODES`][] so a
-#: sense added there reaches the file or raises here. The format differs on
-#: one word: it writes an equality as ``=``.
+#: The LP spelling of each [`SENSE_CODES`][] comparison.
 _LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
 
-#: The section each non-continuous domain is listed under, read off the
-#: language's vocabulary so a domain added there raises here at import.
+#: The section each non-continuous domain is listed under; a new domain raises here at import.
 _LP_DOMAIN_SECTION = {
     domain: {'binary': 'binary', 'integer': 'general'}[domain]
     for domain in get_args(program.VariableDomain)
     if domain != 'continuous'
 }
 
-#: Nonzeros per constraint chunk. A chunk's rendered lines live in memory until
-#: it is sunk, so this bounds the writer's peak rather than its speed.
+#: Nonzeros per constraint chunk; it bounds the writer's peak memory, not its speed.
 EMIT_BUDGET = 2_000_000
 
 
 def write_lp_file(handoff: Handoff, path: str | Path) -> None:
-    """Write the model as LP text.
-
-    ``cols`` is positional, so the bounds section's index is added inside the
-    streamed pipeline. The constraint section goes out one row range at a time,
-    since a chunk's rendered lines are held until it is sunk.
-    """
+    """Write the model as LP text."""
     path = Path(path)
     objective = handoff.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
     bounds = (
@@ -119,13 +99,9 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
 
 
 def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
-    r"""One quadratic constraint, linear part then bracketed quadratic part.
+    """One quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``.
 
-    ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``. **Not** halved, unlike the objective's
-    section: the format divides only that one by two.
-
-    Written a row at a time, after the linear rows and still in label order —
-    the quadratic rows *are* the tail.
+    Not doubled: the format divides only the objective's bracket by two.
     """
     entries = handoff.matrix_block(row, row + 1)
     header = pl.LazyFrame({'line': [f'c{row}:']})
@@ -139,28 +115,17 @@ def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame) -> pl.
 
 
 def _quadratic_terms(handoff: Handoff) -> pl.LazyFrame:
-    r"""The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
+    """The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
 
-    **The section is divided by two, so every coefficient here is doubled.**
-    The format writes :math:`[\;\cdot\;] / 2`, which is the Hessian convention
-    wearing text: a term the model states as :math:`q\,x_i x_j` is written
-    ``2q``, on the diagonal and off it alike, and the reader halves it back.
-    This is uniform, unlike the Hessian's own rule, where the diagonal doubles
-    and the off-diagonal does not.
-
-    A pair arrives ordered, summed and deduplicated
-    ([`_objective_quadratic`][specsolve.relational.engines.polars.assembly.Assembly._objective_quadratic]),
-    so nothing here sorts.
+    The format divides the section by two, so every coefficient is doubled, on
+    the diagonal and off it alike. A pair arrives ordered, summed and
+    deduplicated, so nothing here sorts.
     """
     return handoff.quad.lazy().select(_pair(pl.col('coeff') * 2))
 
 
 def _pair(coeff: pl.Expr) -> pl.Expr:
-    """One quadratic pair as ``+2 x3 * x7`` — or ``x3 ^ 2`` for a squared column.
-
-    ``^ 2`` is the format's spelling and no parser accepts ``x3 * x3``. The
-    objective section doubles *coeff* and the constraint section does not.
-    """
+    """One quadratic pair as ``+2 x3 * x7``, or ``x3 ^ 2`` for a squared column: no parser accepts ``x3 * x3``."""
     return pl.concat_str(
         *_signed(coeff),
         pl.lit(' x'),
@@ -172,17 +137,9 @@ def _pair(coeff: pl.Expr) -> pl.Expr:
 
 
 def _set_lines(handoff: Handoff) -> pl.LazyFrame:
-    """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line.
+    """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line, in linopy's spelling.
 
-    linopy's spelling of the section, so a file this writes and a file the
-    linopy lane writes are read by the same parsers.
-
-    **The one section gathered rather than interleaved**: a set's members have
-    to reach one line. Order is the stream's own, and ``maintain_order`` is what
-    keeps a group's line the same bytes twice.
-
-    Written even where the reader may refuse it: HiGHS has no SOS concept and
-    its parser says so.
+    ``maintain_order`` keeps a set's line the same bytes twice.
     """
     return (
         handoff.sos.lazy()
@@ -209,18 +166,11 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
 def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
-    One row per *output line*, interleaved by sorting, so nothing gathers a
-    row's terms into a string list first. *entries* is the chunk's slice of the
-    matrix from [`Handoff.matrix_block`][], and the anti-join gives a termless
-    row the line a solver still needs to parse.
-
-    **The order is one integer, and the only other column.** A row's lines
-    occupy ``slots`` consecutive keys — header, placeholder, each term at its
-    column index, sense — so one sort settles both the row order and the order
-    within a row.
-
-    The terms are sorted although they arrive sorted: the union sort merges
-    pre-ordered runs rather than permuting them.
+    A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
+    term at its column index, sense — so one sort settles both the row order and
+    the order within a row. The anti-join gives a termless row the ``+0 x0`` a
+    parser needs. The terms are sorted although they arrive sorted, so the union
+    sort merges runs rather than permuting them.
     """
     slots = handoff.cols.height + 3
 
@@ -260,14 +210,10 @@ def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
 
 
 def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
-    """A coefficient, sign always explicit — the LP format needs the ``+``.
+    """A coefficient with its sign always explicit, as the LP format needs.
 
-    Two pieces: the cast already carries the ``-``, so only a non-negative
-    value needs a sign glued on.
-
-    Zero is spelled out rather than cast because ``-0.0`` is ``>= 0``: it takes
-    the ``+`` arm while the cast renders ``-0.0``, giving ``+-0.0``, which no LP
-    parser accepts. Any negative coefficient times a zero parameter reaches it.
+    Zero is spelled out because ``-0.0`` takes the ``+`` arm while the cast
+    renders ``-0.0``, giving ``+-0.0``, which no LP parser accepts.
     """
     return (
         pl.when(value >= 0).then(pl.lit('+')).otherwise(pl.lit('')).alias('sign'),

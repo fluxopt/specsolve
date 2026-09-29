@@ -1,21 +1,10 @@
 """The ``xpress`` solver: the model in two calls, straight into the Optimizer.
 
 The same hand-off as [`highs`][specsolve.relational.sinks.solvers.highs], reading the
-same ``dense_columns``, ``dense_rows`` and ``row_blocks``, so no two sinks can
-disagree about the model they load. What differs:
-
-- **The matrix is row-major and stays that way.** ``addRows`` takes the CSR
-  triple a block already is — no ``scipy`` wrapper, and the extra carries
-  nothing but ``xpress`` itself.
-- **The objective's constant is a column.** Xpress spells it as the objective
-  coefficient of column ``-1``, *negated*, where the other two have an
-  attribute for it.
-- **Forgetting is a control, not a call.** ``problem.reset()`` clears the whole
-  problem here, so what discards the last solve's work is ``keepbasis``; see
-  [`Xpress.forget`][].
-
-``xpress`` is imported inside the functions, so importing this module stays
-free for a caller who never solves with it.
+same ``dense_columns``, ``dense_rows`` and ``row_blocks``. The objective's
+constant is the negated objective coefficient of column ``-1``. ``xpress`` is
+imported inside the functions, so importing this module stays free for a
+caller who never solves with it.
 """
 
 from __future__ import annotations
@@ -35,10 +24,9 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
 
 
-#: Xpress solution status -> termination condition. Copied from linopy's own
-#: ``Xpress.CONDITION_MAP``, which is the whole of theirs;
-#: ``tests/test_solve_status.py`` asserts the copy. Keyed by the enum's
-#: *value*, the enum being an optional import and this module level.
+#: Xpress solution status -> termination condition, copied from linopy's
+#: ``Xpress.CONDITION_MAP``; ``tests/test_solve_status.py`` asserts the copy.
+#: Keyed by value, since the enum is an optional import.
 _CONDITION_OF_SOL_STATUS = {
     0: 'unknown',
     1: 'optimal',
@@ -47,15 +35,11 @@ _CONDITION_OF_SOL_STATUS = {
     4: 'unbounded',
 }
 
-#: Which solution statuses carry values worth reading. ``FEASIBLE`` is an
-#: incumbent found before the run stopped, so it does; ``NOTFOUND`` is the
-#: case [`is_readable`][specsolve.relational.status.SolveStatus.is_readable] exists for.
+#: ``OPTIMAL`` and ``FEASIBLE``, by value: the solution statuses that carry values.
 _HAS_PRIMAL = frozenset({1, 2})
 
-#: ``SolveStatus.FAILED`` and ``SolveStatus.UNSTARTED``, by value. The second
-#: axis, read for two things ``solstatus`` cannot answer: whether the run
-#: errored, and whether there has been a run at all — which on this solver is
-#: the difference between a basis and a trivial one.
+#: ``SolveStatus.UNSTARTED`` and ``SolveStatus.FAILED``, by value: whether there
+#: has been a run, and whether it errored, which ``solstatus`` cannot say.
 _SOLVE_UNSTARTED = 0
 _SOLVE_FAILED = 2
 
@@ -65,9 +49,7 @@ def build_xpress(
     batch_rows: int | None = None,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Xpress:
-    """Load the model into an `xpress.problem` and stop there.
-
-    [`build_highs`][specsolve.relational.sinks.solvers.highs.build_highs]'s seam.
+    """Load the model into an `xpress.problem` and stop there: the seam `bench/` measures.
 
     Returns:
         The [`Xpress`][] holding the problem, at ``.handle``. The problem
@@ -77,34 +59,21 @@ def build_xpress(
 
 
 class Xpress(Solver):
-    """FICO Xpress, holding one model — [`Solver`][]'s member for the second opt-in sink.
+    """FICO Xpress, holding one model.
 
-    [`Highs`][specsolve.relational.sinks.solvers.highs.Highs]'s twin in how the
-    model is handed over and [`Gurobi`][specsolve.relational.sinks.solvers.gurobi.Gurobi]'s
-    in what it costs to hold. Three things are the Optimizer's shape:
-
-    - **A push writes by index**, whole vectors through ``chgBounds`` /
-      ``chgObj`` / ``chgRHS``. There is no handle to keep: the problem *is*
-      the read-back.
-    - **Nothing pushes a row's comparison.** A sense comes from the YAML and no
-      data can move it, so a model whose senses differ is one
-      [`structure`][specsolve.relational.sinks.handoff.Handoff.structure] has already
-      sent back to be loaded again.
-    - **Duals are refused rather than zero-filled** on a model that has none,
-      as on Gurobi, so the refusal is the answer.
+    A push writes bounds, costs and right-hand sides by index. Duals are
+    ``None`` rather than zero-filled on a model that has none.
     """
 
-    #: The loaded problem. One object: ``close`` drops it and the licence goes
-    #: with it.
+    #: The loaded problem; ``close`` drops it, and the licence with it.
     _p: Any
 
     #: One package, and it carries its own solver library.
     requires = ('xpress',)
     unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "specsolve[xpress]"'
 
-    #: Xpress branches on a set itself: no binaries, no big-M, and no bound a
-    #: member has to have. The Optimizer takes a Hessian; **this sink does not
-    #: hand it one**.
+    #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
+    #: sink does not hand it one.
     capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
@@ -115,11 +84,7 @@ class Xpress(Solver):
         return self._p
 
     def push(self, handoff: Handoff) -> None:
-        """Whole vectors by index, in three calls.
-
-        Both bounds go in one ``chgBounds``: it takes a column per entry and a
-        letter saying which bound.
-        """
+        """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per entry."""
         import numpy as np
 
         xpress = _xpress()
@@ -134,15 +99,11 @@ class Xpress(Solver):
         self._p.chgRHS(np.arange(handoff.row_count, dtype=np.int64), handoff.dense_rows(xpress.infinity).rhs)
 
     def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, or its incumbent where that is not valid.
+        """The basis the last solve left, its incumbent after a MIP, or ``None``.
 
-        **Asked of the problem, not caught from it.** Xpress hands back the
-        trivial all-slack basis before any solve, and after a mixed-integer
-        one, so the two questions are asked directly: has anything been solved,
-        and is what is loaded a MIP.
-
-        Xpress hands the basis back as ``(rows, columns)``, the opposite order
-        to [`WarmStart`][]'s fields.
+        Xpress hands back a trivial all-slack basis before any solve and after a
+        MIP, so both are asked of the problem directly. ``getBasis`` returns
+        ``(rows, columns)``, the opposite of [`WarmStart`][]'s order.
         """
         import numpy as np
 
@@ -162,11 +123,7 @@ class Xpress(Solver):
         )
 
     def _warm(self, ws: WarmStart) -> None:
-        """``loadBasis`` for a basis, ``addMipSol`` for an incumbent.
-
-        ``keepbasis`` goes back on with the basis; [`forget`][] is what turns
-        it off.
-        """
+        """``loadBasis`` for a basis, ``addMipSol`` for an incumbent; a basis turns ``keepbasis`` back on."""
         if (basis := ws.basis()) is not None:
             column_statuses, row_statuses = basis
             self._p.controls.keepbasis = 1
@@ -178,11 +135,7 @@ class Xpress(Solver):
             self._p.addMipSol(ws.column_values)
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded and read it back.
-
-        The objective constant is already the loaded model's, so *handoff* is
-        asked for nothing.
-        """
+        """Solve what is loaded and read it back; the objective constant is already in the model."""
         self._p.optimize()
         status = _status_of(self._p)
         if not status.is_readable:
@@ -198,12 +151,10 @@ class Xpress(Solver):
         )
 
     def dual_ray(self) -> pl.Series | None:
-        """``getDualRay``, which Xpress signs the way the contract wants.
+        """``getDualRay``, signed the way the contract wants.
 
-        Xpress has a ray only where the simplex found the infeasibility, and
-        hands back ``None`` where presolve found it first — which is the
-        default, so a caller who wants a ray passes
-        ``solver_options={'presolve': 0}``.
+        ``None`` where presolve found the infeasibility, which is the default;
+        ``solver_options={'presolve': 0}`` gets a ray.
         """
         values = self._p.getDualRay()
         return None if values is None else solver_vector(values)
@@ -211,17 +162,13 @@ class Xpress(Solver):
     def forget(self) -> None:
         """``keepbasis = 0``: the next solve ignores the basis this one left.
 
-        ``problem.reset()`` on Xpress clears the whole problem, the model with
-        it. The control is durable, so it tracks the caller's ``keep=`` across
-        re-solves; [`_warm`][] turns it back on.
+        ``problem.reset()`` would clear the model too. The control is durable;
+        [`_warm`][] turns it back on.
         """
         self._p.controls.keepbasis = 0
 
     def close(self) -> None:
-        """Release the problem, and the licence it holds.
-
-        ``reset`` is documented to clear everything the problem holds.
-        """
+        """Release the problem, and the licence it holds."""
         if self._p is not None:
             self._p.reset()
             self._p = None
@@ -232,16 +179,9 @@ def _built(
     batch_rows: int | None,
     solver_options: Mapping[str, Any] | None,
 ) -> Any:
-    """The loaded problem, columns first and then the matrix a block at a time.
+    """The loaded problem: columns with no entries, then the matrix a row block at a time.
 
-    Columns arrive with no entries — ``start`` is all zeros — because the
-    matrix goes in row-wise afterwards, which is the form
-    [`row_blocks`][specsolve.relational.sinks.handoff.Handoff.row_blocks] already
-    hands over.
-
-    ``chgColType`` is called only when some column is integral.
-
-    ``outputlog`` leads the controls so a caller can put the log back.
+    ``outputlog`` leads the controls so a caller's options can put the log back.
     """
     import numpy as np
 
@@ -283,18 +223,14 @@ def _built(
 
 
 def _add_sets(p: Any, handoff: Handoff, xpress: Any) -> None:
-    """Every special-ordered set, one ``addSOS`` call each.
-
-    The one stream with no bulk form, as on Gurobi — a set is a call, its
-    members a list of column indices and their weights.
-    """
+    """Every special-ordered set, one ``addSOS`` call each: there is no bulk form."""
     if not handoff.sos.height:
         return
     for set_type, cols, weights in handoff.sets():
         p.addSOS(cols.to_list(), weights.cast(float).to_list(), type=set_type)
 
 
-#: Our spelling of a comparison against the Optimizer's row types.
+#: Each comparison as an Optimizer row type.
 _XPRESS_SENSE = {'<=': 'L', '>=': 'G', '==': 'E'}
 
 
@@ -306,10 +242,9 @@ def _xpress() -> Any:
 def _status_of(p: Any) -> SolveStatus:
     """What the solve concluded, on both axes.
 
-    ``solstatus`` carries the condition and whether anything is readable;
-    ``solvestatus`` is read only to separate a solve that *errored* — reported
-    as ``internal_solver_error`` — from one that found nothing, which linopy's
-    map, reading ``solstatus`` alone, cannot tell apart.
+    ``solvestatus`` separates a solve that errored, reported as
+    ``internal_solver_error``, from one that found nothing; ``solstatus`` alone
+    cannot.
     """
     solution = int(p.attributes.solstatus)
     if int(p.attributes.solvestatus) == _SOLVE_FAILED:
@@ -322,23 +257,14 @@ def _status_of(p: Any) -> SolveStatus:
 
 
 def _wording(solution: int) -> str:
-    """Xpress's own name for a solution status.
-
-    Read off the enum rather than tabulated — so one this package has never
-    heard of still arrives searchable.
-    """
+    """Xpress's own name for a solution status, read off the enum so an unknown one still arrives."""
     xpress = _xpress()
     names = {int(member): member.name for member in xpress.SolStatus}
     return names.get(solution, str(solution))
 
 
 def _activity(p: Any) -> pl.Series:
-    """Each row's left-hand side at the solution, in row order.
-
-    Xpress exposes no row value of its own — only the slack, which is
-    ``rhs - activity`` uniformly across senses, as on Gurobi — so the one
-    subtraction recovers the solver's number.
-    """
+    """Each row's left-hand side at the solution, as ``rhs - slack``: Xpress exposes only the slack."""
     import numpy as np
 
     slack = np.asarray(p.getSlacks(), dtype=np.float64)
@@ -347,11 +273,7 @@ def _activity(p: Any) -> pl.Series:
 
 
 def _duals(p: Any) -> pl.Series | None:
-    """Shadow prices in row order, or ``None`` where the model has none.
-
-    Xpress refuses ``getDuals`` on a mixed-integer model, and that refusal *is*
-    the answer — there is no zero vector to tell apart from real prices.
-    """
+    """Shadow prices in row order, or ``None`` on a mixed-integer model, where Xpress refuses ``getDuals``."""
     xpress = _xpress()
     try:
         return solver_vector(p.getDuals())

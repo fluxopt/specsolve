@@ -1,9 +1,7 @@
 """One build: every declaration into rows of the model frames a sink drains.
 
-Declarations build one at a time and concatenate at the end; their rows are
-independent. The two registries that fill *during* a build — the variable and
-constraint label frames — are here because a declaration built later has to see
-what earlier ones produced; everything attaching produced is frozen by contrast.
+The variable and constraint label frames fill during a build, because a
+declaration built later reads what earlier ones produced.
 """
 
 from __future__ import annotations
@@ -41,12 +39,9 @@ _MATRIX = ('row', 'col', 'coeff')
 _QMATRIX = ('row', 'col_l', 'col_r', 'coeff')
 _SOS = ('set', 'type', 'col', 'weight')
 
-#: The dtype of each of those columns. ``vtype`` is an ``Enum`` over the
-#: variable types the plan declares, so a type added upstream and not reaching
-#: here fails where the column is built. ``col``, ``set`` and ``weight`` are
-#: ``Int32``, the solver's own index width. A *label* stays ``Int64``: it is a
-#: position in the full pre-mask coordinate product, which can pass 2^31 while
-#: every survivor fits.
+#: The dtype of each of those columns. ``col``, ``set`` and ``weight`` are the
+#: solver's ``Int32``; a label stays ``Int64``, a position in the pre-mask
+#: coordinate product, which can pass 2^31.
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
     'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
@@ -60,11 +55,9 @@ _DTYPES = {
 class Measured:
     """What one build measured about itself, and a rebuild replaces wholesale.
 
-    It outlives [`BuiltModel`][]: ``close()`` releases the frames and
-    diagnostics still answer, so everything here is a count or a small frame
-    rather than a read of the model. Most of it is taken as it is measured, so a
-    build that raises still reports what it got to; the three sizes are written
-    once the build has finished.
+    It outlives ``close()``, so it holds counts and small frames, never a read
+    of the model. Most of it is written as measured, so a build that raises
+    still reports what it got to.
     """
 
     #: ``name -> (coordinates, rows)`` for each parameter attached short of the
@@ -72,8 +65,7 @@ class Measured:
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint
-    #: block, taken as each share is built.
+    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint block.
     coefficients: dict[str, tuple[float, float]] = field(default_factory=dict)
     #: ``name -> (smallest, largest)`` bound magnitude, per variable block.
     bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
@@ -88,32 +80,19 @@ class Measured:
 
 @dataclass(frozen=True)
 class BuiltModel:
-    """One build's product: the handoff a sink drains, and what reads it back.
-
-    ``handoff`` is what every sink reads and no more, in the sink's own
-    contract; the rest is what puts a solver's answer back into the model's
-    labels. The compiler that built it is not kept: a read builds its own,
-    carrying the solution.
-    """
+    """One build's product: the handoff a sink drains, and what reads it back."""
 
     program: program.Program
     attached: AttachedSources
     #: One [`Labelled`][specsolve.relational.engines.polars.labels.Labelled] per
-    #: declaration, one map per label space: columns and rows are numbered
-    #: independently, and a model may name a variable and a constraint alike.
+    #: declaration, one map per label space: a variable and a constraint may share a name.
     variables: dict[str, labels.Labelled]
     constraints: dict[str, labels.Labelled]
     handoff: sinks.Handoff
 
 
 class Assembly:
-    """One build in progress: the mutable half, discarded once it has frozen.
-
-    Every counter here is one a declaration *advances* — a variable claims the
-    next run of columns, a constraint the next run of rows — so they cannot be
-    on the frozen product. [`run`][] turns the lot into a
-    [`BuiltModel`][], and nothing outside this class writes to any of it.
-    """
+    """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
         self.program = program
@@ -125,9 +104,7 @@ class Assembly:
         self.compiler = PolarsCompiler(self.scope)
         self.n_cols = 0
         self.n_rows = 0
-        #: How many special-ordered sets have been numbered. Sets are dense
-        #: ``0..n-1`` across the model, like columns and rows, so a sink names
-        #: one by its number and two builds agree on which.
+        #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
@@ -136,15 +113,10 @@ class Assembly:
     def run(self) -> BuiltModel:
         """Build every declaration, then freeze what they produced.
 
-        Quadratic constraints are built last, so their rows are a contiguous
-        tail of the label space and every sink downstream takes them as a
-        slice; the sort is stable, so file order survives inside each half.
-
-        The matrix and ``rows`` leave in ``(row, col)`` order, as ``Handoff``
-        promises its sinks. The stack already has it — each share leaves
-        sorted and owns the next run of rows — so the order is *checked* with
-        one linear scan rather than sorted. [`_row_starts`][] reads the CSR
-        index off that order, after which ``row`` is dropped from the matrix.
+        Quadratic constraints build last, so their rows are a contiguous tail
+        a sink takes as a slice; the sort is stable, so file order survives in
+        each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
+        ``Handoff`` promises its sinks.
         """
         cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
         sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
@@ -181,10 +153,8 @@ class Assembly:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
         Returns:
-            The share, and the rows that had *any* term — read off the stack
-            before a prune takes the answer away, and off the ordered share
-            where nothing was pruned: a row whose every coefficient is zero
-            owns no entries and is not thereby a row with no terms.
+            The share, and the rows that had any term, read before the prune: a
+            row whose every coefficient is zero is not a row with no terms.
         """
         stacked = pl.concat(pieces).collect(engine=polars_engine())
         coverage.refuse_null_coefficients(stacked, name, *expressions)
@@ -198,16 +168,8 @@ class Assembly:
     def _build_variable(self, name: str, v: program.VariableDeclaration) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
-        The share leaves in label order, ``cols`` carrying no ``col`` of its
-        own: a row's *position* is its solver column index. The bounds joins
-        usually keep that order, so it is verified with one linear scan and
-        re-established only when a join lost it.
-
-        Only the label and the two bounds are collected, keeping the dim
-        columns and joined parameters inside the lazy pipeline. A null bound
-        is a bound parameter with no value where the variable has a column; it
-        is probed on the two columns and counted only on the model that has
-        one.
+        The share leaves in label order: ``cols`` carries no ``col``, so a row's
+        position is its solver column index.
         """
         start = self.n_cols
         labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
@@ -233,22 +195,10 @@ class Assembly:
     def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
         """One declaration's sets as ``(set, type, col, weight)``, over *v*.
 
-        Builds no column and no row: a set names columns the variable already
-        made, so it runs after every variable and before any constraint.
-
-        **A set and a weight are the two halves of a coordinate's row-major
-        position**, split at the ``over`` dim, by two divisions rather than by
-        reading a dim's ordinal per member. A position is the label itself
-        where the variable dropped nothing; a masked one reads the ordinals
-        and renumbers the sets densely. A member's weight is its
-        coordinate's position in the declared order, so a masked-out
-        coordinate leaves its neighbours adjacent rather than leaving a hole.
-
-        **The stream leaves grouped by set and ascending in weight**, which is
-        what lets a sink read a set's edges off the neighbouring row. The
-        order is verified and the sort runs only where members interleave — on
-        **both** columns, because a sort that reordered ties would be a set
-        whose members arrive out of weight order.
+        A set and a weight are the two halves of a coordinate's row-major
+        position, split at the ``along`` dim; a masked variable renumbers the
+        sets densely. The stream leaves grouped by set and ascending in weight,
+        so a sink reads a set's edges off the neighbouring row.
         """
         held = self.variables[s.variable]
         cardinality = self.scope.data.cardinality
@@ -285,22 +235,10 @@ class Assembly:
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
-        Terms normalise to the left, constants to the right. Whether the data
-        is there where the row reads it is [`coverage`][]'s to answer, in the
-        order its table gives: the two questions an aggregation would hide are
-        asked of the pieces and the parameters first, and the rows pass then
-        carries the third.
-
-        Duplicates from ``Sum`` and ``GroupSum`` — which project rather than
-        aggregate — and from ``x + 2 * x`` collapse in [`_matrix_share`][]'s
-        terminal aggregate, read off the data rather than reasoned from how
-        the fragments were reshaped.
-
-        The labelled frame is kept for the dual read-back, and its block
-        narrows when rows go termless: the run of labels a declaration owns is
-        what survived, not what it declared. A purely quadratic row has no
-        linear entries at all, so what decides whether a row is built is
-        whether *either* matrix has a term.
+        Terms normalise to the left, constants to the right. The [`coverage`][]
+        checks run in its table's order, before an aggregate can hide a hole.
+        A row is built where either matrix has a term, and the labelled block
+        narrows to the rows that survived.
         """
         quadratic = declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
@@ -390,20 +328,9 @@ class Assembly:
     ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
         """Rows that kept no variable term are not built, and the block closes up.
 
-        A row with no variables is not a constraint — it asserts something
-        about constants, which the solver cannot act on. Three provenances
-        reach that shape — an absent variable, an empty reduction, a missing
-        coefficient — and all three drop the row.
-
-        *kept* is the row set the share had terms for, which is
-        [`_matrix_share`][]'s to answer: the share it returns has been pruned
-        of zero coefficients, so a row missing from it may have had every term
-        and every one of them zero. That row stays — ``0 >= 10`` is infeasible
-        — where a row that never had a term goes.
-
-        Labels are dense and the dual read-back reads a block by position, so a
-        dropped row may not leave a gap: survivors renumber from *start* and
-        the row counter rewinds.
+        *kept* is read before zeros are pruned, so a row whose every term is
+        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
+        because the dual read-back reads a block by position.
         """
         if kept.len() == rows.height:
             return rows, matrix, start + rows.height
@@ -425,17 +352,9 @@ class Assembly:
     def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
-        ``None`` in is the file that declares no objective at all, and it takes
-        the same path out: the sense stays ``min`` and the constant ``0``, so
-        the sink is handed a zero objective and answers whether the constraints
-        can be met.
-
-        This projection drops the dims, so a dim that arrived by broadcast puts
-        several rows on one column and their **sum** is the coefficient — the
-        hand-off scatters with ``dense[at] = values``, which keeps the *last*
-        write. The stack arrives unordered and nothing downstream needs it
-        ordered, so a repeat is probed over the dense column space rather than
-        by adjacency.
+        With no objective declared the sense stays ``min`` and the constant
+        ``0``. Rows landing on one column are summed here, because the hand-off
+        scatter keeps only the last write.
         """
         if o is None:
             return None
@@ -462,17 +381,11 @@ class Assembly:
     def _objective_quadratic(
         self, quads: tuple[TermFragment, ...], expression: program.Expression
     ) -> pl.DataFrame | None:
-        r"""The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
+        """The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
 
-        **One row per unordered pair**, at the coefficient the file wrote:
-        ``coeff · x[col_l] · x[col_r]``, whole and not halved. Each sink spells
-        that differently — a Hessian is :math:`\frac12 x^\top Q x`, the LP
-        section is divided by two, Gurobi takes :math:`x^\top Q x` — so what
-        leaves here is the algebra and the conversion is theirs.
-
-        **It leaves sorted, and that is a contract**:
-        [`structure`][specsolve.relational.sinks.handoff.Handoff.structure] hashes it, and
-        the join hands pairs back in whatever order the data made.
+        One row per unordered pair, at the coefficient the file wrote, not
+        halved; each sink converts. It leaves sorted, because
+        [`structure`][specsolve.relational.sinks.handoff.Handoff.structure] hashes it.
         """
         if not quads:
             return None
@@ -486,9 +399,8 @@ class Assembly:
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
     """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
 
-    Arithmetic over two dicts attaching already filled — a dimension's height
-    and a parameter's. The door has refused duplicates and strangers, so the
-    height *is* the number of coordinates covered.
+    The door refuses duplicates and strangers, so a parameter's height is the
+    number of coordinates it covers.
     """
     short: dict[str, tuple[int, int]] = {}
     for name, p in program.parameters.items():
@@ -517,13 +429,7 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
 def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
     """The smallest and largest magnitude across *columns*, or ``None`` where none has one.
 
-    Magnitudes rather than signed extremes: a row scaled by ``-1e9`` is as
-    badly scaled as one scaled by ``1e9``. Zero and infinity are dropped,
-    matching the ``Bound`` and ``RHS`` lines a solver prints, which exclude the
-    same two.
-
-    Each sign is reduced where it lies, so ``|x|`` is never built. Both signs
-    are asked because the smallest magnitude can be interior to either.
+    Zero and infinity are dropped, as in the ``Bound`` and ``RHS`` lines a solver prints.
     """
     sides: list[pl.Expr] = []
     for i, column in enumerate(columns):
@@ -542,16 +448,10 @@ def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] 
 
 
 def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
-    """*matrix* with the entries that cannot reach the answer removed.
+    """*matrix* without its exactly-zero coefficients.
 
-    A coefficient of exactly zero states that a variable is not in a row, which
-    is what an absent row already states.
-
-    **A pruned share can no longer say which rows had terms**, and a row whose
-    every coefficient is zero still asserts something — ``0 >= 10`` is
-    infeasible — so [`Assembly._matrix_share`][] reads that row set off each
-    frame before pruning it. Nulls cannot be here: a null coefficient is an
-    undefined divisor, refused before this runs.
+    A pruned share no longer says which rows had terms, so
+    [`Assembly._matrix_share`][] reads that set before pruning.
     """
     return matrix.filter(pl.col('coeff') != 0)
 
@@ -561,28 +461,11 @@ def _collapsed(
 ) -> tuple[pl.DataFrame, bool]:
     """*stacked* with repeated *keys* summed and zeros dropped, in key order where *ordered* — and whether a zero went.
 
-    The one rule every share of the model obeys, linear and quadratic, row and
-    objective: a cell the pieces reach twice holds their sum, and a cell at
-    exactly zero is not there. Nothing runs unconditionally except linear
-    probes — whether any coefficient is zero, whether the stack arrives in key
-    order, whether any key repeats — so the sort and the aggregate run only
-    when a probe says they would change something.
-
-    Zeros go first, so the probes read them and the sort orders them no
-    longer; a share with nothing to drop is not rechunked. A cancelling pair
-    survives to the aggregate and only becomes a zero there, so the prune runs
-    again on the path that aggregated, and only on it. The stack is rechunked
-    first: a streaming collect returns morsels as chunks, and ``shift(1)``
-    crosses chunk boundaries that ``is_sorted`` does not.
-
-    Unordered, a repeat is probed by *space*, the dense label count a single
-    integer key was drawn from ([`_repeats_a_label`][]), which is what the
-    objective's stack has; adjacency proves nothing there.
-
-    Returns:
-        The share, and whether any zero was dropped — the caller that reads
-        which rows had terms reads them off the stack in that case, the share
-        no longer saying.
+    The sort and the aggregate run only when a linear probe says they would
+    change something. The stack is rechunked first, because ``shift(1)``
+    crosses chunk boundaries that ``is_sorted`` does not. A cancelling pair
+    becomes a zero only at the aggregate, so the prune runs again there.
+    Unordered, a repeat is probed over *space*, the dense label count.
     """
     pruned = _pruned(stacked.rechunk())
     dropped = pruned.height != stacked.height
@@ -619,14 +502,8 @@ def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
 def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
     """The distinct ``row`` labels of a matrix already ordered by ``row``.
 
-    Only ever called on what [`_collapsed`][] handed back ordered, which
-    has *established* that order — by probe, by sort, or by the aggregate's
-    own sort.
-
-    ``set_sorted`` is an assertion, not a check: on a column that is not
-    ascending it returns whichever labels the walk happens to see, which is a
-    model missing rows rather than an error. A caller that reaches here with a
-    share it did not ask for ordered breaks this silently.
+    ``set_sorted`` is an assertion, not a check: an unordered column silently
+    loses rows, so call it only on what [`_collapsed`][] returned ordered.
     """
     return matrix.get_column('row').set_sorted().unique()
 
@@ -634,12 +511,8 @@ def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
 def _repeats_a_label(labels: pl.Series, count: int) -> bool:
     """Whether any of *labels* occurs twice, over a dense ``0..count-1`` space.
 
-    Labels are the solver's own indices, so they index a scratch bitmap
-    directly.
-
-    *count* must exceed every label — it is the declaration counter the labels
-    were drawn from, so a caller passing a stale one indexes out of bounds and
-    raises rather than reporting a wrong answer.
+    *count* must exceed every label; a stale one raises out of bounds rather
+    than answering wrong.
     """
     seen = np.zeros(count, dtype=bool)
     seen[labels.to_numpy()] = True
@@ -647,12 +520,7 @@ def _repeats_a_label(labels: pl.Series, count: int) -> bool:
 
 
 def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
-    """*matrix* without its zeros — unchanged, and not rechunked, when it has none.
-
-    Filtering leaves a chunked frame that the ``shift(1)`` probes downstream
-    read across every boundary, so a share with no zero to drop is returned as
-    it is.
-    """
+    """*matrix* without its zeros — unchanged, and not rechunked, when it has none."""
     if not matrix.select(pl.col('coeff').eq(0).any()).item():
         return matrix
     return _without_zeros(matrix).rechunk()
@@ -661,9 +529,7 @@ def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, ...], np.dtype[np.int64]]:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
-    Run-length, scatter, cumulative sum. *ordered* must ascend in ``row``: a
-    row whose entries arrived in two runs would have the first run overwritten
-    and the spans silently wrong.
+    *ordered* must ascend in ``row``: a row in two runs silently gets wrong spans.
     """
     runs = ordered['row'].rle()
     starts = np.zeros(row_count + 1, dtype=np.int64)
