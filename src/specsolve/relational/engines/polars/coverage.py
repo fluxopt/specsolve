@@ -36,7 +36,7 @@ from specsolve.relational.engines.polars.predicates import masked
 from specsolve.relational.sinks.handoff import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Sequence
+    from collections.abc import Callable, Collection, Sequence
 
     from specsolve.relational.engines.polars.fragments import TermFragment
     from specsolve.relational.engines.polars.scope import Scope
@@ -65,7 +65,12 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
         raise DataError(f'{subject}: {sparse_divisor_message(", ".join(params), undefined)}')
 
 
-def refuse_null_constants(pieces: Sequence[pl.LazyFrame], divisors: Collection[str], subject: str) -> None:
+def refuse_null_constants(
+    pieces: Sequence[pl.LazyFrame],
+    divisors: Collection[str],
+    subject: str,
+    message: Callable[[str, int], str] = sparse_divisor_message,
+) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided.
 
     [`refuse_null_coefficients`][] one position over, and asked before
@@ -74,7 +79,8 @@ def refuse_null_constants(pieces: Sequence[pl.LazyFrame], divisors: Collection[s
     zero, so a gap left behind for this to find is filled in by the time the
     assembled constant is joined. *pieces* are narrowed by the caller to the
     coordinates the declaration builds; *divisors* are the names the refusal
-    reports, and nothing is read where there are none.
+    reports, and nothing is read where there are none. *message* words it for
+    the position: a reported expression constrains nothing.
 
     Raises:
         DataError: Naming *divisors* and the count of undefined values.
@@ -84,7 +90,7 @@ def refuse_null_constants(pieces: Sequence[pl.LazyFrame], divisors: Collection[s
     counts = pl.collect_all([piece.select(pl.col('cval').null_count()) for piece in pieces])
     undefined = sum(int(count.item()) for count in counts)
     if undefined:
-        raise DataError(f'{subject}: {sparse_divisor_message(", ".join(sorted(divisors)), undefined)}')
+        raise DataError(f'{subject}: {message(", ".join(sorted(divisors)), undefined)}')
 
 
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[TermFragment]) -> list[pl.LazyFrame]:

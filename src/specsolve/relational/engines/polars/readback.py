@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.errors import SpecsolveError, reported_divisor_message, unknown_name_message
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
@@ -288,22 +288,23 @@ def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompil
     The frame answers the way a constraint over the same expression would: a
     coordinate a parameter does not cover contributes zero, a coordinate where
     a variable is absent has no row — or holds a zero, under ``absence:
-    zero`` — and a variable-free expression is one row of ``value``. Dims come back in declaration order and rows in label order
+    zero`` — and a variable-free expression is one row of ``value``. A
+    quotient has no row where its divisor is absent or zero. Dims come back in declaration order and rows in label order
     over those dims.
 
     Raises:
-        DataError: A divisor with no value where the expression divides —
-            checked before any sum can read the null as zero.
+        DataError: A divisor parameter with no row where the expression
+            divides — checked before any sum can read the null as zero.
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"
-    compiled = compiler.expression(expr, context)
+    compiled = compiler.expression(expr, context, reported=True)
 
-    divisors = coverage.divisors_of(expr)
     coverage.refuse_null_constants(
         [p.frame for p in compiled.consts],
-        {*program.parameters_of(*divisors), *program.variables_of(*divisors)},
+        program.parameters_of(*coverage.divisors_of(expr)),
         context,
+        reported_divisor_message,
     )
 
     fragments = compiled.consts
