@@ -33,6 +33,7 @@ nav:
       - Running a sweep in parallel: howto/parallel.md
       - Archiving a solve: howto/archiving.md
       - Reading a directory of runs: howto/warehouse.md
+      - Reading an answer into pandas or xarray: howto/pandas-xarray.md
       - Debugging a wrong answer: howto/debug.md
   - Reference:
       - The verbs: reference/api.md
