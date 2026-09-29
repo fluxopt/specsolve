@@ -362,8 +362,8 @@ absence has to be pushed into the operand before the rewrite consumes it
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two fragment lists concatenated |
 | `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic fragment |
-| `Divide` | `x / p` | one-to-one | a **left** join, so a divisor with no value leaves a null to report |
-| `Power` | `p ** q` | one-to-one | an inner join and `pow` |
+| `Divide` | `x / p` | one-to-one | a **left** join, so a divisor with no value leaves a null to report; a divisor with a reduction under it is added up to one value per coordinate first |
+| `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate |
 | `GroupSum` | `sum(x, by=r, over=c, into=d)` | many-to-one | one inner join with the relation's table on the columns the direction consumes and joins on, the consumed dims traded for the produced ones; a bare relation fans a member out to every target |
 | `Pullback` | `at(x, by=r, over=d, into=c)` | one-to-one | the same table joined the other way, fanning out |

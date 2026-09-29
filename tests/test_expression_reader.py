@@ -186,6 +186,25 @@ def test_a_divisor_that_adds_is_added_up_before_it_divides(result):
     )
 
 
+@pytest.mark.parametrize(
+    ('expression', 'of_load'),
+    [
+        pytest.param('sum(p, over=generator) ** 2', lambda load: load**2, id='a-base'),
+        pytest.param('1 / sum(p, over=generator)', lambda load: 1 / load, id='a-divisor'),
+    ],
+)
+def test_an_operand_that_is_a_sum_is_read_whole(result, expression, of_load):
+    """`balance` pins the sum over generators to `load`, so the read is a function of `load` alone.
+
+    Before #1777 the power and the quotient were taken of each generator's
+    output and added: `p1² + p2²`, and `inf` wherever a generator produced nothing.
+    """
+    frame = result.evaluate(expression)
+    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    loads = {0: 50.0, 1: 120.0, 2: 80.0}
+    assert got == pytest.approx({t: of_load(v) for t, v in loads.items()}), 'the sum is taken whole, as its total'
+
+
 def test_a_dual_on_a_solve_that_left_none_is_refused_by_name():
     """An integer variable makes duals undefined; the entry reading one is refused with `Result.dual`'s own sentence, and every other entry still reads."""
     result = sps.solve(override(SPEC, **{'variables.p.domain': 'integer'}), sources())

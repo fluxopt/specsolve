@@ -36,8 +36,10 @@ it, so its behaviour was a claim rather than a result.
 
 from __future__ import annotations
 
+import polars as pl
 import pytest
 
+import specsolve as sps
 from specsolve.errors import DataError
 from tests.conftest import law_data, law_spec, override
 from tests.differential import RTOL, both_lanes_refuse, differential
@@ -580,3 +582,54 @@ def test_a_sparse_divisor_has_an_escape(patch, expected):
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )
+
+
+#: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent
+#: taken summand by summand reads 1/2 + 1/1, 2² + 1² or 2² + 2¹ instead.
+WHOLE_SUM = {
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'parameters': {'w': {'dims': ['g']}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
+}
+WHOLE_SUM_DATA = {'g': ['a', 'b'], 't': [0], 'w': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 1.0]})}
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'expected'),
+    [
+        pytest.param('x / sum(w, over=g) >= 1', 3.0, id='a-divisor'),
+        pytest.param('x >= 6 / sum(w, over=g)', 2.0, id='a-divisor-on-the-constant-side'),
+        pytest.param('x * sum(w, over=g) ** 2 >= 18', 2.0, id='a-base'),
+        pytest.param('x * 2 ** sum(w, over=g) >= 16', 2.0, id='an-exponent'),
+    ],
+)
+def test_an_operand_that_is_a_sum_is_taken_whole(constraint, expected):
+    """Division and a power do not distribute over a sum, so the sum is added up before either reads it.
+
+    `*` distributes, which is why a sum can stay one row per summand until the
+    row is assembled; `/` and `**` do not. Before #1777 the relational lane
+    divided by, or raised, each summand and added the results, and solved a
+    different model with no error: 0.667 for the divisor, 3.6 for the base.
+    """
+    spec = override(WHOLE_SUM, **{'constraints.c': {'dims': ['t'], 'expression': constraint}})
+    with differential(spec, WHOLE_SUM_DATA, lp=True) as run:
+        assert run.oracle == pytest.approx(expected, rel=RTOL), 'the optimum reads the sum as its total, 3'
+
+
+def test_a_sparse_divisor_under_a_summed_divisor_is_still_refused():
+    """A null summand is a divisor's hole, so adding the sum up keeps it null rather than skipping it.
+
+    `w / d` has no value at `b`. Added up by skipping nulls, the outer divisor
+    read 2 instead of refusing, and the build solved `x / 2 >= 1` with no error.
+    """
+    spec = override(
+        WHOLE_SUM,
+        **{
+            'parameters.d': {'dims': ['g']},
+            'constraints.c': {'dims': ['t'], 'expression': 'x / sum(w / d, over=g) >= 1'},
+        },
+    )
+    data = WHOLE_SUM_DATA | {'d': pl.DataFrame({'g': ['a'], 'value': [1.0]})}
+    with pytest.raises(DataError, match='used as a divisor'):
+        sps.build(spec, data).close()
