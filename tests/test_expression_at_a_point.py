@@ -156,6 +156,8 @@ OPERATORS = [
             reason='the linopy lane reads inf where #1776 made a reported quotient by zero absent', strict=True
         ),
     ),
+    pytest.param('sum(x / y, over=f)', id='sum-of-a-quotient-by-a-masked-variable'),
+    pytest.param('sum(x / y + x, over=f)', id='sum-of-a-quotient-by-a-masked-variable-beside-a-present-term'),
     pytest.param('x ** 2', id='square-a-variable'),
     pytest.param('(x + y) ** 2', id='square-a-sum-with-a-masked-term'),
     pytest.param('2 ** x', id='a-variable-exponent'),
@@ -163,6 +165,8 @@ OPERATORS = [
     pytest.param("shift(x, along=t, offset=1, edge='wrap')", id='shift-wrap'),
     pytest.param('shift(x, along=t, offset=lead, edge=0)', id='shift-by-a-parameter-offset'),
     pytest.param('shift(y, along=t, offset=2)', id='shift-a-masked-variable-past-most-of-the-axis'),
+    pytest.param('sum(shift(x, along=t, offset=1) + x, over=t)', id='sum-a-vacated-edge-beside-a-present-term'),
+    pytest.param('sum(shift(x, along=t, offset=1) + x, over=f)', id='sum-across-a-vacated-edge'),
     pytest.param('shift(x, along=t, offset=1, by=season_of, within=s)', id='shift-within-a-group'),
     pytest.param('sum_back(x, along=t, window=2)', id='sum-back'),
     pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-masked-variable'),
