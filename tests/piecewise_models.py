@@ -1,10 +1,7 @@
-"""The curves the piecewise tests build against — this side's copy.
+"""The curves the piecewise tests solve.
 
-`mathspec` judges what these expand to; here they are solved. Same reason as
-`fixtures.py`: a test package is not shipped, so the load-time tests that moved
-took a copy rather than an import. About a hundred and fifty lines of model
-YAML, and the one duplication in this split that is a *model* rather than
-scaffolding — worth watching for drift.
+A copy of `mathspec`'s test models, since a test package is not shipped.
+Watch it for drift.
 """
 
 from __future__ import annotations
@@ -47,8 +44,7 @@ objective:
   sense: minimize
   expression: sum(op_cost, over=snapshot)
 """
-#: And the same restriction as the default's, said as a set rather than built
-#: out of binaries. The two must reach the same optimum on every sink.
+#: The same restriction said as a set; it reaches the default's optimum on every sink.
 SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
 #: two dims in the frame, so the emitted ``dims`` has an order to get wrong.
 TWO_DIM_YAML = """

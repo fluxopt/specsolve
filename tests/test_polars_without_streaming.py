@@ -1,9 +1,8 @@
 """A polars built without the streaming engine, such as the browser's, still solves and reads back.
 
 polars' Pyodide build refuses ``collect(engine='streaming')`` with a pyo3 panic,
-which is a ``BaseException`` rather than an ``Exception``, so a caller that
-asked for the engine by name fell over at the first parameter it attached.
-The engine is now asked for once, and a refusal chooses the in-memory one.
+which is a ``BaseException`` rather than an ``Exception``. A refusal chooses the
+in-memory engine.
 """
 
 from __future__ import annotations

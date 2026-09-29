@@ -1,12 +1,9 @@
 """The sink-capability table in `docs/about/benchmarks.md`, executed.
 
-Every row of that table is a claim about somebody else's library, so it goes
-stale on their release rather than ours — and silently, since nothing in this
-package calls `passHessian` yet. Each assertion names the table it holds up: a
-failure here is a capability that moved, not a regression.
-
-Nothing here builds an specsolve model. These are the solver libraries at their
-own API, which is what "what a sink *could* be given" means.
+Every row of that table is a claim about another library, so it goes stale on
+their release. A failure here is a capability that moved, not a regression.
+Nothing here builds a specsolve model: these are the solver libraries at their
+own API.
 """
 
 from __future__ import annotations
@@ -196,13 +193,7 @@ def test_a_second_hessian_replaces_the_first_and_keeps_the_model():
 
 
 def test_the_highs_descriptor_says_what_these_probes_measured():
-    """The claim, tied to the evidence — the whole point of declaring one.
-
-    A descriptor is a promise about somebody else's library, and the failure it
-    exists to prevent is drift between the promise and the behaviour. Both live
-    in this module, so the tie is an assertion rather than a doc table read
-    twice and hoped over.
-    """
+    """The HiGHS descriptor declares what the probes above measured."""
     capabilities = SOLVERS['highs'].capabilities
     assert capabilities.support('quadratic_objective') == 'native', 'a convex Hessian solved, above'
     assert capabilities.support('nonconvex_quadratic_objective') == 'absent', 'a non-PSD Hessian was refused, above'

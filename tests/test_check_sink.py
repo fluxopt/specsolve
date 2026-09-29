@@ -1,9 +1,7 @@
 """`check(spec, sink=...)`: the second axis, asked with no data attached.
 
-Whether a model is *sayable* is solver-independent; where it can *land* is not.
-What is pinned here is what makes that a separate argument rather than a
-warning everyone gets: bare `check` stays silent, the answer needs no data and
-no installed solver, and a refusal names the sinks that would have taken it.
+Bare `check` stays silent about sinks, the answer needs no data and no
+installed solver, and a refusal names the sinks that would have taken it.
 """
 
 from __future__ import annotations
@@ -21,8 +19,7 @@ from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers import SOLVERS
 from specsolve.relational.sinks.writers import WRITERS
 
-#: A pure LP: every sink takes it whole, so it is what "silent" is measured
-#: against.
+#: A pure LP: every sink takes it whole.
 PLAIN = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}},
@@ -31,12 +28,10 @@ PLAIN = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=g)'},
 }
 
-#: The same model with a set on it — the one construct in the language today
-#: that a shipped sink has no concept of.
+#: The same model with a set on it, which HiGHS has no concept of.
 WITH_A_SET = PLAIN | {'sos': {'pick': {'variable': 'p', 'along': 'g', 'type': 1}}}
 
-#: The same model at degree 2, in each of the two positions the language takes
-#: it: the first constructs a shipped sink refuses outright.
+#: The same model at degree 2, in each of the two positions the language takes it.
 WITH_A_QUADRATIC_OBJECTIVE = PLAIN | {'objective': {'sense': 'minimize', 'expression': 'sum(p * p, over=g)'}}
 WITH_A_QUADRATIC_ROW = PLAIN | {
     'constraints': {**PLAIN['constraints'], 'ball': {'dims': ['g'], 'expression': 'p * p <= 9'}}
@@ -56,8 +51,7 @@ def test_a_plain_lp_is_silent_on_every_sink(sink):
 
 
 def test_bare_check_says_nothing_about_portability():
-    """The default has to stay silent, or every model carries a warning about a
-    sink nobody named."""
+    """The default stays silent about a sink nobody named."""
     assert _warnings(WITH_A_SET) == []
 
 
@@ -71,8 +65,7 @@ def test_a_set_on_highs_is_refused_naming_the_expansion():
 
 @pytest.mark.parametrize('sink', ['gurobi', '.lp'])
 def test_a_set_is_silent_on_the_sinks_that_carry_one(sink):
-    """Gurobi branches on a set and LP text writes it, so neither rewrites
-    anything — the same model, no note."""
+    """Gurobi branches on a set and LP text writes it, so neither says anything."""
     assert _warnings(WITH_A_SET, sink=sink) == []
 
 
@@ -85,9 +78,7 @@ def test_an_unknown_sink_names_the_ones_there_are():
 
 
 def test_the_question_needs_no_solver_installed(monkeypatch):
-    """`solver()` refuses a name whose package is missing, being about to hand a
-    model over. This one is not — and a check that needed the solver installed
-    could not validate a repository against every sink it will be solved on."""
+    """`check(sink=...)` answers for a solver that is not installed; `solver()` refuses it."""
     monkeypatch.setattr(SOLVERS['gurobi'], 'is_available', classmethod(lambda cls: False))
     assert _warnings(WITH_A_SET, sink='gurobi') == []
     with pytest.raises(ModuleNotFoundError):
@@ -100,17 +91,7 @@ def _refusing(spec) -> set[str]:
 
 
 def test_which_shipped_sinks_refuse_what_the_language_can_now_say():
-    """The state of the world, pinned so it is visible when it changes.
-
-    A **set** reaches every sink but HiGHS, which has no concept of one and
-    refuses the model naming the expansion that writes it out. **Degree 2** is
-    what some destinations have no spelling for at all.
-
-    Named individually rather than counted, because which sink is on the list
-    is the fact: a cell moving in either direction — xpress growing a Hessian,
-    a writer gaining a section — should be read here rather than inferred from
-    a number.
-    """
+    """Which shipped sink refuses a set or degree 2, named individually."""
     assert _refusing(WITH_A_SET) == {'highs'}, 'the one shipped sink with no SOS concept, and nothing rewrites for it'
     assert _refusing(WITH_A_QUADRATIC_OBJECTIVE) == {'xpress', '.mps'}, (
         'the two with no path for a Hessian: xpress ships one and this package hands it none, '
@@ -122,11 +103,7 @@ def test_which_shipped_sinks_refuse_what_the_language_can_now_say():
 
 
 def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(monkeypatch):
-    """The refusal path itself, which no shipped sink can reach today.
-
-    A purpose-built probe, since the alternative is leaving the whole contract
-    unexercised until the first `absent` cell lands.
-    """
+    """The refusal path itself, which no shipped sink reaches, through a stub."""
 
     class Stub:
         capabilities = Capabilities(supports={})
@@ -140,9 +117,7 @@ def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(mon
 
 
 def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatch):
-    """The other refusal shape. A caller told "it cannot take a quadratic
-    objective" of a solver whose documentation says it can would reasonably
-    conclude the message is wrong."""
+    """A sink that takes two constructs apart and refuses them together says so."""
 
     class Stub:
         capabilities = Capabilities(
@@ -161,15 +136,12 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
 
 
 def test_a_suffix_is_a_sink_however_the_path_spelled_it():
-    """``write`` resolves ``out.LP`` through the same registry, so the natural
-    ``check(spec, sink=path.suffix)` in a CI script cannot be the call that
-    rejects it."""
+    """``check(spec, sink=path.suffix)`` takes ``.LP`` as ``write`` does."""
     assert sinks.sink_capabilities('.LP') is sinks.sink_capabilities('.lp')
 
 
 def test_a_refusal_does_not_swallow_the_solver_independent_advice(recwarn):
-    """The two axes are independent, so naming a sink answers the second
-    question without costing the first."""
+    """Naming a sink keeps the solver-independent advice."""
     unused = PLAIN | {'dimensions': PLAIN['dimensions'] | {'spare': {'dtype': 'str'}}}
 
     class Stub:

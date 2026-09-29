@@ -13,9 +13,9 @@ hand-written formulation on a different modelling stack reaching the same
 objective and the same prices. ``references.json`` records what this script
 printed, and ``tests/test_ports.py`` holds specsolve to it.
 
-One deliberate difference: the YAML's ``where: p_max > 0`` gives the retired
-generator no columns at all, where this script keeps them bounded to zero.
-Same polytope, same objective, same duals — which is the point the page makes.
+One difference: the YAML's ``where: p_max > 0`` gives the retired generator no
+columns at all, where this script keeps them bounded to zero. Same polytope,
+same objective, same duals.
 """
 
 from __future__ import annotations
@@ -53,9 +53,9 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 def marginal_prices(m: linopy.Model) -> dict[str, list]:
     """The power-balance dual: the classic price signal.
 
-    One price per snapshot — the cost of the marginal generator, which is what
-    makes dispatch worth checking on duals: a snapshot where wind covers the
-    load prices at wind, the moment gas has to run the price jumps to gas.
+    One price per snapshot — the cost of the marginal generator: a snapshot
+    where wind covers the load prices at wind, the moment gas has to run the
+    price jumps to gas.
     """
     dual = m.constraints['power_balance'].dual
     return {'snapshot': [int(v) for v in dual.indexes['snapshot']], 'value': [float(v) for v in dual.values]}

@@ -1,17 +1,13 @@
-"""The ``gurobi`` sink, against the sink that was already here.
+"""The ``gurobi`` sink, against the ``highs`` sink.
 
-Two sinks loading one :class:`Handoff` must produce the same model, so
-HiGHS is the oracle for Gurobi the way linopy is the oracle for the math: the
-interesting assertions here are agreements, not values. Where a value *is*
-asserted it comes from ``examples/ports/references.json`` — somebody else's
-published optimum, which neither sink can talk the other into.
+Two sinks loading one :class:`Handoff` must produce the same model, so the
+assertions here are agreements. Where a value is asserted it comes from
+``examples/ports/references.json``, somebody else's published optimum.
 
-Every test skips without ``gurobipy``. It ships a size-limited licence in its
-own wheel, which is what makes this runnable in CI at all, so the models here
-stay small enough for it — a few hundred columns, where the limit is 2000. A
-port that outgrows the licence is named in ``OVER_THE_GUROBI_LIMIT`` and
-skipped rather than shrunk: the corpus is checked against somebody else's
-optimum for the whole model, and half of one reaches no published number.
+Every test skips without ``gurobipy``. Its wheel ships a licence limited to
+2000 columns, so the models here stay small. A port that outgrows it is named in
+``OVER_THE_GUROBI_LIMIT`` and skipped rather than shrunk, since half a model
+reaches no published number.
 """
 
 from __future__ import annotations
@@ -58,19 +54,16 @@ def test_gurobi_and_highs_agree(name: str, variable: str, constraint: str, has_d
 
 
 #: `osemosys_utopia` builds 5,733 columns against the bundled licence's 2,000.
-#: Nothing about the model is gurobi-specific and the sink handles it fine: on
-#: an unrestricted licence it reaches 29446.862694340936, against 29446.86269434094
-#: from highs and OSeMOSYS's own 29446.86269. It is skipped for the licence, not
-#: for the answer.
+#: On an unrestricted licence it reaches 29446.862694340936, against
+#: 29446.86269434094 from highs and OSeMOSYS's own 29446.86269.
 OVER_THE_GUROBI_LIMIT = {'osemosys_utopia'}
 
 
 def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]) -> None:
     """``test_ports.py``'s corpus, solved by the other solver.
 
-    The one assertion here no part of this package produced. A sink that
-    mis-loads the matrix — a block boundary off by a row, a sense inverted —
-    still reaches *a* number; this is what that number is checked against.
+    A sink that mis-loads the matrix still reaches *a* number; this checks it
+    against a published one.
     """
     if port['name'] in OVER_THE_GUROBI_LIMIT:
         pytest.skip(f'{port["name"]} exceeds the bundled gurobi licence — see OVER_THE_GUROBI_LIMIT')
@@ -128,8 +121,7 @@ def test_gurobi_takes_the_two_quadratic_models_highs_refuses() -> None:
 def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None:
     """What an update must not do twice. ``setMObjective`` replaces the whole
     objective, which is why the linear cost is passed to it again; accumulating
-    would answer twice the curvature on the second solve — a model that still
-    solves, and a number nobody would question."""
+    would answer twice the curvature on the second solve."""
     scaled = QP | {
         'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}, 'wear': {'dims': []}},
         'objective': {'sense': 'minimize', 'expression': 'sum(p * p * wear + p * q + q * q + q * toll, over=g)'},
@@ -161,10 +153,7 @@ def test_a_mixed_integer_model_has_no_duals() -> None:
 
 
 def test_solver_options_reach_gurobi() -> None:
-    """Verbatim, in Gurobi's own vocabulary — ``TimeLimit``, not HiGHS'
-    ``time_limit``. Forwarding is the contract; translating names is not, and
-    an option the solver does not know reaches the caller as the solver's own
-    complaint rather than as a guess at what was meant."""
+    """Verbatim, in Gurobi's own vocabulary — ``TimeLimit``, not HiGHS' ``time_limit``."""
     with sps.solve(*CASES['MIP'], solver_options={'TimeLimit': 0.0}, solver_name='gurobi') as solution:
         assert solution.termination_condition == 'time_limit'
     with pytest.raises(gurobipy.GurobiError, match='no_such_parameter'):
@@ -177,13 +166,11 @@ def test_solver_options_reach_gurobi() -> None:
 
 
 def test_solver_options_land_on_the_environment() -> None:
-    """Where a licence parameter has to go.
+    """Options land on the environment, where a licence parameter has to go.
 
-    ``WLSAccessID`` / ``ComputeServer`` / ``TokenServer`` can only be set
-    before an environment starts, so applying options to the *model* — as this
-    sink first did — locks out every Compute-Server and WLS user. Asserted
-    through an ordinary parameter, since a licence one would need a licence:
-    the model sees it as its default, which is what environment-level means.
+    ``WLSAccessID``, ``ComputeServer`` and ``TokenServer`` can only be set
+    before an environment starts. Asserted through an ordinary parameter, which
+    the model sees as its default.
     """
     with (
         sps.build(*CASES['MIP']) as model,
@@ -208,12 +195,9 @@ def test_build_gurobi_loads_the_model_and_stops() -> None:
 def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
     """The licence a loaded model holds is released when its holder goes.
 
-    Before this, a :class:`Gurobi` dropped without ``close()`` — and the
-    model :func:`build_gurobi` returned bare — left the environment to the
-    collector, and disposed it *before* the model where a finalizer ran at
-    all, which releases nothing: Gurobi keeps an environment until its last
-    model is gone. Asserted through a model the caller still holds, the case
-    where a refcount could not have done it.
+    Gurobi keeps an environment until its last model is gone, so dropping a
+    :class:`Gurobi` without ``close()`` disposes the model too. Asserted through
+    a model the caller still holds, where a refcount could not release it.
     """
     with sps.build(*CASES['MIP']) as model:
         solver = build_gurobi(model._engine._model.handoff)

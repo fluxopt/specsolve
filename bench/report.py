@@ -2,16 +2,9 @@
 
     pixi run -e bench python -m bench.report bench/results/latest.json
 
-Nothing here recomputes or smooths anything: repeats collapse by *minimum*,
-which is the usual choice for a benchmark because noise only ever adds. The
-point of this module existing at all is that the published table has one
-provenance — a file — instead of being retyped by hand and then outliving the
-harness that produced it.
-
-What it does add is a doubt. A minimum whose rounds all ran slow looks exactly
-like a clean one, and one such cell was 2.33x wrong before anyone noticed
-(#797) — so a cell whose spread exceeds `SPREAD_BUDGET` is marked. The number
-printed is still the minimum; the mark is what says not to quote it.
+Nothing here recomputes or smooths anything. A cell whose spread exceeds
+`SPREAD_BUDGET` is marked, because a run whose rounds all ran slow looks like a
+clean one (#797).
 """
 
 from __future__ import annotations
@@ -28,27 +21,16 @@ from bench import results as bench_results
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-#: What every ratio is drawn against. This project is the *subject* of the
-#: page and a comparison arm is what it is measured against, so the division is
-#: always ours ÷ theirs and below 1.00 is always a win for us — whichever arms
-#: a run happened to carry.
+#: What every ratio is drawn against: ours ÷ theirs, so below 1.00 is a win for specsolve.
 BASELINE = 'specsolve'
 
 #: Ceilings from every results file read, in the order they were read. A cell
-#: with no measurement is looked up here before it renders as absent: a library
-#: the budget stopped is *over* a number, and printing the same em dash for that
-#: as for a sink it cannot reach answers two questions with one mark.
+#: with no measurement is looked up here before it renders as absent.
 CEILINGS: list[dict[str, Any]] = []
 
 
 def over_budget(case: str, size: str, sink: str, arm: str) -> str | None:
-    """The bound where a budget stopped this arm below this rung, else None.
-
-    Every rung *above* the one that triggered is covered, not just the next:
-    the climb stopped there, and each rung after it is wider still. Which
-    budget stopped it, and so what the cell reads, is
-    :func:`~bench.results.bound_label`.
-    """
+    """The bound where a budget stopped this arm below this rung, else None; every rung above is covered."""
     from bench.cases import CASES
 
     for ceiling in CEILINGS:
@@ -61,16 +43,11 @@ def over_budget(case: str, size: str, sink: str, arm: str) -> str | None:
 
 
 #: How far a cell's IQR may reach, as a fraction of its own median, before the
-#: number is marked rather than published. Measured on a full ladder at
-#: `3f0dfac`, 192 measurements: iqr/median is p50 5.8%, p75 10.1%, p90 16.0%,
-#: p95 24.1%, max 53.8%. 0.25 sits just above p95, marks 9 of the 192, and
-#: catches the one cell independently verified as contaminated — 53.8% spread,
-#: minimum inflated 2.33x against a clean re-run (#797).
+#: number is marked. It sits just above the p95 of 24.1% over a full ladder, and
+#: catches the one cell verified as contaminated, at 53.8% (#797).
 SPREAD_BUDGET = 0.25
 
-#: Appended to a marked number. A trailing character rather than a superscript
-#: or a footnote reference: it survives markdown in both renderers the page is
-#: read in, and does not read as a link to something.
+#: Appended to a marked number.
 MARK = '~'
 
 _SPREAD_NOTE = (
@@ -83,25 +60,14 @@ _SPREAD_NOTE = (
 
 
 def machine(run: Row) -> str:
-    """One run's box, as the string two runs are compared by.
-
-    Every key is read as optional: a `.jsonl` result is taken verbatim, so a
-    record written before the harness carried these is a dict this has to
-    render rather than raise on.
-    """
+    """One run's box, as the string two runs are compared by; every key is optional."""
     cores = f', {run["cores"]} cores' if run.get('cores') else ''
     where = (run.get('platform') or '?').strip() or '?'
     return f'{run.get("cpu") or "?"}{cores} ({where})'
 
 
 def provenance(runs: list[Row]) -> str:
-    """The line above the tables: what measured them, and on how many machines.
-
-    The ladder takes one sink per job (#1315), so a rendered page routinely
-    merges files from two runners — and a pool mixes CPU models. Every ratio in
-    the tables below is within a rung and therefore within one file, but a
-    reader comparing *across* rungs is comparing machines whenever this says so.
-    """
+    """The line above the tables: what measured them, and on how many machines (#1315)."""
     if not runs:
         return 'No run record — provenance unknown.'
     first = runs[0]
@@ -133,8 +99,7 @@ def load(
 
 Row = dict[str, Any]
 Key = tuple[str, str, str, str]
-#: One rung's two arms. A missing arm is ``None`` rather than an absent key, so
-#: a table renders a half-measured rung instead of skipping it silently.
+#: One rung's arms. A missing arm is ``None``, so a half-measured rung still renders.
 Arms = dict[str, Row | None]
 
 
@@ -143,13 +108,7 @@ def _key(r: Row) -> Key:
 
 
 def best(timings: list[Row]) -> dict[Key, Row]:
-    """(case, size, sink, arm) -> the cleanest run of that cell.
-
-    Lowest median, where this once took the lowest minimum. Across *files* the
-    rule is unchanged in spirit — a second run of the same cell on a quieter
-    machine is the better measurement — but it now compares the number the
-    tables publish rather than the luckiest round in each.
-    """
+    """(case, size, sink, arm) -> the run of that cell with the lowest median."""
     out: dict[Key, Row] = {}
     for r in timings:
         if 'error' in r:
@@ -181,23 +140,10 @@ def _ratio(a: float | None, b: float | None) -> str:
 
 
 def suspect(row: Row | None) -> bool:
-    """Whether *row*'s minimum spread too wide over its rounds to be quoted.
+    """Whether *row*'s rounds spread too wide to be quoted, as IQR over median.
 
-    IQR over median, not stddev over min, because the two disagree on exactly
-    the cases that matter. A single wild round inflates stddev while the bulk
-    of the distribution — and with it the minimum — stays tight:
-    `nodal-s-linopy-highs` read stddev/min 243% at iqr/median 3%, and its
-    minimum landed within 1% of a clean re-take, so stddev would have marked a
-    sound number. Interference sustained across *every* round is what `min`
-    cannot survive, and it spreads the whole distribution instead:
-    `transport-m-specsolve-highs` read iqr/median 54% on a minimum inflated 2.33x
-    against a clean re-take. pytest-benchmark's own outlier counters miss that
-    cell (`2;0`, `iqr_outliers 0`) for the reason that makes it dangerous —
-    when every round is slow, none of them is an outlier.
-
-    A record written before the spread was carried has no `iqr` and is never
-    marked. An absent signal is not a clean one, but a mark on every old cell
-    would say nothing about any of them.
+    A single wild round inflates stddev, not the IQR; interference across every
+    round spreads the IQR (#797). A record with no `iqr` is never marked.
     """
     if not row:
         return False
@@ -216,21 +162,10 @@ def _note(lines: list[str], *, marked: bool) -> list[str]:
 
 
 def arms_in(keys: Iterable[Key]) -> tuple[str, ...]:
-    """Whichever arms a run measured, `BASELINE` first.
+    """Whichever arms appear in *keys*, `BASELINE` first, then in order of first appearance.
 
-    Read off the records rather than named in this module: which libraries a
-    ladder was run against is a property of the run, and a table that names
-    them in advance renders a column of dashes for an arm nobody measured and
-    silently drops one nobody predicted.
-
-    Pass the keys of *one table* rather than of the whole run. A library that
-    cannot reach a sink — `gurobipy` has no HiGHS — is not a gap in that sink's
-    table, it is not in it, and a column of dashes says the measurement was
-    missed rather than impossible.
-
-    First appearance after the baseline, not sorted — the order here is the
-    column order, and sorting would reshuffle a published table because a new
-    arm's name happens to start with a `g`.
+    Pass the keys of one table, so a library that cannot reach its sink gets no
+    column.
     """
     seen = list(dict.fromkeys(a for *_, a in keys))
     return tuple(([BASELINE] if BASELINE in seen else []) + [a for a in seen if a != BASELINE])
@@ -246,25 +181,9 @@ def _grid(
 ) -> str:
     """A comparison table: cells that identify a row, then every arm and its ratio.
 
-    Every table on this page shares one tail — each arm's minimum, its ratio
-    against `BASELINE`, and `MARK` on any wall cell whose rounds spread past
-    `SPREAD_BUDGET` — and differs only in what identifies a row and in what
-    order the rows come. Those are the arguments; the rule is here once.
-
-    It is one rule rather than three that look alike: #801 added the noise mark
-    and had to write the same four lines into each of the three renderers this
-    replaces, which is the duplication showing itself.
-
-    A run of the baseline alone renders no ratio columns at all: a number
-    divided by itself is not a comparison, and a column of `1.00x` reads like
-    one.
-
-    ``ratios=False`` drops them whatever the run carried, which is what the
-    per-model tables ask for. Five libraries times wall, peak and a ratio each
-    is nineteen columns before the dimensions, and the ratio is the half a
-    reader can do by eye from the two numbers beside it. The sweeps keep theirs:
-    they compare one library against another *at one size*, where there is no
-    column of absolutes to read the ratio off.
+    Each arm's wall and peak, its ratio against `BASELINE`, and `MARK` on any
+    wall cell whose rounds spread past `SPREAD_BUDGET`. A run of the baseline
+    alone, or ``ratios=False``, renders no ratio columns.
     """
     against = [a for a in arms if a != BASELINE] if ratios else []
     head = [
@@ -302,12 +221,7 @@ def _grid(
 
 
 def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[str, ...]) -> tuple[Arms, Row | None]:
-    """Every arm at one rung, and whichever of them is there to read shared cells off.
-
-    The shared cells — the counts, the live fraction — are a property of the
-    *model*, so either arm answers for them and a rung measured on only one arm
-    still renders. ``None`` for the second value means neither arm ran it.
-    """
+    """Every arm at one rung, and any one of them to read the model's counts off; ``None`` if none ran it."""
     at_rung = {a: rows.get((case, size, sink, a)) for a in arms}
     return at_rung, next((r for r in at_rung.values() if r), None)
 
@@ -315,20 +229,12 @@ def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[
 _DENSITY_RUNG = re.compile(r'd\d+$')
 _DECLARATION_RUNG = re.compile(r'n\d+m?$')
 #: Rungs that grow the model sideways — entity counts x N, snapshots fixed.
-#: Its own axis rather than more rungs of the size ladder: `w10` and `s` carry
-#: the same variables and the same rows, so sorting them into one column would
-#: read as a single monotone curve that is really two shapes.
 _WIDTH_RUNG = re.compile(r'w\d+$')
 _SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG, _WIDTH_RUNG)
 
 
 def _rung_value(size: str) -> str:
-    """The swept value a rung label carries, as the sweep table prints it.
-
-    A trailing ``m`` is the masked twin of the count before it, so it prints
-    beside its twin and says which one it is rather than sorting as a separate
-    number.
-    """
+    """The swept value a rung label carries; a trailing ``m`` prints as the masked twin."""
     count = int(size[1:].removesuffix('m'))
     return f'{count} masked' if size.endswith('m') else str(count)
 
@@ -339,16 +245,7 @@ def _sweep_of(size: str) -> re.Pattern[str] | None:
 
 
 def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pattern[str] | None = None) -> list[str]:
-    """Rung labels for *case*, smallest model first.
-
-    A sweep is held at one model size, so mixing it into the size ladder would
-    sort its rungs in among the sizes and read as a single monotone column that
-    is really two axes. Each axis gets its own table.
-
-    The label breaks a tie in the count, because a rung and its masked twin
-    carry the same variables by construction — without it their order in the
-    table would follow whichever the results file happened to hold first.
-    """
+    """Rung labels for *case* on one axis, smallest model first, the label breaking a tie."""
     seen = {
         s: r['counts']['columns']
         for (c, s, k, _), r in rows.items()
@@ -357,16 +254,11 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     return sorted(seen, key=lambda s: (seen[s], s))
 
 
-#: Where a reader goes to trace a curve, which is the one thing the tables
-#: below cannot do. It is a link rather than an embed because a static figure
-#: has to be regenerated in lockstep with the numbers beside it to stay true,
-#: and one that is not is worse than no figure at all.
+#: Where a reader goes to trace a curve.
 _CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
 
 
-#: What every arm in a column has ended up holding, said once so a table can
-#: name its own seam. It describes the artifact rather than the arms, because
-#: which arms a run carried is the run's business and this is the sink's.
+#: What every arm in a sink's table has ended up holding.
 _SEAM = {
     'lp': 'Each arm has written the LP file, through whichever writer it has.',
     'highs': (
@@ -385,12 +277,7 @@ _SEAM = {
 
 
 def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
-    """One case's rungs through one sink, as a markdown table.
-
-    The caption is bold rather than a heading: these live inside a collapsed
-    ``<details>``, and a heading in there still lands in the table of contents
-    — a rail full of entries for tables the page has just called the appendix.
-    """
+    """One case's rungs through one sink, as a markdown table under a bold caption."""
     arms = arms_in(k for k in rows if k[0] == case and k[2] == sink)
     return _grid(
         [f'**{case} — {sink} sink**', '', _SEAM[sink]],
@@ -407,12 +294,7 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
 
 
 def _live(r: Row) -> str:
-    """What fraction of the coordinate product survived the mask.
-
-    Reported rather than assumed. `dispatch` declares `where: p_max > 0` and
-    keeps 100% of its product — the engine pays for a mask that removes
-    nothing, and that only shows up if the harness measures it.
-    """
+    """What fraction of the coordinate product survived the mask."""
     frac = r.get('live_fraction')
     return '—' if frac is None else f'{frac * 100:.0f}%'
 
@@ -420,11 +302,8 @@ def _live(r: Row) -> str:
 def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]], arms: tuple[str, ...]) -> str:
     """How far the first recorded round sits from steady state, per arm.
 
-    Rendered from the results file rather than stated, so a refresh moves it
-    (#619). What the pair measures is one recorded round against the best of
-    the rest: the harness warms up before recording, so **neither end carries
-    the one-time import cost** and this is the loop settling, not a cold start.
-    Measuring that cost needs a fresh interpreter per arm, which no rung takes.
+    Rendered from the results file (#619). Neither end carries the one-time
+    import cost.
     """
     per_arm = []
     for arm in arms:
@@ -444,11 +323,7 @@ def _settling(best: dict[tuple[str, str, str], Row], seen: list[tuple[str, str]]
 
 
 def _ms(row: Row | None, half: str, *, bold: bool) -> str:
-    """One half of the first-vs-steady pair, or a dash where that arm has none.
-
-    The baseline's steady column is the one a reader is looking for, so it is
-    the one in bold — the rest of the row is what it is being read against.
-    """
+    """One half of the first-vs-steady pair, or a dash where that arm has none; the baseline's steady is bold."""
     if row is None or row.get(f'{half}_build_seconds') is None:
         return '—'
     cell = f'{row[f"{half}_build_seconds"] * 1000:.1f} ms'
@@ -458,21 +333,8 @@ def _ms(row: Row | None, half: str, *, bold: bool) -> str:
 def marginal(loop_rows: list[Row]) -> str:
     """First model in a process, against every model after it.
 
-    Two questions with two answers, and the gap between them is larger than
-    most of the differences this file reports — so publishing one figure would
-    misreport whichever use case it was not.
-
-    **Read down a column, never across the row.** This table times the *build*
-    with no hand-off after it, and the libraries do not put the same work
-    there: one that defers coefficient materialisation to its writer spends
-    almost nothing here and pays at the seam instead. Measured on `dispatch` at
-    1M columns, linopy builds in 18.6 ms against our 33.7 ms and then emits in
-    0.64 s against our 0.44 s — a row read across says the opposite of the run
-    it came from. That is why there are no ratio columns here and why `table()`
-    above, which measures to a common artifact, is where a comparison belongs.
-
-    The sweep rungs are skipped: each sweep is several variants of one model
-    size and would render as rows sharing a label. They have their own tables.
+    No ratio columns: the libraries do not put the same work in the build. The
+    sweep rungs have their own tables and are skipped.
     """
     best: dict[tuple[str, str, str], Row] = {}
     for r in loop_rows:
@@ -488,16 +350,7 @@ def marginal(loop_rows: list[Row]) -> str:
     arms = arms_in(best)
 
     def order(key: tuple[str, str]) -> tuple[float, str, str]:
-        """Widest model last, then by name — a *total* order, off whichever arm ran.
-
-        Both halves are load-bearing. Reading the width off `specsolve` alone
-        raised `KeyError` on a file measured with `--arms linopy`; widths also
-        tie by construction — `_ladder` grows every case by the same factors,
-        so `fleet`, `nodal` and `profiled` share all six — and a set's
-        iteration order is not stable across processes, so ties left the same
-        results file rendering in a different row order run to run. A published
-        table that a re-render reshuffles has a diff that means nothing.
-        """
+        """Widest model last, then by name — a total order, off whichever arm ran, since widths tie."""
         widths = (best[(*key, a)].get('nominal_variables') for a in arms if (*key, a) in best)
         return (next((w for w in widths if w is not None), 0), *key)
 
@@ -547,10 +400,8 @@ def _sweep(
 ) -> str:
     """A sweep table: one model size, one axis varied, every case that has it.
 
-    Held at one model size, so this is the axis the size ladder cannot show.
-    *second* names the column between the case and its width — what the sweep
-    actually varies — and is read off the rung label, because the label is the
-    only place the swept value survives into the results file.
+    *second* names the column for what the sweep varies, read off the rung
+    label.
     """
     cases = [c for c in sorted({c for c, _, _, _ in rows}) if sizes_of(c, rows, sink, sweep=rung)]
     if not cases:
@@ -571,12 +422,7 @@ def _sweep(
 
 
 def density(rows: dict[Key, Row]) -> str:
-    """One model size, four mask densities — the axis the ladder cannot show.
-
-    A mask is row absence relationally and a NaN-padded dense array eagerly, so
-    this is the one comparison where the two lanes are not doing the same work
-    in different orders — they are doing different amounts of work.
-    """
+    """One model size, four mask densities."""
     return _sweep(
         rows,
         _DENSITY_RUNG,
@@ -592,14 +438,7 @@ def density(rows: dict[Key, Row]) -> str:
 
 
 def width(rows: dict[Key, Row]) -> str:
-    """The same variable counts as the size ladder, reached by widening.
-
-    Every rung here has a twin in the size ladder above — `w10` is `s`, `w1000`
-    is `l` — carrying the same variables and the same rows through a different
-    shape. A library whose cost tracks the row count answers the two the same
-    way; one that pays for joins, for mapping tables or for materialising a
-    product does not, and this is the only table that can tell them apart.
-    """
+    """The same variable counts as the size ladder, reached by widening: `w10` is `s`, `w1000` is `l`."""
     return _sweep(
         rows,
         _WIDTH_RUNG,
@@ -618,12 +457,7 @@ def width(rows: dict[Key, Row]) -> str:
 
 
 def declarations(rows: dict[Key, Row]) -> str:
-    """One model size, several declaration counts — the axis no size ladder varies.
-
-    Total variables and rows are flat across the sweep, so any movement down a
-    column is per-declaration cost — the loop over declarations both lanes
-    still run — rather than model size.
-    """
+    """One model size, several declaration counts, total variables and rows flat."""
     return _sweep(
         rows,
         _DECLARATION_RUNG,
@@ -652,17 +486,7 @@ def _fenced(name: str) -> tuple[str, str]:
 def splice(text: str, fragments: dict[str, str]) -> tuple[str, list[str]]:
     """Replace each fenced block in *text* with the fragment of the same name.
 
-    The page is a tracked source file: its prose, its headings and the sentences
-    that read the numbers are reviewed in a diff like any other code, and only
-    the measurements inside the fences are mechanical. That is the same split
-    `bench.plot` makes on the chart page, for the same reason — a table pasted
-    by hand goes stale silently, and this one had: the block it replaces still
-    carried an `LP` column the renderer stopped emitting.
-
-    A fragment the page has no fence for is *skipped and named*, not an error:
-    the tables live on the chart page now, and a page is entitled to host only
-    the parts it wants. Half a fence is still an error — that is a typo, not a
-    decision.
+    A fragment the page has no fence for is skipped and named.
 
     Returns:
         The rewritten text, and the fragments the page had nowhere to put.
@@ -689,17 +513,10 @@ def splice(text: str, fragments: dict[str, str]) -> tuple[str, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Print the published page for the given result files.
+    """Print the published page for the given result files, or write it with ``--write``.
 
-    The parity gate is enforced by the harness now rather than recorded by it —
-    a case whose arms disagree fails its measurements outright, so a file that
-    exists at all was gated. Older files still carry the records, which is why
-    both branches are here.
-
-    Per-case tables are collapsed, and in ``<details>`` rather than mkdocs'
-    ``???`` because these pages are read on GitHub too, where only the HTML
-    form folds. The figures are the reading; the numbers stay one click away,
-    because a chart nobody can check is decoration.
+    Older files carry parity-gate records, which are printed; per-case tables
+    are collapsed in ``<details>``.
     """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(

@@ -2,8 +2,7 @@
 
 mathspec's relation is a table over any number of dimensions, keyed by any
 number of its columns, walked in whichever direction a call names. The
-single-valued map — two columns, one of them the key — is one shape of it. The
-others each ask something of the engine that the map did not:
+single-valued map — two columns, one of them the key — is one shape of it:
 
 - **a key of several columns** reads the map *under a condition* the row
   carries, so the join carries the rest of the key through;
@@ -16,10 +15,9 @@ others each ask something of the engine that the map did not:
   column needs a name of its own until the consumed one is dropped;
 - **two columns over one dimension** name a line's two ends in one table.
 
-Every optimum here is hand-derived, and the written LP file re-solves to it,
-which is the second opinion this lane has where the linopy one refuses the
-shape (`test_conditioned_relations.py` holds what it does build). Each case
-carries a number a lane that walked the table wrongly would not reach.
+Every optimum here is hand-derived, and the written LP file re-solves to it;
+the linopy lane refuses these shapes (`test_conditioned_relations.py` holds
+what it builds).
 """
 
 from __future__ import annotations

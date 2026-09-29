@@ -120,9 +120,7 @@ def test_the_bytecode_is_dropped_so_a_restored_file_is_really_restored(
     gets reported, just against the wrong code.
 
     Checked directly rather than through a run, because the failure is silent by
-    construction — and it was, until the tracked-only narrowing removed the
-    accident that used to catch it (a leftover ``__pycache__`` read as a dirty
-    tree, which it is not).
+    construction.
     """
     monkeypatch.setattr(tool, 'REPO', tmp_path)
     swept = tmp_path / 'src' / 'specsolve' / '__pycache__'
@@ -180,9 +178,9 @@ def test_a_caught_guard_is_reported_and_the_file_is_put_back(
 ) -> None:
     """The end-to-end claim: mutate, notice, restore — with the restore checked.
 
-    The restore is the half that has been wrong: it goes through
-    ``git checkout --`` rather than a variable, so a killed run leaves nothing
-    behind, and the run says out loud that the tree came back clean.
+    The restore goes through ``git checkout --`` rather than a variable, so a
+    killed run leaves nothing behind, and the run says that the tree came back
+    clean.
     """
     repo = _repo(tmp_path)
     monkeypatch.setattr(tool, 'REPO', repo)
@@ -238,8 +236,7 @@ def test_a_row_that_proves_nothing_says_so_in_the_cell(returncode: int, summary:
 def test_the_command_only_asks_for_xdist_where_xdist_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The bare-install job has no xdist, and pytest answers `-n` with exit 4.
 
-    A row built on that reads "pytest exited 4" and proves nothing, which is how
-    this first went red in CI: the flag was assumed from the dev environment.
+    A row built on that reads "pytest exited 4" and proves nothing.
     """
     monkeypatch.setattr(tool.importlib.util, 'find_spec', lambda name: None)
     assert '-n' not in tool.command(['tests']), 'without xdist the flag is left off rather than sent and rejected'
@@ -260,9 +257,9 @@ def test_a_tree_left_dirty_is_reported_rather_than_passed_over(
 ) -> None:
     """The last line of defence: the run says what it left behind.
 
-    Everything else here checks that the restore works. This checks the claim
-    made when it does not — because a run that quietly leaves a mutant is how
-    #974 committed one. Tracked only, for the same reason the start-up check is.
+    Everything else here checks that the restore works; this checks what the
+    run says when it does not. Tracked only, for the same reason the start-up
+    check is.
     """
     repo = _repo(tmp_path)
     monkeypatch.setattr(tool, 'REPO', repo)

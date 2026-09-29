@@ -2,13 +2,8 @@
 
 `relational/status.py` copies linopy's status vocabulary spelling for
 spelling, and each solver sink copies linopy's own mapping for its solver.
-Copies rot. These tests import linopy and compare, so a divergence — ours
-drifting, or a linopy release moving — fails here instead of being discovered
-by a user who knows one vocabulary and is handed another.
-
-The engine itself never imports linopy (docs/about/architecture.md, hard
-rule 2). Tests may — the same oracle arrangement the differential tests use
-for the math.
+These tests import linopy and compare, so a divergence on either side fails
+here.
 """
 
 from __future__ import annotations
@@ -52,9 +47,8 @@ def test_the_gurobi_mapping_matches_linopy_where_it_claims_to():
 
     linopy's Gurobi map contradicts Gurobi's own documented status codes in
     three places, each listed in ``_LINOPY_DIVERGENCES`` with its reason.
-    Asserted in both directions: everything else still matches, and every
-    declared divergence still diverges — so if linopy fixes one, the entry
-    has to go.
+    Everything else still matches, and every declared divergence still
+    diverges.
     """
     theirs = _linopy_condition_map('Gurobi', ast.Constant, 'value')
     assert set(theirs) == set(_CONDITION_OF_GUROBI_STATUS), (
@@ -73,9 +67,7 @@ def test_the_xpress_mapping_matches_linopy():
     """Copied entry for entry, with nothing claimed as an exception.
 
     The map is keyed by ``SolStatus`` *value* here and by the enum member
-    there, the sink not being allowed to import xpress at module level — so
-    the enum is what the two are compared through, and a member renamed
-    upstream fails here rather than silently dropping an entry.
+    there, so a member renamed upstream fails here.
     """
     xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress] extra')
     theirs = _linopy_condition_map('Xpress', ast.Attribute, 'attr', ast.Constant, 'value')
@@ -94,9 +86,7 @@ def test_the_xpress_sink_adds_to_linopys_answer_rather_than_contradicting_it():
 
 
 def test_every_gurobi_divergence_stays_inside_linopys_vocabulary():
-    """Diverging on a verdict is not licence to invent a word for it. Every
-    condition this package reports is one linopy also defines, which is what
-    keeps `status`, `is_ok` and the rollup meaningful across both."""
+    """Every condition this package reports is one linopy also defines."""
     assert set(_CONDITION_OF_GUROBI_STATUS.values()) <= set().union(*STATUS_TO_TERMINATION_CONDITIONS.values())
 
 
@@ -109,15 +99,9 @@ def _linopy_condition_map(
 ) -> dict[Any, Any]:
     """linopy's ``CONDITION_MAP`` for *solver*, read out of its source.
 
-    Each solver spells the map differently — HiGHS keys it by
-    ``HighsModelStatus`` attributes, Gurobi by integer literals, Xpress by
-    ``SolStatus`` attributes against plain strings — so the node type and the
-    attribute holding the value are arguments, and the two sides may differ.
-
-    Brittle to a linopy refactor, deliberately: the map is a local inside a
-    method, so there is nothing to import, and a copy nobody checks is a copy
-    that rots. If linopy moves it, the assertions say so rather than passing
-    vacuously.
+    Each solver spells the map differently, so the node type and the attribute
+    holding the value are arguments, and the two sides may differ. The map is
+    a local inside a method, so there is nothing to import.
     """
     solvers = pytest.importorskip('linopy.solvers')
     tree = ast.parse(inspect.getsource(solvers))
@@ -171,12 +155,7 @@ def test_reading_results_without_a_solution_raises():
 
 
 def test_a_solve_that_left_no_values_writes_the_record_and_no_frames(tmp_path):
-    """An export of a run that did not solve is the record alone.
-
-    Was: it raised, so a variant that came back infeasible left nothing on
-    disk and could not be told apart from one nobody ran. Reading a value
-    still raises — there is none — and that is the test above.
-    """
+    """An export of a run that did not solve is the record alone."""
     with sps.solve(*CASES['INFEASIBLE']) as solution:
         out = solution.save(tmp_path / 'infeasible')
     assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet'], (
@@ -207,10 +186,7 @@ def test_a_case_that_reached_no_objective_does_not_poison_the_others(tmp_path):
     """A directory per case is a table, and in a table an absent number is null.
 
     nan is a *number* to every aggregate that meets it: one infeasible case
-    among a hundred turns the mean of the hundred into nan, in polars and in
-    any SQL engine reading the same files. `has_primal` already says which
-    rows reached an objective, so the column has nothing to spend a sentinel
-    on.
+    among a hundred turns the mean of the hundred into nan.
     """
     for name, case in (('solved', 'LP'), ('unsolved', 'INFEASIBLE')):
         with sps.solve(*CASES[case]) as solution:
@@ -225,12 +201,7 @@ def test_a_case_that_reached_no_objective_does_not_poison_the_others(tmp_path):
 
 
 def test_a_record_column_that_names_no_written_type_is_refused_at_import():
-    """The schema is derived from `Record`, so a column added to it cannot skip declaring one.
-
-    Restated by hand it could: the next nullable column would go back to the
-    type polars infers from a single row — the defect the schema exists to
-    close, reintroduced with a green suite and nothing to show it.
-    """
+    """The schema is derived from `Record`, so a column added to it cannot skip declaring one."""
 
     class Unwritable(NamedTuple):
         when: bytes
@@ -284,11 +255,10 @@ def test_solver_options_reach_the_solver(knapsack):
 
 
 def test_a_time_limit_with_no_incumbent_is_ok_but_unreadable(knapsack):
-    """The gap `is_ok` alone cannot see, and where we go beyond linopy.
+    """The gap `is_ok` alone cannot see.
 
-    A MIP stopped before it found any feasible point rolls up to `ok` —
-    linopy's `safe_get_solution` would read its zero-filled `col_value` as an
-    answer. `has_primal` carries the solver's own verdict instead.
+    A MIP stopped before it found any feasible point rolls up to `ok`;
+    `has_primal` carries the solver's own verdict.
     """
     spec, sources = knapsack
     with sps.solve(spec, sources, solver_options={'time_limit': 0.0}) as result:

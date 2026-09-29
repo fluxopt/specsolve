@@ -1,9 +1,7 @@
 """The one place that decides which polars engine materialises a frame.
 
-Every collect in the package asks for the streaming engine, and a polars built
-without it — the browser's, for one — refuses the request with a panic rather
-than falling back. So the question is put to polars once, and every collect
-reads the answer.
+A polars built without the streaming engine — the browser's, for one — panics
+on the request rather than falling back, so the question is put once.
 """
 
 from __future__ import annotations

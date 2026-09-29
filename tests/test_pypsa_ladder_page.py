@@ -74,7 +74,7 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
 
 
 def test_every_rung_page_is_in_the_nav():
-    """`mkdocs build --strict` refuses a page the nav does not list, and the nav is written by hand."""
+    """The nav is written by hand, and the build does not refuse a page it leaves out."""
     nav = (ladder.ROOT / 'mkdocs.yml').read_text()
     unlisted = [s for s in STEMS if f'examples/pypsa_ladder/{s}.md' not in nav]
     assert not unlisted, f'rung pages missing from the nav in mkdocs.yml: {unlisted}'
@@ -158,11 +158,9 @@ def test_a_projection_orders_its_names_the_same_whatever_the_hash_seed(tmp_path)
     """The projection is diff-gated, so nothing in it may be *ordered* by a set.
 
     Python seeds string hashing per process, so a set that decides emit order
-    writes a different file on every run — and the committed projection then
-    goes red on a tree nobody touched, which is how `main` broke after #1466.
-    Membership sets are fine and the function keeps several; what may not
-    happen is one of them choosing the order of what is written. Subprocesses,
-    because one interpreter has one seed and cannot see the difference.
+    writes a different file on every run, and the committed projection goes red
+    on a tree nobody touched (#1466). Subprocesses, because one interpreter has
+    one seed.
     """
     import subprocess
     import sys

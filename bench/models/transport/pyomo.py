@@ -1,10 +1,7 @@
 """`transport` as a pyomo user writes it: a `ConcreteModel` with rules.
 
-The bus balance is the shape this case measures. pyomo has no notion of the
-declared relation the YAML groups by — `sum(p, by=gen_bus, over=generator, into=bus)` — so the adjacency is
-built as plain dicts first and the rule sums over them, which is what the
-mapping tables in a pyomo model always come down to. That index work is the
-arm's own cost and is timed with the rest of its build.
+The adjacency the YAML declares as relations is built as plain dicts inside
+the timed build, and the balance rule sums over them.
 """
 
 from __future__ import annotations

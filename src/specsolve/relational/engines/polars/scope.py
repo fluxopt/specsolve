@@ -1,14 +1,7 @@
 """The scope a query is compiled in: what each name stands for, and what a dimension means as a coordinate.
 
-What every query in the lane is written against, and what each helper takes
-— the labeller, the mask walk, the reindexing operators, the coverage
-guards — none of which compiles an expression. The compiler holds one of
-these beside the walk it adds.
-
-``data`` is everything attaching produced, frozen. ``variables`` is the
-build's own dict, not a copy: a variable frame appears while its declaration
-is built and a constraint compiled afterwards has to see it — the one live
-registry in the lane, visible in this signature.
+``variables`` is the build's own dict, not a copy: a constraint compiled after
+a variable is built has to see its frame.
 """
 
 from __future__ import annotations
@@ -31,10 +24,8 @@ if TYPE_CHECKING:
     from specsolve.relational.engines.polars.labels import Labelled
 
 
-#: Carries the single row of the empty coordinate product. Polars cannot hold a
-#: frame with one row and no columns — collecting one reports ``(0, 0)`` — so the
-#: unit needs a column to exist in, and every path drops it by selecting the
-#: dims and the label instead.
+#: Carries the single row of the empty coordinate product, since polars cannot
+#: hold a frame with one row and no columns.
 UNIT = '__unit__'
 
 
@@ -54,14 +45,10 @@ class Scope:
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
 
-        **Folded in reverse, then projected back.** polars' streaming engine
-        walks a cross join right-major, so folding backwards makes the product
-        arrive in declaration row-major order — label order.
-        [`labels.frame`][] verifies that rather than trusting it.
-
-        The empty product is one *real* row carrying only [`UNIT`][]: a
-        ``where`` on a scalar declaration filters this frame, and nothing
-        survives a filter.
+        Folded in reverse because polars' streaming engine walks a cross join
+        right-major, so the product arrives in label order; [`labels.frame`][]
+        verifies it. The empty product is one real row carrying only [`UNIT`][],
+        so a ``where`` on a scalar declaration has a row to filter.
         """
         out: pl.LazyFrame | None = None
         for d in reversed(dims):
@@ -83,17 +70,8 @@ class Scope:
     ) -> pl.LazyFrame:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
-        A parameter carrying a dim the frame lacks would be reduced over it,
-        widening a mask or picking an arbitrary bound, so that is refused;
-        *subject* is the caller's word for the declaration to name.
-
-        *how* is ``left`` for a bound, where a missing value is a fact to
-        report rather than a row to drop. ``inner`` is the mask walk's story
-        ([`compile_predicate`][specsolve.relational.engines.polars.predicates.compile_predicate]).
-
-        *maintain_order* is asked for only by the bounds, which become ``cols``
-        and are read in order; every other consumer verifies order where it
-        reads.
+        A parameter over a dim the frame lacks would be reduced over it, so that is
+        refused, naming *subject*.
         """
         declaration = self.program.parameters[param]
         assert not set(declaration.dims) - set(frame_dims), (
@@ -103,15 +81,11 @@ class Scope:
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
-        """A coordinate's row-major position in the declared product of *dims*.
+        """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
 
-        A label, a bound's slot and a set's position all read this one rule, so
-        two builds of one model agree on every index. Dense over the *full*
-        product rather than the survivors; with no dims, the literal zero of the
-        empty product's one row. *ordinals* says how the frame in hand carries a
-        dim's ordinal — a product frame has the column beside the label, a
-        built variable frame kept only the label and reads it through
-        [`ordinal_of`][].
+        A label, a bound's slot and a set's position all read this one rule, so two
+        builds of one model agree on every index. *ordinals* reads a dim's ordinal
+        off the frame in hand.
         """
         position: pl.Expr = pl.lit(0, dtype=pl.Int64)
         for d in dims:
@@ -121,10 +95,8 @@ class Scope:
     def ordinal_of(self, dim: str) -> pl.Expr:
         """A *dim* value column as that dimension's ordinal.
 
-        A string dimension is Enum-encoded by attaching over the labels in
-        ordinal order, so the physical code already *is* the ordinal. Every
-        other dtype uses a dictionary built from the dimension table — one
-        entry per label, not per row.
+        Attaching encodes an ``Enum`` in ordinal order, so its physical code is the
+        ordinal.
         """
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
@@ -135,9 +107,8 @@ class Scope:
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dim in *want*, saying the same thing.
 
-        A presence frame is silent about the dims it omits, which reads as
-        "present at all of them" — so the widening is a cross join with those
-        dimensions' own tables, and it changes no answer.
+        A presence frame is silent about the dims it omits, which reads as present
+        at all of them.
         """
         return self.spread(presence, [d for d in want if d not in have]).select(*want)
 
@@ -154,9 +125,8 @@ class Scope:
     def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.
 
-        A ``where`` leaf stamps its dims as a set, and two frames keyed by the
-        same dims in two orders join on a key written twice — so the order
-        comes from the one place that has one.
+        Two frames keyed by the same dims in two orders would join on a key written
+        twice.
         """
         wanted = set(dims)
         return tuple(d for d in self.program.dimensions if d in wanted)

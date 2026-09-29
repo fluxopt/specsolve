@@ -10,16 +10,15 @@
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
-The comparison the page cares about is the nodal balance. The YAML groups by
-relations it declared over the dimensions — ``sum(p, by=gen_bus, over=generator, into=bus)`` — where this script has to build the bus x generator and
-bus x line incidence matrices itself and multiply through them. Both say
-Kirchhoff's current law; one says it as a relation, the other as linear
-algebra.
+The line worth comparing is the nodal balance. The YAML groups by relations it
+declared over the dimensions — ``sum(p, by=gen_bus, over=generator, into=bus)``
+— where this script builds the bus x generator and bus x line incidence
+matrices and multiplies through them. Both say Kirchhoff's current law; one
+says it as a relation, the other as linear algebra.
 
 linopy's ``groupby`` (which ``monthly_budget.py`` uses) could carry the
 generator half, but not the flows: a bus no line enters vanishes from the
-grouped sum, and restoring it is the incidence matrix again — so the script
-keeps one idiom for both halves.
+grouped sum.
 """
 
 from __future__ import annotations

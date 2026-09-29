@@ -1,14 +1,9 @@
 """The LP sink renders doubles exactly, and writes the same bytes twice.
 
-The renderer under test is ``writers.base``'s and so is shared with the MPS
-sink; it is pinned here because this is where the trade it buys is made.
-``lp_file`` writes numbers by casting them to string, because emit is almost
-entirely float-to-text and a cast is far cheaper than a format string. That
-trade is only free if the cast is shortest-*round-trip* and not merely
-shortest, so the property is pinned here rather than left to the golden file —
-a golden proves the bytes did not move, not that they are correct.
-
-Reproducibility (#109) is pinned here too, for the same reason: a golden file
+The renderer is ``writers.base``'s, shared with the MPS sink. ``lp_file`` writes
+numbers by casting them to string, which is only correct if the cast is
+shortest-*round-trip*; a golden file proves the bytes did not move, not that
+they are correct. Reproducibility (#109) is pinned here too: a golden file
 proves one write, and the failure mode is two writes of one model differing.
 """
 
@@ -56,12 +51,7 @@ def _rendered(render, values: list[float]) -> list[str]:
 
 
 def _signed_text(value: pl.Expr) -> pl.Expr:
-    """The sign and magnitude ``_signed`` hands to ``concat_str``, as one string.
-
-    The sink never glues them itself — it passes both into the ``concat_str``
-    that builds the whole term — so the property under test is what that
-    concatenation produces.
-    """
+    """The sign and magnitude ``_signed`` hands to ``concat_str``, as one string."""
     return pl.concat_str(*_signed(value))
 
 
@@ -135,12 +125,7 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
 
 
 def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
-    """``DISPATCH_SPEC`` widened to the given size, with data to match.
-
-    The three tests below differ only in how large the file has to be for
-    their property to be observable at all — the sizes stay at the call sites,
-    where each test argues for its own.
-    """
+    """``DISPATCH_SPEC`` widened to the given size, with data to match."""
     generators = [f'g{i}' for i in range(n_generators)]
     data = {
         'generator': generators,
@@ -165,11 +150,9 @@ def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
 def test_the_direction_keyword_is_the_files_own(sense: str | None, keyword: str, tmp_path: Path) -> None:
     """The LP format's word for the direction, including where the file names none.
 
-    A feasibility model reaches the writer with ``objective_sense=None`` — no
-    objective declared is no direction — and the format still opens with a
-    keyword. ``min`` over an empty objective is the one every direction agrees
-    on, and the branch that decides it is reached from nowhere else: the rest
-    of this file writes ``DISPATCH_SPEC``, which declares one.
+    A feasibility model reaches the writer with ``objective_sense=None``, and
+    the format still opens with a keyword. ``min`` over an empty objective is
+    the one every direction agrees on.
     """
     schema, data = _scaled_dispatch(n_generators=2, n_snapshots=3)
     if sense is None:
@@ -186,12 +169,9 @@ def test_the_direction_keyword_is_the_files_own(sense: str | None, keyword: str,
 def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
     """#109 — reproducible output, which is a property of the whole file.
 
-    Sized well past one morsel on purpose. The constraint section is the only
-    place ordering can escape: its terms arrive by join, and a parallel engine
-    hands back one row's terms in whatever order it finished them, which no
-    amount of ordering the rows afterwards repairs. So the model needs many
-    terms per row and enough rows for the engine to split the work — a handful
-    of constraints would pass whatever the sink did.
+    Sized well past one morsel: a parallel engine hands back one row's joined
+    terms in whatever order it finished them, so the model needs many terms per
+    row and enough rows for the engine to split the work.
     """
     schema, data = _scaled_dispatch(n_generators=20, n_snapshots=200)
 
@@ -210,10 +190,8 @@ def test_chunking_the_constraint_section_leaves_the_bytes_alone(
 ) -> None:
     """The seams are invisible — chunking bounds the writer's peak, not its output.
 
-    The suite's models fit inside one `EMIT_BUDGET`, so without forcing the
-    budget down no test ever crosses a seam: a writer that dropped, doubled or
-    reordered a boundary row would pass everything else here. A budget of a few
-    nonzeros puts a seam every handful of rows.
+    The suite's models fit inside one `EMIT_BUDGET`, so a budget of a few
+    nonzeros forces a seam every handful of rows.
     """
     schema, data = _scaled_dispatch(n_generators=5, n_snapshots=40)
 
@@ -228,12 +206,9 @@ def test_chunking_the_constraint_section_leaves_the_bytes_alone(
 def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Path) -> None:
     """The sink writes the keywords itself and polars writes the sections.
 
-    Two writers on one handle, alternating. They agree only for as long as
-    polars goes through the handle's buffer rather than around it to the file
-    descriptor — and a small model proves nothing, because everything fits in
-    the buffer and the ordering cannot be observed. So each section here is
-    megabytes: if a keyword ever lands somewhere other than between the two
-    sections it separates, it lands in the middle of one of them.
+    Two writers on one handle agree only while polars goes through the handle's
+    buffer. Each section here is megabytes, so a keyword out of place lands in
+    the middle of one.
     """
     n_generators, n_snapshots = 50, 2000
     schema, data = _scaled_dispatch(n_generators, n_snapshots)

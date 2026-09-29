@@ -7,19 +7,15 @@ and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
-it needs a checkout of that repository at the tag `pyproject.toml` pins,
-which is what the `PyPSA parity` workflow hands it. Run with this tree's
-specsolve, `pypsa==1.3.0` and `highspy` installed, and the `dev` group's
-linopy for the model comparison against the oracle in `tests/linopy_lane`. No
-pixi environment carries pypsa, so the way to run it locally is the workflow's
-own line, which installs nothing on disk:
+it needs a checkout of that repository at the tag `pyproject.toml` pins. No
+pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
         --with "$(grep -o 'linopy @ git+[^"]*' pyproject.toml)" \
         --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
         python differential/pypsa/parity.py ../mathspec
 
-Per rung, from the same network, three comparisons:
+Per rung, from the same network:
 
 1. **Spec against model** — PyPSA's ``n.optimize.create_model()`` and
    the oracle's ``tests.linopy_lane.build``, label for label: coefficients, sense, right-hand
@@ -28,42 +24,32 @@ Per rung, from the same network, three comparisons:
    the one block PyPSA builds — **done**; ``region`` is the same rows from
    several ``where:`` blocks — **split**; a difference the file states on
    purpose carries a ``blocks`` reason in ``deviations.yaml`` and comes back
-   **recorded**; ``mismatch`` fails the run. A rung
-   whose file `tests.linopy_lane` cannot build yet stamps the error instead —
-   the upstream hardening this gate waits on — and its proof stops at (2).
+   **recorded**; ``mismatch`` fails the run. A rung whose file
+   `tests.linopy_lane` cannot build yet stamps the error instead.
 2. **One solved objective across the fence** — PyPSA's solve against
    `specsolve.relational`'s, both HiGHS, rtol 1e-9 on the generic spine.
 3. **Coverage** — what the relational lane built per block, each
-   dimension's size, the tables attached non-empty; and, over the ladder as a
-   whole, that every block is built by some rung, every mask is partially
-   true somewhere and every parameter is fed by some rung, so an equality is
-   never over data that tests nothing.
+   dimension's size, the tables attached non-empty; and, over the ladder, that
+   every block is built, every mask is partially true and every parameter is
+   fed by some rung.
 4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
    snapshot's objective weighting, which is how PyPSA reports them. A
    mixed-integer rung has no duals on our side and stamps why instead.
 5. **Structure** — PyPSA's rows and columns per name, masked labels
    excluded, against what the relational lane built per block — never
-   summed, so a PyPSA name split over several blocks differs even where the
-   parts add up. A difference is allowed only with a reason in
-   ``deviations.yaml``; one recorded nowhere reds the run, and so does a
-   reason no rung needs any more.
+   summed. A difference is allowed only with a reason in ``deviations.yaml``;
+   one recorded nowhere reds the run, and so does a reason no rung needs.
 
-Primals are deliberately not compared — an optimum need not be unique.
+Primals are not compared — an optimum need not be unique.
 
-The comparison reads linopy's own ``.flat`` export but does not call
-``linopy.testing``: those asserts hold the raw datasets equal, and two
-builders lay the same model out differently — PyPSA pads absent ``_term``
-slots with NaN where specsolve writes -0.0, and term order within a row is the
-builder's own. A canonicalizing ``assert`` upstream would shrink this file.
-PyPSA's model is built before `tests.linopy_lane` is imported: that import flips
-linopy's global ``semantics`` option to ``v1`` and PyPSA speaks ``legacy``,
-so the option is reset around each PyPSA build.
+The comparison canonicalises linopy's ``.flat`` export, because the two
+builders lay the same model out differently. Importing `tests.linopy_lane` sets
+linopy's global ``semantics`` option to ``v1`` and PyPSA speaks ``legacy``, so
+the option is reset around each PyPSA build.
 
-The stamps are rewritten into `references.json` beside this file on every
-run, so the committed certificate is always what the last run of this tree
-produced against the pinned corpus; the workflow fails on a diff, which is
-how a stale stamp shows.
+The stamps are rewritten into `references.json` on every run; the workflow
+fails on a diff.
 """
 
 from __future__ import annotations
@@ -197,12 +183,8 @@ FIRST: dict[str, set[str]] = defaultdict(set)
 def projected(stem: str, spec: Path, parity: dict, n) -> Path:
     """Write the rung's projection of *spec*, solve it, and hold it to the full file's objective.
 
-    The projection is what the page shows as this rung's spec and what its
-    tables are cut to; solving it here is what makes it a model rather than
-    an excerpt — a cut that lost something load-bearing lands elsewhere than
-    PyPSA and reds the run. The rung's script and the file's symbol table are
-    copied beside it, so the page can show the network and typeset the math
-    with no checkout at hand; the same diff gate holds the copies.
+    The rung's script and the file's symbol table are copied beside it, so the
+    page needs no checkout.
     """
     raw = yaml.safe_load(spec.read_text())
     cut = projection.project(raw, parity)
@@ -226,11 +208,8 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
     frame `sps.solve` received, floats rounded to twelve places because a
-    ``pow`` differs by an ulp between libms and the gate is a byte diff; the
-    workflow's diff gate makes a table that drifts from `prep.sources(build())`
-    a red diff. Once per table rather than
-    once per rung: a higher rung prepares the same table with a row more, and
-    committing that copy again would say nothing the page's rung order does not.
+    ``pow`` differs by an ulp between libms and the gate is a byte diff. Once
+    per table, under the lowest rung that feeds it.
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
@@ -245,20 +224,8 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     """Per masked block, what each conjunct of its ``where:`` did on this rung — one character each.
 
     ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
-    and ``-`` where the rung builds no frame for the block at all. That is the
-    whole of what the sweep reads, so it is the whole of what the record
-    carries: the counts behind it are never printed, and stamping them cost
-    2023 integers and four thousand lines of a diff-gated artifact.
-
-    Positional, and the conjuncts are not named. :attr:`mathspec.program.Mask.conjuncts`
-    is deterministic for a program, so the record says what happened and the
-    file says what it is about — a rendered predicate here would make every
-    rewording upstream a red run.
-
-    This is what the *block-level* coverage cannot see. A mask of ``a AND b``
-    is exercised as a whole the moment `a` varies, while `b` may be true at
-    every coordinate of every rung — and a term guarded by `b` alone would
-    then be missing with nothing to say so (mathspec#312).
+    and ``-`` where the rung builds no frame for the block at all. Positional:
+    :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
     model = built_model._engine._model
     scope = Scope(model.program, model.attached, model.variables)
@@ -305,11 +272,8 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     leaves the lane without duals, and the stamp says so.
 
     A name the file writes as PyPSA's row negated carries a ``negated:`` reason
-    in ``deviations.yaml``, and is compared against the negative rather than
-    excused: the claim *the same row negated* is exact, so it is checked, and a
-    difference surviving the negation is a difference. A name whose duals
-    differ for a reason no comparison can express — two degenerate copies of one
-    row — carries a ``duals:`` reason instead, which does excuse it.
+    in ``deviations.yaml`` and is compared against the negative. A ``duals:``
+    reason excuses a difference no comparison can express.
     """
     try:
         result.dual(next(iter(declared.constraints)))
@@ -421,10 +385,9 @@ AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period'}
 def _keyed(labels) -> dict:
     """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
 
-    Key components are strings, because the labels of a dimension are ints on
-    one side and their str spelling on the other (PyPSA numbers its cycles,
-    the tables hold every label as text). A dimensionless array — a per-label
-    global-constraint row — is its one label at the empty key.
+    Key components are strings, because a dimension's labels can be ints on
+    one side and text on the other. A dimensionless array is its one label at
+    the empty key.
     """
     if not labels.ndim:
         return {(): int(labels.item())}
@@ -469,13 +432,9 @@ def _without(key, axis: int, label: str):
 def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
     """Constraint rows by coordinate key: (sign, rhs, sorted (variable, coefficient) pairs).
 
-    Term order within a row is the builder's own, so the pairs are sorted; so
-    is the row's orientation — the two builders move the terms to opposite
-    sides of the same balance — so a row whose first nonzero coefficient is
-    negative is flipped whole, its sense with it. Coefficients and constants
-    are rounded to nine places, as the objective's already are: the builders
-    reach the same number through different arithmetic and may differ in the
-    last ulp.
+    The pairs are sorted, and a row whose first nonzero coefficient is negative
+    is flipped whole, its sense with it. Coefficients and constants are
+    rounded to nine places, as the builders may differ in the last ulp.
     """
     terms = defaultdict(list)
     meta = {}
@@ -515,12 +474,9 @@ def structure(
     """Row and column counts per PyPSA name, PyPSA's model against what specsolve built — the shape, before the labels.
 
     PyPSA's counts come off its own linopy model, masked labels excluded;
-    ours are the rows and columns built per block, keyed by the PyPSA name
-    the block's description opens with and never summed: a PyPSA name is
-    matched only by exactly one block with the same count, so a split is a
-    difference even where its parts add up to PyPSA's number. A
-    global-constraint row is named after its label on PyPSA's side and after
-    its type here, so those are matched through the recorded type.
+    ours are the rows and columns built per block, keyed by the PyPSA name the
+    block's description opens with and never summed. A global-constraint row
+    is matched through its recorded type.
     """
     theirs_rows = {name: int((c.labels != -1).sum()) for name, c in theirs.constraints.items()}
     theirs_columns = {name: int((v.labels != -1).sum()) for name, v in theirs.variables.items()}
@@ -561,9 +517,8 @@ def solver_size(n, built_model) -> dict[str, dict[str, int]]:
     """Rows, columns and nonzeros of the model each side handed HiGHS — the size that is actually optimised.
 
     PyPSA's from the ``highspy.Highs`` handle linopy keeps after the solve;
-    ours from :meth:`Model.diagnostics`, which is the build, a sink adding
-    nothing to it. Naming-independent, so it catches what a per-name count
-    cannot: a padded term that leaked, a helper row one side adds.
+    ours from :meth:`Model.diagnostics`. Naming-independent, so it catches a
+    padded term or a helper row one side adds.
     """
     theirs = n.model.solver_model
     ours = built_model.diagnostics()
@@ -576,9 +531,7 @@ def solver_size(n, built_model) -> dict[str, dict[str, int]]:
 def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     """Every name whose count is not one block equal to PyPSA's, with its recorded reason — and those with none.
 
-    ``deviations.yaml`` maps a PyPSA name to ``{structure: reason}``; a
-    difference without a reason is a red run, and so is a reason no rung
-    needs any more (checked once over the ladder in ``main``).
+    ``deviations.yaml`` maps a PyPSA name to ``{structure: reason}``.
     """
     differences, unexplained = {}, []
     solver = shape['solver']
@@ -605,13 +558,8 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, object]:
     """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
 
-    A name absent from a model is its empty set of labels — PyPSA creates
-    nothing for a component the network does not carry, and this lane drops a
-    block whose every row the data emptied — so a name empty on both sides
-    decides nothing and lands in no bucket. A difference the file states on
-    purpose carries a ``blocks`` reason in ``deviations.yaml`` and comes back
-    under ``recorded``, name to reason; a mismatch recorded nowhere stays a
-    mismatch and reds the run.
+    A name empty on both sides lands in no bucket. A mismatch with a ``blocks``
+    reason in ``deviations.yaml`` comes back under ``recorded``.
     """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
@@ -788,17 +736,10 @@ REASONS: dict = yaml.safe_load(DEVIATIONS.read_text()) or {} if DEVIATIONS.exist
 
 
 def settled(committed: object, fresh: object) -> object:
-    """*fresh*, with every number the committed certificate already agrees on left as it stands.
+    """*fresh*, with every float the committed certificate already agrees on left as it stands.
 
-    Rounding stops the last-digit churn; this stops the rest. HiGHS re-solving
-    the same model does not return the same bits — the objective moved by one
-    ulp and a price residual by 1e-16 between two runs of the same commit — and
-    the gate is a byte diff, so without this every re-run rewrites the file and
-    reds the job over nothing.
-
-    A number that moves by more than the tolerance is still written, so a red
-    diff means a claim changed rather than a rebuild happened. Ints are left
-    alone: a count that moved is never noise.
+    HiGHS re-solving the same model does not return the same bits, and the gate
+    is a byte diff. Ints are never settled.
     """
     if isinstance(committed, dict) and isinstance(fresh, dict):
         return {key: settled(committed.get(key), value) for key, value in fresh.items()}
@@ -814,12 +755,7 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
-
-    A declared block no rung builds is a silent regime; a ``where:`` no rung
-    leaves half-true is untested as a mask; a parameter every rung leaves
-    empty is data no comparison has ever weighed.
-    """
+    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised."""
     gaps = []
     by_file: dict[str, list[dict]] = defaultdict(list)
     for stem in sorted(stamped):
@@ -893,9 +829,7 @@ def main() -> int:
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    # The conjunct verdicts are the sweep's input, read below in the run that
-    # produced them, and nothing reads them back. Committing them put a quarter
-    # again on a diff-gated artifact to record arithmetic nobody prints.
+    # the conjunct verdicts feed `coverage` below and are not committed
     recorded = {
         stem: record | {'parity': {key: v for key, v in record['parity'].items() if key != 'conjuncts'}}
         for stem, record in stamped.items()

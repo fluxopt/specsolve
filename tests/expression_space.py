@@ -1,35 +1,15 @@
 """Every expression up to a bounded depth, and the rewrites that must not move it.
 
-The AST is closed, which is what makes this different from sampling: at depth
-three over two dimensions the space of spellings is *finite*, so the sweep in
-``test_expression_sweep.py`` makes the strong claim — every one of them means
-the same on both lanes — rather than "a hundred did".
+At a bounded depth over two dimensions the space of spellings is finite, so
+``test_expression_sweep.py`` claims every one of them means the same on both
+lanes.
 
-**Built well-formed, not filtered.** Each node carries the dimensions and the
-degree it produces, and the constructors that can fail refuse what the language
-would refuse: summing over a dimension the operand does not carry, a product
-past degree two. Trial-loading the candidates instead cost twenty seconds of
-collection, in every xdist worker, and turned a genuine load error into one more
-rejected candidate. Here a load error is a failure.
-
-**Rewrites are built, not found.** Depth bounds expression *size*, and the rules
-worth checking need a *shape* — which gets rarer as the space grows, not
-commoner. Enumerating to depth three and collecting the rules that happened to
-fire yielded 3,824 commutativity pairs, which ``test_arithmetic_laws.py``
-already states by hand, and ten of ``reduction-is-linear``, which is the one the
-sweep exists for (#1203). So the rule-carrying shapes are constructed over an
-operand pool instead — one builder per rule, below — and the two commute rules
-are left to the curated file.
-
-``reduction-is-linear`` is the rule with a side condition: ``sum(a + b)`` and
-``sum(a) + sum(b)`` are equal only while every operand is *total*, and the
-divergence when they are not went unnoticed for as long as the oracle shared it
-(#311). The condition is read off the tree rather than assumed.
-
-**A degree-two node is generated only as an operand, never emitted as a
-case.** The linopy lane refuses a quadratic constraint outright (#942), and
-every case here is a constraint row, so a degree-two expression would make the
-sweep report a lane limit it already knows about.
+Each node carries the dimensions and degree it produces, and the constructors
+that can fail refuse what the language would refuse, so a load error is a
+failure. The rule-carrying rewrites are constructed over an operand pool, one
+builder per rule. ``reduction-is-linear`` holds only while every operand is
+total, which is read off the tree. A degree-two node is generated only as an
+operand: the linopy lane refuses a quadratic constraint (#942).
 """
 
 from __future__ import annotations
@@ -76,9 +56,7 @@ LEAVES = (
 
 
 # ---------------------------------------------------------------------------
-# the constructors — the two that cannot fail return a node, the three that can
-# return None, which is how the enumeration drops what the language would refuse
-# without ever writing it down
+# the constructors — None is what the language would refuse
 # ---------------------------------------------------------------------------
 
 
@@ -107,20 +85,15 @@ def summed(a: Node, over: str) -> Node | None:
 def shifted(a: Node, over: str) -> Node | None:
     """Likewise for shifting along one — and the result is never total.
 
-    With no ``edge=``, "the vacated edge is absent"
-    (docs/reference/language/operators.md), so a shift introduces absence
-    wherever it lands however total its operand was. Propagating ``total``
-    through it made the generator emit ``reduction-is-linear`` pairs whose side
-    condition does not hold, and they duly disagreed (#1203) — the law is
-    intact, the claim about the operand was not.
+    With no ``edge=`` the vacated edge is absent
+    (docs/reference/language/operators.md).
     """
     if over not in a.dims:
         return None
     return Node(f'shift({a}, along={over}, offset=1)', a.dims, a.degree, total=False)
 
 
-#: Every way to grow an expression by one node. Ordered, so the enumeration is
-#: the same list on every machine and a failing id can be found again.
+#: Every way to grow an expression by one node, ordered so a failing id can be found again.
 UNARY: tuple[Callable[[Node], Node | None], ...] = (
     negate,
     partial(summed, over='f'),
@@ -148,9 +121,8 @@ def space(depth: int) -> tuple[Node, ...]:
 def expressions(depth: int) -> tuple[Node, ...]:
     """The expressions of :func:`space` a constraint row can be written from.
 
-    One with no variable in it is data, which the language refuses in a
-    constraint, and a quadratic one is a row the linopy lane cannot build at
-    all (#942).
+    Data is refused in a constraint, and the linopy lane cannot build a
+    quadratic row (#942).
     """
     return tuple(node for node in space(depth) if node.degree == 1)
 
@@ -174,12 +146,7 @@ def stride(cases: tuple, spec: str) -> tuple:
 
 
 def row_spec(node: Node) -> dict:
-    """The shared fixture's model, with *node* as its one binding row.
-
-    ``dims`` is the expression's own dimensions: anything else is a row
-    repeated across a dimension the expression does not carry, which the
-    language refuses — so it is computed rather than searched for.
-    """
+    """The shared fixture's model, with *node* as its one binding row over its own dims."""
     return law_spec(f'{node} <= 10', dims=sorted(node.dims))
 
 
@@ -198,12 +165,7 @@ class Rewrite:
 
 
 def _pool() -> tuple[Node, ...]:
-    """The operands the rule-carrying shapes are built over.
-
-    Depth two, and total — a masked operand is what ``reduction-is-linear`` is
-    conditional on, so it belongs in the curated non-laws rather than here,
-    where every pair must be an equality.
-    """
+    """The operands the rule-carrying shapes are built over: depth two, and total."""
     return tuple(node for node in _grown(LEAVES) if node.total)
 
 
@@ -218,9 +180,7 @@ def _negate_through_sum(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
 def _reduction_is_linear(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
     """A reduction splits across a sum: ``sum(a + b)`` is ``sum(a) + sum(b)``.
 
-    Only while both operands are total, which is what ``pool`` guarantees, and
-    only where the whole is a row the linopy lane can build — a degree-two
-    summand is #942's gap rather than a disagreement.
+    Only while both operands are total, and only for a linear summand (#942).
     """
     for a in pool:
         for b in pool:
@@ -242,9 +202,7 @@ def rewrites() -> tuple[Rewrite, ...]:
     """Every rule-carrying shape, built over the operand pool.
 
     Returns:
-        The pairs, ordered by rule and then by operand, so a failing id can be
-        found again and the census sampling a stride of them samples the same
-        stride on every machine.
+        The pairs, ordered by rule and then by operand.
     """
     pool = _pool()
     over_a_dim = (_negate_through_sum, _reduction_is_linear)

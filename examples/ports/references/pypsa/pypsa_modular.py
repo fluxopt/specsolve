@@ -8,12 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_modular.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables; nothing recorded here is
-reshaped with it.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -23,11 +18,9 @@ generator makes PyPSA emit an integer ``Generator-n_mod`` and the equality
 ``p_nom - n_mod * p_nom_mod == 0``, so the capacity variable survives but may
 only land on a multiple of the module size.
 
-One bus and no network, deliberately: a model that fails to match should
-implicate one feature, and here that feature is the module count. The three
-module sizes do not divide the peak load, so an optimum that rounded down would
-be infeasible and one that ignored the module sizes would be cheaper — either
-mistake shows up in the objective rather than hiding in a dispatch.
+One bus and no network. The three module sizes do not divide the peak load, so
+an optimum that rounded down would be infeasible and one that ignored the module
+sizes would be cheaper.
 """
 
 from __future__ import annotations

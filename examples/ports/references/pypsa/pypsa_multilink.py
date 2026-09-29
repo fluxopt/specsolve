@@ -8,24 +8,18 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_multilink.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row; pandas
-holds the instance's tables and performs the pivot below.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches. The port holds the link-to-bus
 relation as one incidence table — a ``(link, bus, value)`` row per link end,
 ``-1`` at the input, ``+efficiency`` at each output — and PyPSA holds it wide:
 ``bus0`` is the input, ``bus1``/``bus2`` the outputs,
 ``efficiency``/``efficiency2`` their deratings, an empty ``bus2`` where a link
-has only two ends. ``build`` opens with that pivot, so the two formulations
-stay independent while the data stays one instance. Nothing here imports
+has only two ends. ``build`` opens with that pivot. Nothing here imports
 specsolve.
 
-Beside the ladder rather than on it: a multi-link is the one PyPSA construct
-whose *schema* grows with the data — every arity adds a column pair — so the
-port exists to show the same relation said as rows.
+A multi-link is the one PyPSA construct whose schema grows with the data —
+every arity adds a column pair — and the port says the same relation as rows.
 """
 
 from __future__ import annotations
@@ -95,10 +89,7 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list]:
     """PyPSA's marginal price per bus, tidy — the dual of the nodal balance.
 
     The port has no snapshot dimension, so the network's one default snapshot
-    is dropped from the key: its row is the whole vector. Recorded in
-    references.json so the port is checked on a vector, not just the
-    objective — a sign convention that disagreed would be invisible to a
-    scalar comparison and wrong in every reported price.
+    is dropped from the key.
     """
     mp = n.buses_t.marginal_price.iloc[0]
     return {'bus': [str(b) for b in mp.index], 'value': [float(v) for v in mp]}

@@ -1,15 +1,7 @@
 """No file in the tree carries a conflict marker.
 
-`examples/README.md` shipped three nested `<<<<<<< HEAD` blocks through three
-squash merges before anyone noticed, because nothing reads that file. The one
-test that does read it — `test_the_prose_counts_the_ports_there_are` — asks
-whether its sentence is *in* the file, which stays true with markers wrapped
-around it.
-
-Every port PR edits the same handful of lines in the same handful of files, so
-a rebase-and-continue loop is normal here, and `git add -A` is one keystroke
-away from committing whatever the merge left behind. This is the check that
-makes that loud.
+A file nothing reads can carry markers through a merge unnoticed, and a test
+that asks whether a sentence is *in* a file stays true with markers around it.
 """
 
 from __future__ import annotations
@@ -22,9 +14,8 @@ import pytest
 
 REPO = Path(__file__).parent.parent
 
-#: A marker git writes, anchored at the start of a line. The trailing space is
-#: load-bearing: it keeps this file's own prose, and a markdown `=======` rule,
-#: from matching.
+#: A marker git writes, anchored at the start of a line. The trailing space
+#: keeps this file's own prose, and a markdown `=======` rule, from matching.
 MARKER = re.compile(r'^(<<<<<<< |>>>>>>> |=======$)', re.MULTILINE)
 
 

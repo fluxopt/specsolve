@@ -1,15 +1,8 @@
 """Attach runtime data to a lowered program — the one door both lanes enter.
 
-The language says what a parameter *is* — its dims, its dtype — and never where
-its values come from. This is the other half: what the caller passed (parquet
-paths, any table exposing the Arrow PyCapsule protocol, or a plain-Python
-shape) becomes the tidy frames both lanes read by name, and every question
-about whether that data is usable — is it there, does it carry the declared
-columns, is it single-valued per coordinate, are its labels real, are its values
-present and of the declared type — is asked here, once.
-
-The guard that needs the numbers rather than the shapes is
-[`specsolve.assumptions`][], which [`tidy_sources`][] calls on the way through.
+What the caller passed (parquet paths, any table exposing the Arrow PyCapsule
+protocol, or a plain-Python shape) becomes the tidy frames both lanes read by
+name, and every check on whether that data is usable is made here, once.
 """
 
 from __future__ import annotations
@@ -31,11 +24,7 @@ if TYPE_CHECKING:
 
 
 def attachable(program: Program) -> dict[str, ParameterDeclaration | DimensionDeclaration | RelationDeclaration]:
-    """Every name data may be attached to — declared parameters, dimensions and relations, one flat namespace.
-
-    Everything a ``piecewise:`` block needs is a parameter the file declared,
-    so an expansion adds no name here and takes none away.
-    """
+    """Every name data may be attached to — declared parameters, dimensions and relations, one flat namespace."""
     return {**program.parameters, **program.dimensions, **program.relations}
 
 
@@ -45,12 +34,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a
     parameter as tidy ``(dims…, value)``, a dimension's index as the table it
     arrived as with the labels under the dimension's own name, a relation as
-    the table it declares, one column per column under the column's own name
-    and one row per row it holds. Dimensions are read first, because the
-    plain-Python parameter shapes [`_spread`][] accepts are spread over
-    their labels. What the model assumes of all of it is checked last, once
-    every frame is there to check it against
-    ([`validate_assumptions`][specsolve.assumptions.validate_assumptions]).
+    the table it declares, one column per column under the column's own name.
 
     Args:
         program: The lowered spec.
@@ -99,7 +83,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
 
 def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
-    """A source key naming nothing the file declares — a typo, refused rather than ignored."""
+    """A source key naming nothing the file declares."""
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
     return (
@@ -110,7 +94,7 @@ def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> st
 
 
 def no_index_source_message(dim: str) -> str:
-    """A dimension with no index — the labels have no other home."""
+    """A dimension with no index."""
     return (
         f"dimension '{dim}' has no index: pass its labels under key '{dim}' — a table "
         f'carrying that column, a parquet path, or a bare sequence of them. The index is what '
@@ -154,8 +138,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     return table.collect().lazy()
 
 
-#: The declared dimension dtypes as the column an index becomes. Read only
-#: when there are no labels to infer from.
+#: The declared dimension dtypes as the column an empty index becomes.
 _DECLARED: dict[str, pl.DataType] = {
     'int': pl.Int64(),
     'float': pl.Float64(),
@@ -167,11 +150,8 @@ _DECLARED: dict[str, pl.DataType] = {
 def _labels_frame(dim: str, values: Source, dtype: str) -> pl.LazyFrame:
     """A one-column index frame from a plain sequence of labels.
 
-    **An empty index takes the dimension's declared dtype.** polars infers
-    ``Null`` from no labels, and a ``Null`` key joins against nothing — so a
-    parameter with the right dtype and no rows would fail to attach against
-    the dimension it belongs to. An empty index is what a driver that grows
-    one starts from.
+    An empty index takes the dimension's declared dtype: polars infers
+    ``Null`` from no labels, and a ``Null`` key joins against nothing.
     """
     if not isinstance(values, Iterable):
         raise DataError(_not_labels(dim, values))
@@ -194,11 +174,7 @@ def _not_labels(dim: str, values: object) -> str:
 
 
 def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> None:
-    """Refuse a relation nothing supplies, and a relation column carried on an index.
-
-    The second is refused rather than filtered, unlike every other stray
-    column: it is a table somebody meant to supply under its own key.
-    """
+    """Refuse a relation nothing supplies, and a relation column carried on an index."""
     for name, relation in program.relations.items():
         if name not in data:
             raise DataError(_unsupplied_relation_message(name, relation))
@@ -223,7 +199,7 @@ def _relations_over(program: Program, dim: str) -> tuple[str, ...]:
 
 
 def _unsupplied_relation_message(name: str, relation: RelationDeclaration) -> str:
-    """A relation nothing gives a table for — the counterpart of a parameter with no data."""
+    """A relation nothing gives a table for."""
     rows = f'one row per {list(relation.key)} it maps' if relation.values else 'one row per tuple it relates'
     return (
         f"no data provided for relation '{name}'. Pass it under key '{name}' as a table with "
@@ -242,11 +218,6 @@ def _check_relations_hold_labels(
 ) -> None:
     """Every column of every relation holds labels of its dimension.
 
-    Rows exist only where the relation has one — a key it leaves out is simply
-    unmapped, and a bare relation's tuple that is not there is not related —
-    so what is checked is that every row names labels that exist: a stray on
-    any side would place terms nowhere, silently.
-
     Raises:
         DataError: A column holding a label its dimension lacks.
     """
@@ -258,9 +229,8 @@ def _check_relations_hold_labels(
 def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
     """Refuse a relation column holding a value that is not a label of its dimension.
 
-    A label no row mentions is the partial case and simply has no row; a value
-    naming no label is a typo. Offenders keep their own type — a python native
-    off polars, never a numpy scalar — because the message reprs them.
+    Offenders keep their own type — a python native off polars, never a numpy
+    scalar — because the message reprs them.
     """
     known = set(labels.to_list())
     strays: dict[object, None] = {v: None for v in rows.select(role).collect()[role].to_list() if v not in known}
@@ -277,17 +247,12 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
 
 
 def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
-    """One dimension's labels, for a check that is about to run against them."""
+    """One dimension's labels."""
     return index.select(dim).collect()[dim]
 
 
 def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> pl.LazyFrame:
     """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
-
-    Held to the rules a table has before any index is read: a keyed relation
-    holds one row per key tuple, a bare one holds each tuple at most once, and
-    a null in any column is refused — a relation is partial by leaving a row
-    out, not by relating something to nothing.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -377,15 +342,6 @@ def _parameter_frame(
 def least_value(name: str, p: ParameterDeclaration, obj: Source) -> float | None:
     """The least value one parameter's source holds, read without any dimension's labels.
 
-    Every shape [`tidy_sources`][] accepts has a least value that does not
-    depend on where its numbers land, so a caller may ask how small a
-    parameter goes before the indices it is over have been read — which is
-    what lets a sweep resolve how far the model reaches along an axis it is
-    about to cut. Only the two shapes [`_spread`][] places *by position* are
-    read here — a number and a sequence, which it cannot spread without an
-    index; a ``{label: value}`` map carries its own placement and goes through
-    [`_parameter_frame`][] with the rest.
-
     Returns:
         The least value, or ``None`` where the source holds no rows.
 
@@ -402,16 +358,14 @@ def least_value(name: str, p: ParameterDeclaration, obj: Source) -> float | None
 def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dims it declares.
 
-    Three shapes a hand-written spec reaches for and no table library
-    produces: a ``{label: value}`` map, a sequence in the dimension's own label
-    order, and one number standing for every coordinate. A bool stays boolean
-    rather than widening to float: a mask's truthiness is read off the column
-    type.
+    A ``{label: value}`` map, a sequence in the dimension's own label order,
+    or one number standing for every coordinate. A bool stays boolean rather
+    than widening to float: a mask's truthiness is read off the column type.
 
     Raises:
         DataError: A shape that does not fit the declared dims, a sequence
             whose length does not match, or a dimension whose labels nothing
-            supplies — a positional shape cannot be placed without them.
+            supplies.
     """
     if isinstance(obj, Mapping):
         if len(dims) != 1:
@@ -453,7 +407,7 @@ def _wrong_rank(name: str, said: str, dims: Sequence[str]) -> str:
 
 
 def _broadcast(name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
-    """One number over every coordinate of *dims* — a cross join."""
+    """One number over every coordinate of *dims*."""
     frame = pl.LazyFrame({'__one__': [0]})
     for dim in dims:
         frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources)}), how='cross')
@@ -464,8 +418,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[La
     """*dim*'s labels, in index order, for a shape that has none of its own.
 
     Raises:
-        DataError: Nothing supplies the labels. A positional shape carries
-            none, and no lane reads them off the parameters.
+        DataError: Nothing supplies the labels.
     """
     source = sources.get(dim)
     if source is None:
@@ -483,8 +436,7 @@ def _checked_parameter(
 ) -> pl.LazyFrame:
     """*table* held to what its declaration claims, collected once.
 
-    The collect is the one model-sized materialisation on the way in; a
-    parquet path is streamed through it.
+    The collect is the one model-sized materialisation on the way in.
 
     Raises:
         DataError: The frame lacks a declared dim or ``value``, holds two rows
@@ -513,8 +465,7 @@ def _check_one_row_per_coordinate(
 
     Labels are checked against the dimensions whose index has been read; one
     still missing is refused once every source is in. A parameter with no dims
-    has exactly one coordinate, so the rule reads as "exactly one row" — and a
-    second row would silently multiply every row it broadcasts into.
+    takes exactly one row.
     """
     if not p.dims:
         if frame.height != 1:
@@ -560,12 +511,7 @@ def _check_one_row_per_coordinate(
 
 
 def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame) -> None:
-    """Every row carries a value: a null or a NaN is refused rather than read.
-
-    In long form the absence of a value is the absence of the row, so a hole
-    claims the coordinate and denies it at once; the two readings build
-    different models. NaN is named beside null because pandas spells both NaN.
-    """
+    """Every row carries a value: a null or a NaN is refused rather than read."""
     value = pl.col('value')
     holed = value.is_null() | value.is_nan() if frame.schema['value'].is_float() else value.is_null()
     holes = int(frame.select(holed.sum()).item())
@@ -596,7 +542,7 @@ _COLUMNS: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 #: What each declared dtype accepts. ``int`` serving ``float`` is the one
-#: widening; a float column under ``int`` is refused.
+#: widening.
 ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
     **_COLUMNS,
     'float': _COLUMNS['float'] + _COLUMNS['int'],

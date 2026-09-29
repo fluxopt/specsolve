@@ -49,9 +49,10 @@ python examples/walkthrough.py
 
 The other direction — not how a model is built but how one is *changed* — is a
 page rather than a script, and lives with the docs it belongs to:
-[docs/interactive.md](../docs/interactive.md) runs `dispatch.yaml` through the
-three loops a session has, and [docs/lifecycle.md](../docs/lifecycle.md) aims
-them at linopy's `fix`, `relax` and `remove_constraints`. Both hold their code
+[docs/change.md](../docs/change.md) runs `dispatch.yaml` through the
+three loops a session has, and
+[docs/howto/fix-relax-remove.md](../docs/howto/fix-relax-remove.md) aims them
+at linopy's `fix`, `relax` and `remove_constraints`. Both hold their code
 in blocks the site runs during the build, so what a reader sees rendered is
 what that build produced.
 

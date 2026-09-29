@@ -1,15 +1,10 @@
 """What a ``where:`` may say about data beyond one comparison per parameter.
 
-Three node kinds arrived together and each reduces something the frame does
-not carry: a comparison of two expressions reads arithmetic, a count reduces a
-dimension away, and a shift reads a predicate at the neighbouring coordinate.
-Every one has two implementations — an array in the linopy lane, a query in the
-streaming one — so each is asserted through the differential harness rather
-than against either lane alone.
-
-The masks are put on *variables* rather than on constraints so the claim is
-visible in the answer: an admitted member is worth one in the objective, so
-the optimum counts exactly the coordinates the mask keeps.
+A comparison of two expressions reads arithmetic, a count reduces a dimension
+away, and a shift reads a predicate at the neighbouring coordinate. Each is
+asserted through the differential harness. The masks sit on *variables*, and an
+admitted member is worth one in the objective, so the optimum counts exactly
+the coordinates the mask keeps.
 """
 
 from __future__ import annotations

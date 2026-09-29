@@ -1,10 +1,7 @@
 """`transport` as a gurobipy user writes it: a variable per (snapshot, entity).
 
-The bus balance is the whole shape of this case — three sums per row, one over
-the generators at the bus and one over each end of the lines touching it. A
-modeller builds those adjacency lists once and then writes the constraint over
-them, which is what this does; the index work is the arm's own cost and is
-timed with the rest of its build.
+The bus balance sums over the generators at the bus and over each end of the
+lines touching it, through adjacency lists built once inside the timed build.
 """
 
 from __future__ import annotations

@@ -2,11 +2,10 @@
 
     pixi run python examples/benders/run.py
 
-**This is evidence, not a feature.** It shows what the language can express and
-that the answer is right; specsolve ships no decomposition driver, and
-https://github.com/fluxopt/specsolve/issues/596 settled that it will not own one.
+It shows what the language can express and that the answer is right; specsolve
+ships no decomposition driver (https://github.com/fluxopt/specsolve/issues/596).
 
-Three files, and the split is the whole idea:
+Three files:
 
 - ``monolith.yaml``  the problem in one plan — the answer everything else must reach
 - ``master.yaml``    capacity, plus a placeholder for what operating it will cost
@@ -14,23 +13,17 @@ Three files, and the split is the whole idea:
 
 Both cut families come out of the *same* subproblem. An optimality cut is read
 off its prices, and a feasibility cut off ``dual_ray`` — the certificate an
-infeasible solve leaves, which says which combination of rows cannot hold. A
-fourth model standing in for the ray is what this example used to carry.
+infeasible solve leaves, which says which combination of rows cannot hold.
 
 The master's cuts are **data**. It declares ``cut`` and ``fcut`` with members
-from data (the data contract) and never changes; an iteration appends rows to their
-parameter tables. No YAML is written at runtime, so the spec a reviewer reads
-is the spec that runs — which is the point of writing specs in YAML at all.
+from data and never changes; an iteration appends rows to their parameter
+tables. No YAML is written at runtime.
 
-Because no file changes, each spec is parsed **once** above the loop and
-*built* once: ``sps.build`` attaches the data and ``update`` puts the next
-iteration's numbers on the model that is already there, where a path would
-re-parse a spec that cannot have moved and a rebuild would re-derive a model
-that did not change. The subproblem's ``cap_hat`` reaches its rows as a
-right-hand side, so HiGHS keeps the model it holds and re-solves from the last
-basis; the master grows a row a step and is loaded again, which
-``diagnostics().loads`` is what says. Any driver over a fixed model does this, whether it decomposes,
-rolls a horizon or sweeps data.
+Each spec is parsed and built once, above the loop, and ``update`` puts the
+next iteration's numbers on the model that is already there. The subproblem's
+``cap_hat`` reaches its rows as a right-hand side, so HiGHS keeps the model it
+holds and re-solves from the last basis; the master grows a row a step and is
+loaded again, as ``diagnostics().loads`` reports.
 """
 
 from __future__ import annotations
@@ -68,11 +61,8 @@ SOURCES = {
 def slice_for(spec, **extra):
     """The part of ``SOURCES`` *spec* declares, plus what this call adds.
 
-    One bag of data and three models, each taking its own slice — the master
-    reads an `invest` that `sub` does not, and `sub` reads a `load` the master
-    has never heard of. Attaching refuses a name a spec does not declare, so a
-    driver over several models says which slice it means; that refusal is what
-    turns a misspelled key into an error instead of a table nobody read.
+    Attaching refuses a name a spec does not declare, so a driver over several
+    models says which slice it means.
     """
     known = {**spec.parameters, **spec.dimensions}
     return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
@@ -113,10 +103,6 @@ def cut_from_ray(solution: sps.Result) -> tuple[pl.DataFrame, float]:
     proof. Every term is linear in capacity, so asking the master for a
     capacity where that same combination is *not* positive is one row —
     slope ``Σ_s u·avail`` per generator, against ``minus Σ_s v·load``.
-
-    This is what the fourth model used to be for. An infeasible solve has no
-    duals to read, correctly, since its values would be indistinguishable from
-    an answer — but it does have this.
     """
     slope = (
         solution.dual_ray('capacity')
@@ -135,7 +121,7 @@ def cut_from_ray(solution: sps.Result) -> tuple[pl.DataFrame, float]:
 
 
 def appended(tables: dict[str, pl.DataFrame], family: str, constant: float, slope: pl.DataFrame) -> None:
-    """One more cut in *family*, in place. This is the whole of "a cut is data"."""
+    """One more cut in *family*, in place."""
     index = tables[f'{family}_const'].height
     tables[f'{family}_const'] = pl.concat(
         [tables[f'{family}_const'], pl.DataFrame({family: [index], 'value': [constant]})]
@@ -151,10 +137,8 @@ def appended(tables: dict[str, pl.DataFrame], family: str, constant: float, slop
 def main() -> None:
     """The decomposition loop, against the same problem solved in one plan.
 
-    An infeasible subproblem has no duals to read — correctly, since its values
-    would be a vector of zeros indistinguishable from an answer — so the cut
-    comes from its ``dual_ray`` instead, which is the one thing an infeasible
-    solve does have to say.
+    An infeasible subproblem has no duals to read, so the cut comes from its
+    ``dual_ray`` instead.
 
     The gap is only checked once some capacity has proved dispatchable: every
     feasibility cut leaves the upper bound at infinity.

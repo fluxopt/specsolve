@@ -1,12 +1,8 @@
 """A relation whose two columns sit over one dimension — a representative snapshot.
 
-`rep_of: {key: snapshot, values: {rep: snapshot}}` maps each
-snapshot to the one that stands for it. The language's own example of the form,
-and two columns keyed by one, so `lanes.lowered` takes it.
-
-What needs two lanes to see: the walk lands on the dimension it started from, so
-the column it produces and the column it was joined on are over one dimension —
-and a frame, or an array's coordinate, has one name per dimension to give them.
+`rep_of: {key: snapshot, values: {rep: snapshot}}` maps each snapshot to the
+one that stands for it. The walk lands on the dimension it started from, so the
+column it produces and the column it was joined on are over one dimension.
 """
 
 from __future__ import annotations
@@ -67,16 +63,7 @@ def _inputs() -> dict[str, object]:
 
 
 def test_a_pullback_through_a_self_map_reads_the_representative():
-    """`at(price, by=rep_of, over=rep, into=snapshot)` is the price at the snapshot that stands for this one.
-
-    Was: the walk named its value column after the dimension it lands on, which
-    for a self-map is the name the key column already holds, so the relational
-    lane met polars' `DuplicateError`; and the linopy lane left the labels it
-    read as the coordinate, so a row landed at the snapshot it read rather than
-    at the one that read it, and linopy refused the mismatch (#1652). Both
-    happened after `check` passed, which is what made it a bug rather than a
-    gap.
-    """
+    """`at(price, by=rep_of, over=rep, into=snapshot)` is the price at the snapshot that stands for this one (#1652)."""
     with differential(SPEC, _inputs()) as run:
         assert run.oracle == pytest.approx(1 * 1.0 + 1 * 2.0 + 3 * 3.0, rel=RTOL), (
             'each snapshot capped at its representative price, both lanes agreeing'
@@ -91,9 +78,7 @@ def test_a_pullback_through_a_self_map_reads_the_representative():
 def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
     """`sum(p, by=rep_of, over=snapshot, into=rep)` adds each snapshot's output into its representative's row.
 
-    The adjoint of the pullback above, and the direction the two lanes
-    disagreed on before the fix (#1652): the relational one raised where the
-    linopy one built, so nothing here was checking that what it built was right.
+    The adjoint of the pullback above (#1652).
     """
     spec = override(
         raw_of(SPEC),
@@ -118,7 +103,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
 
 
 def test_a_where_reads_a_self_map_at_its_key():
-    """The data path was never the problem, and this is what said so while the walk was broken."""
+    """A self-map read as a mask compares at its key."""
     spec = override(
         raw_of(SPEC),
         **{

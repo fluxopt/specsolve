@@ -1,9 +1,7 @@
 """The fold: one plan per slice, and the answers stitched back together.
 
-What is checked here is that the driver is a *driver* — every claim below is
-about slicing, coupling and folding, and none of it is about the language. The
-windowed model in ``WINDOW_YAML`` uses only constructs that already ship, which
-is the whole argument for building this above ``api.py`` rather than inside it.
+Every claim here is about slicing, coupling and folding, not the language: the
+windowed model ``WINDOW`` uses only constructs that ship.
 """
 
 from __future__ import annotations
@@ -34,8 +32,8 @@ from tests.conftest import DISPATCH_SPEC, override
 GENERATORS = ['wind', 'gas']
 STORES = ['battery', 'pumped']
 
-#: Dispatch, with a scenario-free declaration — the slice column never appears
-#: in the model, which is what lets `EachCoordinate` need no language support.
+#: Dispatch, with a scenario-free declaration: the slice column never appears
+#: in the model.
 DISPATCH = DISPATCH_SPEC
 
 #: Storage over a *local* index, with the seam split out by a `where` on a dim
@@ -76,7 +74,7 @@ WINDOW = {
 
 #: The same storage, but two of them — so `soc` is over `(t, storage)` and the
 #: carried `soc_initial` over `(storage)`. The carry drops `t` and `storage`
-#: rides along, which is the general shape a scalar carry is a corner of.
+#: rides along.
 #:
 #: `charge` and `discharge` are capped well below a window's worth so a store
 #: cannot empty itself before the seam; otherwise every window ends at zero and
@@ -117,7 +115,7 @@ MULTI_STORE = {
 
 #: A myopic pathway: what a period builds is what the next period already has.
 #: `total` and `existing` are both over `(generator)`, so the carry drops
-#: nothing and the whole vector moves — no index could have said this.
+#: nothing and the whole vector moves.
 MYOPIC = {
     'dimensions': {'generator': {'dtype': 'str'}},
     'parameters': {
@@ -195,10 +193,9 @@ def coordinate_sources(coordinates: list, load: float = 5.0) -> dict[str, object
     }
 
 
-#: Window geometries whose *tail* differs — the only place a windowing rule
-#: goes wrong. Between them these cover a final window of one, a final window
-#: of ``steps``, a horizon shorter than a single window, and a tail that divides
-#: exactly so there is no short window at all.
+#: Window geometries whose *tail* differs: a final window of one, a final
+#: window of ``steps``, a horizon shorter than a single window, and a tail that
+#: divides exactly.
 GEOMETRIES = [
     pytest.param(periods, steps, lookahead, id=f'n{periods}-s{steps}-la{lookahead}')
     for periods in (1, 2, 5, 7, 12)
@@ -223,7 +220,7 @@ def overlapping() -> strategy.Sweep:
         WINDOW,
         horizon_sources(12),
         sps.EachWindow('snapshot', steps=3, lookahead=3, into='t'),
-        carry={'soc_initial': 'soc'},  # the last *kept* row, not the last row
+        carry={'soc_initial': 'soc'},
     )
 
 
@@ -246,21 +243,12 @@ def builds(monkeypatch):
 
 
 def answer_of(runs: strategy.Sweep) -> pl.DataFrame:
-    """A sweep's record without the two columns that belong to a *run* rather than an answer.
-
-    `solved_at` differs between two solves of one sweep by design, and `run`
-    is stamped when an archive is published, so neither is part of what two
-    ways of running the same sweep must agree on.
-    """
+    """A sweep's record without `solved_at` and `run`, which belong to a *run* rather than an answer."""
     return runs.record.drop('solved_at', 'run')
 
 
 def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
-    """The model never mentions `scenario`; the driver filters and drops it.
-
-    That is the whole reason this needs no language change — a slice is the
-    same declaration attached to a narrower source.
-    """
+    """The model never mentions `scenario`; the driver filters and drops it."""
     runs = sweep
 
     assert len(runs) == 3
@@ -286,16 +274,9 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
 def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
     """`keep` reaches each slice as asked, and the default is `solve`'s.
 
-    A purpose-built probe, and it says why: the request is invisible in the
-    answer *and* in `loads`, since keeping the solver and keeping its progress
-    are separate halves and the fold keeps the first either way. So a fold that
-    quietly picked `progress` for the caller would pass every other assertion in
-    this file while taking a bet only the caller can price.
-
-    Read off the call rather than `kept`, because it is the *request* that is
-    the decision: a slice whose labels moved is loaded again and correctly
-    keeps `nothing`, which would make an assertion on `kept` a test of the
-    data instead.
+    The request is invisible in the answer and in `loads`, so it is read off
+    the call. `kept` would test the data instead: a slice whose labels moved is
+    loaded again and keeps `nothing`.
     """
     asked: list[object] = []
     original = Model.solve
@@ -315,12 +296,9 @@ def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
 
 
 def test_a_serial_fold_builds_once_and_updates(builds):
-    """The fold is an update loop, and it has to stay one.
+    """The fold is an update loop: nothing after the first slice pays for the YAML, the plan or a fresh solver.
 
-    Every slice is the same math over different numbers, so nothing after the
-    first pays for the YAML, the plan or a fresh solver. Counted at `build`
-    because the difference is invisible in the answer, which is the whole point
-    of `update` being total — a regression here is silent.
+    The difference is invisible in the answer, so it is counted at `build`.
     """
     built = builds(strategy)
 
@@ -333,14 +311,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
 
 
 def test_a_carried_fold_still_builds_once(builds):
-    """A carry writes a parameter, and a parameter the first slice already attached.
-
-    So the sources a carried slice names are the ones before it named, and the
-    rule that rebuilds a slice naming something else never fires here. Pinned
-    separately from the sweep above because it is the *reason* it does not
-    fire, not a second instance of it — and because a rolling horizon is the
-    driver with the most slices to lose the fast path on.
-    """
+    """A carry writes a parameter the first slice already attached, so no slice names new sources."""
     built = builds(strategy)
 
     runs = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'})
@@ -350,12 +321,7 @@ def test_a_carried_fold_still_builds_once(builds):
 
 
 def test_a_pooled_fold_builds_per_slice(builds):
-    """The exception, and the reason for it: a built model cannot be pickled.
-
-    Stated as a test because the two branches now differ in more than where
-    they run, and a `Model` handed to `_run_slice` would fail in the
-    worker rather than here. Counted at the one `build` both branches reach.
-    """
+    """The exception: a built model cannot be pickled, so a pooled slice builds its own."""
     built = builds(strategy)
 
     with ThreadPoolExecutor(2) as pool:
@@ -390,7 +356,7 @@ def test_a_name_the_sweep_does_not_hold_says_what_it_does_hold(sweep):
 
 
 def test_a_sweep_that_solved_nothing_blames_the_solve():
-    """An absent frame has one cause now, and the message says which.
+    """An absent frame has one cause, and the message says which.
 
     The load is pushed past total capacity, so every slice is infeasible.
     """
@@ -409,9 +375,7 @@ def test_a_slice_that_reached_no_objective_does_not_poison_the_sweep():
     """`objective` is a table, and in a table an absent number is null.
 
     nan is a *number* to every aggregate that meets it, so one infeasible
-    slice makes the mean over the sweep nan — here, and in any SQL engine
-    reading the files a spill wrote. `has_primal` says which slices reached
-    one, which is what a sentinel would be there to say.
+    slice makes the mean over the sweep nan.
     """
     sources = scenario_sources()
     sources['load'] = sources['load'].with_columns(
@@ -486,8 +450,7 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
 
     A non-final window owns exactly ``steps``; a final one owns whatever is
     left, which can be one. Both are in range by construction, because a
-    window owns rows it solved — so unlike the index this replaced, there is
-    no geometry where the carry reads off the end.
+    window owns rows it solved.
     """
     runs = sps.solve_over(
         WINDOW,
@@ -503,9 +466,7 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
 def test_stitch_keeps_the_whole_of_the_final_short_window():
     """A tail window holds at most `steps`, so the owning rule keeps all of it.
 
-    12 coordinates kept 5 at a time leaves a final window of two. Dropping
-    `t >= step` uniformly would be right for it too; the risk is a rule that
-    drops the tail because it is not a full window, and it must not.
+    12 coordinates kept 5 at a time leaves a final window of two.
     """
     runs = sps.solve_over(
         WINDOW,
@@ -521,16 +482,9 @@ def test_stitch_keeps_the_whole_of_the_final_short_window():
 def test_a_hand_built_axis_refuses_to_read_over_a_dimension_it_never_named(tmp_path):
     """`original_index=True` on a hand-built axis is refused rather than ignored.
 
-    A windowed axis's slices are a plain list, so a caller wanting lengths
-    `EachWindow` cannot express hands that list in directly. The keys are then
-    window *starts* and nothing says so: a list carries no `into`, no sliced
-    dimension and no record of what each window owns, so there is no way back
-    to `snapshot`. Returning the keyed frame answered a different question than
-    the one asked, and under overlap its rows are the lookahead ones the next
-    window recomputed — summing them double-counts.
-
-    `scan` is checked beside it because it reaches the same guard by its own
-    route, not through the frame readers.
+    A list of slices carries no `into`, no sliced dimension and no record of
+    what each window owns, so there is no way back to `snapshot`. `scan`
+    reaches the same guard by its own route.
     """
     sources = horizon_sources(12)
     windows = sps.EachWindow('snapshot', steps=3, lookahead=3, into='t').slices(sources)
@@ -558,10 +512,8 @@ def test_stitching_an_axis_that_re_indexed_nothing_changes_nothing(sweep):
 def test_duals_stitch_the_same_way_primals_do(overlapping):
     """A window's price at a coordinate is the owning window's, not a blend.
 
-    The reason `stitch` is a flag on the readers rather than a reader of its
-    own: what has to be undone is a property of the *axis*, so a dual needs no
-    second implementation — and a name that is both a variable and a
-    constraint, which the language permits, is never dispatched on.
+    What has to be undone is a property of the *axis*, so a dual stitches as a
+    primal does.
     """
     runs = overlapping
     keyed, stitched = runs.dual('balance'), runs.dual('balance', original_index=True)
@@ -609,12 +561,10 @@ def priced() -> strategy.Sweep:
 
 
 def test_a_stitched_expression_prices_only_the_rows_a_window_owns(priced):
-    """`expression(original_index=True)` is the fix for the lookahead double-count.
+    """`expression(original_index=True)` drops the lookahead double-count.
 
-    The oracle is the polars restatement it replaces: price the stitched
-    dispatch by hand and the two must agree to the float. The keyed sum must
-    exceed it — the overlap is in the keyed frames, which is the double-count
-    the stitched read exists to drop.
+    The oracle is the stitched dispatch priced by hand. The keyed sum exceeds
+    it, since the keyed frames carry the overlap.
     """
     stitched = priced.evaluate('spend', original_index=True)
     assert stitched.columns == ['snapshot', 'value']
@@ -684,13 +634,8 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
         runs.evaluate('ratio')
 
 
-#: Six coordinates, three windows of two, whatever the coordinates *are*.
-#:
-#: `steps` and `lookahead` count coordinates rather than coordinate values, and
-#: every row here is a case that measuring in values got wrong. Dense integers
-#: from zero were the one shape that worked, because there value equals
-#: position; spacing them by ten silently produced **26** mostly-empty slices,
-#: and a datetime index raised `TypeError` from `int()`.
+#: Six coordinates, three windows of two, whatever the coordinates *are*:
+#: `steps` and `lookahead` count coordinates rather than coordinate values.
 COORDINATE_TYPES = [
     pytest.param(list(range(6)), id='dense-ints'),
     pytest.param([0, 10, 20, 30, 40, 50], id='gapped-ints'),
@@ -704,10 +649,8 @@ COORDINATE_TYPES = [
 def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     """The only requirement on a windowed dimension is that it is orderable.
 
-    Not numeric, not dense, not starting anywhere in particular — and not time,
-    which is only the common case. The local index is dense `0..n-1` by
-    construction, which is also what keeps the seam's `where: "t == 0"`
-    matching on a dimension with gaps in it.
+    The local index is dense `0..n-1`, so the seam's `where: "t == 0"` matches
+    on a dimension with gaps in it.
     """
     runs = sps.solve_over(
         WINDOW, coordinate_sources(coordinates), sps.EachWindow('snapshot', steps=2, lookahead=0, into='t')
@@ -771,12 +714,7 @@ def test_a_window_key_column_never_shadows_the_dimension_it_replaced(sweep):
     ],
 )
 def test_the_window_geometry_is_checked_at_construction(geometry, expected):
-    """`__post_init__` is what earns these a name on the public surface.
-
-    A step past the length used to be refused here and is now unrepresentable:
-    `lookahead` counts coordinates beyond the block rather than the whole
-    window, so there is no pair of numbers that skips coordinates.
-    """
+    """A bad geometry is refused when the axis is constructed."""
     with pytest.raises(ValueError, match=expected):
         sps.EachWindow('snapshot', **geometry)
 
@@ -795,12 +733,7 @@ BLOCKS = [
 
 @pytest.mark.parametrize('blocks', BLOCKS)
 def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(blocks):
-    """`steps` as a sequence keeps those numbers in order, one window each.
-
-    A telescoping horizon is this and nothing else: the stitch, the seam and
-    the separability gate never read a second number, because what a window
-    owns was always per-window and only the schedule was uniform.
-    """
+    """`steps` as a sequence keeps those numbers in order, one window each."""
     runs = sps.solve_over(
         WINDOW,
         horizon_sources(12),
@@ -840,12 +773,9 @@ OVERSHOOTING = [
 def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, periods, expected):
     """A probe, because no solved sweep can tell `min(block, left)` from `block`.
 
-    Only the *last* block can overshoot, and the last slice is the one whose
-    carry nobody reads, so trimming it changes no answer. What it keeps true is
-    `_Slice.owns`: a window that claims five coordinates while holding two has
-    lied about what it is responsible for, and the stitch and the seam both read
-    that number. Deleting the trim leaves the suite green, which is why this
-    asserts the arithmetic rather than an answer.
+    Only the *last* block can overshoot, and its carry is never read, so
+    trimming it changes no answer. It keeps `_Slice.owns` true, which the
+    stitch and the seam both read.
     """
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
 
@@ -920,8 +850,7 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
 
     The two declarations say what is copied: `t` is what the parameter lacks,
     so `t` is the one the carry collapses, and `storage` passes through — both
-    stores are handed forward, each its own level. That is the general case; a
-    scalar `soc_initial` is only the one where nothing is left to ride.
+    stores are handed forward, each its own level.
     """
     runs = sps.solve_over(MULTI_STORE, multi_store_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'})
 
@@ -958,7 +887,7 @@ def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
     rows 3..5 are solved against a horizon that ends at 5, so the store empties
     into them; the next window recomputes those coordinates from its own
     horizon. Handing row 5 forward would seed it with a level that was never
-    going to happen, which is what the index this replaced let a caller do.
+    going to happen.
 
     The first assertion is what makes the rest discriminating: where the two
     rows hold the same level, reading either passes.
@@ -993,9 +922,7 @@ def test_a_myopic_pathway_carries_a_whole_vector():
     """Capacity per generator, handed forward as a frame rather than a number.
 
     `total` and `existing` are both over `(generator)`, so nothing is dropped
-    and the frame *is* the carry. The two declarations decide that, which is why
-    a coordinate sweep needs no axis-owned dimension to carry this shape while
-    one that drops a dimension is refused.
+    and the frame *is* the carry.
     """
     runs = sps.solve_over(
         MYOPIC,
@@ -1013,8 +940,7 @@ def test_a_myopic_pathway_carries_a_whole_vector():
     assert total == pytest.approx([10.0, 25.0, 40.0]), 'demand 10 -> 25 -> 40 is met exactly'
 
 
-#: The five ways a carry cannot line up. Each `id` is the case, so a failure
-#: names it rather than a line number: `-k collapses-two-dimensions`.
+#: The five ways a carry cannot line up.
 _PERIOD_AXIS = sps.EachCoordinate('period')
 UNSOUND_CARRIES = [
     pytest.param(
@@ -1063,10 +989,8 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, source
 def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
     """ "Early" has to mean before the data, not merely before the solve.
 
-    Every question a carry raises is answered by the two declarations, so
-    answering it after the axis has scanned every parquet file to find its
-    coordinates makes a typo cost a pass over the whole dataset. The unreadable
-    path is the assertion: reaching it at all means the check ran too late.
+    The unreadable path is the assertion: reaching it at all means the check
+    ran after the data was read.
     """
     missing = tmp_path / 'not-written-yet.parquet'
     sources = {**horizon_sources(), 'load': str(missing)}
@@ -1100,11 +1024,8 @@ def test_carry_and_executor_are_refused_together():
 class Inline:
     """The whole protocol `solve_over` needs, in nine lines.
 
-    Not a toy: it is the claim that ``executor=`` takes
-    :class:`concurrent.futures.Executor` and not `ProcessPoolExecutor`, which
-    is what lets a dask ``Client`` or any other pool plug in **without this
-    package shipping a transport**. If the driver ever reaches for something
-    only a stdlib pool has, this is what stops compiling.
+    ``executor=`` takes any :class:`concurrent.futures.Executor`, not only a
+    `ProcessPoolExecutor`, so a dask ``Client`` or any other pool plugs in.
     """
 
     def submit(self, fn, /, *args, **kwargs):
@@ -1122,9 +1043,7 @@ def _process_pool(method: str):
 
 @contextlib.contextmanager
 def _entered(pool):
-    """The live executor: entered where it is a real pool, taken as-is where the
-    Inline protocol object has no ``__enter__`` — which is the whole reason it
-    is in the parametrisation."""
+    """The live executor: entered where it is a real pool, taken as-is for `Inline`, which has no ``__enter__``."""
     if hasattr(pool, '__enter__'):
         with pool as live:
             yield live
@@ -1132,12 +1051,8 @@ def _entered(pool):
         yield pool
 
 
-#: Every executor shape the docs name, and the reason each is here.
-#:
-#: **`fork` is absent and that is the statement.** polars' thread pool does not
-#: survive it, and a forked worker *hangs* rather than failing — so it cannot be
-#: a parametrisation without wedging CI, which is exactly why the docs refuse
-#: it. Measured: `fork` never returns where all four below do.
+#: Every executor shape the docs name. `fork` is absent: polars' thread pool
+#: does not survive it, and a forked worker *hangs* rather than failing.
 EXECUTORS = [
     pytest.param(Inline, id='inline-protocol'),
     pytest.param(lambda: ThreadPoolExecutor(2), id='threads'),
@@ -1158,8 +1073,7 @@ def test_every_executor_gives_the_same_answers_in_the_same_order(make_executor):
     """One fold, four pools, one answer — and the sequential run is the oracle.
 
     Same numbers *and* the same order. Futures complete out of order, so a
-    sweep that read them by completion would reorder itself run to run, which
-    is the kind of wrong that looks fine until two runs are diffed.
+    sweep that read them by completion would reorder itself run to run.
     """
     sources = scenario_sources()
     sequential = sps.solve_over(DISPATCH, sources, sps.EachCoordinate('scenario'))
@@ -1192,13 +1106,9 @@ def test_every_executor_carries_expressions_the_same(make_executor):
 
 
 def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypatch):
-    """In-process, so a parquet round trip would be paid for nothing.
+    """In-process, so a parquet round trip would be paid for nothing: 31% of a thread-pool sweep, measured.
 
-    31% of a thread-pool sweep, measured, which is what earns the one type
-    check in the driver. `ThreadPoolExecutor` is public stdlib, so this is a
-    documented class rather than a reach into an executor's internals — and
-    every other executor is assumed to cross, because none of them can be
-    asked.
+    Every other executor is assumed to cross, because none of them can be asked.
     """
     seen: list[str] = []
     original = strategy._encode
@@ -1220,11 +1130,7 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypat
 def test_the_model_and_its_plan_both_cross_a_process():
     """A worker is handed the document and the lowered plan, under every executor.
 
-    Both used to be refused by a pool that crosses a process, because the
-    language sealed its groups behind a `MappingProxyType` that pickle
-    refuses; the seal pickles since mathspec alpha.78. A slice reads no file:
-    it is handed the `Spec`, and re-validating one it already has costs
-    nothing.
+    A slice reads no file: it is handed the `Spec`.
     """
     spec = to_spec(DISPATCH)
     serial = sps.solve_over(spec, scenario_sources(), sps.EachCoordinate('scenario'))
@@ -1239,8 +1145,7 @@ def test_a_failing_slice_reports_the_real_error_across_a_process_boundary():
 
     A custom ``__init__`` signature is the classic way this breaks, and it
     surfaces as an unrelated ``TypeError`` raised while *unpickling* — so the
-    worker's real complaint never arrives. Pinned because a future improvement
-    to an error message is exactly what would break it.
+    worker's real complaint never arrives.
     """
     broken = {**scenario_sources()}
     broken.pop('cost')
@@ -1267,12 +1172,10 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
 def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path, monkeypatch):
     """`workers_share_fs` is inferred from the pool, and only paths are affected.
 
-    A `ProcessPoolExecutor`'s workers are this machine's, so slurping the file
-    into the message would be reading and shipping it once per slice for
-    nothing. An executor this package did not ship could be anywhere, so its
-    paths travel as their own bytes — which is what a caller building a remote
-    transport depends on, and the reason the flag survives with no transport in
-    the box. `workers_share_fs=` says it outright when the guess is wrong.
+    A `ProcessPoolExecutor`'s workers are this machine's, so a path stays a
+    path. An executor this package did not ship could be anywhere, so its paths
+    travel as their own bytes. `workers_share_fs=` says it outright when the
+    guess is wrong.
     """
     sources = scenario_sources()
     path = tmp_path / 'p_max.parquet'
@@ -1316,14 +1219,7 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
 
 
 def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension(sweep):
-    """A sweep is where a labelled array earns its keep.
-
-    `(scenario, snapshot, generator)` is the shape the caller wants — `.sel` a
-    scenario, take a spread across them — and assembling it out of a
-    slice-keyed frame by hand is the part worth not writing twice. Every
-    reader here is `Result`'s under the same name, so knowing one is knowing
-    both.
-    """
+    """Every reader here is `Result`'s under the same name, with the slice key as one more dimension."""
     pytest.importorskip('xarray')
     runs = sweep
 
@@ -1391,12 +1287,9 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
 def test_a_sweep_keys_every_file_it_writes_with_one_type(priced, tmp_path):
     """One key, one dtype, or the files a sweep writes are not one table.
 
-    The record and the manifest infer their key column from a Python value
-    the way every other frame here does; the kept frames prepend theirs with
-    `pl.lit`, which reads an int as `Int32` where that inference gives
-    `Int64`. Nothing in the process notices — polars joins across the two and
-    duckdb casts — but a concatenation of them is refused, and so is the
-    second load into any typed table.
+    `pl.lit` reads an int as `Int32` where inference from a Python value gives
+    `Int64`; polars joins across the two, but a concatenation of them is
+    refused.
     """
     out = priced.save(tmp_path / 'sweep')
     keyed = {
@@ -1409,13 +1302,7 @@ def test_a_sweep_keys_every_file_it_writes_with_one_type(priced, tmp_path):
 
 
 def test_a_resume_checks_the_layout_it_is_extending_rather_than_restamping_it(tmp_path) -> None:
-    """`spill_to=` at a directory an earlier build wrote is the one place the stamp has to hold.
-
-    Was: opening a spill wrote the stamp before asking whether the directory
-    already held a sweep, so a resume overwrote the layout it was extending
-    and mixed two under one manifest — the one failure the stamp exists to
-    catch, defeated by the path most likely to hit it.
-    """
+    """`spill_to=` at a directory an earlier build wrote is the one place the stamp has to hold."""
     out = tmp_path / 'sweep'
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=out)
     (out / 'format.json').write_text(json.dumps({'layout': 99}))
@@ -1435,13 +1322,7 @@ def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
 
 
 def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
-    """One solve's record is one slice's, so cases solved apart concatenate.
-
-    This is why the record is written beside the frames rather than kept in
-    the process that solved. Variants solved in separate sessions answer
-    "which was cheapest, and which did not solve" by reading a directory
-    each, with the case name a column the reader adds.
-    """
+    """One solve's record is one slice's, so cases solved apart concatenate."""
     sources = scenario_sources()
     low = {**sources, 'load': sources['load'].filter(pl.col('scenario') == 'low').drop('scenario')}
     with sps.solve(DISPATCH, low) as alone:
@@ -1478,8 +1359,7 @@ def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
     """`save` is not an export, and an infeasible study is an answer.
 
     A single solve that left no values writes its record and no frames, and a
-    sweep of them does the same: a set of saved cases needs the study that
-    did not solve on disk, not a call that refuses.
+    sweep of them does the same.
     """
     sources = scenario_sources()
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
@@ -1499,10 +1379,7 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     """A manifest with no record beside it is not a sweep this package wrote.
 
     Both are written per slice as the fold goes, so a directory holding one
-    and not the other was edited or interrupted before the layout existed.
-    Read without this, the missing one surfaces as whatever the frame reader
-    makes of nothing — an empty scan, or a `Sweep` whose record has no rows —
-    rather than as the directory being wrong.
+    and not the other was edited or interrupted.
     """
     out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
     assert sps.load_sweep(out._spill.directory).record.height == 3, 'the whole one reads back first'
@@ -1515,12 +1392,9 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
 def test_a_loaded_sweep_is_held_and_a_scanned_one_is_spilled(tmp_path):
     """The two verbs give the same study and differ in where its frames are.
 
-    A spilled sweep is what `spill_to=` leaves and what `scan_sweep` hands
-    back: the frames stay on disk, `scan` reads them, and the readers that
-    return a frame refuse rather than collecting a study on a caller's
-    behalf. `load_sweep` reads them in, so what comes back is the value a
-    sweep solved without spilling is — every reader answers, and the
-    directory is free afterwards.
+    `scan_sweep` leaves the frames on disk: `scan` reads them, and the readers
+    that return a frame refuse. `load_sweep` reads them in, so every reader
+    answers and the directory is free afterwards.
     """
     spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
     expected = spilled.scan('p').collect()
@@ -1544,13 +1418,10 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
 
 
 def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
-    """`axis` also takes a plain list of `(key, sources)`, so an irregular
-    ladder needs no third constructor on the public surface.
+    """`axis` also takes a plain list of `(key, sources)`.
 
-    What it cannot do is say what its keys are coordinates *of*, so `key=` is
-    required there — the same argument that leaves `EachWindow.into` without a
-    default. A column called `slice` would be this library naming somebody
-    else's draw.
+    The list cannot say what its keys are coordinates *of*, so `key=` is
+    required there.
     """
     base = scenario_sources()
     slices = [(name, {**base, 'load': _draw(base, name)}) for name in ('low', 'high')]
@@ -1565,9 +1436,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
 
 
 #: The second slice of a two-slice hand-built axis, each naming *less* than the
-#: first. Neither class axis can produce one — each rewrites a copy of the
-#: whole source mapping every slice, index included — so this is where a slice
-#: being total stops being automatic.
+#: first. Neither class axis can produce one.
 NARROWED = [
     pytest.param(lambda base: {'load': _draw(base, 'high'), 'snapshot': range(4)}, id='fewer sources'),
     pytest.param(lambda base: {**base, 'load': _draw(base, 'high', 2)}, id='no index'),
@@ -1578,12 +1447,9 @@ NARROWED = [
 def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second):
     """A slice says what the whole model attaches, whichever way the sweep runs.
 
-    A serial fold updates, and an update is partial by construction — it keeps
-    what the last slice attached. So a slice naming fewer sources, or no index,
-    would be answered off the *previous slice's* data, where a pooled fold
-    builds it alone and answers off the slice. The two branches are run against
-    each other because the failure is a disagreement: either outcome on its own
-    reads as an answer.
+    A serial fold updates and keeps what the last slice attached, where a
+    pooled fold builds each slice alone. The failure is a disagreement between
+    the two: either outcome on its own reads as an answer.
     """
     base = scenario_sources()
     slices = [('low', {**base, 'load': _draw(base, 'low'), 'snapshot': range(4)}), ('high', second(base))]
@@ -1601,9 +1467,8 @@ def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second
 def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
     """The derived name is right by default and the caller's word wins.
 
-    The refusal: a key that is a declared dimension would collide with a
-    column the frames carry, which polars reports as a duplicate with no idea
-    why.
+    A key that is a declared dimension would collide with a column the frames
+    carry.
     """
     runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name='case')
     assert runs.record.columns[0] == 'case'
@@ -1614,14 +1479,7 @@ def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
 
 
 def test_duals_come_back_keyed_by_slice_and_are_never_combined(sweep):
-    """A shadow price belongs to the slice that priced it.
-
-    The refusal `Sweep` used to carry was against *aggregating* duals, which is
-    a different thing from not having them: a price curve concatenated across
-    windows is wrong in a way nothing complains about, but so is one summed
-    across scenarios, and `primal` has never been asked to guess either. Keyed
-    rows say whose each price is and leave the reduction to the caller.
-    """
+    """A shadow price belongs to the slice that priced it; the reduction is the caller's."""
     runs = sweep
 
     prices = runs.dual('balance')
@@ -1633,11 +1491,8 @@ def test_duals_come_back_keyed_by_slice_and_are_never_combined(sweep):
 def test_a_slice_without_duals_does_not_fail_the_sweep():
     """An integer variable leaves duals undefined, and that is one slice's news.
 
-    `Result.dual` raises for such a model — correct there, fatal here. The
-    sweep must still return, and when the caller does ask for a price it must
-    say what a single solve says: which variable is not continuous, and what to
-    do about it. A sweep of one model has one answer, so the first is carried
-    rather than rewritten.
+    The sweep still returns, and asked for a price it says what a single solve
+    says: which variable is not continuous.
     """
     integral = override(DISPATCH, **{'variables.p.domain': 'integer'})
     runs = sps.solve_over(integral, scenario_sources(), sps.EachCoordinate('scenario'))
@@ -1652,11 +1507,8 @@ def test_a_slice_without_duals_does_not_fail_the_sweep():
 def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
     """`to_pandas` answers about the model before it asks about the environment.
 
-    The bare-install job carries no pandas, and importing it first turned "this
-    sweep never held 'q'" into "no module named pandas" — a true statement about
-    something the caller did not ask about. Resolving the name first is what
-    makes the reader's message the same on every install — while a name the
-    sweep does hold still needs the dependency, and says which package to install.
+    A bad name reads the same on every install; a name the sweep does hold
+    still needs the dependency, and says which package to install.
     """
     with mock.patch.dict(sys.modules, {'pandas': None}):
         with pytest.raises(sps.SpecsolveError, match="no variable 'q' in this sweep"):
@@ -1784,8 +1636,7 @@ def test_a_window_whose_local_index_the_spec_does_not_declare_is_refused_by_name
 
 
 def test_a_coordinate_sweep_over_a_dimension_the_spec_declares_is_refused():
-    """`EachCoordinate` drops its column, so a declared dimension would be left
-    with no data — the guard that lets a coordinate sweep ask the model nothing else."""
+    """`EachCoordinate` drops its column, so a declared dimension would be left with no data."""
     with pytest.raises(sps.SpecsolveError, match=r"EachCoordinate\('generator'\) drops 'generator'"):
         sps.solve_over(WINDOW, horizon_sources(8), sps.EachCoordinate('generator'), key_name='g')
 
@@ -1797,8 +1648,8 @@ def test_a_coordinate_sweep_over_a_dimension_the_spec_declares_is_refused():
 
 #: Every shape `build` takes for a source that does not carry the axis: a
 #: number for a scalar parameter, a bare sequence for an index, a
-#: `{label: value}` map. None of them is a table, and none needs to be — the
-#: axis has nothing to filter in them.
+#: `{label: value}` map. None of them is a table: the axis has nothing to filter
+#: in them.
 NOT_A_TABLE = [
     pytest.param(WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 0.0}, id='a-number'),
     pytest.param(DISPATCH, scenario_sources, sps.EachCoordinate('scenario'), {'snapshot': range(4)}, id='a-bare-index'),
@@ -1826,11 +1677,10 @@ def test_a_sweep_takes_every_source_shape_solve_takes(spec, sources, axis, plain
 
 
 def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
-    """`cost` stops at period 2 while `demand` runs to 3, so period 3 builds
-    with no cost at all — and solved to zero without a word. A warning rather
-    than a refusal, because absence is how a model masks and the engine
-    reports sparsity the same way; but it is said before a slice is taken,
-    naming the source, the coordinate it lacks, and a source that has it.
+    """`cost` stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
+
+    The warning comes before a slice is taken, naming the source, the
+    coordinate it lacks, and a source that has it.
     """
     sources = myopic_sources()
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
@@ -1868,9 +1718,8 @@ def test_a_slice_that_leaves_nothing_to_carry_stops_the_sweep_by_name():
 def test_a_failing_slice_is_named(make_executor):
     """Slice three of three fails to build, and the traceback says so.
 
-    The error is the engine's own, untouched — the note is added to it, so a
-    caller matching on the message still matches, and one reading a
-    fifty-window traceback learns which window without counting.
+    The error is the engine's own, with a note added, so a caller matching on
+    the message still matches.
     """
     base = scenario_sources()
     slices = [(k, {**base, 'load': _draw(base, k)}) for k in ('low', 'mid')]
@@ -1920,9 +1769,8 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
 def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
     """`axis.slices(sources)` is the hand-built list the sweep would have run.
 
-    That is what a user with an infeasible window 37 needs: build that one
-    slice alone, write it, read a row of it. And the list is the sweep, so
-    solving it hand-built gives the same answers under the axis's own key.
+    One slice builds alone, and the list solved hand-built gives the same
+    answers under the axis's own key.
     """
     sources = horizon_sources(12)
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, into='t')
@@ -1946,7 +1794,7 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
 
     A serial sweep updates one model, so after the first slice the solver is
     pushed values rather than loaded; a pooled sweep builds each slice alone,
-    so every one loads. That difference is the reason the column exists.
+    so every one loads.
     """
     with _entered(make_executor() if make_executor else None) as executor:
         runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=executor)
@@ -1985,10 +1833,7 @@ def _spilled(directory, **kwargs) -> strategy.Sweep:
 
 
 def test_a_slices_metrics_are_written_in_the_columns_its_type_declares(tmp_path):
-    """A slice's row was a bare dict until `SliceMetrics`, so nothing said what
-    it holds and a drift between what the fold builds and what the spill writes
-    would have been silent.
-    """
+    """The fold and the spill both write a slice's metrics as `SliceMetrics` declares them."""
     runs = _spilled(tmp_path / 'sweep')
     written = pl.read_parquet(sorted((tmp_path / 'sweep' / 'metrics').glob('*.parquet')))
 
@@ -1999,9 +1844,7 @@ def test_a_slices_metrics_are_written_in_the_columns_its_type_declares(tmp_path)
 
 
 def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
-    """A resume reads a slice's record and reading back as values, so a file
-    short of a column is a sentence rather than a sweep whose own table is the
-    wrong shape."""
+    """A resume reads a slice's record back as values, so a file short of a column is refused by name."""
     _spilled(tmp_path / 'sweep')
     first = min((tmp_path / 'sweep' / 'metrics').glob('*.parquet'))
     pl.read_parquet(first).drop('loaded').write_parquet(first)

@@ -1,8 +1,6 @@
 """`storage` as a gurobipy user writes it: a variable per (snapshot, entity).
 
-The cyclic state of charge closes the ring with `snapshots[i - 1]`, the same
-index trick the pyomo formulation beside it uses — in a per-entity API the wrap
-is where it always is, in the modeller's own index arithmetic.
+The cyclic state of charge closes the ring with `snapshots[i - 1]`.
 """
 
 from __future__ import annotations

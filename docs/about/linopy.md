@@ -145,10 +145,10 @@ you review and diff. The third is
 linopy's *design* for declared solver capabilities without adopting its code.
 
 The modeling API is what a reader arriving from linopy misses first. Two
-tutorial pages replace it. [Change a model](../interactive.md) covers the
+pages replace it. The tutorial [Change a model](../change.md) covers the
 loops: `update` for new numbers, a longer table for more rows, a patched `dict`
-for new math. [Fix, relax, remove](../lifecycle.md) covers the verbs, the
-same loops aimed at `fix`, `relax` and `remove_constraints`. Neither replaces
+for new math. The how-to [Fixing, relaxing and removing](../howto/fix-relax-remove.md)
+aims the same loops at `fix`, `relax` and `remove_constraints`. Neither replaces
 the *debugging*: an IIS. A built row is read with
 [`row`](../reference/api.md#specsolve.Model.row), in linopy's own form.
 

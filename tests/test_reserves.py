@@ -1,17 +1,10 @@
 """``reserves``: every many-to-many shape at once, each proven load-bearing.
 
-The gallery claims the language covers two idioms for a many-to-many relation:
-reify the pair set as a dimension with leg relations (lines bus-to-bus, offers as
-(generator, market, tranche) triples), or state pure weighted membership as an
-incidence parameter (overlapping reserve zones). ``examples/reserves.yaml``
-holds all of them in one instance; ``test_ports.py`` already checks it against
-the independent incidence-matrix build in
-``examples/ports/references/linopy/reserves.py``.
-
-What this module adds is the other half of the claim: **present is not
-proven**. A construct that could be deleted without moving the optimum would be
-decoration, so each shape gets the one data mutation that must move it — the
-same discipline a correctness guard owes its mutation table.
+``examples/reserves.yaml`` holds both many-to-many idioms: a pair set reified as
+a dimension with leg relations (lines bus-to-bus, offers as (generator, market,
+tranche) triples), and weighted membership as an incidence parameter
+(overlapping reserve zones). Each shape gets the one data mutation that must
+move the optimum.
 """
 
 from __future__ import annotations

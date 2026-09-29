@@ -1,5 +1,4 @@
-"""A pixi task's ``cmd`` is a shell script, so its newlines are what separate
-one command from the next — they are not the line wrapping they look like.
+"""A pixi task's ``cmd`` is a shell script, so its newlines separate commands.
 
 A task written across lines for readability therefore runs as several commands,
 and the shape that hides it is a long invocation whose first line is already
@@ -11,14 +10,10 @@ valid on its own::
       --budget 30 --benchmark-json=bench/results/latest.json
     \"\"\"
 
-That ran a full default benchmark for four and a half hours, then reported
-``--cases: command not found`` — the selection, the budget and the results file
-were three separate commands that never reached pytest. Nothing above it
-noticed: the run passed 260 tests, and the flags it dropped are exactly the
-ones that would have made it write anything down.
-
-A line ending in an operator (``&&``, ``|``) is genuinely continued and is
-fine. What this refuses is a line that ends in the middle of an argument list.
+There the selection, the budget and the results file are three separate
+commands that never reach pytest. A line ending in an operator (``&&``, ``|``)
+is continued and is fine; what this refuses is a line that ends in the middle
+of an argument list.
 """
 
 import re
@@ -62,10 +57,8 @@ def test_a_task_wrapped_across_lines_is_still_one_command(name: str) -> None:
 def test_the_sweep_matrix_covers_every_shard_it_divides_the_space_into() -> None:
     """A leg missing from the matrix is a slice of the sweep nobody runs.
 
-    Nothing else would say so: each leg passes on its own cases, the job is
-    green, and `--sweep-shard 0/4` in a three-leg matrix silently drops a
-    quarter of depth three. The task's own `i/n` is the divisor, so the matrix
-    has to name every offset it implies.
+    The task's own `i/n` is the divisor, so the matrix has to name every offset
+    it implies.
     """
     matrix = _MATRIX.search((REPO / '.github' / 'workflows' / 'sweep.yml').read_text())
     assert matrix, 'sweep.yml names no `shard:` matrix — the job takes one leg per shard'

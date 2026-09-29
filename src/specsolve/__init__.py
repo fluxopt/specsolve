@@ -12,8 +12,7 @@ Example::
     result.primal('p')  # tidy polars.DataFrame
     result.to_dataarray('p')  # labelled, for array post-processing
 
-``__version__`` reads the installed metadata: the git tag is the source of
-truth, and hatch-vcs bakes it in at build time. A source tree with nothing
+``__version__`` reads the installed metadata; a source tree with nothing
 installed reads ``0.0.0``.
 """
 

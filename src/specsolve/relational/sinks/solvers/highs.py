@@ -1,17 +1,8 @@
 """The ``highs`` solver: the whole model straight into HiGHS, in one call.
 
 The default, and the only one whose dependency ships with the package. Every
-vector crosses as a numpy buffer, with no float→text→parse round trip.
-
-**Nothing textual crosses into numpy**: a row's ``'<='`` becomes a
-[`SENSE_CODES`][specsolve.relational.sinks.handoff.SENSE_CODES] byte before it is read
-here.
-
-``highspy`` is imported inside the function, being optional: importing this
-module stays free for callers that only write LP files.
-
-[`Highs`][] is the same hand-off held open — what a driver that re-solves
-one model with new numbers uses, and where the warm basis lives.
+vector crosses as a numpy buffer. ``highspy`` is imported inside the functions,
+so importing this module stays free for callers that only write LP files.
 """
 
 from __future__ import annotations
@@ -32,9 +23,8 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff, RowVectors
 
 
-#: HiGHS model status -> termination condition. Copied from linopy's own
-#: ``Highs.CONDITION_MAP``; ``tests/test_solve_status.py`` asserts it still
-#: matches.
+#: HiGHS model status -> termination condition, copied from linopy's
+#: ``Highs.CONDITION_MAP``; ``tests/test_solve_status.py`` asserts it still matches.
 _CONDITION_OF_HIGHS_STATUS = {
     'kNotset': 'unknown',
     'kLoadError': 'internal_solver_error',
@@ -62,10 +52,7 @@ def build_highs(
     handoff: Handoff,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Highs:
-    """Load the model into a `highspy.Highs` and stop there.
-
-    The hand-off without the simplex. `bench/` ends here, as linopy's
-    ``Model.to_highspy()`` does on that side.
+    """Load the model into a `highspy.Highs` and stop there: the seam `bench/` measures.
 
     Returns:
         The [`Highs`][] holding the model, at ``.handle``.
@@ -76,13 +63,8 @@ def build_highs(
 def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated `highspy.Highs`.
 
-    One ``passModel`` loads the whole model at once — the scalars, the five
-    dense vectors, and the matrix as row-wise CSR. Every array crosses as a
-    numpy buffer.
-
-    The integrality vector spans the whole index even where no column is
-    integer. HiGHS reads it either way, and an empty one is read as whatever
-    the memory held (1.15.1).
+    The integrality vector spans every column even where none is integer: HiGHS
+    reads an empty one as whatever the memory held (1.15.1).
     """
     import highspy
     import numpy as np
@@ -149,18 +131,10 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
     r"""The objective's quadratic part, as the Hessian HiGHS reads.
 
     ``passHessian`` takes :math:`Q` in :math:`\frac12 x^\top Q x`, lower
-    triangle only, in column-major (CSC) order — so the conversion from the
-    unordered-pair form the engine hands over is two rules, and they differ:
-
-    * a **diagonal** pair states :math:`q\,x_i^2`, and :math:`\frac12 Q_{ii}
-      x_i^2 = q\,x_i^2` needs :math:`Q_{ii} = 2q`;
-    * an **off-diagonal** pair states :math:`q\,x_i x_j` once, where the
-      symmetric matrix holds it twice — :math:`\frac12 (Q_{ij} + Q_{ji}) = q`
-      — so the stored value is :math:`q` itself.
-
-    The whole part goes over at once — there is no incremental Hessian API —
-    but onto the model already loaded, which is what lets [`Highs.push`][]
-    replace it without a reload.
+    triangle only, in CSC order. A diagonal pair :math:`q\,x_i^2` needs
+    :math:`Q_{ii} = 2q`; an off-diagonal pair :math:`q\,x_i x_j` is stored as
+    :math:`q`, since the symmetric matrix holds it twice. It goes onto the
+    loaded model, so [`Highs.push`][] replaces it without a reload.
     """
     import highspy
     import numpy as np
@@ -190,13 +164,10 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 
 
 class Highs(Solver):
-    """HiGHS, holding one model — [`Solver`][]'s member for the default sink.
+    """HiGHS, holding one model.
 
-    The second solve of an updated model changes bounds, costs and right-hand
-    sides on the model HiGHS already holds and starts from the basis the last
-    solve ended on, unless the caller carries the basis across with
-    [`warm_start`][] and
-    [`warm`][specsolve.relational.sinks.solvers.base.Solver.warm].
+    A re-solve changes bounds, costs and right-hand sides on the held model and
+    starts from the basis the last solve ended on.
     """
 
     #: The loaded model. ``close`` drops it.
@@ -205,9 +176,8 @@ class Highs(Solver):
     requires = ('highspy',)
     unavailable_message = 'highspy ships with specsolve, so a build without it is broken rather than missing an extra'
 
-    #: No SOS concept at all, so a set is written out before it gets here. A
-    #: *convex* Hessian goes in through ``passHessian``, and the pair is probed
-    #: in ``test_sink_capability_probes.py``.
+    #: No SOS concept, and a Hessian beside integrality is refused; the pair is
+    #: probed in ``test_sink_capability_probes.py``.
     capabilities = Capabilities(
         supports={
             'integrality': 'native',
@@ -226,7 +196,6 @@ class Highs(Solver):
         return self._handle
 
     def push(self, handoff: Handoff) -> None:
-        """The index vectors are built here rather than held."""
         import highspy
         import numpy as np
 
@@ -244,12 +213,7 @@ class Highs(Solver):
         _pass_hessian(self._handle, handoff)
 
     def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, or its incumbent where none is valid.
-
-        A solved MIP is the model that holds an answer but no valid basis —
-        ``getBasis().valid`` is false — so what crosses is ``col_value`` as an
-        incumbent. A model not yet solved holds neither.
-        """
+        """The basis the last solve left, its incumbent after a MIP, or ``None`` before any solve."""
         import numpy as np
 
         basis = self._handle.getBasis()
@@ -266,11 +230,7 @@ class Highs(Solver):
         return None
 
     def _warm(self, ws: WarmStart) -> None:
-        """``setBasis`` for a basis, ``setSolution`` for an incumbent.
-
-        Both report a refusal by return value, like every hand-off here, so
-        both go through [`_took`][].
-        """
+        """``setBasis`` for a basis, ``setSolution`` for an incumbent."""
         import highspy
 
         if (statuses := ws.basis()) is not None:
@@ -289,12 +249,10 @@ class Highs(Solver):
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve, and read the one error HiGHS reports as a refusal to start.
+        """Solve and read the answer back.
 
-        A ``kError`` from ``run()`` leaves the model status unset — there is no
-        solve to read back — so a quadratic model that gets one is refused
-        explicitly. The pair a Hessian is otherwise refused for, integrality
-        beside it, is declared on the descriptor and never reaches a load.
+        A ``kError`` from ``run()`` leaves the model status unset, so on a
+        quadratic model it is refused explicitly.
         """
         import highspy
 
@@ -325,19 +283,12 @@ class Highs(Solver):
         return SolveAnswer(status, objective, primal, dual, activity)
 
     def dual_ray(self) -> pl.Series | None:
-        """``getDualRay``, which HiGHS signs the way the contract wants.
-
-        HiGHS needs nothing asked of it, and produces a ray whether or not
-        presolve is the pass that found the infeasibility.
-        """
+        """``getDualRay``, signed the way the contract wants, whether or not presolve found the infeasibility."""
         _, has_ray, values = self._handle.getDualRay()
         return solver_vector(values) if has_ray else None
 
     def forget(self) -> None:
-        """``clearSolver``: the basis and the solution go, the model stays.
-
-        HiGHS skips presolve for a run that starts from a basis.
-        """
+        """``clearSolver``: the basis and the solution go, the model stays."""
         self._handle.clearSolver()
 
     def close(self) -> None:
@@ -347,10 +298,7 @@ class Highs(Solver):
 
 
 def _row_bounds(rows: RowVectors, inf: float) -> tuple[Any, Any]:
-    """HiGHS's ``(lower, upper)`` spelling of a sense code and right-hand side.
-
-    An inequality is open on the side its sense does not bound.
-    """
+    """HiGHS's ``(lower, upper)`` spelling of a sense code and right-hand side."""
     import numpy as np
 
     return (
@@ -360,14 +308,7 @@ def _row_bounds(rows: RowVectors, inf: float) -> tuple[Any, Any]:
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:
-    """Raise unless the solver accepted the hand-off.
-
-    HiGHS reports a rejected call by return value and carries on with whatever
-    it had.
-
-    Raises:
-        SpecsolveError: If the batch was refused.
-    """
+    """Raise unless HiGHS accepted the hand-off; it reports a refusal by return value alone."""
     import highspy
 
     if status == highspy.HighsStatus.kError:
@@ -380,13 +321,7 @@ def _loaded(h: Any, status: Any, what: str) -> None:
 
 
 def _took(status: Any, what: str) -> None:
-    """Raise unless the solver accepted a warm-start hint.
-
-    HiGHS reports a refusal by return value and carries on.
-
-    Raises:
-        SpecsolveError: If the hint was refused.
-    """
+    """Raise unless HiGHS accepted a warm-start hint; it reports a refusal by return value alone."""
     import highspy
 
     if status == highspy.HighsStatus.kError:
@@ -400,9 +335,8 @@ def _took(status: Any, what: str) -> None:
 def _status_of(h: Any) -> SolveStatus:
     """What the solve concluded, on both axes.
 
-    ``has_primal`` is the solver's own answer to "is there anything here",
-    which the termination condition does not give: a run stopped at a time
-    limit may or may not have found an incumbent.
+    ``has_primal`` is asked separately: a run stopped at a limit may or may not
+    hold an incumbent.
     """
     model_status = h.getModelStatus()
     return SolveStatus(
@@ -413,7 +347,7 @@ def _status_of(h: Any) -> SolveStatus:
 
 
 def _has_primal(h: Any) -> bool:
-    """Whether HiGHS holds a feasible primal — the one question both the status and a warm start ask."""
+    """Whether HiGHS holds a feasible primal."""
     import highspy
 
     return h.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible)

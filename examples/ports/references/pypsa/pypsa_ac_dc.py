@@ -12,8 +12,7 @@ out of band — PyPSA is not a dependency of this project. It reads the same
 instance the port attaches and builds the network with PyPSA's own objects.
 Nothing here imports specsolve.
 
-**Two coordinates on one dimension.** Every model before it put a
-generator on a bus and stopped there. Here a generator also burns a *carrier*,
+**Two coordinates on one dimension.** A generator sits on a bus and also burns a *carrier*,
 and the CO2 budget is priced through that second map — PyPSA's
 ``primary_energy`` global constraint, which charges output over efficiency at
 the carrier's rate. The port states the two maps as two coordinates on
@@ -146,14 +145,7 @@ def nodal_prices(n: pypsa.Network) -> dict[str, list[float]]:
 
 
 def main() -> float:
-    """Solve and print what ``references.json`` records.
-
-    The recorded figure is ``n.objective + n.objective_constant``, not
-    ``n.objective``: every component here is extendable, so PyPSA credits the
-    capital already standing in ``p_nom`` and reports the change against that
-    starting point — a negative number on this network. The port has no such
-    starting point and states the system cost outright.
-    """
+    """Solve and print what ``references.json`` records: ``n.objective + n.objective_constant``."""
     n = build(load_tables())
     status, condition = n.optimize(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'
