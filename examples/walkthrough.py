@@ -1,21 +1,16 @@
 """The whole architecture, one model, one stage at a time — run it and read.
 
-docs/about/architecture.md describes the pipeline; this script *executes* it one stage at
-a time and prints the artifact each stage produces. Nothing here is a
-reimplementation: every call is the same public entry point ``sps.solve`` takes
-internally, so what you see is what actually runs.
+docs/about/architecture.md describes the pipeline; this script executes it one
+stage at a time and prints the artifact each stage produces, through the same
+entry points ``sps.solve`` takes internally.
 
     pixi run python examples/walkthrough.py
 
 Its output is committed as ``examples/walkthrough.out`` and asserted line for
-line by ``tests/test_walkthrough.py``, so the narration cannot go stale
-unnoticed: a stage that starts saying something else fails CI, and the diff of
-the regenerated file is the record of what changed. Everything printed is
-therefore deterministic.
+line by ``tests/test_walkthrough.py``, so everything printed is deterministic.
 
-The point it is trying to make is the thesis in docs/about/architecture.md: a YAML math
-spec is a closed AST known before any data is touched. Stages 1-3 happen with
-no data attached at all; only stage 4 sees a number.
+A YAML math spec is a closed AST known before any data is touched: stages 1-3
+happen with no data attached at all; only stage 4 sees a number.
 """
 
 from __future__ import annotations
@@ -107,15 +102,10 @@ def validated_model() -> Spec:
 def expanded_ast(schema: Spec) -> None:
     """Stage 2 — macros substituted away, named expressions kept as nodes.
 
-    Hard rule 1: the core AST is the whole language. Everything above it is
-    pure substitution, which is why a macro costs nothing and cannot make the
-    two lanes disagree — neither lane ever sees one. A named expression is
-    not substituted: it stands as one node wherever a constraint uses it, its
-    body under it, and stage 6 reads it back by name at the solution.
-
-    Substitution is the language's own business, and so are the passes that do
-    it: this asks ``mathspec`` for the finished AST rather than walking it
-    through their stages, which are mathspec's to rearrange.
+    The core AST is the whole language. Everything above it is pure
+    substitution, so no lane ever sees a macro. A named expression is not
+    substituted: it stands as one node wherever a constraint uses it, its body
+    under it, and stage 6 reads it back by name at the solution.
     """
     banner(2, 'expand macros -> core AST', 'Spec.program')
     objective_text = schema.objective.expression
@@ -128,10 +118,8 @@ def expanded_ast(schema: Spec) -> None:
 def relational_ir(schema: Spec) -> Any:
     """Stage 3 — the core AST lowered to the relational plan.
 
-    This is where the language's boundary is *decided*, by attempting the
-    lowering, so eligibility can never drift from what the backend supports. It
-    needs no data, which is what makes ``sps.check()`` a CI verb for spec
-    repositories: compile the math, attach nothing.
+    The language's boundary is decided here, by attempting the lowering. It
+    needs no data, so ``sps.check()`` can compile a spec with nothing attached.
     """
     banner(3, 'a spec -> the program both lanes build from', 'Spec.program')
     program = schema.program
@@ -150,10 +138,8 @@ def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
     Sources are adapted to tidy frames (dims..., value) and the engine
     assembles the model from them.
 
-    The private attributes read here are the one place this script reaches past
-    the public API: the frames are engine-private by design (hard rule 1 — the
-    plan is internal and the query is backend-private), and looking at them is
-    the whole point.
+    The frames are engine-private, so this is the one place the script reads
+    private attributes.
     """
     banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
     engine.build(program, tidy_sources(program, SOURCES))
@@ -194,15 +180,12 @@ def lp_file(engine: PolarsEngine) -> None:
 def solution(engine: PolarsEngine) -> None:
     """Stage 6 — batches to highspy, and the solution read back by label join.
 
-    Never densified. ``primal()`` hands back a frame: the engine's own shape,
-    and the one a caller can pass on without this package depending on their
-    library. Printed unsorted because the order *is* a fact this file narrates
-    — label order, row-major over the coordinate product, which is what the
-    read-back join is built to give and what ``Result.primal`` documents.
+    Never densified. ``primal()`` hands back a frame, printed unsorted: label
+    order, row-major over the coordinate product, as ``Result.primal``
+    documents.
 
-    ``expression()`` reads the quantity stage 1 named: lowered on this call,
-    not at build, so declaring it cost the stages in between nothing. It comes
-    back in the same order, and is printed the same way, for the same reason.
+    ``evaluate()`` reads the quantity stage 1 named, lowered on this call
+    rather than at build.
     """
     banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/solvers/highs.py')
     result = engine.solve()
@@ -216,16 +199,9 @@ def solution(engine: PolarsEngine) -> None:
 def refusals() -> None:
     """Stage 7 — what the language refuses, and which stage catches it.
 
-    Every rejection is a product statement: the error names the construct and
-    its rewrite. Never a silent fallback, never a redirect to the other lane —
-    both lanes accept exactly the same language (hard rule 3).
-
-    Each spec is run through ``sps.check()`` — stages 1-3, no data attached — and
-    then, only if that passes, through a build. Both are caught by ``check()``,
-    which is what makes it a CI verb: a spec repository can compile-check its
-    math with no data in the runner. The build arm stays because which stage
-    catches what is a real property of the design, and printing it is how this
-    script would tell you if that changed.
+    The error names the construct and its rewrite. Each spec is run through
+    ``sps.check()`` — stages 1-3, no data attached — and then, only if that
+    passes, through a build, so the output says which stage caught it.
 
     ``LanguageError`` is a ``ValueError`` subclass, so that is what is caught.
     """

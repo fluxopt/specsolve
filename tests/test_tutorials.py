@@ -1,22 +1,8 @@
-"""The tutorial pages must keep running, and keep claiming true things.
+"""The tutorial pages keep running, and keep claiming true things.
 
-``docs/interactive.md`` teaches the three loops a session actually has — update,
-grow a coordinate set, patch the spec — plus the verb that reads a built row
-back when one of them lands wrong, and ``docs/lifecycle.md`` aims them at
-linopy's `fix` / `relax` / `remove`. Every executed block is a real call, so a
-signature change breaks this test rather than leaving a page that reads fine and
-errors in a reader's session.
-
-Running is the weaker half, as with ``test_walkthrough.py``. The prose also
-*claims* things: that the update loop loaded one model for three solves, that
-growing an axis loads a second, that a pin moves bounds rather than labels,
-that a masked-out generator leaves the balance row a term short. A page that
-executed but had stopped doing any of that would still be green here without
-these assertions, and would teach the wrong loop.
-
-Blocks are exec'd in order in one namespace, which is what markdown-exec's
-``session=`` gives them on the site. The site does run them — a build is the
-second place this would fail, several minutes later and only on a push.
+``docs/interactive.md`` and ``docs/lifecycle.md`` run every executed block, and
+each test pins one claim the prose makes. Blocks are exec'd in order in one
+namespace, as markdown-exec's ``session=`` runs them on the site.
 """
 
 from __future__ import annotations
@@ -40,17 +26,14 @@ LOOPS = DOCS_DIR / 'interactive.md'
 LIFECYCLE = DOCS_DIR / 'lifecycle.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
-#: A plain ```python fence on the same page is a listing, and running it would
-#: make this test disagree with the site about what the page does.
 EXECUTED = re.compile(r'^```python[^\n]*\bexec="true"[^\n]*$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
 
 
 def run(page: Path) -> tuple[dict[str, Any], str]:
     """One top-to-bottom run: the namespace it ends with, and what it printed.
 
-    Runs from the repository root, which is where zensical runs the build and
-    so where markdown-exec starts a block — which is what makes
-    ``examples/dispatch.yaml`` resolve.
+    Runs from the repository root, where zensical runs the build, so
+    ``examples/dispatch.yaml`` resolves.
     """
     blocks = [match['code'] for match in EXECUTED.finditer(page.read_text())]
     assert blocks, f'{page.name} has no executed block, so this test would assert nothing'
@@ -99,7 +82,7 @@ def test_the_added_constraint_changes_the_answer(session: tuple[dict[str, Any], 
 
 
 def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, Any], str]) -> None:
-    """The claim that makes a fix worth spelling as bounds rather than as a row."""
+    """A pin writes bounds, not a row, so the loaded model is kept."""
     namespace, _ = lifecycle
     assert namespace['pinning'].loads == 1, 'a pin writes bounds, so the solver keeps the model it has loaded'
     assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'

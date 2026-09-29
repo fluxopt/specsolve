@@ -2,9 +2,6 @@
 
 Four tiers. A new test lands in the cheapest tier that can catch its failure,
 using the harness that serves it — not a hand-rolled copy.
-[`differential.py`](differential.py)'s docstring records what copies cost last
-time: twelve hand-rolled versions in seven files, each carrying a different
-fraction of the claim.
 
 | tier | the claim | the harness |
 |---|---|---|
@@ -39,7 +36,7 @@ a row that never binds, which an objective cannot.
 
 A *recorded* dual is a different claim: that this instance has a **unique**
 one, which is a property of the instance and something a port designs for
-(#938 moved a bound off the optimum to get it). Both lanes owe it the same
+(#938). Both lanes owe it the same
 answer, and both are asked — `test_ports` of the relational lane,
 `test_corpus_parity` of the linopy one, which linopy-free `test_ports` cannot
 reach.

@@ -1,26 +1,12 @@
-"""pyomo, hand-written — the incumbent, and the baseline most readers already have.
+"""pyomo, hand-written.
 
-Slow is the expected answer and not the point. A comparison that leaves pyomo
-out looks chosen, and a reader who runs pyomo today wants to know what the
-difference is in the units this harness measures rather than in an anecdote.
+The model is a `ConcreteModel` with `Set`/`Var`/`Constraint` rules, one per
+case in `bench/models/<case>/pyomo.py`, read from parquet with pandas.
 
-**The model is a `ConcreteModel` with `Set`/`Var`/`Constraint` rules**, which is
-what pyomo's own documentation and every textbook using it writes. Each case's
-is in `bench/models/<case>/pyomo.py`.
-
-**All three sinks, through appsi's persistent interfaces.** `set_instance`
-populates the solver's own model and stops there, which is the same seam
-`build_highs` and `build_gurobi` reach — no `solve()` anywhere near a
-measurement. The LP writer is pyomo's own.
-
-**`symbolic_solver_labels` is left off**, which is pyomo's default: the labels
-it would otherwise generate are the same feature `set_names=False` switches off
-on the linopy arm, and the default is already the cheap side. Nothing is
-switched off here that pyomo does not switch off itself.
-
-**The parquet is read with pandas.** pyomo's own examples build their
-`initialize=` mappings out of dicts and pandas frames; a polars read would
-charge it for a hop its users do not take.
+The solver sinks go through appsi's persistent interfaces: `set_instance`
+populates the solver's own model, the seam `build_highs` and `build_gurobi`
+reach. The LP writer is pyomo's own. `symbolic_solver_labels` stays at its
+default, off.
 """
 
 from __future__ import annotations
@@ -37,10 +23,7 @@ if TYPE_CHECKING:
 #: Every sink pyomo can hand a model to.
 SINKS = ('lp', 'highs', 'gurobi')
 
-#: What has to be importable for this arm to run. pyomo is in `dev` so the
-#: default and bench environments carry it; the `codspeed` one deliberately does
-#: not, and an absent library skips the cell with its reason rather than
-#: erroring the run.
+#: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('pyomo',)
 
 #: Which formulation module in `bench/models/<case>/` this arm builds from.
@@ -68,12 +51,7 @@ def _built(prepared: Prepared) -> Any:
 
 
 def _counts(m: Any) -> Counts:
-    """What pyomo has, counted the way pyomo counts.
-
-    ``active=True`` is the honest reading: a `ConcreteModel` can carry
-    deactivated blocks, and this harness's models do not, so the count is the
-    model's own size rather than an assertion about how it was built.
-    """
+    """What pyomo has, counted over active components."""
     from pyomo.environ import Constraint, Var
 
     columns = sum(len(v) for v in m.component_objects(Var, active=True))
@@ -88,11 +66,7 @@ def _persistent(sink: str) -> Any:
 
 
 def build_and_emit(sink: str, prepared: Prepared) -> Counts:
-    """Build the model and hand it over — an LP file, or a populated solver.
-
-    ``set_instance`` is where appsi writes pyomo's expressions into the solver's
-    own model, and it is the whole hand-off: nothing here calls ``solve``.
-    """
+    """Build the model and hand it over — an LP file, or a populated solver; nothing calls ``solve``."""
     with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
         m = _built(prepared)
         if sink == 'lp':

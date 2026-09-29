@@ -2,23 +2,9 @@
 
     pixi run -e bench python -m bench.plot
 
-The page is a tracked source file, not a build artifact: its markup, prose and
-renderer are edited by hand and reviewed in the diff. Only the measurements go
-stale, so this rewrites exactly one line of it — the ``const DATA = {...};``
-literal — and touches nothing else. Templating the page instead would move the
-interesting part (what the bands *say*) into a file nobody opens.
-
-One panel per model and sink, one line per library, log on both axes — which is
-the only shape that shows a *slope*, and the slope is the claim. A table can
-say a library is behind at one size; only the curve says whether it is falling
-further behind or catching up.
-
-**The band around each line is that measurement's own rounds**, minimum to
-maximum. It is not a confidence interval and not the spread across models: it
-is what the machine did to the same work nine times over, so a line whose band
-overlaps another's is two numbers this run cannot tell apart. `bench/report.py`
-marks the same doubt with `~` where it exceeds a quarter of the median; here it
-is drawn, which is the one thing a table cannot do.
+The page is hand-edited; this rewrites only its ``const DATA = {...};`` line.
+One panel per model and sink, one line per library, log on both axes. The band
+around each line is that measurement's own rounds.
 """
 
 from __future__ import annotations
@@ -30,17 +16,11 @@ from typing import Any
 
 from bench import results as bench_results
 
-#: What the page calls each library. Only specsolve is renamed — the page is about
-#: our engine and `polars` is what the reader sees named in the architecture —
-#: and anything unlisted keeps the name the harness measured it under.
+#: What the page calls each library; anything unlisted keeps its harness name.
 NAME = {'specsolve': 'polars'}
 
-#: The rungs the page plots, per ladder and in order. The two are **not** mixed
-#: into one curve: `w10` and `s` are the same size through different shapes, so
-#: a line through both would read as one model growing when nothing grew. They
-#: are drawn as the same panels under a toggle instead, which is the comparison
-#: the pair exists for — the x axis is variables either way, so switching it
-#: holds the size fixed and changes only the shape that reached it.
+#: The rungs the page plots, per ladder and in order. The two ladders are never
+#: one curve: `w10` and `s` are the same size through different shapes.
 LADDERS = {'length': ('xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
 
 #: Which ladder a rung belongs to, for the filters below.
@@ -49,13 +29,7 @@ _DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
 
 
 def measurements() -> list[Path]:
-    """Every results file under ``bench/results``, the way `bench.report` reads them.
-
-    A directory rather than one name, because the scheduled run takes one sink
-    per job and lands `latest-highs.json` beside `latest-gurobi.json`. Reading
-    a single `latest.json` here plotted whichever half was renamed and silently
-    dropped the other.
-    """
+    """Every results file under ``bench/results``, one per sink, the way `bench.report` reads them."""
     found = bench_results.files(Path('bench/results'))
     if not found:
         raise SystemExit('no results under bench/results — run the ladder first (bench/README.md)')
@@ -65,16 +39,9 @@ def measurements() -> list[Path]:
 def series(*paths: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
     """``(case, sink, arm) -> rung -> what one panel line needs at that rung``.
 
-    ``wall`` is the median, which is what the tables publish, and the band is the
-    first to the third quartile — the middle half of the rounds, centred on the
-    line rather than hanging off it.
-
-    Not the maximum at the top: one nine-round measurement here read
-    ``[1.18, 1.02, 1.07, 1.02, 1.02, 1.02, 1.06, 1.45, 9.97]``, and a band drawn
-    to that outlier is ten times the height of the model it belongs to.
-
-    A measurement taken without `isolate=True` has no peak and is dropped rather
-    than plotted as zero.
+    ``wall`` is the median the tables publish, and the band is the first to the
+    third quartile. A measurement taken without `isolate=True` has no peak and
+    is dropped.
     """
     out: dict[tuple[str, str, str], dict[str, Any]] = {}
     for record in (r for p in paths for r in bench_results.records(p)):
@@ -96,20 +63,10 @@ def series(*paths: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
 def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dict[str, Any]]) -> dict[str, Any]:
     """One panel per (case, sink): a shared rung axis, and a line per library.
 
-    Shared, with ``null`` where a library has no measurement, because the panel
-    feeds both the chart and the table under it. The chart skips a null; the
-    table prints what the run actually decided there — ``>30 s`` where the time
-    budget stopped that library, an em dash where it simply has no number.
-
-    A library that cannot reach a sink is absent from the panel rather than
-    present and empty: `gurobipy` has no HiGHS, and a row of dashes says the
-    measurement was missed rather than impossible.
-
-    **Only a ceiling from the ladder this page plots is read**, which is the
-    filter `series` applies to the measurements one line up. A case carries two
-    of them, and an arm stopped on the width climb keeps its key here — so
-    reading it would both bound a panel it says nothing about and displace the
-    size ceiling that does, the two sharing an arm.
+    ``null`` marks a rung with no measurement; ``bound`` carries the time-budget
+    label where a ceiling stopped the library. A library that cannot reach a
+    sink is absent from the panel. A ceiling applies only to the panels of its
+    own ladder.
     """
     out: dict[str, Any] = {}
     for (case, sink, arm), rungs in sorted(taken.items()):

@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_fixed.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -22,14 +18,11 @@ free.** ``p_set`` fixes a dispatch, ``p_nom_set`` fixes a capacity, and PyPSA
 emits each equality only where the value is not NaN — the must-run generator,
 the pre-committed schedule, the capacity somebody already signed for.
 
-Both partial tables are here on purpose, and at different ranks: ``p_set`` is
-sparse over *(snapshot, generator)* and ``p_nom_set`` over *(generator)* alone.
-The mask is the whole feature, so a model that pinned everything would prove
-nothing.
+Both partial tables are at different ranks: ``p_set`` is sparse over
+*(snapshot, generator)* and ``p_nom_set`` over *(generator)* alone.
 
 ``chp`` is the dearest unit in the fleet and still runs in the two snapshots it
-is pinned in. That is the direction that matters: a fixing which only ever
-agreed with the merit order would be invisible in the objective.
+is pinned in, so the fixing shows in the objective.
 """
 
 from __future__ import annotations
@@ -94,10 +87,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy.
 
-    Read off the model rather than ``buses_t.marginal_price``: the two differ
-    wherever the snapshot weightings are not 1, and recording the dual keeps the
-    comparison between the two formulations rather than against a presentation
-    of one of them.
+    Read off the model: ``buses_t.marginal_price`` divides it by the snapshot
+    weighting.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {

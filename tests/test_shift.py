@@ -93,18 +93,11 @@ def test_a_wrapping_edge_is_cyclic_on_both_lanes(storage_inputs):
 def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inputs):
     """shift() = acyclic recurrence, and the first snapshot has *no* recurrence.
 
-    ``soc[0]`` has no predecessor, so under #289 the vacated slot is absent, it
-    propagates through the equation, and the ``t=0`` row is not built at all —
-    linopy v1's own reading of ``.shift()``. It used to start from zero, which
-    was a constraint the model never wrote: an initial condition invented by
-    the language on the modeller's behalf.
-
-    A model that wants one now says so, which is what the declaration rules'
-    storage example
-    already did with a complementary ``where``. Both lanes are asserted because
-    they reach the drop differently — the linopy lane from linopy's absence
-    propagation, the relational one from the vacated coordinates leaving the
-    presence set.
+    ``soc[0]`` has no predecessor, so the vacated slot is absent (#289), it
+    propagates through the equation, and the ``t=0`` row is not built — linopy's
+    own reading of ``.shift()``. The linopy lane reaches the drop through linopy's
+    absence propagation, the relational one through the vacated coordinates
+    leaving the presence set.
     """
     acyclic = _storage_variant('shift(soc, along=snapshot, offset=1)')
     with differential(acyclic, _dimmed(storage_inputs)) as run:
@@ -118,13 +111,7 @@ def test_shift_drops_the_row_it_has_no_predecessor_for_on_both_lanes(storage_inp
 
 
 def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inputs):
-    """`by=-1` is the mirror of the test above: the *last* snapshot has no successor.
-
-    Both directions are one operator and the sign is data, so nothing about the
-    drop should be special to reaching backwards — but nothing built a forward
-    shift until #837, where the typesetter turned out to abort on one. The
-    engine had always been right; that is the half no test said.
-    """
+    """`by=-1` is the mirror of the test above: the *last* snapshot has no successor (#837)."""
     forward = _storage_variant('shift(soc, along=snapshot, offset=-1)')
     with differential(forward, _dimmed(storage_inputs)) as run:
         soc, charge, discharge = _soc_trace(run.result)
@@ -137,12 +124,9 @@ def test_a_forward_shift_drops_the_row_at_the_far_end_on_both_lanes(storage_inpu
 
 
 def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storage_inputs):
-    """`edge=0` fills what `by=-1` vacates, so the row at the far end survives.
+    """`edge=0` fills what `by=-1` vacates, so the row at the far end survives (#830).
 
-    The distinction the two spellings carry is the whole of law 8 in this
-    position, and it is the one #830 found the math could not state: both
-    printed as `t - 1`. Here it is asserted as rows rather than as notation —
-    the last snapshot keeps its equation, with the successor term contributing
+    The last snapshot keeps its equation, with the successor term contributing
     nothing.
     """
     filled = _storage_variant('shift(soc, along=snapshot, offset=-1, edge=0)')
@@ -157,8 +141,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
 
 
 #: A mask that removes one interior coordinate, so the operand's own absence
-#: sits where no edge is. `edge: 0` may fill the boundary and nothing else, and
-#: the two are one call to `fillna` apart on the linopy lane (#987).
+#: sits where no edge is. `edge: 0` may fill the boundary and nothing else (#987).
 MASKED_INTERIOR = masked_operand_spec('link', 'take <= shift(level, along=t, offset=1, edge=0)')
 
 
@@ -183,10 +166,9 @@ def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_ther
         )
 
 
-#: The same question asked of the two *gathers* — an offset that differs per
-#: entity, and a shift closed inside a group. Both reach the edge through their
-#: own out-of-range mask rather than through `.shift()`, so each needs its own
-#: case or one of the three could fill the whole operand unnoticed.
+#: The same question asked of the two *gathers*: an offset that differs per
+#: entity, and a shift closed inside a group. Each reaches the edge through its
+#: own out-of-range mask.
 BY_PARAMETER = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
@@ -206,8 +188,7 @@ IN_GROUPS = masked_operand_spec(
 )
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
-#: operand reaches the shift with no presence frame of its own. Which of the
-#: two group-less readings the lane takes used to depend on that (#1061).
+#: operand reaches the shift with no presence frame of its own (#1061).
 IN_GROUPS_UNMASKED = masked_operand_spec(
     'link', 'take <= shift(level, along=t, offset=1, edge=0, by=season_of, within=season)', grouped=True, masked=False
 )
@@ -226,10 +207,7 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
     One technology, a lead of one month, and `level` masked away at the middle
     month: `t=0` is the vacated edge and is filled, `t=2` reads the masked slot
     and drops, so two rows are built and `take` at the last month is capped by
-    nothing.
-
-    Where a *named* offset stops being a detail: which coordinates are vacated
-    is per entity, so the edge cannot be one column of labels (#1049).
+    nothing. Which coordinates are vacated is per entity (#1049).
     """
     sources = {
         'g': pd.Index(['a'], name='g'),
@@ -262,17 +240,12 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
 
 def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated():
     """A snapshot in no season at all: it reaches nothing for a reason the
-    shift had nothing to do with, so `edge=0` does not speak for it.
+    shift had nothing to do with, so `edge=0` does not speak for it (#1061).
 
-    The two readings of "reached nothing" are what separates this from the
-    test above: off a group's start the shift vacated the slot and the edge
-    fills it, but a coordinate the relation sends nowhere never had a
-    predecessor to lose. It is the null a partial relation gets everywhere else
-    (#969, `sum(by=)`, `at()`), and filling it asserts `take <= 0` where the
-    model said nothing.
-
-    Before #1061 the linopy lane filled it and the relational one did not, so
-    the lanes reported 4 rows and 3 for the same file.
+    Off a group's start the shift vacated the slot and the edge fills it; a
+    coordinate the relation sends nowhere never had a predecessor to lose. It
+    is the null a partial relation gets everywhere else (#969, `sum(by=)`,
+    `at()`).
     """
     with differential(IN_GROUPS_UNMASKED, GROUPLESS_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, (
@@ -284,10 +257,8 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
 def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing():
     """The same question with a `where` on the operand that masks no row.
 
-    Worth its own case because it takes the other path: with a presence frame
-    the edge is rebuilt from the vacated set, without one it comes from the
-    grouped labels — and a mask removing nothing must not decide whether a
-    row exists.
+    With a presence frame the edge is rebuilt from the vacated set, without one
+    from the grouped labels; a mask removing nothing decides no row.
     """
     sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
     with differential(IN_GROUPS, sources, lp=True) as run:
@@ -493,12 +464,7 @@ RAMP_SPEC = override(
 
 
 def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
-    """ROADMAP 5b: `where: "snapshot > 0"` must mean the same on both lanes.
-
-    The README's ramp example uses exactly this — a time-coupling constraint
-    that skips the first snapshot. It used to be linopy-only: lowering refused
-    dimension comparisons, so the same file built two different models.
-    """
+    """`where: "snapshot > 0"` means the same on both lanes: a ramp that skips the first snapshot."""
     n_s = 12
     rng = np.random.default_rng(11)
     data = {
@@ -542,15 +508,9 @@ objective: {sense: maximize, expression: "sum(x, over=t)"}
 def test_the_fill_a_product_wants_is_one_not_zero():
     """``fill=`` takes the identity of the *position*, which is why it takes a number.
 
-    linopy v1 refuses to fill on the caller's behalf precisely because the right
-    value is positional (``convention.rst`` §7): 0 is the identity of a sum, 1 of
-    a product. ``x * shift(eff, along=t, offset=1, edge=0)`` would force ``x`` to zero at the
-    first coordinate — the pin again, wearing the coefficient's hat — where
+    0 is the identity of a sum, 1 of a product. ``x * shift(eff, along=t,
+    offset=1, edge=0)`` would force ``x`` to zero at the first coordinate, where
     ``fill=1`` leaves it governed by its own bound.
-
-    Over data any number is allowed, since it is a data fill. The relational
-    lane has to *write* the rows for a nonzero one: a const fragment reads a
-    missing row as zero, so `fill=1` exists only if something puts it there.
     """
     data = {'t': [0, 1, 2], 'eff': pd.Series({0: 2.0, 1: 4.0, 2: 5.0})}
     with differential(FILL_IDENTITY_SPEC, data, lp=True) as run:
@@ -588,11 +548,9 @@ def test_an_edge_policy_is_quoted_or_a_number(edge):
 
 
 def test_a_bare_wrap_names_a_dimension_and_is_refused():
-    """`over=wrap, edge=wrap` was legal, and the same token meant two things.
+    """A bare `wrap` in `edge=` is refused, so one token cannot mean two things.
 
-    The model here declares a dimension actually called `wrap`, which is what
-    makes the ambiguity concrete rather than theoretical: the parser resolved
-    the two positions differently and a reader could not.
+    The model declares a dimension called `wrap`, which `over=wrap` would name.
     """
     with pytest.raises(ValueError) as exc:
         sps.check(_with('x - shift(x, along=t, offset=1, edge=wrap) <= 1'))
@@ -602,13 +560,7 @@ def test_a_bare_wrap_names_a_dimension_and_is_refused():
 
 
 def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
-    """Quotes are for closed keywords in kwarg values, not for arithmetic.
-
-    The *grammar* refuses this rather than resolution, which is the stronger
-    place for it — a quoted word in arithmetic is not a name and not a number,
-    so there is nothing for a later pass to say about it. `resolution.py` keeps
-    a branch for the shape anyway, reachable only from a hand-built AST.
-    """
+    """Quotes are for closed keywords in kwarg values, not for arithmetic: the grammar refuses this."""
     with pytest.raises(ValueError) as exc:
         sps.check(_with("x - 'wrap' <= 1"))
 
@@ -632,15 +584,10 @@ def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[
 def test_the_bare_shift_refusal_names_the_pair_that_actually_omits_the_row():
     """`edge=` and `where:` are a companion pair here, not a choice.
 
-    Each is wrong alone, which is why listing them as alternatives was the
-    defect: a `where` does not lift the refusal, because it is decided on the
-    expression before any mask is read; and `edge=0` alone leaves a row at the
-    vacated coordinate whose bound is that zero — the silent pinning the
-    refusal exists to prevent.
-
-    Held as behaviour and as wording, because the wording is the only thing
-    standing between a reader and the `edge=0`-alone answer, which builds and
-    solves and is wrong.
+    Each is wrong alone: a `where` does not lift the refusal, because it is
+    decided on the expression before any mask is read; and `edge=0` alone
+    leaves a row at the vacated coordinate whose bound is that zero. The
+    wording is held too, since `edge=0` alone builds, solves and is wrong.
     """
     with pytest.raises(LanguageError, match='vacated positions') as bare:
         sps.check(_shift_over_data())
@@ -655,11 +602,7 @@ def test_the_bare_shift_refusal_names_the_pair_that_actually_omits_the_row():
 
 
 def test_edge_zero_alone_binds_the_vacated_row_and_a_where_frees_it():
-    """The measurement the message is built on.
-
-    `edge=0` alone is not a refusal and not an error — it solves, and the
-    answer is wrong in the direction that looks like a tight model.
-    """
+    """`edge=0` alone solves, and the answer is wrong in the direction that looks like a tight model."""
     sources = {'t': [0, 1, 2], 'dt': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 1.0, 1.0]})}
     pinned = sps.solve(_shift_over_data(edge='0'), sources)
     omitted = sps.solve(_shift_over_data(edge='0', where='t > 0'), sources)
@@ -683,15 +626,8 @@ NESTED_SHIFTS = {
 def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     """A shift over a shift, in every arrangement of edge and dimension.
 
-    `shift` takes any node of the right dim set (the operator rules), so nesting is inside
-    what the language accepts — and the linopy lane always built it. The
-    relational lane raised a raw `polars.ColumnNotFoundError` instead, because
-    an acyclic inner shift leaves a presence narrower than the fragment and the
-    outer one projected the fragment's dims onto it.
-
-    The coefficient and the `+ 1` are what make the row bind: without them
-    every variable sits at its upper bound and the lanes agree on an answer
-    neither of them computed from the shift.
+    The coefficient and the `+ 1` make the row bind: without them every
+    variable sits at its upper bound.
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
@@ -710,14 +646,9 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
 def test_an_offset_may_differ_per_entity(edge: str):
     """`by=` names a parameter: each entity is translated by its own amount.
 
-    A lead time, a transit time, a minimum up time — every one of them is a
-    column in the source data, and writing one `shift` per distinct value with
-    a mask selecting the rows that carry it is what this replaces.
-
-    The instance discriminates: an order placed at *t* arrives at *t + lead*,
-    demand falls only in the last period, and the two units have different
-    leads. If the offset were read once for both, one of them would order in
-    the wrong period and the primal would say so.
+    An order placed at *t* arrives at *t + lead*, demand falls only in the last
+    period, and the two units have different leads, so an offset read once for
+    both would order in the wrong period.
     """
     lead = {'slow': 1, 'fast': 2}
     units, periods = list(lead), [0, 1, 2, 3]
@@ -762,13 +693,11 @@ def test_an_offset_may_differ_per_entity(edge: str):
 
 
 def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
-    """The absent edge is refused for a named offset, deliberately and for now.
+    """The absent edge is refused for a named offset.
 
-    A bare `shift` leaves the vacated positions absent, and absence is carried
-    by a presence frame keyed by the translated dimension alone. A per-entity
-    offset vacates a *different* slot for each entity, which that frame cannot
-    say — so the case is refused rather than answered wrongly, and the two
-    edges that write their own answer are allowed.
+    Absence is carried by a presence frame keyed by the translated dimension
+    alone, and a per-entity offset vacates a *different* slot for each entity.
+    The two edges that write their own answer are allowed.
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
@@ -809,13 +738,7 @@ def _reindexed_parameter_spec(op: str) -> dict:
 def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expected):
     """``array`` is any node, so these operators read a parameter.
 
-    Worth its own test because every documented example took a variable, and a
-    downstream consumer built and shipped a hand-shifted copy of a parameter
-    table before probing revealed this works.
-
-    ``fill=0`` is what a *bare* ``shift`` used to mean here, and the pin it
-    produces at ``t=0`` is why it stopped being the default — see the refusal
-    below. Spelled out, it is a legitimate thing to ask for, so it still works.
+    ``fill=0`` pins ``t=0``; spelled out, it is a legitimate thing to ask for.
     """
     data = {'t': [0, 1, 2], 'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
     with differential(_reindexed_parameter_spec(op), data, lp=True) as run:
@@ -827,15 +750,10 @@ def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expe
 def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     """The pin, removed at its source (#289).
 
-    ``x <= shift(dt, along=t, offset=1)`` used to build ``x <= 0`` at the first coordinate:
-    a bound invented from a slot that has no value. Absence would be the
-    consistent answer, but a parameter has no absence to propagate — a missing
-    row is a zero coefficient (the absence rules) — so this follows linopy v1
-    and refuses,
-    at load time, naming the three things the author might have meant.
-
-    Decidable without data, so ``sps.check()`` catches it: the operand is
-    variable-free by declaration, not by what arrives in ``sources``.
+    ``x <= shift(dt, along=t, offset=1)`` would bound ``x`` at the first
+    coordinate from a slot that has no value, and a parameter has no absence to
+    propagate. ``sps.check()`` refuses it, since the operand is variable-free by
+    declaration.
     """
     spec = _reindexed_parameter_spec('shift(dt, along=t, offset=1)')
     with pytest.raises(LanguageError) as exc:

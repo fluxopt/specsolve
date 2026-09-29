@@ -1,16 +1,8 @@
 """The ``mps_file`` sink: the model as MPS text.
 
-The format the other half of the world reads, and it differs from
-[`lp_file`][specsolve.relational.sinks.writers.lp_file] in one way that shapes the
-whole module: **MPS is column-major.** It hands a reader each column with its
-whole column of the matrix, where LP walks the matrix by row. So this is the
-one writer that sorts — CSR is row-major, and no engine frame holds a column
-index.
-
-The names are the LP writer's, so the two files describe one model to a reader
-holding both: ``x0`` a column, ``c0`` a row, ``s0`` a set.
-
-**Every section is written in label order.**
+MPS is column-major and the engine's matrix is row-major, so this writer sorts
+the matrix by column. The names are the LP writer's — ``x0`` a column, ``c0`` a
+row, ``s0`` a set — and every section is written in label order.
 """
 
 from __future__ import annotations
@@ -29,31 +21,23 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
 
 
-#: The sections this writer emits, and nothing beyond them. MPS spells a
-#: quadratic term in an extension section this writer does not write, so a model
-#: that needs one is refused by name rather than written without it.
+#: What this writer emits. It writes no quadratic extension section, so a
+#: quadratic model is refused rather than written without its quadratic part.
 MPS_FILE_CAPABILITIES = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
 
 
-#: How MPS spells each comparison, read off the engine's own vocabulary so a
-#: sense added there raises here at import.
+#: The MPS spelling of each [`SENSE_CODES`][] comparison; a new sense raises here at import.
 _MPS_SENSE = {sense: {'<=': 'L', '>=': 'G', '==': 'E'}[sense] for sense in SENSE_CODES}
 
-#: What an integer column is wrapped in. The name field is a constant — a
-#: marker is positional and nothing reads it.
+#: What an integer column is wrapped in; the name field is a constant nothing reads.
 _MARKER = "    MARKER 'MARKER' '{}'"
 
-#: Nonzeros per column chunk — a chunk's rendered lines live in memory until it
-#: is sunk, so this bounds the writer's peak rather than its speed.
+#: Nonzeros per column chunk; it bounds the writer's peak memory, not its speed.
 EMIT_BUDGET = 500_000
 
 
 def write_mps_file(handoff: Handoff, path: str | Path) -> None:
-    """Write the model as MPS text.
-
-    ``COLUMNS`` streams a column range at a time off the sorted matrix; every
-    other section streams straight off the frame it renders, sorting nothing.
-    """
+    """Write the model as MPS text."""
     path = Path(path)
     entries, starts = _column_major(handoff)
 
@@ -89,12 +73,7 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
     """The matrix in ``(col, row)`` order, and where each column's entries begin.
 
-    This module's own CSR, by column — computed rather than asked of the
-    engine, which holds no column index. The offsets are what let the ranges
-    above slice instead of filtering the matrix once per chunk.
-
-    The sort is the format's: a column's entries have to reach consecutive
-    lines.
+    The offsets let a column range slice the matrix rather than filter it once per chunk.
     """
     entries = handoff.matrix_block(0, handoff.row_count).sort('col', 'row')
     counts = np.bincount(entries['col'].to_numpy(), minlength=handoff.column_count)
@@ -123,13 +102,11 @@ def _rhs_lines(handoff: Handoff) -> pl.LazyFrame:
 def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
-    The LP writer's key trick, transposed: a column's lines occupy ``slots``
-    consecutive keys — the integer marker, its objective coefficient, each
-    matrix entry at its row index, the closing marker — so one sort settles
-    both the column order and the order within a column.
-
-    **Every column gets an objective line, coefficient or not**: a column MPS
-    never names is a column the reader does not have.
+    A column's lines occupy ``slots`` consecutive keys — the integer marker, its
+    objective coefficient, each matrix entry at its row index, the closing
+    marker — so one sort settles both the column order and the order within a
+    column. Every column gets an objective line, coefficient or not: a column
+    MPS never names is a column the reader does not have.
     """
     slots = handoff.row_count + 3
 
@@ -168,8 +145,8 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
 def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
     """Every column's lower bound, then every column's upper.
 
-    Lower bounds are written first: a reader given every lower bound does not
-    apply the MPS rule that an ``UP`` below zero implies an unbounded lower one.
+    A reader given every lower bound does not apply the MPS rule that an ``UP``
+    below zero implies an unbounded lower one.
     """
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
         name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col('col')))
@@ -188,12 +165,9 @@ def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
 def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     """Each special-ordered set as its header line and one line per member.
 
-    The stream arrives grouped by set and ascending in weight, so a set's
-    header belongs at its first member's position and nothing has to be
-    gathered: the key is the member's own index, doubled to leave the header a
-    place to sit.
-
-    Written even where the reader may refuse it.
+    The stream arrives grouped by set and ascending in weight, so the key is the
+    member's own index, doubled to leave the header a slot before its first
+    member.
     """
     members = handoff.sos.lazy().with_row_index('ord').with_columns(pl.col('ord').cast(pl.Int64))
     headers = (

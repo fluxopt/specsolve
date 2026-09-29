@@ -1,13 +1,8 @@
 """`dispatch` as a gurobipy user writes it: a variable per (snapshot, generator).
 
-The comprehension-of-`addVar` plus `addConstrs(quicksum(...))` form, which is
-what the Gurobi examples and the modelling books use. Costs ride on `obj=`
-rather than a `setObjective(quicksum(...))` over every term — both are idiomatic
-and this is the cheaper of the two, which is the direction to err in an arm
-somebody else's library is being judged by.
-
-No `name=` anywhere: naming is a feature only some arms' models carry, and
-`bench/README.md` says why the harness switches it off on every arm that has it.
+The comprehension-of-`addVar` plus `addConstrs(quicksum(...))` form of the
+Gurobi examples, with costs on `obj=`. No `name=`: `bench/README.md` says why
+the harness switches naming off.
 """
 
 from __future__ import annotations

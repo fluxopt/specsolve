@@ -1,30 +1,10 @@
-"""``sum(x, by=r, over=c, into=[l, m])`` — one grouping onto a pair of dimensions.
+"""``sum(x, by=r, over=c, into=[l, m])``: one grouping onto a pair of dimensions.
 
-A walk to one column lands terms on one dimension; this walks to two columns of
-one relation and lands them on a product of dimensions, which is what a
-capacity limit per *location and technology* asks for. PyPSA ships exactly that
-as a constraint type (`tech_capacity_expansion_limit`, carrier and bus
-together), so the shape has an outside consumer rather than only a symmetry
-argument.
-
-What needs two lanes to see:
-
-**The grouping is one join, not two.** Relationally the coordinates ride the
-same dim table, so a second column costs one extra column and no extra join —
-held by the lowering test, which asserts a single ``GroupSum`` carrying both
-columns rather than a composition.
-
-**The empty combination.** A (bus, technology) pair no generator sits on is a
-group with no members, and the two lanes reach it by different routes: the
-relational lane never emits a row, the linopy lane's unstacked groupby invents
-one and fills it with linopy's own ``const: nan``. That NaN does not stay in
-the empty sum — it propagates through whatever the row adds next and takes the
-whole row with it, which is why the row here carries a second term.
-
-**Label order.** A groupby hands its groups back sorted; the dim table keeps
-the declared order. Under v1 arithmetic a shared dim ordered two ways is a
-refusal, so ``test_a_declared_order_the_groupby_would_not_pick`` builds the
-model whose technologies are deliberately not alphabetical.
+The call walks to two columns of one relation and lands terms on a product of
+dimensions, as a capacity limit per location and technology asks (PyPSA's
+`tech_capacity_expansion_limit`). The lanes differ on the empty combination,
+which the linopy lane's unstack fills with ``const: nan``, and on label order,
+which a groupby sorts and the dim table keeps as declared.
 """
 
 from __future__ import annotations
@@ -136,9 +116,9 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
     nothing. Tightening that limit to zero must therefore change no answer,
     which catches a lane that quietly summed the wrong members into it.
 
-    A row left with no variables is not built at all, on either lane, so this
-    cannot also say whether the row survived — that is what
-    :func:`test_an_empty_combination_does_not_take_its_row_with_it` is for.
+    A row left with no variables is not built on either lane;
+    :func:`test_an_empty_combination_does_not_take_its_row_with_it` checks
+    that the row survives.
     """
     sources = _inputs()
     limit = sources['limit'].copy()
@@ -257,13 +237,7 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
 
 
 def test_a_call_walks_one_table_and_says_so():
-    """A pair of dimensions comes from one relation's two columns, not from two relations.
-
-    Two tables would be two joins and two claims about which keys exist; one
-    table states the pair as a fact of the data, so the language takes the
-    grouping only in that spelling and names the rewrite at load rather than
-    letting a lane quietly walk the first.
-    """
+    """A pair of dimensions comes from one relation's two columns, not from two relations."""
     patch = {
         'relations.gen_bus': {'key': 'generator', 'values': 'bus'},
         'constraints.technology_at_bus.expression': (

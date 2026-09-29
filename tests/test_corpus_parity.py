@@ -1,20 +1,9 @@
 """Every referenced model, built on both lanes.
 
-``test_ports.py`` asks whether the relational lane reaches an optimum somebody
-else published. This module asks the second question of the same corpus —
-whether the linopy lane builds the same model — and it is the same corpus
-because the data is already there: ``port_sources`` hands both lanes the same
-tidy frames, so a model added to ``references.json`` is swept here the day it
-lands rather than when someone remembers a glob.
-
-Per model the claim is the strong one, three routes at once: the linopy
-objective, the relational objective, and the objective HiGHS reaches re-reading
-the written LP file. ``test_ports.py`` supplies the fourth from outside, so a
-model green in both modules has agreed with a published optimum four ways.
-
-Importing ``tests.differential`` is the oracle's guard, which is why this is
-a module of its own rather than three more tests in ``test_ports.py``: that one
-is linopy-free and pandas-free on purpose, and runs on the bare-install job.
+``test_ports.py`` asks whether the relational lane reaches a published
+optimum; this module asks whether the linopy lane builds the same model, and
+whether the written LP file re-solves to it. It needs the oracle, where
+``test_ports.py`` runs on the bare install.
 """
 
 from __future__ import annotations
@@ -29,15 +18,10 @@ from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 from tests.linopy_lane.loader import OracleCannotBuildError
 
-#: The instance files the ports attach, for a test that needs a column the model
-#: does not declare — ``port_sources`` filters those out, as it should.
+#: The instance files the ports attach, unfiltered.
 PORTS_DATA = PORTS_DIR / 'data'
 
-#: What the linopy lane accepts and cannot build, keyed by model. `OracleCannotBuildError` is
-#: the point of the pair: it pins the xfail to *this* refusal, where the bare
-#: `ValueError` it used to name was satisfied by any bug that raised one.
-#: Strict, so the day linopy grows an objective-constant slot these XPASS, the
-#: suite goes red, and the entry comes out with the check in the same PR.
+#: What the linopy lane accepts and cannot build, keyed by model; a strict xfail on `OracleCannotBuildError`.
 LANE_GAPS: dict[str, str] = {
     'osemosys_utopia': '#894 — linopy has no objective-constant slot',
 }
@@ -51,12 +35,7 @@ def _case(name: str) -> Any:
 
 @pytest.mark.parametrize('name', [_case(n) for n in sorted(PORT_REFERENCES)])
 def test_both_lanes_and_the_lp_file_reach_one_objective(name: str) -> None:
-    """The harness is the whole assertion: it builds both lanes and re-solves the LP.
-
-    Every port's ``sources`` already carries each dimension's own index table,
-    which is what both lanes read. The harness writes every formulation out,
-    so a ``method: sos2`` curve reaches the file as binaries HiGHS reads back.
-    """
+    """The harness is the whole assertion: it builds both lanes and re-solves the LP."""
     with differential(port_spec(name), port_sources(name), lp=True) as run:
         _same_matrix(name, run)
         _linopy_matches_the_recorded_duals(name, run)
@@ -65,21 +44,11 @@ def test_both_lanes_and_the_lp_file_reach_one_objective(name: str) -> None:
 def _same_matrix(name: str, run: Any) -> None:
     """The two lanes wrote the same coefficients, not merely the same shape.
 
-    The strongest cross-lane claim available, and the one duals cannot make: an
-    LP with alternative optima has many optimal primal *and* dual solutions, so
-    comparing answers is comparing which vertex a solver happened to reach. The
-    matrix has no such freedom — one model, one set of coefficients.
-
-    Canonical rather than positional. Each constraint becomes the sorted multiset
-    of its rows, each row the sorted multiset of its coefficients, so the
-    comparison survives the two lanes numbering rows and columns differently —
-    which they do, each labelling in its own declaration order.
-
-    Structure is compared exactly and values approximately, because the two
-    lanes reach a coefficient from the same data by a different order of
-    operations: ``pypsa_ac_dc`` writes ``-0.556229726`` where the other writes
-    ``-0.556229727``. How many terms a row has is a fact about the model; its
-    last bit is not.
+    Each constraint becomes the sorted multiset of its rows, each row the
+    sorted multiset of its coefficients, since the lanes number rows and
+    columns differently. Structure is compared exactly and values
+    approximately, since the lanes reach a coefficient by a different order of
+    operations.
     """
     tables = run.engine._model.handoff
     for constraint, block in run.engine._model.constraints.items():
@@ -103,12 +72,7 @@ def _canonical(matrix: pl.DataFrame) -> list[tuple[float, ...]]:
 
 
 def _linopy_matrix(linopy_lane: Any, constraint: str) -> list[tuple[float, ...]]:
-    """The same, off linopy's dense arrays — duplicate terms collapsed first.
-
-    linopy stores ``x + 2 * x`` as two entries where the relational lane sums
-    them into one, so an uncollapsed comparison reports a difference that is not
-    one: on ``genx_piecewise_fuel`` it is 3408 entries against 2376.
-    """
+    """The same, off linopy's dense arrays — duplicate terms collapsed first, as the relational lane does."""
     import numpy as np
 
     c = linopy_lane.constraints[constraint]
@@ -129,18 +93,10 @@ def _linopy_matrix(linopy_lane: Any, constraint: str) -> list[tuple[float, ...]]
 
 
 def _linopy_matches_the_recorded_duals(name: str, run: Any) -> None:
-    """The linopy lane against the price somebody else published, where there is one.
+    """The linopy lane against the published price, where there is one.
 
-    ``test_ports`` asks this of the relational lane and cannot ask it here: it is
-    linopy-free on purpose, for the bare-install job. So the second half of the
-    claim lives in this module, where the oracle is already built — and until it
-    did, the linopy lane's duals were compared against nothing at all.
-
-    Against the *recording* rather than against the other lane, because two lanes
-    need not agree on a dual: an LP with alternative optima has many, and which
-    one HiGHS returns depends on the order the rows reach it (see
-    ``differential``). A recorded dual is a claim that this instance has a unique
-    one, so both lanes owe it the same answer.
+    Against the recording rather than the other lane: a recorded dual claims
+    this instance has a unique one, where two lanes need not agree on a dual.
     """
     _check_recorded_duals(name, PORT_REFERENCES[name], run)
 
@@ -173,15 +129,10 @@ def _tidy(dual: Any, dims: list[str], like: pl.DataFrame) -> pl.DataFrame:
 
 
 def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
-    """The probe the mutation table asked for.
+    """A recording one step from the truth is refused.
 
-    Deleting the comparison above leaves the suite green, because the comparison
-    *is* the assertion — nothing else reads the linopy lane's duals. So the guard
-    needs a case that fails on purpose: a recording one entry away from the
-    truth, which the check must refuse.
-
-    ``monthly_budget`` because its dual is a short vector with distinct values,
-    so a single perturbed entry cannot coincide with another and pass by luck.
+    ``monthly_budget``'s dual is a short vector with distinct values, so a
+    perturbed entry cannot coincide with another.
     """
     name = 'monthly_budget'
     recorded = PORT_REFERENCES[name].get('duals')
@@ -202,11 +153,7 @@ def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
 SECANT_OBJECTIVE = 24432.20488089685
 
 #: The loss each lossy line settles on, ``(snapshot, line)`` in sorted order.
-#: The objective alone pins only the half-planes that bind, so this pins where
-#: on the approximated curve the model sits — and the instance carries three
-#: low-demand snapshots so that the flows reach the *early* segments too. With
-#: the busy snapshots alone only the top two of five bound, and the other three
-#: coefficients could be anything.
+#: Three low-demand snapshots make the flows reach the early segments too.
 SECANT_LOSSES = [
     4.319999999999999,
     1.6236570501210394,
@@ -226,26 +173,10 @@ SECANT_LOSSES = [
 def test_the_two_loss_approximations_are_one_model() -> None:
     """PyPSA's other loss mode is the same rows with different numbers in them.
 
-    ``pypsa_losses`` ports the tangent approximation. The secant one — PyPSA's
-    **default**, the tangents being deprecated — emits the identical shape: one
-    half-plane per segment per sign of the flow, ``loss ± slope * f >= offset``.
-    Only the coefficients differ, and how many of them there are.
-
-    So it gets no model file of its own. A second YAML byte-identical to the
-    first would assert a second model that does not exist; attaching *this* model
-    to the other instance is the claim, and it is the stronger one — the two
-    approximations are one thing the language says once.
-
-    The coefficients are **dumped from PyPSA**, not re-derived here. Where its
-    breakpoints fall — and even how many there are — comes out of a tolerance
-    heuristic that is its business, so reproducing it would put their algorithm
-    in this repository, where a change on their side becomes a failure on ours.
-    ``pypsa_losses.py::secant_coefficients`` is the provenance, the same footing
-    as every other committed instance.
-
-    Through ``differential``, so the secant instance is held to everything the
-    corpus holds a port to: both lanes, the written LP file, and the coefficient
-    matrices agreeing entry for entry.
+    ``pypsa_losses`` ports the tangent approximation; the secant one emits the
+    same half-planes, ``loss ± slope * f >= offset``, with other coefficients.
+    The coefficients are dumped from PyPSA
+    (``pypsa_losses.py::secant_coefficients``), not re-derived here.
     """
     sources = dict(port_sources('pypsa_losses'))
     sources |= {

@@ -1,11 +1,7 @@
 """Relations: structure on a dimension, never an axis.
 
-The declaration rules' split, pinned: everything under ``dimensions:`` is an
-axis, and a label a dimension's members carry is a relation into another
-dimension. What these tests hold still: a relation name joins the flat namespace,
-``check`` advises on a dimension nothing reaches at all and stays silent on one
-a relation targets, and the attach-time contract — the relation arrives under
-its own key, as the table it declares, one row per key.
+Everything under ``dimensions:`` is an axis, and a label a dimension's members
+carry is a relation into another dimension.
 """
 
 from __future__ import annotations
@@ -191,12 +187,7 @@ def test_a_relation_may_target_a_dimension_nothing_spans_yet(month, extra):
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
 def test_an_unused_target_still_checks_containment(lane):
-    """A map into a dimension no constraint groups by is checked all the same.
-
-    On both lanes, because the check now runs where the map is read rather than
-    where each engine holds one — the linopy lane never spans `month` either,
-    and used to reach this only through its own copy.
-    """
+    """A map into a dimension no constraint groups by is checked all the same, on both lanes."""
     from tests.oracle import specsolve_linopy
 
     build = sps.build if lane == 'relational' else specsolve_linopy.build
@@ -207,7 +198,7 @@ def test_an_unused_target_still_checks_containment(lane):
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
 def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane):
-    """The old message blamed missing data the caller may well have supplied (#488)."""
+    """The refusal names the missing index, not data the caller may well have supplied (#488)."""
     from tests.oracle import specsolve_linopy
 
     build = sps.build if lane == 'relational' else specsolve_linopy.build
@@ -220,9 +211,7 @@ def test_both_lanes_read_the_same_index():
     """The `period_of` relation is read the same way on the linopy lane too —
     both lanes reach the 6.0 the relational test above asserts.
 
-    The oracle is imported in the body rather than at module scope: every other
-    test here is linopy-free and has to keep running on the bare install, so
-    this one test skips there instead of failing on a missing pandas.
+    The oracle is imported in the body, so the bare install skips this one test.
     """
     from tests.differential import differential
     from tests.oracle import pd
@@ -318,10 +307,7 @@ def test_a_where_reads_a_relation(where, kept):
     [
         pytest.param('send != recv', 30.0, id='the-two-ring-lines-survive'),
         pytest.param('NOT send != recv', 70.0, id='negated-over-a-partial-relation'),
-        # The two probes for the linopy lane's explicit null exclusion. Only a
-        # `!=` reaches it: numpy answers `None != 'north'` with True, so
-        # without it the linopy lane keeps exactly `spur` — the line that maps
-        # nowhere — where the relational lane drops it.
+        # the linopy lane's null exclusion: numpy answers `None != 'north'` with True
         pytest.param("recv != 'north'", 10.0, id='not-equal-over-a-null-value'),
         pytest.param('recv != send', 30.0, id='not-equal-between-two-relations'),
         pytest.param("at(bus == 'north', by=send, over=bus, into=line)", 80.0, id='a-predicate-read-at'),
@@ -408,9 +394,7 @@ def test_two_relations_into_different_label_sets_cannot_be_compared(extra, where
     """One dimension is necessary but not sufficient — the targets must match too.
 
     A bus label is never a zone label, so the predicate could only mask
-    everything out. It does not even do that consistently: the linopy lane
-    answers `!=` True at every row while polars refuses the Enum mismatch, so
-    both lanes accepted the model and then disagreed about it.
+    everything out.
     """
     spec = {
         **NETWORK,
@@ -437,11 +421,8 @@ def test_a_relation_comparison_is_checked_against_its_dtype():
 def test_a_relation_compares_against_a_label_the_target_lacks():
     """A stranger label masks everything out; it does not raise.
 
-    The where-string rules' reading for every other comparison, and the reason
-    the relation
-    column is compared as a string: attaching casts it to the target's `Enum`,
-    which orders by declaration and *refuses* a label outside it — so without
-    the cast back this is a polars error rather than an empty mask.
+    The relation column is compared as a string, because the target's `Enum`
+    refuses a label outside it.
     """
     spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
     with sps.build(spec, NETWORK_SOURCES) as model:
@@ -564,12 +545,10 @@ def test_a_supplied_relation_agrees_with_the_oracle():
 
 
 def test_a_partial_map_is_supplied_as_the_rows_it_has():
-    """Absence is the absent row here as everywhere else, which is the whole change.
+    """Absence is the absent row here as everywhere else.
 
-    As a column on the index the same map needs a cell for every label and
-    spells "unmapped" as a null — the one place the absence rules read a hole
-    as data. Supplied as a relation it says nothing about `g3` at all, and a
-    null in it is refused the way a null in a parameter's values is.
+    The relation says nothing about `g3`, and a null in it is refused the way a
+    null in a parameter's values is.
     """
     holed = pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['north', 'south', None]})
     with pytest.raises(DataError, match=r"relation 'gen_bus' carries 1 row\(s\) with a null in 'bus'"):
@@ -624,21 +603,15 @@ def test_a_where_reads_a_map_that_leaves_a_label_out():
 def test_a_supplied_relation_is_held_to_what_a_map_is(relation, match):
     """Single-valued, keyed by labels that exist, and spelled as the pair it is.
 
-    The stray key is the one refusal the column form got for free: a map that
-    rides the index cannot name a label the index lacks. Dropping it instead
-    would place that generator's terms nowhere while the model built and solved.
+    Dropping a stray key instead of refusing it would place that generator's
+    terms nowhere while the model built and solved.
     """
     with pytest.raises(DataError, match=match):
         sps.solve(SUPPLIED, {**_SUPPLIED_SOURCES, 'gen_bus': relation})
 
 
 def test_a_map_with_no_author_at_all_is_refused():
-    """Neither is not a spelling of empty: a relation nothing supplies is missing data.
-
-    The counterpart of a declared parameter with no data, and what replaced
-    three checks — a map arriving under its own key is present and
-    single-valued by construction, so the transport cannot be short of it.
-    """
+    """Neither is not a spelling of empty: a relation nothing supplies is missing data."""
     with pytest.raises(DataError, match="no data provided for relation 'gen_bus'"):
         sps.solve(SUPPLIED, {**BASE_SOURCES, 'generator': GENERATORS})
 
@@ -668,9 +641,8 @@ def test_a_supplied_relation_is_refused_the_same_way_on_both_lanes(lane):
 
 
 #: Two maps out of one dimension into the same target — the PyPSA shape, where
-#: a line has a sending and a receiving bus. What it is here for: every check
-#: over a dimension's maps has to run per map, and one relation cannot tell a
-#: loop that runs once from a loop that runs per name.
+#: a line has a sending and a receiving bus. Every check over a dimension's maps
+#: has to run per map.
 TWO_MAPS = {
     'dimensions': {'line': {}, 'bus': {'dtype': 'str'}},
     'relations': {
@@ -694,11 +666,7 @@ _TWO_MAP_SOURCES = {
 
 
 def test_two_maps_into_one_target_each_take_their_own_key():
-    """Two relations of identical schema, told apart by the key they arrive under.
-
-    The alternative — one table per ``(over, into)`` pair — has nowhere to put
-    the second, which is why the key is the relation and not the pair.
-    """
+    """Two relations of identical schema, told apart by the key they arrive under."""
     with sps.solve(TWO_MAPS, _TWO_MAP_SOURCES) as result:
         assert result.objective == pytest.approx(3.0), 'each line serves the bus line_to sends it to'
 
@@ -729,10 +697,8 @@ def test_a_supplied_map_does_not_reorder_the_index_it_joins_onto():
 
     A positional shape is placed against the labels read back off the index
     *after* the map has been joined onto it, so a join free to reorder hands
-    every one of these numbers to the wrong label — and `shift`, which reads
-    ordinals, moves every coordinate with it. Both lanes then agree on a model
-    neither caller wrote, which is why the check is a number here rather than a
-    comparison between the two.
+    every one of these numbers to the wrong label. Both lanes would agree on
+    that model, so the check is a number rather than a comparison between them.
     """
     sources = {
         't': pl.DataFrame({'t': [0, 1, 2]}),
@@ -785,9 +751,7 @@ def _walked(relations: dict, expression: str) -> dict:
 def test_every_relation_shape_the_language_admits_passes_check(relations: dict, expression: str) -> None:
     """The language's relation is any table walked any way, and `check` refuses none of them.
 
-    What each shape builds to is `test_relation_shapes.py`'s subject; this
-    holds the door open, so a shape cannot be turned away before either lane
-    sees it.
+    What each shape builds to is `test_relation_shapes.py`'s subject.
     """
     program = sps.check(_walked(relations, expression))
     assert set(program.relations) == set(relations), 'every relation the model declares, under its own name'

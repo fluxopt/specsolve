@@ -5,10 +5,8 @@ them. Its projection keeps the constraints with rows built and the variables
 with columns built, drops from every kept expression the additive terms over
 variables the rung never builds or parameters and relations it never feeds —
 they contribute nothing — and keeps the parameters, relations and dimensions
-those blocks still name. Derived, never
-edited: the parity runner writes one per rung from the certificate, solves it
-and holds it to PyPSA's objective, so a cut that lost something load-bearing
-is a red run rather than a quiet lie.
+those blocks still name. The parity runner writes one per rung, solves it and
+holds it to PyPSA's objective.
 """
 
 from __future__ import annotations
@@ -22,13 +20,7 @@ NAME = re.compile(r'\b[A-Za-z_][A-Za-z0-9_]*\b')
 
 
 def _relation_dims(relation: dict[str, Any]) -> set[str]:
-    """The dimensions a relation declaration names, read off the raw block.
-
-    This module shapes YAML before the language reads it, so every spelling of
-    a side is read here rather than off a loaded declaration: a bare name, a
-    list naming each column after its dimension, or a mapping naming the
-    dimension per column. A bare relation has a key and no ``values:``.
-    """
+    """The dimensions a raw relation block names, in every spelling of a side."""
     sides = (relation['key'], relation.get('values', ()))
     return {d for side in sides for d in _side_dims(side)}
 
@@ -93,7 +85,13 @@ def _mentions(block: dict[str, Any]) -> set[str]:
 
 
 def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
-    """The projection of *raw* (the file as a dict) onto what *parity* says the rung built."""
+    """The projection of *raw* (the file as a dict) onto what *parity* says the rung built.
+
+    A cased quantity is kept whole, because only its regions' masks may say
+    whether a region applies. Expressions keep the file's order, so the output
+    is stable across processes. A variable a kept quantity names is declared
+    as written, even where the rung builds no column for it.
+    """
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
     fed = set(parity['attached_nonempty'])
     dead = (
@@ -109,13 +107,6 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
         if cut is not None:
             constraints[name] = {**block, 'expression': cut}
     objective = {**raw['objective'], 'expression': _cut(raw['objective']['expression'], dead)}
-    # A cased quantity is kept whole. Cutting inside one would decide from the
-    # *names* a region reads whether that region applies, which the regions'
-    # masks are the only thing entitled to say — and a mask reads the other
-    # way as often as not, `not committable` being true exactly where
-    # `committable` is absent. Kept whole it states what the file states, and
-    # the declarations it names are kept below whether or not this rung fills
-    # them, which is what the file does too.
     survived = {}
     for name, block in raw.get('expressions', {}).items():
         if 'cases' in block:
@@ -128,17 +119,12 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):
         mentioned |= _mentions(block)
-    # in the file's own order: a set here iterates by string hash, which is
-    # seeded per process, so the emitted YAML reordered itself between runs and
-    # the committed projection went red on a tree that had not changed
     expressions: dict[str, Any] = {}
     while reached := [n for n in survived if n in mentioned and n not in expressions]:
         for name in reached:
             expressions[name] = survived[name]
             mentioned |= _mentions(survived[name])
 
-    # a kept quantity may name a variable this rung builds no column for; the
-    # file's own mask empties it there, so it is declared exactly as written
     variables |= {n: v for n, v in raw['variables'].items() if n in mentioned}
     for block in variables.values():
         mentioned |= _mentions(block)

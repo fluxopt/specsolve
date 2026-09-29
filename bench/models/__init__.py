@@ -1,17 +1,10 @@
 """One directory per case: the model in every dialect that can express it.
 
-`bench/cases.py` holds what a case *is* — its ladder, its cardinalities, the
-parquet its generator writes. Here is what it *says*, once per language that
-says it: `spec.yaml` for specsolve, and one module per hand-written dialect.
-
-A case with no alternative formulation is just its `spec.yaml`; the ones that
-have one carry a `FORMULATIONS` map naming what they hold. Written out rather
-than discovered by scanning, so a misnamed module is an import error rather
-than an arm that quietly measures nothing.
-
-`matrix.py` is the exception to one module per dialect: the two matrix arms
-map to it together, because what they differ in is the solver they push an
-`Lp` into rather than the matrix they build.
+`bench/cases.py` holds what a case is: its ladder, its cardinalities, the
+parquet its generator writes. Here is the model: `spec.yaml` for specsolve, and
+one module per hand-written dialect, named in the case's `FORMULATIONS` map.
+The two matrix arms share `matrix.py` and differ only in the solver they push
+the `Lp` into.
 """
 
 from __future__ import annotations
@@ -26,13 +19,8 @@ class Lp(NamedTuple):
     """A case as a matrix, in the vocabulary every solver's bulk API shares.
 
     Columns carry `lower`, `upper` and `obj`; rows carry `matrix`, one `senses`
-    character each and `rhs`. `senses` is `'='` or `'<'` — no case here needs a
-    third, and an arm meeting one raises rather than guesses.
-
-    Nothing on it is solver-specific, which is the whole reason it exists: a
-    case's matrix had one home per matrix arm and would have had two once
-    `highspy-matrix` arrived, so the second copy is the one that drifts and the
-    published floor is what it would have taken down with it.
+    character each and `rhs`. An arm meeting a sense other than `'='` or `'<'`
+    raises.
 
     Attributes:
         lower: Column lower bounds, one per column.
@@ -54,12 +42,9 @@ class Lp(NamedTuple):
 def formulation(case_name: str, dialect: str):
     """The case's model in *dialect*, or None where nobody has written one.
 
-    A case package names what it holds in `FORMULATIONS`; a case that holds
-    nothing has no package at all, which is the same answer. What `build`
-    takes is the *arm's* contract rather than a shared one — `gurobipy-loop`
-    hands its formulations an `Env`, because an environment is arm-level
-    knowledge and a model file should not be creating one, where the matrix
-    dialects take the tables alone and hand back an `Lp`.
+    What `build` takes is the arm's contract: `gurobipy-loop` passes an `Env`
+    and the tables, the matrix dialects take the tables alone and return an
+    `Lp`.
     """
     import importlib
 

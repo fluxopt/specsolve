@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_losses.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -27,30 +23,20 @@ plain linear model rather than a piecewise one.
 The loss is subtracted **half at each end** of the branch, which is PyPSA's
 convention for where the energy goes.
 
-Three of the six snapshots are quiet on purpose. A fan of segments is only
-witnessed by flows that reach them, and with the busy snapshots alone the model
-sits on the top two of five throughout — the other three coefficients could
-have been anything.
+Three of the six snapshots are quiet, so the flows reach every segment of the
+fan.
 
-The network is a **path**, b0—b1—b2—b3, and radial on purpose: with no
-independent cycle there is no Kirchhoff voltage law to satisfy, so a mismatch
-here implicates the loss approximation rather than the voltage law's
-technique. ``x`` is
-carried in the instance all the same, because it is what makes these lines
-passive branches in the first place.
+The network is a **path**, b0—b1—b2—b3, radial so there is no Kirchhoff
+voltage law to satisfy. ``x`` is carried in the instance all the same, because
+it is what makes these lines passive branches.
 
-The last line has **no resistance**, and is the reason the instance has four
-buses rather than three: PyPSA gives every passive branch a loss variable and
-lets ``r = 0`` pin it to nothing, while the port declares the variable only
-where there is a curve to approximate. Same model, and the port's spelling is
-the one that says which lines dissipate. Its rating is tight enough to bind,
-so a port that lost that row would be cheaper rather than merely different.
+The last line has **no resistance**: PyPSA gives every passive branch a loss
+variable and lets ``r = 0`` pin it to nothing, while the port declares the
+variable only where there is a curve to approximate. Its rating binds.
 
-``r`` is 0.0003 rather than a textbook per-unit figure: PyPSA's loss term is
-``r_pu_eff * s**2`` with ``s`` in MW, so a resistance chosen for a per-unit base
-makes the loss exceed the flow and the model infeasible. At this value the
-losses run about 3% of throughput, which is what a transmission network looks
-like.
+``r`` is 0.0003 because PyPSA's loss term is ``r_pu_eff * s**2`` with ``s`` in
+MW; a per-unit resistance would make the loss exceed the flow. At this value
+the losses run about 3% of throughput.
 """
 
 from __future__ import annotations
@@ -66,16 +52,10 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_losses.json'
 #: What ``n.optimize`` is asked for, and what the port's tangent columns encode.
 SEGMENTS = 3
 
-#: The tolerances PyPSA's *secant* mode derives its breakpoints from — its
-#: current default, where the tangent mode is deprecated. Recorded here because
-#: the port's second instance encodes the coefficients they produce, and they
-#: are the only inputs that decide how many segments there are.
-#:
-#: ``atol`` is 0.01 rather than PyPSA's default 1 so that the breakpoints need
-#: four segments rather than two. Its step rule is
-#: ``max(k / (k - 1), rtol_step)``, and at two segments the first term wins
-#: every time — an instance that stops there cannot tell whether the ``rtol``
-#: half of the rule was implemented at all.
+#: The tolerances PyPSA's default *secant* mode derives its breakpoints from; the
+#: port's second instance encodes the coefficients they produce. ``atol`` is 0.01
+#: rather than PyPSA's default 1, so the breakpoints need four segments and the
+#: ``rtol`` half of the step rule ``max(k / (k - 1), rtol_step)`` takes effect.
 SECANT_TOLERANCES = {'atol': 0.01, 'rtol': 0.1}
 
 
@@ -129,10 +109,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy.
 
-    Read off the model rather than ``buses_t.marginal_price``: the two differ
-    wherever the snapshot weightings are not 1, and recording the dual keeps the
-    comparison between two formulations rather than against a presentation of
-    one of them.
+    Read off the model: ``buses_t.marginal_price`` divides it by the snapshot
+    weighting.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {
@@ -150,10 +128,7 @@ def secant_coefficients(n: pypsa.Network) -> dict[str, list]:
     ``2 * sqrt(atol / r)`` and each next steps by
     ``max(k / (k - 1), 1 + 2 * (rtol + sqrt(rtol + rtol**2)))`` until the
     rating is covered, so even the *number* of segments is an output of their
-    heuristic. Reproducing that here would put their algorithm in this
-    repository, where a change on their side becomes a failure on ours; the
-    port's job is to show the language says the rows, not to re-derive the
-    numbers in them.
+    heuristic.
 
     Lines with no resistance are left out: their coefficients are all zero, and
     the model gives them no rows at all.
@@ -180,7 +155,7 @@ def secant_objective() -> float:
     Secants lie above a convex curve where tangents lie below, so this
     overestimates the losses the tangent instance underestimates and costs more.
     The rows are the same shape either way — one half-plane per segment per sign
-    of the flow — which is the whole claim the port's second instance makes.
+    of the flow.
     """
     n = build(load_tables())
     status, condition = n.optimize(solver_name='highs', transmission_losses={'mode': 'secants', **SECANT_TOLERANCES})

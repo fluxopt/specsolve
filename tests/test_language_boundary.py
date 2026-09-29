@@ -25,14 +25,9 @@ def _objective(expression: str) -> dict:
 def test_every_shipped_example_is_inside_the_language(path):
     """Every dim rule, over the corpus this repository ships, and then lowering.
 
-    The rules live with the language and are swept there over the probes that
-    travel with them; this is the same sweep over the gallery and the ports,
-    which stay. Both are needed: a rule with no corpus proves nothing, and a
-    corpus with no rule applied to it is a directory of files.
-
-    Loading *is* the first half: a ``Spec`` runs every dim rule on the way
-    out. The second is that the result lowers, so an example falling outside
-    the streaming subset is caught here rather than by a reader running it.
+    The language sweeps the rules over its own probes; this is the same sweep
+    over the gallery and the ports. Loading a ``Spec`` runs every dim rule, and
+    the result must then lower.
     """
     expanded(path, 'piecewise')
 
@@ -72,15 +67,10 @@ def test_inside_the_language(patch):
 def test_outside_the_language_is_a_load_error(patch, match):
     """The refusal reaches the caller through ``sps.check``, with no data attached.
 
-    Two rows, one per position the verb has to reach — which rules it enforces
-    there is the language's inventory and is swept in mathspec's own
-    ``test_degree.py``. Asked of ``sps.check`` rather than of
-    ``Spec.program``, because the verb is the claim: the affine guard once
-    needed data attached, so ``check`` accepted the model and it blew up at build
-    time — useless as a CI verb for exactly the rules it should enforce first.
-    A named expression is the same argument one construct along: it is checked
-    where the math reads it, so a dual smuggled into the objective through one
-    is refused there, and one the math never reads is held to nothing.
+    Two rows, one per position the verb has to reach; the rules themselves are
+    swept in mathspec's ``test_degree.py``. A named expression is checked where
+    the math reads it, so a dual smuggled into the objective through one is
+    refused there, and one the math never reads is held to nothing.
     """
     with pytest.raises(LanguageError, match=match):
         sps.check(schema_of(DISPATCH, **patch))

@@ -9,19 +9,11 @@
 
 **This is not what verifies the port.** The optimum came from the literature —
 published with GAMS model library #1 — and that is what ``references.json``
-records as primary. This script is a *second, independent* arrival at the same
-number, from a different formulation in a different tool, and it exists for two
-reasons:
+records as primary. This script is a second, independent arrival at the same
+number, from a different formulation in a different tool.
 
-- a published constant proves the answer, not that anybody can still get it;
-- the docs put this file side by side with the YAML to let a reader judge
-  readability, and code shown next to a claim about legibility has to be code
-  that runs. An unexecuted script in a docs page rots silently, which is the
-  failure the whole ports corpus exists to avoid.
-
-Run out of band with the pinned versions above, like every reference here:
-linopy is not a runtime dependency of this project. Nothing here imports
-specsolve.
+Run out of band with the pinned versions above: linopy is not a runtime
+dependency of this project. Nothing here imports specsolve.
 """
 
 from __future__ import annotations
@@ -65,23 +57,15 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 def shadow_prices(m: linopy.Model, name: str, dim: str) -> dict[str, list]:
     """The dual of constraint *name*, tidy.
 
-    Both of this model's constraints are *inequalities*, which is where sign
-    conventions diverge most between implementations — a capacity's shadow
-    price and a demand's carry opposite signs, and getting one backwards still
-    produces a plausible-looking table. Recorded so the port is checked on
-    them rather than only on the objective.
+    Both of this model's constraints are inequalities: a capacity's shadow
+    price and a demand's carry opposite signs.
     """
     dual = m.constraints[name].dual
     return {dim: [str(v) for v in dual.indexes[dim]], 'value': [float(v) for v in dual.values]}
 
 
 def main() -> float:
-    """Solve, and print what ``references.json`` records.
-
-    The status assertion is what every reference carries: without it a failed
-    solve prints an objective of whatever linopy left behind, and a dual table
-    read off a solution that does not exist — recorded as fact.
-    """
+    """Solve, and print what ``references.json`` records."""
     m = build(load_tables())
     status, condition = m.solve(solver_name='highs')
     assert status == 'ok', f'{status}: {condition}'

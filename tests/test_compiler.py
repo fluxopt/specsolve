@@ -1,40 +1,21 @@
-"""The compiler is lazy, and this file is the proof.
+"""The compiler is lazy: a plan node goes in and a query comes out, no row read.
 
-No solver, no data, not one row read — a plan node goes in and a query comes
-out. That is the seam the split bought: checking what an operator does costs a
-compile, not a build and a solve.
+This is the only place query shape is asserted. Every property here can
+regress while every model still solves to the right answer:
 
-**This is the only place query *shape* is asserted**, which is what the
-hand-built fixture below buys. Every property here can regress while the whole
-suite still passes and every model still solves to the right answer, so no
-end-to-end test stands in for it:
-
-- ``AGGREGATE`` absent from ``Sum`` and ``GroupSum``. They *project*; duplicates
-  collapse once, in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
-  Make either of them aggregate and the answers stay right while the single
-  place duplicates are meant to collapse quietly becomes two.
+- ``AGGREGATE`` absent from ``Sum`` and ``GroupSum``; duplicates collapse once,
+  in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
 - ``OVER`` absent from a translation, which joins the dim table twice instead.
-  A window function answers correctly and gives up bounded-halo locality.
 - the modulo appearing only when a translation wraps.
 - a dimension comparison *filtering* a column the frame already carries rather
   than joining to find it, and a constant bound costing no join at all.
 - ``SEMI JOIN`` present for a mask that reads some of the frame's dims and
-  absent for one that reads them all. A full-width truth set is as wide as the
-  product, so the semi-join builds the product twice to save no width; the
-  fallback filter answers identically, which is why only shape can hold it.
+  absent for one that reads them all.
 - ``INNER`` rather than ``LEFT`` for a name the mask is certain of, and ``LEFT``
-  again once that name sits under an ``Or``. Both give the same rows — the
-  filter drops what the left join kept — so the asymmetry is invisible to any
-  test that reads an answer.
+  again once that name sits under an ``Or``.
 
-The frames are declared as **empty frames with the right schemas**, and that is
-the purity claim itself rather than a convenience: a lazy frame is a plan, so a
-schema is all it takes to compile one. It cannot be checked any other way —
-reach the compiler through the engine and it needs rows, at which point the
-demonstration that a schema suffices has evaporated.
-
-The assertions are deliberately about shape, not exact text, so the query
-planner stays free to change underneath them.
+The frames are empty frames with the right schemas: a schema is all it takes
+to compile. The assertions are about shape, not exact text.
 """
 
 from __future__ import annotations
@@ -99,29 +80,18 @@ VARIABLES = {
 
 
 def attached() -> AttachedSources:
-    """The data a query is written against — schemas only, no rows.
-
-    Compiling reads nothing, so an empty frame of the right schema is a whole
-    fixture (docs/about/architecture.md's admissibility test).
-    """
+    """The data a query is written against — schemas only, no rows."""
     return AttachedSources(
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         relations=RELATIONS,
         cardinality=CARDINALITY,
-        # heights, which only `diagnostics` reads — empty here for the reason
-        # the frames are: compiling reads no rows and cannot count them either.
         parameter_rows={},
     )
 
 
 def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Program:
-    """PROGRAM with the declared dtypes a case needs.
-
-    What a bare name in a where asks is decided by the *declaration* now, so a
-    case that used to hand the compiler a set of boolean parameters redeclares
-    one instead.
-    """
+    """PROGRAM with the declared dtypes a case needs."""
     return replace(
         PROGRAM,
         parameters={n: replace(p, dtype=dtypes.get(n, p.dtype)) for n, p in PROGRAM.parameters.items()},
@@ -142,12 +112,7 @@ def query(frame: pl.LazyFrame) -> str:
 
 
 def joins(frame: pl.LazyFrame) -> int:
-    """How many joins the plan performs.
-
-    Counted on the header polars prints for each one (``INNER JOIN:``,
-    ``LEFT JOIN:``); the matching ``END … JOIN`` carries no colon, so this
-    counts joins rather than lines mentioning one.
-    """
+    """How many joins the plan performs, counted on the ``… JOIN:`` headers polars prints."""
     return query(frame).count('JOIN:')
 
 
@@ -189,17 +154,10 @@ def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
 
 
 def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
-    """Whether a product may be quadratic is the plan's; whether *this* call can hold one is not.
+    """A quadratic product in a position compiled as affine is the lane contradicting itself.
 
-    ``quadratic=`` is the position's ceiling, and the caller that knows it is
-    the engine — a constraint passes what ``_declares_quadratic`` said about
-    the very expression being compiled. So the two disagreeing is the lane
-    contradicting itself, and what the assert stands in front of is a term
-    whose second variable would be silently dropped.
-
-    The language half of this is the language's own and is checked upstream;
-    a file can no longer reach the compiler with a degree its position
-    refuses.
+    The assert stands in front of a term whose second variable would be
+    silently dropped.
     """
     with pytest.raises(AssertionError, match='quadratic product in a position compiled as affine'):
         compiler().expression(program.Multiply(program.Variable('p'), program.Variable('p')), 'test')
@@ -211,8 +169,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
-    """The aggregate lives in the terminal assembly, not in the fragment —
-    which is what keeps the operator pointwise."""
+    """The aggregate lives in the terminal assembly, not in the fragment."""
     compiled = compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
     fragment = compiled.terms[0]
     assert fragment.dims == ('snapshot',)
@@ -221,11 +178,7 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
 
 
 def masked_compiler() -> PolarsCompiler:
-    """A compiler over two masked variables, so fragments carry presence.
-
-    Two, because a restriction only ever crosses from one fragment to another —
-    with a single masked term there is nothing for absence to propagate *to*.
-    """
+    """A compiler over two masked variables, since a restriction only crosses between fragments."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -245,13 +198,8 @@ def masked_compiler() -> PolarsCompiler:
 def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_came_from():
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
-    Which is the whole of what "each one's absence says nothing about the
-    other" means: the *other*. A fragment's rows and its presence come from one
-    frame and are rewritten in step, so restricting a fragment by its own
-    coordinates can only return the rows it was given. Under a mask over a
-    single term — the ordinary case — that made the pass a semi-join of a
-    frame against itself, and no assertion about the answer can see it, since
-    the answer is the same frame.
+    Restricting a fragment by its own coordinates returns the rows it was
+    given, so a lone masked term costs no join.
     """
     both = masked_compiler().expression(
         program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
@@ -264,13 +212,7 @@ def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_c
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
-    """A semi-join asks whether a key occurs, so nothing distinguishes first.
-
-    A distinct on the right of one changes no row: occurring twice is still
-    occurring. It costs a hash pass over every coordinate the variable has,
-    which on `dispatch/l` was a third of the restriction — and it is invisible
-    from the answer, since both plans return the same frame.
-    """
+    """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
     compiled = masked_compiler().expression(
         program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
     )
@@ -345,8 +287,7 @@ def test_a_parameter_predicate_needs_a_join():
 
 
 def test_a_name_the_mask_is_certain_of_is_inner_joined():
-    """The rows a left join would keep here are rows the filter then drops, so
-    all it adds is the width of the product they are dropped from."""
+    """The rows a left join would keep here are rows the filter then drops."""
     text = query(
         masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
@@ -355,9 +296,7 @@ def test_a_name_the_mask_is_certain_of_is_inner_joined():
 
 
 def test_the_same_predicate_under_an_or_is_left_joined_again():
-    """Certainty is the whole of the caution: under an ``Or`` a missing value
-    can be what makes the mask true, so the rows an inner join would drop are
-    rows the answer may need."""
+    """Under an ``Or`` a missing value can make the mask true, so no row is dropped early."""
     where = program.Mask(
         program.Or(
             program.ParameterDefined('available', ('generator',)),
@@ -370,12 +309,7 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
 
 
 def test_what_a_bare_name_asks_is_decided_by_its_declaration():
-    """Three readings, and the file picks — not the column that turned up.
-
-    Reading it off the storage is what let one set of flags mask and the same
-    flags spelled 1/0 mask nothing, and it is what sent a string parameter into
-    `is_finite`, which polars refuses outright.
-    """
+    """Three readings, and the declared dtype picks — not the column that turned up."""
     numeric = query(
         masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
@@ -416,11 +350,7 @@ def test_an_unmasked_frame_has_nothing_to_filter():
 
 
 def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
-    """The predicate is a function of only the dims it reads, so it is evaluated
-    over *their* product and the full product is semi-joined against the truth
-    set — the mask's parameter columns never touch the full product, and the
-    left side's order survives, which is what keeps labelling's verify a verify.
-    """
+    """The predicate is evaluated over the product of the dims it reads, and the full product semi-joined."""
     frame = masked(
         compiler().scope,
         ('snapshot', 'generator'),
@@ -430,10 +360,7 @@ def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
 
 
 def test_a_mask_reading_every_dim_filters_instead():
-    """A full-width truth set is as wide as the product itself, so the semi-join
-    would build the product twice to save no width. `sector`'s balance mask is
-    exactly that shape and paid 6.6% of the `m` pipeline for it before this
-    branch existed; the filter it falls back to keeps order the same way."""
+    """A full-width truth set is as wide as the product itself, so a filter replaces the semi-join."""
     where = program.Mask(
         program.And(
             program.ParameterDefined('load', ('snapshot',)),
@@ -467,16 +394,9 @@ def test_a_side_the_program_leaves_open_is_an_infinite_column():
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     """`edge=0` over a constant leaves a row, not a gap.
 
-    The arithmetic is the same either way — a const fragment reads a missing
-    row as zero — so nothing about the model changes here. What changes is that
-    the vacated slot *has* a value, so "I asked for zero" and "there was
-    nothing here" stop looking alike downstream. They were already telling
-    different stories: the presence branch counts a filled slot as present,
-    while the frame had no row for it.
-
-    Over a *term* there is still nothing to write: `edge=0` on a variable means
-    the vacated slot contributes no term (the operator rules), and a zero-coefficient
-    entry would be a nonzero in the matrix standing for a term that is absent.
+    The presence branch counts a filled slot as present, so the frame has a
+    row for it. Over a term there is nothing to write: the vacated slot
+    contributes no term.
     """
     snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})
     sources = AttachedSources(

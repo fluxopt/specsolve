@@ -1,34 +1,16 @@
 #!/usr/bin/env bash
 # Kill the case that is about to take the box, so the run survives it.
 #
-# The memory budget in `bench/conftest.py` is a projection made *between* rungs:
-# it multiplies the rung that just finished by the next one's growth factor and
-# stops the arm if the product is over. It cannot see a cell while that cell
-# runs, and it counts one copy where a measurement holds two — the timed rounds
-# in the pytest process, and `benchmem(isolate=True)` again in a child, with
-# glibc returning neither to the OS in between. So `transport/w100` projected
-# 8.4 GB from `w10`, took 14.3 of its own, needed about twice that of the
-# machine, and took a 32 GB box down twice (runs 12 and 16 of the published
-# benchmark).
-#
-# This is a backstop rather than the fix. It samples, so it cannot catch an
-# allocation faster than its interval — run 16 climbed 10 GB between two
-# one-second samples, which is why the default here is four times a second. A
-# cgroup cap or a box with room for both copies is what would *guarantee* it.
-# What this buys is the difference between a dead case and a dead runner: a
-# killed case leaves the ones after it their turn, and leaves `report`, `plot`
-# and the artifact something to run on.
+# The memory budget in `bench/conftest.py` is a projection made between rungs,
+# and cannot see a cell while it runs. This is a backstop: it samples, so it
+# cannot catch an allocation faster than its interval. A killed case leaves the
+# ones after it their turn.
 set -uo pipefail
 
 #: The running case, by the flag only its pytest carries.
 CASE='--benchmark-memory'
-#: **The memory is in the child, and the child cannot be found by that flag.**
-#: `benchmem(isolate=True)` measures in a `multiprocessing` *spawn*, so the
-#: process holding the model is `python -c 'from multiprocessing.spawn import
-#: spawn_main…'` with none of pytest's arguments on it. Killing the pytest
-#: alone orphans it, still holding its 14 GB — which is run 18: `transport` was
-#: killed at 24 GB used, `storage` started on a box that had freed nothing, and
-#: the runner died fifteen seconds later.
+#: The memory is in the `benchmem(isolate=True)` spawn child, which carries none
+#: of pytest's arguments; killing the pytest alone orphans it.
 SPAWNED='multiprocessing.spawn import spawn_main'
 
 available() { free -m | awk '/^Mem:/{print $7}'; }
@@ -44,20 +26,14 @@ stop_the_case() {
   pkill "-$signal" -f -- "$SPAWNED" 2>/dev/null || true
 }
 
-# `free` is procps, so this samples on Linux and nowhere else. Standing down is
-# the honest answer on a machine it cannot watch: the ladder is runnable by hand
-# and a watchdog that exits non-zero would take the run with it.
+# `free` is procps, so this samples on Linux only; elsewhere it exits 0 so the run goes on.
 if ! command -v free >/dev/null 2>&1; then
   echo "memory watchdog: no \`free\` here, so nothing is watching — a cell too big for this machine will take it down"
   exit 0
 fi
 
-#: A killed cell is a measurement, not an accident: one library needing the
-#: whole machine where another needs half a gigabyte is what the ladder is for.
-#: The process that would record it is the one being killed, so the cell's name
-#: comes from the breadcrumb `bench/conftest.py` writes before each test, and
-#: the record is appended here — where it survives the kill and rides out with
-#: the case's artifact.
+#: A killed cell is recorded here, since its own process is the one killed. The
+#: cell's name comes from the breadcrumb `bench/conftest.py` writes before each test.
 INFLIGHT=bench/results/.inflight
 CASUALTIES=${BENCH_CASUALTIES:-bench/results/casualties.json}
 
@@ -78,10 +54,7 @@ PYEOF
 }
 
 interval=${BENCH_MEMORY_SAMPLE_SECONDS:-0.25}
-#: A line on the clock as well as on a new maximum. The high-water mark prints
-#: only when it moves, so a quiet watchdog and a dead one read alike — run 19
-#: went six minutes without a word and it took an orphaned `sleep` in the
-#: runner's cleanup to establish it had been sampling the whole time.
+#: A line on the clock as well as on a new maximum, so a quiet watchdog does not read as a dead one.
 heartbeat=${BENCH_MEMORY_HEARTBEAT_SECONDS:-60}
 total=$(free -m | awk '/^Mem:/{print $2}')
 floor=${BENCH_MEMORY_FLOOR_MB:-$((total / 4))}
@@ -104,9 +77,7 @@ while sleep "$interval"; do
   echo "MEM ${avail} MB available, under the ${floor} MB floor — killing this case before it takes the box"
   record_the_casualty "$avail" "$peak"
   stop_the_case TERM
-  # Never a blind sleep here. The next case starts the moment this one dies, so
-  # the seconds after a kill are exactly when the box is still full and still
-  # falling — run 18 died inside a 30-second one.
+  # Poll rather than sleep: the next case starts the moment this one dies, while the box is still full.
   waited=0
   while :; do
     sleep "$interval"

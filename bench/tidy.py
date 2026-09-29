@@ -3,35 +3,17 @@
     pixi run -e bench python -m bench.tidy bench/results/latest.json > measurements.csv
     pixi run -e bench python -m bench.tidy bench/results/latest.json --runs > runs.csv
 
-`report.py` renders the published markdown and `plot.py` renders the chart
-page's literal; both decide *in code* which cells exist, so a question nobody
-anticipated — peak against nonzeros, one sink across cases, a new phase — is a
-change to a renderer. This is the third rendering and the one with no opinions:
-dims in columns, one metric per row, and whatever asks the question later does
-its own pivot.
+Dims in columns, one metric per row; whatever reads it does its own pivot.
 
     run,case,size,sink,arm,phase,variables,metric,value
     latest,dispatch,l,highs,specsolve,emit,2000000,wall_seconds,0.83
 
-**A missing number is an absent row, never a null.** A cell the run did not
-produce — `peak_rss_bytes` without `isolate=True`, `nonzeros` on an arm whose
-model cannot count them — writes nothing, so every value column is complete.
-That is the same rule the language holds its own inputs to, and it is what
-makes this file loadable by specsolve without a fillna.
+A missing number is an absent row, never a null, so every value column is
+complete. ``phase`` is ``emit`` for build-and-emit, ``window`` for a later
+window of a rolling horizon, and ``first`` and ``steady`` for the two halves of
+the rebuild loop; only here is ``window`` rendered.
 
-**`phase` is why the shape is worth having.** Today it takes four values —
-``emit`` for build-and-emit, ``window`` for a later window of a rolling horizon,
-``first`` and ``steady`` for the two halves of the rebuild loop. A finer split
-(import, ingest, build, emit, retrieve) adds values to that column and changes
-no schema, no renderer and no committed file.
-
-``window`` is the one the published tables do not render: `bench/report.py` and
-`bench/plot.py` take the ``emit`` phase, so a rung measuring the same cell at a
-different moment is reachable here and nowhere else — which is this file's own
-argument for existing.
-
-**The fingerprint is long too** (`--runs`): one row per fact, so a dependency
-added to `TRACKED` in `bench/conftest.py` is a row rather than a column.
+The fingerprint (`--runs`) is long too: one row per fact.
 """
 
 from __future__ import annotations
@@ -47,15 +29,11 @@ from bench import results as bench_results
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-#: The dims every measurement is keyed by. `sink` is absent from the rebuild
-#: loop, which measures the build alone, and rides as an empty string rather
-#: than as a null for the same reason the values do.
+#: The dims every measurement is keyed by. The rebuild loop has no `sink`, and writes an empty string.
 DIMS = ('run', 'case', 'size', 'sink', 'arm', 'phase', 'variables')
 
-#: What a `test_emit` record carries, in the order the file writes them.
-#: `peak_bytes` keeps memray's name out of the metric column: the two peaks
-#: measure different things and only `rss` is honest across libraries, so the
-#: one that is not must say so where it is read.
+#: What a `test_emit` record carries, in the order the file writes them. memray's
+#: `peak_bytes` is renamed so it cannot be read as the RSS peak.
 EMIT_METRICS = (
     ('wall_seconds', 'wall_seconds'),
     ('peak_rss_bytes', 'peak_rss_bytes'),
@@ -113,12 +91,7 @@ def measurements(records: Iterable[dict[str, Any]], run: str) -> Iterator[dict[s
 
 
 def fingerprint(records: Iterable[dict[str, Any]], run: str) -> Iterator[dict[str, Any]]:
-    """What was installed and what ran it, as ``run,key,value`` rows.
-
-    A version the run could not resolve is dropped rather than written as an
-    empty string: `TRACKED` names packages an arm may not have installed, and
-    an absent row says that where a blank one would read as a version.
-    """
+    """What was installed and what ran it, as ``run,key,value`` rows; an unresolved version writes no row."""
     for record in records:
         if record.get('record') != 'run':
             continue

@@ -1,15 +1,12 @@
-"""`storage` as a matrix: the recurrence is the whole difficulty.
+"""`storage` as a matrix.
 
 Columns are one snapshot's ``[p | charge | discharge | soc]`` repeated per
-snapshot, so the balance rows are `kron(I, ·)` as in every other matrix
-formulation here — but a state of charge reaches the *previous* snapshot, which
-is a second `kron` against the cyclic shift matrix rather than against the
-identity:
+snapshot. A state of charge reaches the previous snapshot, so its rows add a
+`kron` against the cyclic shift matrix:
 
     kron(I, own) + kron(P, previous)     where P[t, t-1 mod n] = 1
 
-`P` is what closes the ring: its wrap row is the first snapshot reaching the
-last, which is exactly what ``edge='wrap'`` says in the YAML.
+The wrap row of `P` is ``edge='wrap'`` in the YAML.
 """
 
 from __future__ import annotations

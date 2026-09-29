@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_global_limits.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -28,11 +24,10 @@ attribute:
 The two link limits carry **different weights over the same set**, and the
 weights disagree: ``north_south`` is the long cheap link, ``east_south`` the
 short dear one, so a volume limit and a cost limit pull the build in opposite
-directions and neither is the other in disguise.
+directions.
 
-``main`` drops each limit in turn, because a limit that does not bind proves
-nothing — and prints what PyPSA does with the fifth, which is the finding of
-this port: see :func:`what_pypsa_drops`.
+``main`` drops each limit in turn to show that it binds, and prints what PyPSA
+does with the fifth: see :func:`what_pypsa_drops`.
 """
 
 from __future__ import annotations
@@ -46,8 +41,7 @@ import pypsa
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_global_limits.json'
 
 #: The ``GlobalConstraint`` rows, as ``name -> attributes``. Their constants are
-#: the numbers the port's cap parameters carry, and the objective is what checks
-#: the two tables agree.
+#: the numbers the port's cap parameters carry.
 LIMITS: dict[str, dict[str, object]] = {
     'gas_energy': {'type': 'operational_limit', 'carrier_attribute': 'gas', 'sense': '<=', 'constant': 380.0},
     'link_volume': {
@@ -137,10 +131,8 @@ def build(
 def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy.
 
-    Read off the model rather than ``buses_t.marginal_price``: the two differ
-    wherever the snapshot weightings are not 1, and recording the dual keeps the
-    comparison between two formulations rather than against a presentation of
-    one of them.
+    Read off the model: ``buses_t.marginal_price`` divides it by the snapshot
+    weighting.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {
@@ -159,12 +151,7 @@ def what_pypsa_drops() -> None:
     ``["carrier_attribute", "sense", "investment_period"]``; ``investment_period``
     is ``NaN`` where none is given, pandas drops NaN keys, and the row leaves no
     constraint behind — while naming a period raises, there being no investment
-    periods to name. The code reads as though NaN were expected (the next line is
-    ``period = None if isnan(period) else int(period)``), so this looks like
-    theirs to fix rather than ours to work around.
-
-    Printed rather than asserted: this is a reference script, and the reader of
-    a finding wants to see it happen.
+    periods to name.
     """
     for label, extra in (('no investment_period', {}), ('investment_period=0', {'investment_period': 0})):
         row = {

@@ -1,13 +1,7 @@
 """`dispatch` as a matrix: one column block, one balance row per snapshot.
 
-What a performance-minded user of either solver's bulk API writes, and the same
-seam our own sinks reach. The difference between a matrix arm and ours is
-therefore *where the matrix came from*, which is the only thing worth measuring
-here.
-
-The balance matrix is a block of ones per snapshot, which is
-``kron(I(n_snapshot), ones(1, n_generator))`` — built once, in one call, rather
-than assembled row by row.
+What a performance-minded user of either solver's bulk API writes. The balance
+matrix is ``kron(I(n_snapshot), ones(1, n_generator))``.
 """
 
 from __future__ import annotations

@@ -1,13 +1,10 @@
 """`transport` as a matrix: one incidence block, tiled per snapshot.
 
 Columns are one snapshot's generators followed by its lines, repeated per
-snapshot, so the balance is ``kron(I(n_snapshot), [A_generator | A_line])`` —
-the same block, once per snapshot, exactly as `bench/floor.py` tiles it.
+snapshot, so the balance is ``kron(I(n_snapshot), [A_generator | A_line])``.
 
-**The load vector is read in file order**, which `_transport_data` writes
-snapshot-major with buses within. A permuted file would build a different model
-and still look fine, which is what
-`test_a_hand_written_arm_builds_the_same_model` exists to catch.
+The load vector is read in file order, which `_transport_data` writes
+snapshot-major with buses within.
 """
 
 from __future__ import annotations

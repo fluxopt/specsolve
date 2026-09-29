@@ -1,15 +1,9 @@
 """Re-solving one built model with new numbers.
 
-Two claims, and the first is the whole contract: **an update answers what a
-fresh build answers**. `build(spec, sources | change)` is always available as
-the reference, so every rung below is checked against it rather than against a
-number someone wrote down — the same oracle shape as the two-lane differential
-and the Benders monolith check.
-
-The second is that the fast path is *only* a fast path. An update that moves a
-mask renumbers labels and cannot be pushed onto a loaded solver, so the engine
-rebuilds and solves cold; nothing about the answer changes, and
-`diagnostics().loads` is where a driver finds out which happened.
+**An update answers what a fresh build answers**: `build(spec, sources |
+change)` is the reference for every rung below. The fast path is *only* a fast
+path: an update that moves a mask renumbers labels, so the engine rebuilds and
+solves cold, and `diagnostics().loads` says which happened.
 """
 
 from __future__ import annotations
@@ -42,11 +36,9 @@ def sources() -> dict[str, pl.DataFrame]:
 
 
 #: Which plants may serve which zone, and how well. Every matrix entry of
-#: `examples/dispatch.yaml` is a 1 — its only constraint is `sum(p) == load` —
-#: and its objective has no constant, so no change to its data can move a
-#: coefficient, move one to another column, move one to another row, or move
-#: the term that has no column at all. Those are the four things an update can
-#: move that the example cannot say, and this is the model that says them.
+#: `examples/dispatch.yaml` is a 1 and its objective has no constant, so this
+#: model moves what that one cannot: a coefficient, an entry's column, an
+#: entry's row, and the objective constant.
 ZONES = ['north', 'south']
 PLANTS = ['a', 'b', 'c', 'd']
 REACH = {
@@ -59,8 +51,7 @@ REACH = {
     },
     'variables': {'p': {'dims': ['plant'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'meet': {'dims': ['zone'], 'expression': 'sum(reach * p, over=plant) >= demand'}},
-    #: `levy` is the objective's **constant** — the one term with no column, so
-    #: it reaches a solver by neither of the two routes the others take.
+    #: `levy` is the objective's **constant**: the one term with no column.
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost) + levy'},
 }
 
@@ -103,15 +94,12 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
 
 
 #: Each rung of the update contract (``Model.update``): the model it moves, what
-#: changes, and whether the loaded solver may be kept. `p_max` appears twice on
-#: purpose: it gates ``where: p_max > 0`` *and* bounds the variable, so whether
-#: it is structural is a property of the values and not of where the name
-#: appears.
+#: changes, and whether the loaded solver may be kept. `p_max` appears twice: it
+#: gates ``where: p_max > 0`` *and* bounds the variable, so whether it is
+#: structural depends on its values.
 #:
-#: The four `reach` rungs move **one field of the digest each**, which is what
-#: earns them a model of their own: a rung that moved two would still pass with
-#: either one dropped. Each changes the answer, so a solver wrongly kept
-#: reports a wrong number rather than a lucky one.
+#: The four `reach` rungs move **one field of the digest each**, and each
+#: changes the answer.
 RUNGS = [
     pytest.param(
         Rung('dispatch', {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True),
@@ -177,12 +165,8 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
-    every label underneath — which is what makes `update` total rather than a
-    method that refuses the data it cannot do quickly.
-
-    Over **every** declaration rather than a named one, and over **every** sink
-    that can stay loaded: each writes its own push, and a field one of them
-    forgets is a confident answer to the model before the update.
+    every label. Over **every** declaration and **every** sink that can stay
+    loaded, since each sink writes its own push.
     """
     spec, given = _case(rung, dispatch_yaml)
     program = to_spec(spec).program
@@ -204,11 +188,9 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
 # the same oracle, over models nobody here wrote
 # ---------------------------------------------------------------------------
 
-#: One walk over a port's own data. **1.0 first** pins determinism — two builds
-#: of one model have to hash alike or no driver ever takes the fast path, and a
-#: `rows` frame that came back in a different order each build was exactly that
-#: bug — then two scalings, each updated off the state the last one left, so no
-#: step here is a single hop from the build.
+#: One walk over a port's own data. **1.0 first** pins determinism: two builds
+#: of one model have to hash alike or no driver takes the fast path. Then two
+#: scalings, each updated off the state the last one left.
 WALK = [1.0, 1.25, 0.8]
 
 #: `tsp_mtz` walks nowhere: gr17's branch-and-bound is seconds a solve and a
@@ -220,9 +202,8 @@ TOO_SLOW_TO_WALK = {'tsp_mtz'}
 #: `transport_modes` prices two of its eleven connections at 12 — `d1_c1_road`
 #: and `d2_c2_rail` — so once the walk scales the stocks the optimum is reached
 #: at more than one vertex, and which one a solve lands on is a simplex route
-#: rather than an answer. The objective is compared as before; only the primal
-#: is not, because there is no single right one to compare against. Book data,
-#: so the tie is the source's and not ours to perturb away.
+#: rather than an answer, so its primal values are not compared. Book data, so
+#: the tie is not ours to perturb away.
 ALTERNATE_OPTIMA = {'transport_modes'}
 
 #: Constraints whose prices the walk compares for layout but not for numbers.
@@ -237,14 +218,7 @@ NONUNIQUE_PRICES: dict[str, set[str]] = {'multi_period': {'within_cap'}}
 
 
 def _declared(given: dict[str, Any], program: Any) -> dict[str, Any]:
-    """*given* less the names the model never declares.
-
-    `build` attaches what it recognises and ignores the rest; `update` refuses a
-    name it does not know, deliberately, a typo there being a silent re-solve.
-    So the two doors disagree about one mapping — `pypsa_kvl`'s data carries a
-    `reactance` its model reads through `cycle_incidence` instead — and this is
-    what hands both of them the same thing.
-    """
+    """*given* less the names the model never declares, which `update` refuses and `build` ignores."""
     return {name: value for name, value in given.items() if name in attachable(program)}
 
 
@@ -267,12 +241,7 @@ def _scaled(given: dict[str, Any], by: float) -> dict[str, Any]:
 
 
 def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
-    """Every constraint's prices, or ``None`` where this answer carries none.
-
-    Asked of the answer rather than read off the declarations: what leaves
-    duals undefined is the solve's business, and `Result.dual` is where it is
-    already decided.
-    """
+    """Every constraint's prices, or ``None`` where this answer carries none."""
     try:
         return {name: result.dual(name) for name in program.constraints}
     except sps.SpecsolveError:
@@ -289,29 +258,14 @@ def _laid_out_alike(got: pl.DataFrame, want: pl.DataFrame, *, values: bool, wher
 def test_a_update_walk_answers_what_a_fresh_build_answers(port):
     """The oracle again, over ported models, three updates deep.
 
-    `build` + `solve` is always available as the reference, so breadth costs
-    only the models — and there are ten here that nobody wrote to be a test:
-    networks, storage, ramping, unit commitment, a diet, a facility location,
-    two transports. The rungs above are models built to move one field of the
-    digest; these are models built to be models, walked through three data
-    states with the answer checked against a fresh build at every one.
-
-    What is compared is what an update may be held to:
-
     - **The objective and the layout, always.** A read-back that sliced the
-      solver's vector wrongly puts the right numbers on the wrong coordinates,
-      and a corpus this wide is what finds it.
-    - **The numbers, where the answer carries prices** — which is to say where
-      the model is continuous. A discrete model's optimum is not unique, so a
-      updated `tsp_mtz` reaches a different tour of the same length; that is
-      branch-and-bound's answer and not an update's mistake. On the continuous
-      ports the two agree to 1e-14 on both sinks, which is a different simplex
-      route rather than a different vertex — so `approx` rather than `equals`,
-      and the exact form stays on the rungs above, whose optima are unique by
-      construction.
+      solver's vector wrongly puts the right numbers on the wrong coordinates.
+    - **The numbers, where the answer carries prices**, which is where the
+      model is continuous; a discrete model's optimum is not unique. The
+      continuous ports agree to 1e-14 on both sinks, so `approx` rather than
+      `equals`.
 
-    On `highs` alone, the default. What a second sink pushes differently is the
-    rungs' question; this one is about the models.
+    On `highs` alone, the default.
     """
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
@@ -383,10 +337,7 @@ def _tables(spec: Any) -> Any:
 
 #: The three fields of the digest **no rung above can reach**: a variable's
 #: type, a row's comparison and the objective's direction all come from the
-#: YAML, so no change to data moves one. They are hashed anyway — the digest's
-#: soundness must not rest on reasoning about which of a model's facts the
-#: language lets data touch — so they are pinned where they *are* reachable,
-#: one edit of the declaration apart.
+#: YAML, so they are pinned one edit of the declaration apart.
 DECLARED = [
     pytest.param({'variables.p.domain': 'integer'}, id='a variable type'),
     pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
@@ -396,20 +347,13 @@ DECLARED = [
 
 @pytest.mark.parametrize('edited', DECLARED)
 def test_the_digest_moves_where_a_declaration_moved(edited):
-    """What a re-solve may not change, checked directly for want of a rung.
-
-    A solver keeps the model it holds when the digest matches, so a field left
-    out of it is a push onto a model that is no longer the one being asked
-    about — and every such answer is confident. Two builds one declaration
-    apart is the only way to ask about a field the data cannot move.
-    """
+    """What a re-solve may not change, checked directly for want of a rung."""
     assert _tables(REACH).structure != _tables(override(REACH, **edited)).structure, (
         'a model a re-solve may not be pushed onto has to hash differently'
     )
 
 
-#: The counts, which no edit of a declaration reaches either — and which no
-#: *vector* stands in for, the reason below.
+#: The counts, which no edit of a declaration reaches either.
 COUNTS = [pytest.param('column_count', id='the column count'), pytest.param('row_count', id='the row count')]
 
 
@@ -417,15 +361,9 @@ COUNTS = [pytest.param('column_count', id='the column count'), pytest.param('row
 def test_the_digest_reads_the_counts_that_frame_its_vectors(count):
     """The counts say where one hashed vector ends and the next begins.
 
-    Every vector goes in as raw bytes, one after another and with nothing
-    between them, so the concatenation alone does not say how it was split: a
-    model with one column more and one row fewer offers the digest the same
-    bytes in the same order. It is the counts that make the stream mean one
-    model, which is why they are not the redundant restatement of five vector
-    lengths they look like.
-
-    Asked of the tables rather than of two builds, since a build produces the
-    counts and the vectors together and so cannot pose the question.
+    Every vector goes in as raw bytes with nothing between them, so a model
+    with one column more and one row fewer offers the digest the same bytes in
+    the same order.
     """
     tables = _tables(REACH)
     moved = replace(tables, **{count: getattr(tables, count) + 1})
@@ -451,24 +389,17 @@ def _hashes(monkeypatch) -> list[int]:
 
 
 def test_a_solve_that_is_never_rebuilt_never_hashes_the_model(model, monkeypatch):
-    """One solve, no digest — the comparison it would feed does not exist (#1608).
-
-    Every byte of the model goes through that hash to make sixteen only a
-    *second* solve reads, and at the top of the ladder it is the larger part of
-    the hand-off.
-    """
+    """One solve, no digest — the comparison it would feed does not exist (#1608)."""
     taken = _hashes(monkeypatch)
     model.solve()
     assert taken == [], f'a first solve has nothing to compare against, so it hashed {len(taken)} time(s) for nothing'
 
 
 def test_a_rebuild_takes_the_evidence_and_the_fast_path_still_holds(model, monkeypatch):
-    """Deferring it costs the session nothing: one digest per solve, as before (#1608).
+    """One digest per solve, and the fast path still holds (#1608).
 
-    The accounting is the risk: the rebuild reads the outgoing model's digest
-    and `keeps` the incoming one, which would be twice per solve where the
-    load-time hash paid once. A push leaves the digest still describing what the
-    solver holds, so the second rebuild finds one taken and reads nothing.
+    A push leaves the digest still describing what the solver holds, so the
+    second rebuild finds one taken and reads nothing.
     """
     taken = _hashes(monkeypatch)
     model.solve()
@@ -487,10 +418,7 @@ def test_a_rebuild_takes_the_evidence_and_the_fast_path_still_holds(model, monke
 def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, monkeypatch):
     """A second solve of an *unchanged* model still takes the fast path (#1608).
 
-    The deferral's sharp edge while it still was one: a digest taken *only* at
-    rebuilds is missing exactly here, and a solver that can prove nothing is
-    loaded again. It is not missing, because `keeps` asking is itself the first
-    ask. Two solves, no update, one load.
+    `keeps` asking is itself the first ask for a digest.
     """
     taken = _hashes(monkeypatch)
     model.solve()
@@ -502,14 +430,9 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
 def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     """What outlives a build is the digest, never the frames it was read from (#1608).
 
-    The deferral's price is a solver holding the tables it loaded, and that
-    reference has to go before the next build allocates or a re-solving loop
-    stands at two models' peak.
-
-    **Asked between the rebuild and the next solve**, the only window where it
-    shows: `keeps` releases the frames itself one solve later, too late for this
-    peak and late enough to hide a missing release from a test that looks after
-    solving. No answer changes either way, so reachability is asked directly.
+    A solver holding the tables it loaded has to drop them before the next
+    build allocates, or a re-solving loop stands at two models' peak. **Asked
+    between the rebuild and the next solve**, the only window where it shows.
     """
     model.solve()
     released = weakref.ref(model._engine._model.handoff.matrix)
@@ -518,9 +441,8 @@ def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     assert released() is None, "the rebuilt-over model's matrix is still reachable, so the solver kept a whole model"
 
 
-#: The option name each sink gives a time limit — `solver_options` is forwarded
-#: verbatim, so the vocabulary is the solver's own and there is one word per
-#: member rather than one shared word.
+#: The option name each sink gives a time limit; `solver_options` is forwarded
+#: verbatim.
 LIMITS = {'highs': 'time_limit', 'gurobi': 'TimeLimit', 'xpress': 'timelimit'}
 
 
@@ -702,8 +624,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
     `examples/dispatch.yaml` masks on `p_max > 0`, so the shape is what
-    *survived* the mask rather than what the declarations multiply out to —
-    which is the whole reason it is read off the built model.
+    *survived* the mask rather than what the declarations multiply out to.
     """
     with sps.build(dispatch_yaml, sources() | COORDS) as model:
         model.solve()
@@ -726,12 +647,9 @@ def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
 def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     """The objective frame may change height across an update. The solver may not.
 
-    A zero cost is pruned, so `obj` holds one row fewer than before — while
-    `structure` deliberately does not read `obj`, costs being pushable. The
-    column is still *there*; it is `dense_columns` that puts the zero back,
-    scattering the sparse frame over the solver's full index. A push that read
-    `obj` positionally instead would hand the solver one plant's cost under
-    another's name, and every answer after it would be confidently wrong.
+    A zero cost is pruned, so `obj` holds one row fewer, while `structure`
+    does not read `obj`. A push that read `obj` positionally would hand the
+    solver one plant's cost under another's name.
     """
     given = reach_sources()
     with sps.build(REACH, given) as model:

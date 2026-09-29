@@ -15,15 +15,12 @@ curves are all the same length.
 weights over each curve's own breakpoints; this states it as the segment lines
 themselves — ``op_cost >= slope * p + intercept``, one row per real segment,
 which is exact for a convex curve under minimisation and needs no weights at
-all. Agreement between the two is worth more than agreement between two
-spellings of one formulation.
+all.
 
-Ragged curves are why it is written out rather than handed to
-``linopy.add_piecewise_formulation``: that takes a rectangle, so a hydro unit
-with two breakpoints in a four-breakpoint frame must repeat its last point to
-be expressed — and linopy then reads the zero-length segment as non-convex and
-reaches for SOS2, which is a mixed-integer model with no duals. Padding is not
-free even where it is allowed.
+``linopy.add_piecewise_formulation`` takes a rectangle, so a hydro unit with
+two breakpoints in a four-breakpoint frame would repeat its last point — and
+linopy then reads the zero-length segment as non-convex and reaches for SOS2, a
+mixed-integer model with no duals.
 """
 
 from __future__ import annotations
