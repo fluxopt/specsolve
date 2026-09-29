@@ -298,7 +298,8 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return _eval(node.left, ctx) * _eval(node.right, ctx)
 
     if isinstance(node, program.Divide):
-        return _eval(node.numerator, ctx) / _eval(node.divisor, ctx)
+        divisor = _eval(node.divisor, ctx)
+        return _eval(node.numerator, ctx) / (absence.divisor(divisor) if ctx.solved else divisor)
 
     if isinstance(node, program.Power):
         return _eval(node.base, ctx) ** _eval(node.exponent, ctx)

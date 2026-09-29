@@ -38,6 +38,8 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING
 
+import pytest
+
 from tests.conftest import LAW_DIMS, law_spec
 
 if TYPE_CHECKING:
@@ -135,17 +137,40 @@ def _grown(previous: tuple[Node, ...]) -> tuple[Node, ...]:
     return tuple(dict.fromkeys(grown))
 
 
-def expressions(depth: int) -> tuple[Node, ...]:
-    """Every well-formed expression of at most *depth* nodes deep, deduplicated.
-
-    Only those a constraint row can be written from come back: one with no
-    variable in it is data, which the language refuses in a constraint, and a
-    quadratic one is a row the linopy lane cannot build at all (#942).
-    """
-    space: tuple[Node, ...] = LEAVES
+def space(depth: int) -> tuple[Node, ...]:
+    """Every well-formed expression of at most *depth* nodes deep, deduplicated, at any degree."""
+    grown: tuple[Node, ...] = LEAVES
     for _ in range(depth - 1):
-        space = _grown(space)
-    return tuple(node for node in space if node.degree == 1)
+        grown = _grown(grown)
+    return grown
+
+
+def expressions(depth: int) -> tuple[Node, ...]:
+    """The expressions of :func:`space` a constraint row can be written from.
+
+    One with no variable in it is data, which the language refuses in a
+    constraint, and a quadratic one is a row the linopy lane cannot build at
+    all (#942).
+    """
+    return tuple(node for node in space(depth) if node.degree == 1)
+
+
+def stride(cases: tuple, spec: str) -> tuple:
+    """The shard of *cases* that ``i/n`` asks for — every n-th, offset by i.
+
+    A stride rather than a contiguous block: the space is ordered by shape, so
+    consecutive cases cost about the same and a block would hand one leg all
+    the cheap ones. Every case is in exactly one shard for any n, which is what
+    lets the legs be compared with the unsharded run.
+
+    Raises:
+        pytest.UsageError: If *spec* is not ``i/n`` with ``0 <= i < n``. A shard
+            nobody runs is coverage lost in a green job.
+    """
+    i, _, n = spec.partition('/')
+    if not (i.isdigit() and n.isdigit() and 0 <= int(i) < int(n)):
+        raise pytest.UsageError(f'--sweep-shard takes `i/n` with 0 <= i < n, not {spec!r}')
+    return cases[int(i) :: int(n)]
 
 
 def row_spec(node: Node) -> dict:

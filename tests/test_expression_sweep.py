@@ -42,7 +42,7 @@ import pytest
 from specsolve.errors import SpecsolveError
 from tests.conftest import law_data
 from tests.differential import RTOL, NoFiniteAnswerError, differential
-from tests.expression_space import expressions, rewrites, row_spec
+from tests.expression_space import expressions, rewrites, row_spec, stride
 from tests.linopy_lane.loader import OracleCannotBuildError
 
 if TYPE_CHECKING:
@@ -62,24 +62,6 @@ CENSUS_STEP = 20
 #: spreading rather than a countdown to closing it.
 ANSWERS = 38
 LANE_REFUSALS = 10
-
-
-def stride(cases: tuple, spec: str) -> tuple:
-    """The shard of *cases* that ``i/n`` asks for — every n-th, offset by i.
-
-    A stride rather than a contiguous block: the space is ordered by shape, so
-    consecutive cases cost about the same and a block would hand one leg all
-    the cheap ones. Every case is in exactly one shard for any n, which is what
-    lets the legs be compared with the unsharded run.
-
-    Raises:
-        pytest.UsageError: If *spec* is not ``i/n`` with ``0 <= i < n``. A shard
-            nobody runs is coverage lost in a green job.
-    """
-    i, _, n = spec.partition('/')
-    if not (i.isdigit() and n.isdigit() and 0 <= int(i) < int(n)):
-        raise pytest.UsageError(f'--sweep-shard takes `i/n` with 0 <= i < n, not {spec!r}')
-    return cases[int(i) :: int(n)]
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

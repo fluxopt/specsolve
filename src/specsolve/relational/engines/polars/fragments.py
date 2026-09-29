@@ -34,6 +34,8 @@ if TYPE_CHECKING:
 
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
+    from specsolve.relational.engines.polars.scope import Scope
+
 
 def join_on(
     left: pl.LazyFrame,
@@ -254,6 +256,15 @@ def absence_restrictions(fragments: Sequence[TermFragment]) -> list[Presence]:
 FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
 
 
+def acted_along(expression: program.Sum | program.GroupSum | program.WindowSum) -> tuple[str, ...]:
+    """The dims a node that is not one-to-one sums along."""
+    if isinstance(expression, program.Sum):
+        return expression.over
+    if isinstance(expression, program.GroupSum):
+        return tuple(expression.direction.consumed_dims)
+    return (expression.along,)
+
+
 def fan_in(expression: program.Expression) -> FanIn:
     """How *expression*'s output rows relate to its input slots.
 
@@ -287,7 +298,7 @@ def fan_in(expression: program.Expression) -> FanIn:
     assert_never(expression)
 
 
-def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
+def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequence[str]) -> CompiledExpression:
     """Restrict every fragment to where the *whole* expression exists.
 
     Addition is fragment concatenation, so ``x + size`` is two independent
@@ -298,8 +309,13 @@ def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
     operand over its own domain and reads the absent ``size`` as a zero (the
     absence and operator rules).
 
-    Applied only where the key columns are dims the fragment carries: a
-    restriction naming a dim a fragment lacks cannot speak about it.
+    A fragment that lacks a dim the restriction is keyed by is first repeated
+    along it: ``w`` over ``f`` beside ``y`` over ``f`` and ``t`` stands in
+    every ``(f, t)`` slot of ``sum(y + w, over=f)``, and leaves each one where
+    ``y`` is absent. Never along a dim in *along*, the ones the operator acts
+    along: a constant part without one of those is refused by the operator
+    itself ([`refuse_a_fragment_without_the_dims`][]), and repeating it there
+    would build a sum the engine has no row-level answer for.
 
     **Which operators need it is decided by their fan-in** ([`fan_in`][]),
     which the compiler reads.
@@ -325,14 +341,19 @@ def propagate_absence(compiled: CompiledExpression) -> CompiledExpression:
         return compiled
 
     def restrict(p: TermFragment) -> TermFragment:
-        frame = p.frame
+        frame, dims = p.frame, p.dims
         for source, presence in absent:
             if source is p:
                 continue
             on = list(presence.keys(source.dims))
-            if all(d in p.dims for d in on):
-                frame = presence.restrict(frame, on)
-        return p if frame is p.frame else replace(p, frame=frame)
+            missing = [d for d in on if d not in dims]
+            if any(d in along for d in missing):
+                continue
+            if missing:
+                dims = scope.in_declaration_order((*dims, *missing))
+                frame = scope.spread(frame, missing).select(*dims, *p.carried)
+            frame = presence.restrict(frame, on)
+        return p if frame is p.frame else replace(p, dims=dims, frame=frame)
 
     return map_fragments(compiled, restrict)
 
