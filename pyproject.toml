@@ -117,7 +117,7 @@ specsolve = { path = ".", editable = true }
 [tool.pixi.feature.dev.pypi-dependencies]
 specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress", "datarecord"] }
 # datarecord's unreleased stack, at a fixed commit until it releases.
-datarecord = { git = "https://github.com/energy-models/datarecord.git", rev = "99c9dcd49fcab413aeb250c1904b10b58e330c42", extras = ["mathspec"] }
+datarecord = { git = "https://github.com/energy-models/datarecord.git", rev = "b03c7bc5b03d780367f138d1b8213395c5240589", extras = ["mathspec"] }
 
 [tool.pixi.feature.floors]
 # pyyaml has no win-64 wheel. linux-aarch64 lets `pixi install` solve on the CodSpeed runner.
