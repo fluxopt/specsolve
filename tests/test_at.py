@@ -1,22 +1,9 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
-`sum` walks a mapping table from the fine dim into the coarse one; this
-walks it back out. They take the same one argument on purpose: ``by=`` names
-one relation, and the helper says which direction.
-
-Two things are checked here that a single-lane test could not reach.
-
-**The answer, against the oracle.** A pullback duplicates a variable's label
-across the fine dim, so the relational lane's key claim has to weaken and the
-terminal aggregate has to run. Whether it does is only observable as a *wrong
-objective*, which is what the differential case is for.
-
-**The model the ledger cares about.** `examples/multi_period.yaml` is ragged —
-four snapshots in 2030 against two in 2050 — which a ``period x snapshot``
-rectangle cannot express at all. Its capacity bound reads a per-period
-*variable* at every snapshot, and a variable cannot be pre-joined in data prep
-the way a parameter can. The number `docs/examples/multi_period.md` quotes is
-held by :func:`test_the_multi_period_page_number`.
+`sum` walks a relation from the fine dim into the coarse one; `at` walks it
+back out. `examples/multi_period.yaml` is ragged — four snapshots in 2030
+against two in 2050 — and its capacity bound reads a per-period variable at
+every snapshot.
 """
 
 from __future__ import annotations
@@ -32,9 +19,7 @@ from tests.conftest import EXAMPLES_DIR, by_coord, relation
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
 
-#: 2030 is modelled at four snapshots and 2050 at two — the whole reason the
-#: index is flat. `weight` is what keeps them comparable: a 2050 snapshot
-#: stands for four hours and is charged for four.
+#: 2030 at four snapshots and 2050 at two; a 2050 snapshot weighs four hours.
 SNAPSHOTS = [0, 1, 2, 3, 4, 5]
 PERIOD_OF = [2030, 2030, 2030, 2030, 2050, 2050]
 GENERATORS = ['wind', 'gas']
@@ -60,12 +45,7 @@ def _sources(capex_2050_wind: float = 8.0):
 
 
 def test_the_multi_period_page_number():
-    """The optimum `docs/examples/multi_period.md` quotes, and the build behind it.
-
-    Capacity is per period and binds at every snapshot in that period, so the
-    two periods must be able to differ — which is the claim the table on the
-    page makes and this holds.
-    """
+    """The optimum `docs/examples/multi_period.md` quotes, and the per-period build behind it."""
     with sps.solve(MULTI_PERIOD, _sources()) as result:
         nominal = result.primal('p_nom').sort('period', 'generator')
         assert result.objective == pytest.approx(750.0)
@@ -82,12 +62,7 @@ def test_the_multi_period_page_number():
 
 
 def test_a_period_bound_actually_binds():
-    """Not vacuous: halving what 2050 may build has to move the answer.
-
-    A pullback that silently dropped its rows would leave `p` unbounded above
-    and the objective unchanged, which is the failure this rules out. The cap
-    is applied by making 2050 capacity ruinously expensive.
-    """
+    """Not vacuous: making 2050 capacity dearer moves the answer."""
     with sps.solve(MULTI_PERIOD, _sources()) as unbounded:
         base = unbounded.objective
 
@@ -119,13 +94,7 @@ COMPONENT_GATE = {
 
 
 def test_one_binary_gates_every_flow_of_its_component():
-    """The shape #185 was filed for: a per-component decision read on each of
-    that component's flows.
-
-    Reads a **variable** through the map, not a parameter — which is the half
-    that matters, since a parameter could be pre-joined in data prep and a
-    variable cannot.
-    """
+    """A per-component binary variable read on each of that component's flows (#185)."""
     flows, components = ['f1', 'f2', 'f3'], ['c1', 'c2']
     sources = {
         't': [0, 1],
@@ -149,20 +118,10 @@ def test_one_binary_gates_every_flow_of_its_component():
 
 
 def test_at_agrees_with_the_oracle_through_a_reduction():
-    """The differential half, and the case the key claim is about.
+    """A pullback summed back over `flow` brings two copies of one label into a row, and they add.
 
-    A pullback duplicates a variable's label across the fine dim, so a later
-    reduction can bring two copies into one constraint row. If the relational
-    lane still claimed its ``(row, col)`` key were unique, the terminal
-    aggregate would be skipped and the frame would hold a cell twice — which a
-    solver reads as whichever copy it saw last, not as their sum.
-
-    Summing the pulled-back term back over `flow` is what forces that, so this
-    is deliberately not the pointwise case the tests above cover.
-
-    The oracle is imported in the body rather than at module scope: every other
-    test here is linopy-free and has to keep running on the bare install, so
-    this one test skips there instead of failing on a missing pandas.
+    The oracle is imported in the body so the rest of the module runs on the
+    bare install.
     """
     from tests.differential import differential
     from tests.oracle import pd
@@ -179,7 +138,6 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
             'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
         },
         'constraints': {
-            # summed, so one `level` label lands in this row once per flow of its component
             'draw': {
                 'dims': [],
                 'expression': 'sum(at(level, by=component_of, over=component, into=flow) * share, over=flow) >= 9',
@@ -203,39 +161,18 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
 
 
 def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
-    """The window family's data-dependent member, and what to write instead of a shift chain.
+    """A minimum up time read per unit from data is an incidence table, not a shift chain.
 
-    A minimum up time — a unit that starts must stay committed for its own *T*
-    snapshots — is `sum(start over the last T) <= status`. Where *T* is fixed in
-    the file that is a chain of shifts, a macro. Where each unit carries its
-    own, the *number of terms* differs per unit and no chain can be written
-    down, which the ledger read as the constraint being unsayable.
-
-    It is not. The window is a relation between snapshots — one row per pair
-    inside it — so it is an incidence table contracted along a mirror of the
-    snapshot axis, the shape `pypsa_kvl` already uses for a cycle basis. The
-    plan's *shape* is fixed before any data is read; only its cardinality comes
-    from data, which is as true of `dims: [snapshot]`.
-
-    The mirror needs no second commitment variable and no identity table: `tf`
-    maps back to `t` single-valuedly, which is a relation, and `at()` reads the
-    commitment onto the mirror axis where the start recurrence needs it.
-
-    Two units, one with T=3 and one with T=1, and a no-load cost so idling is
-    not free. The slow unit is cheaper to run, so it is chosen and must then
-    stay up its full three hours: **13.0**. Relaxing the window row gives 11.0
-    with one hour up, which is what makes it bind rather than decorate.
-
-    Relational lane only: the differential harness cannot carry a 3-D
-    parameter, because the two lanes take a wide frame and a tidy one
-    respectively (#60). The claim here is about what the language can state,
-    and the engine is what states it.
+    The window is one row per pair of snapshots inside it, contracted along a
+    mirror axis `tf`; `at()` reads the commitment onto that axis. The slow unit
+    is cheaper, so it runs and stays up its three hours: 13.0, where relaxing
+    the window gives 11.0. Relational lane only: the harness cannot carry a
+    3-D parameter (#60).
     """
     up_time = {'slow': 3, 'fast': 1}
     hours = list(range(6))
     spec = {
         'dimensions': {'unit': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'tf': {'dtype': 'int'}},
-        # every `tf` is the same moment as one `t` — single-valued, so a relation
         'relations': {'same_moment': {'key': 'tf', 'values': 't'}},
         'parameters': {
             'window': {'dims': ['unit', 't', 'tf']},
@@ -250,7 +187,6 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             'started': {'dims': ['unit', 'tf'], 'domain': 'binary'},
         },
         'constraints': {
-            # the commitment read onto the mirror axis, where the recurrence lives
             'a_start_turns_it_on': {
                 'dims': ['unit', 'tf'],
                 'expression': (
@@ -296,11 +232,8 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         assert set(on['unit']) == {'slow'}, 'and it is the slow unit that is held, not the fast one'
 
 
-#: `f3` maps nowhere, which is what a *partial* relation is for. The objective
-#: pays for `take` and charges ruinously for `level`, so the two readings of
-#: `f3`'s row are separated by the answer and not merely by a row count: with
-#: the row gone, `take[f3]` is held by its own bound alone and goes to 10; with
-#: the row built, its right-hand side is zero and it cannot move at all.
+#: `f3` maps nowhere. With its row gone `take[f3]` goes to its bound of 10; with
+#: the row built, its right-hand side is zero.
 DANGLING = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
     'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
@@ -330,20 +263,9 @@ def _dangling_sources(map_: list | None = None, **extra):
 
 
 def test_at_through_a_null_relation_takes_the_row_with_it():
-    """A label mapping nowhere has no value to read, so the row is not asserted.
+    """A label mapping nowhere has no value to read, so the row is not asserted (#897).
 
-    The absence rules list a null relation value among the four constructs that
-    create absence, and absence spreads through arithmetic taking its row —
-    so `link` is built for the two flows that map somewhere and not for `f3`.
-
-    Before #897 this did not get as far as an answer: the null entry was
-    dropped from the *coordinate* rather than read as an absence, so `at()`
-    returned a result over a short `flow` and linopy v1 refused the next
-    combination with a coordinate mismatch.
-
-    Linopy-lane only, and the oracle is imported in the body: the differential
-    case below carries the relational lane, and reads the same answer off the
-    row count as well as the objective.
+    Linopy lane only; the differential case below carries the relational lane.
     """
     from tests.oracle import specsolve_linopy
 
@@ -359,13 +281,7 @@ def test_at_through_a_null_relation_takes_the_row_with_it():
 
 
 def test_at_through_a_null_relation_agrees_between_lanes():
-    """The same model on both lanes, which is what #897 is finally about.
-
-    Until #968 the relational lane answered 0.0: the null entry was dropped by
-    the join that places the pullback's terms, so the term vanished while its
-    row stayed and `link[f3]` was built as `take[f3] <= 0` — a row asserting
-    something the model never said, with nothing anywhere reporting it.
-    """
+    """The same model on both lanes (#897, #968)."""
     from tests.differential import differential
 
     with differential(DANGLING, _dangling_sources(), lp=True) as run:
@@ -373,9 +289,7 @@ def test_at_through_a_null_relation_agrees_between_lanes():
         assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
 
-#: Two columns read at once, through a relation that leaves `f3` out. The tuple
-#: `f3` would read does not exist, and the pair is what makes the case: a lane
-#: that joined one column at a time could still find a slot for it.
+#: Two columns read at once, through a relation that leaves `f3` out.
 DANGLING_PAIR = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}, 'kind': {'dtype': 'str'}},
     'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind']}},
@@ -394,13 +308,7 @@ DANGLING_PAIR = {
 
 
 def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
-    """A pullback reads a *tuple* of labels, so one null anywhere leaves nothing.
-
-    The single-column case above says a label mapping nowhere has no value to
-    read. Reading two columns at once, a lane that joined `component` and
-    stopped would find `c1` for every flow, build `take[f3] <= 0`, and pin a
-    flow the model never spoke about.
-    """
+    """A pullback reads a tuple of labels, so one null anywhere leaves nothing."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -419,9 +327,7 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
         assert run.engine.diagnostics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
 
 
-#: The same shape with a *total* relation, so the absence is the operand's own:
-#: `c2` exists as a label and every flow maps somewhere, but `level` is masked
-#: away there, and a fine coordinate reading a masked slot reads nothing.
+#: The same shape with a total relation; `level` is masked away at `c2`.
 MASKED = DANGLING | {
     'parameters': {'usable': {'dims': ['component']}},
     'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
@@ -429,13 +335,7 @@ MASKED = DANGLING | {
 
 
 def test_at_over_a_masked_variable_takes_the_row_with_it():
-    """A pullback carries the mask under it, not only the relation's own gaps.
-
-    Two absences reach a fine coordinate through the same join and the engine
-    used to report neither, so this answered 0.0 beside the null-relation case
-    above and for the same reason (#968) — `f3` reads `level[c2]`, which is not
-    there, and its row was built anyway with the right-hand side empty.
-    """
+    """A pullback carries the mask under it, not only the relation's own gaps (#968)."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -445,11 +345,7 @@ def test_at_over_a_masked_variable_takes_the_row_with_it():
         assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
 
 
-#: A pullback's absence is one column wide — the fine dim — while the fragment
-#: it rides on carries every dim the operand had. `u` is what makes that
-#: difference observable: a shift along `t` reads the *other* dims off the
-#: presence to place its edge, and there are two of them here where the frame
-#: names one.
+#: A pullback's absence is keyed by the fine dim alone; `u` is a second dim the shift edge spans.
 DANGLING_SHIFTED = {
     'dimensions': {
         'flow': {'dtype': 'str'},
@@ -481,15 +377,8 @@ DANGLING_SHIFTED = {
 def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
     """The shift edge places itself over dims the pullback's presence omits.
 
-    A presence keyed by one column is the cheap spelling — materialising the
-    coordinate product to name an edge costs a fifth of build on a wide ramp —
-    and `edge: 0` is the one reader that goes looking for columns it may not
-    have. It widens rather than asking, so this builds at all instead of
-    failing on a column named `u`.
-
-    Differential, and it is the case that decides both lanes read `edge:` the
-    same way: an absence that arrived *before* the shift is not the edge, so it
-    is not filled, and f3 — mapping nowhere — keeps no row at either t (#987).
+    An absence that arrived before the shift is not the edge, so it is not
+    filled, and f3 keeps no row at either t (#987).
     """
     from tests.differential import differential
     from tests.oracle import pd
