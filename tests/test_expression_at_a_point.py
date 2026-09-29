@@ -180,6 +180,10 @@ OPERATORS = [
     pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-masked-variable'),
     pytest.param('sum_back(x, along=t, window=lead)', id='sum-back-by-a-parameter-window'),
     pytest.param('sum_back(x, along=t, window=2, by=season_of, within=s)', id='sum-back-within-a-group'),
+    pytest.param(
+        'sum(sum_back(x, along=t, window=2, by=tariff_of, within=s) + x, over=t)',
+        id='sum-a-sum-back-within-a-partial-group-beside-a-present-term',
+    ),
     pytest.param('sum(x, by=season_of, over=t, into=s)', id='sum-by-a-relation'),
     pytest.param('sum(y, by=season_of, over=t, into=s)', id='sum-a-masked-variable-by-a-relation'),
     pytest.param(
