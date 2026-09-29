@@ -49,16 +49,19 @@ if TYPE_CHECKING:
 
 
 def _spec() -> dict[str, Any]:
-    """The law model, with a season over ``t`` and a per-``f`` lead, so every operator has something to act on."""
+    """The law model, with a season over ``t``, a relation that leaves a snapshot out, and a per-``f`` lead."""
     spec = law_spec('x <= 100', dims=['f', 't'])
     spec['dimensions']['s'] = {'dtype': 'str'}
     spec['parameters']['lead'] = {'dims': ['f'], 'dtype': 'int'}
-    spec['relations'] = {'season_of': {'key': 't', 'values': 's'}}
+    spec['relations'] = {'season_of': {'key': 't', 'values': 's'}, 'tariff_of': {'key': 't', 'values': 's'}}
     return spec
 
 
 def _data() -> dict[str, Any]:
-    """``law_data`` over three snapshots, two in one season, so a window and a group each have an inside and an edge."""
+    """``law_data`` over three snapshots, two in one season, so a window and a group each have an inside and an edge.
+
+    ``tariff_of`` maps no season to the last snapshot, so a group can also be partial.
+    """
     from tests.oracle import pd
 
     snapshots = [0, 1, 2]
@@ -66,6 +69,7 @@ def _data() -> dict[str, Any]:
         't': snapshots,
         's': ['warm', 'cold'],
         'season_of': relation('t', 's', snapshots, ['warm', 'warm', 'cold']),
+        'tariff_of': relation('t', 's', snapshots, ['warm', 'warm', None]),
         'lead': pd.Series({'a': 1, 'b': 2}),
     }
 
@@ -168,6 +172,10 @@ OPERATORS = [
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=t)', id='sum-a-vacated-edge-beside-a-present-term'),
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=f)', id='sum-across-a-vacated-edge'),
     pytest.param('shift(x, along=t, offset=1, by=season_of, within=s)', id='shift-within-a-group'),
+    pytest.param(
+        'sum(shift(x, along=t, offset=1, by=tariff_of, within=s) + x, over=t)',
+        id='sum-a-shift-within-a-partial-group-beside-a-present-term',
+    ),
     pytest.param('sum_back(x, along=t, window=2)', id='sum-back'),
     pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-masked-variable'),
     pytest.param('sum_back(x, along=t, window=lead)', id='sum-back-by-a-parameter-window'),
