@@ -1,8 +1,8 @@
 # Choosing a solver
 
-How to solve on a solver other than HiGHS, and pass it options. HiGHS ships
-with specsolve and is the default. Nothing in the spec names a solver, so the
-call chooses one.
+How to solve on a solver other than HiGHS, pass it options, or write the model
+to a file for a solver specsolve does not run. HiGHS ships with specsolve and
+is the default. Nothing in the spec names a solver, so the call chooses one.
 
 ## See which solvers this build has
 
@@ -61,3 +61,15 @@ sps.check('dispatch.yaml', sink='highs')
 
 The refusal names the solvers that do take the construct. The full table is
 [what each sink takes](../reference/api.md#what-each-sink-takes).
+
+## Write the model to a file
+
+For a solver or tool that specsolve does not run, write the model. The suffix
+picks the format, and this build writes `.lp` and `.mps`:
+
+```python
+sps.write('dispatch.yaml', sources, 'dispatch.lp')
+```
+
+The two formats carry different constructs: MPS has no quadratic objective or
+indicator, for example. The table above covers both.
