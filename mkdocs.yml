@@ -28,6 +28,7 @@ nav:
       - Preparing the data: howto/data.md
       # The schema is the language's, so the editor recipe is documented with it.
       - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
+      - Choosing a solver: howto/solvers.md
       - Running a sweep in parallel: howto/parallel.md
       - Archiving a solve: howto/archiving.md
       - Reading a directory of runs: howto/warehouse.md

@@ -64,6 +64,7 @@ REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
     'README.md',
     'docs/guide.md',
+    'docs/howto/solvers.md',
     'docs/howto/parallel.md',
     'docs/howto/debug.md',
     'docs/howto/archiving.md',
