@@ -1,14 +1,9 @@
 """The one place that knows what a caller's table library is.
 
-What a caller hands over is learned from the Arrow PyCapsule protocol, not from
-an import, so neither pyarrow nor pandas is a dependency. ``pandas.Series`` has
-no capsule that carries its index, so it is unwrapped first — and only when
-pandas is already in ``sys.modules``.
-
-**Tables in, arrays out.** What is read here is a table: rows under named
-columns, an index being a column wearing a hat. An ``xarray.DataArray`` is a
-dense n-dimensional array rather than a table and is not read. xarray is what
-a result is handed back *as* (``to_dataarray``), never what a build reads.
+What a caller hands over is read through the Arrow PyCapsule protocol, so
+neither pyarrow nor pandas is a dependency. A ``pandas.Series`` is unwrapped
+first, and only when pandas is already imported. An ``xarray.DataArray`` is not
+a table and is not read.
 """
 
 from __future__ import annotations
@@ -32,11 +27,7 @@ __all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'to_pandas']
 
 
 def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
-    """A polars frame as pandas, column by column, without reaching for pyarrow.
-
-    A dictionary-encoded column (``Categorical``, ``Enum``) is widened to
-    string first.
-    """
+    """A polars frame as pandas, column by column, without pyarrow."""
     import pandas as pd
 
     encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
@@ -48,13 +39,11 @@ def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
 def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     """One source as a lazy frame: a parquet path scanned, or an in-memory table normalised.
 
-    The one place a string is read as a parquet path, for every door a source
-    enters by. *dims* names the columns a pandas index becomes.
+    The one place a string is read as a parquet path. *dims* names the columns
+    a pandas index becomes.
 
     Returns:
-        The frame, or ``None`` for "not table-shaped" — a number, a
-        ``{label: value}`` map, a bare sequence — which the caller spreads,
-        passes through, or refuses with the message that knows what it wanted.
+        The frame, or ``None`` where *obj* is not table-shaped.
     """
     import sys
 
@@ -104,13 +93,8 @@ def is_multi_indexed(obj: Source) -> bool:
 def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | None:
     """A pandas Series with its one index level promoted to a column.
 
-    One level is all a Series can carry here — [`is_multi_indexed`][] refuses
-    the rest — so it runs along one dimension as a dict and a sequence do, and
-    any other arity is declined rather than reported.
-
-    Where the caller named the level it attaches by that name — renaming it to
-    *dims* would transpose the data when two dims share a label space, which
-    nothing downstream can catch.
+    A named level keeps its name: renaming it to *dims* would transpose the
+    data when two dims share a label space.
 
     Returns:
         The tidy frame, or ``None`` where the declaration is not one dimension.
@@ -123,11 +107,10 @@ def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | N
 
 
 def _from_pandas(frame: pd.DataFrame) -> pl.LazyFrame:
-    """A pandas frame, column by column, without reaching for pyarrow.
+    """A pandas frame, column by column, without pyarrow.
 
-    A whole-frame conversion needs pyarrow for anything Arrow-backed, which
-    strings are by default on pandas 3. Object arrays go through a list so
-    numpy's float ``nan`` becomes a null rather than a string.
+    Object arrays go through a list so numpy's ``nan`` becomes a null rather
+    than a string.
     """
     columns: dict[str, object] = {}
     for name in frame.columns:

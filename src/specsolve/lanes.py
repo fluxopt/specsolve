@@ -1,7 +1,4 @@
-"""What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
-
-``Buildable`` and ``Source`` are what every verb in the package takes.
-"""
+"""What a spec and its sources may arrive as, and the one door every verb lowers a spec through."""
 
 from __future__ import annotations
 
@@ -22,20 +19,13 @@ if TYPE_CHECKING:
     from mathspec import Spec
 
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
-#: the language has already read, its ``piecewise:`` blocks written out
-#: (``to_spec(...).expand('piecewise')``). **Not** a ``Program``: lowering has
-#: no inverse, so an answer from one could not name the spec it came from, and
-#: nothing built from one can be archived.
+#: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
+#: no inverse.
 type Buildable = str | Path | Mapping[str, object] | Spec
 
 
 def declared(spec: Buildable) -> Spec:
     """*spec* as the document it is, whatever shape it arrived in.
-
-    The one door every verb reads a spec through.
-
-    Args:
-        spec: A YAML path, a mapping, or a ``Spec``.
 
     Raises:
         SpecsolveError: A lowered ``Program``.
@@ -59,15 +49,12 @@ class ArrowTable(Protocol):
     def __arrow_c_stream__(self, requested_schema: object = None) -> object: ...
 
 
-#: A pandas Series of any dtype a source may carry: an index's
-#: (`mathspec.program.DimensionDtype`) or a parameter's values'
-#: (`ParameterDtype`), which is where ``bool`` comes
-#: from. Spelled out because pandas types ``Series`` invariantly: a bare
-#: ``pd.Series`` is ``Series[Any]``, and no single parameter stands for the five.
+#: A pandas Series of any dtype a source may carry. Spelled out because pandas
+#: types ``Series`` invariantly.
 type PandasSeries = pd.Series[float] | pd.Series[int] | pd.Series[bool] | pd.Series[str] | pd.Series[datetime]
 
-#: A label along a dimension, and so a slice's key: the Python type of each
-#: dtype an index may declare (`mathspec.program.DimensionDtype`).
+#: A label along a dimension: the Python type of each dtype an index may
+#: declare (`mathspec.program.DimensionDtype`).
 type Label = int | float | str | datetime
 
 #: Anything a verb takes under one name of ``sources``. A parameter: a parquet
@@ -92,11 +79,7 @@ type Source = (
 
 
 def _case_collision(program: Program) -> str | None:
-    """Two declarations of one namespace whose names differ only by case, as the sentence refusing them.
-
-    The namespaces are the language's own — the flat one every expression
-    refers into, and constraints beside it.
-    """
+    """Two declarations of one namespace whose names differ only by case, as the sentence refusing them."""
     flat = (
         *(('dimension', name) for name in program.dimensions),
         *(('relation', name) for name in program.relations),
@@ -123,10 +106,8 @@ def _case_collision(program: Program) -> str | None:
 def lowered(spec: Buildable) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
-    Every door lowers through here, so what [`check`][] refuses
-    [`build`][] and an archive refuse too. Nothing is expanded here: a spec
-    still carrying a ``piecewise:`` block is refused, naming ``Spec.expand``,
-    because which formulations to write out is the caller's to say.
+    Every verb lowers through here. A ``piecewise:`` block is refused, not
+    expanded.
 
     Raises:
         LanguageError: A construct outside the streaming language, or a
