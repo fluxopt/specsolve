@@ -1,14 +1,8 @@
 """`dispatch` as a linopy user writes it — `examples/ports/references/linopy/dispatch.py`.
 
-That script is the reviewed idiomatic form (#681) and is executed by the docs,
-so this is the same model against the ladder's parquet rather than a second
-opinion about how linopy should be written.
-
-One deliberate difference from the YAML, and the reference carries it too: the
-`where: p_max > 0` mask gives a retired generator no columns at all, where this
-keeps them bounded to zero. Same polytope, same objective — and on this ladder
-the mask is vacuous anyway, because the generator draws `p_max` strictly
-positive.
+The same model against the ladder's parquet. Where the YAML's
+`where: p_max > 0` gives a retired generator no columns, this bounds them to
+zero: same polytope, same objective.
 """
 
 from __future__ import annotations

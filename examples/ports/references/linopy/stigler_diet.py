@@ -9,23 +9,19 @@
 
 **Two things verify this port, and they answer different questions.**
 
-The *published* figure is $39.69 a year. Jack Laderman computed it in 1947 at
-the National Bureau of Standards as the first serious test of the simplex
-method — nine clerks on desk calculators, about 120 man-days. That number is
-history, and it is rounded by the arithmetic of the people who produced it.
+The *published* figure is $39.69 a year. Jack Laderman computed it by hand in
+1947 at the National Bureau of Standards as the first serious test of the
+simplex method, so it carries his rounding.
 
 This script is what the same data gives to a modern solver: $39.6617 a year,
 0.08% under Laderman's. The gap is his rounding, not a different model, and the
 *composition* of the diet is the stronger corroboration — both arrive at the
 same five foods.
 
-Nothing here imports specsolve. The model is a covering LP with no network in it
-at all, which is why it is in the corpus: every other verified port is a flow
-of something through something.
+Nothing here imports specsolve. The model is a covering LP with no network in
+it at all.
 
 Pinned above to the versions that produced the number in ``references.json``.
-linopy is pinned because it builds the model here and xarray is its data model;
-pandas is a floor, shaping the input tables and nothing else.
 """
 
 from __future__ import annotations
@@ -74,9 +70,8 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 def shadow_prices(m: linopy.Model) -> dict[str, list]:
     """What one more unit of each nutrient per day would cost.
 
-    The most legible dual in the corpus: it is the price of the binding
-    nutrient, and the nutrients that are *not* binding come back at zero
-    because they arrive free alongside the ones that are.
+    The price of a binding nutrient; the nutrients that are *not* binding come
+    back at zero because they arrive free alongside the ones that are.
     """
     dual = m.constraints['meet_requirement'].dual
     return {'nutrient': [str(v) for v in dual.indexes['nutrient']], 'value': [float(v) for v in dual.values]}

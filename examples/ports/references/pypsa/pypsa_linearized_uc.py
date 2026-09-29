@@ -8,32 +8,26 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_linearized_uc.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
-**The same rows, with the status continuous.** PyPSA offers the linear
-relaxation of unit commitment as a first-class mode rather than as a debugging
-convenience: ``optimize(linearized_unit_commitment=True)`` declares the status
+**The same rows, with the status continuous.**
+``optimize(linearized_unit_commitment=True)`` declares the status
 and the two transition variables in [0, 1] instead of {0, 1} and leaves every
 constraint where it was. A unit may then be committed by a third.
 
-``base`` carries **deliberately unequal** start-up and shut-down costs. PyPSA
-tightens the relaxation with an extra dispatch-limit block wherever a
-generator's two costs *match*, and that block reaches for the ramp-limit
-parameters — a second feature. ``base`` is therefore left untightened, and the
-log says so. ``peak`` is not, its two costs both being zero: PyPSA emits four
+``base`` carries unequal start-up and shut-down costs. PyPSA tightens the
+relaxation with an extra dispatch-limit block wherever a generator's two costs
+*match*, and that block reaches for the ramp-limit parameters, so ``base`` is
+left untightened. ``peak`` is not, its two costs both being zero: PyPSA emits four
 further blocks for it, every one of which collapses to a row the port already
 holds, since ``p_min_pu`` is 0 and there are no ramp limits. Hence the same
 objective and the same prices out of a model with more rows in it.
 
-The relaxation is a bound, not an approximation to be trusted: on this instance
-it is worth less than half the integer answer, which is why ``main`` prints both.
+The relaxation is a bound, not an approximation: on this instance it is worth
+less than half the integer answer, and ``main`` prints both.
 """
 
 from __future__ import annotations
@@ -87,12 +81,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 def balance_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the power balance per snapshot, tidy.
 
-    A relaxed commitment is an LP, so unlike every other committable model in
-    this corpus it *has* a dual solution — which is most of why the mode exists.
-
-    Keyed by snapshot alone: the port has one balance row per snapshot and no
-    bus dimension, so carrying PyPSA's single-bus coordinate would key the two
-    tables differently for nothing.
+    A relaxed commitment is an LP, so it has a dual solution. Keyed by snapshot
+    alone, as the port has no bus dimension.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {

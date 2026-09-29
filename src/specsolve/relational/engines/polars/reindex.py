@@ -1,17 +1,8 @@
 """Re-indexing along one dimension's own order: ``shift`` and ``sum_back``.
 
-The two operators that move a fragment's rows *along* a dimension rather than
-across dims. ``shift`` is a pointwise remap of the dim through its ordinal —
-one output row per input row — and ``sum_back`` a one-to-many one, a row at
-*o* contributing at every ``o + lag`` inside the window. They share the
-ordinal arithmetic, the scratch columns below, and the question no other
-operator has to answer: what happens at the edge, where the walk runs out of
-dimension.
-
-Both take the [`Scope`][specsolve.relational.engines.polars.scope.Scope] and
-hold nothing. They read three things off it — ``data``, ``program`` and
-``widen`` — and everything else here is their own, built once per operator
-as an [`_Order`][].
+``shift`` is a pointwise remap of the dimension through its ordinal and
+``sum_back`` a one-to-many one. They share the ordinal arithmetic and the
+question of the edge, where the walk runs out of dimension.
 """
 
 from __future__ import annotations
@@ -33,8 +24,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engines.polars.scope import Scope
 
 
-#: Scratch columns. The spaces make them unrepresentable as declared names, so
-#: they cannot collide with a dimension or relation the model already has.
+#: Scratch columns.
 _OFFSET = '__offset'
 _LAG = '__lag'
 _WIDTH = '__width'
@@ -47,13 +37,10 @@ class _Order:
     """A grouping as an operator walks along it: the two keyed sides of the remap.
 
     ``incoming`` and ``outgoing`` read the same rank column, so a change to how
-    a walk ranks cannot move one side without the other — the pair every remap
-    and every edge computation here reads. Built once per operator; everything
-    below takes it rather than rebuilding it.
+    a walk ranks moves both sides.
     """
 
-    #: The groups the walk stays inside — the whole dimension as one group
-    #: where no ``by=`` was written ([`Grouping.whole`][]).
+    #: The groups the walk stays inside — the whole dimension where no ``by=`` was written.
     grouping: Grouping
     incoming: pl.LazyFrame
     outgoing: pl.LazyFrame
@@ -62,10 +49,7 @@ class _Order:
     def of(cls, scope: Scope, dimension: str, partition: program.Partition | None) -> _Order:
         """Rank *dimension* inside each group of *partition*, or along the whole of it.
 
-        A neighbour is decided by rank within the group, and a wrap closes on
-        the group's size. Under a partition a coordinate the map places nowhere
-        is not in the table at all and joins to nothing, which is what it
-        reaches everywhere else.
+        A coordinate the partition places nowhere is not in the table and joins to nothing.
         """
         grouping = Grouping.whole(scope.data, dimension) if partition is None else Grouping.of(scope.data, partition)
         incoming = grouping.table.select(
@@ -87,11 +71,8 @@ class _Order:
     ) -> pl.LazyFrame:
         """*source* with the walked dimension moved by *moved*.
 
-        *dims* is the caller's, because a presence frame need not carry the
-        fragment's: an acyclic shift's presence speaks only about the dim it
-        vacated, so projecting the fragment's dims onto it asks for columns it
-        never had. *prepared* splices in whatever extra join the operator needs
-        — a lag table, a named offset — between the two keyed sides.
+        *dims* is the caller's, since a presence frame need not carry the
+        fragment's. *prepared* adds the operator's extra join between the two keyed sides.
         """
         dimension = self.grouping.dimension
         kept = [d for d in dims if d != dimension]
@@ -108,37 +89,19 @@ def translate_rows(
 ) -> pl.LazyFrame:
     """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
-    The predicate form of [`translate_fragment`][]: no partition, no named
-    offset, no wrap and nothing to fill, since false is what a missing row
-    already means in a mask. *carried* is the columns that travel with the
-    coordinates.
+    The predicate form of [`translate_fragment`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
     return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
 
 
 def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context: str) -> TermFragment:
-    """A one-to-many remap of the dim through its ord.
-
-    A row at *o* contributes at every ``o + lag`` for ``lag`` inside the
-    window, so the terms land on each output position that can see them and
-    the terminal ``sum(coeff)`` at assembly adds them up.
+    """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for; a named
-    width then keeps only the lags that entity reaches. Every join is still
-    on a dim-table key or the width's own dims, so the reach stays a relation
-    and the locality class is the one [`translate_fragment`][] has.
-
-    Unlike a shift this vacates nothing: the window at the first position
-    is short rather than empty, since it always contains that position
-    itself. So an operand with no presence gains none — unless a partition
-    makes one: a coordinate the map places nowhere is in no group, so the
-    window reaches nothing for it, itself included, and that is the one way
-    a window loses a row it would otherwise keep.
-
-    Under ``by=`` the walk is inside the group: positions are the within-group
-    rank rather than the ``ord`` along the whole dimension, and a wrap closes on the group's
-    own size, exactly as [`translate_fragment`][] walks a partitioned shift.
+    width keeps only the lags its entity reaches. A window vacates nothing, so
+    an operand with no presence gains one only under a partition, for the
+    coordinates in no group.
     """
     if s.along not in p.dims:
         refuse_a_fragment_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
@@ -179,21 +142,11 @@ def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context
 
 
 def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, context: str) -> TermFragment:
-    """A pointwise remap of the dim through its ord.
+    """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
-    A row at *o* contributes at ``(o + by) % card``.
-
-    Both joins are on a dim-table key, so the row count is unchanged and an
-    out-of-range ordinal does not join. No window function; bounded-halo
-    locality. The operand's *presences* are ``travelled_presences`` below.
-
-    Every fill over a *constant* is written, ``0`` included: the
-    arithmetic is unchanged, but the slot now has a value, so asking for
-    zero stops being indistinguishable from having nothing. Over a *term*
-    there is nothing to write — ``edge=0`` on a variable means the vacated
-    slot contributes no term at all (the operator rules), where a zero-coefficient
-    entry would be a matrix nonzero standing for a term that is not there.
-    Lowering refuses every other numeric edge over a variable.
+    Every fill over a constant is written, ``0`` included, so the slot has a
+    value. Over a term a fill writes nothing: the vacated slot contributes no
+    term, and lowering refuses every nonzero fill over a variable.
     """
     if s.along not in p.dims:
         refuse_a_fragment_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
@@ -222,19 +175,10 @@ def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, cont
     def travelled_presences() -> tuple[Presence, ...]:
         """Where the variable exists after the shift, and what keys it.
 
-        An existing presence **travels**: the coordinate set goes through
-        the same map the rows did, and the inner join drops whatever the
-        edge vacated. Under a fill the vacated positions go back in
-        ([`_vacated`][]) — a filled slot counts as present. A narrow
-        presence is widened first when the shift moves a dim it is silent
-        about, since there is no column to remap otherwise.
-
-        An operand with **no** presence gets one: nothing was absent before
-        and the acyclic edge now is, where without this the vacated slot
-        would merely fail to join and the row would survive with its term
-        quietly gone. It is keyed by the one dimension it speaks about. Under
-        a wrap or a fill a policy speaks about a group's edge, and a
-        coordinate in no group has none: it is absent under every policy.
+        An existing presence goes through the same map as the rows, the vacated
+        positions going back in under a fill. An operand with no presence gets
+        one under an acyclic edge, or else its row would survive with the term
+        quietly gone; under a wrap or fill only a coordinate in no group is absent.
         """
         if not p.presences:
             if s.wrap or s.fill is not None:
@@ -263,13 +207,8 @@ class _Edge:
     """The edge of an acyclic shift along an [`_Order`][]: which coordinates it vacates, and what keys them.
 
     Keyed by the translated dimension, a named offset's own dims and the
-    partition's joined dims, each once. How far back a row reaches decides
-    which rows have nothing to reach, so under a named offset the two
-    entities of one coordinate need not agree about whether it is the edge;
-    and under a partition keyed on more than the dimension it walks, which
-    coordinate is a group's edge depends on the rest of the key — a
-    generator's own season. A grouped dimension is not among the keys: a lag
-    per group varies along the translated dimension itself.
+    partition's joined dims, each once: under either, whether a coordinate is
+    the edge depends on the rest of the key. A grouped dimension is not a key.
     """
 
     order: _Order
@@ -294,15 +233,9 @@ class _Edge:
     def coordinates(self, *, vacated: bool) -> pl.LazyFrame:
         """The coordinates the shift vacates, or keeps, under [`keys`][].
 
-        Exact complements: a fill and the presence set it implies must not
-        disagree about which coordinates the edge is. Under a partition the
-        edge is **each group's**, counted along the same within-group rank
-        the translation itself walks: a coordinate reaches outside its own
-        group exactly where it would have reached outside the dimension. A
-        coordinate in no group is neither — it is absent, the reading
-        [`Grouping.placed`][] gives it, so it is not in the table at all. A
-        per-group offset reaches it by the group column rather than by a
-        cross join, one lag standing for the whole group.
+        Exact complements, so a fill and the presence it implies agree on the
+        edge. Under a partition the edge is each group's; a coordinate in no
+        group is in neither.
         """
         grouping, s = self.order.grouping, self.shift
         table, position, span = grouping.table, pl.col(GROUP_RANK), pl.col(GROUP_SIZE)
@@ -321,14 +254,7 @@ class _Edge:
         return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.along), *keyed)
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
-        """``(dims…, cval=fill)`` at every coordinate the shift vacated.
-
-        Dense over *others*, not over the rows the operand happened to carry.
-
-        Only a *truthy* fill gets here, ``fill=0`` needing no rows at all. A
-        nonzero fill reaches a translation only over a variable-free operand,
-        so this is always the const branch and never invents a ``var_label``.
-        """
+        """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
         edge = self.coordinates(vacated=True)
         for d in others:
             if d in self.keys:
@@ -339,17 +265,9 @@ class _Edge:
     def vacated_of(self, scope: Scope, presence: Presence, dims: tuple[str, ...]) -> pl.LazyFrame:
         """The edge positions ``shift`` leaves with nothing to move in, for one presence.
 
-        Reached only under ``fill=0``, which is the whole of what ``fill`` does
-        here: back in the presence set they are present-with-no-term, a zero
-        contribution and a surviving row. Left out, absence propagates and the
-        row drops.
-
-        Only the ``shift`` edge qualifies; a coordinate the variable's own mask
-        removed is genuinely absent and remapping already dropped it. So the
-        edge is crossed with the other-dim combinations the variable actually
-        has, one vacated row each. The incoming presence is widened to the other
-        dims first, since a narrowly keyed one — a pullback's, an earlier
-        shift's — is silent about the columns this reads.
+        Back in the presence set they are present with no term, so the row
+        survives. The edge is crossed with the other-dim combinations the
+        variable has, so a coordinate its own mask removed stays absent.
         """
         others = [d for d in dims if d != self.shift.along]
         edge = self.coordinates(vacated=True)
@@ -365,12 +283,8 @@ class _Edge:
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:
     """A named offset's or width's values, and the keys a frame reads them by.
 
-    A **per-group** amount is declared over a dimension the partition groups
-    into, and no frame carries a column of it: what travels with a coordinate is
-    the relation's own value, so the amount is read under the group column and one
-    equi-join lands each group its own. A coordinate the map places
-    nowhere is in no partitioned table and joins to nothing, which is what it
-    reaches everywhere else.
+    A per-group amount is read under the group column, since no frame carries
+    the grouped dimension.
     """
     dims = scope.program.parameters[name].dims
     keys = [order.grouping.column_of(d) or d for d in dims]

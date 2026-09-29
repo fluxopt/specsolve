@@ -1,20 +1,9 @@
 """Shared fixtures and schema helpers for specsolve tests.
 
-Everything here is linopy-free *and pandas-free at import*, so it loads on a
-bare install. On a bare install (no linopy) the oracle modules
-skip themselves: they reach the oracle through ``tests.oracle``, whose
-``importorskip`` guard fires at collection. There is no list of filenames to
-keep in sync here — a module that needs the oracle says so by importing it. The
-differential harness lives in ``tests.differential`` for the same reason:
-importing it *is* the guard.
-
-pandas follows the same discipline one level down. It is no longer a runtime
-dependency (the ``dev`` group carries it, for ``Result.to_pandas`` and for
-the oracle), so a fixture that hands out pandas objects imports it in
-its own body: requesting the fixture is what asks for the dependency, and the
-bare job never requests it. ``dispatch_inputs`` and ``dispatch_frame_inputs``
-are the same numbers in the two shapes — the oracle lane is pandas-native, the
-engine is frame-native, and the module constants are the single source of both.
+Everything here is linopy-free and pandas-free at import, so it loads on a bare
+install. A module that needs the oracle imports ``tests.oracle`` or
+``tests.differential``, whose ``importorskip`` skips it. A fixture that hands
+out pandas objects imports pandas in its own body.
 """
 
 from __future__ import annotations
@@ -35,10 +24,6 @@ import yaml as pyyaml
 
 from specsolve.relational.sinks import SOLVERS
 from specsolve.sources import attachable
-
-# The language's own tests own these (#1150); the noqa marks the two this file
-# re-exports without using, so the forty-odd tests on the other side of the cut
-# keep importing all four from one place.
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
     expanded,
@@ -53,25 +38,13 @@ if TYPE_CHECKING:
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
-#: The referenced models — the ports somebody else published an optimum for,
-#: plus the teaching models that carry a hand-written reference implementation
-#: — with their data and the number each should reach. Shared because two
-#: modules ask different questions of one corpus: ``test_ports.py`` whether we
-#: reach the outside answer, ``test_update.py`` whether an update reaches the
-#: answer a fresh build does.
+#: The referenced models, with their data and the optimum each should reach.
 PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = constructs.REFERENCES
 
 
 def relation(over: str, into: str, labels: Sequence[Any], values: Sequence[Any]) -> pl.DataFrame:
-    """A relation's map as the table it is supplied under its own key.
-
-    Takes the column form these fixtures used to carry — one value per label,
-    `None` where the label maps nowhere — and returns the relation: the rows it
-    maps, and no row for the rest. The tests that pin the transport itself
-    write their relations out literally; this is for the many where the map is
-    a prop rather than the subject.
-    """
+    """A relation's map from one value per label, `None` where the label maps nowhere."""
     rows = [(a, b) for a, b in zip(labels, values, strict=True) if b is not None]
     return pl.DataFrame({over: [a for a, _ in rows], into: [b for _, b in rows]})
 
@@ -79,11 +52,8 @@ def relation(over: str, into: str, labels: Sequence[Any], values: Sequence[Any])
 def port_sources(name: str) -> dict[str, Any]:
     """One JSON per port, filtered to what its model declares.
 
-    The file carries what the upstream framework dumped — `pypsa_kvl` ships a
-    `reactance` the ported model reads through `cycle_incidence` instead, and
-    `pypsa_ac_dc` six more of that kind. Keeping them is the point: they are the
-    provenance of the instance. Attaching refuses a name the model does not
-    declare, so the filter belongs here, where a dump becomes a call.
+    The file keeps the upstream dump whole as provenance, and attaching refuses a
+    name the model does not declare.
     """
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
     tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
@@ -93,12 +63,7 @@ def port_sources(name: str) -> dict[str, Any]:
 
 
 def port_spec(name: str) -> Path:
-    """The file behind a referenced model's name.
-
-    A port's model file lives in ``examples/ports/``; a teaching model with a
-    reference implementation keeps its file in ``examples/``, where the guide
-    and the gallery already point.
-    """
+    """The file behind a referenced model's name, in ``examples/ports/`` or ``examples/``."""
     spec = PORTS_DIR / f'{name}.yaml'
     return spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml'
 
@@ -109,9 +74,7 @@ def port(request: pytest.FixtureRequest) -> dict[str, Any]:
     return {'name': request.param, 'spec': port_spec(request.param)} | PORT_REFERENCES[request.param]
 
 
-#: Every model in the repo, ports included — ``constructs.models()`` is the one
-#: list the gallery and the docs already build from, so a model added anywhere
-#: is covered the day it lands rather than when someone remembers a glob.
+#: Every model in the repo, ports included, from the list the gallery and docs build from.
 SPEC_PATHS = [p for _, p in constructs.models()]
 
 
@@ -143,12 +106,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def solve_written_file(path: Path | str) -> float:
     """Objective HiGHS reaches reading a written model back from disk.
 
-    The third opinion in a differential: the ``highs`` solver builds the model
-    through the HiGHS API, this one round-trips it through text, and a sink
-    that writes a wrong file is otherwise invisible. The format is the path's,
-    HiGHS reading both of the ones that ship. Lives here rather than in
-    ``tests.differential`` because highspy is a core dependency — a bare
-    install must still be able to check the writers.
+    The third opinion in a differential: without it a sink that writes a wrong
+    file is invisible. The format is the path's.
     """
     import highspy
 
@@ -163,12 +122,7 @@ def solve_written_file(path: Path | str) -> float:
 def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
     """A variable's primal as ``{coordinate: value}`` — tuple keys past one dim.
 
-    One ``primal`` call, then one zip — and that is the whole reason this is a
-    function. ``primal`` is a label join and promises row *order* but not that
-    two separate calls line up column-wise, so the idiom has to read the frame
-    once and pair its columns in a single pass. A dozen tests do this and the
-    caveat was written down at one of them; here it applies to all by
-    construction.
+    One ``primal`` call: two separate calls are not promised to line up.
     """
     frame = result.primal(name)
     columns = [frame[dim] for dim in dims]
@@ -182,11 +136,7 @@ def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
 
 
 def run_example(path: Path, name: str) -> str:
-    """Import a script as module ``name`` and capture what its ``main()`` prints.
-
-    ``StringIO`` is not a tty, so any banners come out unstyled — the same
-    plain text a shell redirect into a golden file would produce.
-    """
+    """Import a script as module ``name`` and capture what its ``main()`` prints, unstyled."""
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -268,12 +218,7 @@ def _dispatch_load() -> np.ndarray:
 
 @pytest.fixture
 def dispatch_inputs():
-    """Dispatch data as pandas — the shape the linopy oracle takes.
-
-    Pairs with :func:`dispatch_frame_inputs`: same numbers, and a test picks
-    the shape by which lane it exercises. Importing pandas here rather than at
-    module scope is what keeps this file loadable on a bare install.
-    """
+    """Dispatch data as pandas — the shape the linopy oracle takes."""
     import pandas as pd
 
     return {
@@ -287,11 +232,7 @@ def dispatch_inputs():
 
 @pytest.fixture
 def dispatch_frame_inputs():
-    """The same data as tidy frames — the shape the engine documents.
-
-    Tests that assert the native API's behaviour use this one, so they stay
-    runnable with no dataframe library beyond the engine's own installed.
-    """
+    """The same data as tidy frames — the shape the engine documents."""
     generators = list(DISPATCH_GENERATORS)
     return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
@@ -304,12 +245,7 @@ def dispatch_frame_inputs():
 
 @pytest.fixture
 def commitment_inputs():
-    """Data for the unit-commitment MILP in ``tests.test_milp``.
-
-    Here rather than beside the model because two modules need it: the MILP
-    itself, and the duals refusal — a mixed-integer model is the case that has
-    no dual solution to give.
-    """
+    """Data for the unit-commitment MILP in ``tests.test_milp``."""
     import pandas as pd
 
     rng = np.random.default_rng(5)
@@ -333,25 +269,13 @@ def commitment_inputs():
 # ---------------------------------------------------------------------------
 # the law fixture: one model, one masked dimension
 # ---------------------------------------------------------------------------
-#
-# `test_arithmetic_laws.py` states the laws a reader should know, chosen by
-# hand; `test_expression_sweep.py` sweeps every spelling at a bounded depth.
-# The second is evidence about the first only while both are written over the
-# *same* model — otherwise a law holding there and a sweep agreeing here are
-# two unrelated facts — which is the second importer that brings it here.
 
-#: The two dimensions every expression in those two files is written over.
+#: The two dimensions every expression in the law and sweep tests is written over.
 LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int'}}
 
 
 def law_data() -> dict[str, Any]:
-    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient.
-
-    Every interesting law is conditional on whether absence is in play, so the
-    fixture keeps one masked variable and one total one, and one coefficient
-    that is not a variable at all. The labels of both dimensions ride along:
-    they are data now, and every law is written over the same two.
-    """
+    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient."""
     import pandas as pd
 
     return {
@@ -373,14 +297,9 @@ def law_spec(
 
     Args:
         expression: The constraint the model exists to state.
-        dims: The dimensions the row is repeated over. Required rather than
-            defaulted: a row repeated across a dimension its expression does
-            not carry is refused, so the caller that built the expression is
-            the one that knows.
-        objective: What is maximised, unless the caller needs the row to bind
-            against something else.
-        also: A second named constraint, for the cases that need two rules —
-            which are two blocks rather than two entries in a list (#298).
+        dims: The dimensions the row is repeated over.
+        objective: What is maximised.
+        also: A second named constraint, for the cases that need two rules.
     """
     return {
         'dimensions': dict(LAW_DIMS),
@@ -397,13 +316,10 @@ def law_spec(
 def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
     """The probe behind the shift and window edge cases, over one masked operand.
 
-    ``level`` is masked where ``usable`` says so (or not at all, under
-    ``masked=False`` — the operand that reaches the operator with no presence
-    frame of its own), and ``take`` is capped only by *expression*'s row. The
-    1000x penalty on ``level`` is the knowledge: it makes "row dropped" and
-    "row built and binding" separable from the objective alone, rather than
-    only from a row count. ``grouped`` adds the ``season_of`` relation the
-    partitioned walks read.
+    ``level`` is masked where ``usable`` says so (unmasked under
+    ``masked=False``), and ``take`` is capped only by *expression*'s row. The
+    1000x penalty on ``level`` makes "row dropped" and "row built and binding"
+    separable from the objective alone. ``grouped`` adds ``season_of``.
     """
     spec: dict[str, Any] = {
         'dimensions': {'t': {'dtype': 'int'}},
@@ -426,13 +342,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
 
 @pytest.fixture
 def transport_data():
-    """A four-bus network whose data is feasible by construction.
-
-    Generation is dealt round-robin so every bus has some locally, the topology
-    is a ring plus one chord so every bus is reachable, and loads sit below each
-    bus's local capacity — feasible even with zero flow. The cost spread still
-    makes cross-bus flows optimal, so the network is not decoration.
-    """
+    """A four-bus ring plus one chord, feasible with zero flow and cheaper with some."""
     import pandas as pd
 
     rng = np.random.default_rng(11)
@@ -470,14 +380,10 @@ def transport_data():
 def recomputed_row_values(engine, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
-    ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, out of the
-    built frames and the primal — and nothing else the solver produced, which
-    is what makes agreement with ``result.activity`` a check of the whole chain
-    rather than a tautology. For a quadratic row it stands in for the oracle
-    the linopy lane cannot provide.
-
-    Scattered rather than ``reduceat``-ed: a purely quadratic row owns no
-    linear entries, and ``reduceat`` repeats the previous row on an empty span.
+    ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
+    built frames and the primal alone. Scattered rather than ``reduceat``-ed: a
+    purely quadratic row owns no linear entries, and ``reduceat`` repeats the
+    previous row on an empty span.
     """
     tables = engine._model.handoff
     x = np.zeros(tables.column_count)
@@ -496,11 +402,7 @@ def recomputed_row_values(engine, result) -> Any:
     return values
 
 
-#: A three-period model whose solver vector is exactly three long — shared
-#: because the hand-off tests and the timing tests both need one that small.
-#: Three columns and three rows, the smallest model whose solution vector has a
-#: length worth disagreeing about — and, every declared row being built, the
-#: control for the omissions report.
+#: Three columns and three rows, every declared row built.
 SOLVER_VECTOR_SPEC = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
@@ -525,8 +427,7 @@ LP = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p * price, over=t)'},
 }
 
-#: A convex quadratic objective — the third convention for one form, so two
-#: sinks agreeing is what says the conversion is right rather than consistent.
+#: A convex quadratic objective.
 QP = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {'need': {'dims': []}, 'toll': {'dims': ['g']}},
@@ -535,9 +436,7 @@ QP = {
         'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
-    #: A linear term beside the quadratic one, deliberately: ``setMObjective``
-    #: sets the *whole* objective, so a hand-off that passed only ``Q`` would
-    #: drop the linear half — and a purely quadratic case could not tell.
+    #: A linear term beside the quadratic one: a hand-off that passed only ``Q`` drops it.
     'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
 }
 
@@ -547,8 +446,7 @@ QP_SOURCES = {
     'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
 }
 
-#: Maximisation *and* an objective constant, which are the two things the
-#: sink states outside the frames: ``ModelSense`` and ``ObjCon``.
+#: Maximisation and an objective constant, the two things a sink states outside the frames.
 MAX = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'cap': {'dims': ['t']}},
@@ -600,16 +498,11 @@ CASES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
 
 
 def assert_agrees_with_highs(solver_name: str, case: str, variable: str, constraint: str, *, has_duals: bool) -> None:
-    """The claim a second solver has to earn, on all four quantities.
+    """A second solver agrees with HiGHS on objective, primal, activity and duals.
 
-    Coordinates as well as values, since a sink that loaded the columns in a
-    different order would still reach the same objective on these models — and
-    duals under ``maximize``, where a sign convention could differ and nothing
-    else in the suite would notice. Activity is the quantity every member
-    reaches through its own door — HiGHS reads its own ``row_value``, the
-    others subtract slack from the right-hand side — so agreement is two
-    solvers *and* two derivations; it holds on the MIP too, being gated on
-    ``has_primal`` alone where duals are not.
+    Coordinates as well as values, since columns loaded in a different order
+    still reach the same objective; and duals under ``maximize``, where a sign
+    convention could differ.
     """
     import specsolve as sps
 
@@ -643,10 +536,7 @@ def assert_infeasible_reports_both_axes(solver_name: str) -> None:
             solution.primal('p')
 
 
-#: A knapsack, because nothing above declares a discrete variable. Shared
-#: because two modules need a MILP: an updated one re-solves on a solver still
-#: holding the last solve's incumbent, and a solved one leaves no valid basis
-#: for a warm start to carry.
+#: A knapsack: the discrete model the update and warm-start tests share.
 ITEMS = [f'item{i}' for i in range(12)]
 KNAPSACK = {
     'dimensions': {'item': {'dtype': 'str'}},
@@ -668,12 +558,7 @@ def knapsack_sources(items: list[str] = ITEMS) -> dict[str, pl.DataFrame]:
 
 @pytest.fixture(params=sorted(SOLVERS))
 def solver_name(request: pytest.FixtureRequest) -> str:
-    """Every sink that can stay loaded, skipping one this build cannot run.
-
-    Asked through the sink's own availability rule rather than by naming its
-    package here, so a member that grows a second dependency does not also grow
-    a second skip.
-    """
+    """Every sink that can stay loaded, skipping one this build cannot run."""
     if not SOLVERS[request.param].is_available():
         pytest.skip(f'{request.param} is not installed here')
     return str(request.param)

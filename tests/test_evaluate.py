@@ -1,17 +1,8 @@
 """`sps.evaluate(spec, sources, expression)`: a spec's arithmetic, with no solver.
 
-A spec with no variables is a calculation, not an optimisation — dimensions,
-parameters, relations and ``expressions:`` — so each expression has a value with
-no solver and no chosen point. What is pinned here: the value is the arithmetic
-the data implies, the frame's dims are the ones the expression survives over, a
-grouped sum relabels through a relation, a declared name and an expression the
-file never named read through the one verb, laziness (only the expression
-asked for compiles), the unknown-name refusal, and the refusal that names
-`solve` for a spec that declares a decision.
-
-The engine underneath is the same one a solve reads named expressions through
-(``test_expression_reader.py``); evaluate hands it a compiler carrying no
-solution, so the value tests here and the at-a-solution tests there share it.
+A spec with no variables is a calculation, so each expression has a value with
+no solver. The engine is the one a solve reads named expressions through
+(``test_expression_reader.py``), handed no solution.
 """
 
 from __future__ import annotations

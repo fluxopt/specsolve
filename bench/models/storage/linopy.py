@@ -1,11 +1,7 @@
 """`storage` as a linopy user writes it.
 
-The cyclic state of charge is `.roll(snapshot=1)`, which is what the PyPSA
-models this case is modelled on use — an array shifted along its own axis,
-where the YAML says `shift(soc, along=snapshot, offset=1, edge='wrap')` and the
-relational engine joins the term stream against itself on `snapshot.ord - 1`.
-The two spell the same recurrence, and the difference in what it costs is the
-reason this case is in the ladder.
+The cyclic state of charge is `.roll(snapshot=1)`, as in PyPSA, where the YAML
+says `shift(soc, along=snapshot, offset=1, edge='wrap')`.
 """
 
 from __future__ import annotations

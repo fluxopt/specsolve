@@ -1,30 +1,14 @@
 """Attribute build wall time to phases, in seconds you can compare to a real run.
 
-``profile_build.py`` answers *which query*; this answers *which phase, and how
-much of the build is it*. The two are complements and the difference is the
-instrument: that one wraps every ``LazyFrame.collect``, which identifies queries
-precisely and adds enough Python per call that its own docstring says not to
-quote its seconds. This one wraps three methods per build, so what it prints is
-comparable to ``bench/`` — at the cost of saying nothing about what is inside
-them.
+``profile_build.py`` answers which query; this answers which phase. It wraps
+three methods per build, so its seconds are comparable to ``bench/``.
 
     pixi run -e bench python -m bench.profile_phases profiled l
     pixi run -e bench python -m bench.profile_phases transport l --rounds 15
 
-**Everything that is not the build is hoisted out of the loop.** Timing
-``sps.build`` repeatedly measures a YAML parse, a lowering pass, a parquet read
-and the assembly at once — and the parquet read drags the page cache in with it,
-which is why repeated runs of identical code spread 12-55% and nothing smaller
-than a rewrite shows up above the noise. Parsing and lowering happen once here,
-and attaching happens once and is then *reused*: ``AttachedSources`` is frozen by
-contract, so handing the same one to every round is legitimate and leaves the
-assembly alone in the measurement. Measured spread drops to a few percent, which
-is what makes a 10% change visible at all.
-
-Attaching is not skipped, it is *separated*: the first pass runs it for real, and
-the difference between the two minima is what reading and validating the sources
-costs. On ``profiled/l`` that is a third of the build and on ``dispatch/l`` it
-rounds to nothing, which is the kind of thing a single number hides.
+Parsing and lowering happen once, outside the loop. The first pass attaches
+the sources every round; the second reuses one frozen ``AttachedSources``, so
+the difference between the two minima is what attaching costs.
 """
 
 from __future__ import annotations
@@ -37,8 +21,7 @@ from typing import Any
 
 from bench import cases as bench_cases
 
-#: Wrapped per build rather than per collect. Three calls of overhead against a
-#: few hundred milliseconds of work is why these seconds mean something.
+#: Wrapped per build rather than per collect, so the overhead is three calls.
 PHASES = ('_build_variable', '_build_constraint', '_build_objective')
 
 

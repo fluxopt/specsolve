@@ -1,22 +1,13 @@
 """What the linopy lane builds of the language's relation, and what it refuses.
 
-The relational lane builds every shape the language admits
-(`test_relation_shapes.py`). The linopy lane builds the **single-valued map** —
-one value column read at the key, a self-map included (`test_self_map.py`) —
-keyed by one column or several, and refuses the rest at its door with the
-relational lane named. So this module holds the differential cases, where both
-lanes answer, and the refusals, where one does.
+The linopy lane builds the single-valued map, keyed by one column or several,
+and refuses the other shapes naming the relational lane.
 
 A map keyed by several columns — a generator's zone that changes by period —
-is read *under a condition* the row already carries. `sum(by=)` groups per
+is read under a condition the row already carries: `sum(by=)` groups per
 condition, `at(by=)` reads back per condition, and a `where:` tests the value
-at both key dimensions. Relationally the extra key column is one more
-equi-join column; on the linopy lane the map is an array over the key's
-product, and grouping by a two-dimensional label array is what stands in for
-the one-dimensional coordinate a plain map assigns. A conditioned map leaves
-out a *pair* rather than a label, so nothing can be dropped along either axis:
-the operand is masked at that pair instead, and the two lanes have to agree
-that its terms land nowhere.
+at both key dimensions. A conditioned map leaves out a pair rather than a
+label.
 """
 
 from __future__ import annotations
@@ -75,8 +66,7 @@ objective:
 GENERATORS = ['g1', 'g2']
 PERIODS = [1, 2]
 
-#: `g1` bids into the capped zone in period 1 and joins `g2` in period 2 — the
-#: whole point of the condition: one generator, two zones, no second relation.
+#: `g1` bids into the capped zone in period 1 and joins `g2` in period 2.
 ZONE_OF = pl.DataFrame(
     {
         'generator': ['g1', 'g1', 'g2', 'g2'],
@@ -129,8 +119,6 @@ def test_a_pair_the_map_leaves_out_is_in_no_group():
 
     `g1` is in no zone in period 1, so no cap reaches it there and it serves
     the whole 10 at cost 1 — while period 2, where it is mapped, is untouched.
-    A lane dropping the label rather than the pair would lose `g1` in period 2
-    as well, and the objective would say so.
     """
     sources = _inputs()
     sources['zone_of'] = ZONE_OF.filter(~((pl.col('generator') == 'g1') & (pl.col('period') == 1)))
@@ -146,12 +134,7 @@ def test_a_pair_the_map_leaves_out_is_in_no_group():
 
 
 def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
-    """`at(by=)` is the adjoint: the cap of *this* generator's zone in *this* period.
-
-    Bounding each generator by its own zone's cap is a different model from the
-    zonal sum — and the pair (g2, 1) reads zone s, not the n its period-1 peer
-    reads, which is what the condition buys.
-    """
+    """`at(by=)` reads the cap of this generator's zone in this period: (g2, 1) reads zone s."""
     spec = override(
         raw_of(SPEC),
         **{
@@ -174,9 +157,7 @@ def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
 def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
     """`zone_of == 'n'` selects the pairs, not the generators.
 
-    Only (g1, 1) sits in zone n, so masking the variable there leaves period 1
-    to `g2` alone and period 2 untouched — where a lane reading the map at the
-    generator alone would mask `g1` in both periods.
+    Only (g1, 1) sits in zone n.
     """
     spec = override(raw_of(SPEC), **{'variables.p.where': "zone_of == 'n'"})
     sources = _inputs()
@@ -232,13 +213,7 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
 def test_the_linopy_lane_refuses_a_shape_it_does_not_build_and_names_the_lane_that_does(
     relations: dict, expression: str, dims: list[str], match: str
 ) -> None:
-    """A `OracleCannotBuildError` at the lane's door, before any data is read: the language admits the file, and `check` does.
-
-    The message names the relational lane, which builds every one of these
-    (`test_relation_shapes.py`), so the refusal is a limit of the lane rather
-    than of the spec. Three shapes, not four: a self-map is two columns over
-    one dimension and the lane builds it (`test_self_map.py`).
-    """
+    """An `OracleCannotBuildError` at the lane's door, before any data is read, naming the relational lane."""
     spec = _shaped(relations, expression, dims)
     sps.check(spec)
     with pytest.raises(OracleCannotBuildError, match=match) as caught:

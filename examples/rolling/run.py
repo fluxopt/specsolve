@@ -2,27 +2,22 @@
 
     pixi run python examples/rolling/run.py
 
-**This is evidence, not a feature.** `solve_over` ships; what this shows is
-that the pieces compose into the thing people actually want — a storage
-schedule over a whole year, solved a day at a time — and that the answer lines
-up with the one full foresight gives.
+A storage schedule solved a window at a time with `solve_over`, against the
+answer full foresight gives.
 
 One file, `horizon.yaml`, written over a *local* index `t`. The same YAML is
 solved as one window over the whole horizon — the reference — and then as
 rolling windows of increasing lookahead, each handing its state of charge to
 the next through `carry`.
 
-**The store cycles in every schedule.** This is deliberately not a model where
-myopia switches storage off: wind blows nightly and load triples by day, so
-charging and discharging is worth doing inside any window. What lookahead buys
-is the *end* of one. Charge a window cannot spend before its horizon runs out
-is worth nothing to it, so it arrives empty and hands zero to the next; a
-window that can see far enough has somewhere to spend it.
+**The store cycles in every schedule**: wind blows nightly and load triples by
+day, so charging and discharging is worth doing inside any window. What
+lookahead buys is the *end* of one. Charge a window cannot spend before its
+horizon runs out is worth nothing to it, so it arrives empty and hands zero to
+the next; a window that can see far enough has somewhere to spend it.
 
 Windows advance eight hours against a twelve-hour cycle, so a boundary lands at
-a different point of the day each time. A horizon that happened to align with
-the cycle would end each window at the natural trough and show no gap at all —
-which is a property of that arithmetic, not of rolling horizons.
+a different point of the day each time.
 
 Three properties are asserted rather than printed:
 
@@ -50,15 +45,11 @@ PERIODS = DAY * DAYS
 GENERATORS = ['wind', 'gas']
 
 #: Wind blows at night when load is low; by day there is none and load triples.
-#: The store therefore cycles every day, in every schedule below — what changes
-#: is how *well*.
 NIGHT = [t % DAY < DAY // 2 for t in range(PERIODS)]
 LOAD = [25.0 if night else 85.0 for night in NIGHT]
 WIND = [70.0 if night else 0.0 for night in NIGHT]
 
-#: Windows advance eight hours against a twelve-hour cycle, so a window
-#: boundary falls at a different point of the day each time — which is the
-#: ordinary case, and the one a horizon that happened to align would hide.
+#: Windows advance eight hours against a twelve-hour cycle.
 STEP = 8
 
 SOURCES = {
@@ -106,8 +97,7 @@ def cost_of(sweep: sps.Sweep) -> float:
 
     A window objective covers its lookahead too, so summing them double-counts.
     `spend` is the model's own per-snapshot definition, and the stitched read
-    keeps only the rows a window owns — the same quantity the objective
-    minimises, never restated in a second language.
+    keeps only the rows a window owns.
     """
     return float(sweep.evaluate('spend', original_index=True)['value'].sum())
 

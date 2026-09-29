@@ -1,13 +1,7 @@
 """The linopy lane: its verbs, its loader, its where evaluator, its notes.
 
-Everything here needs the oracle's linopy and nothing here is reachable
-from the package, so it is one module rather than four: the guard and the
-"write a YAML file, feed it to the lane" idiom were being restated in each of
-them.
-
-The lane *constructs*, so it holds no state to begin with: one call, one
-model, nothing retained. What is left to pin is that it puts nothing on
-``linopy.Model`` either — the first test below.
+Everything here needs the oracle's linopy. The lane holds no state: one call,
+one model, nothing retained, and nothing put on ``linopy.Model``.
 """
 
 from __future__ import annotations
@@ -113,11 +107,10 @@ class TestMasterCoords:
         assert list(_master_coords(_schema(dims={'x': {'dtype': 'int'}}), {'x': [10, 20]})['x']) == [10, 20]
 
     def test_a_dimension_with_no_index_is_refused(self):
-        """Third in the precedence there is not one: the index is the authority.
+        """The index is the authority, and both lanes refuse a dimension without one in the same sentence.
 
         Labels read out of the parameters would *be* the definition, so a
-        mistyped one could not be told from a new one — and both lanes say so
-        in the same sentence.
+        mistyped one could not be told from a new one.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
@@ -139,11 +132,8 @@ class TestMasterCoords:
     def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):
         """`datetime.date` out of pandas and `datetime64` out of polars are one label.
 
-        They compare unequal, so which library a caller reached for used to
-        decide whether their parameter aligned with their index at all — and
-        whether a `where` boundary could be compared against the axis. The
-        declaration is what knows, and it always answers, so the axis is
-        canonical past the read and the source library stops being visible.
+        They compare unequal, so the declaration makes the axis canonical past
+        the read and the source library stops being visible.
         """
         import datetime
 
@@ -282,9 +272,7 @@ def gens():
 def _lowered(text, parameters=('p_max',), dimensions=('g',)):
     """The program a model with predicate *text* lowers to, and that predicate.
 
-    Through a whole model rather than the resolver directly: the resolver is
-    the language's, and a model with the right names in it is the only handle
-    this side of the seam has on one predicate.
+    Through a whole model, because the resolver is the language's.
     """
     from mathspec import to_spec
 
@@ -327,8 +315,7 @@ def test_a_dimension_comparison_masks_on_the_coordinate_itself():
 
 
 def test_a_missing_parameter_is_a_load_error():
-    """Was: a scalar-False mask, i.e. a silently empty model. Resolution
-    makes an undeclared name a load error in both lanes."""
+    """An undeclared name is a load error in both lanes, not a silently empty model."""
     with pytest.raises(LanguageError, match="'nonexistent' not found"):
         _lowered('nonexistent')
 
@@ -353,8 +340,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 #: A constant side the data does not cover, which only the *build* can see: the
 #: rows exist, the parameter has no row at one of them, and the fill would be
 #: the bound. The declaration it names is reached through `note()` rather than
-#: written into the message, which is the half of this the load errors cannot
-#: exercise.
+#: written into the message.
 _UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
@@ -420,17 +406,10 @@ def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, data, err
 
 
 def test_importing_the_lane_selects_the_v1_convention():
-    """In a *fresh* process, because the harness would otherwise answer for it.
+    """In a *fresh* process, because ``tests/oracle.py`` sets ``semantics = 'v1'`` at import.
 
-    ``tests/oracle.py`` sets ``semantics = 'v1'`` at import, so an in-process
-    assertion here would pass whether or not the package sets it — which is
-    precisely how the package shipped without setting it: the suite proved the
-    two lanes agree under a configuration no user ran. linopy's default is
-    ``legacy``, which fills an absent slot with 0 rather than dropping the row,
-    so under it this lane answered 25.0 where the native engine answered 125.0.
-
-    A subprocess is the only place the claim is falsifiable, so it is the only
-    place worth making it.
+    linopy's default is ``legacy``, which fills an absent slot with 0 rather
+    than dropping the row.
     """
     probe = 'import linopy, tests.linopy_lane; print(linopy.options["semantics"])'
     out = subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True, check=True)
@@ -438,12 +417,10 @@ def test_importing_the_lane_selects_the_v1_convention():
 
 
 def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_path):
-    """The divergence the missing opt-in caused, pinned end to end.
+    """Both lanes, driven from a subprocess with nothing but the package imported.
 
-    Not a ``differential()`` case on purpose: that helper runs inside the suite,
-    where the convention is already set. This one drives both lanes from a
-    subprocess with nothing but the package imported, which is the user's
-    situation.
+    Not a ``differential()`` case: that helper runs inside the suite, where the
+    convention is already set.
     """
     spec = tmp_path / 'masked.yaml'
     spec.write_text(
@@ -500,28 +477,16 @@ SCALAR_SWITCH = {
 
 @pytest.mark.parametrize(('on', 'expected'), [pytest.param(True, 6.0, id='on'), pytest.param(False, 4.0, id='off')])
 def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
-    """Was: the lane loaded a dims-less bool through ``float()``, so ``False``
-    arrived as ``0.0`` and a bare ``where: on`` read it as *defined* — x was
-    built at every coordinate while the relational lane built none.
-    """
+    """A dims-less ``False`` is a false mask on both lanes, not a defined ``0.0``."""
     with differential(SCALAR_SWITCH, {'i': [1, 2], 'on': on}) as agreed:
         assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
 
 def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml_file):
-    """It used to surface two phases later, from inside linopy.
+    """A bound the data does not cover is a ``DataError`` at build, as on the native lane (#313).
 
-    ``build()`` returned a model whose bounds carried NaN, and the failure came
-    at solve or write as ``ValueError: Continuous Variable x contains nan's in
-    field(s) ['upper']`` — linopy's own message, naming an internal rather than
-    the YAML, the declaration or the fix. The native lane had raised a
-    ``DataError`` at build the whole time, so the two lanes agreed on the
-    verdict and disagreed on everything a reader needs (#313).
-
-    The mask is the other half. A coordinate the variable does not occupy needs
-    no bound, and supplying data only where the variable exists is the ordinary
-    idiom — so this must refuse the gap and accept the masked one, which is what
-    the second half asserts.
+    A coordinate the variable does not occupy needs no bound, so the gap is
+    refused and the masked one accepted.
     """
     spec = yaml_file("""
         dimensions:
@@ -656,11 +621,9 @@ def test_a_dual_on_a_solve_that_left_none_is_refused_on_this_lane_too(yaml_file)
 def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
     """`result.evaluate(name)` and the lane's `evaluate` read one value.
 
-    Including the standalone case: the rules for named expressions guarantees a never-referenced
-    expression is parsed and name-checked, and #562 makes it readable — on
-    the linopy lane by evaluating the declared expression at the solved model's
-    `.solution` and `.dual` arrays, which is what lets an entry of any degree,
-    and one reading a dual, be read on both lanes.
+    Including a never-referenced expression (#562). The linopy lane evaluates it
+    at the solved model's `.solution` and `.dual` arrays, so an entry of any
+    degree, and one reading a dual, reads on both lanes.
     """
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     with differential(path, EXPRESSION_DATA) as run:
@@ -673,8 +636,7 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
 
 #: A curve masked by ``points:``, so the expansion declares a parameter the file
 #: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
-#: purpose: hydro states two breakpoints where the axis has four, which is the
-#: whole reason a mask exists.
+#: purpose: hydro states two breakpoints where the axis has four.
 MASKED_CURVE_YAML = """
 dimensions:
   snapshot: {dtype: int}
@@ -754,9 +716,7 @@ def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
 def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
     """An expression string is what `evaluate` takes, alongside a name the file declares.
 
-    Both spellings reach the same node — the language substitutes a declared
-    name where it stands — so the reader that used to refuse a string now
-    answers one, and `total_gen`'s own body is the check.
+    Both spellings reach the same node, so `total_gen`'s own body is the check.
     """
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     m = specsolve_linopy.build(path, dict(EXPRESSION_DATA))
@@ -780,12 +740,7 @@ def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
 
 
 def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    """The claim the shape work is for: one `sources` mapping, either lane.
-
-    polars frames and a parquet path, handed to both unchanged — no per-lane
-    conversion at the call site, which is what made the two accepted-input sets
-    a divergence a user hit directly (#60).
-    """
+    """One `sources` mapping of polars frames and a parquet path reaches either lane unchanged (#60)."""
     frames = dispatch_frame_inputs
     path = tmp_path / 'load.parquet'
     frames['load'].write_parquet(path)
@@ -805,12 +760,7 @@ def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inpu
     ],
 )
 def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as_spec):
-    """`sps.build` and this take the same first argument, so neither decides the lane.
-
-    A path was the only spelling here while the runner took all three, which
-    made "convert this to a linopy.Model instead" a rewrite of the call rather
-    than a change of import (#845).
-    """
+    """`sps.build` and this take the same first argument, so neither decides the lane (#845)."""
     import yaml as pyyaml
 
     raw = {
@@ -838,13 +788,7 @@ _BARE_SHIFT = {
 
 
 def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
-    """One gate, both lanes — hard rule 3 held mechanically rather than by care.
-
-    This lane used to load and expand and stop there, so the lowering pass's
-    refusals never fired on it: a bare `shift()` over data built a
-    model whose vacated positions were `NaN`, and died two phases later inside
-    linopy's IO with a sentence naming neither the YAML nor the fix.
-    """
+    """One gate, both lanes: the lowering pass's refusals fire on this lane too."""
     import specsolve as sps
 
     with pytest.raises(LanguageError, match='vacated positions') as native:
@@ -869,12 +813,9 @@ OBJECTIVE_CONSTANT = {
 def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
     """The mirror of the test above: the streaming lane builds this one.
 
-    So it is not a refusal of the *language* — the model is sayable, lowers,
-    and solves relationally. What the reader has to be told is that the wall
-    is this lane's, which linopy's `Constant values in objective function not
-    supported.` cannot say: it names no file, no declaration and no other
-    route. Before #894 that sentence was what escaped, from a linopy setter
-    two frames down.
+    The model is sayable, lowers and solves relationally, so the refusal says
+    the wall is this lane's, which linopy's `Constant values in objective
+    function not supported.` cannot say (#894).
     """
     import specsolve as sps
 
@@ -904,15 +845,10 @@ TERM_ON_THE_RIGHT_DATA = {'g': ['a', 'b'], 'cap': {'a': 10.0, 'b': 20.0}, 'cost'
 
 
 def test_a_constraint_carrying_its_terms_on_the_right_builds_on_both_lanes():
-    """Was: the lane handed the sides to `add_constraints` in declared order,
-    and linopy accepts a term only on the left, so `cap >= p` came back as
-    ``TypeError: `lhs` must be a LinearExpression, Variable, Constraint, tuple,
-    or callable, got DataArray`` — linopy's own sentence, naming neither the
-    file nor the declaration. The relational lane solved it the whole time
-    (#1534).
+    """`cap >= p` builds on both lanes, though linopy takes a term only on the left (#1534).
 
-    The swap has to flip the sense with it, which the objective is what tells:
-    read as `p >= cap` both variables would run to their bound of 100.
+    The swap flips the sense with it, which the objective tells: read as
+    `p >= cap` both variables would run to their bound of 100.
     """
     with differential(TERM_ON_THE_RIGHT, TERM_ON_THE_RIGHT_DATA) as agreed:
         assert agreed.oracle == pytest.approx(30.0), 'each generator is capped by its own row, at 10 and at 20'

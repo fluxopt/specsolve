@@ -1,35 +1,25 @@
 """Every expression to a bounded depth on both lanes, and the rewrites that must not move it.
 
-``test_arithmetic_laws.py`` states the laws a reader should know, chosen by hand.
-This makes the same kind of claim without choosing: the AST is closed, so the
-set of spellings at a given depth is finite and "every one of them agrees" is a
-sentence that can be checked rather than sampled. Both are written over the one
-model ``conftest.law_spec`` builds, which is what lets the sweep be evidence
-about the laws rather than a second unrelated fact.
+The AST is closed, so the set of spellings at a given depth is finite and
+"every one of them agrees" can be checked rather than sampled. The model is the
+one ``conftest.law_spec`` builds for ``test_arithmetic_laws.py``.
 
-Two claims, and the second is the one the curated file could not make:
+**Agreement**: each expression builds to one model on the linopy lane and the
+relational one.
 
-**Agreement** — each expression builds to one model on the linopy lane and the
-relational one, over shapes no model in the corpus writes.
+**Invariance**: a rewrite that must not change the meaning does not change the
+answer. Agreement alone misses a mistake both lanes share, such as
+``sum(a + b)`` and ``sum(a) + sum(b)`` parting where an operand is absent
+(#311).
 
-**Invariance** — a rewrite that must not change the meaning does not change the
-answer. ``reduction-is-linear`` is why this exists: ``sum(a + b)`` and
-``sum(a) + sum(b)`` part company the moment an operand is absent, and while the
-oracle shared the mistake both lanes agreed on the wrong number until somebody
-wrote that pair down by hand (#311). Agreement alone would not have caught it.
+Depth three is 2,576 expressions and minutes of CPU, against depth two's thirty
+and about a second (#1203), so ``--sweep-depth 3`` is its own job, split across
+runners by ``--sweep-shard i/n``. The rewrites are built over an operand pool
+and give 480 cases at either depth.
 
-**Depth two here, depth three in its own job.** Depth three is 2,576 expressions
-and minutes of CPU, against depth two's thirty and about a second (#1203) — so
-``--sweep-depth 3`` is a job of its own and the default keeps every PR fast.
-That job splits across runners on ``--sweep-shard i/n``, which takes every n-th
-case of both sweeps; unsharded is the default and is what a contributor runs. The
-rewrites do not depend on that dial: they are built over an operand pool, so the
-rule that motivated the sweep gets 480 cases either way rather than the ten
-depth three happened to contain.
-
-A model this fixture makes infeasible or unbounded is skipped rather than failed
-— it says nothing about either lane — and ``test_enough_of_the_sweep_reaches_an_answer``
-is what stops that from quietly becoming every case.
+A model this fixture makes infeasible or unbounded is skipped, and
+``test_enough_of_the_sweep_reaches_an_answer`` stops that from becoming every
+case.
 """
 
 from __future__ import annotations
@@ -55,11 +45,10 @@ DATA = law_data()
 #: fixed stride over a fixed order, so the sample is the same on every machine.
 CENSUS_STEP = 20
 #: Of the 56 cases that samples, what answered and what a lane refused when the
-#: floor and the ceiling were measured (#1213). Every refusal today is the
-#: asymmetry #1137 settled — a `sum` acting along a dimension a constant part of
-#: the expression does not carry, which the linopy lane builds and the relational
-#: one refuses by name. That is decided, so the ceiling is a ratchet against it
-#: spreading rather than a countdown to closing it.
+#: floor and the ceiling were measured (#1213). Every refusal is the asymmetry
+#: #1137 settled: a `sum` acting along a dimension a constant part of the
+#: expression does not carry, which the linopy lane builds and the relational
+#: one refuses by name.
 ANSWERS = 38
 LANE_REFUSALS = 10
 
@@ -78,17 +67,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 class Answer:
     """What both lanes said about one expression, or why neither was asked.
 
-    Two things are not disagreements and must not be failures. A model this
-    fixture makes infeasible or unbounded says nothing about either lane. And a
-    lane that refuses the expression outright is a gap already filed against it,
-    not a divergence — the message names its issue.
+    A model this fixture makes infeasible or unbounded, and a lane that refuses
+    the expression by name, are skips rather than failures.
 
     Attributes:
         value: The objective both lanes reached, or None if neither was asked.
         skipped: Why there is no value, in the words the skip reports.
         refused: Whether it was a lane that refused, rather than the fixture.
-            The census counts this, so a new gap costs a red suite rather than
-            one more skip nobody reads.
     """
 
     value: float | None = None
@@ -147,15 +132,10 @@ def test_every_case_is_in_exactly_one_shard() -> None:
 def test_enough_of_the_sweep_reaches_an_answer() -> None:
     """The floor under the skips, because a skip reads exactly like a pass.
 
-    Both sweeps above skip a case this fixture cannot solve and a case a lane
-    refuses, which is right — neither says anything about agreement. What is not
-    right is a change that quietly makes *every* case skip, leaving thousands of
-    green skips and no claim at all. So a slice is counted two ways: a floor
-    under the answers, and a ceiling over the lane refusals, which is what turns
-    a new gap into a red suite rather than one more skip.
-
-    One test, so xdist cannot split the count across workers, and always the
-    depth-two slice, so the numbers do not move with ``--sweep-depth``.
+    A slice is counted two ways: a floor under the answers, and a ceiling over
+    the lane refusals. One test, so xdist cannot split the count across
+    workers, and always the depth-two slice, so the numbers do not move with
+    ``--sweep-depth``.
     """
     answers = [_answer(node) for node in expressions(2)]
     answers += [_answer(pair.before) for pair in rewrites()[::CENSUS_STEP]]

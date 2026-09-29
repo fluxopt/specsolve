@@ -1,9 +1,7 @@
 """``archive=``: a spec, its data and its answer as one file, and back.
 
-The property is the one ``tidy_sources`` sees: what attaches from the archive
-is what attached from the caller's own tables, frame for frame, over every
-ported instance — the corpus is where every source shape and every declared
-dtype already lives, so a shape the archive cannot carry fails here by name.
+What attaches from the archive is what attached from the caller's own tables,
+frame for frame, over every ported instance.
 """
 
 from __future__ import annotations
@@ -184,12 +182,7 @@ def test_a_zip_outside_the_layout_is_refused(members: dict[str, bytes], says: st
 def test_a_directory_archive_holds_what_the_zip_holds_and_is_read_where_it_lies(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The suffix picks the container, and the container is all that differs.
-
-    A zip is the directory packed. The members are the same either way, so the
-    only thing that changes is whether anything has to be unpacked before a
-    scan can see the parquet files.
-    """
+    """The suffix picks the container, and the container is all that differs."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case.zip')
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case')
 
@@ -223,13 +216,7 @@ def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
     dispatch_frame_inputs,
     tmp_path: Path,
 ) -> None:
-    """`into` is not a convention to remember — the shape and the reader say which it is.
-
-    A scanned zip has no paths a read can reach once it is over, so it needs
-    somewhere writable that will still be there, and only the caller knows
-    one: an archive often lives where it is only read. A directory already has
-    them, so an `into` would have nothing to do — whichever reader is asking.
-    """
+    """A scanned zip needs an `into` to unpack to; a directory has nothing to unpack."""
     out = tmp_path / f'case{suffix}'
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out)
     with pytest.raises(sps.LayoutError, match=says):
@@ -239,12 +226,7 @@ def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
 def test_loading_a_zip_needs_nowhere_to_unpack_and_leaves_nothing_behind(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """What `load_archive` reads whole it does not read again, so the members are scratch.
-
-    The one thing `into` ever bought a loading caller was somewhere the frames
-    could still be read from afterwards, and there is no afterwards here: the
-    answer and the sources are in memory by the time the call returns.
-    """
+    """What `load_archive` reads whole it does not read again, so the members are scratch."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case.zip')
     beside_it = sorted(path.name for path in tmp_path.iterdir())
 
@@ -259,11 +241,7 @@ def test_loading_a_zip_needs_nowhere_to_unpack_and_leaves_nothing_behind(
 def test_a_directory_that_already_holds_something_is_refused(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """An archive is written whole, so it never merges into what is there.
-
-    Overwriting a directory cannot be one rename the way replacing a file can,
-    so what would be left is a mix of two archives that reads as one.
-    """
+    """An archive is written whole, so it never merges into what is there."""
     out = tmp_path / 'case'
     out.mkdir()
     (out / 'mine.txt').write_text('not an archive')
@@ -283,22 +261,13 @@ def test_a_directory_that_already_holds_something_is_refused(
     ],
 )
 def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """Lowering has no inverse, so a Program is refused at the door, not at the archive.
-
-    An answer from one could not name the document it came back from, and
-    nothing built from one could be archived. Every verb reads a model through
-    one function, so the sentence is written once and arrives before anything
-    is built.
-    """
+    """Lowering has no inverse, so a Program is refused at the door, before anything is built."""
     with pytest.raises(sps.SpecsolveError, match='lowered Program is not a spec this takes'):
         verb(sps.check(dispatch_yaml), dispatch_frame_inputs)
 
 
 def test_the_archive_lands_whole(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, monkeypatch) -> None:
-    """The archive is written beside its name and renamed into place, so a
-    reader that finds it finds all of it: a parent directory that does not
-    exist is made, and a failure after the archive is open leaves nothing
-    under either name."""
+    """The archive is renamed into place: a missing parent is made, and a failure leaves nothing."""
     from mathspec import Spec
 
     out = tmp_path / 'nested' / 'dispatch.zip'
@@ -318,12 +287,7 @@ def test_the_archive_lands_whole(dispatch_yaml: Path, dispatch_frame_inputs, tmp
 def test_an_archive_carries_the_answer_beside_the_question(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The whole archive: what was asked, the data it was asked of, and what came back.
-
-    A saved answer alone cannot say which model produced it, and an archived
-    model alone has to be re-solved to be read. One file holds both, and the
-    two cannot drift apart or be paired up wrongly.
-    """
+    """The whole archive: what was asked, the data it was asked of, and what came back."""
     with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case.zip') as solved:
         loaded = sps.load_archive(tmp_path / 'case.zip', tmp_path / 'case')
 
@@ -340,12 +304,7 @@ def test_an_archive_carries_the_answer_beside_the_question(
 def test_two_archives_of_one_spec_over_different_numbers_are_told_apart(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """What `spec_digest` cannot say, and the reason the data is digested too.
-
-    A spec digest is of the document. Two runs of one model over different
-    numbers carry the same one, so on that column alone they read as the same
-    question asked twice.
-    """
+    """The source digests separate two runs of one document that `spec_digest` cannot."""
     halved = pl.DataFrame(
         {'snapshot': dispatch_frame_inputs['load']['snapshot'], 'value': dispatch_frame_inputs['load']['value'] * 0.5}
     )
@@ -365,11 +324,7 @@ def test_two_archives_of_one_spec_over_different_numbers_are_told_apart(
 def test_the_digest_table_names_every_source_the_archive_holds(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A digest per member of `sources/`, so nothing is silently unattested.
-
-    A table short of one key would leave that input outside the claim while
-    reading as a complete one.
-    """
+    """A digest per member of `sources/`, so nothing is silently unattested."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case').close()
     case = sps.load_archive(tmp_path / 'case')
 
@@ -392,12 +347,7 @@ def test_the_digest_table_names_every_source_the_archive_holds(
 def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A sweep archives its sources whole, so the digests are of the whole.
-
-    One digest per slice would name data the archive does not hold: the point
-    of archiving a sweep's sources whole is that one copy carries every
-    slice's rows.
-    """
+    """A sweep archives its sources whole, so the digests are of the whole."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
     study = sps.load_archive(tmp_path / 'study')
@@ -416,12 +366,7 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
 def test_an_archive_records_what_reaching_its_answer_cost(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The one part of an archive that re-solving cannot recover.
-
-    Everything else it holds is reproducible by construction — that is what
-    `sps.solve(case.spec, case.sources)` is for. The clocks are of the machine
-    that ran them, so unless the solve writes them down nothing does.
-    """
+    """The clocks: the one part of an archive that re-solving cannot recover."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case')
     taken = sps.load_archive(tmp_path / 'case').metrics
 
@@ -451,13 +396,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
 def test_the_cost_row_says_how_many_solves_its_clocks_cover(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """Why `solves` is a column rather than something the reader assumes.
-
-    The diagnostics a model reports are its whole life, and an archive is
-    written from inside one solve of it. So a row off a model that has solved
-    before carries clocks covering every one of those solves, and the column
-    saying so is what stops it from reading as this answer's own.
-    """
+    """A row off a model that solved before covers every solve, and `solves` says how many."""
     with sps.build(dispatch_yaml, dispatch_frame_inputs) as model:
         model.solve()
         model.solve(archive=tmp_path / 'second')
@@ -470,12 +409,7 @@ def test_the_cost_row_says_how_many_solves_its_clocks_cover(
 def test_a_case_that_wrote_a_file_and_one_that_did_not_are_still_one_table(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """Why a phase that never ran writes zero instead of no column.
-
-    The point of the row is that a directory of archives is a table. Two cases
-    that entered different phases would otherwise write different schemas, and
-    a concat over the directory would fail on whichever one differed.
-    """
+    """A phase that never ran writes zero rather than no column, so the rows concatenate."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'solved')
     with sps.build(dispatch_yaml, dispatch_frame_inputs) as model:
         model.write(tmp_path / 'model.lp')
@@ -493,13 +427,7 @@ def test_a_case_that_wrote_a_file_and_one_that_did_not_are_still_one_table(
 def test_an_archive_whose_metrics_are_short_of_a_column_is_refused_by_name(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A missing member is one refusal; a member short of a column is the other.
-
-    The stamp says which layout an answer is in, not that every member of it is
-    whole, so neither is caught by it. Read as a frame, a short row would come back as a `Metrics`
-    missing a field — a `TypeError` naming an argument, from inside a reader
-    the caller did not call.
-    """
+    """A member short of a column is refused by name; the layout stamp does not catch it."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case')
     metrics = tmp_path / 'case' / ANSWER_DIR / METRICS_FILE
     pl.read_parquet(metrics).drop('write_seconds').write_parquet(metrics)
@@ -512,11 +440,7 @@ def test_an_archive_whose_metrics_are_short_of_a_column_is_refused_by_name(
 def test_every_phase_a_build_clocks_has_a_column_to_travel_in(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A phase added to the engine and not to `Metrics` would be dropped in silence.
-
-    The row is written off `seconds`, whose keys are whatever the engine
-    clocked, and a key with no column of its own simply does not travel.
-    """
+    """A phase added to the engine and not to `Metrics` would be dropped in silence."""
     with sps.build(dispatch_yaml, dispatch_frame_inputs) as model:
         model.write(tmp_path / 'model.lp')
         model.solve()
@@ -533,13 +457,7 @@ def test_every_phase_a_build_clocks_has_a_column_to_travel_in(
 def test_an_updated_model_archives_the_data_it_actually_answered(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """An update moves the question, so the model is the only thing that knows it.
-
-    `update` puts new numbers on a built model, and what it answers from then
-    on is the merge — not the mapping the caller passed `build`. Nothing
-    outside the call could tell those two questions apart, the spec being
-    unchanged, so the archive is written from inside it.
-    """
+    """An update moves the question, and the archive holds the merged data."""
     halved = pl.DataFrame(
         {'snapshot': dispatch_frame_inputs['load']['snapshot'], 'value': dispatch_frame_inputs['load']['value'] * 0.5}
     )
@@ -559,14 +477,7 @@ def test_an_updated_model_archives_the_data_it_actually_answered(
 def test_every_archive_holds_one_objective_file_whatever_wrote_it(
     sweep: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """One glob over a warehouse of runs has to find every one of them.
-
-    A spill writes the record one file per slice because the objective file's
-    existence is how a resumed sweep knows a slice finished. An archive has no
-    resume to serve, and a directory beside a file means no single pattern
-    matches both — and the pattern that matches one of them returns half a
-    warehouse without saying so.
-    """
+    """One glob over a warehouse of runs finds every one of them."""
     out = tmp_path / 'run'
     if sweep:
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high', 'mid'])}
@@ -586,12 +497,7 @@ def test_every_archive_holds_one_objective_file_whatever_wrote_it(
 def test_an_archive_stamps_its_own_name_and_when_the_solve_returned(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The two columns a warehouse of runs is keyed and ordered by.
-
-    Neither can come from the solve alone: the name is the archive's, chosen
-    when it is published, and a reader left to recover either from the file
-    paths is parsing a convention rather than reading data.
-    """
+    """The two columns a warehouse of runs is keyed and ordered by."""
     before = datetime.now(UTC)
     with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'nightly-2026-09-10.zip') as solved:
         reached = solved.solved_at
@@ -614,10 +520,7 @@ def test_a_run_named_directory_stamps_the_name_and_not_the_segment(
 ) -> None:
     """A value frame carries no `run`, so a directory of archives can put it in the path instead.
 
-    `run=<name>` is what a query engine reads that column off, and the archive
-    is still named `<name>`. Without the prefix dropped the record would say
-    `run=nightly-2026-09-10` where the path says `nightly-2026-09-10`, which is
-    one name spelled two ways across tables a warehouse joins.
+    Under `run=<name>` the record says `<name>`, as the hive path does.
     """
     out = tmp_path / 'runs' / 'run=nightly-2026-09-10'
     with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out):
@@ -633,11 +536,7 @@ def test_a_run_named_directory_stamps_the_name_and_not_the_segment(
 def test_a_saved_answer_that_was_never_archived_names_no_run(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """`run` is the publisher's, so a bare `save` leaves it null rather than inventing one.
-
-    The column is still there: one schema whether or not an archive was
-    written, so the two concatenate.
-    """
+    """A bare `save` leaves `run` null, in a column of the same schema."""
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         record = pl.read_parquet(solved.save(tmp_path / 'answer') / 'record.parquet')
     assert record['run'].to_list() == [None], 'nothing published it, so nothing named it'
@@ -647,14 +546,7 @@ def test_a_saved_answer_that_was_never_archived_names_no_run(
 def test_a_loaded_archive_owes_the_members_nothing_and_a_scanned_one_owes_them_everything(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The one difference between the two verbs, in both places it shows.
-
-    A source is a table or the path to one, and the answer is in memory or on
-    disk — the same fact twice, because there is no archive whose sources are
-    held and whose answer is not. What `load_archive` buys is that the
-    extracted members are scratch; what `scan_archive` buys is the archive
-    that does not fit in memory, at the price of keeping them.
-    """
+    """`load_archive` holds sources and answer in memory; `scan_archive` reads them off the members."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case.zip')
     loaded = sps.load_archive(tmp_path / 'case.zip', tmp_path / 'out')
     scanned = sps.scan_archive(tmp_path / 'case.zip', tmp_path / 'out')
@@ -672,13 +564,7 @@ def test_a_loaded_archive_owes_the_members_nothing_and_a_scanned_one_owes_them_e
 def test_a_loaded_sweep_archive_answers_the_frame_readers(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A `Sweep` out of an archive is held or spilled for the reason one out of a fold is.
-
-    `scan_archive` gives the spilled sweep the extracted directory is, which
-    is what serves the study too large to hold. `load_archive` gives the held
-    one, so `primal` answers rather than naming `scan` — the difference a
-    caller meets first.
-    """
+    """`load_archive` gives a held `Sweep`, `scan_archive` a spilled one."""
     axis = sps.EachCoordinate('scenario')
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
@@ -694,11 +580,7 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
 def test_a_scenario_sweep_is_an_archive_and_runs_again(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The axis is what makes a sweep's sources legible, so it travels with them.
-
-    They carry the column it slices on, which the model does not declare, and
-    the archive holds them **whole** — one copy, not one per slice.
-    """
+    """The axis travels with the sweep's sources, which the archive holds whole."""
     axis = sps.EachCoordinate('scenario')
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     runs = sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
@@ -719,12 +601,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 
 
 def test_a_rolling_horizon_keeps_the_way_back_to_the_dimension_it_sliced(tmp_path: Path) -> None:
-    """`original_index` is the one thing a windowed sweep cannot rebuild from its frames.
-
-    The dimension a window sliced and the coordinates each one owns go in the
-    manifest beside them, so a stitched read off the archive is the stitched
-    read off the sweep.
-    """
+    """A stitched read off the archive is the stitched read off the sweep."""
     from tests.test_strategy import WINDOW, horizon_sources
 
     axis = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
@@ -742,12 +619,7 @@ def test_a_rolling_horizon_keeps_the_way_back_to_the_dimension_it_sliced(tmp_pat
 def test_an_archive_whose_answer_names_another_spec_is_refused(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The one thing the archive asserts that its members do not: they belong together.
-
-    A solve writes both together, so this cannot fire on one this package
-    wrote — it stands between a hand-edited zip and a reader who would take it
-    at its word and re-solve to something else.
-    """
+    """A hand-edited archive whose answer and model do not belong together is refused."""
     archive = _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case.zip')
     other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1.0})
     tampered = tmp_path / 'tampered.zip'
@@ -765,13 +637,7 @@ def test_an_archive_whose_answer_names_another_spec_is_refused(
 def test_every_slice_of_a_sweep_names_the_model_it_answered(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A sweep's digest is the sweep's, not each slice's.
-
-    Every slice is built off the one lowered program, which has no document to
-    digest. Left to the slice, every row would carry null: the comparison
-    could not run, and the pairing an archive checks on the way in would have
-    nothing to compare.
-    """
+    """A sweep's digest is the sweep's, not each slice's."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     runs = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'))
     alone = sps.solve(dispatch_yaml, dispatch_frame_inputs)
@@ -785,11 +651,7 @@ def test_every_slice_of_a_sweep_names_the_model_it_answered(
 def test_a_sweep_archive_whose_answer_names_another_spec_is_refused(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The sibling of the one-solve check, and the one that was vacuous.
-
-    A sweep's guard reads every slice's digest. While those were null it could
-    not fire at all, so a swapped `spec.yaml` loaded happily.
-    """
+    """A sweep archive with a swapped `spec.yaml` is refused."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
     other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1.0})
@@ -802,12 +664,7 @@ def test_a_sweep_archive_whose_answer_names_another_spec_is_refused(
 def test_saving_an_answer_twice_leaves_only_the_second(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A directory holds one answer, so the first one's frames do not survive.
-
-    Without this a second save leaves both models' frames side by side, and
-    `load_result` reports the second model's digest while answering for a
-    variable only the first declared.
-    """
+    """A directory holds one answer, so the first one's frames do not survive."""
     renamed = raw_of(dispatch_yaml)
     renamed['variables']['q'] = renamed['variables'].pop('p')
     renamed['constraints']['power_balance']['expression'] = 'sum(q, over=generator) == load'
@@ -826,13 +683,7 @@ def test_saving_an_answer_twice_leaves_only_the_second(
 def test_saving_an_answer_into_an_unpacked_archive_takes_its_metrics_row_with_it(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A metrics row belongs to the answer beside it, so a second save removes it.
-
-    Unpacking an archive gives a directory `result.save` will take, and what a
-    save leaves is one answer. A row saying what a different solve on a
-    different machine spent would otherwise sit beside it, readable through a
-    reader that reports this answer's digest.
-    """
+    """A metrics row belongs to the answer beside it, so a second save removes it."""
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case')
     answer = tmp_path / 'case' / ANSWER_DIR
     assert (answer / METRICS_FILE).is_file(), 'the archive wrote one, or this proves nothing'
@@ -843,12 +694,7 @@ def test_saving_an_answer_into_an_unpacked_archive_takes_its_metrics_row_with_it
 
 
 def test_saved_cases_say_whether_they_are_comparable(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path) -> None:
-    """Why the digest is written rather than only checked.
-
-    Concatenating the records of cases solved apart gives a comparison table,
-    and one distinct `spec_digest` in it is the claim that the table compares like
-    with like. Nothing else on disk says so.
-    """
+    """One distinct `spec_digest` in concatenated records says they compare like with like."""
     other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1000.0})
     records = []
     for name, spec in (('base', dispatch_yaml), ('capped', other)):
@@ -878,12 +724,7 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
 def test_an_answer_in_another_layout_is_refused_by_name(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The layout moves before 1.0, so a stale one says so, and names the specsolve that wrote it.
-
-    Nothing reads another layout back — there is no migration and there will
-    not be one — so the stamp exists to turn a missing column into a sentence
-    naming what to do instead. An answer 0.1.0 or earlier wrote has no `layout` at all.
-    """
+    """An answer in another layout names the specsolve that wrote it; one with no stamp is refused too."""
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
     (out / 'format.json').write_text(json.dumps({'layout': 0, 'specsolve': '0.0.1a359'}))
@@ -904,12 +745,7 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
 
 def test_a_hand_built_axis_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """A list of `(key, sources)` is a set of sources per slice.
-
-    Nothing serialises it but a copy of every slice's data, and the slices are
-    unrelated questions anyway — so the refusal sends them to one archive
-    each rather than inventing a layout for them.
-    """
+    """A list of `(key, sources)` is refused, and sent to one archive per solve."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     with pytest.raises(sps.SpecsolveError, match='archive one solve each'):
         sps.solve_over(dispatch_yaml, sources, [('a', sources)], key_name='case', archive='never.zip')
@@ -934,13 +770,7 @@ def test_a_sweep_refuses_a_lowered_program_before_it_solves_a_slice(dispatch_yam
 
 
 def test_two_writers_to_one_target_stage_in_separate_places(tmp_path: Path) -> None:
-    """The staging name is not a function of the target, because one name is shared.
-
-    Two archives written to one path at once met in it: the second to open a
-    staging area cleared the first's members out from under it, and the first
-    went on to rename a torn directory into place and report it written. The
-    tear surfaced only at load, as an archive with no ``spec.yaml``.
-    """
+    """The staging name is not a function of the target, so two writers cannot meet in it."""
     out = tmp_path / 'case'
 
     assert _staging_for(out) != _staging_for(out), 'two writers to one target stage in separate places'
@@ -965,11 +795,7 @@ _UNDECLARED = 'sum(p * cost, over=generator)'
 
 
 def test_a_solve_that_never_saves_hashes_nothing(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """The digest is what a `save` costs, not what a solve costs.
-
-    It is held as the callable the engine handed over until something asks, so
-    the common case — solve, read the values, drop the result — pays none of it.
-    """
+    """The digest is computed when asked for, not at the solve."""
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         solved.primal('p')
         assert callable(solved._model_digest), 'reading values must not hash the model'
@@ -978,12 +804,7 @@ def test_a_solve_that_never_saves_hashes_nothing(dispatch_yaml: Path, dispatch_f
 
 
 def test_two_builds_of_one_model_digest_the_same(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """The digest names a model, so building the same one twice cannot name two.
-
-    The objective frame is genuinely sparse and carries no order contract: two
-    builds lay its rows out differently, and reading it in place would refuse an
-    answer against the very data it came back from.
-    """
+    """The digest names a model, however its sparse frames are laid out."""
     with sps.build(dispatch_yaml, dispatch_frame_inputs) as one, sps.build(dispatch_yaml, dispatch_frame_inputs) as two:
         assert one._model_digest() == two._model_digest(), (
             'one model, one digest, however its sparse frames are laid out'
@@ -997,12 +818,7 @@ def test_two_builds_of_one_model_digest_the_same(dispatch_yaml: Path, dispatch_f
 def test_an_archive_whose_data_was_replaced_is_refused_at_the_rebuild(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """What the spec digest cannot see: one document over two sets of numbers.
-
-    An archive holds the pair it was solved as, so this catches a member
-    replaced since it was written. Refused where a rebuilt model first exists,
-    which is also the first moment a value could be handed back.
-    """
+    """A source member replaced since the archive was written is refused at the rebuild."""
     _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case')
     intact = sps.load_archive(tmp_path / 'case')
     want = intact.answer.evaluate(_UNDECLARED)['value'].sum()

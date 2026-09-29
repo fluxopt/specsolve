@@ -8,12 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_committable_extendable.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables; nothing recorded here is
-reshaped with it.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -107,9 +102,6 @@ def what_pypsa_relaxes() -> None:
     relaxation that excludes the integer optimum is not a bound, so the honest
     relaxation of this model is taken on the port's own model instead (the same
     rows with the status in [0, 1]), which reaches 18200.0.
-
-    Printed rather than asserted: this is a reference script, and the reader of a
-    finding wants to see it happen.
     """
     n = build(load_tables())
     n.optimize(solver_name='highs', linearized_unit_commitment=True)

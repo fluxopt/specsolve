@@ -1,8 +1,7 @@
 """docs/about/architecture.md, enforced.
 
-Each test encodes one hard rule from the architecture document, so the doc
-cannot silently drift from the code. Static checks parse source with ``ast``
-— they need no optional dependencies and run on a bare install.
+Each test encodes one hard rule from the architecture document. Static checks
+parse source with ``ast``, so they run on a bare install.
 """
 
 from __future__ import annotations
@@ -18,11 +17,8 @@ if TYPE_CHECKING:
 REPO = Path(__file__).parent.parent
 PKG = REPO / 'src' / 'specsolve'
 
-#: What no module of the package may import at module level. linopy is the
-#: test oracle (``tests/linopy_lane``) and nothing the package runs; xarray is
-#: reached lazily by the bridges out of a result. pandas is deliberately absent:
-#: those bridges hold sanctioned lazy imports of it too, so the bare-install job
-#: is the fence for it rather than this set.
+#: What no module of the package may import at module level. pandas is absent:
+#: the bridges out of a result import it lazily, and the bare-install job fences it.
 FORBIDDEN_RUNTIME = {'linopy', 'xarray'}
 
 #: The differential-test oracle: the same YAML built as a ``linopy.Model``.
@@ -30,15 +26,10 @@ ORACLE = REPO / 'tests' / 'linopy_lane'
 
 
 def _module_level_imports(path: Path) -> set[str]:
-    """Top-level (non-lazy, non-TYPE_CHECKING) imported root packages.
-
-    Module-level ``try:`` blocks count. An optional-dependency guard is still
-    a module-level import, and wrapping one must not evade this check —
-    ``tests/linopy_lane/__init__.py`` uses exactly that pattern, so the rule has to see through it.
-    """
+    """Top-level (non-lazy, non-TYPE_CHECKING) imported root packages, ``try:`` blocks included."""
     tree = ast.parse(path.read_text())
     found: set[str] = set()
-    stmts = list(tree.body)  # module level only — function bodies are lazy
+    stmts = list(tree.body)
     while stmts:
         node = stmts.pop()
         if isinstance(node, ast.Import):
@@ -92,11 +83,8 @@ def _reaches_past(
 ) -> dict[str, list[str]]:
     """Modules under *package* importing a name its fence forbids.
 
-    Forbidden is an ``specsolve`` name outside *allowed* and *allowlist*, or a
-    name whose root package is in *third_party*. Lazy imports are included by
-    default: a fence a function body could step over is not one — *nodes* can
-    prune instead (:func:`_runtime_nodes`). Membership is read off the path,
-    so a new module cannot land outside the fence by being spelled differently.
+    Forbidden is a ``specsolve`` name outside *allowed* and *allowlist*, or a
+    name whose root package is in *third_party*. Lazy imports count.
     """
     offenders = {}
     for path in (PKG / package).rglob('*.py'):
@@ -114,22 +102,7 @@ def _reaches_past(
 
 
 def _runtime_nodes(tree: ast.AST) -> Iterator[ast.AST]:
-    """Every node the interpreter can reach — ``if TYPE_CHECKING:`` bodies pruned.
-
-    The lane fences below exist to stop *running* code from needing the
-    oracle's dependencies: that is what breaks a bare install and what would
-    stop ``relational/`` being lifted out. A ``TYPE_CHECKING`` body is erased
-    before any of that — it is not lazy, it is not executed at all — so
-    counting it buys no isolation and costs a public return type, which is how
-    ``to_dataarray`` came to be annotated ``Any`` while its own docstring one
-    line below says it returns an ``xarray.DataArray``.
-
-    This is not a new position: :func:`_module_level_imports` has always read
-    "top-level (non-lazy, non-TYPE_CHECKING)". These walks simply lost the
-    distinction by reaching for :func:`ast.walk`, which sees everything.
-
-    The ``else`` branch of such a guard *does* run, so it stays in.
-    """
+    """Every node the interpreter can reach — ``if TYPE_CHECKING:`` bodies pruned, their ``else`` kept."""
     stack: list[ast.AST] = [tree]
     while stack:
         node = stack.pop()
@@ -148,15 +121,7 @@ def _is_type_checking(test: ast.expr) -> bool:
 
 
 def test_the_lane_fences_see_running_code_and_only_running_code():
-    """The pruner itself, pinned — because both halves have been wrong once.
-
-    Walking everything cost `Result.to_dataarray` its return type: the fence
-    read an erased annotation as a dependency and the method was widened to
-    `Any` to satisfy it. Walking too little would be worse — a lazy
-    `import xarray` in a function body is exactly what the allowlist exists
-    to make deliberate. So the line is *does the interpreter reach it*, and
-    it is checked in both directions rather than described.
-    """
+    """The pruner keeps what the interpreter reaches and drops only what it never runs."""
     erased, executed, otherwise = (
         'if TYPE_CHECKING:\n    import xarray\n',
         'def f():\n    import xarray\n',
@@ -194,12 +159,7 @@ LAZY_ORACLE_ALLOWED: dict[str, str] = {}
 
 
 def test_lazy_oracle_imports_stay_on_the_allowlist():
-    """Hard rule 3, the half a module-level check cannot see.
-
-    A lazy ``import linopy`` inside a function is still oracle code, and it
-    hides in a module the package imports. Every one has to be declared, so
-    adding another is a decision rather than an accident.
-    """
+    """Hard rule 3, the half a module-level check cannot see: a lazy import is declared."""
     offenders = {}
     for path in _all_modules():
         if path.name in LAZY_ORACLE_ALLOWED:
@@ -220,12 +180,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 
 #: Package modules the engine may import: dependency-free leaves that carry no
-#: YAML, schema or AST knowledge. ``errors.py`` is one — without it there is no
-#: single exception class a caller can catch across both lanes.
-#: ``mathspec.program`` is the other and is not this package's at all: the
-#: language writes the plan and the engine reads it, so the vocabulary the two
-#: speak lives upstream of both, and a fence cannot enclose what neither side
-#: owns.
+#: YAML, schema or AST knowledge.
 ENGINE_MAY_IMPORT = {'specsolve.errors', 'mathspec.program'}
 
 
@@ -233,16 +188,7 @@ def test_engine_is_isolated():
     """Hard rule 2: the engine knows nothing about linopy, xarray or YAML.
 
     Enforced as "imports nothing from the package bar ENGINE_MAY_IMPORT",
-    which is stricter than the written rule and deliberately so: the plan is
-    fed to the engine, and keeping the import surface at zero is what leaves
-    the subpackage extractable. Widening it is a decision — add the module to
-    ENGINE_MAY_IMPORT with a reason, the way ``errors.py`` is there.
-
-    What the engine *names* is checked here; what those names cost is not.
-    ``errors.py`` re-exports the language's half of the hierarchy, so importing
-    it now loads the language package too. That is deliberate and stated in
-    hard rule 2: a root class cannot live downstream of what extends it. The
-    day the engine stops raising ``LanguageError`` it could be a leaf again.
+    which keeps the subpackage extractable.
     """
     offenders = _reaches_past(
         'relational',
@@ -257,16 +203,8 @@ def test_engine_is_isolated():
 def test_no_contract_module_names_an_engine():
     """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
 
-    ``sinks/``, ``status.py`` and ``result.py`` say what an
-    engine answers to and what a sink reads; ``engines/`` implements that. What
-    a model *is* is ``mathspec.program``, upstream of both. A contract module naming a class
-    out of ``engines/`` inverts the two, and a second engine then has to
-    satisfy a type written for the first.
-
-    **Type-only imports count here**, where the lane fences above prune them: a
-    ``TYPE_CHECKING`` guard is enough to erase a dependency and nowhere near
-    enough to erase a design. ``Result`` held ``_engine: PolarsEngine`` behind
-    one and called five of its privates.
+    A contract module naming a class out of ``engines/`` inverts the two.
+    Type-only imports count here.
     """
     offenders = {}
     for path in (PKG / 'relational').rglob('*.py'):
@@ -283,8 +221,7 @@ def test_no_contract_module_names_an_engine():
     )
 
 
-#: Where python this repository owns lives. ``.pixi`` and a worktree parked
-#: under the checkout are neither ours nor scanned.
+#: Where python this repository owns lives.
 SOURCE_DIRS = ('src', 'tests', 'tools', 'bench', 'examples')
 
 
@@ -293,26 +230,10 @@ def _repository_modules() -> list[Path]:
 
 
 def test_the_language_is_imported_as_one_package():
-    """Hard rule 1, the half of it that is still ours to keep.
+    """Hard rule 1: this repository depends on the ``__all__`` mathspec pins.
 
-    The language moved to ``mathspec`` and took its fence with it: the
-    allowlist that said the directory imports nothing from this package is a
-    dependency edge now, and no test here can step over it. What a test here
-    *can* still hold is the traffic in the other direction — that this
-    repository depends on the one ``__all__`` mathspec pins rather than on the
-    union of whatever its submodules expose.
-
-    A submodule path is a contract nobody agreed to. It can carry a private
-    name, it is not counted in the surface upstream pins in both directions,
-    and it survives a refactor there that the package export would have caught.
-    ``from mathspec import Spec`` fails loudly the day ``Spec`` stops being
-    exported; ``from mathspec.spec import Spec`` keeps working until it does
-    not.
-
-    A submodule ``__all__`` itself exports is not inside: ``mathspec.program``
-    is a pinned name, so the vocabulary a program is written in travels under
-    the same promise the package makes — the resolved where nodes included,
-    since the parser they once lived beside went package-private.
+    A submodule that ``__all__`` exports, such as ``mathspec.program``, is
+    inside the surface.
     """
     import mathspec
 
@@ -338,15 +259,10 @@ def test_the_language_is_imported_as_one_package():
 
 
 #: Directory prefixes a workflow can name that are files in this repository.
-#: Anything else in a `run:` block is a runner path, a container path or a shell
-#: variable, and none of those are ours to check.
 REPO_PREFIXES = ('examples/', 'tests/', 'src/', 'docs/', 'tools/', 'bench/')
 
 
-#: A trigger a fork can fire. `pull_request` runs the *base* repository's
-#: workflow file, so a fork cannot edit the steps — but it chooses the code
-#: those steps check out, build and import, which on a self-hosted runner is
-#: the whole machine.
+#: A trigger a fork can fire, choosing the code the steps check out and run.
 FORK_REACHABLE = ('pull_request', 'pull_request_target')
 
 #: How a job asks for a machine somebody owns: the label itself, or the
@@ -357,15 +273,8 @@ OWN_MACHINE = ('self-hosted', 'BENCH_RUNNER')
 def test_no_fork_can_reach_a_runner_we_own():
     """A public repository plus a self-hosted runner is arbitrary code execution.
 
-    `pull_request` builds the contributor's branch. On a hosted runner that is
-    a disposable VM; on a machine registered to this repository it is a shell
-    on that machine, with whatever the account can reach from it. GitHub's own
-    documentation says not to do this, and the reason it stays undone here is
-    that the published benchmark is `workflow_dispatch` only.
-
-    That is one edit away from being untrue, and the edit looks innocuous — a
-    `pull_request:` line added so a change to the benchmark can be tested on a
-    branch. This refuses it in the same commit.
+    `pull_request` builds the contributor's branch, which on a machine
+    registered to this repository is a shell on that machine.
     """
     guilty = []
     for workflow in sorted((REPO / '.github' / 'workflows').glob('*.y*ml')):
@@ -390,14 +299,7 @@ def test_no_fork_can_reach_a_runner_we_own():
 def test_every_repository_path_a_workflow_names_exists():
     """A workflow step reads files by path, and a move makes it read nothing.
 
-    Filed as a guard because it happened: `tests/golden/` moved to
-    `tests/typeset/golden/`, the whole suite stayed green locally, and CI went
-    red on a step that renders every model by path. Nothing else looks here —
-    the fences read imports, and the crossings check answers "does this file
-    name something that moves", not "is every path it names still right".
-
-    Globs are resolved rather than skipped: `examples/*.yaml` matching nothing
-    is the same silent hole as a missing file.
+    Globs are resolved: one matching nothing is the same hole as a missing file.
     """
     missing = []
     for workflow in sorted((REPO / '.github' / 'workflows').glob('*.y*ml')):
@@ -414,10 +316,7 @@ def test_every_repository_path_a_workflow_names_exists():
     )
 
 
-#: The whole Python surface, by role. Hard rule 5 says the public interface is
-#: a declared model rather than a Python API — this is what "rather than" is
-#: worth in names. Adding one is a row here, which is a line in a diff a
-#: reviewer reads; the fences elsewhere in this file work the same way.
+#: The whole Python surface, by role (hard rule 5).
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
@@ -448,23 +347,8 @@ PUBLIC_API = {
 def test_the_public_surface_is_exactly_what_is_declared():
     """Hard rule 5, in names: the Python surface is narrow, and stays narrow.
 
-    Narrow is a feature, not an accident — it is the half of "the public
-    interface is a declared model" that a reader can count. A model travels as
-    YAML; Python is how you *run* it, so the runner has four verbs, a fold and
-    its two axes, and one error hierarchy.
-
-    The three types are here because a name a verb *returns* is part of that
-    verb's signature: a caller wrapping this package annotates what it hands
-    back and catches what its readers raise, and neither is reachable through a
-    call. Nothing of the language's is: ``check`` hands back a ``Program`` and
-    the verbs take a ``Spec``, and both belong to ``mathspec`` — a caller
-    annotating one imports it from the package that owns it, and is already
-    there, because obtaining either means calling that package too.
-
-    Two directions, because either alone rots. ``__all__`` must match the
-    table (a name added quietly, or documented and never exported), and no
-    public non-module attribute may exist outside it (a helper that leaked
-    into the namespace by being imported at the top of ``__init__``).
+    Two directions: ``__all__`` matches the table, and no public non-module
+    attribute exists outside it.
     """
     import inspect
 
@@ -487,9 +371,7 @@ def test_the_public_surface_is_exactly_what_is_declared():
     leaked = sorted(
         name
         for name in dir(specsolve)
-        if not name.startswith('_')
-        and name not in declared
-        and not inspect.ismodule(getattr(specsolve, name))  # submodules are import paths, not API
+        if not name.startswith('_') and name not in declared and not inspect.ismodule(getattr(specsolve, name))
     )
     assert not leaked, (
         f'public names outside __all__: {leaked} — a surface that grows by '
@@ -497,8 +379,7 @@ def test_the_public_surface_is_exactly_what_is_declared():
     )
 
 
-#: The two sink families. The directory *is* the family, so a member cannot
-#: land in the wrong one by being spelled differently.
+#: The two sink families; the directory is the family.
 SINKS = PKG / 'relational' / 'sinks'
 
 
@@ -509,16 +390,9 @@ def _family(name: str) -> set[str]:
 def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
-    A solver is four things that must agree: a module under ``solvers/`` named
-    for the solver, a ``Solver`` subclass defined *in that module*, a
-    ``build_<name>`` seam for `bench/`, and the ``SOLVERS`` key holding the
-    class. Writers are keyed by suffix instead, but the rule is the same.
-    Agreement is what makes adding one mechanical — nothing above the module
-    to teach, nothing to remember but the name.
-
-    The class, because a solver holds a model between solves. Defined in its
-    own module, so the fence that keeps ``gurobipy`` off a HiGHS caller's
-    import path holds.
+    A solver is a module under ``solvers/`` named for it, a ``Solver``
+    subclass defined in that module, a ``build_<name>`` seam for `bench/`, and
+    the ``SOLVERS`` key holding the class. Writers are keyed by suffix.
     """
     import importlib
 
@@ -547,16 +421,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 
 
 def test_every_sink_declares_what_it_can_ingest():
-    """Both families answer the capability axis, in one vocabulary.
-
-    Three silent failures: a sink declaring nothing reads as ``absent``
-    everywhere and is refused a model it can take, one naming a capability
-    outside the vocabulary is refused nothing, since no required set can
-    contain a name that is not in it, and one *answering* outside the
-    vocabulary is read as ``absent`` by every comparison in the family — a
-    ``'Native'`` on gurobi silently takes the big-M rewrite instead of the sets
-    it branches on.
-    """
+    """Both families answer the capability axis, in one vocabulary."""
 
     from specsolve.relational.sinks import SOLVERS, WRITERS
     from specsolve.relational.sinks.capabilities import (
@@ -583,12 +448,7 @@ def test_every_sink_declares_what_it_can_ingest():
 
 
 def test_the_door_gives_every_declared_dimension_dtype_a_column():
-    """``sources._DECLARED`` spells the dtype set the language validates.
-
-    A dtype added to ``DimensionDtype`` without a polars dtype here would
-    fail an empty index with a ``KeyError`` rather than at load with a
-    sentence.
-    """
+    """``sources._DECLARED`` spells the dtype set the language validates."""
     from mathspec.program import DimensionDtype
 
     from specsolve.sources import _DECLARED
@@ -597,12 +457,7 @@ def test_the_door_gives_every_declared_dimension_dtype_a_column():
 
 
 def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
-    """Every declared dtype has a column table entry, and ``int`` for ``float`` is the only widening.
-
-    A dtype added to ``ParameterDtype`` without an entry here would fail at
-    attach with a ``KeyError`` on the first parameter that declared it, rather
-    than at load with a sentence.
-    """
+    """Every declared dtype has a column table entry, and ``int`` for ``float`` is the only widening."""
     from mathspec.program import ParameterDtype
 
     from specsolve.sources import _COLUMNS, ACCEPTED_VALUE_TYPES
@@ -620,21 +475,8 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    ``gurobipy`` stays the ``gurobi`` module's alone only because no other
-    sink imports it, directly or by importing the module that does. A leaf
-    reads ``handoff.py``, its family's ``base``, and its own dependency —
-    nothing else in the family.
-
-    ``base`` is allowed for the reason the rest is not: it imports no solver,
-    so it cannot carry one across, and it is what stops the alternative — one
-    leaf importing the other to share a rule — from being the tempting option.
-    A ``base`` that reached for a leaf would fail the same check.
-
-    ``capabilities`` joined it on the same argument: a frozen descriptor and
-    two ``Literal`` vocabularies, read by **both** families — where one per
-    family would be two spellings of a single axis. It names ``plan`` for the
-    type of the program ``required`` reads, and that is a ``TYPE_CHECKING``
-    import: it runs nothing, so a leaf still carries nothing across.
+    A leaf reads ``handoff.py``, its family's ``base``, ``capabilities``, and
+    its own dependency — nothing else in the family.
     """
     shareable = ('.handoff', '.base', '.capabilities')
     offenders = {}
@@ -654,20 +496,7 @@ def test_no_sink_reaches_a_sibling():
 
 
 def test_every_plan_node_is_handled_by_the_compiler():
-    """Two-tier economy: a primitive is not done until the engine consumes it.
-
-    The compiler is the consumer — it is the module that turns plan nodes into
-    SQL, so a node it does not mention has no relational meaning however much
-    the engine moves around it. Grep-level drift alarm; the differential tests
-    prove semantics and every walk here ends in ``assert_never``, so what this
-    adds is the alarm that fires without a type checker in hand.
-
-    Each base is checked against every module that walks it, not against one:
-    an expression node answered only in ``predicates.py`` would be as wrong as
-    one answered nowhere, and since the linopy lane was moved onto the plan
-    there are *two* expression walkers — a node the linopy builder cannot
-    evaluate is one lane silently refusing at build.
-    """
+    """A primitive is not done until every module that walks its union names it."""
     from typing import get_args
 
     from mathspec import program
@@ -688,21 +517,8 @@ def test_every_plan_node_is_handled_by_the_compiler():
 def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
     """Every verb here opens a spec the way ``to_spec`` does, and a lowered ``Program`` is not one of them.
 
-    ``Buildable`` is what ``check``, ``build``, ``solve``, ``write``,
-    ``solve_over``, ``Model`` and both linopy-lane verbs annotate their first
-    argument with. It is upstream's union, which holds no ``Program``: lowering
-    has no inverse, so an answer built from one could not name the document it
-    came from and nothing built from one could be archived. Checked here so the
-    copy cannot quietly narrow, which would refuse a shape the language
-    accepts, or widen, which would promise one this package does not.
-
-    Textual, and deliberately: upstream's annotation is a string under
-    ``from __future__ import annotations`` that ``get_type_hints`` cannot
-    evaluate (its ``Path`` is behind ``TYPE_CHECKING``), and ours is a ``type``
-    statement whose value would fail the same way, so it is read off the
-    source. Splitting on ``|`` holds while every member is a flat name or a
-    subscript — a nested union upstream would need this rewritten rather than
-    merely updated.
+    Textual, since neither annotation evaluates. Splitting on ``|`` holds
+    while every member is a flat name or a subscript.
     """
     import inspect
 
@@ -731,12 +547,7 @@ def type_alias_value(path: Path, name: str) -> str:
 def test_the_sources_argument_is_one_type_at_every_door():
     """Every verb that takes data annotates it ``Mapping[str, Source]``.
 
-    ``Source`` is the one spelling of what a name in ``sources`` may hold, and
-    it is a copy at each door: a verb that widened it back to ``Any`` would
-    promise a shape the readers refuse, and one that narrowed it would refuse
-    a shape they accept. Textual, like the ``Buildable`` check above, because
-    the annotations are strings. The linopy lane's two verbs are asked in
-    ``tests/test_linopy_lane.py``, where the extra is installed.
+    The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
     from specsolve.strategy import EachCoordinate, EachWindow, solve_over
@@ -759,16 +570,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
 
 
 def test_both_lanes_lower_a_spec_through_one_function():
-    """Neither lane accepts a file the other refuses, which is what ``lowered`` is for.
-
-    This package refuses what the language allows — two names in one
-    namespace differing only by case, and a ``piecewise:`` block not yet
-    written out — so lowering is where that verdict is reached. A module
-    reading ``.program`` straight off a model it just opened would reach a
-    different one, and the lanes would disagree about what loads while both
-    docstrings claimed they could not. ``lanes.py`` is the one reader because
-    it is what sits above both.
-    """
+    """Neither lane accepts a file the other refuses, which is what ``lowered`` is for."""
     import ast
 
     reading = {
@@ -799,11 +601,7 @@ def _gen_bus_direction(program: Any) -> Any:
 def test_every_shape_operator_declares_its_fan_in():
     """The absence pass asks :func:`fan_in`, so it has to answer for each shape operator.
 
-    The values are pinned as a truth table rather than derived: fan-in is a
-    semantic claim about each operator (which the compiler's absence pass
-    acts on), and an edit that flips one is #1142 over again — the lanes
-    disagreeing about a constant at a masked slot — caught here before any
-    differential case has to.
+    Pinned as a truth table: fan-in is a semantic claim about each operator (#1142).
     """
     from mathspec import program
 
@@ -829,9 +627,7 @@ def test_every_shape_operator_declares_its_fan_in():
     }, 'a fan-in moved — the absence pass now treats that operator differently, which is a semantic change'
 
 
-#: A kwarg no built-in declares, passed to :func:`call_shape_error` to make it
-#: answer with the usage line it refuses against. A probe rather than a read of
-#: the descriptors, which are mathspec-private (hard rule 1).
+#: A kwarg no built-in declares, which makes :func:`call_shape_error` answer with its usage line.
 _NOT_A_KEYWORD = '#no such keyword'
 
 
@@ -841,12 +637,7 @@ def _declared_keywords(usage: str) -> set[str]:
 
 
 def _keywords_read(fn: ast.FunctionDef, helpers: Mapping[str, ast.FunctionDef]) -> set[str]:
-    """Every literal key *fn* takes off a ``.kwargs`` mapping, helpers included.
-
-    One level of indirection is followed because a lowering may delegate a
-    keyword to a module-level reader — ``shift`` reads its partition through
-    ``_partition_of`` — and a keyword read there is read.
-    """
+    """Every literal key *fn* takes off a ``.kwargs`` mapping, one level of helpers included."""
     found: set[str] = set()
     called: set[str] = set()
     for node in ast.walk(fn):
@@ -865,11 +656,7 @@ def _keywords_read(fn: ast.FunctionDef, helpers: Mapping[str, ast.FunctionDef]) 
 
 
 def _dispatched_by_name(fn: ast.FunctionDef) -> set[str]:
-    """The operators *fn* spells out by name — ``if node.name == 'at'``.
-
-    What ``_call`` reads off a ``.kwargs`` mapping it reads for these alone;
-    every other operator is handed its keywords and takes them as parameters.
-    """
+    """The operators *fn* spells out by name — ``if node.name == 'at'``."""
     return {
         comparator.value
         for node in ast.walk(fn)
@@ -895,32 +682,8 @@ def _functions(tree: ast.Module) -> dict[str, ast.FunctionDef]:
 def test_both_lanes_dispatch_on_every_plan_node():
     """Hard rule 3: the same plan, dispatched on by both lanes.
 
-    What used to be compared here was the *keywords* each lane read off a
-    ``FunctionCallNode``, because each lane read them separately and could
-    disagree: measured on ``sum(x, over=t, where=…)`` against a language that
-    declared ``where``, the relational lane never read the key and built as
-    though the clause were not written, while the linopy one raised ``TypeError``
-    out of a function signature — a silent wrong answer on one lane, a library
-    exception on the other, and nothing red.
-
-    Neither lane reads a keyword now, and neither keeps a table of operator
-    names: lowering reads the surface once and turns it into a plan node both
-    lanes dispatch on, so the way they can still disagree is a node kind one of
-    them does not handle — an operator lowered to a new node, built by the
-    engine, and unanswered by the linopy evaluator.
-
-    **Node kinds, not their fields.** A field census reads as stricter and is
-    not: matching ``ast.Attribute`` by name credits ``Translate.fill`` for
-    ``operators.py``'s unrelated ``_Edge.fill``, so it passes for a reason that
-    has nothing to do with the plan. ``isinstance(x, program.Foo)`` names the
-    class and cannot collide.
-
-    The kinds are the language's two unions rather than a scan of a file here,
-    which is what keeps this honest now that the vocabulary is upstream: a node
-    mathspec adds arrives with the pin, not with the first model that uses it.
-
-    Read statically: ``tests/linopy_lane/operators.py`` imports xarray at module level,
-    and this must run on a bare install.
+    Node kinds, not their fields: ``isinstance(x, program.Foo)`` names the
+    class and cannot collide. Read statically, so this runs on a bare install.
     """
     from typing import get_args
 
@@ -959,25 +722,13 @@ def test_both_lanes_dispatch_on_every_plan_node():
 
 
 def test_every_module_is_documented_somewhere():
-    """No module is undocumented — but the doc need not be docs/about/architecture.md.
-
-    A subpackage that grows a member per variant (one sink per module) would
-    push its whole membership list into the top-level map, which is the thing
-    that map exists *not* to be. A ``README.md`` beside the code counts
-    instead: it is what you read when you open the directory, and it stays
-    next to the thing it describes.
-
-    "Beside" reaches *up* as well as across, because a family may be a
-    directory of its own — ``sinks/solvers/highs.py`` is documented by
-    ``sinks/README.md``, which is the page describing both families. One
-    README per tree, not one per level.
-    """
+    """No module is undocumented, in docs/about/architecture.md or a ``README.md`` in a directory above it."""
     architecture = (REPO / 'docs/about/architecture.md').read_text()
     missing = []
     for path in _all_modules():
         name = path.name
         if name.startswith('_'):
-            continue  # private plumbing needs no doc entry
+            continue
         if name == '__init__.py':
             continue
         readmes = [d / 'README.md' for d in path.parents if PKG in d.parents or d == PKG]
@@ -990,9 +741,7 @@ def test_every_module_is_documented_somewhere():
     )
 
 
-#: Every in-function ``specsolve`` import in the package, with the cycle it
-#: breaks. Empty, and that is the claim: the layers are ordered with no
-#: exception at all, so a lazy import is only ever a leftover.
+#: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
     ('relational/engines/polars/predicates.py', 'specsolve.relational.engines.polars.compiler'): (
         'the same comparison on the streaming lane, and the compiler reads this module for the mask '
@@ -1002,11 +751,7 @@ DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
 
 
 def test_lazy_intra_package_imports_are_all_declared():
-    """Hard rule 0, mechanically: the layers are ordered, with no exception.
-
-    An undeclared in-function import is either a cycle nobody noticed or a
-    leftover. Both are worth a line of explanation, so both fail here.
-    """
+    """Hard rule 0: an undeclared in-function import is an unnoticed cycle or a leftover."""
     found = {}
     for path in _all_modules():
         tree = ast.parse(path.read_text())

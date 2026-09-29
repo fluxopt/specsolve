@@ -1,10 +1,9 @@
 """Expressions the file never named, valued against a spec the language has already read.
 
-The expressions are spliced into the spec as named ones and the whole spec is
-lowered again, so an ad-hoc read passes every rule a declared read passes; then
-everything but the nodes is thrown away. It sits above both lanes because
-lowering reads the spec **as written**, which nothing under ``relational/`` may
-see (docs/about/architecture.md, hard rule 2).
+An expression is spliced into the spec as a named one and the whole spec is
+lowered again, so it passes every rule a declared one passes. This sits above
+both lanes because nothing under ``relational/`` may see the spec as written
+(docs/about/architecture.md, hard rule 2).
 """
 
 from __future__ import annotations
@@ -19,12 +18,11 @@ if TYPE_CHECKING:
     from mathspec import Spec
     from mathspec.program import Expression
 
-#: The name a single unnamed expression is spliced under. Stepped over rather
-#: than overwritten where a spec declares it — [`_free_name`][].
+#: The name an unnamed expression is spliced under, stepped over where the
+#: spec declares it.
 _EVALUATED = '_evaluated'
 
-#: The one section a caller may hand in. Every other declaration needs data or
-#: builds rows, and neither is a read — see [`_splice`][].
+#: The one section a caller may hand in.
 _SECTION = 'expressions'
 
 
@@ -51,13 +49,7 @@ def lower(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
 
 
 def _splice(written: dict[str, object], entries: Mapping[str, object]) -> dict[str, Expression]:
-    """*entries* added to the spec *written* and lowered with it, as nodes.
-
-    The lowered program is read for these nodes and dropped — its variables,
-    constraints and objective are the ones already solved, lowered again only to
-    check what is spliced against them. Through the same door the lanes use, so
-    an added name is held to the rules a declared one is.
-    """
+    """*entries* added to the spec *written* and lowered with it, as nodes."""
     section = written.get(_SECTION)
     written[_SECTION] = {**section, **entries} if isinstance(section, dict) else dict(entries)
     named = lowered(written).expressions
@@ -74,9 +66,5 @@ def _free_name(written: Mapping[str, object]) -> str:
 
 
 def _declared(written: Mapping[str, object]) -> set[str]:
-    """Every name *written* declares.
-
-    Read off the spec's own mappings, the way the language checks the same
-    thing, so a section added later is covered.
-    """
+    """Every name any section of *written* declares, so a section added later is covered."""
     return {name for section in written.values() if isinstance(section, dict) for name in section}

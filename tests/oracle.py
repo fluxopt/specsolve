@@ -1,37 +1,12 @@
 """Guarded access to the linopy lane, used as the differential oracle.
 
 Importing this module skips the importing test module when the oracle's
-dependencies (the ``dev`` group's linopy, and xarray and pandas) are absent — ``pytest.importorskip`` raises ``Skipped``, and pytest turns
-that into a skipped module at collection time.
+dependencies (the ``dev`` group's linopy, and xarray and pandas) are absent.
+Import linopy, xarray and pandas through here, so import ordering cannot bypass
+the guard.
 
-Import the oracle *through here* rather than importing linopy or xarray
-directly, so the guard cannot be bypassed by import ordering: isort sorts a
-bare ``import xarray`` above a first-party import, and it would then blow up
-as a collection error before any guard ran.
-
-**pandas is re-exported for the same reason.** It is no longer a runtime
-dependency — the ``dev`` group carries it, for ``Result.to_pandas`` and for the
-oracle — so a bare ``import pandas as pd`` in a test module is
-exactly the ordering bug described above, one dependency down. Test modules
-take ``pd`` from here instead, and the guard covers it.
-
-This replaces a hand-maintained list of filenames in ``conftest.py``, which
-had to be edited every time a test module was added and silently mis-skipped
-when it was not.
-
-**The oracle is v1, and only v1.** A differential test is an oracle only if the
-thing it compares against is the convention we implement. Legacy is the one
-linopy is retiring: it fills every absent slot with 0, so it agrees with a lane
-that keeps a constraint row whose variable is masked, and disagrees with one
-that drops it. Measuring against legacy would pin this package to the behaviour
-v1 classifies as a bug (PyPSA/linopy#712). So the guard below raises rather
-than skipping — a skip would be the worst outcome available, the suite going
-green having quietly stopped checking the lanes against each other on precisely
-the cases the convention changed.
-
-The lane is imported under its own name rather than something shorter, because
-this module re-exports the *real* ``linopy`` too: ``specsolve_linopy`` names the
-module it actually is, and cannot be confused with it.
+The oracle is linopy's v1 convention only: legacy fills every absent slot with
+0 (PyPSA/linopy#712). A linopy without it raises rather than skips.
 """
 
 from __future__ import annotations

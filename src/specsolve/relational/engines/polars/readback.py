@@ -20,8 +20,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engines.polars.attaching import AttachedSources
     from specsolve.relational.engines.polars.compiler import PolarsCompiler
 
-#: Scratch columns of the expression reader. The spaces make them
-#: unrepresentable as declared names.
+#: Scratch columns. The spaces make them unrepresentable as declared names.
 SOLUTION = '__solution value__'
 _EXPRESSION_ROW = '__expression row__'
 _LABEL_ORDER = '__label order__'
@@ -29,11 +28,6 @@ _LABEL_ORDER = '__label order__'
 
 def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> ConstraintRow:
     """One built constraint row, spelled back out. See [`row`][specsolve.api.Model.row].
-
-    Three positional takes against frames the build already keeps, and no scan
-    of the matrix: the constraint's own coordinate frame carries the global row
-    index, ``row_starts`` says where that row's entries lie, and each
-    variable's frame carries the global column index its terms point at.
 
     Raises:
         KeyError: No constraint of that name.
@@ -57,17 +51,7 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
 
 
 def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> tuple[int, dict[str, object]]:
-    """The global row index constraint *name* built at *coordinate*, and that coordinate in dim order.
-
-    The coordinate has to name **every** dim of the declaration: a partial
-    one matches a set of rows.
-
-    Raises:
-        SpecsolveError: The coordinate names dims the declaration does not,
-            holds a label the dimension cannot, or matches no row the build
-            produced — a row masked out by ``where`` or dropped for having no
-            terms.
-    """
+    """The global row index constraint *name* built at *coordinate*, and that coordinate in dim order."""
     dims = model.program.constraints[name].dims
     if set(coordinate) != set(dims):
         raise SpecsolveError(
@@ -93,8 +77,7 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
 def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
     """*value* as a literal of *dim*'s own type, or a refusal naming what it is not.
 
-    The cast **is** the check: a string against an integer dim and a stranger
-    against an ``Enum`` are one failure.
+    The cast is the check: a wrong type and an unknown ``Enum`` label fail alike.
     """
     try:
         return pl.lit(pl.Series([value], dtype=dtype).item(0), dtype=dtype)
@@ -106,18 +89,12 @@ def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
 
 
 def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
-    """``(variable, coordinate, coefficient)`` for one row's matrix entries.
+    """``(variable, coordinate, coefficient)`` for one row's matrix entries, in the entries' order.
 
-    Each declaration owns a contiguous, dense run of column indices, so which
-    variable a term belongs to is a range test, and a term's place in its own
-    declaration's frame is its label minus that block's start — a positional
-    take, not a search.
-
-    ``coordinate`` is rendered rather than spread across dim columns because
-    one row's terms may come from variables with *different* dims. It carries
-    the labels alone, in the declaration's dim order — linopy's ``p[1, wind]``
-    bracket. The terms leave in the order the entries arrived in, which is the
-    solver's own column order.
+    Each declaration owns a contiguous run of column indices, so a term's
+    variable is a range test and its place in that frame is a positional take.
+    ``coordinate`` is one string because one row's terms may span variables
+    with different dims.
     """
     wanted = entries['col'].to_numpy()
     named = []
@@ -153,21 +130,17 @@ def laid_out(
 ) -> pl.LazyFrame:
     """One declaration's coordinates in label order, beside its share of *values*.
 
-    The order was never lost: [`labels.frame`][] hands back a
-    label-ascending frame, and the solver's vector is positional in the same
-    index. The share is attached as a column rather than concatenated as a
-    frame, so a mismatched length raises instead of padding with nulls.
-
-    **Dim columns leave in ``String``**, where the build holds them as
-    ``pl.Enum``: a returned frame is something a caller joins against their
-    own data, and polars refuses ``Enum`` against ``String``.
+    The share is a column, not a concatenated frame, so a mismatched length
+    raises instead of padding with nulls. Dim columns leave as ``String``,
+    because a caller joins them against their own data and polars refuses
+    ``Enum`` against ``String``.
     """
     labelled = held.frame.select(*dims).with_columns(held.share(values))
     return labelled.with_columns(pl.col(d).cast(pl.String) for d in string_dims(attached, dims))
 
 
 def string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
-    """Those of *dims* attaching encoded as ``Enum`` — its string ones."""
+    """Those of *dims* attaching encoded as ``Enum``."""
     return [d for d in dims if attached.is_enum_encoded(d)]
 
 
@@ -179,17 +152,8 @@ def reordered(
 ) -> pl.Series:
     """A saved solution's value frames back as the positional vector — the inverse of [`laid_out`][].
 
-    Each declaration's ``(dims…, value)`` is aligned to its
-    [`Labelled`][labels.Labelled] frame's label order and the values concatenated in
-    ``start`` order, rebuilding the vector a solver returned. A rebuild of the
-    model over the same spec and sources numbers the labels identically
+    A rebuild over the same spec and sources numbers the labels identically
     (docs/about/architecture.md, "The relational lane").
-
-    Args:
-        attached: The rebuilt model's sources, for which dims it enum-encoded.
-        registry: The rebuilt model's ``variables`` or ``constraints``.
-        declared: The program's ``variables`` or ``constraints``, for the dims.
-        frames: The saved ``(dims…, value)`` frame per name, as read back.
 
     Raises:
         SpecsolveError: A declaration whose saved frame misses a coordinate the
@@ -207,10 +171,8 @@ def _aligned(
 ) -> pl.Series:
     """One declaration's saved values in its label order — its slice of the vector.
 
-    The values are joined onto the rebuilt label frame on the dims, the string
-    ones cast as [`laid_out`][] casts them. A declaration the rebuild masks
-    away entirely holds no label, so its slice is empty and a missing *stored*
-    is no error; a missing one the rebuild does build raises.
+    A declaration the rebuild masks away entirely has an empty slice, so a
+    missing *stored* is no error there.
     """
     if held.height == 0:
         return pl.Series(SOLUTION, [], dtype=pl.Float64)
@@ -243,23 +205,9 @@ def readers(
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """The reads [`evaluate`][specsolve.relational.result.Result.evaluate] is built from, over one compiler.
 
-    Every producer of them — a live solve, a rebuilt archive, and the
-    variable-free arithmetic path — comes through here, so the read a declared
-    name gets and the read an ad-hoc expression gets are defined once and
-    differ only in the compiler. Nothing is compiled until a reader is called.
-
-    Args:
-        compiler: The compiler each read compiles through — carrying a solution,
-            or none for pure arithmetic.
-        named: The declared named expressions, by name.
-        lower: How an expression written the way ``expressions:`` writes one
-            becomes a plan node in the spec's namespace, or ``None`` where there
-            is no spec as written to lower against — then ad-hoc evaluation is
-            unavailable and the second element is ``None``.
-
-    Returns:
-        One deferred reader per declared name, and the ad-hoc evaluator (or
-        ``None``).
+    One deferred reader per declared name, and an ad-hoc evaluator. Nothing
+    compiles until a reader is called. Without *lower* there is no spec as
+    written to lower against, so the ad-hoc evaluator is ``None``.
     """
 
     def reader(name: str, expression: program.Expression) -> Callable[[], pl.DataFrame]:
@@ -278,23 +226,15 @@ def readers(
 def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompiler) -> pl.DataFrame:
     """Named expression *expr* evaluated at the solve *compiler* holds — ``(dims…, value)``.
 
-    Every leaf is a number after a solve: the compiler reads a variable as its
-    primal and ``dual(c)`` as the constraint's row duals, so the expression is
-    const fragments at whatever degree the file wrote it — a product of two
-    variables, a variable under a power, a division by one — each added up
-    per coordinate over the expression's coordinate product the way a
-    constraint's right-hand side is.
-
-    The frame answers the way a constraint over the same expression would: a
-    coordinate a parameter does not cover contributes zero, a coordinate where
-    a variable is absent has no row — or holds a zero, under ``absence:
-    zero`` — and a variable-free expression is one row of ``value``. A
-    quotient has no row where its divisor is absent or zero. Dims come back in declaration order and rows in label order
-    over those dims.
+    It answers as a constraint over the same expression would: a coordinate a
+    parameter does not cover contributes zero, and one where a variable is
+    absent has no row, or a zero under ``absence: zero``. A quotient has no row
+    where its divisor is absent or zero. A variable-free expression is one row.
+    Dims come in declaration order, rows in label order.
 
     Raises:
         DataError: A divisor parameter with no row where the expression
-            divides — checked before any sum can read the null as zero.
+            divides.
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"

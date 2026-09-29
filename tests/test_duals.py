@@ -1,13 +1,8 @@
 """Duals: the shadow price read-back, and the two models that have none.
 
-A nodal balance's dual is the price at that node, which is why this is a
-headline output rather than a diagnostic — and why the differential test below
-compares *values*, not just presence: a sign convention that disagreed with
-linopy would be a silently wrong answer of exactly the kind the two-lane claim
-exists to catch.
-
-The other half of the feature is the refusals. A MILP has no dual solution and
-an infeasible solve has no valid one, and in both cases returning zeros would
+The differential test compares values, not just presence: a sign convention
+that disagreed with linopy would be a silently wrong answer. A MILP has no dual
+solution and an infeasible solve has no valid one, and zeros for either would
 look like an answer.
 """
 
@@ -64,19 +59,8 @@ def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
 def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
     """Integrality is decidable from the program, so the message says which.
 
-    **A deliberate divergence from the oracle, not an oversight.** Asked for
-    the duals of this same model, linopy hands back an array of zeros — the
-    ``dual`` entry exists and every value is ``0.0`` — which is a plausible
-    number with no signal attached, the ``bug:silent`` class. (On an
-    *unsolved* model the two lanes agree that it must raise: linopy through
-    its ``has_optimized_model`` gate, we through ``_require_solution`` — see
-    the infeasible test below.)
-
-    Hard rule 3 governs the *language*, and both lanes still accept this
-    model and agree on its objective; what differs is a post-solve read-back
-    that has no defined answer. #78 fixed the direction: a model with any
-    binary or integer variable must raise, naming the reason, not return
-    zeros. Parity here would be parity with the bug.
+    A deliberate divergence from the oracle (#78): linopy returns zeros for
+    the duals of this model, a plausible number with no signal attached.
     """
     data = commitment_inputs
 
@@ -91,12 +75,7 @@ def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
 
 
 def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
-    """No values at all is the *other* refusal — the one `primal` shares.
-
-    `dual` goes through `_require_solution` before it looks at duals, so an
-    infeasible solve raises `NoSolutionError` exactly as `primal` does rather
-    than reporting the narrower "this model has no duals".
-    """
+    """No values at all is the *other* refusal: `NoSolutionError`, the one `primal` shares."""
     data = dispatch_inputs
     data = dict(data, load=pd.Series(1e6, index=data['snapshot']))  # more than every generator together
 
@@ -135,16 +114,12 @@ RAMP_BLOCK = {
     ],
 )
 def test_reading_back_an_unknown_name_says_what_was_built(asked, expected):
-    """The error rules ask a message to name the fix, and this is where it matters most.
+    """A name that was never built is refused with the names that were.
 
-    One name can expand into several — a `piecewise:` block becomes a handful of
-    constraints, and a rule split by regime is conventionally ``x`` and
-    ``x_initial`` — so a caller can reasonably ask for a name that was never
-    built. A bare ``KeyError`` left them to find out from the source which one
-    was.
-
-    Single-line on purpose: these raise ``KeyError``, whose ``str`` is the repr
-    of its argument, so a newline would reach the reader as a literal ``\\n``.
+    One name can expand into several (a `piecewise:` block, a rule split into
+    ``x`` and ``x_initial``), so a caller can ask for one that was never built.
+    The message is one line: a ``KeyError`` prints the repr of its argument,
+    so a newline would reach the reader as a literal ``\\n``.
     """
     import polars as pl
 

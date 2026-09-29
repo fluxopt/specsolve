@@ -1,16 +1,9 @@
 """The math a page prints for GitHub has to reach MathJax on the site as well.
 
-``mathspec.to_markdown`` writes GitHub-flavoured Markdown, and its inline math
-is the verbatim pair ``$`…`$`` — delimiters GitHub hands to MathJax untouched.
-Arithmatex reads neither that pair nor a ```math fence. The fence is a
+``mathspec.to_markdown`` writes inline math as the verbatim pair ``$`…`$``,
+and Arithmatex reads neither that pair nor a ```math fence. The fence is a
 ``superfences`` entry in ``mkdocs.yml`` and the pair is
-``tools.mdx_github_math``, so a page rendering its equations as literal
-backticks is what either of those going missing looks like — silently, on a
-strict build, across sixty pages of generated models.
-
-Nothing asked this before the site moved to zensical. The rewrite was a hook,
-which only a full build could load; it is a Markdown extension now, which is
-what lets the two assertions below run in a second.
+``tools.mdx_github_math``.
 """
 
 from __future__ import annotations
@@ -76,16 +69,9 @@ def test_the_site_renders_the_math_the_page_prints_for_github(page: Path) -> Non
 def test_the_extension_rewrites_math_and_nothing_that_only_quotes_it(source: str, expected: str) -> None:
     """Inline math becomes `$…$`; a fence and a code span are left exactly as they are.
 
-    The fence is the `superfences` entry's, not the extension's — reaching into
-    one would rewrite the YAML a model page shows beside its equation. A
-    backtick on the outer edge is a code span quoting the delimiter rather than
-    math using it.
-
-    The last case is why the closing run is matched against the opening one.
-    markdown-exec fences its source block with eight backticks, so a pattern
-    that only ever closed on three ran from that opening fence to the first
-    bare one and left every span in between — a whole rendered model — as
-    literal text on `docs/change.md`.
+    A backtick on the outer edge is a code span quoting the delimiter. The
+    last case holds the closing run to the opening one's length, because
+    markdown-exec fences its source block with eight backticks.
     """
     pytest.importorskip('markdown', reason='the docs group; the default environment skips it')
     from tools.mdx_github_math import rewrite

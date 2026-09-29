@@ -60,8 +60,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
 
 #: Every form here is **convex**, and deliberately: HiGHS solves only convex
 #: QPs, so a pure cross term is refused by the oracle lane before it can
-#: disagree with anything. Curvature is a property of the *data* and belongs to
-#: the nonconvex test below, not to the agreement tests.
+#: disagree with anything.
 @pytest.mark.parametrize(
     'expression',
     [

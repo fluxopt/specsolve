@@ -1,26 +1,11 @@
 """``method: lp`` — the curve as its own segment lines, and no weights at all.
 
-Every other method interpolates: it declares a weight per breakpoint and ties
-the linked expressions to a convex combination of them. This one does not
-declare anything. Where the curve is convex and the linked expression is
-bounded from below by it — a cost, the common case — the epigraph *is* the
-intersection of the segments' half-planes, so the rows say it directly and the
-K weights per frame row are simply not there.
-
-Three things need holding:
-
-**It is the same model.** `test_lp_and_convex_reach_one_optimum` solves the
-same curve both ways; the objectives must agree, because a formulation that
-merely relaxes differently is a different model wearing the same block.
-
-**The saving is real and it is a trade.** Columns fall and rows rise, and
-`test_the_saving_is_columns_paid_for_in_rows` records both — a claim about size
-that only counted the half that improved would be worth nothing.
-
-**The curvature is checked, because getting it wrong is silent.** Lines that
-envelope a convex curve *cut* a concave one, and the solve comes back optimal
-either way. That check needs the values, so it lives beside the one
-`method: convex` already has.
+Where the curve is convex and the linked expression is bounded from below by
+it, the epigraph *is* the intersection of the segments' half-planes, so the
+rows state it directly. The tests hold that it is the same model as
+``method: convex``, that it trades columns for rows, and that the curvature is
+checked: lines that envelope a convex curve cut a concave one, and the solve
+comes back optimal either way.
 """
 
 from __future__ import annotations
@@ -263,9 +248,8 @@ def test_values_past_the_mask_are_not_part_of_the_curve():
 
     A table may be dense where the mask is not — the row exists, it is simply
     not on this curve. Judged by which rows carry a value instead, `b`'s
-    unmarked third point counts: here it runs backwards *and* bends the wrong
-    way, either of which refused a block whose curves are both well-formed
-    over the breakpoints they actually run.
+    unmarked third point would count, and it runs backwards *and* bends the
+    wrong way.
     """
     sources = _per_unit_points(short=False, mask=True)
     past = (pl.col('unit') == 'b') & (pl.col('bp') == 2)
@@ -292,10 +276,10 @@ def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
     """A curve of one point has no segment, which is the whole of what lp states.
 
     The chord row is written at the later of the two breakpoints it joins, so
-    a single breakpoint wrote none — and the two domain rows pin only the
-    *pinned* link, leaving the bounded one on its own bound: 0 under
-    minimisation against a curve that says 25 (#1121). The three weight methods
-    do reach 25 on this data and keep it, so the refusal names them.
+    a single breakpoint writes none, and the two domain rows pin only the
+    *pinned* link: the bounded one sits on its own bound, 0 under minimisation
+    against a curve that says 25 (#1121). The three weight methods reach 25 on
+    this data, so the refusal names them.
     """
     point = _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])
 
@@ -394,12 +378,9 @@ def test_each_curve_of_a_frame_is_checked_on_its_own():
 def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):
     """The verdict is a property of the numbers, not of how they were handed over.
 
-    The guard laid out what it could in process and skipped a path, so this
-    concave curve was refused as a frame and reached the solver as parquet,
-    coming back optimal at 155 where the curve says 110 — and the linopy lane,
-    which loads a path before the guard runs, refused it all along (#1123).
-    Both lanes now scan it, for the two columns `validate_curve_extent` already
-    pays that I/O for.
+    Unchecked, this concave curve handed over as parquet comes back optimal at
+    155 where the curve says 110 (#1123). Both lanes scan a path for the two
+    columns `validate_curve_extent` already reads.
     """
     concave = [0.0, 30.0, 50.0, 60.0]
     sources = _relational(ys=concave)
@@ -416,10 +397,9 @@ def test_a_concave_curve_is_refused_whatever_the_breakpoints_are_measured_in():
     """The guard's tolerance is in the units of what it compares, so x cancels.
 
     `diff(diff(ys) / dx)` is a difference of slopes, y per x. Judged against
-    `1e-9 * max(|y|)`, which carries no x, the same curve stretched along x
-    slipped under a tolerance that did not shrink with it: this one is concave
-    by 3000 cost units, and `lp` returned 4502000 where the curve says 4497500
-    — optimal and wrong, the outcome the guard exists to prevent (#1124).
+    `1e-9 * max(|y|)`, which carries no x, this curve stretched along x would
+    pass: it is concave by 3000 cost units, and `lp` would return 4502000 where
+    the curve says 4497500 (#1124).
     """
     xs = [0.0, 1e6, 2e6, 3e6]
     concave = [0.0, 1e6, 2e6 - 1000.0, 3e6 - 3000.0]

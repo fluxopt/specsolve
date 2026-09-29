@@ -4,9 +4,7 @@
 
 """The coverage question the block-level one cannot reach, as a rule with no data in it.
 
-Its own module because it is *pure* — stamps and a program in, sentences out —
-and `parity.py` cannot be imported without pypsa. A rule nothing can test
-without a network is a rule nobody tests.
+Stamps and a program in, sentences out, so it is testable without pypsa.
 """
 
 from __future__ import annotations
@@ -20,12 +18,9 @@ if TYPE_CHECKING:
 def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]]) -> list[str]:
     """Every conjunct of every mask true somewhere on the ladder and false somewhere.
 
-    The half the block-level coverage cannot reach. A mask is exercised as a
-    whole the moment one of its conjuncts varies, so `committable AND
-    p_nom_mod > 0` passes while `committable` is true at every coordinate of
-    every rung — and a regime guarded by that conjunct alone would be missing
-    with nothing to say so. That is the shape the negative-`p_min_pu` gap had,
-    found by hand (mathspec#312); this is the sweep that would have found it.
+    A mask is exercised as a whole the moment one of its conjuncts varies, so
+    `committable AND p_nom_mod > 0` passes block-level coverage while
+    `committable` is true everywhere (mathspec#312).
 
     Each rung records one character per conjunct — ``t`` held everywhere, ``f``
     nowhere, ``b`` at some coordinates, ``-`` no frame at all. A conjunct is
@@ -33,8 +28,8 @@ def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]])
     somewhere (``f`` or ``b``), which one ``b`` satisfies alone and two rungs
     disagreeing satisfy between them.
 
-    A conjunct of a block no rung builds is not reported: that block is already
-    a louder gap one line up, and saying it twice buries it.
+    A conjunct of a block no rung builds is not reported; the block is already
+    a gap of its own.
     """
     gaps = []
     for block_name, block in {**program.constraints, **program.variables}.items():

@@ -1,5 +1,4 @@
-"""The `gurobipy-loop` arm. Its verbs are `bench.arms.gurobipy`'s; what makes
-it an arm of its own is which formulation module they reach for."""
+"""The `gurobipy-loop` arm: `bench.arms.gurobipy`'s verbs over the `gurobipy-loop` formulations."""
 
 from __future__ import annotations
 

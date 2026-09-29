@@ -1,23 +1,14 @@
-"""The two `solve_over` examples must keep making their claims, or they are not evidence.
+"""The two `solve_over` examples keep making their claims.
 
-`examples/rolling/` and `examples/myopic/` are the two coupled strategies —
-windows over one dimension, and periods that hand a fleet forward. Each is a
-claim that the driver composes into the thing people actually run, and a claim
-is worth what the check behind it is worth. So each has one *substantive*
-assertion here, apart from its golden:
+`examples/rolling/` and `examples/myopic/` each have one *substantive*
+assertion here, apart from their golden:
 
 - rolling: lookahead really does close the myopia gap, and enough of it reaches
   full foresight exactly
 - myopic: the fleet each period starts from is the one the last period ended
   with, which is the promise `carry` makes
 
-Committed output for the rest, for the reason `test_benders_example.py` gives:
-a page that shows output is promising what a reader will see, and a diff is how
-that promise stays true. Regenerate with ``--update-golden``.
-
-The scenario sweep has no example of its own — it is the uncoupled case, so
-`docs/reference/sweeps.md`'s three lines are the whole of it and there is nothing an example
-would add.
+Regenerate the goldens with ``--update-golden``.
 """
 
 from __future__ import annotations
@@ -35,12 +26,7 @@ def outputs() -> dict[str, str]:
 
 
 def test_lookahead_closes_the_myopia_gap(outputs: dict[str, str]) -> None:
-    """Asserted apart from the golden because it is the *point*.
-
-    A golden alone would keep passing if every number drifted together — and
-    in particular if the gap went to zero because storage stopped being used,
-    which is the degenerate model this example was rewritten to stop being.
-    """
+    """A golden alone keeps passing if every number drifts together, or if the gap closes because storage goes unused."""
     lines = [line for line in outputs['rolling'].splitlines() if line.startswith('rolling')]
     gaps = [float(line.rsplit('+', 1)[1].rstrip('% ')) for line in lines]
     peaks = [float(line.split('peak soc')[1].split()[0]) for line in lines]

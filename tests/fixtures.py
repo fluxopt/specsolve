@@ -1,13 +1,8 @@
-"""What a test builds a schema from — this side of the extraction's copy.
+"""What a test builds a schema from.
 
-`mathspec` owns the same four names, and this is the copy its own extraction
-predicted rather than an accident: a test package is not shipped, so nothing
-here can import them from the dependency. Thirty lines of dict-patching
-duplicated to keep one copy of every *rule* — the models and the language are
-single-homed, this is scaffolding.
-
-If they drift, the symptom is a test that passes here and fails there over a
-model that reads the same. Worth remembering before editing one of them.
+`mathspec` owns the same four names; a test package is not shipped, so this
+is a copy. If they drift, a test passes here and fails there over a model that
+reads the same.
 """
 
 from __future__ import annotations
@@ -19,10 +14,7 @@ from typing import Any
 import yaml as pyyaml
 from mathspec import Spec, to_spec
 
-#: The dispatch model as a dict, for tests that need to mutate a declaration
-#: rather than read a file. Deliberately the same math as
-#: ``examples/dispatch.yaml`` so a reader who knows one knows the other; use
-#: :func:`override` to vary it.
+#: The math of ``examples/dispatch.yaml`` as a dict; vary it with :func:`override`.
 DISPATCH_SPEC: dict[str, Any] = {
     'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
     'parameters': {
@@ -40,9 +32,7 @@ def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
     """A deep copy of ``base`` with dotted paths replaced.
 
     ``override(DISPATCH_SPEC, **{'variables.p.where': 'p_max > 0'})``. Missing
-    intermediate keys are created, so this both edits an existing declaration
-    and adds a new one — which is what makes a whole family of "the base model
-    but for one thing" tests a one-liner each.
+    intermediate keys are created.
     """
     raw = copy.deepcopy(base)
     for dotted, value in patch.items():
@@ -57,10 +47,8 @@ def override(base: dict[str, Any], **patch: Any) -> dict[str, Any]:
 def schema_of(source: str | Path | dict[str, Any], **patch: Any) -> Spec:
     """A ``Spec`` from a YAML path, YAML text, or a raw dict.
 
-    ``Path`` means a file, ``str`` means the YAML itself — the distinction is
-    the type, never a guess about the content. ``**patch`` applies
-    :func:`override` first, which is how a test says "this example, but with
-    ``**`` in the objective".
+    ``Path`` means a file, ``str`` means the YAML itself. ``**patch`` applies
+    :func:`override` first.
     """
     raw = raw_of(source)
     return to_spec(override(raw, **patch) if patch else raw)
@@ -70,8 +58,7 @@ def expanded(source: str | Path | dict[str, Any] | Spec, *kinds: Any, **patch: A
     """:func:`schema_of` with its formulations written out — the shape every lane is handed.
 
     Every ``piecewise:`` block, and every ``sos:`` block too unless *kinds*
-    names ``'piecewise'`` alone: the door builds no curve as written, and HiGHS
-    takes no set. A ``Spec`` passes straight through to ``expand``.
+    names ``'piecewise'`` alone. A ``Spec`` passes straight through to ``expand``.
     """
     schema = source if isinstance(source, Spec) else schema_of(source, **patch)
     return schema.expand(*kinds)
@@ -80,10 +67,8 @@ def expanded(source: str | Path | dict[str, Any] | Spec, *kinds: Any, **patch: A
 def raw_of(source: str | Path | dict[str, Any]) -> dict[str, Any]:
     """The parsed mapping behind a path / YAML text / dict, unvalidated.
 
-    Plain YAML rather than the language's own reader: ``to_spec`` reads a
-    ``str`` as a *path*, so a text fixture has no door to go through, and every
-    caller here is about to patch the mapping into a shape — often a
-    deliberately invalid one — no loaded ``Spec`` could hold.
+    Plain YAML: ``to_spec`` reads a ``str`` as a path, and callers patch the
+    mapping into shapes no loaded ``Spec`` could hold.
     """
     if isinstance(source, dict):
         return source

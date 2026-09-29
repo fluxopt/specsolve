@@ -11,10 +11,7 @@ from bench.cases import CASES
 #: Every sink the relational lane can hand a model to.
 SINKS = ('lp', 'highs', 'gurobi')
 
-#: What has to be importable for this arm to run. An environment without it
-#: skips the arm with that as the reason: CI has several environments and only
-#: some carry every modelling library, and a missing one is a fact about the
-#: environment rather than a failure of the harness.
+#: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ()
 
 if TYPE_CHECKING:
@@ -25,16 +22,10 @@ if TYPE_CHECKING:
 
 
 def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, str]:
-    """Every generated parquet, checked against what the model declares.
+    """Every generated parquet, checked against what the model declares, before the clock.
 
-    Harness bookkeeping, and it runs *before* the clock: it re-parses the YAML
-    only because the runner, not specsolve, decides which parquet file is which.
-
-    A path the model declares nothing for is an error rather than a silent
-    drop, which would leave the case measuring a build that never saw it. The
-    way it happens is a stale parquet in the case's cache directory: the
-    generator's output is globbed on a cache hit, so a file an older generator
-    wrote outlives the declaration it was written for.
+    A path the model declares nothing for raises; it is usually a stale parquet
+    in the case's cache directory.
     """
     import yaml as pyyaml
 
@@ -62,14 +53,8 @@ def prepare(
 def _handoff(handle: Any) -> Any:
     """The built model's frames, wherever the checkout under test keeps them.
 
-    ``build`` returns a handle *over* the engine; a checkout from before it
-    returned the engine itself, one from before ``BuiltModel`` kept the
-    frames on the engine rather than on a value, one from before it held
-    them as a field built them on demand, and one from before ``handoff``
-    names that field ``tables``. Written the tolerant way for
-    the same reason the nonzero count below is optional — the ladder is run
-    across checkouts, and a comparison that cannot reach the older one measures
-    nothing.
+    The ladder runs across checkouts, so this reaches the handle, the engine and
+    the frames (``handoff`` or ``tables``) in each shape an older checkout had.
     """
     engine = getattr(handle, '_engine', handle)
     built = getattr(engine, '_model', None)
@@ -80,12 +65,7 @@ def _handoff(handle: Any) -> Any:
 
 
 def _counts(tables: Any, *, nonzeros: bool) -> Counts:
-    """The dims the published tables read.
-
-    ``matrix`` is this engine's frame and an older checkout exposes its own
-    shape, so the nonzero count stays optional — and a build with no sink has
-    no assembled matrix to count at all.
-    """
+    """The dims the published tables read; nonzeros is None where no matrix is assembled or reachable."""
     matrix = getattr(tables, 'matrix', None) if nonzeros else None
     return {
         'columns': tables.column_count,
@@ -95,17 +75,7 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
 
 
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
-    """Build relationally and hand the model over — an LP file, or a solver.
-
-    ``run()`` / ``optimize()`` is never called. The simplex is the solver's work
-    whoever filled the model, so timing it would swamp the phase this harness
-    exists to measure and publish a number about HiGHS under our name.
-    ``Spec.to_highspy()`` is the same seam on linopy's side, which is the only
-    reason the two arms are comparable.
-
-    The counts are read after the action, so they are the harness's work and
-    not the engine's.
-    """
+    """Build relationally and hand the model over — an LP file, or a solver; the solver never runs."""
     import specsolve as sps
 
     spec, sources = prepared
@@ -138,15 +108,8 @@ def _loaded(sink: str, model: Any) -> Any:
 def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Window one, built and loaded before the clock, and held for the one that is timed.
 
-    Runs as pytest-benchmark's pedantic ``setup``: untracked, so the build is
-    outside ``peak``, and inside the spawned child, so the model is rebuilt
-    there rather than shipped to it. Returns the ``(args, kwargs)`` pair that
-    convention feeds to :func:`window`.
-
-    Nothing is released: the model and its solver are what a rolling horizon
-    holds between windows, so the peak this measurement reports should include
-    them. ``setup`` is untracked but resident, which is exactly that — and the
-    pass is isolated, so the process carries them away.
+    Nothing is released: the model and its solver stay resident, so the
+    measured peak includes them.
     """
     import specsolve as sps
 
@@ -158,18 +121,9 @@ def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tupl
 def window(model: Any, solver: Any, sources: dict[str, str]) -> Counts:
     """What the second window of a rolling horizon costs, and every one after.
 
-    A rolling horizon re-attaches data of the same shape and never reloads the
-    solver: ``update`` rebuilds the tables against the new numbers and ``push``
-    replaces the bounds, costs and right-hand sides on the model the solver
-    already holds. That is the path ``solve()`` takes whenever a rebuild leaves
-    the structure digest where it was, and refusing it is a reload — which is
-    what ``build_and_emit`` measures and what the other arm has to do every
-    window.
-
-    **The same sources are re-attached, not perturbed ones.** What an update
-    costs is the shape of the data, not its values, and generating a second set
-    inside the clock would charge this arm for the harness's work. The digest
-    matches either way, so the path taken is the one a driver takes.
+    ``update`` rebuilds the tables and ``push`` replaces the bounds, costs and
+    right-hand sides on the loaded solver. The same sources are re-attached,
+    because the cost depends on the shape of the data, not its values.
     """
     model.update(sources)
     solver.push(_handoff(model))
@@ -186,13 +140,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
 
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:
-    """Solve, and return the objective the parity gate compares.
-
-    The two lanes carry two axes: ``status`` is the coarse rollup (``'ok'``) and
-    the solver's verdict is ``termination_condition`` (``'optimal'``). Checking
-    the wrong one aborts every run with a parity failure that is really a
-    vocabulary mismatch.
-    """
+    """Solve, and return the objective the parity gate compares."""
     import specsolve as sps
 
     spec, sources = prepared

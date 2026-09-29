@@ -1,9 +1,8 @@
 """The gallery's math, and every model in it rendered.
 
-The renderer's own tests are mathspec's, over fixtures that travel with it.
-What is asserted here is about **this repository's corpus** — that every gallery
-model renders in every format, and that each page's generated math block is
-current. The renderer is the tool; the gallery is specsolve's documentation.
+The renderer's own tests are mathspec's. This module asserts that every model
+in **this repository's corpus** renders in every format, and that each gallery
+page's generated math block is current.
 """
 
 from __future__ import annotations
@@ -18,8 +17,7 @@ from mathspec import FORMATS, SymbolTable, to_latex, to_markdown, to_spec, to_ty
 from tests.conftest import SPEC_PATHS
 from tools import gallery_math
 
-#: Every format, as a parametrize mark — the same spelling the renderer's own
-#: tests use, duplicated rather than imported because that module travels.
+#: Every format, as a parametrize mark.
 EVERY_FORMAT = pytest.mark.parametrize('fmt', list(FORMATS))
 
 _OPERATORS = frozenset({r'\sum', r'\min', r'\max', r'\prod', r'\int'})
@@ -37,10 +35,7 @@ def typst():
 
 
 #: Every model a format has to handle: the gallery corpus, plus the operator
-#: probes the operators page renders as math. The probes live outside
-#: `examples/`, so without this line the one part of the corpus written
-#: *because* it covers every operator would be the one part no format ever
-#: renders.
+#: probes the operators page renders as math.
 TYPESET_PATHS = SPEC_PATHS
 
 
@@ -53,8 +48,7 @@ def test_every_example_renders(fmt):
 
 
 #: Syntax that could only have come from one family of formats. Markdown is
-#: absent on purpose: it *is* LaTeX math in a Markdown wrapper, and inherits
-#: every math method — so sharing LaTeX's spelling is the design, not a leak.
+#: absent: it *is* LaTeX math in a Markdown wrapper.
 _FINGERPRINTS = {
     'latex': (r'\mathcal{', r'\mathit{', r'\sum_{', r'\begin{align'),
     'typst': ('cal(', 'italic("', 'sum_(', '#set '),
@@ -68,10 +62,6 @@ _FINGERPRINTS = {
 def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
     """The seam's whole job. Typst syntax in the LaTeX output means the walk is
     spelling something itself instead of asking the format to.
-
-    Checking *syntax families* rather than one rendered symbol matters: an
-    earlier version of this test looked for the literal ``\\mathcal{X}``, which
-    no model declares, so it passed without ever reading the output.
     """
     text = '\n'.join(typeset(p, name, standalone=True) for p in TYPESET_PATHS)
     assert any(mark in text for mark in _FINGERPRINTS[name if name != 'markdown' else 'latex']), (
@@ -106,8 +96,7 @@ GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
 #: every symbol the summary uses, the generator has to be able to reach.
 REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Pages whose summary deliberately says something *else*, each with its reason.
-#: Declared rather than assumed: `test_every_summary_declares_itself` fails on a
-#: page in neither list, so a new summary cannot quietly opt out of the check.
+#: `test_every_summary_declares_itself` fails on a page in neither list.
 DIVERGENT = {
     'piecewise_conversion': (
         'names the weights at the converter a flow belongs to — the c(f) the tie reads through '
@@ -168,22 +157,11 @@ DIVERGENT = {
 
 
 def _summary(stem: str) -> str:
-    """The hand-written math on a gallery page — the whole page *minus* the
-    generated block, which is the definition of hand-written here.
+    """The ``$$`` blocks of a gallery page, *minus* the generated block.
 
-    Not the first `$$` in the file: positional indexing survives only until
-    someone adds math above it, and then it silently checks a different
-    equation. Not a heading name either — `tsp_mtz` states its math under
-    "What genuinely is refused", because for that page the summary is the
-    formulation the language *cannot* use. Keying on the machine-maintained
-    markers is the one anchor that holds for both.
-
-    The closing marker is searched for *from* the opening one, so a marker that
-    is missing and one that sits above its partner are the same failure — and
-    the assertion names the file, where ``index`` would raise a bare
-    ``ValueError``. Only ``$$`` blocks are returned: the prose and the YAML
-    fence around them are full of identifiers like ``p_max`` and ``sum``, which
-    read as subscripts.
+    Keyed on the generated block's markers, since neither position nor heading
+    holds for every page. A missing closing marker and one above its partner
+    are the same failure.
     """
     path = GALLERY / f'{stem}.md'
     page = path.read_text()
@@ -230,12 +208,6 @@ def test_every_summary_declares_itself():
 def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str):
     """The oracle direction: the hand-written notation is the expectation, and
     the renderer is what has to meet it.
-
-    This began as the opposite assertion, on `dispatch`. Its summary showed a
-    bound for every `(s, g)` while the prose beneath called `where: "p_max > 0"`
-    the one line worth pausing on — found by generating the same equation, and
-    fixed in the same change. A summary is prose, so nothing else would notice
-    it drifting again.
     """
     generated = _generated(stem)
     missing = sorted(_symbols(_summary(stem)) - _symbols(generated))
@@ -247,16 +219,13 @@ def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str)
 
 
 def test_the_dispatch_summary_still_carries_the_mask():
-    """The specific regression above, pinned by value rather than by symbol set:
-    `> 0` is a condition, not a subscripted quantity, so the check below would
-    not see it disappear."""
+    """Pinned by value: `> 0` is a condition, not a subscripted quantity, so the symbol check would not see it go."""
     assert r'\bar p_g > 0' in _summary('dispatch')
     assert r'\bar p_{g} > 0' in _generated('dispatch')
 
 
 def test_typst_output_compiles(typst, tmp_path: Path):
-    """The only check that the Typst is real, and it has already earned its
-    place: the first run rejected `minus.circle`, which is not a Typst symbol."""
+    """The only check that the Typst output is real."""
     for path in TYPESET_PATHS:
         source = tmp_path / f'{path.stem}.typ'
         source.write_text(to_typst(path, standalone=True))
@@ -321,11 +290,6 @@ def test_a_generated_variable_carries_the_description_its_expander_gave_it():
 # ---------------------------------------------------------------------------
 # the committed symbol tables
 # ---------------------------------------------------------------------------
-#
-# `examples/symbols/` stays: every table is the spelling for one model, and all
-# eight pair with models that stay. So the claims about the *committed* pairs
-# are here, and the renderer keeps the inline-dict equivalents, which is what
-# lets it travel.
 
 #: Committed tables written in typst, by what they declare rather than by what
 #: they are called — the notation is the file's own word (#740).
@@ -341,12 +305,7 @@ def test_the_typst_path_has_a_committed_artifact():
 
 @pytest.mark.parametrize('table', TYPST_TABLES, ids=lambda p: p.name)
 def test_a_committed_typst_table_compiles_beside_its_model(typst, tmp_path: Path, table: Path):
-    """The table on disk, against the model on disk, through the compiler.
-
-    `test_typst_output_with_a_symbol_table_compiles` proves the *dict* input
-    compiles; this proves the committed artifact does, so a typst table cannot
-    drift from its model — or stop compiling — while the suite stays green.
-    """
+    """The table on disk, against the model on disk, through the compiler."""
     source = tmp_path / f'{table.name}.typ'
     source.write_text(to_typst(_spec_of(table), symbols=table, standalone=True))
     typst.compile(str(source), output=str(tmp_path / f'{table.name}.pdf'))

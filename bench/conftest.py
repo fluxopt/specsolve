@@ -1,26 +1,12 @@
 """The harness: selection, and the data every arm reads.
 
 Every moving part is pytest's own: the case x size x sink x arm product is a
-`parametrize`, isolation is `benchmem(isolate=True)`, repetition and its
-minimum are pytest-benchmark's rounds, and the output is `--benchmark-json`.
-Nothing here re-implements a runner.
+`parametrize`, isolation is `benchmem(isolate=True)`, repetition is
+pytest-benchmark's rounds, and the output is `--benchmark-json`.
 
-**There is one arm, so there is no parity gate.** It compared the arms'
-objectives at the smallest rung, which is a check with one counterparty — and
-with one arm it has none. It returns with the second arm, where it means
-something again; until then `bench.floor`'s ``--check`` is the only
-same-model check here, and `test_ladder._record` is the arithmetic one that
-runs on every measurement.
-
-What is *not* free is the ragged shape: cases have different ladders, and the
-density rungs exist on one case only. So the (case, size) axis is built here
-rather than taken as a product — a missing rung is skipped, not an error, which
-is what makes `--sizes all` and `--sizes d100 d50` both mean something.
-
-**The two axes stay separate params.** `parametrize(('case_name', 'size'), ...)`
-gives pytest-benchmem two scalar dims to group and plot by; packing them into
-one string id would leave it nothing to read but the id, which it deliberately
-does not parse.
+Cases have different ladders, so the (case, size) axis is built here: a rung a
+case does not have is skipped. `case_name` and `size` stay two parameters, so
+pytest-benchmem can group by each.
 """
 
 from __future__ import annotations
@@ -79,11 +65,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-#: Rounds every measurement gets at least, which is what `docs/about/benchmarks.md`
-#: publishes as the method. pytest-benchmark's own default is 5, and its
-#: calibration hands the fewest rounds to the slowest cells — exactly where
-#: interference sustained across every round is most likely and a clean round
-#: hardest to come by, which is how a minimum ends up 2.33x wrong (#797).
+#: Rounds every measurement gets at least, as `docs/about/benchmarks.md` publishes.
+#: pytest-benchmark's default of 5 left a minimum 2.33x wrong on a slow cell (#797).
 MIN_ROUNDS = 9
 
 
@@ -95,18 +78,14 @@ def flag_passed(config: pytest.Config, flag: str) -> bool:
 def pytest_configure(config: pytest.Config) -> None:
     """Hold every measurement to the number of rounds the published method claims.
 
-    A default rather than a fixed value: an explicit ``--benchmark-min-rounds``
-    still wins, so a narrow re-take can ask for more. Silent where
-    pytest-benchmark is absent — the CodSpeed job runs this same suite under a
-    plugin that has no such option.
+    An explicit ``--benchmark-min-rounds`` still wins. Silent where
+    pytest-benchmark is absent.
     """
     if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
         config.option.benchmark_min_rounds = MIN_ROUNDS
 
 
-#: How a rung label says which ladder it belongs to. `bench/report.py` renders
-#: each as its own table for the same reason the budget decides each on its own:
-#: `w10` and `s` carry the same variables through different shapes.
+#: How a rung label says which ladder it belongs to.
 _LADDERS = (
     ('width', re.compile(r'w\d+$')),
     ('density', re.compile(r'd\d+$')),
@@ -114,9 +93,7 @@ _LADDERS = (
 )
 
 
-#: Machine-global on purpose — `tempfile.gettempdir()`, not the repo: the run
-#: this lock exists to refuse comes from *another worktree* (#705), which shares
-#: nothing with this one but the machine.
+#: Machine-global, so a run from another worktree is refused too (#705).
 BENCH_LOCK = Path(tempfile.gettempdir()) / 'specsolve-bench.lock'
 
 _TOOK_LOCK = pytest.StashKey[bool]()
@@ -125,9 +102,8 @@ _TOOK_LOCK = pytest.StashKey[bool]()
 def _holder_if_alive(path: Path) -> str | None:
     """The lock's own description of its holder, or None when that process is gone.
 
-    A lock that cannot be read as `pid N, ...` — or whose pid this user may not
-    signal — counts as held: the safe reading of a lock we cannot interpret is
-    that someone owns it, and the override flag is the way past a wrong guess.
+    A lock that cannot be read as `pid N, ...`, or whose pid this user may not
+    signal, counts as held.
     """
     try:
         content = path.read_text().strip()
@@ -145,9 +121,7 @@ def _holder_if_alive(path: Path) -> str | None:
 def take_lock(path: Path) -> None:
     """Claim the machine for one benchmark session, or refuse to start.
 
-    ``O_EXCL`` makes the claim atomic, so two sessions racing for a free lock
-    resolve to one refusal rather than two holders. A lock whose holder is no
-    longer alive is evicted, so a crashed session cannot wedge the next one.
+    The claim is atomic. A lock whose holder is no longer alive is evicted.
 
     Raises:
         pytest.UsageError: If another live session holds the lock.
@@ -172,9 +146,6 @@ def take_lock(path: Path) -> None:
 def refuse_unless_idle(load1: float, cores: int) -> None:
     """Refuse to benchmark a machine that is already working.
 
-    The lock above only catches this harness; the load average catches
-    everything else that owns the box.
-
     Raises:
         pytest.UsageError: If the 1-minute load average exceeds the core count.
     """
@@ -188,15 +159,9 @@ def refuse_unless_idle(load1: float, cores: int) -> None:
 
 
 #: How many copies of the model a measurement holds at once — the timed rounds
-#: in this process, and `benchmem(isolate=True)` again in a child, with glibc
-#: returning neither to the OS in between.
-#:
-#: The *projection* is weighed at all of them, because what has to fit is the
-#: machine rather than the cell: `transport/w100` on linopy projected 8.4 GB
-#: from `w10`, took 14.3 of its own, wanted about twice that, and took a 32 GB
-#: box down twice. The rung just *measured* is weighed at one copy still — it
-#: completed, so it fit, and doubling it would retire ceilings that no run ever
-#: hit.
+#: in this process, and `benchmem(isolate=True)` again in a child. The
+#: projection to the next rung is weighed at all of them; the rung just
+#: measured, at one.
 COPIES_HELD = 2
 
 
@@ -215,14 +180,7 @@ def published_rungs() -> set[str]:
 
 
 def published_results() -> set[Path]:
-    """The result files the published run writes — one per sink and case.
-
-    Named rather than globbed, and derived from the task rather than from what
-    happens to be on disk. `bench/results` also holds files a short run is
-    *entitled* to write — `ladder-smoke` lands `latest-smoke.json` beside these
-    — so a guard over the whole directory would refuse the one run whose whole
-    job is to be narrow.
-    """
+    """The result files the published run writes — one per sink and case, derived from the task."""
     defaults = _ladder_defaults()
     return {
         (Path.cwd() / f'bench/results/latest-{sink}-{case}.json').resolve()
@@ -234,22 +192,8 @@ def published_results() -> set[Path]:
 def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
     """A short run may not write the file the published tables are drawn from.
 
-    The hazard is not a wasted afternoon, it is a silent one: a smoke test aimed
-    at one of them replaces that table's provenance with four measurements, and
-    nothing about the resulting file looks wrong afterwards.
-    `bench/README.md` has warned about it in prose since the harness became
-    pytest; this is the same sentence where it can be enforced.
-
-    **The published run writes one file per sink and case**, and the guard
-    aimed at `latest.json` for long enough that no run wrote that name any
-    more — it stood over a path nothing touched while the sixteen files the
-    tables are actually drawn from were open to exactly the overwrite it exists
-    to stop.
-
-    Narrower *sinks* or *libraries* are allowed — the scheduled run takes one
-    sink per job, so each half writes a file naming the sink it measured and
-    `bench.report` reads the pair. Narrower *rungs* are what makes a run a
-    smoke test.
+    Narrower sinks or libraries are allowed; a run missing a published rung is
+    not.
 
     Raises:
         pytest.UsageError: If the run is missing a published rung and would
@@ -273,12 +217,7 @@ def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
 def pytest_sessionstart(session: pytest.Session) -> None:
     """One benchmark per machine, refused up front rather than found in the numbers (#705).
 
-    CI exempts itself: the runners in bench.yml and codspeed.yml are
-    single-purpose, and CodSpeed counts instructions rather than wall time, so
-    the machine-sharing hazard this refuses is a developer-box one — while a
-    runner whose background load trips the threshold would fail the job for
-    nothing. The load stamp in ``machine_info`` still records what the box was
-    doing.
+    CI is exempt: its runners are single-purpose.
     """
     refuse_to_overwrite_the_provenance(session.config)
     if session.config.getoption('--i-know-another-is-running') or os.environ.get('CI'):
@@ -294,16 +233,8 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
         BENCH_LOCK.unlink(missing_ok=True)
 
 
-#: Fingerprinted into every result file. The published tables name these, and a
-#: number measured against a different polars is a different number.
-#:
-#: `pytest-benchmem` is one of them: a fix to its isolated pass moves `rss`
-#: without a line of specsolve changing, so a result file that does not name the
-#: version that measured it cannot be compared across such a release.
-#:
-#: `gurobipy` and `scipy` for the same reason one level out: the `gurobi` sink
-#: is measurable now, and a published ratio through a solver has to say which
-#: solver — scipy being what carries the matrix into it.
+#: Fingerprinted into every result file: a number measured against a different
+#: version of any of these is a different number.
 TRACKED = (
     'specsolve',
     'highspy',
@@ -319,22 +250,9 @@ TRACKED = (
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: dict[str, Any]) -> None:
-    """Stamp the result file with what was installed when it ran.
+    """Stamp the result file with the dependency versions and the load average (#705).
 
-    pytest-benchmark already records the machine and — in `commit_info` — the
-    commit *and whether the tree was dirty*, which is the fingerprint the old
-    runner shelled out to git for. It does not record dependency versions, and
-    those are what a published ratio is actually a ratio of.
-
-    The load-average triple goes in beside them (#705): the session refuses to
-    start on a busy machine, but a run forced past that — or one the load crept
-    up on — leaves a file that looks complete, and the stamp is what lets it be
-    recognised as contaminated after the fact.
-
-    ``optionalhook`` because the spec is pytest-benchmark's and that plugin is
-    not always installed: the CodSpeed job runs this same suite with only
-    pytest-codspeed, and pluggy rejects an implementation whose spec no plugin
-    registered — as an INTERNALERROR, before a single test runs.
+    ``optionalhook``, because the CodSpeed job runs without pytest-benchmark.
     """
     from importlib.metadata import PackageNotFoundError, version
 
@@ -370,18 +288,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """`test_rebuild` asks a question CodSpeed's instruments cannot answer.
-
-    Its whole premise is what the *second* build costs, which is ``rounds`` in
-    one process — and pytest-codspeed warns that its memory instrument ignores
-    rounds and iterations in pedantic mode. Left in, it would report a
-    first-vs-steady number measured over a single build: a wrong number under a
-    right-sounding name. (It also fails outright, because `filterwarnings` is
-    `error` — which is the warning doing its job.)
-
-    Deselected rather than skipped, so the count reads as "not asked here"
-    rather than "asked and unanswered".
-    """
+    """Deselect `test_rebuild` under CodSpeed, whose instruments ignore rounds in pedantic mode."""
     if not getattr(config.option, 'codspeed', False):
         return
     dropped = [i for i in items if i.name.startswith('test_rebuild')]
@@ -392,13 +299,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 @pytest.fixture(scope='session')
 def paths() -> Any:
-    """``(case, rung) -> parquet paths``, generated once and shared.
-
-    Generation is neither specsolve's work nor stable across machines, so it has
-    to sit outside every measured region — and session scope is what makes that
-    structural rather than a convention the next test can forget. The files are
-    also cached on disk between runs, so a second invocation pays nothing.
-    """
+    """``(case, rung) -> parquet paths``, generated once per session outside every measured region."""
 
     def resolve(case_name: str, size: str) -> dict[str, str]:
         case = CASES[case_name]
@@ -412,25 +313,19 @@ def builds(request: pytest.FixtureRequest) -> int:
     return int(request.config.getoption('--builds'))
 
 
-#: Where a ladder stopped, and why. Read by `pytest_terminal_summary`, which is
-#: the only place a skipped cell can still say something.
 #: Where the cell being measured is noted, for a watchdog that outlives the
 #: process measuring it.
 INFLIGHT = Path(__file__).resolve().parent / 'results' / '.inflight'
 
+#: Where a ladder stopped, and why.
 CEILINGS = pytest.StashKey[dict]()
 
 
 class Ceiling:
     """Which arms have stopped climbing which ladders, and the sentence why.
 
-    An arm that builds per entity costs roughly what the rung is wide, and the
-    rungs grow tenfold — so one measurement is enough to know the next one is
-    out of reach. *That a library is far slower is the finding*; a number
-    measured over an hour to say it again is a machine kept busy for nothing.
-
-    The projection is stated in the reason and never recorded as a measurement:
-    it is arithmetic on one rung, not a second rung.
+    The projection to the next rung is stated in the reason, never recorded as
+    a measurement.
     """
 
     def __init__(self, budget: float, stash: dict, selected: Sequence[str], memory: float = 0.0) -> None:
@@ -444,18 +339,7 @@ class Ceiling:
         return found[1] if found else None
 
     def rows(self) -> list[dict[str, Any]]:
-        """Every ceiling as a record, for the file beside the measurements.
-
-        A cell nobody measured leaves no benchmark entry, so without this the
-        only trace is a line in the terminal — and the table then prints the
-        same em dash for *too slow to measure* as it does for a sink the
-        library cannot reach. They are different answers and the reader is
-        entitled to both.
-
-        ``stopped_by`` names which of the two budgets did it. Both are on the
-        record and only one of them fired, so a renderer reading the wrong one
-        publishes a limit the arm was nowhere near.
-        """
+        """Every ceiling as a record, for the file beside the measurements; ``stopped_by`` names the budget."""
         return [
             {
                 'record': 'ceiling',
@@ -483,11 +367,8 @@ class Ceiling:
     ) -> None:
         """Take one measurement, and decide whether the next rung is worth taking.
 
-        Two budgets, because a rung can be affordable in one and not the other:
-        `transport/w100` on `linopy` takes 51 s and 31 GB, and it was the second
-        that took the machine down with it (#1416). Memory is checked first —
-        an over-time rung leaves a number behind, an over-memory one leaves the
-        run with no runner.
+        Memory is checked before time: `transport/w100` on `linopy` takes 51 s
+        and 31 GB, and the memory took the machine down (#1416).
         """
         key = (arm, case_name, ladder_of(size), sink)
         if self.memory and peak_bytes:
@@ -538,26 +419,12 @@ def _seconds(value: float) -> str:
 
 
 def ladder_of(size: str) -> str:
-    """Which ladder a rung belongs to — its own, or the size one.
-
-    A case can carry more than one, and they ask different questions: `l` is the
-    longest model and `w1000` is the widest. A library that cannot afford the
-    top of one may be perfectly able to climb the other, so the budget has to
-    decide them separately.
-    """
+    """Which ladder a rung belongs to — its own, or the size one; the budget decides each separately."""
     return next((name for name, pattern in _LADDERS if pattern.match(size)), 'size')
 
 
 def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:
-    """How much wider the next rung *of this run* is. 1.0 when there is none.
-
-    Read off the rungs the run was asked for rather than off everything the case
-    defines. A ladder measured to `l` has `xl` and `2xl` behind it, four and
-    twelve times wider, and projecting onto a rung nobody asked for stops the
-    climb on arithmetic about work that was never going to happen — which is
-    what it did on the first published run, taking the width ladder down with
-    it because the ceiling outlived the ladder that set it.
-    """
+    """How much wider the next rung of this run's selection is. 1.0 when there is none."""
     ladder = ladder_of(size)
     rungs = [s for s in CASES[case_name].ladder if s.label in set(selected) and ladder_of(s.label) == ladder]
     labels = [s.label for s in rungs]
@@ -579,12 +446,7 @@ def ceiling(request: pytest.FixtureRequest) -> Ceiling:
 
 
 def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
-    """Every ladder an arm stopped climbing, printed where the run ends.
-
-    A skipped cell leaves no record in the results file — a measurement nobody
-    took is an absent row, not a null — so this is the one place the *reason*
-    survives the run.
-    """
+    """Every ladder an arm stopped climbing, printed where the run ends."""
     del exitstatus
     reasons = config.stash.get(CEILINGS, {})
     if not reasons:
@@ -597,18 +459,7 @@ def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pyte
 
 
 def pytest_runtest_logstart(nodeid: str, location: tuple) -> None:
-    """Leave the cell about to be measured where the watchdog can read it.
-
-    A cell that exhausts the machine is a *result* — one library needing 31 GB
-    where another needs 0.6 GB at the same rung is the comparison this suite is
-    for. But the process that would record it is the one that dies, so the note
-    has to be on disk before the measurement starts rather than after it ends.
-
-    `bench/memory-watchdog.sh` reads this when it kills a case, and writes what
-    it killed into `casualties.json`. Overwritten per test and left behind on a
-    clean run, which costs nothing: the last line of a finished session names a
-    test that finished.
-    """
+    """Leave the cell about to be measured where `bench/memory-watchdog.sh` can read it."""
     del location
     with contextlib.suppress(OSError):
         INFLIGHT.parent.mkdir(parents=True, exist_ok=True)
@@ -616,14 +467,7 @@ def pytest_runtest_logstart(nodeid: str, location: tuple) -> None:
 
 
 def _write_ceilings(config: pytest.Config) -> None:
-    """The ceilings, beside the file the measurements went to.
-
-    Named from `--benchmark-json` rather than fixed, so a scratch run's ceilings
-    land with its scratch results and never overwrite the committed ones. Read
-    off the command line rather than off `config.option`: pytest-benchmark keeps
-    that path in its own storage object, and the attribute a plugin does not
-    promise is one that goes missing on an upgrade without failing.
-    """
+    """The ceilings, beside the file `--benchmark-json` names, read off the command line."""
     import json
 
     reasons = config.stash.get(CEILINGS, {})

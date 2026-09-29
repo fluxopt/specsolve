@@ -15,9 +15,8 @@ the block does.
 **The arity is written out, once per converter.** linopy's call takes the pairs
 as arguments, so how many flows a converter ties is the length of an argument
 list built in Python — two for the boiler, three for the CHP, and a loop over
-the converters to build each. That is the line the YAML no longer has: there
-the tie is one constraint over ``flow``, and a converter with a fourth flow is
-a row in a table rather than an edit to the model.
+the converters to build each. In the YAML the tie is one constraint over
+``flow``, and a converter with a fourth flow is a row in a table.
 
 Ragged curves need no padding on either side: each call carries that
 converter's own breakpoints, three for one and four for the other.

@@ -1,10 +1,8 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
 [`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
-disk and reads each at the call that asks for it. Either gives back a
-[`SolveArchive`][] for one solve, or a [`SweepArchive`][] where the
-sources were cut. Nothing here writes one: ``archive=`` on the verbs that
-solve does, through [`specsolve.layout`][].
+disk. ``archive=`` on the verbs that solve writes one, through
+[`specsolve.layout`][].
 """
 
 from __future__ import annotations
@@ -103,10 +101,9 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
 
     Args:
         path: The archive, a ``.zip`` or the directory one was written to.
-        into: Where to unpack a zip, kept afterwards, for a caller who wants
-            the extracted tree as well. Without it a zip unpacks to a scratch
-            directory that is gone when this returns. Refused for a directory
-            archive, which is read where it lies.
+        into: Where to unpack a zip, kept afterwards. Without it a zip
+            unpacks to a scratch directory removed before this returns.
+            Refused for a directory archive, which is read where it lies.
 
     Returns:
         A [`SweepArchive`][] where the archive carries an axis, a
@@ -131,9 +128,9 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
 def scan_archive(path: str | Path, into: str | Path | None = None) -> SolveArchive | SweepArchive:
     """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
 
-    The members have to outlive the value, so *into* is required for a zip
-    and kept. The same values and the same errors as [`load_archive`][],
-    and ``LayoutError`` for a zip with no *into*.
+    As [`load_archive`][], except that *into* is required for a zip, and kept:
+    the members have to outlive the value. ``LayoutError`` for a zip with no
+    *into*.
     """
     return _read(opened(path, into), whole=False)
 
@@ -162,9 +159,7 @@ def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
 def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
     """Refuse an archive whose answer came back from a different spec than the one beside it.
 
-    A solve writes both together, so this catches a hand-edited archive. A
-    ``None`` digest is an answer solved off a lowered program and is not
-    compared.
+    A ``None`` digest is not compared.
     """
     mine = digest_of(spec.to_yaml())
     if others := sorted({other for other in answered if other is not None and other != mine}):

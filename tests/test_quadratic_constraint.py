@@ -1,9 +1,7 @@
 """A quadratic constraint — the construct with no two-lane oracle.
 
-`linopy.Model` refuses a `QuadraticExpression` in a constraint, which is hard
-rule 3's amendment (*accepts ≠ builds*) and the reason `LINOPY_LANE` exists.
-Two weaker oracles replace the differential one, named here rather than left
-implicit:
+`linopy.Model` refuses a `QuadraticExpression` in a constraint, so two weaker
+oracles replace the differential one:
 
 1. **Two independent encodings** — the direct `addMQConstr` hand-off against
    the same model as LP text read back by Gurobi's parser. They share the
@@ -11,8 +9,8 @@ implicit:
 2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built frames
    (`conftest.recomputed_row_values`) against the activity the solver reports.
 
-Neither catches a *shared misreading*, which is what two lanes were for, and
-that is why one test here is an optimum done by hand.
+Neither catches a *shared misreading*, so one test here is an optimum done by
+hand.
 """
 
 from __future__ import annotations
@@ -106,7 +104,7 @@ def test_the_two_encodings_reach_one_optimum(expression, tmp_path):
 def test_the_activity_is_the_whole_left_hand_side():
     """`xᵀQx + Ax`, recomputed — the residual half of the oracle.
 
-    Emphatically *not* ``Ax``: for ``p·q >= 4`` it is 4 at the optimum where
+    Not ``Ax``: for ``p·q >= 4`` it is 4 at the optimum where
     ``Ax`` is 0, the row owning no linear entry at all.
     """
     with sps.build(SPEC, SOURCES) as model:
@@ -128,9 +126,7 @@ def test_the_optimum_is_the_one_done_by_hand():
     """
     with sps.solve(SPEC, SOURCES, solver_name='gurobi') as result:
         assert result.objective == pytest.approx(8.0, rel=RTOL)
-        # A looser tolerance than the objective's, and not slack: spatial
-        # branch-and-bound closes a *gap*, so the objective is tight while the
-        # point reaching it is only as good as the box the search stopped in.
+        # looser than the objective's: the search closes a gap, not a point
         assert result.primal('p')['value'].to_list() == pytest.approx([2.0, 2.0], rel=1e-3)
         assert result.primal('q')['value'].to_list() == pytest.approx([2.0, 2.0], rel=1e-3)
 
@@ -163,10 +159,8 @@ def test_a_quadratic_row_has_no_price_unless_the_caller_asks():
     """The default is the *answer*, not the extra information.
 
     ``QCPDual`` puts the solve on the convex path, so a nonconvex row that
-    solves without it fails outright with it (*Constraint Q not PSD*). A sink
-    asking for prices on every model would trade an answer for a number on the
-    models least able to spare it — so it is off, and a caller whose model is
-    convex asks.
+    solves without it fails outright with it (*Constraint Q not PSD*). A caller
+    whose model is convex asks.
     """
     with sps.solve(SPEC, SOURCES, solver_name='gurobi') as silent:
         with pytest.raises(SpecsolveError, match='QCPDual'):
@@ -219,7 +213,7 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
     An objective's quadratic part is replaced by one call, so its coefficients
     are pushed and only the pattern is structure. A constraint's has no such
     call, so pushing half would leave a stale coefficient answering a model
-    nobody wrote: it is structure whole. This test found that bug.
+    nobody wrote: it is structure whole.
     """
     weighted = spec(
         parameters={'floor': {'dims': []}, 'weight': {'dims': ['g']}},

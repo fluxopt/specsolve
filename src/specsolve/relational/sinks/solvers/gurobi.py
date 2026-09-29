@@ -1,19 +1,7 @@
-"""The ``gurobi`` solver: the model in two calls, straight into gurobipy.
-
-The same hand-off as [`highs`][specsolve.relational.sinks.solvers.highs], reading the
-same ``dense_columns``, ``dense_rows`` and ``row_blocks``, so the two cannot
-disagree about the model they load. Two things differ:
-
-- **The matrix's currency.** HiGHS takes the three CSR arrays; gurobipy's
-  matrix API takes a matrix *object*, so they are wrapped in a
-  ``scipy.sparse.csr_matrix`` — a view, not a copy. That wrapper is why the
-  ``[gurobi]`` extra carries scipy.
-- **Nothing is batched.** The columns cannot be, since ``addMConstr`` writes
-  into one ``MVar`` spanning the model. See
-  [`row_blocks`][specsolve.relational.sinks.handoff.Handoff.row_blocks].
+"""The ``gurobi`` solver, loading the model straight into gurobipy.
 
 ``gurobipy`` and ``scipy`` are imported inside the functions, so importing
-this module stays free for a caller who never solves with it.
+this module needs neither.
 """
 
 from __future__ import annotations
@@ -35,9 +23,8 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff, RowVectors
 
 
-#: Gurobi status -> termination condition. Copied from linopy's own
-#: ``Gurobi.CONDITION_MAP`` bar three entries ([`_LINOPY_DIVERGENCES`][]);
-#: ``tests/test_solve_status.py`` asserts both halves.
+#: Gurobi status -> termination condition: linopy's ``Gurobi.CONDITION_MAP``
+#: except [`_LINOPY_DIVERGENCES`][].
 _CONDITION_OF_GUROBI_STATUS = {
     1: 'unknown',
     2: 'optimal',
@@ -58,8 +45,7 @@ _CONDITION_OF_GUROBI_STATUS = {
     17: 'resource_interrupt',
 }
 
-#: Where the table above does not copy linopy's, and why: each contradicts a
-#: status Gurobi documents. The words stay linopy's; only the verdicts differ.
+#: Where the table above departs from linopy's, and why.
 _LINOPY_DIVERGENCES = {
     10: 'SOLUTION_LIMIT stopped early after n incumbents; linopy calls it optimal',
     16: 'WORK_LIMIT is a limit, not a solver failure; linopy calls it internal_solver_error',
@@ -74,69 +60,38 @@ def build_gurobi(
 ) -> Gurobi:
     """Load the model into a `gurobipy.Model` and stop there.
 
-    [`build_highs`][specsolve.relational.sinks.solvers.highs.build_highs]'s seam.
-    ``batch_rows`` is a *nonzero* budget that splits the matrix across calls;
-    it defaults to one call — see
-    [`row_blocks`][specsolve.relational.sinks.handoff.Handoff.row_blocks].
+    ``batch_rows`` is a nonzero budget that splits the matrix across calls;
+    ``None`` is one call.
 
     Returns:
         The [`Gurobi`][] holding the model, at ``.handle``. ``close``, or
-        leaving a ``with``, releases both the model and its environment in the
-        order Gurobi wants.
+        leaving a ``with``, releases both the model and its environment.
     """
     return Gurobi(handoff, batch_rows, solver_options)
 
 
 class Gurobi(Solver):
-    """Gurobi, holding one model — [`Solver`][]'s member for the opt-in sink.
+    """Gurobi, holding one model: [`Solver`][]'s member for the opt-in sink."""
 
-    [`Highs`][specsolve.relational.sinks.solvers.highs.Highs]'s twin, and the same
-    lifecycle. Four things are gurobipy's shape:
-
-    - **A push writes through the read-back handles.** The ``MVar`` and the
-      constraint blocks are what carry the attributes, so this keeps what
-      [`_built`][] returns rather than the model alone.
-    - **The release is one finalizer, however it is reached.** ``close`` runs
-      it, and a holder dropped without closing runs it when the collector
-      gets there; both dispose the model before its environment, the order
-      Gurobi's licence wants, and the finalizer holds the two handles rather
-      than the solver.
-    - **Nothing pushes ``Sense``.** A row's comparison comes from the YAML and
-      no data can move it, so a model whose senses differ is one
-      [`structure`][specsolve.relational.sinks.handoff.Handoff.structure] has already
-      sent back to be loaded again. gurobipy would refuse the array anyway.
-    - **``update`` before ``optimize``**, gurobipy's changes being queued.
-    """
-
-    #: The loaded model, the two handles that read it back, and the
-    #: environment to release. ``close`` drops all four.
+    #: The loaded model, the handles that read it back, and the environment.
+    #: ``close`` drops them.
     _m: Any
     _x: Any
     _blocks: list[Any]
     #: [`_released`][] over the model and its environment, bound to this
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
-    #: The quadratic constraints, in row order and **after** every linear one:
-    #: they are the tail of the label space.
+    #: The quadratic constraints, in row order, after every linear one.
     _qrows: list[Any]
     _env: Any
 
-    #: Both halves of the extra.
     requires = ('gurobipy', 'scipy.sparse')
     unavailable_message = (
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
     )
 
-    #: Gurobi branches on a set itself: no binaries, no big-M, and no bound a
-    #: member has to have.
-    #:
-    #: The only sink with no quadratic exclusion: a Hessian stands beside
-    #: integrality, and a nonconvex one reaches spatial branch-and-bound at
-    #: default parameters, both measured in
-    #: ``tests/test_gurobi_capability_probes.py``.
-    #:
-    #: This is the only solver in the package that builds a
-    #: ``quadratic_constraint`` at all.
+    #: The only sink with no quadratic exclusion, as
+    #: ``tests/test_gurobi_capability_probes.py`` measures.
     capabilities = Capabilities(
         supports={
             'integrality': 'native',
@@ -152,17 +107,10 @@ class Gurobi(Solver):
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
     def dual_ray(self) -> pl.Series | None:
-        """``FarkasDual``, negated, and only where the caller asked for it.
+        """``FarkasDual``, negated to the contract's sign, or ``None``.
 
-        Gurobi computes the certificate only under ``InfUnbdInfo``, which is
-        off by default and has to be set *before* the solve, so a caller who
-        wants a ray passes ``solver_options={'InfUnbdInfo': 1}``; without it
-        the attribute is refused, and that refusal *is* the answer. The sign
-        is Gurobi's own, which is the opposite of the contract's, so what is
-        read here is negated.
-
-        A quadratic row carries no ``FarkasDual`` at all, so a model holding
-        one yields no ray rather than a vector that does not span it.
+        Gurobi computes it only under ``solver_options={'InfUnbdInfo': 1}``.
+        A model with a quadratic row has none.
         """
         import numpy as np
 
@@ -181,11 +129,7 @@ class Gurobi(Solver):
         return self._m
 
     def push(self, handoff: Handoff) -> None:
-        """Whole vectors, in as many calls as there are blocks.
-
-        The matrix API writes an attribute across an ``MVar`` or an
-        ``MConstr`` at a time.
-        """
+        """Whole vectors, one call per block."""
         gurobipy = _gurobipy()
         cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
         self._x.LB, self._x.UB, self._x.Obj = cols.lb, cols.ub, cols.cost
@@ -200,11 +144,8 @@ class Gurobi(Solver):
     def warm_start(self) -> WarmStart | None:
         """The basis the last solve left, or its incumbent where Gurobi holds none.
 
-        Gurobi refuses ``VBasis`` outright where no basis exists — after a
-        mixed-integer solve, and before any — so the refusal itself routes to
-        the incumbent, and to ``None`` where ``SolCount`` says there is not
-        one of those either. Row statuses concatenate across the constraint
-        blocks the way [`_duals`][] reads prices.
+        Gurobi refuses ``VBasis`` where no basis exists, so the refusal routes
+        to the incumbent, or to ``None`` where there is none.
         """
         import numpy as np
 
@@ -221,12 +162,7 @@ class Gurobi(Solver):
         return WarmStart(solver='gurobi', column_statuses=columns, row_statuses=rows, column_values=None)
 
     def _warm(self, ws: WarmStart) -> None:
-        """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent.
-
-        Written through the same handles a push writes, the row statuses
-        sliced per block the way a push slices the right-hand sides —
-        and ``update`` after, gurobipy's changes being queued.
-        """
+        """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent."""
         if (basis := ws.basis()) is not None:
             column_statuses, row_statuses = basis
             self._x.VBasis = column_statuses
@@ -240,12 +176,7 @@ class Gurobi(Solver):
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:
-        """Each linear constraint block with its slice of a row vector.
-
-        The blocks were added in ascending row ranges, so a vector in row order
-        is walked by their shapes — the one layout fact the pushes and the
-        read-backs share.
-        """
+        """Each linear constraint block with its slice of a row vector. The blocks ascend by row."""
         at = 0
         for block in self._blocks:
             yield block, vector[at : at + block.shape[0]]
@@ -254,14 +185,8 @@ class Gurobi(Solver):
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
-        Gurobi refuses the attribute where there is no primal or no dual
-        rather than handing back zeros.
-
-        The one error translated here is the convexity refusal a *caller's own
-        option* can provoke: ``QCPDual`` puts the solve on the convex path, so
-        a nonconvex quadratic constraint that solves without it fails with it.
-        Left alone that reaches the caller as a ``GurobiError`` naming a
-        parameter they set for an unrelated reason.
+        The one ``GurobiError`` translated is a caller's ``QCPDual`` on a
+        nonconvex quadratic constraint.
         """
         gurobipy = _gurobipy()
         try:
@@ -289,11 +214,7 @@ class Gurobi(Solver):
         )
 
     def forget(self) -> None:
-        """``Model.reset``: the solution and the basis go, the model stays.
-
-        The default depth, which discards the solution without touching the
-        parameters the caller set through ``solver_options``.
-        """
+        """``Model.reset``: the solution and the basis go; the model and its parameters stay."""
         self._m.reset()
 
     def close(self) -> None:
@@ -305,12 +226,7 @@ class Gurobi(Solver):
 
 
 def _released(m: Any, environment: Any) -> None:
-    """Dispose the model, then the environment it was built on.
-
-    In that order because Gurobi keeps an environment — and the licence on it
-    — alive until every model built on it is gone, so the reverse releases
-    nothing until the collector finds the model.
-    """
+    """Dispose the model, then its environment, which Gurobi keeps alive while a model on it lives."""
     m.dispose()
     environment.dispose()
 
@@ -322,16 +238,9 @@ def _built(
 ) -> tuple[Any, Any, list[Any], list[Any], Any]:
     """The model, the handles to read it back, and the environment to release.
 
-    **Options go on the environment, not the model.** A licence parameter —
-    ``WLSAccessID``, ``ComputeServer``, ``TokenServer`` — can only be set
-    before an environment starts, and ``setParam`` on the model refuses it.
-    Nothing else is affected: an environment's parameters are the defaults of
-    every model built on it. ``OutputFlag`` leads so a caller can put the log
-    back.
-
-    ``vtype`` is passed only when some column is integral, as linopy does.
-    ``batch_rows`` goes straight through un-defaulted: one call unless a
-    caller asks otherwise.
+    Options go on the environment, since a licence parameter such as
+    ``WLSAccessID`` can only be set before an environment starts. ``OutputFlag``
+    leads so a caller can put the log back.
     """
     gurobipy = _gurobipy()
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
@@ -374,20 +283,10 @@ def _filled(m: Any, handoff: Handoff, batch_rows: int | None, gurobipy: Any) -> 
 
 
 def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spelling: Any) -> list[Any]:
-    r"""Every quadratic constraint, one ``addMQConstr`` call each.
+    """Every quadratic constraint, one ``addMQConstr`` call each.
 
-    The second stream with no bulk form — ``addSOS`` is the first: the API
-    takes one constraint per call.
-
-    Each row is assembled from **both** matrices: its quadratic entries as
-    :math:`Q` in :math:`x^	op Q x` (no halving, the convention
-    [`_set_quadratic`][] already takes) and its linear entries from the
-    ordinary matrix, where they sit at the same row label. A quadratic row
-    keeps its place in the linear matrix, so the two halves are read from one
-    label.
-
-    They are the **tail** of the label space, so the handles returned here
-    concatenate onto the linear blocks ([`_duals`][]).
+    A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
+    and its linear entries from the matrix at the same row label.
     """
     import numpy as np
     import scipy.sparse
@@ -408,14 +307,9 @@ def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spel
 def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
-    ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` — **no halving** —
-    so the unordered-pair form the engine hands over
-    ([`quad`][specsolve.relational.sinks.handoff.Handoff.quad]) goes in as it
-    stands, one entry per pair in the upper triangle.
-
-    It sets the *whole* objective, so the cost vector already on the columns is
-    passed again rather than overwritten with zeros. Nothing is called at all
-    for an affine model.
+    ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` unhalved, so
+    [`quad`][specsolve.relational.sinks.handoff.Handoff.quad] goes in as it
+    stands. It sets the whole objective, so *cost* is passed again.
     """
     import scipy.sparse
 
@@ -432,12 +326,7 @@ def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
 
 
 def _add_sets(m: Any, x: Any, handoff: Handoff, gurobipy: Any) -> None:
-    """Every special-ordered set, one ``addSOS`` call each.
-
-    The one stream with no bulk form: ``addSOS`` takes a list of ``Var`` and
-    their weights, so a set is a call and its members are Python objects. The
-    ``MVar`` is sliced rather than ``getVars()`` walked.
-    """
+    """Every special-ordered set, one ``addSOS`` call each."""
     if not handoff.sos.height:
         return
     order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
@@ -446,8 +335,7 @@ def _add_sets(m: Any, x: Any, handoff: Handoff, gurobipy: Any) -> None:
         m.addSOS(order[set_type], [columns[at] for at in cols], weights.to_list())
 
 
-#: Our spelling of a comparison against Gurobi's, by ``GRB`` attribute name —
-#: a name because ``gurobipy`` is an optional import and this is module level.
+#: Each comparison's ``GRB`` attribute name, since ``gurobipy`` is imported lazily.
 _GUROBI_SENSE = {'<=': 'LESS_EQUAL', '>=': 'GREATER_EQUAL', '==': 'EQUAL'}
 
 
@@ -462,12 +350,7 @@ def _gurobipy() -> Any:
 
 
 def _status_of(m: Any) -> SolveStatus:
-    """What the solve concluded, on both axes.
-
-    ``SolCount`` answers "is there anything here", which the termination
-    condition does not: a run stopped at a limit may or may not hold an
-    incumbent.
-    """
+    """What the solve concluded, with ``SolCount`` deciding whether a primal exists."""
     code = int(m.Status)
     return SolveStatus(
         termination_condition=_CONDITION_OF_GUROBI_STATUS.get(code, 'unknown'),
@@ -477,11 +360,7 @@ def _status_of(m: Any) -> SolveStatus:
 
 
 def _wording(code: int) -> str:
-    """Gurobi's own name for a status code.
-
-    Read off ``GRB.Status`` rather than tabulated — so one this package has
-    never heard of still arrives searchable.
-    """
+    """Gurobi's own name for a status code, read off ``GRB.Status`` so an unlisted one is named too."""
     gurobipy = _gurobipy()
     names = {getattr(gurobipy.GRB.Status, name): name for name in dir(gurobipy.GRB.Status) if not name.startswith('_')}
     return names.get(code, str(code))
@@ -490,18 +369,9 @@ def _wording(code: int) -> str:
 def _activity(blocks: list[Any], qrows: list[Any]) -> pl.Series:
     r"""Each row's left-hand side at the solution, in row order.
 
-    Gurobi exposes no row value of its own — only ``Slack``, which is
-    ``rhs - activity`` uniformly across senses — so the one subtraction
-    recovers the solver's number. ``Slack`` exists whenever a solution does,
-    mixed-integer included, and a readable status guarantees one by the time
-    this is asked. Blocks were added in ascending row ranges, the same fact
-    [`_duals`][] leans on.
-
-    **A quadratic row's activity is not** :math:`Ax`: ``QCSlack`` is measured
-    against the whole left-hand side, :math:`x^\top Q x + a^\top x`, so the
-    same subtraction returns what the row actually asserts. Nothing here
-    recomputes it — the solver's own number is the one feasibility was judged
-    against.
+    Gurobi exposes only ``Slack``, which is ``rhs - activity`` for every sense.
+    ``QCSlack`` covers a quadratic row's whole left-hand side,
+    :math:`x^\top Q x + a^\top x`.
     """
     import numpy as np
 
@@ -512,19 +382,10 @@ def _activity(blocks: list[Any], qrows: list[Any]) -> pl.Series:
 
 
 def _duals(blocks: list[Any], qrows: list[Any]) -> pl.Series | None:
-    """Shadow prices in row order, or ``None`` where the model has none.
+    """Shadow prices in row order, or ``None`` where Gurobi refuses them.
 
-    Blocks were added in ascending row ranges and the quadratic rows after
-    them, so concatenating their slices reproduces the row index without a
-    sort — and [`Solver.run`][] checks the vector spans the model. Gurobi
-    refuses ``Pi`` on a mixed-integer model, and that refusal *is* the answer
-    — no zero vector to test.
-
-    A quadratic row prices through ``QCPi``, which exists **only under
-    ``QCPDual``** — off by default: asking for it puts the solve on the convex
-    path, and a nonconvex row that solves without it then fails outright. A
-    caller who wants prices asks with ``solver_options={'QCPDual': 1}``;
-    without it the attribute is refused, and that refusal *is* the answer.
+    Gurobi refuses ``Pi`` on a mixed-integer model, and ``QCPi`` unless
+    ``solver_options={'QCPDual': 1}``.
     """
     import numpy as np
 

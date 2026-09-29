@@ -1,15 +1,8 @@
 """`fleet` as a matrix: twelve column blocks per snapshot, seven row blocks.
 
 One snapshot's twelve quantities are twelve blocks of `unit` columns, and the
-whole model is that block `kron`ed against the identity — every row here lives
-inside a single snapshot, so unlike `storage` there is no off-diagonal.
-
-The block is dense on purpose: `fleet` holds its unit count fixed at fifty, so
-it is 301 x 600 whatever the ladder does, and writing it as an array reads as
-the model rather than as sparse-matrix plumbing.
-
-It is also the only case here with an inequality row, which is why `Lp` carries
-a sense per row rather than one for the model.
+whole model is that block `kron`ed against the identity. The block is dense:
+`fleet` holds its unit count at fifty, so it is 301 x 600 on every rung.
 """
 
 from __future__ import annotations
@@ -24,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-#: The twelve, in the order the model file declares them — which is also the
-#: column order of every block below.
+#: The twelve, in the order the model file declares them; also the column order of every block.
 QUANTITIES = (
     'p', 'p_up', 'p_down', 'reserve_up', 'reserve_down', 'charge',
     'discharge', 'soc', 'spill', 'curtail', 'import_', 'export_',

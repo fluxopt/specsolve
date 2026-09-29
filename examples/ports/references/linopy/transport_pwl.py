@@ -8,18 +8,16 @@ piecewise formulation. See docs/examples/index.md.
 
     pixi exec -s uv uv run --script examples/ports/references/linopy/transport_pwl.py
 
-**The independence here is sharper than usual.** Every other reference is
-independent of specsolve because it is a different program; this one is
-independent of the construct under test. `specsolve`'s ``piecewise:`` block and
-linopy's ``add_piecewise_formulation`` are two implementations of the same
-λ convex-combination idea, written separately, and this compares them on a
-model neither was written for. Nothing here imports specsolve.
+`specsolve`'s ``piecewise:`` block and linopy's ``add_piecewise_formulation``
+are two implementations of the same λ convex-combination idea, written
+separately, and this compares them on a model neither was written for. Nothing
+here imports specsolve.
 
 The model is GAMS model library ``trnspwl`` — Dantzig's transportation problem
 with **economies of scale**: shipping cost grows as ``sqrt(x)`` rather than
 linearly, so a big consignment is cheaper per unit. GAMS publishes the model
-and its discretisation but not an optimal objective, which is why this script
-is what verifies the port rather than a citation.
+and its discretisation but not an optimal objective, so this script verifies
+the port.
 
 ``sqrt`` is concave and the objective is a minimisation, so the convex-hull
 relaxation is **not** valid: it would let the solver ride the chord underneath
@@ -28,9 +26,6 @@ formulation therefore needs segment binaries, which is what makes this port a
 MILP.
 
 Pinned above to the versions that produced the number in ``references.json``.
-linopy is pinned because it *is* the reference here — this script calls its own
-``add_piecewise_formulation``, so the formulation is theirs — and xarray is its
-data model; pandas is a floor, shaping the input tables and nothing else.
 """
 
 from __future__ import annotations

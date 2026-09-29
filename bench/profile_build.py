@@ -1,20 +1,12 @@
 """Attribute build wall time to the queries that spend it.
 
-``bench/test_ladder.py`` says *how much* slower we are; this says *where*. It
-wraps ``LazyFrame.collect`` and tags every collection with the build step that
-issued it, so the output is a ranked list of queries rather than a single number.
-
-Collection is the right thing to wrap: a lazy frame costs nothing until
-something asks for its rows, so every second of the build is inside one of
-these calls.
+Wraps ``LazyFrame.collect`` and tags every collection with the build step that
+issued it, so the output is a ranked list of queries.
 
     pixi run -e bench python -m bench.profile_build dispatch l
     pixi run -e bench python -m bench.profile_build transport m
 
-The wrapper adds Python overhead per call, so **absolute times here are not
-comparable to the ladder's** — there are only a few dozen collections, but the
-process is otherwise unoptimised. Read the shares, not the seconds; to quote a
-number, measure it with the harness.
+The wrapper adds overhead per call, so read the shares, not the seconds.
 """
 
 from __future__ import annotations
@@ -27,12 +19,8 @@ from typing import Any
 
 from bench import cases as bench_cases
 
-#: What a collection is attributed to, as ``(module path, owner or None,
-#: name)`` — a method on the class that owns it, or a module-level function.
-#: Named against the owners rather than against one of them, because the steps
-#: a build spends its time in no longer live on the engine: attaching reads the
-#: sources, labelling assigns the solver indices, and only the assembly is the
-#: engine's own.
+#: What a collection is attributed to, as ``(module path, owner or None, name)``
+#: — a method on the class that owns it, or a module-level function.
 STEPS = (
     ('specsolve.relational.engines.polars.assembly', 'Assembly', '_build_variable'),
     ('specsolve.relational.engines.polars.assembly', 'Assembly', '_build_constraint'),

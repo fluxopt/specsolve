@@ -28,8 +28,7 @@ if TYPE_CHECKING:
 
     from specsolve.lanes import Source
 
-#: The archive's one layout. ``axis.json`` is also what says which kind an
-#: archive holds, a sweep being the one whose sources are cut.
+#: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
 DIGESTS_MEMBER = 'sources.parquet'
@@ -46,11 +45,7 @@ def beside(out: Path) -> Iterator[Path]:
 
 
 def check_the_target(out: Path) -> None:
-    """Refuse a directory target that already holds something, before anything is solved.
-
-    A ``.zip`` target is replaced; a directory archive is written whole rather
-    than merged into what is there.
-    """
+    """Refuse a directory target that already holds something, before anything is solved."""
     if out.suffix != '.zip' and out.is_dir() and any(out.iterdir()):
         raise LayoutError(
             f'{str(out)!r} already holds something, and a directory archive is written whole rather than '
@@ -62,9 +57,8 @@ def check_the_target(out: Path) -> None:
 def _staging_for(out: Path) -> Path:
     """A staging directory of this writer's own, beside *out*.
 
-    One per writer: two writers archiving to one path would otherwise share a
-    staging area, and the second to open it would clear the first's members.
-    Beside *out* so landing it is a rename rather than a copy across devices.
+    One per writer, so two writers to one path do not clear each other's
+    members; beside *out*, so landing it is a rename.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(dir=out.parent, prefix=out.name + '.'))
@@ -82,10 +76,8 @@ def write_archive(
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
     Args:
-        out: Where to write. Its parent is made if it does not exist. A
-            directory named ``run=<name>`` is stamped ``<name>``, so a
-            reader taking the run from the path and one taking it from the
-            column read one name.
+        out: Where to write; its parent is made if it does not exist. A
+            directory named ``run=<name>`` is stamped ``<name>``.
         spec: The spec as written, held as ``spec.yaml``.
         sources: What was attached, keyed as the file declares. A parquet path
             is copied as its own bytes; anything else is written as *tables*
@@ -94,12 +86,10 @@ def write_archive(
             is not a path.
         axis: The axis manifest, or ``None`` where the sources are not cut.
         answer: A directory holding the answer's own layout. Its record and
-            metrics, which a spill writes per slice, land as one file each,
-            stamped with the archive's name.
+            metrics land as one file each, stamped with the run.
 
     Returns:
-        *out*, which lands whole or not at all: it is built beside its name
-        and renamed into place.
+        *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip').removeprefix('run=')
@@ -134,7 +124,7 @@ def write_archive(
 
 
 def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
-    """``(run, source, digest)`` in source order, so one model's data digests to one table whoever assembled it."""
+    """``(run, source, digest)`` in source order, so one model's data digests to one table."""
     names = sorted(digests)
     return pl.DataFrame(
         {'run': [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},

@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_spill.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -24,13 +20,10 @@ by the inflow itself, and existing only where there is inflow to spill.
 
 The reservoir is the cheap unit and gas is dear, so nothing spills for want of
 somewhere to sell it: the first two snapshots simply deliver more water than
-30 MW of turbine and 60 MWh of reservoir can absorb. An instance where the spill
-variable stayed at zero throughout would have proved nothing.
+30 MW of turbine and 60 MWh of reservoir can absorb.
 
-Efficiencies are 1 and the standing loss is 0 on purpose. The storage port
-already proves
-the round-trip terms, and leaving them in would let a mismatch here implicate
-either feature.
+Efficiencies are 1 and the standing loss is 0; the storage port covers the
+round-trip terms.
 """
 
 from __future__ import annotations
@@ -98,10 +91,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy.
 
-    Read off the model rather than ``buses_t.marginal_price``: the two differ
-    wherever the snapshot weightings are not 1, and recording the dual keeps the
-    comparison between two formulations rather than against a presentation of
-    one of them.
+    Read off the model: ``buses_t.marginal_price`` divides it by the snapshot
+    weighting.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {

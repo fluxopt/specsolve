@@ -1,30 +1,15 @@
 """`nodal` as a linopy user writes it.
 
-The one case on the ladder whose mask is not vacuous. `dispatch` carries a
-`where` its generator never triggers, so both lanes build the same dense
-product there; here a quarter of the (node, tech) pairs exist and the other
-three quarters are what the case measures.
+A quarter of the (node, tech) pairs exist. `mask=` is linopy's spelling of the
+YAML's `where: installed > 0`, as a node x tech plane linopy broadcasts along
+the snapshot axis.
 
-`mask=` is linopy's spelling of the YAML's `where: installed > 0`, and the
-shape of the argument is the point: the mask is node x tech where the variable
-is snapshot x node x tech. Structural sparsity is time-invariant, so linopy
-broadcasts one plane along the snapshot axis rather than storing the product —
-the linopy lane's best case for this shape, not a handicap arranged for it.
+`fillna(0)` makes an absent slot contribute zero to the sum, as the YAML means;
+without it the pinned linopy warns and the model depends on a global option.
 
-**`fillna(0)` is what makes the sum mean what the YAML means**, and it is the
-line to read twice. An absent slot contributes zero to `sum(p, over=tech)`,
-which is legacy linopy's default and v1's only under `fillna` — the same
-mapping the linopy oracle (`tests/linopy_lane`) uses for a variable under `absence: zero`. Without it
-the pinned linopy warns and the arm builds whichever model the option happens
-to be set to, which is how a benchmark comes to measure a different model.
-
-**The pivot to a dense node x tech frame is inside `build`, and is timed.**
-`installed` arrives tidy, one row per pair that exists, because that is the
-shape the sparsity lives in; squaring it up is work a linopy user does, and the
-arm's contract is that each lane pays for its own ingestion. Labels come from
-the declared dimension tables rather than from the pivot — a tech no node
-installed would otherwise drop out of the model's coordinates, which is a
-different model rather than a smaller one.
+The pivot of the tidy `installed` table to a dense node x tech frame is inside
+`build`, so it is timed. Labels come from the dimension tables, so a tech no
+node installed stays in the model's coordinates.
 """
 
 from __future__ import annotations

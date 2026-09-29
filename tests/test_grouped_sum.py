@@ -116,9 +116,7 @@ def _relationally(data):
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
-    """Before coordinates were declared this built and solved: the mapping's
-    value column was promoted to an index unchecked, and the inner join that
-    places the terms dropped the generator out of its balance silently."""
+    """A mapping value that is not a declared label would drop its generator out of the balance silently."""
     gens, lines, load = transport_data
     bad = gens.copy()
     bad.loc[bad.index[0], 'bus'] = 'nowhere'  # a bus that does not exist
@@ -151,9 +149,6 @@ def test_a_coordinate_must_be_single_valued(transport_data):
 def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
     """A parameter is a function of its dims, so two rows for one coordinate
     has no answer — and the linopy lane will not lay such a source out either.
-
-    The relational lane used to resolve it into a sum, silently, which is a
-    divergence between two lanes that are supposed to accept the same thing.
     """
     gens, lines, load = transport_data
     data = _inputs(gens, lines, load)
@@ -227,10 +222,8 @@ def _partial_inputs():
 def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
     """A null coordinate means "this label is in no group", not "typo".
 
-    Row absence is the language's idiom for "not present" everywhere else —
-    an absent parameter row is a structural zero — and a coordinate is the one
-    place it used to be an error. `i2` belongs to no group, so `sum`
-    places its terms nowhere and only `i0`/`i1` can meet the target of 3.
+    `i2` belongs to no group, so `sum` places its terms nowhere and only
+    `i0`/`i1` can meet the target of 3.
     """
     path = tmp_path / 'partial.yaml'
     path.write_text(PARTIAL_YAML)
@@ -394,10 +387,6 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     that include them — so one row there is one `(row, col)` cell. The
     objective drops them, and a fragment that still carries one then holds
     several rows per column.
-
-    Nothing downstream would fix it: the hand-off scatters with
-    `dense[at] = values`, which keeps the last write rather than accumulating,
-    so this reads as a plausible answer to a model nobody wrote.
     """
     with sps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as model:
         obj = model._engine._model.handoff.obj.sort('col')
@@ -443,8 +432,7 @@ def monthly():
     """The snapshot index and sources: six snapshots over three calendar months,
     wind capped in the first.
 
-    The `month_of` relation is data prep — one polars expression — which is the
-    page's whole point: the language never learns what a calendar is.
+    The `month_of` relation is data prep: one polars expression.
     """
     import datetime as dt
 

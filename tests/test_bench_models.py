@@ -1,18 +1,8 @@
 """The benchmark corpus still loads, and still builds.
 
-`bench/` has its own models — one directory per case, holding `spec.yaml`
-beside the same model in every dialect the harness has an arm for — and until
-#343 nothing checked them. The benchmark
-workflow runs only on a `trigger:bench` label — asked for, never guessed, which
-is right for a job that costs a runner — so no gate ever opened these files.
-#329 removed `equations:`, `examples/` was migrated, and all six bench models
-silently stopped loading. The README's headline numbers come from this suite, so
-they were unreproducible from a clean checkout and nothing failed.
-
-Two gates, because loading does not imply building. `check()` needs no data at
-all and holds even on the bare install. The build needs `bench.cases` to
-generate a rung, and that imports pandas — which the bare install does not
-have — so it skips there and runs everywhere else.
+The benchmark workflow runs only on request, so this is the gate that opens
+`bench/models/` (#343). `check()` needs no data and runs on the bare install;
+the build needs `bench.cases`, which imports pandas, so it skips there.
 """
 
 from __future__ import annotations
@@ -30,10 +20,7 @@ def _specs() -> list[Path]:
     return sorted(MODELS.glob('*/spec.yaml'))
 
 
-#: Case names are the directory each model sits in — a case is a directory now,
-#: holding its `spec.yaml` beside the same model hand-written in every dialect
-#: the harness has an arm for. Read off the tree rather than imported from
-#: `bench`, which is what lets the load gate below run on the bare install.
+#: Case names are the directory each model sits in, read off the tree so the load gate runs on a bare install.
 CASE_NAMES = [p.parent.name for p in _specs()]
 
 
@@ -44,9 +31,7 @@ def test_a_bench_spec_loads(spec: Path):
 
 
 def test_the_corpus_is_not_empty():
-    """A guard on the guard: the parametrised tests pass vacuously if the glob
-    stops matching — a rename of `bench/models/` would silently retire them.
-    """
+    """The parametrised tests pass vacuously if the glob stops matching."""
     assert len(_specs()) >= 6, f'expected the bench corpus to be found; got {CASE_NAMES}'
 
 
@@ -57,11 +42,7 @@ def bench_cases():
 
 @pytest.mark.parametrize('case', CASE_NAMES)
 def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, bench_cases):
-    """Loading is not building, which is why both gates exist: `sector` passed
-    `check()` and then died in the engine on a presence key a broadcast had
-    widened (#345). The smallest rung costs milliseconds, so that difference is
-    worth holding here rather than on a labelled runner.
-    """
+    """Loading is not building (#345)."""
     bench_case = bench_cases.CASES[case]
     sources = bench_case.write(bench_case.shape('xs'), tmp_path)
     with sps.build(bench_case.spec, sources) as model:
@@ -69,12 +50,9 @@ def test_a_bench_case_builds_on_the_smallest_rung(case: str, tmp_path: Path, ben
 
 
 def test_every_model_backs_a_case(bench_cases):
-    """A model nothing runs, or a case whose model was renamed away. The two
-    lists are matched by directory name, which is what the parametrisation
-    above assumes.
-    A case may generate its model per rung instead of committing one —
-    `declarations` does, and `bench/test_harness.py` gates the generated file —
-    so the stem match covers exactly the cases that name a committed file.
+    """No model nothing runs, and no case whose model was renamed away.
+
+    A case that generates its model per rung is gated by `bench/test_harness.py`.
     """
     static = sorted(name for name, case in bench_cases.CASES.items() if case.spec is not None)
     assert static == CASE_NAMES

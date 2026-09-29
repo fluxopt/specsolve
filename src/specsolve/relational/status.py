@@ -1,13 +1,11 @@
 """What a solve returned, on two axes.
 
 Copied spelling for spelling from ``linopy.constants``;
-`tests/test_solve_status.py` asserts the tables still match. Nothing here
-imports linopy — the engine may not (hard rule 2) — but the test does.
+`tests/test_solve_status.py` asserts the tables still match.
 
-The two axes stay separate: ``termination_condition`` is what the solver said,
-``status`` what it means for the caller. **ok does not mean optimal** — a run
-stopped at a time limit with an incumbent is ``ok``, there being values worth
-reading.
+``termination_condition`` is what the solver said, ``status`` what it means for
+the caller. ``ok`` does not mean optimal: a run stopped at a time limit with an
+incumbent is ``ok``.
 """
 
 from __future__ import annotations
@@ -40,7 +38,7 @@ class SolveStatus:
     #: Exactly what the solver called it, for a message a user can search for.
     solver_wording: str = ''
     #: Whether the solver reports an actual primal, which the termination
-    #: condition does not tell you — see [`is_readable`][].
+    #: condition does not say.
     has_primal: bool = True
 
     @property
@@ -51,8 +49,7 @@ class SolveStatus:
     def is_ok(self) -> bool:
         """The linopy rollup: the run is not an error, an abort or a refusal.
 
-        Kept exactly as linopy defines it. It is *not* the question "can I read
-        values" — see [`is_readable`][].
+        Not whether there are values to read — see [`is_readable`][].
         """
         return self.status == 'ok'
 
@@ -60,12 +57,8 @@ class SolveStatus:
     def is_readable(self) -> bool:
         """Whether there are primal values to read.
 
-        Beyond ``is_ok``: a MIP stopped at a time limit **before finding any
-        incumbent** is ``ok``, and its zero-filled ``col_value`` would be read
-        as an answer.
-
-        ``optimal`` always has a primal. Every other ``ok`` condition means
-        "stopped early", and whether an incumbent exists is a separate fact
-        only the solver knows.
+        Narrower than ``is_ok``: a MIP stopped at a time limit before
+        finding any incumbent is ``ok``, and its zero-filled ``col_value`` would
+        be read as an answer.
         """
         return self.is_ok and self.has_primal

@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_stochastic.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -22,15 +18,14 @@ operational variable into a scenario-indexed one and leaves the nominal
 variables alone: ``Generator-p`` comes out with dims ``(scenario, name,
 snapshot)`` and ``Generator-p_nom`` with dims ``(name,)``. Capacity is chosen
 once and lives through all three futures; dispatch is chosen after the load is
-known. That is the whole content of the port, and it states it by giving
-``p`` a ``scenario`` in its ``dims`` and ``p_nom`` none.
+known. The port states it by giving ``p`` a ``scenario`` in its ``dims`` and
+``p_nom`` none.
 
 **Every objective term is weighted, capital cost included.** ``define_objective``
 splits into ``capex_terms`` and ``opex_terms`` and runs both through
 ``_expected``, which selects each scenario and multiplies by its weight
 (``optimize.py:361``). The weights sum to one, so the capital term is unchanged
-by the round trip — the port writes it once rather than three times weighted,
-which is the same number and the shorter sentence.
+by the round trip, and the port writes it once.
 
 **What the expectation is worth** is printed by :func:`what_the_mean_would_build`:
 the same network with every scenario replaced by the probability-weighted mean
@@ -109,11 +104,8 @@ def balance_duals(n: pypsa.Network) -> dict[str, list]:
 def what_the_mean_would_build(tables: dict[str, pd.DataFrame]) -> None:
     """Solve the same network against the mean load, and try that fleet on the futures.
 
-    The expected-value model is the one a modeller writes when the scenario
-    dimension is not available: three futures collapsed into their
-    probability-weighted average. It is a smaller, cheaper model, and its fleet
-    is infeasible in the severe future — which is what the port is claiming when
-    it says the expectation is doing work.
+    The expected-value model collapses three futures into their
+    probability-weighted average. Its fleet is infeasible in the severe future.
     """
     load: pd.DataFrame = tables['load'].pivot(index='snapshot', columns='scenario', values='value')
     weights: pd.Series = tables['probability'].set_index('scenario')['value']
