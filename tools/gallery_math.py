@@ -3,53 +3,16 @@
     pixi run python -m tools.gallery_math           # rewrite every page's math block
     pixi run python -m tools.gallery_math --check   # fail if any has drifted
 
-A page that states its model's math by hand is the same shape of claim as a
-hand-kept coverage table: written once when it was true, with nothing failing
-when the model changes underneath it. That is not hypothetical here — three
-pages had already drifted when this was written, and the drift was in the
-direction that matters, the page claiming *less* constraint than the model
-builds:
+Notation comes from ``examples/symbols/<model>.yaml`` where one exists, and is
+derived otherwise.
 
-- ``dispatch`` displayed a bound for every ``(s, g)`` while the model masks
-  with ``where: "p_max > 0"`` — the very line the prose underneath calls the
-  one worth pausing on;
-- ``storage`` wrote ``\\eta\\,\\mathrm{charge}_s`` for a parameter the model
-  does not have, having hardcoded ``0.9``;
-- ``transport`` wrote ``\\sum_{g \\in \\mathrm{bus}}``, which is not
-  well-formed — ``bus`` is a coordinate map, not a set.
+The block is a ``<details markdown="1">``, because the gallery pages render on
+GitHub as well as on the site: GitHub keeps ``<details>`` and drops the unknown
+attribute, and the site's ``md_in_html`` needs ``markdown="1"`` to render the
+tables and math inside it.
 
-The hand-written one-liner stays: it is a *summary*, and a good one, doing a
-job the generated block does not. What is generated is the exact statement
-underneath it, which is the thing that has to be true.
-
-Notation comes from ``examples/symbols/<model>.yaml`` where one exists, so a
-page keeps the symbols its prose already uses; models without a table get the
-derived symbols, which are plain but never ambiguous.
-
-The toggle is ``<details markdown="1">``, and every part of that is load
-bearing, because these pages are read in two renderers.
-
-On **GitHub**: the sanitiser strips ``<style>``, ``class``, ``onclick`` and a
-bare ``<input>``, so the CSS-only tab trick cannot survive it — ``<details>``
-and math inside it both do. Unknown attributes are dropped, so ``markdown="1"``
-costs nothing there.
-
-On the **site**: ``md_in_html`` is enabled, and without ``markdown="1"`` it
-treats everything inside the element as raw HTML — the tables and the ``$$``
-blocks render as literal text. The strict build does not catch that, because
-literal text is valid; ``tests/test_docs_site.py`` does.
-
-``pymdownx.tabbed`` is enabled, so real tabs are now available — but a
-``=== "Math"`` marker is literal text on GitHub, and mkdocs.yml is explicit
-that these pages are meant to render in both places. If that ever stops being
-true, tabs are a change to :func:`_block` and to nothing else, which is the
-reason to generate this rather than hand-write it even once.
-
-``docs/index.md`` is the exception, and gets :func:`_home_block`: it is the one
-page under ``docs/`` that is *only* ever the site — ``README.md`` is what
-GitHub renders for the repo — so its block does use tabs, and shows the LaTeX
-source beside the math it sets. Same model, same generation, different marker
-(``home-math:``) because it is a different rendering of it.
+``docs/index.md`` renders only on the site, so its block (marker ``home-math:``)
+uses tabs and shows the LaTeX source beside the math.
 """
 
 from __future__ import annotations
@@ -87,18 +50,8 @@ def _indent(text: str) -> str:
 def _literal(table: Path) -> str:
     """*table* as the Python dict literal that `symbols=` accepts.
 
-    Rendered from the YAML rather than typed out, so the call in the "How" tab
-    is provably the one that produced the math beside it — the reason the tab
-    exists is that $\\ell$ appearing where the model says ``load`` is otherwise
-    unexplained, and an explanation that can drift is not one.
-
-    `ruff format` reaches into ```python fences in Markdown, so this emits what
-    ruff would: single quotes, a magic trailing comma on every dict it expands.
-
-    The sidecar is parsed here rather than loaded as a ``SymbolTable``, because
-    what the block prints is the mapping ``symbols=`` accepts, and a loaded
-    table hands back its own fields (``indices``, ``sets``) rather than the
-    two-key ``dimensions:`` entries the file and that argument are written in.
+    The output must be what `ruff format` would write, because ruff reaches into
+    ```python fences in Markdown.
     """
     raw = pyyaml.safe_load(Path(table).read_text())
     lines = ['symbols = {']
@@ -114,17 +67,7 @@ def _literal(table: Path) -> str:
 
 
 def _home_block() -> str:
-    """The home page's tabs: the math, and the call that printed it.
-
-    The legend stays on and the "How" tab carries the symbol table inline,
-    because between them they answer the question the section otherwise begs.
-    A reader who sees ``load`` in the YAML and $\\ell$ in the math, with
-    neither in front of them, has to take the page on faith.
-
-    Typst is absent: the committed table is ``notation: latex`` and a tab
-    would spell the same notation a second time on a page generated to
-    prevent drift.
-    """
+    """The home page's tabs: the math, its LaTeX source, and the call that printed it."""
     table = SYMBOLS / 'dispatch.yaml'
     options = {'symbols': table, 'legend': True}
     return '\n'.join(
@@ -176,12 +119,7 @@ def rendered_home(page: str) -> str:
 
 
 def pages() -> list[tuple[str, Path, Path]]:
-    """Every (name, model, page) the gallery covers and this tool can fill.
-
-    A page with no markers is skipped rather than an error: adding the block
-    to a page is a deliberate edit, and this tool is not the thing that
-    decides which pages have one.
-    """
+    """Every (name, model, page) the gallery covers whose page has the markers."""
     found = []
     for name, path in models():
         page = GALLERY / f'{name}.md'
@@ -191,15 +129,7 @@ def pages() -> list[tuple[str, Path, Path]]:
 
 
 def _home_has_block(home: str, ap: argparse.ArgumentParser) -> bool:
-    """Whether ``docs/index.md`` carries the tabbed block; error on half a pair.
-
-    Neither marker is a skip, as it is for a gallery page — the block is a
-    deliberate edit and ``tests/test_docs_site.py`` is what asserts the home
-    page still has one. Anything between the two is malformed rather than
-    absent: half a pair reaches ``str.index`` and raises ``substring not
-    found``, and a duplicated pair silently rewrites the first span and leaves
-    the second stale. Both are worth a sentence rather than a traceback.
-    """
+    """Whether ``docs/index.md`` carries the tabbed block; error on anything but one pair or none."""
     found = (home.count(HOME_BEGIN), home.count(HOME_END))
     if found == (1, 1):
         return True

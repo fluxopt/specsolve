@@ -1,11 +1,8 @@
 """Activity: a constraint row's left-hand side, read back after a solve.
 
-The value is the solver's own — HiGHS hands ``row_value`` back in the same
-``getSolution()`` call the primals come from — so a CSR recomputation agreeing
-with it is an independent check of the whole chain: matrix, hand-off, solve,
-read-back. Beside ``dual`` it is the constraint-side reader without the MILP
-hole: an activity exists at any incumbent, where a mixed-integer model has no
-dual solution at all.
+The value is the solver's own, so a CSR recomputation agreeing with it checks
+the whole chain: matrix, hand-off, solve, read-back. Unlike a dual, an
+activity exists at any mixed-integer incumbent.
 """
 
 from __future__ import annotations
@@ -57,12 +54,7 @@ def test_activity_matches_the_linopy_lane(dispatch_yaml, dispatch_inputs):
 
 
 def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
-    """Activity is gated on `has_primal` alone: an integer incumbent has one.
-
-    The constraint-side reader without the MILP hole — the same model on which
-    `dual` must refuse (`tests/test_duals.py`) reads its activities back, and
-    they agree with the CSR recomputation at the incumbent.
-    """
+    """Activity is gated on `has_primal` alone: an integer incumbent has one."""
     data = commitment_inputs
     with differential(COMMITMENT_YAML, data) as run:
         assert run.result.has_primal

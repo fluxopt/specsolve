@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_link_delay.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -25,12 +21,9 @@ here: ``ship`` takes two snapshots to arrive and loses 10% on the way, ``wire``
 arrives at once — the same expression in the port, with the delay read off a
 column.
 
-``cyclic_delay`` is **False**, which is not PyPSA's default. Cyclic would wrap
-the last shipments onto the first snapshots, and the corpus already ports a
-wrap ([cyclic storage](https://github.com/fluxopt/specsolve/blob/main/examples/ports/pypsa_cyclic_storage.yaml)).
-Non-cyclic is the case with a boundary to state: PyPSA's own docs say *energy is
-lost at the tail and first snapshots receive nothing from delayed links*, and
-``main`` prints both ends so the reader can see it happen.
+``cyclic_delay`` is **False**, which is not PyPSA's default. PyPSA's own docs
+say *energy is lost at the tail and first snapshots receive nothing from
+delayed links*, and ``main`` prints both ends.
 """
 
 from __future__ import annotations
@@ -93,10 +86,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy.
 
-    Read off the model rather than ``buses_t.marginal_price``: the two differ
-    wherever the snapshot weightings are not 1, and recording the dual keeps the
-    comparison between two formulations rather than against a presentation of
-    one of them.
+    Read off the model: ``buses_t.marginal_price`` divides it by the snapshot
+    weighting.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {

@@ -3,37 +3,19 @@
     pixi run -e bench python -m bench.floor l
     pixi run -e bench python -m bench.floor xs --check
 
-**The published floor is the ``highspy-matrix`` arm**, which answers this
-question for every case and lands in the tables. This module answers it for
-``transport`` alone, by hand, and stays for the one thing the arm cannot do:
-its CSR is tiled directly rather than through ``scipy.kron``, so the gap
-between the two is what the matrix *construction* costs on top of the load
-([`bench/models/transport/matrix.py`](models/transport/matrix.py) is the arm's
-version of the same matrix). Reach for the arm for a ratio and for this to ask
-where a floor's own time goes.
+``transport`` built straight from the case's cached parquet into numpy arrays
+and a CSR matrix, with no specsolve and no polars expression engine in the
+path, ending at a populated ``highspy.Highs`` with ``run()`` never called. The
+published floor is the ``highspy-matrix`` arm; this one tiles its CSR directly
+rather than through ``scipy.kron``, to show where a floor's own time goes. It
+is not an arm.
 
-Either way the floor is the missing denominator: ``transport`` built straight
-from the case's cached parquet into numpy arrays and a CSR matrix, with no
-specsolve and no polars expression engine anywhere in the path. What it costs is
-the irreducible price of emitting the coefficients, and with it the sentence
-becomes *"we are at Nx the floor and linopy is at Mx"* — a claim about
-engineering rather than a ranking.
+Phases print as minima over ``--rounds``, after one untimed warmup round that
+pays the imports. The peak RSS is the process high-water mark over every round,
+warmup included.
 
-It ends where the harness's ``highs`` sink ends: a populated ``highspy.Highs``
-with ``run()`` never called. It is **not an arm** — it hardcodes one model, so
-it has no place in the ``case x size x sink x arm`` product, and its numbers
-are quoted beside the ladder's rather than inside it.
-
-Phases print as minima over ``--rounds``, like ``profile_phases``, after one
-untimed warmup round that pays the polars and highspy imports — the harness
-excludes import from ``wall_seconds`` for the same reason. The peak RSS is the
-process high-water mark over every round, warmup included.
-
-**The columns are read in file order.** ``_transport_data`` writes every table
-in a known order (generators and lines in declaration order, load
-snapshot-major), and this module leans on that instead of sorting — a sort
-would charge the floor for work the file layout already did. ``--check`` is
-the guard: a permuted file changes the objective and the check fails.
+The columns are read in file order, as ``_transport_data`` writes them;
+``--check`` fails on a permuted file.
 """
 
 from __future__ import annotations
@@ -104,12 +86,7 @@ class Floor:
 
 
 def read(paths: dict[str, str]) -> Raw:
-    """The parquet into numpy, labels resolved to positions.
-
-    The only string work in the floor: generator and line endpoints become
-    positions in the bus table's order, which is also the order the load table
-    cycles through — so every later step is integer arithmetic.
-    """
+    """The parquet into numpy, bus labels resolved to positions in the bus table's order."""
     import polars as pl
 
     def column(name: str, field: str = 'value') -> Any:
@@ -134,11 +111,8 @@ def read(paths: dict[str, str]) -> Raw:
 def arrays(raw: Raw) -> Floor:
     """Cost, bounds and the CSR balance matrix, by tiling one snapshot.
 
-    The balance rows repeat the same sparsity pattern every snapshot with only
-    the column indices shifted, so the pattern is built and bucket-sorted by
-    bus once and then broadcast: a ``p`` entry advances by ``n_gen`` per
-    snapshot, an ``f`` entry by ``n_line``, which is what the per-entry
-    ``stride`` carries.
+    The pattern is built and sorted by bus once, then broadcast: a ``p`` entry
+    advances by ``n_gen`` per snapshot, an ``f`` entry by ``n_line``.
     """
     n_gen, n_line, n_snap = len(raw.p_max), len(raw.cap), raw.n_snap
     f_block = n_snap * n_gen
@@ -165,13 +139,7 @@ def arrays(raw: Raw) -> Floor:
 
 
 def handoff(model: Floor) -> Any:
-    """A populated ``highspy.Highs``, ``run()`` never called.
-
-    The same seam the harness's ``highs`` sink stops at, minus the chunking:
-    the floor hands the whole model over in one ``addCols`` and one
-    ``addRows``, because bounding residency is the engine's discipline and the
-    floor exists to have none.
-    """
+    """A populated ``highspy.Highs``, ``run()`` never called, in one ``addCols`` and one ``addRows``."""
     import highspy
 
     h = highspy.Highs()
@@ -184,13 +152,7 @@ def handoff(model: Floor) -> Any:
 
 
 def check() -> tuple[float, float]:
-    """Solve the smallest rung both ways and return (floor, specsolve) objectives.
-
-    A correctness probe rather than a measurement: it is the one place the
-    floor is allowed to call ``run()``, and it exists because a floor that
-    quietly built a different model would make every headroom claim off it
-    wrong.
-    """
+    """Solve the smallest rung both ways and return (floor, specsolve) objectives."""
     from bench.arms import solved
 
     case = bench_cases.CASES[CASE]

@@ -1,10 +1,8 @@
 """Expansion means the same on both lanes.
 
-The rules for `macros:` and `expressions:` are the language's and live with
-its own suite (#1150); *that the two lanes agree about what they expanded to*
-is a claim about two consumers, so it is asserted here.
-One end-to-end case carries it: both constructs expand to core AST before
-dispatch, so if the lanes agree here they agree at all.
+The rules for `macros:` and `expressions:` live with the language's own suite
+(#1150). Both constructs expand to core AST before dispatch, so one end-to-end
+case on which the lanes agree covers them.
 """
 
 from __future__ import annotations
@@ -16,8 +14,7 @@ from tests.differential import differential
 from tests.oracle import pd
 
 #: The same model the language's own expansion suite expands, copied rather
-#: than imported: that suite travels with the language and this one does not,
-#: so an import here would be a reference across the cut.
+#: than imported: that suite travels with the language and this one does not.
 EXPANSION_YAML = """
 dimensions:
   snapshot: {dtype: int}

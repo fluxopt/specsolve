@@ -1,9 +1,7 @@
 """Every arm, and the four verbs the harness asks of one.
 
-An *arm* is one library's answer to the same question: same parquet, same
-model, same seam. The harness knows nothing about any of them beyond the names
-below, so adding one is a module here and an entry in `ARMS` — not a branch in
-the runner.
+An arm is one library's answer to the same question: same parquet, same model,
+same seam. Adding one is a module here and an entry in `ARMS`.
 
 Each arm module defines:
 
@@ -12,41 +10,24 @@ Each arm module defines:
     build_only(prepared) -> Counts
     objective(prepared) -> float
 
-and, where the library has a rolling-horizon answer at all, the pair that rung
-is measured through — offered together or not at all:
+and, where the library has a rolling-horizon answer, both or neither of:
 
     window_setup(sink, prepared) -> (args, kwargs)
     window(*args, **kwargs) -> Counts
 
-``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked
-before each sample, so whatever a window is priced *against* — a built model, a
-loaded solver — is outside the clock, and it runs in the spawned child, so that
-state is rebuilt there rather than shipped to it. What it returns feeds
-``window``, which is the one later window that gets timed.
+``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked in
+the spawned child before each sample, and what it returns feeds ``window``, the
+one window that gets timed.
 
-``Prepared`` is opaque to the harness: it hands the token from `prepare` to the
-verb without looking inside, so an arm's own bookkeeping — validating paths,
-resolving a writer backend — is described once and lands where it belongs.
+``Prepared`` is opaque to the harness. ``prepare`` runs before the clock, so
+work the harness rather than the library imposes is charged to nobody.
 
-**`prepare` is the pre-clock hook, and it is the reason it exists.** Whatever
-an arm needs before it can build, that the *harness* rather than the library
-imposed, is charged to nobody: the specsolve arm re-parses the case's YAML only
-because the runner decides which parquet file is which, and the linopy arm has
-no counterpart to be charged for it.
+Every verb is top-level and picklable, because ``benchmem(isolate=True)`` sends
+it to a fresh process; pre-clock state is built by ``window_setup`` in the
+child, never returned as a closure (#1617).
 
-**Every verb is top-level and picklable**, because ``benchmem(isolate=True)``
-sends it to a fresh process: peak RSS is a property of a process, and two
-measurements in one interpreter report the larger of them twice. That is why
-pre-clock state is built by ``window_setup`` in the child and not by a verb that
-*returns* a closure over it — a closure does not pickle, and a rung written that
-way raises before anything is timed rather than reporting a number that is wrong
-(#1617). `bench/test_harness.py` holds both halves of this.
-
-**The library is imported inside the verb, never at module scope.** The import
-is part of what an arm costs — a modelling library's alone can exceed specsolve's
-entire build at the `xs` rung — so a harness that had already paid for it
-before measuring would be charging one arm for another's work. That is also
-why `ARMS` maps to modules rather than to imported callables.
+The library is imported inside the verb, never at module scope, because the
+import is part of what an arm costs.
 """
 
 from __future__ import annotations
@@ -59,13 +40,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from types import ModuleType
 
-#: What every verb returns: enough to prove the model is the right one, and the
-#: counts the published tables carry. Read after the action, never during.
+#: What every verb returns: the counts the published tables carry, read after the action.
 Counts = dict[str, Any]
 
-#: Name to the module that speaks for it. Written out rather than discovered by
-#: scanning: a misnamed module would go missing as an *absent arm*, which reads
-#: as "not measured" rather than as the error it is.
+#: Name to the module that speaks for it.
 ARMS: dict[str, ModuleType] = {
     'specsolve': specsolve,
     'linopy': linopy,
@@ -79,10 +57,8 @@ ARMS: dict[str, ModuleType] = {
 def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     """Why this cell is not measured, or None when it is.
 
-    A cell can be missing for three honest reasons — the arm's library is not
-    installed here, the arm cannot reach that sink, or nobody has written the
-    case in that arm's dialect — and all three are results. Returned as a sentence rather than a bool so the skip says which
-    it was, and so a table can print the reason where a reader is looking.
+    The reason is a missing library, an unreachable sink, or a case with no
+    formulation in the arm's dialect.
     """
     import importlib.util
 
@@ -102,11 +78,6 @@ def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
 
 
 def solved(arm: str, case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> float:
-    """Prepare and solve on *arm* — what `bench.floor` checks its own answer against.
-
-    Not a measurement — the one thing the harness does that is allowed to be
-    slow, because a performance number describing two different models is worse
-    than none.
-    """
+    """Prepare and solve on *arm*, unmeasured — what `bench.floor` checks its own answer against."""
     module = ARMS[arm]
     return float(module.objective(module.prepare(case_name, size, paths, options)))

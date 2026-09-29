@@ -1,23 +1,12 @@
 """gurobipy, both dialects — the model is hand-written, in `bench/models/<case>/`.
 
 One runtime for two arms: `gurobipy-loop` and `gurobipy-matrix` differ only in
-which formulation module they call, and everything around that call — reading
-the parquet, the environment, the seam, the counts — is the same and belongs
-here rather than twice in the models.
+which formulation module they call.
 
-**The seam is `update()`, and it is inside the clock.** gurobipy defers every
-`addVar` and `addConstr` until the model is flushed, so timing the calls alone
-measures a queue and not a model. `build_gurobi` on our own arm ends with the
-same call, which is what makes the two comparable.
-
-**`OutputFlag` goes off at `Env` construction**, not after: set later, the
-licence banner has already been written, and it lands inside the measurement.
-
-**Counts are read after the clock stops** — touching `NumVars` forces the
-update this arm has just paid for deliberately.
-
-There is one sink. An LP file would measure Gurobi's writer rather than ours,
-and this arm cannot reach HiGHS at all.
+The seam is `update()`, inside the clock, because gurobipy defers every
+`addVar` and `addConstr` until the model is flushed; `build_gurobi` ends with
+the same call. `OutputFlag` goes off at `Env` construction, so the licence
+banner is never written. There is one sink.
 """
 
 from __future__ import annotations
@@ -34,16 +23,12 @@ if TYPE_CHECKING:
 #: Where this arm can hand a model over.
 SINKS = ('gurobi',)
 
-#: What has to be importable for this arm to run. An environment without it
-#: skips the arm with that as the reason: CI has several environments and only
-#: some carry every modelling library, and a missing one is a fact about the
-#: environment rather than a failure of the harness.
+#: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('gurobipy',)
 
 
 class Prepared(NamedTuple):
-    """What the timed verbs need. The parquet is *not* read here — reading it is
-    this arm's own cost, exactly as it is every other arm's."""
+    """What the timed verbs need; the parquet is read inside the clock."""
 
     dialect: str
     case_name: str
@@ -58,11 +43,8 @@ def prepare(dialect: str, case_name: str, size: str, paths: dict[str, str], opti
 def _model(env: Any, dialect: str, case_name: str, tables: Mapping[str, Any]) -> Any:
     """The model, however this dialect spells one.
 
-    The two dialects have two contracts, and that difference is what separates
-    them. `gurobipy-loop` writes gurobipy calls directly and hands back a
-    `Model`. `gurobipy-matrix` builds a solver-neutral `Lp` — the same one
-    `highspy-matrix` builds — and the push into `addMVar` and `addMConstr`
-    happens here, so a case's matrix has one home rather than one per arm.
+    `gurobipy-loop` returns a `Model`. `gurobipy-matrix` returns the
+    solver-neutral `Lp`, pushed here into `addMVar` and `addMConstr`.
     """
     import gurobipy as gp
 
@@ -101,13 +83,7 @@ def _release(env: Any, model: Any) -> None:
 
 
 def build_and_emit(sink: str, prepared: Prepared) -> Counts:
-    """Build the model and flush it — for this arm those are one act.
-
-    There is no second hand-off to time: a populated `gurobipy.Model` is what
-    `addVar` and `addMConstr` produce directly, where our own arm reaches it by
-    handing a built matrix to `build_gurobi`. That difference is the
-    measurement.
-    """
+    """Build the model and flush it — for this arm those are one act."""
     del sink
     env, model = _built(prepared)
     try:
@@ -128,15 +104,8 @@ def build_only(prepared: Prepared) -> Counts:
 def objective(prepared: Prepared) -> float:
     """Write the model out and solve it with HiGHS — never with Gurobi.
 
-    Not squeamishness about the solver: `gurobipy`'s own wheel carries a
-    size-limited licence that refuses `optimize()` above 2000 columns, so a
-    check that solved here would pass on a developer box with a full licence
-    and fail on every runner without one — which is exactly what it did.
-    Writing is not limited, and HiGHS reads what Gurobi wrote.
-
-    It also makes the check stronger than it was: what crosses to HiGHS is the
-    *model*, so an agreement here is agreement about the model rather than
-    about two solvers reading their own author's memory.
+    The `gurobipy` wheel's size-limited licence refuses `optimize()` above 2000
+    columns; writing is not limited.
     """
     import highspy
 

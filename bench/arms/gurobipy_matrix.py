@@ -1,5 +1,4 @@
-"""The `gurobipy-matrix` arm. Its verbs are `bench.arms.gurobipy`'s; what makes
-it an arm of its own is which formulation module they reach for."""
+"""The `gurobipy-matrix` arm: `bench.arms.gurobipy`'s verbs over the `gurobipy-matrix` formulations."""
 
 from __future__ import annotations
 
@@ -13,9 +12,7 @@ if TYPE_CHECKING:
 DIALECT = 'gurobipy-matrix'
 SINKS = runtime.SINKS
 
-#: The runtime's, plus the CSR the shared formulation builds — `gurobipy-loop`
-#: writes its model call by call and needs no `scipy`, so this cannot be the
-#: runtime's list unchanged.
+#: The runtime's, plus `scipy` for the CSR the shared formulation builds.
 REQUIRES = (*runtime.REQUIRES, 'scipy')
 
 build_and_emit = runtime.build_and_emit

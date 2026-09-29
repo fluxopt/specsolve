@@ -8,25 +8,17 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_unit_commitment.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables; nothing recorded here is
-reshaped with it.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
 **The MILP entry in the corpus.** ``committable=True`` gives each generator a
-binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``, and
-that is the point: it is the first ported model with an integrality constraint.
-One bus, no network — a model which fails to match should implicate one
-feature, and here that feature is commitment.
+binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``. One
+bus, no network.
 
-``min_up_time`` and ``min_down_time`` are left at 0. They would need a rolling
-window sum over a horizon, which is a different question from whether the
-language can say commitment at all, and it belongs to a port of its own.
+``min_up_time`` and ``min_down_time`` are left at 0; ``pypsa_min_up_down`` ports
+them.
 """
 
 from __future__ import annotations

@@ -3,32 +3,17 @@
     pixi run -e bench python -m bench.warm_payoff m
     pixi run -e bench python -m bench.warm_payoff s m l --steps 200 --wall
 
-#382 wants a warm start across a rebuild. ``examples/benders/run.py`` is the
-only driver in the tree that rebuilds a model every iteration, and it is a toy:
-its master is 3 columns and 25 rows, and a cold solve of it costs one simplex
-iteration. A mechanism measured there proves nothing about payoff, so this
-module supplies the missing number — a capacity-expansion Benders whose master
-is sized from data and solved three ways at every rebuild: cold, from the
-previous iteration's basis spliced per declaration, and from that basis merely
-truncated to the new height.
+A capacity-expansion Benders (#382) whose master is sized from data and solved
+three ways at every rebuild: cold, from the previous basis spliced per
+declaration, and from that basis truncated to the new height. It is not an arm
+and writes no results file; no ``src/`` code carries a basis across a rebuild.
 
-**It is not an arm.** Like ``bench.floor`` it hardcodes one model and prints
-its own table, so it has no place in the ``case x size x sink x arm`` product
-and never touches the ladder's results files. It is also **not a feature**: no
-``src/`` code carries a basis across a rebuild, and the splice below lives here
-precisely so that the evidence can be taken before the engine work is written.
+The primary number is simplex iterations, which are deterministic. Wall time is
+behind ``--wall`` and prints the load averages beside itself.
 
-The primary number is **simplex iterations**, which are deterministic and need
-no idle machine. Wall time is behind ``--wall``, prints the load averages
-beside itself, and carries none of the argument.
-
-**Rows do not append.** A master with two cut families numbers rows per
-declaration in declaration order, so a row gained by ``optimality_cut`` shifts
-every row of ``feasibility_cut``. A basis truncated to the new height therefore
-describes a different model: :func:`spliced` is the correction and
-:func:`prefixed` the mistake it avoids. Both run, because a wrong basis cannot
-make an answer wrong — what it costs is iterations, and iterations are the only
-place the difference can be read.
+Rows are numbered per declaration, so a row gained by ``optimality_cut`` shifts
+every row of ``feasibility_cut``: :func:`spliced` re-indexes for that, and
+:func:`prefixed` does not.
 """
 
 from __future__ import annotations
@@ -57,19 +42,14 @@ if TYPE_CHECKING:
 
 MODELS = Path(__file__).resolve().parent / 'expansion'
 
-#: The status a spliced row gets where the previous basis has nothing to say —
-#: a row that did not exist then. Basic is the neutral choice: it is what a
-#: freshly added slack holds, so a spliced basis of all-new rows is the cold
-#: start rather than a perturbation of one.
+#: The status of a spliced row the previous basis did not have: a fresh slack is basic.
 BASIC = int(highspy.HighsBasisStatus.kBasic)
 
 #: Generators per rung — the axis swept. The master is one column per
 #: generator plus ``theta``, and one row per cut it has accumulated.
 SIZES: Mapping[str, int] = {'xs': 6, 's': 100, 'm': 1_000, 'l': 10_000}
 
-#: Snapshots in the dispatch subproblem. Fixed across the ladder: the master is
-#: what rebuilds, and this only has to make the loop expensive enough to be a
-#: loop somebody would run.
+#: Snapshots in the dispatch subproblem, fixed across the ladder.
 SNAPSHOTS = 24
 
 #: The relative gap at which the decomposition stops.
@@ -117,11 +97,7 @@ class Run:
 
     @property
     def nonzeros(self) -> int:
-        """Coefficients the run emitted into the master, over every rebuild.
-
-        The counterweight to an iteration saving: what a rebuild costs whether
-        or not the solve that follows it starts warm.
-        """
+        """Coefficients the run emitted into the master, over every rebuild."""
         return sum(s.nonzeros for s in self.steps)
 
     @property
@@ -137,11 +113,9 @@ def instance(n_gen: int, n_snap: int) -> dict[str, pl.DataFrame]:
     """Seeded data for a capacity expansion with a real build-or-run trade.
 
     Marginal cost and capital cost are anti-correlated, so the answer is a
-    portfolio rather than "build the cheapest one". Each snapshot's load is
-    half of what the full portfolio could serve in it, which makes the problem
-    feasible by construction while leaving the subproblem infeasible at the
-    zero capacity the loop starts from — so both cut families grow, which is
-    what makes the splice's per-declaration shift real.
+    portfolio. Each snapshot's load is half of what the full portfolio could
+    serve, so the problem is feasible while the subproblem is infeasible at zero
+    capacity, and both cut families grow.
     """
     rng = _seed(Shape('warm_payoff', {'generator': n_gen, 'snapshot': n_snap}, n_gen * n_snap))
     gens = [f'g{i:05d}' for i in range(n_gen)]
@@ -181,11 +155,7 @@ def spliced(
     the rebuild, and *order* the declaration order they were numbered in. Each
     declaration keeps the leading rows it still has and the rest start
     :data:`BASIC`; a declaration that appeared or vanished is skipped, which
-    leaves its rows basic too.
-
-    Columns cross unchanged — the caller has already established that the
-    column count did not move, which for a cutting-plane master is the whole
-    of "the columns are the same columns".
+    leaves its rows basic too. Columns cross unchanged.
     """
     assert previous.row_statuses is not None, 'a spliced start carries a basis; an incumbent has no rows to splice'
     rows = np.full(n_rows, BASIC, dtype=np.int8)
@@ -206,11 +176,7 @@ def spliced(
 def prefixed(previous: WarmStart, n_rows: int) -> WarmStart:
     """*previous* truncated or padded to *n_rows*, ignoring declaration order.
 
-    The carry somebody writes first, and the arm that says whether
-    :func:`spliced` earns its complication: it is only right for a model whose
-    growth is all in the last declaration. It cannot make an answer wrong — a
-    basis moves the route and not the optimum — so what it costs is iterations,
-    which is the only place the difference can be read.
+    Right only for a model whose growth is all in the last declaration.
     """
     assert previous.row_statuses is not None, 'a prefix carry needs a basis; an incumbent has no rows to truncate'
     rows = np.full(n_rows, BASIC, dtype=np.int8)
@@ -227,10 +193,7 @@ def prefixed(previous: WarmStart, n_rows: int) -> WarmStart:
 def _solved(tables: Any, start: WarmStart | None) -> tuple[Any, int, float, WarmStart | None]:
     """A fresh HiGHS session on *tables*, optionally started from *start*.
 
-    Fresh on purpose: a session kept across the rebuild is the path that
-    already works (``update`` pushes values onto it), and the case #382 is
-    about is the one where the model was rebuilt and there is nothing to keep.
-    The iteration count is read off the handle because no public surface
+    The iteration count is read off the private handle; no public surface
     reports it.
     """
     solver = SOLVERS['highs'](tables)
@@ -248,9 +211,8 @@ def _solved(tables: Any, start: WarmStart | None) -> tuple[Any, int, float, Warm
 def _slope_at(solution: sps.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """The subproblem's subgradient in capacity, and its value at *capacity*.
 
-    The capacity row's shadow price is that derivative, weighted by
-    availability and summed over snapshots — ``examples/benders/run.py``'s
-    reading, against a generator set that comes from data.
+    The subgradient is the capacity row's dual, weighted by availability and
+    summed over snapshots.
     """
     slope = (
         solution.dual('capacity')
@@ -294,12 +256,9 @@ def _blocks(engine: PolarsEngine) -> tuple[dict[str, Any], list[str]]:
 def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     """Run the decomposition once, solving every master rebuild three ways.
 
-    The loop is driven by the **cold** answer throughout, so all three arms see
-    the same sequence of masters and their iteration counts compare directly.
-    Each carrying arm chains its own basis — the spliced one and the naive
-    prefix one never see each other's — and that the warm objective matches the
-    cold one every step is asserted, a carried basis being allowed to move the
-    route and never the answer.
+    The cold answer drives the loop, so all three see the same masters. Each
+    carrying arm chains its own basis, and the warm objective is asserted equal
+    to the cold one every step.
     """
     data = instance(n_gen, n_snap)
     gens = data['invest']['generator'].to_list()

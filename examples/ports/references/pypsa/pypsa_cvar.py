@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_cvar.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -33,8 +29,7 @@ weight on regret.
 
 **What the risk preference is worth** is printed by
 :func:`what_risk_neutral_builds`: the same instance with no risk preference
-builds a different fleet and reaches a different objective, so this is not the
-stochastic port with three idle variables bolted on.
+builds a different fleet and reaches a different objective.
 """
 
 from __future__ import annotations
@@ -111,8 +106,7 @@ def what_risk_neutral_builds(tables: dict[str, pd.DataFrame | float]) -> None:
     """Solve the same instance with the risk preference switched off.
 
     ``omega = 0`` is the risk-neutral objective exactly — ``(1-omega) E[OPEX] +
-    omega CVaR`` collapses to the expectation — so the comparison is the same
-    model, one number changed, rather than two models that differ in shape.
+    omega CVaR`` collapses to the expectation.
     """
     neutral = build(tables | {'omega': 0.0})
     neutral.optimize(solver_name='highs')

@@ -1,16 +1,8 @@
 """What the build reports about itself: omissions, clocks, magnitudes, sparsity.
 
-A diagnostic is a claim about a model the solver never sees. A row that lost
-every term is not built, and saying so is the difference between a smaller
-problem and a silently different one; a coefficient range is what turns "the
-solver struggled" into a named block; a parameter short of its dimensions is
-reported rather than judged, because whether the gap is a mistake is the
-modeller's call and not the engine's.
-
-They are gathered here rather than beside the assembly they measure because
-that is the question a reader arrives with — *what does the build tell me* —
-and because a report that survives the model being released is a property of
-the report, not of the matrix.
+A row that lost every term is not built, and is reported; a range names the
+block that holds an outlier; a parameter short of its dimensions is reported
+rather than judged.
 """
 
 from __future__ import annotations
@@ -29,23 +21,9 @@ from tests.differential import RTOL, differential
 def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_rows):
     """A row that lost every term is not a constraint, and the build says so.
 
-    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum. Three
-    provenances reach that shape — an absent variable, an empty reduction, a
-    missing coefficient — and the language used to answer them differently, so
-    the same empty row meant different things depending on how it emptied. The
-    rule is now at the level the property lives at: no variable terms, no row.
-
-    **The omission is reported, and that is what makes dropping defensible.**
-    An unenforced constraint the caller cannot see is the failure this used to
-    guard against by keeping the row; `diagnostics().omissions` answers it without asking
-    the solver to carry a comparison nothing can fail.
-
-    Ragged batches because a block loop is where a *surviving* seat would be
-    lost — labels are compacted when a row goes, so the dense vector and the
-    block ranges have to agree about the narrower block. That is the Gurobi and
-    Xpress sinks; HiGHS takes the whole model in one call and reads
-    ``batch_rows`` not at all, so its four cases are one case asked four times.
-    Every sink all the same, because the seating is theirs jointly.
+    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum. Ragged
+    batches, because labels are compacted when a row goes and a block loop
+    has to agree about the narrower block; HiGHS ignores ``batch_rows``.
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
@@ -67,24 +45,13 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
 
 
 def test_omissions_is_empty_when_every_declared_row_is_built():
-    """The common case says nothing, so the report is a signal rather than noise."""
+    """The common case says nothing."""
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         assert model.diagnostics().omissions.is_empty()
 
 
 def test_a_row_a_propagated_absence_deleted_is_reported_too():
-    """The other way a declared row goes missing, and it used to go unrecorded (#944).
-
-    A row that loses *all* its terms was always counted. This one keeps three of
-    them: ``x`` exists at both coordinates with a bound of its own, and the row
-    is deleted because absence travelled out of ``y``. Nothing ever counted it,
-    because a restricted row is removed before there is a row to count — so the
-    model quietly enforced half of what it declared and said so nowhere.
-
-    Asserted through the objective as well as the report, because the point is
-    that the two disagree with each other: `both[b]` reads `x[b] >= 5` and its
-    loss is worth 5 of the answer.
-    """
+    """A row deleted by absence travelling out of ``y`` is reported too (#944)."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
@@ -112,9 +79,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
 def test_diagnostics_say_where_the_time_went(tmp_path):
     """A run that is slower than it should be can say which phase the time went to.
 
-    `seconds` is advisory wall time, so nothing here asserts a magnitude —
-    only that each phase that ran left a clock, that none ran backwards, and
-    that they accumulate across calls the way `solves` counts.
+    `seconds` is advisory wall time, so nothing here asserts a magnitude.
     """
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         built = model.diagnostics().seconds
@@ -139,10 +104,9 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
         assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
 
 
-#: Three blocks that differ only in how they are scaled, so the report has
-#: something to distinguish. `badly_scaled` spans nine orders of magnitude by
-#: itself, `signed` carries `ordinary`'s coefficients negated, and one cost is
-#: negative — which is where a signed extreme and a magnitude part company.
+#: Three blocks that differ only in scale. `badly_scaled` spans nine orders of
+#: magnitude, `signed` carries `ordinary`'s coefficients negated, and one cost
+#: is negative.
 SCALING = {
     'dimensions': {'unit': {'dtype': 'str'}},
     'parameters': {'small': {'dims': ['unit']}, 'large': {'dims': ['unit']}, 'cost': {'dims': ['unit']}},
@@ -165,16 +129,7 @@ SCALING_SOURCES = {
 
 
 def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
-    """The spread of the matrix, per declaration — which is what a caller can act on.
-
-    A solver prints one ``Matrix range`` for the whole model, and the model is
-    too large to open, so the number says a repair is needed and not where. The
-    engine builds the matrix a declaration at a time and can say both.
-
-    Magnitudes, not signed extremes: `signed` holds `ordinary`'s coefficients
-    negated and is scaled identically, which is the answer a modeller wants and
-    the one a signed min/max cannot give.
-    """
+    """The spread of the matrix, per declaration, in magnitudes rather than signed extremes."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         spread = model.diagnostics().coefficient_range
 
@@ -189,12 +144,7 @@ def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
 
 
 def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
-    """Costs and coefficients are different faults, so they are different fields.
-
-    `cost` is negative on one unit, which is the whole reason the pair is
-    magnitudes: a signed answer here would be ``(-0.5, 2.0)`` and say nothing
-    about the four-fold spread it actually has.
-    """
+    """Costs and coefficients are different faults, so they are different fields."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         seen = model.diagnostics()
 
@@ -204,11 +154,8 @@ def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
     )
 
 
-#: One variable whose bounds are the outlier and one with no finite bound at
-#: all, so the report has both the case it must name and the case it must not
-#: invent. `cap` carries a real cap and the 1e9 that a modeller writes when a
-#: connection is uncapped — the shape `examples/ports/transport_modes.yaml`
-#: ships.
+#: One variable whose bounds are the outlier and one with no finite bound.
+#: `cap` carries a real cap and a 1e9 standing for uncapped.
 BOUNDS = {
     'dimensions': {'unit': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['unit']}, 'cost': {'dims': ['unit']}},
@@ -232,13 +179,7 @@ BOUNDS_SOURCES = {
 
 
 def test_the_bound_range_names_the_variable_whose_bounds_are_the_outlier():
-    """The axis a solver reports and does not repair, per declaration.
-
-    HiGHS equilibrates the matrix by itself and answers the bounds with advice
-    to the caller, so a model can be clean on ``coefficient_range`` and still be
-    the one it is complaining about. `BOUNDS` is exactly that model — every
-    coefficient is 1 and the bounds span eight orders.
-    """
+    """The bound range, per declaration, on a model whose matrix is clean."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
@@ -251,12 +192,7 @@ def test_the_bound_range_names_the_variable_whose_bounds_are_the_outlier():
 
 
 def test_a_bound_of_zero_or_infinity_is_not_a_magnitude():
-    """`lower: 0` and an unbounded side are excluded, so the pair reads as a solver's does.
-
-    Neither is a magnitude the solver has to represent, and a zero would make
-    every non-negative variable report a range of ``0 .. something`` — an
-    infinite conditioning number on the most ordinary declaration there is.
-    """
+    """`lower: 0` and an unbounded side are excluded, so the pair reads as a solver's does."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         reported = model.diagnostics().bound_range.get_column('variable').to_list()
 
@@ -275,13 +211,7 @@ def test_the_rhs_range_is_read_per_block_like_the_coefficients():
 
 
 def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
-    """A model can be clean on one axis and the offender on another.
-
-    The reason these are not one number: `BOUNDS` has a perfect matrix, a
-    modest objective, a modest right-hand side and a bound range of 2e7. Rolled
-    together it would read as badly scaled with nothing saying which axis, which
-    is the whole-model line a solver already prints.
-    """
+    """A model can be clean on one axis and the offender on another."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
@@ -304,10 +234,7 @@ def test_a_model_with_no_objective_has_no_objective_range():
     assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
 
 
-#: A coefficient short of its dims, and a bound that is not. Sparse in a
-#: coefficient is the ordinary case — every other position where a missing row
-#: has no reading is refused already (a bound, a comparison's constant side),
-#: so this is the shape where a lost row goes unreported.
+#: A coefficient short of its dims, and a bound that is not.
 SPARSE_SOURCE = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
     'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
@@ -326,14 +253,7 @@ SPARSE_SOURCES = {
 
 
 def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
-    """Which parameters arrived short, and by how much — not whether they should have.
-
-    A table that lost a row and a `where:` that removed one build the same
-    model, so nothing in the answer distinguishes them and nothing here tries
-    to: what a missing row *means* is the absence rules', and whether it was
-    meant is the caller's. Reporting is the half that can be said without
-    taking the data contract.
-    """
+    """Which parameters arrived short, and by how much — not whether they should have."""
     with sps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
         short = model.diagnostics().sparse_parameters
 
@@ -352,8 +272,7 @@ def test_a_model_whose_parameters_all_span_their_dims_reports_none():
 
 
 def test_the_sparsity_report_survives_the_model_being_released():
-    """Summarised at attach from two counts attaching already had, so it outlives
-    the frames — the same reason the coefficient range does."""
+    """Summarised at attach, so it outlives the frames."""
     with sps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()
@@ -376,16 +295,10 @@ HALF_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a'], 'value': [2.0]
 
 
 def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
-    """The two halves of the report part company exactly where the build stopped.
+    """A build that raised reports no size, neither its own nor the previous build's.
 
-    A size is written when the model is whole, so there is none — and none of
-    the *previous* build's either, which is the point: those numbers described
-    a model the engine released before this build started, and reporting them
-    would be the half-a-model state a failed build exists to refuse.
-
-    What the attach measured is a different kind of fact. It was taken before
-    anything raised and it is still true, and here it is the reason the build
-    then raised at all — the parameter it names is the one the divisor lacked.
+    What the attach measured is still true, and names the gap the build then
+    refused.
     """
     with sps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
         built = model.diagnostics()
@@ -404,11 +317,7 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
 
 
 def test_the_coefficient_range_survives_the_model_being_released():
-    """Read off each share as it is built, so it outlives the frames it came from.
-
-    The alternative — a reader over the live matrix — would go dark exactly
-    when a caller comes back to a finished run asking why it solved badly.
-    """
+    """Read off each share as it is built, so it outlives the frames it came from."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()
@@ -420,9 +329,8 @@ def test_the_coefficient_range_survives_the_model_being_released():
 def test_the_largest_magnitude_agrees_with_the_oracle():
     """linopy answers the same question per constraint, and the two must not drift.
 
-    Its `coefficientrange` is a *signed* min/max, so only the larger magnitude
-    is comparable — the smaller one is the half this engine adds, and there is
-    nothing upstream to check it against.
+    Its `coefficientrange` is a signed min/max, so only the larger magnitude is
+    comparable.
     """
     with differential(SCALING, SCALING_SOURCES) as run:
         ours = {row['constraint']: row['largest'] for row in run.engine.diagnostics().coefficient_range.to_dicts()}

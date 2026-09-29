@@ -1,15 +1,7 @@
 """`result.evaluate`: a declared name (#562) or an expression the file never named, at the solution.
 
-The relational lane only — the differential half, both lanes agreeing on the
-same values, lives in ``test_linopy_lane.py`` with the rest of the oracle
-comparisons. What is pinned here for a declared name: the value is the one the
-primal implies, an expression no constraint references still reads, the
-frame's dims are the ones it survives over, laziness (a build compiles no
-expression; a read compiles that one), and the unknown-name refusal. For an
-undeclared expression, below: a name and the body it stands for read one
-value, both written forms are taken, and what it refuses — a name the model
-does not declare, and an answer read back off disk, which carries no model to
-lower against.
+The relational lane only; both lanes agreeing on the same values is in
+``test_linopy_lane.py``.
 """
 
 from __future__ import annotations

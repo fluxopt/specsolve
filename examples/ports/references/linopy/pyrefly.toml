@@ -1,16 +1,5 @@
-# The reference scripts, checked so their annotations cannot lie: the
-# binding-line annotations in each build() are what this config gates — a
-# Series annotated as a DataFrame fails the check. Run as
-#
-#   pixi run typecheck
-#
-# which is both configs, this one and the package's, and is what ci.yml runs.
-#
-# Two strict rules are off; both fire only on linopy's optional-typed harness
-# API (`m.objective.value`, the helpers' tidy lists) — the same
-# Any-at-the-boundary the root pyproject leaves unpromoted for src/. The pypsa/
-# scripts are not checked: pypsa is deliberately installed nowhere in this
-# repository's environments.
+# The reference scripts' annotations, checked by `pixi run typecheck`.
+# Both rules fire only on linopy's optional-typed harness API. pypsa/ is not checked: pypsa is installed nowhere.
 python-version = "3.12"
 
 [errors]

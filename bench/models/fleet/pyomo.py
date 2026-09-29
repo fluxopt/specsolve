@@ -1,8 +1,7 @@
 """`fleet` as a pyomo user writes it: twelve `Var` blocks and seven `Constraint`s.
 
-Every quantity is its own component, which is the shape this case measures — a
-`ConcreteModel` pays its per-component cost twelve times rather than once over
-a product twelve times as wide.
+Every quantity is its own component, so a `ConcreteModel` pays its
+per-component cost twelve times.
 """
 
 from __future__ import annotations

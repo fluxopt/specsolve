@@ -1,19 +1,11 @@
 """What an objective sums, when its terms do not carry the same dims.
 
-An objective is one number and says so: the expression is scalar or the file
-does not load, so every reduction in it is one somebody wrote. What these
-tests hold is that the two readings a bracket allows are **both sayable and
-different** — ``sum(a) + sum(b)`` totals each term over its own dims, while
-``sum(a + b)`` broadcasts and counts each once per coordinate of the other.
-
-That distinction is invisible while every term of an objective has the same
-dims, which is every model the rest of the suite builds. It becomes an 8x
-error the moment an objective spans a sparse ``(snapshot, node, tech)``
-variable and a dense ``(snapshot, node, carrier)`` one — the shape a real cost
-function has, and the shape that found #197. What #197 fixed by *rule* — the
-implied sum distributing over addition — is now spelled at the call site, and
-#1069 is why: the rule was invisible in the file and the math block disagreed
-with the LP about it (#1046).
+An objective is scalar or the file does not load, so every reduction in it is
+one somebody wrote. ``sum(a) + sum(b)`` totals each term over its own dims,
+while ``sum(a + b)`` broadcasts and counts each once per coordinate of the
+other. The two differ only when the terms' dims differ, as in a sparse
+``(snapshot, node, tech)`` variable beside a dense ``(snapshot, node,
+carrier)`` one (#197).
 """
 
 from __future__ import annotations
@@ -75,11 +67,9 @@ def data():
 def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expected):
     """Two readings, both sayable, and the bracket is what picks.
 
-    ``differential`` already asserts the two lanes agree; what it cannot know is
-    whether they agree on the *right* number, and before #197 they disagreed in
-    exactly this shape. The pairs here are what make the rule readable rather
-    than remembered: 32 against 66, and 6400 against 13200, differ only in
-    where the sum's bracket closes.
+    ``differential`` asserts the two lanes agree; these pairs pin the right
+    number. 32 against 66, and 6400 against 13200, differ only in where the
+    sum's bracket closes.
     """
     spec = {**DISJOINT_SPEC, 'objective': {'sense': 'minimize', 'expression': expression}}
     with differential(spec, data) as run:
@@ -88,7 +78,7 @@ def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expec
 
 #: #1046's model: a bracketed addition under a product, its branches on
 #: different dims. The two readings differ by a factor of |j| on the first
-#: term, and the file used to pick one while the math block printed the other.
+#: term.
 BRACKETED_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
     'parameters': {'c': {'dims': ['i']}},
@@ -108,13 +98,10 @@ BRACKETED_SPEC = {
     ],
 )
 def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, expected):
-    """#1046: the shape whose math block and LP file disagreed.
+    """#1046: ``c * (x + y)`` carrying dims is refused, so both readings are written down.
 
-    ``c * (x + y)`` carried dims, so it is now refused outright and both
-    readings have to be written down — 30 per unit of ``x[0]`` where the sum
-    closes outside the bracket, 10 where it closes around each term. What made
-    the old spelling a silent bug is that the page showed the first and the
-    solver was handed the second.
+    30 per unit of ``x[0]`` where the sum closes outside the bracket, 10 where
+    it closes around each term.
     """
     data = {'i': [0, 1], 'j': [0, 1, 2], 'c': pd.Series([10.0, 100.0], index=pd.Index([0, 1], name='i'))}
     spec = {**BRACKETED_SPEC, 'objective': {'sense': 'minimize', 'expression': expression}}
@@ -123,7 +110,7 @@ def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, e
 
 
 def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
-    """The rule that used to be implied is now the load error that asks for it."""
+    """An objective that carries dims is a load error that asks for a `sum` around each term."""
     from specsolve.errors import DimensionError
 
     spec = {**DISJOINT_SPEC, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}
@@ -142,12 +129,9 @@ FEASIBILITY_SPEC = {
 
 
 def test_a_model_with_no_objective_is_a_feasibility_problem(tmp_path):
-    """Both lanes build it, and the answer is a point rather than an optimum.
+    """Both lanes build it, and the answer is a point rather than an optimum (#845).
 
-    A file with no `objective:` used to lower to `LanguageError: the relational
-    backend requires an objective` while the linopy lane built it happily —
-    the one construct the two lanes disagreed about (#845). Nothing optimises,
-    so the objective value is the zero the sink was handed.
+    Nothing optimises, so the objective value is the zero the sink was handed.
     """
     import yaml as pyyaml
 

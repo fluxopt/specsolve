@@ -1,29 +1,8 @@
 """The floor under the `highs` sink: a matrix, hand-written, into `highspy`.
 
-`gurobipy-matrix` is the denominator the `gurobi` tables have — raw solver API,
-no modelling layer, so a reader can tell *"1.15x faster than linopy"* from
-*"1.15x, of which 94% is Gurobi"*. The `highs` tables had no such arm, and HiGHS
-is the sink the page leads with, so every ratio there was a number nobody could
-put a floor under. This is that floor.
-
-It hands the model over in one `addCols` and one `addRows`, where our own sink
-chunks: bounding residency is the engine's discipline, and the floor exists to
-have none. What it costs is the irreducible price of emitting the coefficients.
-
-**It is not a fifth opinion about the model.** It builds the same `Lp` as
-`gurobipy-matrix`, out of the same `bench/models/<case>/matrix.py`, so the two
-floors differ in the solver they load rather than in the matrix they load it
-with. `bench/floor.py` answers the same question for `transport` alone and by
-hand, with a faster tiled CSR of its own; this is the arm that puts the answer
-in the published tables for every case.
-
-`highspy` needs no guard in `REQUIRES`, being a hard dependency of the package
-under test. **`scipy` does**, and it is the reason this arm cannot be the one
-with an empty `REQUIRES`: the matrix a case hands over is a scipy CSR, and
-until this arm existed those modules were only ever reached through
-`gurobipy-matrix` and so were gated behind `gurobipy`. An arm that declares
-nothing runs everywhere, and the `codspeed` environment — which carries neither
-— failed on the import rather than skipping the cell.
+Raw solver API, no modelling layer: the `highs` counterpart of
+`gurobipy-matrix`, built from the same `bench/models/<case>/matrix.py`. It hands
+the model over in one `addCols` and one `addRows`, unchunked.
 """
 
 from __future__ import annotations
@@ -35,12 +14,10 @@ if TYPE_CHECKING:
 
     from bench.arms import Counts
 
-#: Where this arm can hand a model over. One sink, and it is the point of the
-#: arm: an LP file would measure a writer rather than a load.
+#: Where this arm can hand a model over.
 SINKS = ('highs',)
 
-#: What has to be importable — the CSR the formulations build. See the module
-#: docstring for why `highspy` is not listed beside it.
+#: What has to be importable — the CSR the formulations build; `highspy` is a hard dependency.
 REQUIRES = ('scipy',)
 
 #: Which formulation module in `bench/models/<case>/` this arm builds from.
@@ -48,8 +25,7 @@ DIALECT = 'highspy-matrix'
 
 
 class Prepared(NamedTuple):
-    """What the timed verbs need. The parquet is *not* read here — reading it is
-    this arm's own cost, exactly as it is every other arm's."""
+    """What the timed verbs need; the parquet is read inside the clock."""
 
     case_name: str
     paths: dict[str, str]
@@ -61,13 +37,7 @@ def prepare(case_name: str, size: str, paths: dict[str, str], options: Mapping[s
 
 
 def _row_bounds(lp: Any) -> tuple[Any, Any]:
-    """A sense per row as the pair of bounds HiGHS takes.
-
-    An equality pins both bounds to the right-hand side and a `'<'` leaves the
-    lower one open. There is no third sense in any case here, and a fourth
-    spelling arriving silently would be a different model measured under this
-    one's name, so it raises.
-    """
+    """A sense per row as the pair of bounds HiGHS takes; a sense other than `'='` or `'<'` raises."""
     import highspy
     import numpy as np
 
@@ -112,13 +82,7 @@ def _counts(highs: Any) -> Counts:
 
 
 def build_and_emit(sink: str, prepared: Prepared) -> Counts:
-    """Build the matrix and load it — for this arm those are one act.
-
-    There is no second hand-off to time: a populated `highspy.Highs` is what
-    `addCols` and `addRows` produce directly, where our own arm reaches it by
-    handing a built matrix to `build_highs`. That difference is the
-    measurement.
-    """
+    """Build the matrix and load it — for this arm those are one act."""
     del sink
     highs = _built(prepared)
     try:
@@ -133,12 +97,7 @@ def build_only(prepared: Prepared) -> Counts:
 
 
 def objective(prepared: Prepared) -> float:
-    """Solve, and return what the parity gate compares.
-
-    HiGHS carries no size-limited licence, so unlike the gurobipy arms this one
-    solves the model it just built rather than writing it out for a second
-    solver to read.
-    """
+    """Solve, and return what the parity gate compares."""
     highs = _built(prepared)
     try:
         highs.run()

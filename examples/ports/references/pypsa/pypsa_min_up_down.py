@@ -8,32 +8,24 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_min_up_down.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables; nothing recorded here is
-reshaped with it.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
-**A unit that has started must stay on.** ``pypsa_unit_commitment`` takes the
-status and the two transition variables and stops there. The rows that make
-commitment *bite* are the windows: over any ``min_up_time`` consecutive
+**A unit that has started must stay on.** Beyond the status and the two
+transition variables of ``pypsa_unit_commitment``, the windows make commitment
+bite: over any ``min_up_time`` consecutive
 snapshots a unit may have started at most as often as it is now running, and the
 mirror holds for stopping. Each is a backward-looking sum whose length is a
 property of the generator, not of the model.
 
-The three units carry **different** window lengths — 3, 2 and 1 — because a
-single shared length would be satisfied by an operator that ignored the
-parameter and used a constant.
+The three units carry different window lengths — 3, 2 and 1.
 
 ``up_time_before`` and ``down_time_before`` are both set to 0, against PyPSA's
 default of 1 and 0. The default says the unit was already running before the
 horizon, which emits a further block pinning the status on for the remainder of
-its minimum up time — real behaviour, but a *second* feature, and this model is
-about the windows. With both at 0 that block does not appear, every unit begins
+its minimum up time. With both at 0 that block does not appear, every unit begins
 the horizon **off**, and the first snapshot's transition rows are the mirror of
 the ones ``pypsa_unit_commitment`` ports: a unit committed in the first snapshot
 pays for a start and nothing is charged for a stop, where a unit that began the

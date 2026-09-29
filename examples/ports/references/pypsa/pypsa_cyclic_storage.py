@@ -8,15 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_cyclic_storage.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded
-duals, and
-``nodal_prices`` spells that reshape out rather than leaning on ``stack()``,
-whose NA handling changed in 3.0. The floor is checked rather than assumed —
-this script emits byte-identical output on either side of that change.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -24,7 +16,7 @@ own objects. Nothing here imports specsolve.
 Storage with ``cyclic_state_of_charge``. The first
 snapshot's state of charge carries over from the *last* rather than from a
 seed, so the horizon closes on itself and there is no
-``state_of_charge_initial``. That is the whole delta from the non-cyclic port.
+``state_of_charge_initial``.
 """
 
 from __future__ import annotations
@@ -97,13 +89,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
 
 def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost.
-
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective. A sign convention that disagreed would be invisible to
-    a scalar comparison and wrong in every reported price.
-    """
+    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal balance."""
     mp = n.buses_t.marginal_price
     return {
         'snapshot': [s for s in mp.index for _ in mp.columns],

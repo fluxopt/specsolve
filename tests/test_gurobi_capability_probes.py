@@ -1,11 +1,7 @@
 """The Gurobi column of the sink-capability table, measured rather than read.
 
-`test_sink_capability_probes.py`'s twin, and it exists because this column was
-the *unverified* one — the table said its entries came "from the API and
-linopy's `SolverFeature` table, and want a spike before they are relied on".
-
-Every model is two columns wide, so it runs under the size-limited licence
-gurobipy ships in its own wheel.
+`test_sink_capability_probes.py`'s twin. Every model is two columns wide, so it
+runs under the size-limited licence gurobipy ships in its own wheel.
 """
 
 from __future__ import annotations
@@ -61,10 +57,8 @@ def test_gurobi_takes_a_convex_quadratic_objective(model):
 
 
 def test_gurobi_takes_a_nonconvex_quadratic_objective_at_default_parameters(model):
-    """`NonConvex=2` is the folklore answer and was not needed: the automatic
-    default reaches spatial branch-and-bound by itself. Pinned because the
-    refusal contract will name Gurobi, and "…if you set a parameter" is a
-    different sentence."""
+    """The automatic default reaches spatial branch-and-bound without `NonConvex=2`,
+    so a refusal that names Gurobi needs no "…if you set a parameter"."""
     m = model()
     x = m.addVars(2, lb=0, ub=10)
     m.addConstr(x[0] + x[1] >= 2)
@@ -92,10 +86,8 @@ def test_gurobi_takes_a_quadratic_constraint(model):
 
 
 def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model):
-    """`addSOS` has no bulk form; the quadratic parts do, which is why the
-    hand-off cost is about memory rather than call overhead. Measured through
-    the matrix APIs the table names, since those are what this package would
-    call and a shape they stop accepting is a cell going wrong."""
+    """`addSOS` has no bulk form; the quadratic parts do. Measured through the
+    matrix APIs the table names, since those are what this package calls."""
     m = model()
     x = m.addVars(2, lb=0, ub=10)
     columns = [x[0], x[1]]
@@ -110,10 +102,8 @@ def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model
 def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
     """The claim beside its evidence — `test_sink_capability_probes.py`'s twin.
 
-    Everything above solved, and this sink now hands gurobipy every one of them
-    — the quadratic constraint included, which makes it the only consumer in
-    the package that builds one at all. The linopy lane cannot, which is hard
-    rule 3's amendment and what ``lanes.LANES`` declares.
+    This sink hands gurobipy every model above, the quadratic constraint
+    included. The linopy lane cannot, as ``lanes.LANES`` declares.
     """
     capabilities = SOLVERS['gurobi'].capabilities
     for capability in CAPABILITIES:

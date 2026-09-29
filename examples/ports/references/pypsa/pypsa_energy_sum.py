@@ -8,12 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_energy_sum.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded
-duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -25,13 +20,11 @@ in the corpus holds within one snapshot.
 
 **The snapshot weightings are not 1.** They are the hours each snapshot stands
 for, and they enter twice: once in the energy being bounded, once in the cost
-being minimised. A port that dropped them would still solve and would still
-look sensible.
+being minimised.
 
-Only two of the three generators carry a bound. That is PyPSA's own shape — the
-attributes default to ``-inf`` and ``inf``, and the constraint is emitted only
-where the value is finite — and it is why the port's tables are short rather
-than padded with infinities.
+Only two of the three generators carry a bound: the attributes default to
+``-inf`` and ``inf``, and PyPSA emits the constraint only where the value is
+finite, so the port's tables are short rather than padded with infinities.
 """
 
 from __future__ import annotations
@@ -90,19 +83,10 @@ def nodal_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per (snapshot, bus), tidy — read off the
     model rather than off ``buses_t.marginal_price``.
 
-    Recorded in references.json so the port is checked on a whole *vector*, not
-    just the objective.
-
-    **The two are not the same number here, and every model above hid it.**
     PyPSA divides the dual by ``snapshot_weightings.objective`` before
     publishing it as a marginal price, so that the figure reads per unit energy
-    rather than per snapshot. Where the weightings are all 1 — every other
-    PyPSA port in this corpus — the division is invisible. This instance
-    weights its snapshots 1, 2, 3, 2, and the published price is a flat 60
-    against a dual of 60, 120, 180, 120.
-
-    The dual is the object both models actually hold, so it is the one recorded:
-    the port asserts the formulation, not the presentation.
+    rather than per snapshot. This instance weights its snapshots 1, 2, 3, 2,
+    and the published price is a flat 60 against a dual of 60, 120, 180, 120.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()
     return {
