@@ -69,37 +69,7 @@ constraint as written:
 
 ## 6. When a loop of re-solves is slow
 
-Run the loop once with each `keep=` and read the clock the package keeps.
-`kept` confirms the request was honoured rather than quietly downgraded:
-
-```python
-for keep in ('solver', 'progress'):
-    model = sps.build('dispatch.yaml', sources)
-    for numbers in walk:
-        assert model.update(numbers).solve(keep=keep).kept in {keep, 'nothing'}
-    print(keep, model.diagnostics().seconds['solve'])
-```
-
-Take the faster one. `'nothing'` on every iteration means each update moved a
-mask and the model was rebuilt, so the loop is paying for the build, not the
-solve ([`Model.update`](../reference/api.md#specsolve.Model.update)).
-
-**`keep='progress'` can lose by an order of magnitude and win by a factor of
-two**, so measure rather than guess. Over six updates on HiGHS
-([#815](https://github.com/fluxopt/specsolve/pull/815)), carrying the solver's
-work cost **76.6 s against 4.3 s** on a dispatch model whose presolve cracks
-the problem outright, an 18× loss, and **111.2 s against 213.9 s** on a
-storage model whose cyclic recurrence presolve cannot crack, a 1.9× win. It
-pays where the model is hard for its solver's preprocessing *and* consecutive
-solves differ by a small step: a rolling horizon, a myopic pathway, a search
-that inches. The answer does not change either way: across both models the
-objectives agreed to 2e-15 relative. No solver option reaches the same thing;
-on both solvers that ship, an option asking for it did not produce it (#815).
-
-**Time with `keep='nothing'`.** It discards the held solver before the load,
-so no basis, incumbent or solver-internal state survives. A benchmark needs
-that, and so does comparing two sets of `solver_options`.
-
-**A rebuild carries no progress.** A cutting-plane master re-solved after
-gaining a cut has gained a *row*, and a basis spans the model it was read
-from. [#382](https://github.com/fluxopt/specsolve/issues/382) tracks that case.
+Compare `keep='solver'` with `keep='progress'` on the loop, as
+[warm-starting a re-solve](warm-start.md#check-that-it-pays) shows. A `kept`
+of `'nothing'` on every iteration means each update moved a mask, so the loop
+pays for a rebuild, not for the solve.

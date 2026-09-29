@@ -85,7 +85,7 @@ def test_the_extension_rewrites_math_and_nothing_that_only_quotes_it(source: str
     markdown-exec fences its source block with eight backticks, so a pattern
     that only ever closed on three ran from that opening fence to the first
     bare one and left every span in between — a whole rendered model — as
-    literal text on `docs/interactive.md`.
+    literal text on `docs/change.md`.
     """
     pytest.importorskip('markdown', reason='the docs group; the default environment skips it')
     from tools.mdx_github_math import rewrite

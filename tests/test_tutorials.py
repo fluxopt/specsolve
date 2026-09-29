@@ -1,16 +1,14 @@
-"""The tutorial pages must keep running, and keep claiming true things.
+"""The pages whose blocks the site runs must keep running, and keep claiming true things.
 
-``docs/interactive.md`` teaches the three loops a session actually has — update,
-grow a coordinate set, patch the spec — plus the verb that reads a built row
-back when one of them lands wrong, and ``docs/lifecycle.md`` aims them at
-linopy's `fix` / `relax` / `remove`. Every executed block is a real call, so a
+``docs/change.md`` teaches the three loops a session actually has — update,
+grow a coordinate set, patch the spec — and ``docs/howto/fix-relax-remove.md``
+aims them at linopy's `fix` / `relax` / `remove`. Every executed block is a real call, so a
 signature change breaks this test rather than leaving a page that reads fine and
 errors in a reader's session.
 
 Running is the weaker half, as with ``test_walkthrough.py``. The prose also
 *claims* things: that the update loop loaded one model for three solves, that
-growing an axis loads a second, that a pin moves bounds rather than labels,
-that a masked-out generator leaves the balance row a term short. A page that
+growing an axis loads a second, and that a pin moves bounds rather than labels. A page that
 executed but had stopped doing any of that would still be green here without
 these assertions, and would teach the wrong loop.
 
@@ -36,8 +34,8 @@ if TYPE_CHECKING:
 
 REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
-LOOPS = DOCS_DIR / 'interactive.md'
-LIFECYCLE = DOCS_DIR / 'lifecycle.md'
+LOOPS = DOCS_DIR / 'change.md'
+LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
 #: A plain ```python fence on the same page is a listing, and running it would
@@ -108,22 +106,6 @@ def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, An
 def test_a_refused_edit_says_what_is_wrong(session: tuple[dict[str, Any], str]) -> None:
     _, printed = session
     assert 'does not name a declared dimension' in printed, "the load-time error is the page's error message"
-
-
-def test_a_masked_generator_leaves_the_balance_row_short(session: tuple[dict[str, Any], str]) -> None:
-    """The debugging claim: the file names three generators and the built row carries two."""
-    namespace, _ = session
-    fleet = namespace['fleet'].row('power_balance', snapshot=3)
-    short = namespace['short'].row('power_balance', snapshot=3)
-    assert fleet.terms['coordinate'].to_list() == ['3, wind', '3, solar', '3, gas'], (
-        'the fleet as declared puts all three generators in the balance row'
-    )
-    assert short.terms['coordinate'].to_list() == ['3, wind', '3, solar'], (
-        "a capacity of zero deletes gas's column, so the row that built has no term to carry it"
-    )
-    assert namespace['answer'].termination_condition == 'infeasible', (
-        'and the page needs a model that actually stopped having an answer'
-    )
 
 
 def test_the_session_leaves_a_file(session: tuple[dict[str, Any], str]) -> None:

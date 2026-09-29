@@ -1,17 +1,17 @@
-# Fix, relax, remove
+# Fixing, relaxing and removing
 
-Three verbs a linopy reader reaches for first, spelled as the loops of
-[the previous page](interactive.md). None is a method here, which is
-[hard rule 5](https://github.com/fluxopt/specsolve/blob/main/docs/about/architecture.md#hard-rules).
+How to do what linopy's `fix`, `relax` and `remove_constraints` do. None is a
+method here: a fix is data, and the other two are an edit to the spec
+([Change a model](../change.md) teaches both).
 
-| linopy | here | loop |
+| linopy | here | rebuild |
 |---|---|---|
-| `x.fix(v)` | both bounds read a parameter; write the same number into both | **1**, data, no rebuild |
-| `x.relax()` | `domain:` in the declaration | 3 |
-| `remove_constraints` | drop the key from the spec | 3 |
+| `x.fix(v)` | both bounds read a parameter; write the same number into both | no, `update` |
+| `x.relax()` | `domain:` in the declaration | yes |
+| `remove_constraints` | drop the key from the spec | yes |
 
-The spec is `examples/dispatch.yaml`, as before. Every block runs when the
-site is built, and a block that raises fails the build.
+The spec is `examples/dispatch.yaml`. Every block runs when the site is
+built, and a block that raises fails the build.
 
 ```python exec="true" source="material-block" session="lifecycle"
 import polars as pl
@@ -31,11 +31,12 @@ sources = {
 }
 ```
 
-## Fix
+## Fix a variable
 
-A fix is two bound parameters, each total over the variable's coordinates: a
-frame holding only the pinned rows is a load error. `p_max` keeps its job as
-the `where` mask, so a pin does not renumber the labels.
+Give the variable two bound parameters, each total over its coordinates: a
+frame holding only the pinned rows is a load error. Keep `p_max` as the
+`where` mask, so a pin does not renumber the labels. Then write the pinned
+value into both bounds with `update`:
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 pinnable = to_spec(MODEL).to_dict()
@@ -58,16 +59,14 @@ print(f'{pinning.loads} loads over {pinning.solves} solves — a pin moves bound
 print(pl.DataFrame({'gas': ['free to dispatch', 'held at 60'], 'objective': [unpinned, held]}))
 ```
 
-One load for both answers. A `p == p_pin` constraint would do the same at a
-row per pinned variable, and put the information in a shadow price instead of
-a reduced cost. Write a row for a combination, `sum(p, over=generator) ==
-target`, which is not a bound.
+One load for both answers. To fix a combination of variables, such as
+`sum(p, over=generator) == target`, write a constraint instead: a combination
+is not a bound.
 
-## Relax
+## Relax integrality
 
-Integrality is what the column is, so changing it is loop 3: patch `domain:`
-and build again. An integer variable makes duals undefined, and asking for
-one says so.
+Patch `domain:` and build again. An integer variable makes duals undefined,
+and asking for one says so.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 integral = to_spec(MODEL).to_dict()
@@ -85,10 +84,10 @@ relaxed = sps.solve(MODEL, sources)  # the same file, continuous as declared
 print(relaxed.dual('power_balance'))
 ```
 
-## Remove
+## Remove a constraint
 
-A constraint family is a key in a mapping, so removing it is `pop`. Below,
-the ramp limit from the previous page, added and taken away.
+`pop` the constraint's key from the spec. Below, the ramp limit from
+[Change a model](../change.md#3-new-math), added and taken away.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 ramped = to_spec(MODEL).to_dict()
@@ -106,22 +105,8 @@ without_ramp = sps.solve(ramped, data).objective
 print(pl.DataFrame({'model': ['with ramp_up', 'ramp_up removed'], 'objective': [with_ramp, without_ramp]}))
 ```
 
-The data-shaped alternative is a `where` on the constraint: the declaration
-stays and builds no rows where the mask is false. That is loop 1 in spelling
-and loop 2 in cost, since a mask that changes membership renumbers labels.
-`diagnostics().loads` says which one you got, and `omissions` counts the rows
-not built.
-
-## What is still missing
-
-An IIS (irreducible infeasible subsystem) on an infeasible model.
-`model.row(name, **coordinate)` gives one row's terms, comparison and
-right-hand side without a solve, and
-[debugging a wrong answer](howto/debug.md) is the recipe. The whole
-relationship is
-[relationship to linopy](https://github.com/fluxopt/specsolve/blob/main/docs/about/linopy.md).
-
-## Where next
-
-[Tables in, tables out](tables.md) feeds a model from parquet, reads the answer
-as tables and queries its archive.
+To switch rows off with data instead, put a `where` on the constraint. The
+declaration stays and builds no rows where the mask is false. An `update` that
+changes the mask loads the model again, since the rows are renumbered.
+`diagnostics().loads` counts the loads, and `omissions` counts the rows not
+built.

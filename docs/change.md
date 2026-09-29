@@ -1,15 +1,12 @@
 # Change a model
 
-The dispatch model from [Run a model](guide.md), changed three ways, cheapest
+The dispatch model from [Run a model](run.md), changed three ways, cheapest
 first. Every block is a function of a **spec** (the YAML, as a `dict`) and its
 **sources**, so blocks re-run in any order mean the same thing.
 
 1. **New numbers**: `update`, and the solver keeps the model it has loaded.
 2. **More rows**: the same math over a longer axis.
 3. **New math**: patch the `dict` and re-run.
-
-A fourth section reads a built row back, for when the answer is wrong and the
-file looks right.
 
 Every block on this page runs when the site is built, and what you see under it
 is what it printed on this commit. A block that raises fails the build.
@@ -135,41 +132,6 @@ except sps.LanguageError as exc:
     print(exc)
 ```
 
-## 4. When the answer is wrong
-
-`p` is declared `where: "p_max > 0"`, so a capacity of zero does not park a
-generator at zero. It deletes the column and every term that referenced it.
-Below, gas is retired with one number:
-
-```python exec="true" source="material-block" result="text" session="loops"
-retired = sources | {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [80.0, 40.0, 0.0]})}
-short = sps.build(SPEC, retired)
-answer = short.solve()
-
-print(f'{answer.status} / {answer.termination_condition}')
-try:
-    answer.primal('p')
-except sps.NoSolutionError as exc:
-    print(exc)
-```
-
-Infeasible, while the file still reads `sum(p, over=generator) == load` over
-all three generators. `row` gives the row the build produced, with no solve:
-
-```python exec="true" source="material-block" result="text" session="loops"
-fleet = sps.build(SPEC, sources)
-
-print(fleet.row('power_balance', snapshot=3))
-print(short.row('power_balance', snapshot=3))
-print(f'{fleet.diagnostics().columns} columns became {short.diagnostics().columns}')
-```
-
-`p[3, gas]` is missing from the second row: six columns went with the
-`where`, and `power_balance` asks two generators for a load of 180. The line
-is [linopy's shape](reference/api.md#specsolve.relational.result.ConstraintRow). No solver output names
-this fault. Where a mask takes every row of a declaration,
-`diagnostics().omissions` counts them.
-
 ## What leaves the session
 
 The spec, as a file you can diff and commit:
@@ -180,7 +142,9 @@ print(to_spec(spec).to_yaml())
 
 ## Where next
 
-[Fix, relax, remove](lifecycle.md) spells `fix`, `relax` and "remove that
-constraint" as these three loops.
-[`keep=`](reference/api.md#specsolve.Model.solve) is the one choice made for
-you here: `'solver'`.
+| | |
+|---|---|
+| [Sweep a model](sweep.md) | the next tutorial: one model once per scenario, then window by window |
+| [Warm-starting a re-solve](howto/warm-start.md) | keep the solver's work between solves, not only the model |
+| [Fixing, relaxing and removing](howto/fix-relax-remove.md) | linopy's `fix`, `relax` and `remove_constraints`, as these three loops |
+| [Debugging a wrong answer](howto/debug.md) | read the row a build produced, when the file looks right and the answer is not |

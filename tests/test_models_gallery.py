@@ -304,7 +304,7 @@ def test_no_tab_without_a_reference() -> None:
 
 
 #: Hand-written prose that shows model YAML, checked against the models that
-#: run. `docs/guide.md` is not here: the language is mathspec's and the guide
+#: run. `docs/run.md` is not here: the language is mathspec's and the tutorial
 #: links it rather than teaching it, so it shows no expressions to check.
 #: `README.md`'s block is what `docs/index.md` includes as the whole thing in
 #: one model.
