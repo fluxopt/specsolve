@@ -57,19 +57,14 @@ class PolarsEngine:
         #: The build, or ``None`` where there is not one — closed, released by
         #: an update that raised, or never run.
         self._built: BuiltModel | None = None
-        #: What the last build measured about itself. Outlives ``_built``,
-        #: since [`diagnostics`][] answers after [`close`][].
+        #: What the last build measured about itself. Outlives ``_built``.
         self._measured = Measured()
-        #: The solver holding this model, kept between solves — the only thing
-        #: a rebuild does *not* throw away. ``None`` until one has been solved.
+        #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
-        #: How many solves this model has been through, and how many of them
-        #: had to load the solver from scratch instead of pushing values onto
-        #: one that already held it.
+        #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
-        #: Wall seconds each phase has spent, cumulatively. Time spent is a
-        #: fact about what ran, so a rebuild adds to it rather than clearing it.
+        #: Wall seconds each phase has spent, cumulative across rebuilds.
         self._seconds: dict[str, float] = {}
 
     @property
@@ -86,13 +81,10 @@ class PolarsEngine:
     def build(self, program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> None:
         """Attach *sources*, then build every declaration into the model frames.
 
-        **A second call rebuilds over the same object**, which is what
-        ``update`` is. The previous build is released *before* this one starts,
-        and the held solver is asked for its
-        [`structure`][specsolve.relational.sinks.solvers.base.Solver.structure] first,
-        reading it being what lets go of these frames.
-        A build that raises leaves no model at all rather than half of one,
-        and ``diagnostics()`` answers from what was measured by then.
+        A second call rebuilds over the same object. The held solver reads its
+        [`structure`][specsolve.relational.sinks.solvers.base.Solver.structure]
+        before the previous build is released, since that read lets go of these
+        frames. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
             self._solver.structure()
@@ -118,10 +110,6 @@ class PolarsEngine:
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
 
-        A construct the format has no section for is refused here, the way the
-        solve path refuses one a solver cannot ingest
-        ([`refusal`][specsolve.relational.sinks.refusal]).
-
         Raises:
             ValueError: A suffix nothing writes.
             SpecsolveError: A construct this format cannot spell.
@@ -145,31 +133,21 @@ class PolarsEngine:
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
-        The solver stays loaded where it can, which is
-        [`loaded`][specsolve.relational.sinks.solvers.loaded]'s decision: an updated
-        model has its new numbers pushed onto what the solver already holds,
-        and one whose structure moved is loaded again. A construct the solver
-        cannot ingest is refused before the load
-        ([`refusal`][specsolve.relational.sinks.refusal]).
+        The solver stays loaded where
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
+        the solver cannot ingest is refused before the load.
 
         Args:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
             keep: How much of the session this solve may keep — one of
-                [`KEEPS`][specsolve.relational.result.KEEPS]. A preference, not a
-                guarantee: a model whose structure moved is loaded again
-                whatever was asked, and
+                [`KEEPS`][specsolve.relational.result.KEEPS]. A preference:
                 [`kept`][specsolve.relational.result.Result.kept] reports what
-                happened. ``nothing`` is held to structurally, the held solver
-                being closed before the load decision.
-            lower: How an expression the caller *writes* becomes a plan node,
-                for [`evaluate`][specsolve.relational.result.Result.evaluate]. Passed
-                in because lowering reads the spec as written, which nothing
-                under ``relational/`` sees (docs/about/architecture.md, hard
-                rule 2). ``None`` for a build from an already-lowered
-                ``Program``, and the result then says so rather than
-                evaluating an undeclared expression.
+                happened.
+            lower: How an expression the caller writes becomes a plan node,
+                for [`evaluate`][specsolve.relational.result.Result.evaluate], or
+                ``None`` for a build from an already-lowered ``Program``.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -240,11 +218,7 @@ class PolarsEngine:
         return self._model.handoff.contents
 
     def diagnostics(self) -> Diagnostics:
-        """What this build and its solves did that the answer does not show.
-
-        Answerable after [`close`][]: every field is a count, a clock or a
-        small frame this keeps, not a read of the model it releases.
-        """
+        """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured
         return Diagnostics(
             columns=measured.columns,
@@ -276,12 +250,9 @@ class PolarsEngine:
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
         """One solve's answer as one frame per declaration — a [`Result`][]'s own.
 
-        References rather than copies: the frames point at this build's label
-        frames, and [`build`][] replacing the registries takes nothing from
-        what an earlier result still holds. Lazy, so each declaration's plan is
-        composed only when it is read. A vector that is ``None`` yields no
-        frames at all rather than empty ones, which is the state
-        [`Result`][] reports through the status.
+        The frames reference this build's label frames, which [`build`][]
+        replaces rather than mutates. A ``None`` vector yields no frames rather
+        than empty ones.
         """
         model = self._model
         program = model.program
@@ -318,15 +289,8 @@ class PolarsEngine:
     ]:
         """What [`evaluate`][specsolve.relational.result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
 
-        Both close over the same snapshot the result *owns* — the program, the
-        attached data, a copy of this build's variable-frame registry and the
-        solver's primal vector — so they keep answering after an update or
-        ``close()``, at the cost of keeping those frames alive. Nothing is
-        compiled until a reader is called.
-
-        The evaluator is served whenever *lower* is given: a loaded answer
-        rebuilds it ([`reconstruct`][]), and a build off a lowered ``Program``,
-        which has no spec as written, does not.
+        Both close over a snapshot the result owns, including a copy of the
+        variable registry, so they keep answering after an update or ``close()``.
         """
         if primal is None:
             return {}, None
@@ -344,15 +308,12 @@ class PolarsEngine:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame] | None:
         """The ad-hoc evaluator for a saved solution, over this rebuilt model.
 
-        The primal and dual are reconstructed from the frames a save wrote,
-        this build supplying the labels that put the values back in vector order
-        ([`readback.reordered`][]); the evaluator is then the one [`solve`][]
-        hands a live result. It comes back where *lower* is given.
+        This build supplies the labels that put the saved values back in vector
+        order. It comes back where *lower* is given.
 
         Args:
             primals: The saved ``(dims…, value)`` frame per variable.
-            duals: The same per constraint, or ``None`` where the solve left no
-                duals — *no_duals* then says why, and a read of one raises it.
+            duals: The same per constraint, or ``None`` where the solve left no duals.
             no_duals: Why there are no duals, or ``None`` when *duals* holds them.
             lower: How an expression the caller writes becomes a plan node.
         """
@@ -379,11 +340,7 @@ class PolarsEngine:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model. A [`Result`][] keeps its own frames.
-
-        A loaded solver goes first, being the one thing here that is not this
-        process's memory. [`diagnostics`][] still answers afterwards.
-        """
+        """Drop the built model and close a loaded solver. A [`Result`][] keeps its own frames."""
         if self._solver is not None:
             self._solver.close()
             self._solver = None
@@ -418,10 +375,8 @@ def expression_readers(
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
-    A spec that declares no variables is a calculation rather than an
-    optimisation, so every expression has a value with no solver and no chosen
-    point. The readers are the ones a solve hands out, over a compiler carrying
-    no solution: a variable is never reached, every leaf a number already.
+    A spec that declares no variables is a calculation, so every expression
+    has a value with no solver.
 
     Args:
         program: A lowered program with no variables — a calculation.
@@ -441,12 +396,8 @@ def expression_readers(
 def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:
     """Why this answer carries no certificate of infeasibility.
 
-    Two different noes. A solve that found an answer has nothing to certify,
-    and saying so is the whole message. A solve that *was* infeasible and
-    still produced nothing hit a solver setting, so the message names the
-    setting for the sink that was used — which is why this takes the sink's
-    name rather than asking the sink, whose session the engine may already
-    have let go.
+    It takes the sink's name rather than asking the sink, whose session the
+    engine may already have let go.
     """
     if status.termination_condition != 'infeasible':
         return (
@@ -471,11 +422,7 @@ def _no_duals_message(
     termination_condition: str,
     quadratic_rows: Sequence[str],
 ) -> str:
-    """The message for a solve that left values but no duals.
-
-    *quadratic_rows* are the quadratic constraints, whose prices are off by
-    default.
-    """
+    """The message for a solve that left values but no duals."""
     if quadratic_rows and not discrete:
         names = ', '.join(f"'{n}'" for n in quadratic_rows)
         return (
@@ -501,12 +448,7 @@ def _no_duals_message(
 
 @contextmanager
 def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
-    """Add the block's wall time onto ``seconds[phase]`` — the diagnostics clocks.
-
-    Cumulative, so a phase that runs again adds to its total the way the
-    counters count. Recorded on failure too: a build that died mid-phase spent
-    its time there.
-    """
+    """Add the block's wall time onto ``seconds[phase]``, on failure too."""
     started = perf_counter()
     try:
         yield

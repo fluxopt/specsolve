@@ -3,15 +3,10 @@
     pixi run python -m tools.ladder           # rewrite docs/examples/pypsa_ladder.md and docs/examples/pypsa_ladder/*.md
     pixi run python -m tools.ladder --check   # fail if any has drifted
 
-A rung's page is its projected spec as math, then `specsolve` beside `PyPSA`:
-the projected YAML, the prep that makes its tables from the network, and
-the solve — against the PyPSA script that builds the same network and
-optimises it. Below: the tables the rung is the first to declare, the rows
-specsolve built, and how deep the comparison went. Every fence is a committed
-file under ``differential/pypsa/`` (the projection, the script, the tables)
-or derived from one (the prep slice, from ``prep.py``); the runner wrote
-them from the pinned mathspec and the ``PyPSA parity`` workflow holds them
-there. Nothing here runs pypsa.
+A rung's page is its projected spec as math, then `specsolve` beside `PyPSA`,
+then the tables the rung is the first to declare and the comparison verdict.
+Every fence is a committed file under ``differential/pypsa/`` or a slice of
+``prep.py``. Nothing here runs pypsa.
 """
 
 from __future__ import annotations

@@ -80,10 +80,7 @@ def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitme
 
     Integrality is applied by column index, so a vector that is short, shifted
     or in another order relabels which variables are integral and the
-    objective moves. A binary model is the sharp case, and it is the one this
-    asks: the sink hands HiGHS a boolean widened to ``int32`` over the whole
-    index, where it once walked bounded column chunks and applied
-    ``changeColsIntegrality`` per chunk.
+    objective moves. A binary model is the sharp case.
     """
     tables = commitment_run.engine._model.handoff
     with Highs(tables, None, None) as sink:
@@ -113,12 +110,8 @@ def test_highs_numbers_a_continuous_column_zero_and_an_integer_one():
 def test_cols_vtype_is_an_enum_over_every_declared_domain(commitment_run):
     """``cols.vtype`` is an Enum, and its members are ``program.VariableDomain``.
 
-    The storage choice is a performance one — one word per column, the same
-    handful of words for the whole model, and the widest thing on the row as a
-    string. The *members* are a contract: an Enum rejects a value outside it,
-    so a fourth domain added to the plan and not reaching the column
-    fails where the column is built rather than in whichever sink first
-    compares against a name it does not know.
+    An Enum rejects a value outside it, so a fourth domain added to the plan
+    and not reaching the column fails where the column is built.
     """
     vtype = commitment_run.engine._model.handoff.cols.schema['vtype']
     held = set(commitment_run.engine._model.handoff.cols['vtype'].unique().to_list())

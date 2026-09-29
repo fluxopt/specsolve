@@ -1,15 +1,9 @@
 """Absence: what a missing value does to a coefficient, a row and a bound.
 
-Absence is a first-class state here rather than a zero
-(docs/reference/language/absence.md), and almost every rule in this file is a
-consequence of that one decision: a sparse coefficient is still a coefficient,
-a constant side with a hole is refused rather than filled, an empty group is a
-zero and not a gap, and a term whose variable is absent takes its row with it.
-
-The pairs matter more than the singles. A sparse coefficient and a sparse
-*constant* are the same shape of data and are treated differently on purpose,
-and an empty group is a zero while a member with no value is a refusal — so
-they are checked next to each other, where the line between them is visible.
+Absence is a state, not a zero (docs/reference/language/absence.md): a sparse
+coefficient is still a coefficient, a constant side with a hole is refused, an
+empty group is a zero, and a term whose variable is absent takes its row with
+it. Each pair that differs is checked side by side.
 """
 
 from __future__ import annotations
@@ -23,9 +17,7 @@ from tests.conftest import by_coord, override
 from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
-#: A masked variable broadcast onto a wider frame, then reduced back. `p` is
-#: over (node, tech); `produces` adds `carrier`; the sum removes `tech`. So the
-#: constraint's dims are neither a subset nor a superset of the variable's.
+#: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
 BROADCAST_MASK_SPEC = {
     'dimensions': {
         'node': {'dtype': 'str'},
@@ -63,22 +55,12 @@ SPARSE_COEFFICIENT_SPEC = {
 }
 
 
-#: `w` everywhere, `c` with no row at t=0 — the sparse constant side that is
-#: refused unmasked and legal behind a `where`.
+#: `w` everywhere, `c` with no row at t=0.
 SPARSE_CONSTANT_DATA = {'t': [0, 1, 2], 'w': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
 
 
 def test_a_sparse_coefficient_is_still_a_zero_coefficient():
-    """A tidy parameter table is a compressed dense array — where it can be.
-
-    Supplying rows only where a *coefficient* is nonzero stays the language's
-    sparsity idiom (the data-attachment rules). The uncovered coordinate contributes no term, the
-    row survives, and both lanes agree about it: nothing was invented, the term
-    simply is not there.
-
-    Only the *constant* side lost this reading, and the test below says why.
-
-    """
+    """A coordinate a coefficient does not cover contributes no term, and the row survives."""
     data = {'t': [0, 1, 2], 'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 0.0, 1: 4.0, 2: 5.0})}
     with differential(SPARSE_COEFFICIENT_SPEC, data, lp=True) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
@@ -89,12 +71,7 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
 def test_a_sparse_constant_side_is_refused_on_both_lanes():
     """The same omission on the constant side is a `DataError`, not a zero.
 
-    There the fill *is* the bound — `w * x <= c` with no `c` row reads `<= 0`,
-    which binds rather than vanishing, and the solve reports optimal. Nothing in
-    the model said so: a table left sparse is compression, not a claim.
-
-    Refused on both lanes, in the same words, because a rule the linopy lane did
-    not share would be a parity break rather than a language rule (hard rule 3).
+    There the fill is the bound: `w * x <= c` with no `c` row would read `<= 0`.
     """
     with (
         pytest.raises(DataError, match="parameter 'c' covers 1 fewer"),
@@ -112,15 +89,7 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
     ],
 )
 def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint):
-    """A reduction between the parameter and the row hid the hole from one lane.
-
-    `sum` reads a missing coordinate as no summand rather than as a gap — the
-    relational lane sums each constant piece per coordinate before asking the
-    assembled constant for its nulls, so the answer came back complete and
-    `<= 9` stood where the data said nothing. The linopy lane asks the
-    parameter, which is the only shape a reduction cannot flatten, and both
-    lanes now do (#1465).
-    """
+    """A reduction between the parameter and the row does not hide the hole (#1465)."""
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
@@ -129,9 +98,7 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
     """Masking the coordinate answers the question, so it is not refused.
 
     The check is keyed to the rows a declaration builds, not to the coordinate
-    product — the same property that keeps #312's divisor check from becoming a
-    wall. Without it the remedy the error names would not work.
-
+    product.
     """
     masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': 'c'})
     with differential(masked, SPARSE_CONSTANT_DATA) as run:
@@ -141,26 +108,17 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
 
 
 def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
-    """A parameter added beside a variable term is a constant piece, not skipped (#1521).
+    """A parameter added beside a variable term is a constant piece, and is checked (#1521).
 
-    `w * x + c <= 100` reads `w * x <= 100` where the file says `w * x <= 100 - c`,
-    the missing `c` filled with the zero that is a bound. The linopy check asked
-    its question of a side carrying no variable, so a piece beside a term went
-    unasked and the lane built the wrong row in silence; the relational lane,
-    asking of every constant fragment, refused alone.
+    Filled, `w * x + c <= 100` would read `w * x <= 100` where the file says
+    `w * x <= 100 - c`.
     """
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
 def test_a_constant_piece_beside_a_term_is_refused_through_a_reduction():
-    """The same piece under a sum, where both lanes were blind (#1521).
-
-    `sum(w * x, over=t) + sum(c, over=t) <= 100` sums the gap away before either
-    lane's per-coordinate check can see it — the linopy lane skipped the side for
-    its variable, the relational lane could not see the hole through the sum
-    (#1465's mechanism) — so the parameter is asked directly, of both lanes now.
-    """
+    """The same piece under a sum, which would sum the gap away (#1521)."""
     spec = override(
         SPARSE_COEFFICIENT_SPEC,
         **{'constraints.cap': {'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 100'}},
@@ -169,12 +127,10 @@ def test_a_constant_piece_beside_a_term_is_refused_through_a_reduction():
 
 
 def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
-    """The widened check still reads a sparse coefficient as a zero (#1521).
+    """Beside a constant piece, a sparse coefficient is still a zero (#1521).
 
-    `w * x + c <= 100` with `w` short and `c` whole builds and both lanes agree:
-    `w` is a coefficient wherever a variable stands with it, so its missing row
-    is the zero the absence rules allow rather than an uncovered bound — only the
-    piece `c`, which no variable stands with, is owed its coordinates.
+    `w` stands with a variable, so its missing row is a zero; only `c` is owed
+    its coordinates.
     """
     data = {'t': [0, 1, 2], 'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({0: 5.0, 1: 4.0, 2: 5.0})}
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
@@ -213,15 +169,8 @@ def _grouped_constant_sources(capacity=('g1', 'g2')):
 def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     """A group with no members holds the empty sum, which is a value.
 
-    The coverage check reads what a constant fragment produced, and a label no
-    member maps to is missing from it for the same reason a label whose data was
-    omitted is. Only the first is a value: `capacity` covers every generator it
-    has, and the operator rules say a group with no members contributes nothing.
-
-    Refusing it named a parameter that was complete, and none of the three
-    remedies the message offers existed — there is no row to supply, and the
-    `where` that would mask `south` needs a grouped sum, which the predicate
-    grammar has no atom for.
+    `capacity` covers every generator it has, and a group with no members
+    contributes nothing.
     """
     with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
         assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
@@ -230,8 +179,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
 
-#: The same story with a dim the group does not consume, so the empty label
-#: has to be paired with every snapshot rather than standing on its own.
+#: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int'}},
@@ -248,13 +196,7 @@ SPANNED_GROUPED_CONSTANT_SPEC = {
 
 
 def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
-    """The empty label is a row per snapshot, not one row.
-
-    A group consumes one dim and the fragment keeps the rest, so the value an
-    empty group holds is needed at every coordinate of what is kept. One row
-    would leave the others uncovered and refuse the model for the reason the
-    zero was written to remove.
-    """
+    """The empty label is a row per snapshot, not one row."""
     sources = {
         'snapshot': [0, 1],
         'bus': ['north', 'south'],
@@ -272,9 +214,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
 
 
-#: A walk to two columns at once, so what the reached set is subtracted from is
-#: the *product* of the targets: `south` reaches neither technology, and `north`
-#: reaches both, so two of the four combinations have no members.
+#: A relation to two columns: `south` reaches neither technology, `north` both.
 PLURAL_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'technology': {'dtype': 'str'}},
@@ -291,13 +231,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
 
 
 def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
-    """A combination no member sits at is empty for the reason one label is.
-
-    A walk to two columns lands on a product of targets, and the
-    unreached part of that product is what holds the empty sum — so subtracting
-    the reached labels of each dim in turn would leave `(north, solar)` looking
-    reached when nothing sits there.
-    """
+    """A combination of two groups that no member sits at holds the empty sum."""
     sources = {
         'bus': ['north', 'south'],
         'technology': ['wind', 'solar'],
@@ -317,13 +251,10 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
 
 
 def test_a_member_with_no_value_is_still_refused_through_a_group():
-    """The group that is empty *because its data is missing* keeps the refusal.
+    """A group short of a member's value keeps the refusal.
 
-    Both generators sit on `north`, and dropping `g2`'s row leaves `north`'s
-    group with one member and a hole rather than with no members. Nothing
-    downstream can tell those two apart once the fragment is built, which is why
-    the empty group is written down as a zero where the reason is known — this
-    is the case that says the zero is not written down for every absence.
+    Dropping `g2`'s row leaves `north`'s group with one member and a hole, not
+    with no members.
     """
     with (
         pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
@@ -347,16 +278,9 @@ ABSENT_VARIABLE_SPEC = {
 def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     """Absence propagates into the comparison; it does not zero the term.
 
-    ``x - relmax * size <= 0`` where ``size`` is masked out used to build
-    ``x <= 0`` — a row that silently pinned the flow to zero. Plausible answer,
-    no error, which is goal 1 of linopy's v1 convention ("no silent wrong
-    answers") and the whole of PyPSA/linopy#712. Under v1 §6 the slot is absent
-    and v1 §12 drops the row instead, so ``x`` is left free at ``f=b`` and bounded only
-    by its own declaration.
-
-    The oracle is the point: the linopy lane gets this from linopy's own v1
-    semantics, the relational lane from carrying variable presence apart from
-    the term stream. Two independent implementations, one answer.
+    With ``size`` masked out, ``x - relmax * size <= 0`` drops its row rather
+    than building ``x <= 0`` (linopy v1 §6, §12), so ``x`` at ``f=b`` is bounded
+    only by its own declaration.
     """
     data = {
         'f': ['a', 'b'],
@@ -387,16 +311,9 @@ DEFINED_SPEC = {
 
 
 def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
-    """The escape hatch for a language where absence drops the row.
+    """A bare variable name in a ``where`` asks "does this exist here".
 
-    Since a term whose variable is absent takes the row with it, a model that
-    wanted the *other* reading — keep the row, treat the term as zero — needs a
-    way to say which coordinates those are. A bare parameter name in a ``where``
-    already asks "does this have a value here"; a bare variable name asks "does
-    this exist here", and the two complementary clauses spell out both cases.
-
-    Without it the only way to write this is a parameter mirroring the
-    variable's own mask, which is two sources for one fact and drifts.
+    The two complementary clauses keep a row where the variable is absent.
     """
     data = {
         'f': ['a', 'b'],
@@ -423,21 +340,11 @@ ABSENT_COEFFICIENT_SPEC = {
 
 
 def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
-    """The half of v1 §6's hazard that survives absence propagation.
+    """A missing coefficient keeps the row, and ``x <= 0`` is built.
 
-    Same expression as ``ABSENT_VARIABLE_SPEC`` above, one operand different:
-    the thing missing at ``f=b`` is the *parameter* ``relmax``, not the variable
-    ``size``. Absence is a property of variables, so nothing propagates — the
-    row is kept, the term is dropped, and ``x <= 0`` is built.
-
-    That is correct and it is the documented reading of a sparse coefficient
-    table, but it is the same silently-wrong shape the v1 convention removed
-    from the variable side, so the absence rules now name it and this pins the behaviour
-    the prose describes. The benign case is
-    ``test_a_sparse_coefficient_is_still_a_zero_coefficient``:
-    there the zero lands on a coefficient *and* a right-hand side, so the row
-    constrains nothing. Here the right-hand side is a literal 0 and the missing
-    coefficient was the whole bound.
+    Same expression as ``ABSENT_VARIABLE_SPEC``, but what is missing at ``f=b``
+    is the parameter ``relmax``. Absence is a property of variables, so nothing
+    propagates (docs/reference/language/absence.md).
     """
     data = {
         'f': ['a', 'b'],
@@ -463,19 +370,7 @@ SCALAR_MASKED_SPEC = {
 
 
 def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
-    """Law 7 holds at no dimension either (#340).
-
-    Was: a scalar's presence was `select()` over no dims, and polars cannot hold
-    rows with no columns — collecting reports (0, 0), so present and absent were
-    one frame and nothing downstream could restrict on it. `cap` stayed enforced
-    with its term gone, as `sum(x) <= budget` — a constraint the file does not
-    contain. The presence frame now carries a marker column instead, and a
-    keyless restriction is a cross join.
-
-    Held here as well as in the parity suite because that suite needs the
-    oracle's linopy, and this has to be true on the bare install too.
-
-    """
+    """Law 7 holds at no dimension either (#340), and on the bare install."""
     data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
     with sps.solve(SCALAR_MASKED_SPEC, data) as sol:
@@ -484,16 +379,7 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
 
 
 def test_a_mask_survives_a_broadcast_into_a_reduction():
-    """`Presence.keyed_by=None` means "keyed by the fragment's dims", and a
-    product may *widen* dims — so carrying it through the widening re-read
-    `p`'s (node, tech) presence as keyed by (node, tech, carrier) and
-    `_propagate_absence` selected a column it never had (#345).
-
-    Unmasked the same model was fine, which is what made it look like a problem
-    with the coordinate dim rather than with the mask. The whole benchmark
-    `sector` case sat on this.
-
-    """
+    """A mask keeps its own dims through a product that widens them (#345)."""
     data = {
         'node': ['n1', 'n2'],
         'tech': ['t1', 't2'],

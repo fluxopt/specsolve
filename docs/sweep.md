@@ -2,14 +2,15 @@
 
 One call, [`solve_over`](reference/sweeps.md), solves a model once per slice
 of its data and reads the answers back as one table. This page runs it once per
-scenario, and then window by window with state carried between windows.
+scenario, then window by window, and then period by period, with state carried
+from one slice to the next.
 
 Every block on this page runs when the site is built, and what you see under it
 is what it printed on this commit. A block that raises fails the build.
 
 ## 1. One solve per scenario
 
-The dispatch model of [Run a model](guide.md), with two load levels. The `load`
+The dispatch model of [Run a model](run.md), with two load levels. The `load`
 table carries a `scenario` column, which the spec does not declare.
 [`EachCoordinate('scenario')`](reference/sweeps.md#the-axes) solves the model
 once per label of that column:
@@ -119,11 +120,61 @@ hour 2.
 
 ## 3. Myopic pathways
 
-A myopic pathway is the same call over investment periods:
-`EachCoordinate('year')` with `carry={'existing': 'total'}` hands each period
+A myopic pathway solves one investment period at a time, and hands each period
 the fleet the one before it left.
-[`examples/myopic/run.py`](https://github.com/fluxopt/specsolve/blob/main/examples/myopic/run.py)
-runs one.
+[`examples/myopic/pathway.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/myopic/pathway.yaml)
+is one period: it builds capacity on top of the parameter `existing`, and
+`total` is what stands after the build. The data covers three periods, and
+the tables that change between them carry a `year` column. Load grows, solar
+gets cheaper, and gas fuel gets dearer:
+
+```python exec="true" source="material-block" session="sweep"
+YEARS = [2030, 2035, 2040]
+HOURS = [0, 6, 12, 18]
+SOLAR = [0.0, 0.5, 0.9, 0.1]
+LOAD = [60.0, 80.0, 100.0, 70.0]
+
+pathway = {
+    'day': ['typical'],
+    'hour': HOURS,
+    'generator': ['solar', 'gas'],
+    'weight': pl.DataFrame({'day': ['typical'], 'value': [365.0]}),
+    'load': pl.DataFrame(
+        {'year': year, 'day': 'typical', 'hour': hour, 'value': growth * load}
+        for year, growth in zip(YEARS, [1.0, 1.25, 1.5])
+        for hour, load in zip(HOURS, LOAD)
+    ),
+    'avail': pl.DataFrame(
+        {'day': 'typical', 'hour': hour, 'generator': generator, 'value': solar if generator == 'solar' else 1.0}
+        for hour, solar in zip(HOURS, SOLAR)
+        for generator in ('solar', 'gas')
+    ),
+    'invest': pl.DataFrame(
+        {'year': YEARS * 2, 'generator': ['solar'] * 3 + ['gas'] * 3, 'value': [42e3, 30e3, 24e3] + [55e3] * 3}
+    ),
+    'cost': pl.DataFrame(
+        {'year': YEARS * 2, 'generator': ['solar'] * 3 + ['gas'] * 3, 'value': [0.0] * 3 + [55.0, 70.0, 90.0]}
+    ),
+    'existing': pl.DataFrame({'generator': ['solar', 'gas'], 'value': [0.0, 60.0]}),
+}
+```
+
+`EachCoordinate('year')` solves once per period, in sorted order.
+`carry={'existing': 'total'}` copies the `total` each period ends with into
+the `existing` of the next:
+
+```python exec="true" source="material-block" result="text" session="sweep"
+myopic = sps.solve_over(
+    'examples/myopic/pathway.yaml', pathway, sps.EachCoordinate('year'), carry={'existing': 'total'}
+)
+
+fleet = myopic.primal('build').join(myopic.primal('total'), on=['year', 'generator'], suffix='_total')
+print(fleet.select('year', 'generator', built=pl.col('value').round(2), total=pl.col('value_total').round(2)))
+```
+
+Each period starts from the fleet the one before it left: the 66.25 of gas
+that stands in 2030 plus the 8.75 built in 2035 is the 75.0 that stands in
+2035.
 
 ## Where next
 

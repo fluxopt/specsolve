@@ -71,7 +71,7 @@ def test_every_docstring_link_lands_on_a_specsolve_object():
         'specsolve', search_paths=[SRC], extensions=griffe.load_extensions('griffe_sphinx'), resolve_aliases=False
     )
     broken, read = _broken(package)
-    assert read > 400, f'the walk read {read} links, so it no longer reaches the docstrings it is for'
+    assert read > 260, f'the walk read {read} links, so it no longer reaches the docstrings it is for'
     assert not broken, (
         f'docstring links that land nowhere, or outside specsolve: {broken} — link a name as [`name`][] '
         f'where the module imports it, [`name`][dotted.path] where it does not, and write a name from '

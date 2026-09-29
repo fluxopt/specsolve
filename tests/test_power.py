@@ -55,8 +55,7 @@ def spec(expression: str, **patch) -> dict:
     ],
 )
 def test_both_lanes_reach_one_optimum(expression):
-    """The differential oracle, which is the whole reason this is a fold and not
-    a special case: a power is one number per coordinate on either lane."""
+    """The differential oracle: a power is one number per coordinate on either lane."""
     with differential(spec(expression), SOURCES):
         pass
 
@@ -93,19 +92,13 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     ],
 )
 def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression, match):
-    """Purpose-built, because `check` refuses both before a plan exists.
+    """Purpose-built, because `check` refuses both before a plan exists, so the plan is built by hand.
 
-    The mutation table is why these are here: deleting either guard left the
-    whole suite green, since every route from YAML is already closed one level
-    up. A guard no test can reach is a guard nothing holds, so the plan is
-    built by hand — the shape `test_relational.py` uses for the same reason.
-
-    The second is not pedantry: addition does not distribute over `**`, so a
-    two-fragment base silently folded would compile `1 ** growth` and drop the
-    rate, answering a different model at full confidence. Both operands are
-    the *scalar* parameter: the language refuses a variable-free part of an
+    Addition does not distribute over `**`, so a two-fragment base silently
+    folded would compile `1 ** growth` and drop the rate. Both operands are the
+    *scalar* parameter: the language refuses a variable-free part of an
     objective that carries dims, so a `period`-shaped one would be turned back
-    at the boundary before the guard under test could speak.
+    before the guard under test could speak.
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},

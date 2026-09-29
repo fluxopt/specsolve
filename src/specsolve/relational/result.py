@@ -1,12 +1,7 @@
 """What a caller reads back — a solve's [`Result`][], a build's [`Diagnostics`][].
 
-The objects ``sps.solve`` and ``model.diagnostics()`` hand back, so they are
-the pieces of this subpackage a reader meets without going looking. A
-[`Result`][] holds one finished frame per declaration, its values already
-laid out over the build's coordinates, so no reader ever goes back to the
-engine.
-
-Named for linopy's envelope (``Result`` = status + solution + report).
+A [`Result`][] holds one finished frame per declaration, its values already
+laid out over the build's coordinates.
 """
 
 from __future__ import annotations
@@ -48,15 +43,11 @@ if TYPE_CHECKING:
 
 #: How much of the session a solve keeps, as a request to
 #: [`specsolve.api.Model.solve`][] and as the report in
-#: [`Result.kept`][]. The two things a session holds — the solver with the
-#: model on it, and the work that solver did — can only be dropped in that
-#: order: there is no carrying on from a solver that was closed, so the fourth
-#: combination does not exist.
+#: [`Result.kept`][]. The solver and the work it did can only be dropped in
+#: that order, so the fourth combination does not exist.
 Keep = Literal['nothing', 'solver', 'progress']
 
-#: What each word keeps, in the order of how much that is. About provenance
-#: and not mechanism: whether *progress* is a basis, an incumbent or a sink's
-#: own notion is the sink's business.
+#: What each word keeps, in the order of how much that is.
 KEEPS: Mapping[Keep, str] = {
     'nothing': 'the model is handed to a fresh solver, which has nothing to begin from',
     'solver': 'the solver already holding the model is reused, and the work the last solve did is discarded',
@@ -94,12 +85,9 @@ def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
 
 
 def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
-    """The same, labelled by its non-``value`` columns.
+    """A tidy frame as an ``xarray.DataArray``, labelled by its non-``value`` columns.
 
     A scalar declaration has none and comes back 0-dimensional.
-
-    Probed rather than imported: an ``import xarray`` anywhere under
-    ``relational/`` is what hard rule 2 forbids (``tests/test_architecture.py``).
 
     Raises:
         ModuleNotFoundError: On an install without xarray, naming the extra.
@@ -123,21 +111,14 @@ def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) ->
 
 
 def _number(value: float, *, sign: bool = False) -> str:
-    """*value* as the shortest string that reads back as itself.
-
-    Shortest round-trip, never rounded. A trailing ``.0`` is dropped, as linopy
-    prints ``+50``.
-    """
+    """*value* as the shortest string that reads back as itself, without a trailing ``.0``."""
     text = repr(float(value))
     text = text.removesuffix('.0')
     return f'+{text}' if sign and not text.startswith('-') else text
 
 
 def _bracket(labels: str) -> str:
-    """``[1, wind]``, or nothing at all for a declaration over no dims.
-
-    A scalar is ``z``, not ``z[]`` — linopy's spelling.
-    """
+    """``[1, wind]``, or nothing at all for a declaration over no dims."""
     return f'[{labels}]' if labels else ''
 
 
@@ -147,29 +128,23 @@ class ConstraintRow:
 
     The row a model actually built at one coordinate: every term with its
     coefficient, and the comparison and right-hand side it was built against.
-    Read off the built model, so it needs no solve — and it is the *built*
-    row, after ``where`` masking, after any term whose variable was absent
-    dropped out, and after a coefficient the data made exactly zero stopped
-    being a term at all. Those
-    three are why a row can be shorter than the file suggests, and why reading
-    one is worth it when a model says something other than what its author
-    wrote.
+    Read off the built model, so it needs no solve. It is the row after
+    ``where`` masking, after any term whose variable was absent dropped out,
+    and after a coefficient the data made exactly zero stopped being a term,
+    so it can be shorter than the file suggests.
 
-    Printing it gives the row as one line of math in linopy's format, which is
-    what reading a row usually means. A row wider than [`display_terms`][]
-    prints instead how many terms each variable contributes and the span of
-    their coefficients. [`terms`][] is the same content as a frame, for the
-    row too wide to read and for anything that filters or joins.
+    Printing it gives the row as one line of math in linopy's format. A row
+    wider than [`display_terms`][] prints instead how many terms each variable
+    contributes and the span of their coefficients. [`terms`][] is the same
+    content as a frame, for the row too wide to read and for anything that
+    filters or joins.
 
     Attributes:
         name: The constraint this row belongs to.
         coordinate: Where in that declaration it sits.
         terms: ``(variable, coordinate, coefficient)``, one row per term, in
             the solver's own column order. ``coordinate`` is the term's labels
-            in its variable's dim order — what goes in the brackets — rendered
-            rather than spread across dim columns, since two terms of one row
-            may come from variables with different dims and so cannot share
-            them.
+            in its variable's dim order, rendered as one string.
         sense: ``<=``, ``>=`` or ``==``.
         rhs: What the left-hand side is compared against.
     """
@@ -186,8 +161,7 @@ class ConstraintRow:
     def __str__(self) -> str:
         """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``.
 
-        linopy's shape for the same job. A row wider than [`display_terms`][]
-        summarises rather than truncating.
+        A row wider than [`display_terms`][] summarises rather than truncating.
         """
         return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
 
@@ -199,7 +173,7 @@ class ConstraintRow:
         return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
 
     def _body(self) -> str:
-        """The terms, spelled out or summarised — the part that depends on width."""
+        """The terms, spelled out or summarised."""
         if not self.terms.height:
             return '(no terms)'
         if self.terms.height <= self.display_terms:
@@ -210,12 +184,7 @@ class ConstraintRow:
         return f'{self.terms.height} terms — {self._per_declaration()}'
 
     def _per_declaration(self) -> str:
-        """``p: 300 (|coef| 1…50)`` per variable, in the row's own term order.
-
-        The two things a row too wide to read shows: how much of it each
-        declaration contributes, and whether its coefficients span an order of
-        magnitude.
-        """
+        """``p: 300 (|coef| 1…50)`` per variable, in the row's own term order."""
         import polars as pl
 
         grouped = self.terms.group_by('variable', maintain_order=True).agg(
@@ -235,64 +204,43 @@ class ConstraintRow:
 class Diagnostics:
     """What a build and its solves did that the answer does not show.
 
-    Advisory, all of it: no answer depends on any field. Read them when a loop
-    is slower or smaller than it should be.
+    Advisory, all of it: no answer depends on any field.
     """
 
-    #: The shape the build produced: columns, rows, and matrix entries. The
-    #: thing to report when a model is bigger than its author expected — a
-    #: broadcast that multiplied rows shows up here first.
+    #: The shape the build produced: columns, rows, and matrix entries.
     columns: int
     rows: int
     nonzeros: int
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
-    #: the solver (the absence rules), by either route: one emptied of all its
-    #: terms, and one a **propagated absence** deleted while its other terms were
-    #: still live. Empty for a model whose every declared row was built — a
-    #: recurrence's first coordinate counting as a row it declared and did not
-    #: get, so a ``shift`` against the horizon's edge reports here and is the
-    #: boundary rather than a fault. Counts rather than coordinates: the label
-    #: of an unbuilt row does not exist.
+    #: the solver: one emptied of all its terms, and one a propagated absence
+    #: deleted. Empty where every declared row was built. A recurrence's first
+    #: coordinate counts, so a ``shift`` against the horizon's edge reports
+    #: here, as the boundary rather than a fault.
     omissions: pl.DataFrame
 
     #: ``(parameter, coordinates, rows, missing)`` — one row per parameter whose
-    #: source is short of the coordinates its dims reach, in declaration order,
-    #: and **empty where every one is complete**. Sparsity is the ordinary case
-    #: here — absence is how a model masks — so this reports it rather than
-    #: judging it: what a missing row means is the absence rules', and whether
-    #: it was meant is the caller's to say.
-    #:
-    #: A parameter over no dims has one coordinate and attaching already refuses
-    #: a source that does not carry exactly one row for it, so it is never
-    #: here.
+    #: source is short of the coordinates its dims reach, in declaration order.
+    #: Empty where every one is complete. An entry is a report, not a fault:
+    #: absence is how a model masks. A parameter over no dims is never here.
     sparse_parameters: pl.DataFrame
 
-    #: ``(constraint, smallest, largest)`` — the coefficient **magnitudes** each
+    #: ``(constraint, smallest, largest)`` — the coefficient magnitudes each
     #: constraint block put in the matrix, one row per block that kept a term,
-    #: in build order. A solver's own ``Matrix range`` line answers this for the
-    #: whole model; what it cannot say, and what a caller can act on, is which
-    #: *declaration* holds the outlier. ``largest / smallest`` over the frame is
-    #: the conditioning to compare against the solver's. A block whose every row
-    #: went (the absence rules) has no entry, the same way it has no rows.
+    #: in build order. ``largest / smallest`` over the frame is the
+    #: conditioning to compare against the solver's.
     coefficient_range: pl.DataFrame
 
-    #: ``(variable, smallest, largest)`` — the **bound** magnitudes each variable
+    #: ``(variable, smallest, largest)`` — the bound magnitudes each variable
     #: block put on its columns, one row per block that declared a finite one.
-    #: The axis a solver reports and does not repair: HiGHS prints a ``Bound``
-    #: range beside its ``Matrix`` one, equilibrates the matrix automatically,
-    #: and answers the bounds with ``Consider scaling the bounds by …`` — so a
-    #: model can be clean on [`coefficient_range`][] and still be the one the
-    #: solver is complaining about. Zero and infinity are excluded, an
-    #: unbounded side and a ``lower: 0`` being nothing the solver represents. A
-    #: large ``largest`` is usually a big number standing in for "uncapped", and
-    #: wants no upper bound at all rather than a rounder one.
+    #: Zero and infinity are excluded. A model can be clean on
+    #: [`coefficient_range`][] and still have bounds the solver asks to have
+    #: scaled. A large ``largest`` is usually a big number standing in for
+    #: "uncapped", and wants no upper bound at all rather than a rounder one.
     bound_range: pl.DataFrame
 
     #: ``(constraint, smallest, largest)`` — the same for each block's
-    #: right-hand sides, over the rows that survived. The fourth of the four
-    #: ranges a solver reports, and the last of them this can answer per
-    #: declaration rather than per model.
+    #: right-hand sides, over the rows that survived.
     rhs_range: pl.DataFrame
 
     #: The same pair for the objective's coefficients, or ``None`` where the
@@ -301,13 +249,10 @@ class Diagnostics:
 
     #: How many times this model has been solved, and how many of those solves
     #: loaded the solver from scratch instead of pushing values onto one that
-    #: already held it. Read together: ``loads == 1`` is a driver on the fast
-    #: path — the first solve had nothing to keep — and ``loads == solves`` on
-    #: an iterating driver is the difference between "specsolve is slow" and
-    #: "this model masks on a parameter that varies", unless the driver asked
-    #: for ``keep='nothing'``, which loads by construction. ``loads`` ticks on
-    #: exactly the solves that report [`Result.kept`][] of ``nothing`` —
-    #: the same event, counted here and named there.
+    #: already held it. ``loads == solves`` on an iterating driver means the
+    #: model masks on a parameter that varies, unless the driver asked for
+    #: ``keep='nothing'``. ``loads`` ticks on exactly the solves that report
+    #: [`Result.kept`][] of ``nothing``.
     solves: int
     loads: int
 
@@ -316,20 +261,17 @@ class Diagnostics:
     #: into the model frames), ``handoff`` (the built model into a solver),
     #: ``solve`` (the solver's own run), ``write`` (the built model to a
     #: file). A phase that never ran has no key; one that ran again holds the
-    #: sum — an update's attach and build land on top of the first's, the way
-    #: ``solves`` keeps counting. Clocks rather than a profile: enough to say
-    #: which phase a slow loop spends its time in, not why.
+    #: sum.
     seconds: Mapping[str, float]
 
     def metrics(self) -> Metrics:
         """The sizes, counters and clocks as one value — the row an archive records.
 
         What ``archive=`` records beside the answer, and what a caller feeding
-        its own store reads off a model it solved. Which fields reach it and
-        what it means cumulatively are
-        [`Metrics`][specsolve.relational.parquet.Metrics]'s to say; a phase this
-        build never entered reads zero there. ``run`` is null: the name is the
-        publisher's, and nothing has published this yet.
+        its own store reads off a model it solved.
+        [`Metrics`][specsolve.relational.parquet.Metrics] says what each field
+        means. A phase this build never entered reads zero, and ``run`` is
+        null.
         """
         clocks = self.seconds
         return Metrics(
@@ -360,10 +302,8 @@ def evaluated(
 ) -> pl.DataFrame:
     """*expression* valued: by the declared reader that holds it, else lowered by *evaluator*.
 
-    The one rule every ``evaluate`` shares. A declared name is served by its own
-    reader first, so it costs no lowering and answers off an archive that
-    retains no model; anything else is what *evaluator* lowers, and where there
-    is none the refusal says so.
+    A declared name is served by its own reader first, so it answers off an
+    archive that retains no model.
 
     Raises:
         SpecsolveError: *expression* is not a declared name and *evaluator* is
@@ -381,42 +321,28 @@ class Result:
     """What a solve returned — the outcome, and access to any values.
 
     Returned whatever the solve concluded: test [`has_primal`][] before
-    reading values, or catch [`NoSolutionError`][specsolve.errors.NoSolutionError]. The
-    values are this result's own, so a later solve on the same model does not
-    rewrite them, and there is no lifetime to manage — [`close`][] releases
-    what this result holds early, and nothing breaks without it.
-
-    An update is no exception. A result owns everything it reads — one finished
-    frame per declaration, its own values already laid out over the label frames
-    of the build it answered — so it outlives anything done to the model
-    afterwards: an update, another solve, ``model.close()``. What retaining one
-    costs is those label frames staying alive, which matters once a caller keeps
-    several, as a sweep, a rolling horizon and Benders all do.
+    reading values, or catch [`NoSolutionError`][specsolve.errors.NoSolutionError].
+    A result owns its values, so it outlives anything done to the model
+    afterwards: an update, another solve, ``model.close()``. Retaining one
+    keeps the label frames of the build it answered alive; [`close`][]
+    releases them early, and nothing breaks without it.
     """
 
     _status: SolveStatus
     _objective: float
-    #: One ``(dims…, value)`` frame per declaration, lazy and in label order —
-    #: a read is a collect. ``None`` is what [`close`][] leaves behind, and
-    #: the primal's absence is what "closed" means: both go together, and an
-    #: empty mapping is a solve that left nothing, which the status reports.
+    #: One ``(dims…, value)`` frame per declaration, lazy and in label order.
+    #: ``None`` after [`close`][], which is what "closed" means; an empty
+    #: mapping is a solve that left nothing.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
     #: The constraints' left-hand sides at the solution, laid out exactly as
-    #: [`_duals`][] — same frames, same row order — and present whenever the
-    #: primals are: unlike a dual, an activity exists at any incumbent.
+    #: [`_duals`][], and present whenever the primals are.
     _activities: Mapping[str, pl.LazyFrame] | None
-    #: How much of the session this solve kept, read off what actually ran —
-    #: never off what was asked for.
+    #: How much of the session this solve kept, read off what actually ran.
     _kept: Keep
     #: One deferred reader per declared named expression, and the ad-hoc
-    #: evaluator — what [`evaluate`][] reads through and what [`save`][]
-    #: writes. Nothing is compiled until a reader is called; the pair is
-    #: composed above the lane so the evaluator may read the spec as written
-    #: (hard rule 2). ``_evaluate`` is ``None`` where there is no such spec —
-    #: a build off an already-lowered ``Program``, or an answer read back off
-    #: disk. Released with the primals by [`close`][], since each holds this
-    #: build's frames and values.
+    #: evaluator. ``_evaluate`` is ``None`` where there is no spec as written:
+    #: a build off an already-lowered ``Program``, or an answer read off disk.
     _expressions: Mapping[str, Callable[[], pl.DataFrame]] | None = None
     _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
     #: Why there are no duals, when a solve that left values still has none.
@@ -424,23 +350,19 @@ class Result:
     _no_duals: str | None = None
     #: One ``(dims…, value)`` frame per constraint, laid out exactly as
     #: [`_duals`][], carrying the certificate an infeasible solve left.
-    #: Empty on every solve that was not infeasible, and released by
-    #: [`close`][] with the rest.
+    #: Empty on every solve that was not infeasible.
     _dual_rays: Mapping[str, pl.LazyFrame] | None = None
     #: Why there is no certificate — the status, or the solver setting that
     #: would have produced one. ``None`` whenever [`_dual_rays`][] holds it.
     _no_dual_ray: str | None = None
-    #: Which spec this answered, as [`digest_of`][specsolve.relational.parquet.digest_of]
-    #: names it. Attached by the model that solved, so a solve run off a
-    #: lowered program — which has no document — leaves it ``None``.
+    #: [`digest_of`][specsolve.relational.parquet.digest_of] the spec this
+    #: answered, or ``None`` for a solve run off a lowered program.
     _spec_digest: str | None = None
-    #: When the solver returned, in UTC. Attached by the model that solved.
+    #: When the solver returned, in UTC.
     _solved_at: datetime | None = None
-    #: The built model's digest — the spec *and* its data — as the value an
-    #: answer read off disk carries, or as the callable a live solve is given
-    #: so that nothing is hashed unless [`model_digest`][] is asked. ``None``
-    #: where neither: an answer written before the column, or one built by hand.
-    #: Read through [`model_digest`][], never here.
+    #: The built model's digest, or the callable that computes it on the first
+    #: ask. ``None`` for an answer written before the column, or built by hand.
+    #: Read through [`model_digest`][].
     _model_digest: str | Callable[[], str] | None = None
     #: The archive this answer was read back out of, as its record names it.
     #: ``None`` for a live solve: the name is stamped when an archive is
@@ -451,8 +373,7 @@ class Result:
         """Which model this answered — the document and the data it was attached to.
 
         [`spec_digest`][] names the document alone, so two scenarios of one
-        spec share that and differ here. Computed on the first ask and kept,
-        which is what keeps a solve that never asks free of it.
+        spec share that and differ here. Computed on the first ask and kept.
         """
         if callable(self._model_digest):
             self._model_digest = self._model_digest()
@@ -491,20 +412,15 @@ class Result:
     def spec_digest(self) -> str | None:
         """Which spec this answered — a digest of the file, not its name.
 
-        Two answers carrying one digest answered the same document, so a table
-        of saved cases says whether it is comparing like with like. The *data*
-        may differ entirely: two scenarios of one spec share this. ``None``
-        where the solve ran off a lowered program, which has no document.
+        Two answers carrying one digest answered the same document; their data
+        may differ. ``None`` where the solve ran off a lowered program, which
+        has no document.
         """
         return self._spec_digest
 
     @property
     def solved_at(self) -> datetime | None:
-        """When the solver returned, in UTC — ``None`` where the solve carried no clock.
-
-        What orders a table concatenated from runs solved apart, so that a
-        comparison is not left reading the timestamps of the files.
-        """
+        """When the solver returned, in UTC — ``None`` where the solve carried no clock."""
         return self._solved_at
 
     @property
@@ -529,21 +445,15 @@ class Result:
     def kept(self) -> Keep:
         """How much of the session this solve kept: ``solver``, ``progress`` or ``nothing``.
 
-        What *happened*, not what was asked: ``keep=`` is a preference, and a
-        first solve or a structure that moved keeps ``nothing`` whatever it
-        requested, the solver having been loaded again. So a driver that asked
-        to keep ``progress`` and reads ``nothing`` back is being told its
-        labels moved. Advisory, like [`Diagnostics`][]: no answer depends
-        on it.
+        What happened, not what was asked: a first solve or a structure that
+        moved keeps ``nothing`` whatever ``keep=`` requested, so a driver that
+        asked for ``progress`` and reads ``nothing`` is being told its labels
+        moved. Advisory, like [`Diagnostics`][]: no answer depends on it.
         """
         return self._kept
 
     def _unclosed(self, what: str) -> Mapping[str, pl.LazyFrame]:
-        """The primals, or why nothing here can be read: this result was closed.
-
-        The closed check is read off the primals whichever mapping the caller
-        wants: [`close`][] releases them together.
-        """
+        """The primals, or why nothing here can be read: this result was closed."""
         if self._primals is None:
             raise SpecsolveError(
                 f'cannot read {what}: this result was closed, and closing releases its values and its '
@@ -613,22 +523,16 @@ class Result:
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
 
-        The one thing an infeasible solve has to say, and the only reader that
-        answers on one: [`primal`][], [`dual`][] and [`activity`][] all
-        raise there, because there is no solution behind them. Weight every
-        row by its value here and add them together, and the combined row
-        demands more than the columns can deliver inside their bounds — which
-        is the proof that nothing satisfies all of them at once. That is what
-        a Benders feasibility cut is built from, and it is why a driver no
-        longer needs a second model to ask *how far from feasible* a
-        subproblem was.
+        The only reader that answers on an infeasible solve, where
+        [`primal`][], [`dual`][] and [`activity`][] all raise. Weight every row
+        by its value here and add them together, and the combined row demands
+        more than the columns can deliver inside their bounds: the proof that
+        nothing satisfies all of them at once, and what a Benders feasibility
+        cut is built from.
 
-        [`dual`][]'s shape and order. **The sign is the row's own**, one
-        convention across every sink, so a driver never asks who solved — a
-        sink whose solver signs the other way negates what it reads. Where
-        every column is held only by a lower bound of zero, as a dispatch
-        variable is, the bounds deliver nothing and the proof is the simpler
-        ``Σ weight * right-hand side > 0``.
+        [`dual`][]'s shape and order. The sign is the row's own, the same on
+        every sink. Where every column is held only by a lower bound of zero,
+        the proof is ``Σ weight * right-hand side > 0``.
 
         A certificate is computed only where it was asked for. ``highs``
         always produces one; ``gurobi`` needs ``{'InfUnbdInfo': 1}`` and
@@ -661,12 +565,10 @@ class Result:
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``.
 
-        [`dual`][]'s shape and order, and the other half of a row's story:
-        how far each row's ``Σ aᵢxᵢ`` sits from its bound. The solver's own
-        number, not a recomputation. Readable whenever there is a solution —
-        unlike [`dual`][] it is well-defined on a mixed-integer model. On an
-        ``==`` row it equals the right-hand side up to solver tolerance by
-        construction.
+        [`dual`][]'s shape and order. The solver's own number, not a
+        recomputation. Readable whenever there is a solution, a mixed-integer
+        one included. On an ``==`` row it equals the right-hand side up to
+        solver tolerance.
 
         Raises:
             NoSolutionError: The solve left no values to read.
@@ -686,12 +588,10 @@ class Result:
         own dims, in declaration order, rows in label order over them —
         [`primal`][]'s shape and order.
 
-        A declared name is served by its own reader, compiled on this call and
-        never lowered again, so a spec whose expressions go unread compiles
-        none of them. Anything else lowers the spec as written, which costs
-        what ``check`` costs. An undeclared expression names nothing, so it is
-        not a kind: [`save`][] does not write it and a sweep does not spill it.
-        To keep a quantity, declare it under ``expressions:``.
+        Anything but a declared name lowers the spec as written, which costs
+        what ``check`` costs. An undeclared expression is not written by
+        [`save`][] or spilled by a sweep; to keep a quantity, declare it under
+        ``expressions:``.
 
         Raises:
             NoSolutionError: The solve left no values to read.
@@ -754,9 +654,8 @@ class Result:
     def to_dataset(self, *names: str, kind: str = 'primal') -> xr.Dataset:
         """The named values of one *kind* as one `xarray.Dataset`; all of that kind by default.
 
-        One kind per call: a dual and a variable of the same name would
-        collide, and mean something else per row. Each arrives dense over its
-        own dims, all at once — on a large model name the few you need.
+        Each arrives dense over its own dims, all at once — on a large model
+        name the few you need.
 
         Args:
             names: What to include; none means every name of *kind*.
@@ -768,47 +667,30 @@ class Result:
         """Every kind this solve answered with, one file per name, into *directory*.
 
         ``record.parquet`` holds the
-        [`Record`][specsolve.relational.parquet.Record] — how the solve terminated
-        and what it reached, in the columns a sweep keys and folds. A solve
-        that reached no objective writes null there rather than ``nan``, so a
-        directory per case is a table an aggregate reads. Then
-        ``primal/<name>.parquet`` for every variable, ``dual/<name>.parquet``
-        for every constraint where the duals are defined, and
-        ``expression/<name>.parquet`` for every named expression this data
-        can evaluate — an integer variable leaves the duals out, and an
-        expression that fails on this data is left out, [`evaluate`][]
-        still saying why. The primals are streamed to disk in
-        [`primal`][]'s order, so the same model and data write the same
-        bytes.
-
-        ``activity/<name>.parquet`` goes beside them for every constraint,
-        which no ``kind=`` names — a sweep folds three kinds and never holds
-        these, so a saved result carries them under a name of their own.
+        [`Record`][specsolve.relational.parquet.Record] — how the solve
+        terminated and what it reached; a solve that reached no objective
+        writes null there rather than ``nan``. Then ``primal/<name>.parquet``
+        for every variable, ``dual/<name>.parquet`` for every constraint where
+        the duals are defined, ``activity/<name>.parquet`` for every
+        constraint, and ``expression/<name>.parquet`` for every named
+        expression this data can evaluate. The same model and data write the
+        same bytes.
 
         ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
         deliberately not here, and is absent when everything is: one row per
-        expression that failed, and one with an empty *name* for the duals,
-        whose absence is never per-constraint. Written because a directory
-        that simply lacks a file cannot tell "there is none, and here is why"
-        from "no such name", which is the one thing [`dual`][] and
-        [`evaluate`][] do say.
+        expression that failed, and one with an empty *name* for the duals.
 
         ``format.json`` stamps the directory with the layout it is written in
         and the specsolve that wrote it: ``{"layout": 1, "specsolve": "…"}``.
-        A release that changes what a result, a sweep or an archive writes
-        raises the layout, and its notes say so. Nothing reads another layout
-        back, and an answer 0.1.0 or earlier wrote carries none, so every
-        reader refuses it with a [`LayoutError`][specsolve.errors.LayoutError]
-        that says to solve the model again and save it.
+        Every reader refuses another layout with a
+        [`LayoutError`][specsolve.errors.LayoutError] that says to solve the
+        model again and save it.
 
-        A solve that left no values writes the record and nothing else. A run
-        that came back infeasible is an answer a set of saved cases needs on
-        disk, rather than a directory that does not exist.
+        A solve that left no values writes the record and nothing else.
 
-        **The directory holds this answer and no other.** Whatever a previous
-        save left there is removed first, so a re-run cannot leave one model's
-        frames beside another's record. Files that are not part of the layout
-        are left alone.
+        The directory holds this answer and no other: whatever a previous save
+        left there is removed first. Files that are not part of the layout are
+        left alone.
 
         Returns:
             The directory.
@@ -846,9 +728,8 @@ class Result:
     def close(self) -> None:
         """Release what this result holds early. Optional.
 
-        Its frames, which carry both its own values and its hold on the label
-        frames of the build it answered. Frames already read stay valid. Never
-        the model or the solver, which are the
+        Its frames and its hold on the label frames of the build it answered.
+        Frames already read stay valid. The model and the solver are the
         [`Model`][specsolve.api.Model]'s to close.
         """
         self._primals = self._duals = self._activities = self._expressions = None

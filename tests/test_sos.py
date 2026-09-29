@@ -1,17 +1,10 @@
 """``sos:`` — one construct, three sinks, and one of them without the concept.
 
-The claim has two halves and they need different oracles. That the *language*
-means the same thing on both lanes is `differential`'s job as usual. That a
-set **written out** (``Spec.expand()``) is the same feasible set as a set a
-sink branches on is not something either lane can say, since both would be
-reading the expansion: so the optimum is enumerated here (:func:`best`), which
-is tractable because a set over four options has nine admissible shapes, and
-asserted against every sink.
-
-The model is purpose-built for that enumeration: two sites choosing among four
-sizes, values and caps varying enough that SOS1, SOS2 and the unrestricted LP
-all have *different* optima — a set that does not bind proves nothing about a
-formulation of it.
+`differential` checks that the language means the same thing on both lanes.
+That a set **written out** (``Spec.expand()``) is the same feasible set as one a
+sink branches on is checked against an optimum enumerated here (:func:`best`),
+since both lanes read the expansion. Two sites choose among four sizes, and
+SOS1, SOS2 and the unrestricted LP all have *different* optima.
 """
 
 from __future__ import annotations
@@ -168,9 +161,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     """The differential claim, plus the one oracle that is nobody's code.
 
     The harness is imported **inside the test**: importing it is the
-    oracle's guard, and everything else here is the streaming lane's own
-    and has to keep running on the bare install. The harness hands both lanes
-    the set written out, so the file leg reads binaries HiGHS takes.
+    oracle's guard, and the rest of this module runs on the bare install.
     """
     from tests.differential import differential
 
@@ -327,9 +318,6 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
     bounds, no rows, no matrix — except which sets those columns fall into:
     two members of one set against one member each of two. A digest that did
     not read the sets would call the second the model it already holds.
-
-    Asserted on the digest rather than through a solver because only a sink
-    taking the set *natively* depends on it.
     """
     raw = {
         'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int'}},

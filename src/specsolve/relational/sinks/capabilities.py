@@ -1,25 +1,15 @@
-"""What a sink can ingest — the axis that is not the ceiling.
+"""What a sink can ingest, separate from the solver-independent ceiling.
 
-The ceiling is about streamability and is solver-independent (mathspec's
-docs/about/limits.md); what a *sink* can take is separate. One descriptor per
-sink, so a construct the language says and a sink cannot take is a refusal
-naming both rather than a ``kError`` from inside a library.
+One descriptor per sink, so a construct the language says and a sink cannot
+take is a refusal naming both rather than a ``kError`` from inside a library.
 
-Four shapes:
-
-- **Two-valued.** A sink takes a construct or it does not; nothing is
-  rewritten at the hand-off. A set on a sink with no SOS concept is refused,
-  and the refusal names the expansion that writes it out as binaries and rows.
-- **Exclusions.** HiGHS takes a Hessian, takes integrality, and refuses the
-  pair.
-- **Some entries are data-time.** Convexity is a property of coefficients, so
-  ``check`` cannot answer it (rule 2). ``nonconvex_quadratic_objective`` is
-  declared anyway: the sink that discovers it at solve time reads the sinks
-  that would have taken it off this table.
-- **A descriptor describes the sink as shipped, not the library it wraps.** A
-  solver that takes a Hessian through an entry point this package does not call
-  cannot ingest a quadratic objective *here*. An entry moves when the hand-off
-  lands, so the benchmarks table may be ahead of it.
+- A sink takes a construct or it does not; nothing is rewritten at the
+  hand-off.
+- An exclusion is a pair a sink takes separately and refuses together.
+- ``nonconvex_quadratic_objective`` is decided by the data, so ``check``
+  cannot answer it; the sink that meets it at solve time reads the takers off
+  this table.
+- A descriptor describes the sink as shipped, not the library it wraps.
 """
 
 from __future__ import annotations
@@ -33,9 +23,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Program
 
-#: What a model may need a sink to have. ``indicator`` and ``semi-continuous``
-#: are absent: they have rows in the benchmarks table but no spelling in the
-#: language.
+#: What a model may need a sink to have.
 Capability = Literal[
     'integrality',
     'sos',
@@ -72,18 +60,14 @@ class Capabilities:
         return self.supports.get(capability, 'absent')
 
     def missing(self, required: Collection[Capability]) -> list[Capability]:
-        """Those of *required* this sink cannot take at all.
-
-        In [`CAPABILITIES`][] order rather than the caller's.
-        """
+        """Those of *required* this sink cannot take at all, in [`CAPABILITIES`][] order."""
         return [c for c in CAPABILITIES if c in required and self.support(c) == 'absent']
 
     def excluded(self, required: Collection[Capability]) -> frozenset[Capability] | None:
         """The first conjunction *required* contains that this sink refuses.
 
         Returns:
-            The excluded set, or ``None``. Each member is one the sink supports
-            on its own; one it simply lacks is [`missing`][]'s answer.
+            The excluded set, or ``None``.
         """
         for combination in self.excludes:
             if combination <= set(required):
@@ -92,12 +76,7 @@ class Capabilities:
 
 
 def required(program: Program, /) -> frozenset[Capability]:
-    """What *program* needs a sink to have, decided with no data attached.
-
-    Exactly what the spec declares.
-
-    Only what rule 2 can decide appears here, so convexity never does.
-    """
+    """What *program* needs a sink to have, decided with no data attached, so convexity never appears."""
     footprint = program.footprint
     needed: set[Capability] = set()
     if footprint.domains - {'continuous'}:

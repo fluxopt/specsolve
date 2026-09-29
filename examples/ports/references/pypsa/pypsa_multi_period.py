@@ -8,11 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_multi_period.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded duals.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -33,8 +29,7 @@ retires before 2040 (lifetime 5), ``gas`` is built in 2030 and lives through bot
 *both* the capex of an asset active in that period and the marginal cost of every
 snapshot inside it. ``years`` is 10 for each period and does not reach the
 objective at all, because ``capital_cost`` is given directly rather than
-annuitised from an ``overnight_cost`` (``costs.py:119``) — a distinction worth
-knowing before reading a PyPSA objective and expecting to see the decade in it.
+annuitised from an ``overnight_cost`` (``costs.py:119``).
 """
 
 from __future__ import annotations
@@ -47,11 +42,8 @@ import pypsa
 
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_multi_period.json'
 
-#: ``build_year`` and ``lifetime`` per generator — the two numbers the ``active``
-#: mask is derived from, and the only place the port's sparse ``active`` table
-#: comes from. Kept here rather than in the instance because they are PyPSA's
-#: spelling of it: the port states which (period, asset) pairs exist, which is
-#: the same fact one level down.
+#: ``build_year`` and ``lifetime`` per generator — PyPSA's spelling of the port's
+#: sparse ``active`` table.
 LIFETIMES: dict[str, tuple[int, int]] = {'coal': (2030, 5), 'gas': (2030, 40), 'wind': (2040, 30)}
 
 

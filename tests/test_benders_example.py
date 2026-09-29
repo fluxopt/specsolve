@@ -1,15 +1,8 @@
 """The decomposition example must keep reaching the monolith, or it is not evidence.
 
-`examples/benders/run.py` is the claim that specsolve can *express* Benders — four
-files, cuts as data, no engine change. A claim like that is worth exactly as
-much as the check behind it, so the check is the one the algorithm itself
-provides: the decomposed answer has to equal the answer the monolith gives on
-the same sources, and the run prints both.
-
-Committed output rather than an assertion on a number, for the reason
-`test_walkthrough.py` gives: a page that shows output is making a promise about
-what a reader will see, and a diff is how that promise stays true. Regenerate
-with ``--update-golden`` when the story legitimately changes.
+`examples/benders/run.py` expresses Benders with cuts as data; the decomposed
+answer equals the monolith's on the same sources. Regenerate the committed
+output with ``--update-golden``.
 """
 
 from __future__ import annotations
@@ -28,12 +21,7 @@ def output() -> str:
 
 
 def test_the_decomposition_reaches_the_monolith(output: str) -> None:
-    """The oracle, stated as the example prints it.
-
-    Asserted separately from the golden because it is the *claim*: a golden
-    file would keep passing if the difference drifted, so long as it drifted
-    identically every run.
-    """
+    """The oracle, asserted apart from the golden, which would pass a stable drift."""
     assert 'difference: 0.0e+00' in output, output
 
 

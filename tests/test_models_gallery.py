@@ -1,20 +1,7 @@
 """The gallery says what the repo actually contains.
 
-A docs page that shows a model is a **copy** of that model, and a copy rots
-unless something asserts it. Three things are checked, each a different way for
-the page to become a lie:
-
-- a model exists with no page, so the gallery quietly under-sells the language;
-- a model has a page the catalogue does not list, which under-sells it just as
-  quietly — the reader who never scrolls to the construct matrix never sees it;
-- a page shows YAML that no longer matches the file CI runs;
-- a page shows a reference implementation that no longer matches the script;
-- the construct matrix says a model exercises something it does not;
-- a model, or a declaration in one, says nothing about what it is, so the
-  generated legend has an empty `Meaning` column where the reader needs one.
-
-The same trade the linopy lane's v1-absence helpers already make: copying is fine when a
-test asserts it, and rots when nothing does.
+A docs page that shows a model is a copy of that model, and a copy rots unless
+a test asserts it.
 """
 
 from __future__ import annotations
@@ -53,10 +40,9 @@ def test_every_model_has_a_page(example: tuple[str, Path]) -> None:
 def _fences(markdown: str, lang: str) -> list[str]:
     """Every ``lang`` fence, dedented.
 
-    A fence inside a content tab is indented by the tab's four spaces, and the
-    byte-for-byte checks below compare against file text — so the tab indent
-    is stripped from every line that carries it, and a blank line (which
-    markdown allows to stay empty inside an indented block) passes through.
+    A fence inside a content tab is indented by the tab's four spaces, so that
+    indent is stripped from every line that carries it, and a blank line passes
+    through.
     """
     bodies = []
     for match in re.finditer(rf'^([ \t]*)```{lang}\n(.*?)^\1```', markdown, re.MULTILINE | re.DOTALL):
@@ -75,9 +61,7 @@ def test_the_page_shows_the_model_that_runs(example: tuple[str, Path]) -> None:
 def test_the_model_says_what_it_is(example: tuple[str, Path]) -> None:
     """Every gallery model carries a file `description:`.
 
-    The legend a page generates opens with it, so a model without one opens
-    with nothing — and the sentence is the only part of the page a reader who
-    never opens the YAML is certain to read.
+    The legend a page generates opens with it.
     """
     _, path = example
     assert to_spec(path).description, (
@@ -93,20 +77,12 @@ def test_no_page_without_a_model() -> None:
 
 
 def test_the_gallery_math_is_current() -> None:
-    """Each page's math block equals what the model produces.
-
-    The fourth way a page becomes a lie, and the one that had already
-    happened: three pages stated math their model does not build. A summary
-    can be loose — it is prose, and it is meant to be read at a glance — but
-    the exact statement beside it has to be exact, and only a generator keeps
-    it that way.
-    """
+    """Each page's math block equals what the model produces."""
     assert gallery_math.main(['--check']) == 0, 'stale gallery math'
 
 
 def test_every_page_with_a_model_carries_a_math_block() -> None:
-    """A page added without the markers would silently opt out of the check
-    above, which is the failure mode the check exists to prevent."""
+    """A page added without the markers would silently opt out of the check above."""
     missing = [
         name for name, _ in constructs.models() if gallery_math.BEGIN not in (GALLERY / f'{name}.md').read_text()
     ]
@@ -120,11 +96,8 @@ def test_every_math_block_opts_into_markdown_inside_html(example: tuple[str, Pat
     """`<details>` without `markdown="1"` renders its contents as literal text
     on the site, and the strict build does not notice — literal text is valid.
 
-    The two renderers disagree here and only one of them complains. GitHub
-    processes Markdown inside `<details>` regardless and drops the unknown
-    attribute; mkdocs has `md_in_html`, which needs it. So the attribute is
-    free on one side and load-bearing on the other, which is exactly the kind
-    of thing that ships broken.
+    GitHub processes Markdown inside `<details>` regardless; the site's
+    `md_in_html` needs the attribute.
     """
     name, _ = example
     page = (GALLERY / f'{name}.md').read_text()
@@ -137,10 +110,8 @@ def test_every_math_block_opts_into_markdown_inside_html(example: tuple[str, Pat
 def test_the_catalogue_lists_every_model(example: tuple[str, Path]) -> None:
     """The section head says *every* model, and the nav is what makes that true.
 
-    ``strict: true`` fails the build on a page missing from the nav, and the
-    catalogue is generated from the nav — but only from the *groups* under
-    Models. A page filed anywhere else, or as a loose entry beside the data
-    page, still builds and still disappears from the list.
+    The catalogue is generated from the *groups* under Models in the nav, so a
+    page filed anywhere else still builds and is missing from the list.
     """
     name, _ = example
     listed = {name for _, pages in constructs.nav_groups() for _, name in pages}
@@ -151,15 +122,11 @@ def test_the_catalogue_lists_every_model(example: tuple[str, Path]) -> None:
 
 
 def test_the_generated_blocks_are_current() -> None:
-    """All three of the gallery's blocks, which is the whole point of generating them.
+    """All three of the gallery's generated blocks are current.
 
-    The catalogue comes from the nav and from each page's opening line, so a
-    model cannot be renamed, regrouped or re-described into a list that still
-    claims to be every model. The construct matrix comes from the resolved
-    plan, so a model that gains a construct and a table that does not mention
-    it cannot both be committed. The reference table comes from
-    ``references.json``, the same file ``test_ports.py`` asserts against — so
-    the *published* optimum and the *asserted* one cannot disagree.
+    The catalogue comes from the nav and each page's opening line, the
+    construct matrix from the resolved plan, and the reference table from
+    ``references.json``, the file ``test_ports.py`` asserts against.
     """
     page = constructs.PAGE.read_text()
     assert constructs.rendered(page) == page, 'the gallery page is stale — run `pixi run python -m tools.constructs`'
@@ -175,11 +142,7 @@ def exercised() -> set[str]:
 def test_every_construct_is_exercised_by_some_model(column: str, exercised: set[str]) -> None:
     """No column of the construct matrix is all dots.
 
-    The checks above keep the matrix *true*; this one keeps it *full*. A
-    construct the language ships that no model exercises renders as a column
-    of `·`, visible only to a reader scanning for the hole — the same claim
-    `test_resolution_parity.test_every_resolved_predicate_is_parity_tested`
-    makes one level down.
+    The checks above keep the matrix *true*; this one keeps it *full*.
     """
     assert column in exercised, (
         f'`{column}` ships, but no model in examples/ or examples/ports/ exercises it — '
@@ -190,10 +153,7 @@ def test_every_construct_is_exercised_by_some_model(column: str, exercised: set[
 PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports' / 'references'
 
 #: Directory name under ``references/`` -> the tab title the gallery shows.
-#: Adding an arm (``pyomo/``) means adding its display name here — the tests
-#: below then demand a tab for every script it holds, and refuse a tab with no
-#: script, so the docs and the corpus cannot say different things about which
-#: libraries a model is shown in.
+#: Adding an arm (``pyomo/``) means adding its display name here.
 ARMS = {'linopy': 'linopy', 'pypsa': 'PyPSA'}
 
 
@@ -211,13 +171,7 @@ def test_every_arm_directory_is_named(reference: Path) -> None:
 
 
 def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
-    """The reference tab embeds the script's modelling half, and a comparison
-    about readability has to show code that still exists in that form.
-
-    Caught its own first regression: `ruff format` reflowed a `pivot` chain in
-    `transport_dantzig.py` after the page had copied it, and nothing else would
-    have noticed.
-    """
+    """The reference tab embeds the script's modelling half as it exists in the file."""
     page = GALLERY / f'{reference.stem}.md'
     text = page.read_text()
     title = ARMS[reference.parent.name]
@@ -233,10 +187,8 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
 def _build_slice(reference: Path) -> str:
     """The reference's ``build`` function, exactly as the file holds it.
 
-    The slice ends at the next top-level statement, so the run harness — the
-    solve, the printing protocol, the dual extraction — never reaches the
-    page. A reader comparing formulations wants the modelling against the
-    YAML, like against like; the harness is a click away at the file itself.
+    The slice ends at the next top-level statement, so the run harness never
+    reaches the page.
     """
     body = reference.read_text()
     body = body[body.index('def build') :]
@@ -249,10 +201,7 @@ def _call_snippet(name: str) -> str:
 
     Three lines: the solve, the objective it reaches, the dual the corpus
     checks — a projection of `references.json`, and this is its one home. A
-    model with a formulation is handed over written out, which is the door's
-    rule.
-    `test_ports.py` executes the same call against the committed instance;
-    the page only has to match it.
+    model with a formulation is handed over written out.
     """
     entry = constructs.REFERENCES[name]
     ports_yaml = constructs.ROOT / 'examples' / 'ports' / f'{name}.yaml'
@@ -286,10 +235,8 @@ def test_the_specsolve_tab_shows_the_call(reference: Path) -> None:
 def test_no_tab_without_a_reference() -> None:
     """The reverse: a tab claiming an arm must have a script behind it.
 
-    The arm tabs exist to show code that ran and matched the recorded optimum;
-    a tab whose script was deleted or renamed would keep showing code nobody
-    can run, which is the drift the whole side-by-side machinery exists to
-    prevent.
+    A tab whose script was deleted or renamed would keep showing code nobody
+    can run.
     """
     arm_of = {display: arm for arm, display in ARMS.items()}
     for page in sorted(GALLERY.glob('*.md')):
@@ -304,10 +251,8 @@ def test_no_tab_without_a_reference() -> None:
 
 
 #: Hand-written prose that shows model YAML, checked against the models that
-#: run. `docs/guide.md` is not here: the language is mathspec's and the guide
-#: links it rather than teaching it, so it shows no expressions to check.
-#: `README.md`'s block is what `docs/index.md` includes as the whole thing in
-#: one model.
+#: run. `docs/run.md` links the language rather than teaching it, so it is
+#: not here.
 TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
 #: Both spellings of a declaration: a list item under `constraints:` and a
 #: mapping key under a named one.
@@ -320,8 +265,7 @@ def _normalise(text: str) -> str:
 
     A YAML folded scalar joins its lines with single spaces, so the same math
     written on one line and over five parses to the same string only after the
-    runs of whitespace collapse. Comparing *parsed* values rather than source
-    lines is what lets the guide and the models each wrap where they read best.
+    runs of whitespace collapse.
     """
     return ' '.join(text.split())
 
@@ -371,20 +315,11 @@ def _declared(node: object) -> Iterator[str]:
 def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
     """Every expression a prose page shows is copied from a model that runs.
 
-    Prose is prose, so nothing else would notice it drifting — and a page
-    demonstrating syntax the compiler no longer accepts is worse than no page.
-    Only expressions and `where` clauses are checked: the dimension blocks are
-    deliberately written in the compact form to be read, not to be pasted.
-
-    Compared as **parsed values**, not as source lines. The line form was
-    equivalent only while every expression fitted on one line; once a model
-    folds one across several, a line-wise check silently degrades to comparing
-    ``- expression: >-`` against itself and asserts nothing about the math.
-
-    The corpus is ``constructs.models()`` — the same list the gallery and the
-    matrix are built from — rather than a glob of ``examples/*.yaml``, which
-    silently excluded the two ports one directory down. A line taken from a
-    port would have failed here for not existing.
+    Only expressions and `where` clauses are checked; the dimension blocks are
+    written in the compact form to be read, not to be pasted. They are compared
+    as parsed values, so a folded expression is compared as math rather than
+    as its ``>-`` header. The corpus is ``constructs.models()``, the list the
+    gallery and the matrix are built from.
     """
     declared = {text for _, path in constructs.models() for text in _declared(yaml.safe_load(path.read_text()))}
     taught = _taught(page.read_text())
@@ -405,11 +340,8 @@ COUNTED_IN_PROSE = (
 def test_the_prose_counts_the_ports_there_are(page: str, sentence: str) -> None:
     """The stated size of the port corpus is the size of the port corpus.
 
-    Written by hand in two files, and the failure it guards is not a stale
-    number but a *silent* one: two port PRs each bump the count from the same
-    starting number, git merges the identical edit with nothing to conflict on,
-    and the total lands one short. Nothing else in the suite reads these
-    sentences, so without this they are wrong until a person notices.
+    Written by hand in two files: two port PRs that each bump the count from
+    the same number merge without a conflict and leave the total one short.
     """
     expected = sentence.format(len(constructs.ports()))
     assert expected in (constructs.ROOT / page).read_text(), (

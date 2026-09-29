@@ -1,10 +1,7 @@
 """sum_back: a trailing window whose width is data, through both backends.
 
-A minimum up time, a rolling emissions budget, a delivery horizon — the width
-is a column in the source data, and the alternative to saying so is either a
-run of hand-written shifts (which fixes the width in the model text) or an
-incidence table over the dimension twice (which is what the GenX port built
-before this existed).
+A minimum up time, a rolling emissions budget, a delivery horizon: the width
+is a column in the source data.
 """
 
 from __future__ import annotations
@@ -104,9 +101,7 @@ def test_a_literal_width_is_the_last_n_positions():
 def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
     """`x - p` puts a constant beside the variable in every lag, and both add up.
 
-    The linopy lane merges the window's lags in one step, and the merge owns
-    the constant arithmetic the running `+` used to: each lag's constant is
-    summed into the row, not concatenated beside it. The right-hand sides are
+    Each lag's constant is summed into the row. The right-hand sides are
     pinned as numbers because the differential agreement alone would stay
     green if both lanes dropped every constant at once.
     """
@@ -181,8 +176,7 @@ ZERO_WIDTH_SOURCES = {
 def test_a_window_whose_every_width_is_zero_builds_no_row():
     """A per-entity width can be zero everywhere, and then no window row is built.
 
-    A min-up-time model on a fleet with no committable unit. The linopy lane
-    gathered no lag at all and crashed reducing over nothing (#1306).
+    A min-up-time model on a fleet with no committable unit (#1306).
     """
     with differential(ZERO_WIDTH, ZERO_WIDTH_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'only the three meet rows are built; every window reached nothing'
@@ -213,16 +207,7 @@ UNMAPPED_WIDTH_SOURCES = {
 
 
 def test_a_width_read_through_a_relation_that_maps_nothing_there_builds_no_row():
-    """A coordinate in no group has no width, which is a window of nothing.
-
-    Was: the linopy lane bounded its lag count with `int(np.max(...))` over the
-    widths, and a width read through the relation carries the operand's own
-    absence where the relation mapped nothing — so the bound was `NaN` and the
-    build died on `cannot convert float NaN to integer` while the relational
-    lane solved the file (#1535). A bare width parameter never showed it: the
-    holes are filled with the coefficient zero before the operator sees them,
-    and only the pullback puts them back.
-    """
+    """A coordinate in no group has no width, which is a window of nothing (#1535)."""
     with differential(UNMAPPED_WIDTH, UNMAPPED_WIDTH_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'the snapshot in no season carries no width, so it holds no row'
         assert run.oracle == pytest.approx(13.0), (

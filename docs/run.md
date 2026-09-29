@@ -29,8 +29,20 @@ import specsolve as sps
 program = sps.check('dispatch.yaml')
 ```
 
-`check` raises if the file uses something outside the language, and needs no
-data to do it.
+`check` reads the file against the language, and needs no data to do it. To
+see it refuse one, take the sum out of `power_balance`: change its line to
+`expression: p == load`, and check again:
+
+```python
+sps.check('dispatch.yaml')
+```
+
+```text
+DimensionError: Constraint 'power_balance': the expression carries dims ['generator'] that are not in its dims: ['snapshot'] — every stray dim multiplies the rows this constraint builds; add it to dims: if that is intended, or sum it out.
+```
+
+The message names the fix. Put `sum(p, over=generator)` back before the next
+step.
 
 ## 4. Attach the numbers and solve
 
@@ -68,20 +80,14 @@ Each answer is a polars table keyed by the declaration's labels. The dual is
 the cost of the last generator on: 10 at snapshot 0, where wind alone covers
 the load, and 50 at the other three.
 
-To hand the model to another tool instead, write it. The suffix picks the
-format:
-
-```python
-sps.write('dispatch.yaml', sources, 'dispatch.lp')
-```
-
 ## Where next
 
 | | |
 |---|---|
-| [Change a model](interactive.md) | the next lesson: new numbers, more rows, new math |
+| [Tables in, tables out](tables.md) | the next lesson: parquet in, tables out, and an archive to query |
 | [Preparing the data](howto/data.md) | from files to the tables above |
 | [The verbs](reference/api.md) · [The data contract](reference/data.md) | what every call takes, returns and refuses |
+| [Choosing a solver](howto/solvers.md) | another solver, or a file for a tool specsolve has no solver for |
 | [Language reference](https://mathspec.readthedocs.io/en/latest/reference/language/) · [the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/) | what a file may contain, and where it stops |
 | [Debug a wrong answer](howto/debug.md) | when it solves and the number is wrong, or it does not solve |
 | [Examples](examples/index.md) | every model in the repository |

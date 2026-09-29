@@ -1,14 +1,6 @@
 """The assertion-message rule, checked rather than reviewed.
 
-AGENTS.md asks for the claim in the message that prints. Reviewed by eye that
-held at 59% of the 1,583 assertions here, and the distribution said age rather
-than disagreement — 5% in the oldest file, 96% in the newest. A rule at 59% with
-no way to say whether that is bad is unenforceable in both directions.
-
-**100% is the wrong target.** ``assert result.status == 'optimal'`` needs no
-sentence, and demanding one produces exactly the restatement AGENTS.md tells you
-to cut. So the rule checked here is narrower than the one written there, and
-covers only assertions whose *claim is not visible in the expression*:
+Only assertions whose claim is not visible in the expression need a message:
 
 - **a literal collection** — ``== ['high', 'low', 'mid']`` claims an order and a
   completeness, and neither is on the line;
@@ -17,12 +9,7 @@ covers only assertions whose *claim is not visible in the expression*:
 - **an absence** — ``assert not offenders`` says what is empty, never why it
   must be.
 
-**A ceiling, not a floor, and not a backfill.** 247 assertions were in breach
-when this landed, and adding 247 sentences in one pass would produce 247
-restatements rather than 247 claims. So the number is pinned: a new one turns
-the suite red, and the count comes down as the files are touched for other
-reasons. It is the same instrument the expression sweep's lane-refusal ceiling
-is, for the same reason — a rule nobody can measure is a rule that drifts.
+The count in breach is a ratchet that falls as files are touched.
 """
 
 from __future__ import annotations
@@ -32,9 +19,7 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
 
-#: Assertions in breach when the rule was mechanised. A ratchet: this may fall,
-#: and a PR that raises it is adding an assertion whose claim is not written
-#: down. Lower it in the PR that lowers the count.
+#: Assertions in breach. A ratchet: lower it in the PR that lowers the count.
 IN_BREACH = 205
 
 
@@ -72,13 +57,7 @@ def _in_breach() -> list[str]:
 
 
 def test_an_assertion_whose_claim_is_not_on_the_line_carries_a_message() -> None:
-    """The ratchet holds in both directions, off one pass over the tree.
-
-    Above the constant, an assertion was added whose claim is not written
-    down; below it, the count fell and the ceiling did not — and a ceiling
-    nobody lowers is a ceiling that stops meaning anything, since the next
-    unmessaged assertion lands under the old headroom unremarked.
-    """
+    """The ratchet holds in both directions: above it a claim went unwritten, below it the ceiling was not lowered."""
     breach = _in_breach()
     assert len(breach) <= IN_BREACH, (
         f'{len(breach)} assertions state a claim their expression does not carry, above the {IN_BREACH} '

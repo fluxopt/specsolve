@@ -1,16 +1,9 @@
 """``sum()`` naming no dim: every dim the operand carries.
 
-The spelling exists so that an implied reduction can be written down. Where a
-declaration sums for you — an objective is scalar, so every dim in it goes —
-the file says nothing about *which* dims went or where the sum's bracket ends,
-and #1046 is what that costs: the math block and the LP disagreed about a
-model both lanes accepted.
-
-So the claim under test is equivalence, not a new capability: ``sum(x)`` and
-the nest that names each dim build one model, on both lanes and through the LP
-file. The reduction is asked for in a **scalar constraint** rather than in the
-objective, because an objective sums what is left over anyway — a bare sum
-there is invisible, and a test that cannot see it certifies nothing.
+The spelling writes down a reduction a declaration would otherwise imply
+(#1046). ``sum(x)`` and the nest that names each dim build one model, on both
+lanes and through the LP file. The reduction sits in a **scalar constraint**,
+since an objective sums what is left over anyway and hides a bare sum.
 """
 
 from __future__ import annotations

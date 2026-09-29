@@ -1,16 +1,8 @@
-"""The data-time guard on what a model assumes of its data.
+"""The data-time check of a model's ``assumptions:``.
 
-Everything decidable without data is decided at load, and an ``assumptions:``
-entry is what is left over: a predicate only the numbers can answer. The
-language states each one — the predicate, the coordinates it is checked at,
-and the sentence `assumption_message` refuses in — and
-every condition a ``piecewise:`` method puts on its breakpoints arrives the
-same way. What is decided here is whether the data holds it, and where not.
-
-The mask walk answers, which is the relational engine's: a second reading of a
-predicate at the door would drift from the one the rows are built with. Called
-from [`tidy_sources`][specsolve.sources.tidy_sources], so both lanes pass through it by
-entering the one door.
+A predicate is read by the relational engine's mask walk, so it agrees with
+the rows that are built. Called from
+[`tidy_sources`][specsolve.sources.tidy_sources], so both lanes pass through it.
 """
 
 from __future__ import annotations
@@ -34,14 +26,10 @@ if TYPE_CHECKING:
 def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) -> None:
     """Refuse data that does not hold what the model assumes of it.
 
-    A model stating nothing pays nothing: the frames are shaped for the walk
-    only where there is an assumption to walk. Nothing is assumed of a
-    parameter the door left unfilled — a ``piecewise:`` mask whose own source
-    cannot be read — which attaching refuses on its own terms.
+    Nothing is checked while a parameter is unfilled; attaching refuses that.
 
     Args:
-        program: The lowered spec — every assumption by the name a refusal
-            quotes.
+        program: The lowered spec.
         sources: What [`tidy_sources`][specsolve.sources.tidy_sources] holds once every
             parameter, relation and index is read.
 
@@ -61,14 +49,8 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
 def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | None:
     """One coordinate the assumption does not hold at, or ``None`` where it holds everywhere.
 
-    The search is the assumption negated — the coordinates its ``where``
-    admits and its predicate does not — so one filter over one product answers
-    it however many conditions the predicate joins. A predicate with no value
-    at a coordinate does not hold there, a mask reading a missing row as
-    false, so the negation admits that coordinate and the refusal names it.
-
-    The empty string is the answer for an assumption over no dims: it fails,
-    and there is no coordinate to name.
+    A predicate with no value at a coordinate does not hold there. The empty
+    string answers a failing assumption over no dims.
     """
     failing = ~assumption.predicate
     if assumption.where is not None:

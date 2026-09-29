@@ -1,12 +1,8 @@
 """Native API: YAML → streaming engine → solver, with linopy never imported.
 
 The linopy-free guarantee is asserted in a subprocess so the suite's own
-oracle imports cannot pollute the check.
-
-This module is deliberately **pandas-free**: it is the bare install's proof
-that the native path — frames in, build, solve, frames out — needs no
-dataframe library beyond the engine's own. The tests that exercise the bridges
-*out* (``to_pandas``, ``to_dataarray``) say so with an ``importorskip``.
+oracle imports cannot pollute the check. This module is pandas-free; the tests
+of the bridges out say so with an ``importorskip``.
 """
 
 from __future__ import annotations
@@ -67,10 +63,7 @@ def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, t
 
 
 def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_length(tmp_path):
-    """The mask a ``points:`` parameter derives was read off the caller's object before any path
-    was opened, so a curve supplied as a file was held to the full breakpoint grid and refused for
-    the rows a shorter curve does not have.
-    """
+    """A ``points:`` curve supplied as a file keeps its own length, as a frame does."""
     from tests.conftest import expanded, port_sources, port_spec
 
     frames = port_sources('piecewise_ragged')
@@ -89,10 +82,7 @@ def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_lengt
 
 
 def test_a_string_is_a_parquet_path_at_every_door(tmp_path):
-    """One fact with one home: `as_frame` is what every reader of a source goes
-    through, so a path attaches the same at a parameter, an index, a relation,
-    a curve and a sweep's axis — the `points:` curve that was refused from a
-    path while accepted from a frame was the fifth reader lacking it."""
+    """Every reader of a source goes through `as_frame`, so a path attaches the same everywhere."""
     from specsolve.frames import as_frame
 
     frame = pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})
@@ -119,8 +109,7 @@ def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
         assert objective == pytest.approx(ref.objective, rel=1e-9)
 
 
-#: ``examples/dispatch.yaml``'s numbers written out in Python rather than
-#: handed over as tables — the shapes a hand-written model reaches for.
+#: ``examples/dispatch.yaml``'s numbers as plain Python rather than tables.
 _PLAIN = {
     'dict': {
         'p_max': dict(zip(DISPATCH_GENERATORS, DISPATCH_P_MAX, strict=True)),
@@ -139,8 +128,7 @@ _PLAIN = {
 def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dispatch_frame_inputs, shape):
     """A dict and a sequence are sources, and mean what the tables mean.
 
-    A dict carries its own labels; a sequence is positional against the index,
-    which is why the dimensions are resolved before any parameter is read.
+    A dict carries its own labels; a sequence is positional against the index.
     """
     frames = dispatch_frame_inputs
     with sps.solve(dispatch_yaml, frames) as tables:
@@ -152,11 +140,7 @@ def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dis
 
 
 def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_inputs):
-    """A scalar covers the dims the parameter declares, not just a 0-D one.
-
-    Dense by construction, and materialised here — which is the cost of saying
-    it this way rather than declaring the parameter ``dims: []``.
-    """
+    """A scalar covers the dims the parameter declares, not just a 0-D one."""
     frames = dispatch_frame_inputs
     flat = {**frames, 'cost': 7.0}
     spelled = {**frames, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
@@ -226,19 +210,10 @@ def test_a_positional_source_needs_the_labels_it_is_written_against():
 
 
 def test_runtime_is_linopy_free(dispatch_yaml):
-    """Import the package, build and solve on Arrow sources — linopy never loads.
+    """Import the package, build and solve on Arrow sources — linopy, xarray, pandas and pyarrow never load.
 
-    pandas and pyarrow are on the list too, and that is newer than it looks:
-    on the duckdb engine they could not be, because duckdb imported pandas
-    opportunistically when registering any Python object, so "not in
-    ``sys.modules``" was not a claim this package could keep. polars imports
-    neither until asked, so the stronger claim is now available and is pinned
-    here — a bridge out (``to_pandas``, ``to_dataarray``) must stay a bridge
-    and never become something the build path walks over on its own.
-
-    Distinct from, and weaker than, the claim that they need not be
-    *installed*: the bare-install CI job is what proves that, running this
-    suite with no dataframe library beyond polars present at all.
+    Weaker than the claim that they need not be installed, which the
+    bare-install CI job proves.
     """
     absent = ('linopy', 'xarray', 'pandas', 'pyarrow')
     script = textwrap.dedent(f"""
@@ -283,12 +258,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
 def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispatch_frame_inputs, tmp_path, form):
     """One first argument across the five verbs, and it is `to_spec`'s own.
 
-    A caller who has already read the file hands the `to_spec` back rather
-    than the path, and every verb takes it. A lowered `Program` is the one
-    shape none of them takes, which `test_a_lowered_program_is_not_a_model_any_verb_takes`
-    holds. Asserted per verb rather than on `check` alone: each annotates
-    `Buildable` and each has its own door, so one that forgot to pass the
-    model through would only show up here.
+    Asserted per verb: each has its own door.
     """
     spec = {
         'path': dispatch_yaml,
@@ -316,8 +286,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
 
 
 def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
-    """The model stands for itself: the plan is read from the file when
-    wanted, never carried on a built model."""
+    """The plan is read from the model alone, with no data."""
     for program in (sps.check(dispatch_yaml), to_spec(dispatch_yaml).program):
         assert program.variables['p'].dims == ('snapshot', 'generator')
         assert program.parameters['load'].dims == ('snapshot',)
@@ -339,10 +308,7 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 ):
     """The CI verb enforces the ceiling with no data attached (mathspec's docs/about/limits.md).
 
-    The refusal is the language's, at load (mathspec's ``test_degree.py``);
-    what is asserted here is that both verbs surface it, ``build`` saying the
-    same thing rather than deferring it to the solver. The raw file is
-    assembled by hand because validating it is the refusal.
+    The refusal is the language's; both ``check`` and ``build`` surface it.
     """
     raw = {**to_spec(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
 
@@ -364,11 +330,7 @@ def test_error_hierarchy_is_one_catchable_tree():
 
 
 def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
-    """The set of solvers is closed, and a name outside it never falls back to
-    the default — solving with a solver other than the one asked for is the one
-    answer that cannot be right. Here rather than in ``test_gurobi_sink.py``,
-    which skips without the extra: the closed set is a property of the package,
-    not of gurobi. Refused before the build, as an unwritable suffix is."""
+    """The set of solvers is closed, and a name outside it never falls back to the default."""
     from specsolve.relational.sinks import SOLVERS
 
     sources = dispatch_frame_inputs
@@ -382,15 +344,8 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 ):
     """A name in the closed set is not a promise the package is installed.
 
-    `gurobi` is a name specsolve knows on an install that never took the extra, so
-    the two mistakes are different and get different sentences. Both refuse
-    where the sink is resolved, which is before the build: resolving it there is
-    what makes naming a sink nothing can serve cost no model, and that was only
-    half true while a known name always resolved.
-
-    Faked by naming a package nothing has rather than by uninstalling gurobipy,
-    so the check runs wherever the suite does and still goes through the real
-    probe.
+    Faked by naming a package nothing has, so the real probe runs wherever the
+    suite does.
     """
     from specsolve import api
     from specsolve.relational.sinks import SOLVERS
@@ -406,11 +361,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
-    """Composition is merging declarations, not passing several models.
-
-    The message points at the dict, because a caller holding two files has
-    somewhere to go — #30 declined the native merge rather than deferring it.
-    """
+    """Composition is merging declarations, not passing several models."""
     with pytest.raises(sps.LanguageError, match='merge the declarations'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
@@ -449,38 +400,20 @@ def _named(**declared) -> dict:
     ],
 )
 def test_two_names_in_one_namespace_differing_only_by_case_are_refused(spec):
-    """`p` beside `P` is ordinary notation and the language takes it. An answer on disk cannot.
-
-    Every declaration is written as a file named after it, so on a
-    case-insensitive filesystem the two fold into one: the second overwrites
-    the first and keeps its name, and the surviving name then reads back
-    carrying the other's values. Refused at the front door rather than at
-    `save`, so a solve worth archiving is not found to be unarchivable after
-    it has run.
-    """
+    """`p` beside `P` is refused: on a case-insensitive filesystem their files fold into one."""
     with pytest.raises(sps.SpecsolveError, match='differ only by case'):
         sps.check(spec)
 
 
 def test_a_case_pair_across_two_namespaces_is_allowed():
-    """The namespaces are the language's, and a constraint is not in the flat one.
-
-    A constraint may already carry a variable's exact name — they are written
-    under `dual/` and `primal/`, which no filesystem folds together — so the
-    rule is per namespace rather than over every name in the file.
-    """
+    """The rule is per namespace: a constraint is written under `dual/`, a variable under `primal/`."""
     spec = _named(constraints={'P': {'dims': ['t'], 'expression': 'p >= load'}})
     assert 'P' in sps.check(spec).constraints, "a constraint named like a variable is the language's to allow"
 
 
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
-    """A rule only `check` enforced is one `solve` walks past.
-
-    `build` lowers without going through `check`, and the write that lays an
-    archive out lowers without going through either, so all of them lower
-    through one function that refuses.
-    """
+    """A rule only `check` enforced is one `solve` walks past."""
     spec = _named(variables={'P': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}})
     sources = {'t': range(2), 'load': [1.0, 2.0]}
     call = {
@@ -503,11 +436,7 @@ def test_write_suffix_dispatch(dispatch_yaml, dispatch_frame_inputs, tmp_path):
 
 
 def test_a_solution_saves_every_kind_it_answered_with(dispatch_solution, dispatch_yaml, tmp_path):
-    """Every kind the solve answered with, tidy, streamed straight to disk.
-
-    `<kind>/<name>.parquet`, because the language lets a constraint carry a
-    variable's name and a flat directory could not hold both.
-    """
+    """Every kind the solve answered with, tidy, as `<kind>/<name>.parquet`."""
     assert dispatch_solution.is_ok
     out = dispatch_solution.save(tmp_path / 'solution')
     assert out == tmp_path / 'solution'
@@ -520,13 +449,7 @@ def test_a_solution_saves_every_kind_it_answered_with(dispatch_solution, dispatc
 
 
 def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
-    """The record beside the frames: what the numbers themselves cannot carry.
-
-    Without it a directory holds every value the solve produced and cannot say
-    what the solve concluded, so a set of saved cases answers neither which
-    one was cheapest nor which one did not solve. Written as the row a sweep
-    writes per slice, so a directory per case concatenates.
-    """
+    """The record beside the frames, as the row a sweep writes per slice."""
     out = dispatch_solution.save(tmp_path / 'solution')
     record = pl.read_parquet(out / 'record.parquet')
     assert record.columns == [
@@ -586,12 +509,7 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
 
 
 def test_a_saved_solution_carries_the_activities(dispatch_solution, dispatch_yaml, tmp_path):
-    """The fourth reader a result has, and the one the export left behind.
-
-    `activity` is not a `kind=` any bridge takes — a sweep folds three kinds
-    and never holds these — so it needs naming separately or a saved answer
-    cannot answer what a row's left-hand side reached.
-    """
+    """A saved answer carries each row's left-hand side."""
     out = dispatch_solution.save(tmp_path / 'solution')
     constraints = set(sps.check(dispatch_yaml).constraints)
     assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
@@ -600,13 +518,7 @@ def test_a_saved_solution_carries_the_activities(dispatch_solution, dispatch_yam
 
 
 def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
-    """An absence is a fact about the answer, so it is written down.
-
-    Skipping a dual an integer variable made undefined, and an expression this
-    data cannot evaluate, leaves a directory that cannot tell "there is none,
-    and here is why" from "no such name". `dual` and `expression` say why in
-    the process that solved; the file has to say it too.
-    """
+    """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
         'dimensions': {'t': {'dtype': 'int'}},
         'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t']}},
@@ -632,12 +544,7 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
 
 
 def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_solution, dispatch_yaml, tmp_path):
-    """Every reader answers what it answered, off the directory rather than a session.
-
-    The point of writing the record and the fourth kind: a `Result` is frames
-    and a handful of scalars, so nothing about it needs the build that made
-    it, the solver that filled it, or the process either ran in.
-    """
+    """Every reader answers what it answered, off the directory rather than a session."""
     loaded = sps.load_result(dispatch_solution.save(tmp_path / 'solution'))
 
     assert (loaded.status, loaded.termination_condition) == (
@@ -702,13 +609,7 @@ def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
 
 
 def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispatch_solution, tmp_path):
-    """The one difference between the two verbs, in the one place a caller meets it.
-
-    Both read the same answer and both answer the same values. `load_result`
-    has them by the time it returns, so the directory is free afterwards;
-    `scan_result` reads each frame at the call that asks for it, which is what
-    serves an answer larger than memory and what the files have to outlive.
-    """
+    """`load_result` holds the values when it returns; `scan_result` reads each frame when asked."""
     saved = dispatch_solution.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
     scanned = sps.scan_result(saved)
@@ -722,12 +623,7 @@ def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispa
 
 
 def test_a_scanned_answer_reads_its_frames_at_the_call_that_asks(dispatch_solution, tmp_path):
-    """Why scanning is worth a second verb rather than a slower load.
-
-    A scan is a plan until it is collected, so what the file holds at the read
-    is what comes back. The loaded answer beside it was fixed when it was
-    loaded, which is the same fact from the other side.
-    """
+    """A scan returns what the file holds at the read; a load, what it held at the load."""
     saved = dispatch_solution.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
     scanned = sps.scan_result(saved)
@@ -741,14 +637,8 @@ def test_a_scanned_answer_reads_its_frames_at_the_call_that_asks(dispatch_soluti
 def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     """A read is a join, and a join settles no order — so the read states one.
 
-    Was: every call came back in whatever order the hash join finished in, so
-    two reads of one unchanged result disagreed and five writes of one solution
-    produced five different files. Nothing was wrong with the numbers, which is
-    what made it worth stating rather than leaving to the planner.
-
-    Label order is row-major over the coordinate product, so it is checkable
-    against the coordinates themselves: `snapshot` varies slowest, and within
-    it `generator` follows the order the file declares.
+    Label order is row-major over the coordinate product: `snapshot` varies
+    slowest, and within it `generator` follows the declared order.
     """
     sources = dispatch_frame_inputs
     generators = list(sources['p_max']['generator'])
@@ -766,13 +656,7 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
 
 
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
-    """No lifetime to manage: reading is valid until you say otherwise.
-
-    A result owns its read-back, so nothing expires it from outside and a
-    caller who never closes loses nothing but memory. `close()` is there to
-    release the label frames it pins early, and it means what it says — after
-    it, there is nothing left to read.
-    """
+    """Reading is valid until `close()`, and nothing after it."""
     sources = dispatch_frame_inputs
     result = sps.solve(dispatch_yaml, sources)
     height = result.primal('p').height
@@ -785,16 +669,8 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
 
 
 def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs):
-    """A result reports its own solve, not the engine's latest.
-
-    Was: the values lived on the engine and every reader went back to them,
-    so `objective` was a snapshot while `primal` was live — one result
-    disagreeing with itself after a second solve, silently and with plausible
-    numbers. Nothing supported re-attaches data yet, so the bound has to be moved
-    the way the planned in-place update will (#382: `changeColsBounds`
-    against labels that are already solver indices).
-    """
-    key = ['snapshot', 'generator']  # a read is a join, so compare on coordinates
+    """A result reports its own solve, not the engine's latest."""
+    key = ['snapshot', 'generator']
     sources = dispatch_frame_inputs
     with sps.build(dispatch_yaml, sources) as model:
         first = model.solve()
@@ -812,11 +688,7 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
 
 
 def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
-    """A frame is the shape results come in; pandas is an exit, not a shape.
-
-    The two must describe the same table — the bridge is a conversion, not a
-    second query with its own opinion about column order or dtypes.
-    """
+    """A frame is the shape results come in; `to_pandas` converts the same table."""
     frame = dispatch_solution.primal('p')
     assert isinstance(frame, pl.DataFrame)
     assert frame.columns == ['snapshot', 'generator', 'value']
@@ -840,12 +712,8 @@ def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
 def test_a_bridge_out_names_the_package_to_install(dispatch_solution, absent, bridge):
     """A bridge out of a bare install says which package to add.
 
-    specsolve installs neither pandas nor xarray, so the bare `No module named
-    'pandas'` leaves the reader to guess whether the package is broken. The
-    message says the package is the caller's to install.
-
-    `to_dataarray` reads through pandas first, so on an install with neither
-    package the one it names is pandas.
+    The message says the package is the caller's to install. On an install
+    with neither package, `to_dataarray` names pandas, which it reads first.
     """
     named = absent if importlib.util.find_spec('pandas') is not None else 'pandas'
     with (
@@ -856,21 +724,15 @@ def test_a_bridge_out_names_the_package_to_install(dispatch_solution, absent, br
 
 
 def test_no_operator_registry_on_this_package():
-    """The operator set is closed — there is no way to register more (#38's
-    ``escape:`` island replaces the idea).
+    """The operator set is closed, so both lanes accept the same language.
 
-    This is what makes the two lanes accept the same language, and hence what
-    makes the differential tests an oracle rather than a comparison of
-    dialects (docs/about/architecture.md, "The expressive ceiling"). What
-    ``mathspec`` exports is pinned name by name in mathspec's own suite, so
-    the surface asserted here is this package's.
+    See docs/about/architecture.md, "The expressive ceiling".
     """
     assert not hasattr(sps, 'register')
 
 
 def test_solution_to_dataarray(dispatch_solution):
-    """Long tables are right for joining, wrong for the array math that
-    post-processing is mostly made of. `to_dataarray` is the bridge."""
+    """`to_dataarray` is the bridge to labelled array math."""
     pytest.importorskip('xarray')
     arr = dispatch_solution.to_dataarray('p')
     tidy = dispatch_solution.to_pandas('p')
@@ -897,10 +759,7 @@ def test_solution_to_dataset(dispatch_solution):
 
 
 def test_every_bridge_takes_a_kind(dispatch_solution, dispatch_yaml):
-    """`to_pandas`, `to_dataarray` and `to_dataset` take `kind=` the way `scan`
-    does — one kind per call, `primal` by default — so a price is a
-    `DataArray` without going through `dual` and the bridge by hand, and a
-    dataset of every dual has no name to collide with."""
+    """`to_pandas`, `to_dataarray` and `to_dataset` take `kind=`, one per call, `primal` by default."""
     pytest.importorskip('xarray')
     constraint = next(iter(sps.check(dispatch_yaml).constraints))
     tidy = dispatch_solution.to_pandas(constraint, 'dual')
@@ -952,8 +811,7 @@ TWO_VARIABLE_SPEC = {
 
 
 def test_to_dataset_defaults_to_every_variable():
-    """A small model wants all of them at once, as linopy's model.solution
-    gives you — naming them would be busywork."""
+    """`to_dataset()` with no names is every variable."""
     pytest.importorskip('xarray')
     n = 4
     sources = {
@@ -989,14 +847,8 @@ def test_to_dataset_defaults_to_every_variable():
 def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
     """Every documented door answers with `SpecsolveError` (#527).
 
-    Spec checking happens in two places — pydantic's validators and the
-    language checkers — and they failed differently, so `except SpecsolveError`,
-    the thing `docs/reference/api.md` tells a caller to write, missed the majority of
-    model mistakes and a caller had no way to know which.
-
-    `Spec.__init__` is *not* in this list, and cannot be: defining one makes
-    pydantic route validation through it, which runs every after-validator
-    twice and the first time with no context, breaking `extend()`.
+    `Spec.__init__` is not a door: defining one would run every after-validator
+    twice, the first time with no context.
     """
     doors = {
         'to_spec': lambda: to_spec(raw),
@@ -1012,13 +864,7 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
 
 
 def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):
-    """`close` releases the read-back the readers lay values over, and they say so.
-
-    The status gate cannot notice: closing releases the coordinates, not the
-    solve, so `is_readable` stays true and the reader used to fall through to
-    a bare `AssertionError`. Frames read before the close are their own data
-    and stay valid, which is the half worth stating in the message.
-    """
+    """After `close` the readers say so; frames read before it stay valid."""
     sources = dispatch_frame_inputs
     sol = sps.solve(dispatch_yaml, sources)
     frame = sol.primal('p')
@@ -1033,14 +879,7 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
 
 
 def test_check_catches_a_dim_error_with_no_sources_bound():
-    """`check` is a CI verb, and this is what makes it one.
-
-    Every dim rule is decided from declarations alone — mathspec's own suite
-    is the whole set (#1150) — so the claim worth making *here* is
-    not that the rule exists but that the runner reaches it without a byte of
-    data. Kept on this side of the split for that reason: it is an assertion
-    about `check`, not about dims.
-    """
+    """`check` reaches a dim rule without a byte of data."""
     raw = override(
         raw_of(EXAMPLES_DIR / 'dispatch.yaml'),
         **{'constraints.stray': {'dims': ['snapshot'], 'expression': 'p <= p_max'}},

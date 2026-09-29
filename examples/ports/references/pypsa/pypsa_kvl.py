@@ -8,32 +8,18 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_kvl.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables and reshapes the recorded
-duals, and
-``nodal_prices`` spells that reshape out rather than leaning on ``stack()``,
-whose NA handling changed in 3.0. The floor is checked rather than assumed —
-this script emits byte-identical output on either side of that change.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
-**Kirchhoff's voltage law.** Every model before it moved
-power over ``Link`` objects, whose flow is a decision variable — a transport
-model. A ``Line`` is passive: flow is decided by physics, and around every
-independent cycle the reactance-weighted flows must sum to zero. That is what
-makes this port network physics rather than another time coupling, and why it
-builds on the transport model rather than on cyclic storage: the two axes are
-independent,
-and mixing them would leave a mismatch ambiguous.
+**Kirchhoff's voltage law.** A ``Link``'s flow is a decision variable — a
+transport model. A ``Line`` is passive: flow is decided by physics, and around
+every independent cycle the reactance-weighted flows must sum to zero.
 
 It also prints the cycle basis PyPSA derived, because the port carries that
 basis as data (``cycle_incidence``) and the two must describe the same cycle
-space. Computing a cycle basis is a graph algorithm, which is data preparation
-and deliberately outside the language.
+space. Computing a cycle basis is data preparation, outside the language.
 """
 
 from __future__ import annotations

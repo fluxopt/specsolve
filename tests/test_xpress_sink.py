@@ -1,22 +1,16 @@
-"""The ``xpress`` sink, against the sink that was already here.
+"""The ``xpress`` sink, with HiGHS as its oracle.
 
-Three sinks loading one :class:`Handoff` must produce the same model, so
-HiGHS is the oracle for Xpress the way it is for Gurobi: the interesting
-assertions are agreements, not values. Where a value *is* asserted it comes
-from ``examples/ports/references.json`` — somebody else's published optimum,
-which no sink can talk another into.
+Three sinks loading one :class:`Handoff` must produce the same model, so the
+assertions are agreements. Where a value *is* asserted it comes from
+``examples/ports/references.json``.
 
-Every test skips without ``xpress``. Its wheel carries a Community licence
-that is active on import — no file and no signup, which is what makes this
-runnable in CI at all — and refuses a model whose rows *plus* columns exceed
-5000. The models here stay well under; the one port that does not is named in
-``OVER_THE_XPRESS_LIMIT`` and skipped rather than shrunk, the corpus being
-checked against a published optimum for the whole model.
+Every test skips without ``xpress``. Its wheel carries a Community licence,
+active on import, that refuses a model whose rows *plus* columns exceed 5000;
+the one port over it is named in ``OVER_THE_XPRESS_LIMIT``.
 
-What this sink does not share with the other two is worth naming, since each
-is a place a member could be wrong on its own: the objective's constant is a
-*column* here, discarding a solve is a control rather than a call, and an
-unsolved problem hands back a trivial basis where Gurobi refuses one.
+Where this sink differs from the other two: the objective's constant is a
+*column*, discarding a solve is a control rather than a call, and an unsolved
+problem hands back a trivial basis where Gurobi refuses one.
 """
 
 from __future__ import annotations
@@ -49,16 +43,12 @@ xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress
     ],
 )
 def test_xpress_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
-    """The shared cases, deliberately reused rather than restated: the models
-    were chosen for what a sink states *outside* the frames — a maximisation,
-    an objective constant, an integrality — which is exactly what a third
-    member spells in its own third way."""
+    """The shared cases: a maximisation, an objective constant and an integrality, each stated outside the frames."""
     assert_agrees_with_highs('xpress', name, variable, constraint, has_duals=has_duals)
 
 
 #: `osemosys_utopia` builds 10,857 rows plus columns against the Community
-#: licence's 5,000. Nothing about the model is xpress-specific — it is skipped
-#: for the licence, not for the answer.
+#: licence's 5,000.
 OVER_THE_XPRESS_LIMIT = {'osemosys_utopia'}
 
 
@@ -118,12 +108,10 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
 
 
 def test_forgetting_makes_the_next_solve_start_cold() -> None:
-    """``keepbasis``, and the reason it is not ``problem.reset()``.
+    """``keepbasis``, not ``problem.reset()``, which clears the problem itself.
 
-    Reset on this solver clears the problem itself, so what the middle rung of
-    ``keep=`` needs is the control. The observable is the iteration counter:
-    a re-solve that kept the basis does no simplex work, and one that forgot
-    it does the same work as the first.
+    A re-solve that kept the basis does no simplex work, and one that forgot it
+    does the same work as the first.
     """
     from tests.test_warm_start import DISPATCH, SNAPSHOTS, dispatch_sources
 
@@ -199,10 +187,9 @@ def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
     """A non-binding row, which no case in ``CASES`` has.
 
     Xpress reports a *slack* and this sink subtracts it from the right-hand
-    side to recover the row's own value. Every model above binds every row, so
-    slack is zero and the subtraction cannot be seen — here the minimum parks
-    both variables at 0 against caps of 10 and 20, so activity and rhs differ
-    by the whole of each bound.
+    side to recover the row's own value. Here the minimum parks both variables
+    at 0 against caps of 10 and 20, so activity and rhs differ by the whole of
+    each bound.
     """
     with sps.solve(SLACK, SLACK_DATA, solver_name='xpress') as solution:
         assert solution.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
@@ -213,10 +200,9 @@ def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
 def test_a_solve_that_errored_is_not_reported_as_unknown() -> None:
     """The second axis, which linopy's map does not read.
 
-    A unit probe rather than a solve: making the Optimizer *fail* is not
-    something the suite can arrange reliably, and the branch is one line —
-    what it has to answer is that a failure and a model nobody solved do not
-    arrive as the same word.
+    A unit probe rather than a solve, since the suite cannot make the Optimizer
+    *fail* reliably. A failure and a model nobody solved do not arrive as the
+    same word.
     """
     from types import SimpleNamespace
 

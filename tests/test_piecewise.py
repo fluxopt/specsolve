@@ -1,15 +1,10 @@
 """piecewise costs: the λ-formulation block, and the epigraph that needs none.
 
-The ``piecewise:`` expansion is the language's and the caller's, run before
-either backend, so linopy and relational receive identical affine declarations. Nonconvex correctness is
-verified by checking the linked primals lie ON the curve (adjacency binaries
-at work) against a numpy interpolation; the ``convex:`` flag is verified to
-produce the hull instead.
-
-The last section is the counterweight, and the piecewise rules' claim: convex piecewise
-needs no formulation machinery at all. Written as epigraph constraints it is
-ordinary affine YAML, relational-eligible with no ``piecewise:`` block in
-sight — which is the reason the block is only for the nonconvex case.
+The ``piecewise:`` expansion runs before either backend, so both lanes receive
+identical affine declarations. Nonconvex correctness is checked by the linked
+primals lying on the curve, against a numpy interpolation; the ``convex:`` flag
+produces the hull instead. The last section writes convex piecewise as
+epigraph constraints: ordinary affine YAML with no ``piecewise:`` block.
 """
 
 from __future__ import annotations
@@ -189,8 +184,7 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
 
     What changes is only *how λ is restricted*: the segment variable and the
     two rows that pick and neighbour it are gone, replaced by a set over the
-    weights the block already emits — which is why this is a method rather
-    than a second formulation.
+    weights the block already emits.
     """
     program = expanded(SOS2_SPEC, 'piecewise').program
 
@@ -239,8 +233,7 @@ def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
 
     A gated-off block pins the convexity row to zero, which sets every weight
     to zero — a state the set admits, since at most two nonzero is satisfied
-    by none. ``method: convex`` is the one that refuses ``activity``, and does
-    so because a hull with nothing pinning it is not a gate.
+    by none. ``method: convex`` is the one that refuses ``activity``.
     """
     data = nonconvex_inputs
     gated = override(raw_of(GATED_YAML), **{'piecewise.cost_curve.method': 'sos2'})
@@ -254,17 +247,12 @@ def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
 
 
 def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
-    """The reason ``shift`` kept an escape hatch when it started meaning absence.
+    """The adjacency row exists at the first breakpoint, where the shifted term has no predecessor.
 
-    Adjacency is ``lam <= seg + shift(seg, along=bp, offset=1, edge=0)``. At the first
-    breakpoint the shifted term has no predecessor: filled it contributes zero
-    and the row reads ``lam <= seg``, which is correct. Absent it would
-    propagate and drop the row (#289), leaving the first lambda bounded only by
-    ``[0, 1]`` — free to sit on a breakpoint the active segment does not touch,
-    which is a wrong MILP that still solves.
-
-    So this asserts the row *exists* on the built model, which is the only
-    place the escape hatch is worth having.
+    Adjacency is ``lam <= seg + shift(seg, along=bp, offset=1, edge=0)``.
+    Filled, the missing predecessor contributes zero and the row reads
+    ``lam <= seg``. Absent, it would drop the row (#289) and leave the first
+    lambda bounded only by ``[0, 1]``, a wrong MILP that still solves.
     """
     data = nonconvex_inputs
     with differential(NONCONVEX_YAML, data) as run:
@@ -277,12 +265,8 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
 
     A values parameter carrying a dim the links do not is a stray dim in
     generated math — one row per zone where the file reads as one per
-    snapshot. The native lane used to validate the file as written, which made
-    ``sps.check()`` pass on a model ``specsolve_linopy.build`` refused: the same
-    YAML, two answers (hard rule 3). Both refused it once the emitted
-    declarations were judged too — but as a dimension error against
-    ``cost_curve_link1``, a constraint the author never wrote and a different
-    name under ``method: lp``. The block now says it of the link itself.
+    snapshot. The refusal names the link, not a generated constraint the
+    author never wrote.
     """
     raw = override(
         raw_of(NONCONVEX_YAML),
@@ -379,9 +363,7 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
 
     Rows reach a lane in whatever order the join or the group-by that made
     them left behind; what orders the breakpoints is the `bp` index, which is
-    ascending here. The guard read the rows as they arrived and refused this
-    table as backwards (#1122), where the engine joins it by label and the
-    linopy lane builds and solves it.
+    ascending here (#1122).
     """
     shuffled = {
         **nonconvex_inputs,
@@ -397,11 +379,8 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
 def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_inputs):
     """With no index there is no order, so the guard has no question to answer.
 
-    It answered anyway: reading the rows as they arrived, a curve written out
-    of order drew "requires strictly increasing breakpoints" — a claim about
-    an order nothing had established — in front of the message that names the
-    missing index. The λ methods, which have no curvature guard, always
-    reached the right one.
+    A curve written out of order reaches the message that names the missing
+    index, not "requires strictly increasing breakpoints".
     """
     orphaned = {k: v for k, v in nonconvex_inputs.items() if k != 'bp'}
     orphaned['bp_x'] = pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP)
@@ -414,12 +393,10 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
 
 
 def test_the_linopy_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
-    """Which of the two lanes is right, pinned — the loader lays the values out first.
+    """The linopy loader lays the values out first, so the guard walks the dimension's order.
 
-    So the order the guard walks is the dimension's, and the row order the
-    table happened to arrive in is nothing: the shuffled curve binds and the
-    backwards index is refused. Hard rule 3 says the streaming lane owes the
-    same two answers.
+    The shuffled curve binds and the backwards index is refused; the streaming
+    lane owes the same two answers.
     """
     path = tmp_path / 'convex.yaml'
     path.write_text(pyyaml.safe_dump(CONVEX_SPEC))
@@ -436,14 +413,12 @@ def test_the_linopy_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tm
 
 
 def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
-    """The other half of the same blindness, and this one built a wrong model.
+    """A breakpoint index that runs backwards is refused (#1122).
 
     A dimension's index is its order — `shift` walks it and `index(bp, 0)`
     names its first label — so an index written `[2, 1, 0]` puts the fixture's
-    breakpoints at x = 100, 40, 0. `adjacency` then pairs segments that are
-    not neighbours, and `lp` writes its chords against a negative run. The
-    guard never read the index, so it had nothing to say about the order that
-    index sets (#1122).
+    breakpoints at x = 100, 40, 0. `adjacency` would then pair segments that
+    are not neighbours, and `lp` would write its chords against a negative run.
     """
     backwards = {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')}
     schema = schema_of(CONVEX_SPEC)
@@ -479,9 +454,9 @@ def ragged_inputs():
 def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
     """A missing breakpoint row read as a zero coefficient is a vertex at the origin.
 
-    It built, and the answer was wrong with nothing to see: on this fixture B
-    interpolated between its real (20, 130) and the (0, 0) it never declared,
-    for an optimum of 147.5 where its own two points put it at 195.
+    On this fixture B would interpolate between its real (20, 130) and the
+    (0, 0) it never declared, for an optimum of 147.5 where its own two points
+    put it at 195.
     """
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
@@ -622,9 +597,7 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
 
     `lp` is the one whose rows the mask reaches directly, and the one whose
     domain rows sit on each curve's own first and last breakpoint rather than
-    the axis'. Testing only the default method left that pair unbuilt on the
-    linopy lane, where the constant-side coverage guard refuses a curve its
-    breakpoints stop short of.
+    the axis'.
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
@@ -645,9 +618,8 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
 def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve_inputs, method):
     """Every method reads the mask, and two of them have no other way to take a short curve.
 
-    `convex` and `lp` require strictly increasing breakpoints, so the padding
-    that serves `adjacency` and `sos2` is refused there — before this the
-    shorter curve could not be written at all.
+    `convex` and `lp` require strictly increasing breakpoints, so they refuse
+    the padding that serves `adjacency` and `sos2`.
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
@@ -786,8 +758,7 @@ def test_a_curve_masked_by_its_own_breakpoints_asks_for_nothing_extra():
 
     The block masks the weights by a parameter the file already wrote, so what
     the caller attaches is exactly what the file declares and the curve still
-    solves. A name only the expansion knew would be one the caller could
-    neither supply nor be told about.
+    solves.
     """
     program = expanded(_nominated_mask_spec(), 'piecewise').program
 
@@ -818,11 +789,9 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     to 1 — what a block with no `activity:` at all gets (#1158).
 
     The convexity row is ``sum(lam, over=bp) == (activity)`` and absence does
-    not spread out of a reduction, so a masked gate used to take the *row* with
-    it: the weights stayed, summing to whatever the solver liked, and the curve
-    was silently relaxed. Measured on a curve with a no-load intercept it
-    bought 900.00 where the answer is 1050.00, reported as nothing louder than
-    a ``rows_not_built`` count.
+    not spread out of a reduction, so a masked gate that took the *row* with it
+    would relax the curve silently: 900.00 where the answer is 1050.00, on a
+    curve with a no-load intercept.
     """
     raw = raw_of(GATED_YAML)
     raw['piecewise']['cost_curve']['method'] = method

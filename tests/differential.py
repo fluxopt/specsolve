@@ -1,25 +1,12 @@
 """The both-lanes harness: one model, two backends, one answer.
 
-The differential test is this project's central claim — the same YAML must
-mean the same thing on the linopy lane and on the streaming relational
-one (docs/about/architecture.md, hard rule 3). Twelve tests made that claim by hand, in
-seven files, each rebuilding the same fifteen lines: build eagerly, solve,
-take the objective, re-parse the schema, lower it, attach sources, execute,
-compare.
+The same YAML means the same thing on the linopy lane and on the streaming
+relational one (docs/about/architecture.md, hard rule 3). Importing this module
+is the oracle's guard: a bare install skips every module that uses it at
+collection.
 
-What the repetition cost was not correctness but *evenness*. Every copy
-compared objectives and checked the status, but only five of the twelve also
-wrote the LP file and re-solved it, and nothing recorded why the other seven
-skipped that third opinion — so the strength of the claim varied with which
-file you happened to be reading. Here it is one ``lp=True``, and a test that
-does not ask for it is visibly choosing not to.
-
-Importing this module is the oracle's guard: it reaches the oracle
-through ``tests.oracle``, so a bare install skips every module that uses the
-harness at collection time, with no filename list to maintain.
-
-Usage — the engine stays open for the length of the ``with`` block, so
-per-variable primal checks live inside it::
+The engine stays open for the length of the ``with`` block, so per-variable
+primal checks live inside it::
 
     with differential(NONCONVEX_YAML, sources, lp=True) as run:
         assert run.result.to_pandas('op_cost') ...
@@ -50,19 +37,15 @@ if TYPE_CHECKING:
 
     from specsolve.relational.engines.polars.engine import Result
 
-#: Both lanes hand the same numbers to the same solver, so they must agree to
-#: solver precision, not to a fudge factor. One tolerance, one place.
+#: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9
 
 
 class NoFiniteAnswerError(AssertionError):
     """The fixture admits no finite optimum, so neither lane is on trial.
 
-    An ``AssertionError`` because that is what it was and what every caller
-    that does not catch it still wants: a failure naming the fixture. A class
-    of its own because a caller generating its models — ``test_expression_sweep``
-    — must tell "this data has no answer" from "the lanes disagree", and was
-    doing it by matching the message text.
+    A class of its own so a caller generating its models can tell "this data
+    has no answer" from "the lanes disagree".
     """
 
 
@@ -95,18 +78,10 @@ def differential(
 
     ``spec`` is a ``Path`` to a file, the YAML text itself, or a raw dict.
     Both lanes are handed it with every formulation written out
-    (``Spec.expand()``): the door builds no curve as written, and a set
-    reaches HiGHS as the binaries the language states rather than as a set.
+    (``Spec.expand()``).
 
-    **Duals are not compared here, and cannot be.** An LP with alternative
-    optima has many optimal dual solutions, and the two lanes hand HiGHS the
-    same rows in a different order, so it lands on a different basis:
-    ``genx_piecewise_fuel`` agrees on the objective to nine decimals, differs in
-    2 of 72 entries of one primal, and in 12 of 48 entries of one dual. A
-    lane-to-lane dual assertion would therefore be false rather than merely
-    strict. What *is* checkable is a dual against a recording made from an
-    instance designed to have a unique one, which is ``test_ports`` and
-    ``test_corpus_parity``'s job rather than this harness's.
+    Duals are not compared: an LP with alternative optima has many optimal
+    duals, and the two lanes hand HiGHS the same rows in a different order.
 
     Set ``lp=True`` to also write and re-solve the LP file, the third opinion.
     """
@@ -224,10 +199,8 @@ def _pointby_coordinate(point: Mapping[str, pl.DataFrame]) -> dict[str, dict[tup
 def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:
     """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it.
 
-    Not a ``pytest.raises`` around :func:`differential`: the linopy build runs
-    first there and satisfies the raises on its own, so a lane that let the
-    data through would go unnoticed — which is the divergence a data check is
-    most likely to have. The two are built apart, and their sentences compared.
+    The two are built apart: a ``pytest.raises`` around :func:`differential`
+    is satisfied by the linopy build alone.
     """
     model = schema_of(spec).expand()
     with pytest.raises(DataError, match=match) as relational:
@@ -241,17 +214,9 @@ def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, A
 def _same_shape(diagnostics: Any, linopy_lane: Any) -> None:
     """The two lanes built the same *model*, not merely the same answer.
 
-    An objective, a dual vector and a re-solved LP file are all invariant to a
-    column that cannot move: a variable pinned to ``[0, 0]``, or a row that is
-    true whatever the solver does. So a lane could materialise either and every
-    other assertion here would still pass — which is not hypothetical, it is
-    how a first draft of ``absence: zero`` shipped an extra column per absent
-    coordinate on the linopy lane with the whole suite green.
-
-    Counts rather than a set comparison: the two lanes name their columns
-    differently by design (labels against a ``(name, coordinate)`` index), and
-    the claim worth making is that the same declarations produced the same
-    number of them.
+    An objective and a re-solved LP file are invariant to a column pinned to
+    ``[0, 0]`` or a row that always holds, so the counts are compared. Counts
+    rather than sets: the two lanes name their columns differently.
     """
     assert diagnostics.columns == linopy_lane.nvars, (
         f'the lanes disagree on how many columns this model has — relational {diagnostics.columns}, linopy {linopy_lane.nvars}'

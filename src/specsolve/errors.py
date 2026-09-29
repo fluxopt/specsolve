@@ -1,13 +1,9 @@
 """The run half of the exception hierarchy, and the whole of it re-exported.
 
-The spec half — `LanguageError` and what derives from it, decidable at
-load time with no data attached — belongs to ``mathspec`` and is re-exported here,
-so one ``except`` clause covers the package. The run half is defined here:
-[`DataError`][] is a fine file with the wrong thing attached to it, and
-[`NoSolutionError`][] a solve with nothing to read back.
-
-A message lives here only where the engine and the test oracle both raise it.
-One raiser keeps its message beside itself.
+The spec half — `LanguageError` and what derives from it — belongs to
+``mathspec`` and is re-exported here, so one ``except`` clause covers the
+package. A message lives here only where the engine and the test oracle both
+raise it.
 """
 
 from __future__ import annotations
@@ -22,8 +18,8 @@ from mathspec import (
     did_you_mean,
 )
 
-#: The root, under the name callers catch it by. An alias and not a subclass:
-#: `except sps.SpecsolveError` has to catch a `LanguageError`.
+#: The root. An alias, not a subclass, so ``except sps.SpecsolveError`` catches
+#: a ``LanguageError``.
 SpecsolveError = MathSpecError
 
 if TYPE_CHECKING:
@@ -45,9 +41,8 @@ class DataError(SpecsolveError):
 class LayoutError(SpecsolveError):
     """What is on disk is not a layout this package reads.
 
-    The target is a directory or archive that ``save`` wrote, or did not. The
-    fix is which path was named, or re-solving a model whose layout has moved
-    since it was written. The layout is the one
+    The fix is which path was named, or re-solving a model whose layout has
+    moved since it was written. The layout is the one
     [`save`][specsolve.relational.result.Result.save] stamps.
     """
 
@@ -169,11 +164,9 @@ def short_groups_message(name: str, by: str, op: str, position: int, short: Sequ
 
 
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
-    r"""``unknown <kind> '<name>'``, plus the near miss or the declared set.
+    """``unknown <kind> '<name>'``, plus the near miss, or every declaration the name prefixes.
 
-    A name that is the prefix of one or more declarations lists the whole
-    family instead of a near miss. The message stays single-line: it is raised
-    as ``KeyError``, whose ``str`` reprs a newline as a literal ``\n``.
+    Single-line: it is raised as ``KeyError``, whose ``str`` reprs a newline.
     """
     candidates = sorted(known)
 

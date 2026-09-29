@@ -1,20 +1,8 @@
-"""The architecture walkthrough must keep running, or it stops being true.
+"""The architecture walkthrough keeps running, and keeps printing what it claims.
 
-``examples/walkthrough.py`` calls the real pipeline stage by stage, so any
-signature change in the modules it narrates breaks this test rather than
-leaving a plausible-looking script that no longer matches the code.
-
-Running is the weaker half. The script also *claims* things — that the macro is
-gone by stage 3, that ``var_p`` has 18 rows and not 24, that the degree-1
-ceiling is caught with no data attached. A script that merely executes proves none
-of them: 18 could silently become 31 and CI would stay green. So its whole
-output is committed as ``examples/walkthrough.out`` and compared line for line.
-When the pipeline legitimately changes, regenerate it —
-
-    pixi run pytest tests/test_walkthrough.py --update-golden
-
-— and the diff of that file is the review artifact: exactly how the
-architecture's story changed, in the same PR that changed it.
+``examples/walkthrough.py`` calls the real pipeline stage by stage. Its whole
+output is committed as ``examples/walkthrough.out`` and compared line for line;
+regenerate it with ``pixi run pytest tests/test_walkthrough.py --update-golden``.
 """
 
 from __future__ import annotations
@@ -47,9 +35,7 @@ def test_walkthrough_matches_golden(output: str, pytestconfig: pytest.Config) ->
 def test_walkthrough_claims_hold(output: str) -> None:
     """The golden file catches *any* change; this names the ones that matter.
 
-    Redundant with the diff above by construction, and kept anyway: when one of
-    these breaks, the failure says which architectural property lapsed instead
-    of pointing at a line number.
+    A failure here says which architectural property lapsed, not which line.
     """
     for stage in range(1, 8):
         assert f'[{stage}]' in output, f'stage {stage} did not run'

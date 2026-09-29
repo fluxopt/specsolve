@@ -1,25 +1,15 @@
 """How much of a session a solve keeps, and the machinery under it.
 
-Two levels, and the split is the point.
+**The public half** is `solve(keep=...)` and `result.kept`. A session holds the
+solver with the model on it and the work that solver did, dropped in that
+order: `'nothing'` keeps neither, `'solver'` keeps the first, `'progress'`
+keeps both. `loads` says whether the model was handed over again, and the
+iteration count says whether the work survived. `'nothing'` discards the held
+solver, so the fresh one has nothing to begin from.
 
-**The public half** is `solve(keep=...)` and `result.kept`. A session holds two
-things — the solver with the model on it, and the work that solver did — and
-they can only be dropped in that order, which is why one word says it rather
-than two flags: `'nothing'` keeps neither, `'solver'` keeps the first,
-`'progress'` keeps both. The two observables are independent and both are
-checked: `loads` says whether the model was handed over again, and the
-iteration count says whether the work survived. `'nothing'` refuses
-**structurally** — the held solver is discarded, so the fresh one has nothing
-to begin from whatever a member squirrels away.
-
-**The sink half** is `Solver.warm_start()` / `warm()`, machinery with no
-caller above the family yet (#382). It is tested here because it exists: a
-carried basis starts the simplex at the optimum — zero iterations against the
-cold solve's hundreds — and every refusal it can check is checked. The reason
-it stays below the surface is the refusal in
-`test_a_warm_start_for_a_differently_shaped_model_is_refused`: the case that
-wants a carry most, a cutting-plane master re-solved after gaining a cut, is a
-model that gained a row, and a basis spans the model it was read from.
+**The sink half** is `Solver.warm_start()` / `warm()`, with no caller above the
+family yet (#382). A carried basis starts the simplex at the optimum, and every
+refusal it can check is checked.
 
 Iteration counts are deterministic, so none of this needs an idle box.
 """
@@ -171,10 +161,8 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
 def test_the_three_keeps_hold_the_two_things_independently(solver_name):
     """Each word keeps one more than the last, and both halves are observed.
 
-    The solver kept shows up as `loads`, the work kept as the iteration count,
-    and the point of three words rather than one flag is that the middle rung
-    exists: `solver` skips the hand-off *and* begins from nothing, which no
-    boolean over one axis can say.
+    The solver kept shows up as `loads`, the work kept as the iteration count.
+    `solver` skips the hand-off *and* begins from nothing.
     """
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
@@ -206,13 +194,7 @@ def test_the_three_keeps_hold_the_two_things_independently(solver_name):
 
 
 def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
-    """Not `progress`: carrying the solver's work on is opt-in.
-
-    A solve that skips preprocessing it would otherwise do is faster only on
-    a model that preprocessing cannot crack, and nothing at this call site
-    knows which kind it has — so the default takes the half that always pays
-    (the hand-off) and leaves the bet to a caller who can make it.
-    """
+    """Not `progress`: carrying the solver's work on is opt-in."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         model.solve(solver_name=solver_name)
         assert model.solve(solver_name=solver_name).kept == 'solver'
@@ -350,9 +332,8 @@ def test_a_solver_that_has_not_run_has_nothing_to_carry(solver_name):
 class _Refusing:
     """A HiGHS handle refusing the named hint call — the probe for the `_took` guard.
 
-    HiGHS reports refusals by return value and carries on, so a dropped hint
-    would silently start cold; nothing reachable from the tables can make the
-    real handle refuse a span-checked hint, which is why this stands in.
+    Nothing reachable from the tables makes the real handle refuse a
+    span-checked hint.
     """
 
     def __init__(self, handle: Any, call: str) -> None:

@@ -1,12 +1,6 @@
-"""What every solver is: a loaded model, and the rule for keeping it.
+"""What every solver sink is: a loaded model that takes an update's numbers and re-solves warm.
 
-A solver sink holds the model it was given and outlives the solve it was loaded
-for, so that an updated model ([`update`][specsolve.api.Model.update]) has its new
-numbers *pushed* onto what the solver already has and re-solves from the basis
-the last one ended on.
-
-**This module imports no solver.** It is the one thing ``solvers/`` members may
-read besides ``handoff.py``.
+This module imports no solver.
 """
 
 from __future__ import annotations
@@ -32,30 +26,24 @@ if TYPE_CHECKING:
 class WarmStart:
     """What one solve leaves for a later session: a basis, or an incumbent.
 
-    Read with [`Solver.warm_start`][], applied with [`Solver.warm`][].
-    Which fields are filled is the reading solver's decision: an LP leaves its
-    simplex basis (both status vectors, paired), a mixed-integer solve leaves
-    no valid basis anywhere and carries its incumbent instead.
-
-    Opaque, and the statuses are the reading solver's own encoding, so only a
-    session of the same solver takes them back. Nothing above ``solvers/``
-    carries one.
+    Read with [`Solver.warm_start`][], applied with [`Solver.warm`][]. The
+    statuses are the reading solver's own encoding, so only that solver takes
+    it back.
     """
 
-    #: Which member of ``SOLVERS`` read it; only that member takes it back.
+    #: The member of ``SOLVERS`` that read it.
     solver: str
-    #: Basis status per column in label order, or ``None`` after a solve that
-    #: left no valid basis.
+    #: Basis status per column in label order, or ``None`` where no basis was left.
     column_statuses: Any | None
     #: Basis status per row in label order; filled exactly when
     #: [`column_statuses`][] is.
     row_statuses: Any | None
-    #: Primal value per column in label order — a mixed-integer incumbent —
-    #: or ``None`` where the basis carries the start instead.
+    #: Primal value per column in label order (a mixed-integer incumbent), or
+    #: ``None`` where the basis carries the start.
     column_values: Any | None
 
     def basis(self) -> tuple[Any, Any] | None:
-        """Both status vectors — filled exactly together — or ``None`` where the incumbent carries the start."""
+        """Both status vectors, or ``None`` where the incumbent carries the start."""
         if self.column_statuses is not None and self.row_statuses is not None:
             return self.column_statuses, self.row_statuses
         return None
@@ -65,15 +53,9 @@ class WarmStart:
 class SolveAnswer:
     """What a solve concluded, and the vectors it left.
 
-    Any vector may be ``None``, for different reasons: no ``primal`` means the
-    solve left nothing worth reading — and ``activity``, each row's left-hand
-    side at that point, travels with it — while no ``dual`` is narrower: a
-    mixed-integer model has none at all, and neither does a run stopped short
-    of a simplex basis.
-
-    ``dual_ray`` is the one vector an *unreadable* answer can carry, and the
-    only one: an infeasible solve has no solution to report and may still
-    report why there is none.
+    ``primal`` and ``activity`` (each row's left-hand side) are ``None`` where
+    the solve left nothing worth reading. ``dual`` is also ``None`` for a
+    mixed-integer model and for a run stopped short of a simplex basis.
     """
 
     status: SolveStatus
@@ -82,33 +64,26 @@ class SolveAnswer:
     dual: pl.Series | None
     activity: pl.Series | None
     #: A weight per row certifying that the constraints cannot all hold, in
-    #: the sign convention of [`Solver.dual_ray`][], or ``None`` where the
-    #: solve was not infeasible or the solver produced none.
+    #: the sign convention of [`Solver.dual_ray`][], or ``None``.
     dual_ray: pl.Series | None = None
 
     @classmethod
     def unreadable(cls, status: SolveStatus, dual_ray: pl.Series | None = None) -> SolveAnswer:
-        """The answer for a solve that left nothing worth reading.
-
-        An unreadable status carries a NaN objective and no vector but the ray.
-        """
+        """The answer for a solve that left nothing worth reading: a NaN objective and no vector but the ray."""
         return cls(status, float('nan'), None, None, None, dual_ray)
 
 
 class Solver(ABC):
     """One solver, holding one model. Subclassed once per member of ``SOLVERS``.
 
-    A driver never constructs one directly: [`loaded`][specsolve.relational.sinks.solvers.loaded]
-    is the whole of "reuse or load again", and what it hands back is run and,
-    eventually, closed::
+    A driver gets one from [`loaded`][specsolve.relational.sinks.solvers.loaded],
+    then runs and closes it::
 
         solver = solvers.loaded(held, name, handoff, options)
         solver.run(handoff)  # …repeatedly
         solver.close()
 
-    This class records the structure of what was loaded and the options it was
-    loaded with; a subclass owns the hand-off — loading, pushing values,
-    running, releasing.
+    A subclass owns the hand-off: loading, pushing values, running, releasing.
     """
 
     def __init__(
@@ -117,37 +92,29 @@ class Solver(ABC):
         batch_rows: int | None = None,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
-        #: The options the loaded model was told, set at the load.
+        #: The options the model was loaded with.
         self._options = dict(solver_options or {})
         self._load(handoff, batch_rows)
-        #: The build's own frames, until [`structure`][] reads their digest
-        #: and lets them go.
+        #: The loaded frames, until [`structure`][] replaces them with their digest.
         self._handoff: Handoff | None = handoff
-        #: The digest of everything a re-solve may not change, or ``None``
-        #: before [`structure`][] is first asked. Read through it, never here.
+        #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The loaded model's spans, read by [`_takes`][] alone.
+        #: The loaded model's spans, read by [`_takes`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
 
-    #: The packages this member imports lazily, and so the ones an environment
-    #: has to have for it to run at all.
+    #: The packages this member imports lazily, all needed for it to run.
     requires: ClassVar[tuple[str, ...]]
 
-    #: What this member can ingest, and what it refuses in combination. A
-    #: member states it; the family acts on it
-    #: ([`refusal`][specsolve.relational.sinks.refusal]).
+    #: What this member can ingest
+    #: ([`refusal`][specsolve.relational.sinks.refusal] acts on it).
     capabilities: ClassVar[Capabilities]
 
-    #: What to tell a caller when [`is_available`][] says no — which package
-    #: is missing, and whether it ships or needs an extra.
+    #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
 
     def structure(self) -> bytes:
-        """The digest of the loaded model, hashed off its frames the first time it is asked.
-
-        Reading it lets the frames go. Idempotent.
-        """
+        """The loaded model's digest, read off its frames once, after which the frames are let go."""
         if self._structure is None:
             assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
             self._structure = self._handoff.structure
@@ -160,10 +127,10 @@ class Solver(ABC):
 
     @classmethod
     def imported(cls) -> Any:
-        """Every package in [`requires`][], imported — or [`unavailable_message`][].
+        """Every package in [`requires`][], imported. Returns the first, the member's own library.
 
-        Returns the first, the member's own library; the rest are imported only
-        to fail here.
+        Raises:
+            ModuleNotFoundError: With [`unavailable_message`][], if any is missing.
         """
         try:
             modules = [__import__(package) for package in cls.requires]
@@ -173,28 +140,21 @@ class Solver(ABC):
 
     @classmethod
     def is_available(cls) -> bool:
-        """Whether this build can actually run this solver.
+        """Whether this environment can run this solver, probed without importing it or raising.
 
-        A probe of the import system rather than an import, and it does not
-        raise. Probed at the top-level name — ``find_spec`` on a dotted one
-        imports the parent.
+        Probed at the top-level name: ``find_spec`` on a dotted one imports the parent.
         """
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
-        """Hand *handoff* to the solver and hold whatever reads it back.
-
-        Called by ``__init__`` rather than by a caller.
-        """
+        """Hand *handoff* to the solver and hold whatever reads it back. Called by ``__init__``."""
 
     @abstractmethod
     def push(self, handoff: Handoff) -> None:
-        """*handoff*'s bounds, costs and right-hand sides onto the loaded model.
+        """*handoff*'s bounds, costs and right-hand sides onto the loaded model, as whole vectors.
 
-        Everything an update may change without moving a label, and only ever
-        after *handoff*'s digest matched the loaded one. Whole vectors rather
-        than a diff.
+        Called only after *handoff*'s digest matched the loaded one.
         """
 
     @abstractmethod
@@ -203,17 +163,15 @@ class Solver(ABC):
 
         Returns:
             The basis after an LP solve, the incumbent after a mixed-integer
-            one — a solved MIP leaves no valid basis on any solver — and
-            ``None`` where the model holds neither, which is every model not
-            yet solved.
+            one, and ``None`` where the model holds neither, as before any
+            solve.
         """
 
     def warm(self, ws: WarmStart) -> None:
         """Start the next [`run`][] from *ws* instead of from scratch.
 
         The caller vouches that *ws* was read from a model with this one's
-        label set; what is checked here is what can be — the sink it came
-        from, and that its vectors span the loaded model.
+        label set.
 
         Raises:
             SpecsolveError: A warm start read from another solver, or whose
@@ -223,14 +181,7 @@ class Solver(ABC):
         self._warm(ws)
 
     def _takes(self, ws: WarmStart) -> None:
-        """Refuse a warm start that describes a different model.
-
-        Raises:
-            SpecsolveError: A start from another solver — statuses are each
-                solver's own encoding — or one whose vectors have the wrong
-                span, which a basis being positional makes a start about a
-                different model.
-        """
+        """Refuse a warm start from another solver, or whose vectors do not span the loaded model."""
         mine = type(self).__name__.lower()
         if ws.solver != mine:
             raise SpecsolveError(
@@ -256,18 +207,13 @@ class Solver(ABC):
 
     @abstractmethod
     def _warm(self, ws: WarmStart) -> None:
-        """Apply *ws* onto the loaded model, its spans already checked.
-
-        Reached only through [`warm`][], so a member may assume the vectors
-        span the model it holds and that filled fields pair the way
-        [`WarmStart`][] says they do.
-        """
+        """Apply *ws* onto the loaded model. [`warm`][] has already checked its solver and spans."""
 
     def run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded, read it back, and refuse a vector that lies.
+        """Solve what is loaded and read it back.
 
-        Reading a solution back is positional, so a vector that does not span
-        the model is an answer about a *different* one, and is refused here.
+        Raises:
+            SpecsolveError: A solver vector that does not span the model.
         """
         answer = self._run(handoff)
         self._check_span('primal', answer.primal, handoff.column_count)
@@ -277,15 +223,7 @@ class Solver(ABC):
         return answer
 
     def _check_span(self, quantity: str, values: pl.Series | None, expected: int) -> None:
-        """Check that a solver vector spans the model.
-
-        ``None`` is not a wrong length — a mixed-integer model has no duals,
-        and neither does a run stopped short of a simplex basis.
-
-        Raises:
-            SpecsolveError: A vector of any other length, which describes a
-                different model.
-        """
+        """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
                 f'{type(self).__name__} returned {len(values)} {quantity} values for a model with '
@@ -298,29 +236,20 @@ class Solver(ABC):
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
-        *handoff* is asked only for what has no column and so was never loaded —
-        the objective's constant. When either vector may be ``None`` is
-        [`SolveAnswer`][]'s docstring. An infeasible solve calls
-        [`dual_ray`][] and returns what it gives.
+        *handoff* is read only for the objective's constant. An infeasible solve
+        returns what [`dual_ray`][] gives.
         """
 
     def dual_ray(self) -> pl.Series | None:
         """A weight per row certifying that this infeasible model has no solution.
 
-        Called only after an infeasible solve. The weights combine the rows
-        into one that demands more than the columns can deliver inside their
-        bounds — Farkas' lemma, and the cut a Benders master needs when a
-        subproblem cannot be dispatched at all.
-
-        **One convention across the sinks**, since a caller reading a ray
-        cannot be asked which solver signed it: a row's weight carries the
-        sign the row is written with, which is HiGHS's and Xpress's. A sink
-        whose solver signs the other way negates what it reads.
+        Called only after an infeasible solve. A row's weight carries the sign
+        the row is written with, HiGHS's and Xpress's convention. A member whose
+        solver signs the other way negates what it reads.
 
         Returns:
             The weights in row order, or ``None`` where this solver produced
-            none — which is a solver setting rather than a property of the
-            model, so the engine's message names the setting.
+            none.
         """
         return None
 
@@ -328,9 +257,8 @@ class Solver(ABC):
     def forget(self) -> None:
         """Discard the work the last solve did, keeping the model loaded.
 
-        The middle rung of [`KEEPS`][specsolve.relational.result.KEEPS]: the matrix
-        stays handed over, and the next run begins as if it had never been
-        solved. A member with nothing to discard implements this as a no-op.
+        The next run begins as if the model had never been solved. A member
+        with nothing to discard implements this as a no-op.
         """
 
     @property
@@ -338,8 +266,6 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        The library's own model — what ``build_<solver>`` gives a caller who
-        stops at the hand-off, and what a test reads the load back through.
         Owned by this holder: the caller does not release it, [`close`][]
         does.
         """
@@ -348,14 +274,10 @@ class Solver(ABC):
     def close(self) -> None:
         """Release the loaded model, and anything outside this process with it.
 
-        Idempotent. Afterwards [`handle`][] is ``None``.
-
-        **The same release happens to a holder dropped without closing.** A
-        member whose library releases its object on collection has that for
-        free; one that does not — or that holds two objects, a model on an
-        environment, where the order is innermost first — registers a
-        finalizer over the objects rather than over itself.
-        ``tests/test_solver_release.py`` asks every member.
+        Idempotent. Afterwards [`handle`][] is ``None``. A holder dropped
+        without closing releases the same: a member whose library does not do
+        that on collection registers a finalizer over the objects, innermost
+        first, rather than over itself.
         """
 
     def __enter__(self) -> Self:

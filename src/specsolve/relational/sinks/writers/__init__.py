@@ -1,7 +1,7 @@
 """The writer family: the handoff in, a file out. See ../README.md.
 
-One module per format, chosen by the output's **suffix** — the caller names an
-output, not a writer. Each answers ``(handoff, path) -> None``, and streams.
+One module per format, chosen by the output's suffix. Each answers
+``(handoff, path) -> None``, and streams.
 """
 
 from __future__ import annotations

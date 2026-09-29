@@ -1,13 +1,8 @@
 """`dispatch` as a pyomo user writes it: a `ConcreteModel` with rules.
 
 The `Set` / `Var(bounds=…)` / `Constraint(rule=…)` / `Objective(expr=…)` form
-out of pyomo's own documentation. Bounds arrive through the rule rather than as
-a `Param`, which is the shorter of the two idioms and the one that builds
-fewer components.
-
-The YAML's `where: p_max > 0` is honoured by leaving the retired generator out
-of the index set — the closest pyomo has to a variable that does not exist. On
-this ladder it removes nothing: the generator draws `p_max` strictly positive.
+of pyomo's documentation. The YAML's `where: p_max > 0` leaves the retired
+generator out of the index set.
 """
 
 from __future__ import annotations

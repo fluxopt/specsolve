@@ -8,12 +8,7 @@
     pixi exec -s uv uv run --script examples/ports/references/pypsa/pypsa_growth_limit.py
 
 Pinned above to the versions that produced the number in ``references.json``,
-and run out of band — PyPSA is not a dependency of this project. linopy is
-pinned because PyPSA builds its model *through* it, so the formulation, and so
-the number, is theirs jointly; xarray because it is linopy's data model, where
-alignment and broadcasting decide which coefficient lands in which row. pandas
-is only a floor: it holds the instance's tables; nothing recorded here is
-reshaped with it.
+and run out of band — PyPSA is not a dependency of this project.
 
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
@@ -25,8 +20,7 @@ caps the capacity of a carrier *first becoming active* in a period, and
 
     new[period] - max_relative_growth * new[period - 1] <= max_growth
 
-Two details the source settles and prose does not. The quantity on both sides is
-**newly built** capacity, not standing capacity — ``vars.where(first_active)``
+The quantity on both sides is **newly built** capacity, not standing capacity — ``vars.where(first_active)``
 counts an asset in the period it first exists and never again. And the first
 period has no predecessor, so its row is the absolute cap alone.
 
@@ -46,9 +40,7 @@ import pypsa
 
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_growth_limit.json'
 
-#: The lifetime every generator gets. Long enough that nothing retires inside the
-#: horizon: a retirement would move capacity out of the standing fleet, which is
-#: the multi-period port's subject and not this one's.
+#: The lifetime every generator gets, long enough that nothing retires inside the horizon.
 LIFETIME = 60
 
 

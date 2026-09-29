@@ -1,14 +1,8 @@
 """The certificate an infeasible solve leaves, and the one convention the sinks sign it with.
 
-``dual_ray`` is the only reader that answers on an infeasible solve, and it
-exists so that a Benders driver can cut off a first-stage decision without a
-second model standing in for the ray — which is what ``examples/benders/``
-carried until it had one.
-
-Every sink is asked the same question here, because the value of one convention
-is that a driver never asks who solved: HiGHS and Xpress sign a row the way the
-row is written, Gurobi signs it the other way and the sink negates, and the
-three have to come back indistinguishable.
+``dual_ray`` is the only reader that answers on an infeasible solve. HiGHS and
+Xpress sign a row the way the row is written; Gurobi signs it the other way and
+the sink negates, so the three come back indistinguishable.
 """
 
 from __future__ import annotations
@@ -24,9 +18,7 @@ from specsolve.relational.sinks import SOLVERS
 
 #: Two rows that cannot both hold, and no bound in the argument: ``p`` is held
 #: only by a lower bound of zero, which delivers nothing into the combination,
-#: so the certificate is the simple ``Σ weight * rhs > 0``. A model whose
-#: infeasibility came from an *upper* bound would put a term on the other side,
-#: and that arithmetic alone would not be the whole proof.
+#: so the certificate is the simple ``Σ weight * rhs > 0``.
 SHORT = {
     'dimensions': {'snapshot': {'dtype': 'int'}},
     'parameters': {'need': {'dims': ['snapshot']}, 'cap': {'dims': ['snapshot']}},
@@ -46,9 +38,8 @@ SOURCES = {
     'cap': pl.DataFrame({'snapshot': [0, 1], 'value': CAP}),
 }
 
-#: What each sink has to be asked before it will certify anything. HiGHS needs
-#: nothing; the other two compute a ray only on request, and the engine's
-#: refusal names exactly these.
+#: What each sink has to be asked before it will certify anything, as the
+#: engine's refusal names it. HiGHS needs nothing.
 ASKED: dict[str, dict[str, Any]] = {'highs': {}, 'gurobi': {'InfUnbdInfo': 1}, 'xpress': {'presolve': 0}}
 
 

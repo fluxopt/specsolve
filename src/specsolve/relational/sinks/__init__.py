@@ -1,14 +1,8 @@
 """Sinks: how a built model leaves the engine. See README.md.
 
-**Two families.** A *solver* takes the handoff and runs it (``solvers/``,
-chosen by name); a *writer* renders it to a file (``writers/``, chosen by
-suffix). They are directories, so ``tests/test_architecture.py`` reads
-membership off the path.
-
-``handoff.py`` is what both read, and neither family imports the other.
-``capabilities.py`` is what both *declare*, and the functions below are where
-a caller's model meets those declarations — the only place the two families are
-asked one question together.
+A *solver* runs the handoff (``solvers/``, chosen by name); a *writer* renders
+it to a file (``writers/``, chosen by suffix). Both read ``handoff.py`` and
+declare what they take in ``capabilities.py``; neither imports the other.
 """
 
 from __future__ import annotations
@@ -43,9 +37,7 @@ __all__ = [
 def sink_capabilities(name: str) -> caps.Capabilities:
     """What the sink called *name* can ingest — a solver name, or a suffix.
 
-    Answered without importing the solver: a capability is a declared table
-    rather than a probe, so a repository of models can be checked against every
-    sink they will eventually be solved on.
+    Answered without importing the solver.
 
     Raises:
         SpecsolveError: A name belonging to neither family.
@@ -58,11 +50,10 @@ def sink_capabilities(name: str) -> caps.Capabilities:
 
 
 def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequence[str]], str] | None:
-    """The sink called *name*'s refusal of capabilities *needed*, or ``None``.
+    """The sink called *name*'s refusal of *needed* as a function of the takers, or ``None``.
 
     The one home for what "takes" means, so the refusal and the takers it names
-    cannot disagree. What comes back is the message short of its third clause, a
-    function of the takers.
+    cannot disagree.
     """
     table = sink_capabilities(name)
     if missing := table.missing(needed):
@@ -75,9 +66,7 @@ def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequen
 def refusal(program: program.Program, name: str) -> str | None:
     """The sink called *name*'s refusal of *program*, or ``None`` where it takes it.
 
-    The refusal names **the construct, the sink, and the sinks that do take
-    it**. Two shapes: a capability the sink lacks outright, and a pair it has
-    both halves of and refuses together.
+    The refusal names the construct, the sink, and the sinks that do take it.
     """
     needed = caps.required(program)
     if (refuses := _blocker(name, needed)) is None:
@@ -101,11 +90,7 @@ def _sink_refuses_combination_message(sink: str, combination: Sequence[str], tak
 
 
 def _sink_refuses_message(sink: str, missing: Sequence[str], takers: Sequence[str]) -> str:
-    """A sink asked for a capability it does not have at all.
-
-    A set is the one construct the language can write out, so the way past a
-    sink with no SOS concept is named beside the sinks that have one.
-    """
+    """A sink asked for a capability it does not have at all."""
     way_out = (
         ' Or write the sets out: mathspec.to_spec(...).expand() states each as binaries and linking '
         'rows, which every sink takes.'

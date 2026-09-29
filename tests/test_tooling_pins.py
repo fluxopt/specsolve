@@ -1,27 +1,13 @@
-"""Two versions written down twice each. This is what keeps each pair equal.
+"""Two versions written down twice each. This keeps each pair equal.
 
-ruff first. The version lives in ``pyproject.toml`` (``ruff==`` in the dev
-group, which is what CI installs and runs) and again in
-``.pre-commit-config.yaml`` (the ``ruff-pre-commit``
-rev, which is what the hook installs into its own isolated environment).
-Nothing makes them agree on its own.
+ruff: ``pyproject.toml`` pins it in the dev group, which CI runs, and
+``.pre-commit-config.yaml`` pins the ``ruff-pre-commit`` rev, which the hook
+runs. Dependabot bumps the two in separate PRs; a skew is fixed by landing the
+other one.
 
-Dependabot manages both, but in *separate* PRs — it groups within an ecosystem
-and never across one, so a ruff release produces one PR against the dev group
-and another against the hook rev. Merge either alone and the formatter that
-runs on commit is a different version from the one that gates the branch. That
-shows up as a commit that was clean locally and fails CI, or the reverse, and
-the cause is two files nobody thought to read together.
-
-So: fail here instead, on the merge that introduced the skew, naming both
-files. The fix is always to land the other PR.
-
-Then the dependency floors. ``[project.dependencies]`` declares each one as a
-lower bound, and the ``floors`` pixi environment pins the same package to that
-exact version — the environment the ``ci`` job runs the suite in to prove the
-bound is real rather than decorative. The version is therefore written twice in
-one file, and this is what stops the copies drifting: raise a floor and the pin
-has to move with it, which is the whole of the fix.
+The dependency floors: ``[project.dependencies]`` declares each as a lower
+bound, and the ``floors`` pixi environment pins the same package to that exact
+version.
 """
 
 from __future__ import annotations
@@ -46,7 +32,6 @@ def _pinned_in_pyproject() -> str:
 def _pinned_in_pre_commit() -> str:
     match = _HOOK_REV.search((REPO / '.pre-commit-config.yaml').read_text())
     assert match is not None, 'no `rev:` found for the ruff-pre-commit repo'
-    # the hook tags releases as `vX.Y.Z`; the package is `X.Y.Z`
     return match[1].removeprefix('v')
 
 
@@ -80,10 +65,9 @@ _RUNNER = frozenset({'pytest', 'pytest-xdist'})
 
 
 def _pinned_in_the_floors_environment() -> dict[str, str]:
+    """The `floors` pins, without the project under test and without `_RUNNER`."""
     pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
     pinned = pixi['feature']['floors']['pypi-dependencies']
-    # `specsolve` is the project under test and `_RUNNER` is what runs it; neither is
-    # a dependency whose floor is being claimed.
     return {name: spec for name, spec in pinned.items() if isinstance(spec, str) and name not in _RUNNER}
 
 

@@ -1,14 +1,7 @@
 """What a caller's ``sources`` become: the frames the engine reads by name.
 
 The door ([`tidy_sources`][specsolve.sources.tidy_sources]) has already read and checked
-every source; this gives each the shape the query is written against, and
-encodes the string dimensions. Everything downstream reads
-[`AttachedSources`][] and nothing else.
-
-**It is frozen.** Written once by the passes below, then read to construct the
-compiler and the labeller — unlike the one registry that is *live*, the
-variable frames, which appear as declarations build and which a constraint
-compiled afterwards has to see.
+every source; this shapes each and encodes the string dimensions.
 """
 
 from __future__ import annotations
@@ -23,9 +16,8 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
-#: Scratch column carrying a source row's position while first-occurrence
-#: order is computed. The spaces make it unrepresentable as a declared name, so
-#: it cannot collide with a column the caller's index already has.
+#: Scratch column for first-occurrence order. The spaces make it
+#: unrepresentable as a declared name.
 _ROW_POSITION = '__row position__'
 
 
@@ -34,11 +26,7 @@ class AttachedSources:
     """The data a program is built against, after attaching.
 
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
-    ``(val, ord)``; ``relations`` are the declared tables, one column per
-    column under its own name and one row per row the relation holds, so "this
-    key maps nowhere" is a row that is not there and every operator reading one
-    inherits that from its join.
-
+    ``(val, ord)``; ``relations`` hold no row for a key that maps nowhere.
     ``cardinality`` and ``parameter_rows`` are cached frame heights.
     """
 
@@ -56,8 +44,7 @@ class AttachedSources:
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
     """Shape the door's frames into what *program* is written against.
 
-    Dimensions first, then relations, then parameters, then the encoding: a
-    dimension's ``Enum`` is built from its labels, and every frame that
+    A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it.
     """
     dimensions = {d: _ordinal_frame(d, sources[d]).collect() for d in program.dimensions}
@@ -86,12 +73,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
 
 def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
-    """A dimension's ``(val, ord)`` from its index.
-
-    Ordinals follow the source's own order — a label's position is the row it
-    first appears at — so a translation moves by position exactly as the linopy
-    lane does, even for string labels.
-    """
+    """A dimension's ``(val, ord)`` from its index, a label's ordinal being the row it first appears at."""
     return (
         index.select(d)
         .with_row_index(_ROW_POSITION)
@@ -104,11 +86,7 @@ def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:
-    """Dim columns as plain strings, whatever encoding the source used.
-
-    A dictionary-encoded source carries a writer's own dictionary; decoding it
-    first is what lets the strict cast into the dimension's ``Enum`` land.
-    """
+    """Dim columns as plain strings, so a writer's own dictionary cannot block the cast into an ``Enum``."""
     categorical = [d for d, dtype in frame.schema.items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
     if not categorical:
         return frame

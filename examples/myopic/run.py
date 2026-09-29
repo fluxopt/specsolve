@@ -2,9 +2,8 @@
 
     pixi run python examples/myopic/run.py
 
-**This is evidence, not a feature.** It is the shape capacity-expansion models
-are actually run in: a handful of investment periods, each solved on a few
-typical days, each inheriting the fleet the last one left.
+A handful of investment periods, each solved on a few typical days, each
+inheriting the fleet the last one left.
 
 One file, `pathway.yaml`, written for *a* period. The driver supplies which:
 
@@ -12,15 +11,12 @@ One file, `pathway.yaml`, written for *a* period. The driver supplies which:
                    carry={'existing': 'total'})
 
 The periods run in sorted order, which is the order the carry chains them in.
-Nothing is dropped here: `total` is over `(generator)` and so is `existing`, so
-the whole fleet vector moves forward. That is the myopic case in one line. The
-rolling-horizon case (`examples/rolling/`) is the same keyword where a dimension
-*is* dropped, and there the row handed on is the last one each window owns.
+`total` is over `(generator)` and so is `existing`, so the whole fleet vector
+moves forward. The rolling-horizon case (`examples/rolling/`) is the same
+keyword where a dimension is dropped.
 
-**The accumulation is in the YAML, not here.** `carry` copies; it never adds.
-`total == existing + build` is a constraint in `pathway.yaml`, where it is
-reviewable and the linopy oracle can check it — which is the whole reason the
-driver has no `combine: add`.
+**The accumulation is in the YAML.** `carry` copies; it never adds.
+`total == existing + build` is a constraint in `pathway.yaml`.
 
 What the run asserts rather than prints:
 

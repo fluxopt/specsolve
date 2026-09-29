@@ -1,15 +1,9 @@
 """The MPS sink writes the model the LP sink writes, in the format's own order.
 
-MPS is column-major and LP is row-major, so the two files order the matrix
-differently and only one of them can be checked by reading it: the claim under
-test is therefore never "these bytes" but **"this is the same model"**, and
-every check reaches an optimum through the written file and compares it against
-the same model reached another way.
-
-Reproducibility (#109) is pinned here for the LP sink's reason — a golden file
-proves one write, and the failure mode is two writes of one model differing —
-and so is chunk-invariance, this being the writer whose chunking walks the
-sorted matrix rather than the built one.
+MPS is column-major and LP is row-major, so the claim under test is "this is
+the same model", not "these bytes": every check reaches an optimum through the
+written file and compares it against the same model reached another way.
+Reproducibility (#109) and chunk-invariance are pinned as for the LP sink.
 """
 
 from __future__ import annotations
@@ -76,8 +70,7 @@ COMMITMENT_DATA = {
 #: A free column beside bounded ones, so the bounds section is written through
 #: all four of its spellings in one model; ``spill``, which the objective never
 #: names; and ``idle``, which nothing names at all — the column MPS could drop
-#: without the file looking wrong, since the format defines a column by naming
-#: it and this one has nothing to be named in.
+#: without the file looking wrong.
 FREE_SPEC: dict[str, Any] = {
     'dimensions': {'t': {'dtype': 'int'}},
     'parameters': {'load': {'dims': ['t']}},
@@ -129,9 +122,8 @@ def test_a_written_model_reaches_the_optimum_the_engine_reaches(spec: Any, data:
 def test_every_referenced_model_reaches_its_optimum_through_the_file(name: str, tmp_path: Path) -> None:
     """The corpus, against somebody else's published number rather than a sink.
 
-    The three fixtures above are chosen for the sections they exercise; this is
-    what says the writer holds up on models nobody wrote it against — every
-    construct the ports use, at their own sizes.
+    The three fixtures above are chosen for the sections they exercise; this
+    covers every construct the ports use, at their own sizes.
 
     Every formulation is written out first, so a port's set reaches the file
     as the binaries HiGHS reads; the set as a section is checked above.
@@ -272,11 +264,8 @@ def test_a_construct_this_format_cannot_spell_is_refused_rather_than_written(spe
     write, so writing the model without it would hand back a file that parses,
     solves, and is a different model.
 
-    Measured on the model below before the refusal existed: the quadratic rows
-    arrived as empty ones, and Gurobi read the file back at 30.0 against the
-    9.0 the model itself reaches. The declaration was already there — nothing
-    on the write path asked it, where the solve path asks
-    ``sinks.refusal`` and ``check(sink=)`` asks directly.
+    Without the refusal the quadratic rows arrive empty, and Gurobi reads the
+    file back at 30.0 against the 9.0 the model itself reaches.
     """
     with pytest.raises(SpecsolveError, match=r"the '\.mps' sink cannot take a quadratic"):
         sps.write(spec, QUADRATIC_DATA, tmp_path / 'model.mps')

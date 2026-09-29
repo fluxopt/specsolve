@@ -12,9 +12,7 @@ and run out of band — PyPSA is not a dependency of this project.
 
 ``cyclic_state_of_charge`` is a per-unit flag, so one
 network holds both regimes at once: the cyclic unit's first snapshot carries
-from its *last*, and the other's carries from ``state_of_charge_initial``. The
-port is here because that mix is what a real PyPSA model has and what neither
-storage port tests — one is all-seeded and the other all-cyclic.
+from its *last*, and the other's carries from ``state_of_charge_initial``.
 """
 
 from __future__ import annotations
@@ -73,8 +71,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
 
 def nodal_prices(n: pypsa.Network) -> dict[str, list]:
-    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal
-    balance, and the output this community reads most often after the cost."""
+    """PyPSA's marginal price per (snapshot, bus), tidy — the dual of the nodal balance."""
     mp = n.buses_t.marginal_price
     return {
         'snapshot': [s for s in mp.index for _ in mp.columns],

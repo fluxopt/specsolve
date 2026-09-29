@@ -1,15 +1,8 @@
-"""``model.row`` — the verb for *this row is wrong and I do not know why*.
+"""``model.row``: what a named row at a named coordinate says.
 
-`typeset` renders the model as math before any data, and `Result.dual` gives a
-row's number without its terms. Neither answers what a named row at a named
-coordinate actually says, which is the question a model with a hundred thousand
-rows is debugged by.
-
-The claim that makes it worth having is that it reads the **built** row and not
-the declared one: a coefficient that data scaled, a term whose variable was
-absent, a row a ``where`` removed. Every test here is a case where the file and
-the built row differ, because a reader that only agrees with the file would be
-`typeset` with extra steps.
+It reads the **built** row, not the declared one: a coefficient that data
+scaled, a term whose variable was absent, a row a ``where`` removed. Every test
+here is a case where the file and the built row differ.
 """
 
 from __future__ import annotations
@@ -73,13 +66,7 @@ def test_a_row_is_its_terms_its_comparison_and_its_right_hand_side() -> None:
 
 
 def test_printing_a_row_gives_the_line_linopy_gives() -> None:
-    """The form this verb is read in, and it is deliberately linopy's.
-
-    Their ``Constraint.print()`` renders ``+1 p[1, wind] + 50 p[1, gas] … >=
-    60.0``; a reader arriving from there should not have to learn a second way
-    to read a constraint. What is added is the row's own identity on the same
-    line, where linopy prints it as a header.
-    """
+    """A row prints as linopy's ``Constraint.print()`` does, with its identity on the same line."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         printed = str(model.row('commit', t=1, g='gas'))
 
@@ -89,11 +76,8 @@ def test_printing_a_row_gives_the_line_linopy_gives() -> None:
 def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     """Twelve terms of three hundred are twelve arbitrary ones.
 
-    What a wide row is actually asked is how much of it each declaration
-    contributes and whether its coefficients span an order of magnitude the
-    solve will pay for — both of which fit the same line. The model here has a
-    thousand-fold spread *inside one row*, which is the fault
-    ``coefficient_range`` reports per declaration and nothing reported per row.
+    A wide row prints each declaration's term count and coefficient span. The
+    model here has a thousand-fold spread *inside one row*.
     """
     generators = [f'g{i}' for i in range(300)]
     spec = {
@@ -134,22 +118,16 @@ def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
 
 
 def test_it_answers_on_a_model_that_was_never_solved() -> None:
-    """The reason this is ``Model``'s and not ``Result``'s.
-
-    A model too wrong to solve is exactly the model whose rows need reading,
-    so the verb may not require a solver to have run — or even to exist.
-    """
+    """A model too wrong to solve is the one whose rows need reading, so no solve is required."""
     with sps.build(DISPATCH_SPEC, DATA) as model:
         assert model.diagnostics().solves == 0, 'nothing has been solved, and the row still reads'
         assert model.row('balance', snapshot=0).rhs == 80.0
 
 
 def test_a_row_spanning_two_declarations_names_both() -> None:
-    """Why ``coordinate`` is rendered rather than spread across dim columns.
+    """``p <= p_max * u`` puts a term from each of two variables in one row.
 
-    ``p <= p_max * u`` puts a term from each of two variables in one row. They
-    happen to share dims here; a frame schema still cannot promise that, and
-    the coefficient on ``u`` is the one the *data* supplied.
+    The coefficient on ``u`` is the one the *data* supplied.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
@@ -169,12 +147,7 @@ def test_the_coefficient_is_the_one_data_produced_not_the_one_declared() -> None
 
 
 def test_a_term_whose_variable_is_absent_is_absent_from_the_row() -> None:
-    """A built row, so a masked variable leaves a *shorter* row and shows it.
-
-    This is the failure the verb exists for: the file says the row sums over
-    both generators, and the built row has one term. Reading the file cannot
-    tell you that; reading the row can.
-    """
+    """A masked variable leaves a *shorter* row: the file sums over both generators, the row has one term."""
     spec = override(COMMITMENT, **{'variables.p.where': 'p_max > 100'})
     with sps.build(spec, COMMITMENT_DATA) as model:
         row = model.row('balance', t=0)
@@ -190,9 +163,7 @@ def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
 
 
 def test_a_partial_coordinate_is_refused_rather_than_answered_about_one_row() -> None:
-    """A verb that answered about the first matching row would be reporting a
-    block as if it were a row — the one wrong answer a debugging verb may not
-    give."""
+    """A partial coordinate names a block, not a row."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model, pytest.raises(SpecsolveError, match='declared over'):
         model.row('commit', t=0)
 
@@ -203,13 +174,7 @@ def test_an_unknown_constraint_lists_the_declared_ones() -> None:
 
 
 def test_a_closed_model_says_it_was_closed() -> None:
-    """And says which row was being asked for, which is what the reader came with.
-
-    ``row()`` keeps a refusal of its own rather than the engine's general one
-    for that clause alone, so the clause is what pins it: without this the
-    bespoke message could be replaced by the general one and the suite would
-    not notice.
-    """
+    """And says which row was being asked for, which is what the reader came with."""
     model = sps.build(DISPATCH_SPEC, DATA)
     model.close()
     with pytest.raises(SpecsolveError, match="no built model to read 'balance' out of"):
@@ -225,11 +190,10 @@ def test_a_update_moves_what_the_row_says() -> None:
 
 
 def test_the_row_read_is_the_row_the_solver_was_given() -> None:
-    """The strongest available check, and the one a hand-written expectation
-    cannot make: every term of every row, against the matrix handed to the sink.
+    """Every term of every row, against the matrix handed to the sink.
 
     A reader that resolved the row index or the column ranges wrongly would
-    still return plausible terms — this is what says they are *that* row's.
+    still return plausible terms.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         tables = model._engine._model.handoff
@@ -269,9 +233,7 @@ PRECISE_DATA = {
 def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
     """A rendering that rounds agrees with the file in exactly the case worth reading.
 
-    ``%g`` stops at six significant digits, which prints ``1.0000001`` as
-    ``1`` and two bounds differing in the seventh identically — so the one
-    line whose job is *this number is not what you wrote* would say it was.
+    ``%g`` stops at six significant digits and prints ``1.0000001`` as ``1``.
     """
     with sps.build(PRECISE, PRECISE_DATA) as model:
         printed = str(model.row('balance', t=0))
@@ -282,11 +244,7 @@ def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
 
 
 def test_a_row_echoed_at_a_prompt_is_the_line_not_the_frame() -> None:
-    """``repr`` is how a row is read in a REPL and in a notebook cell.
-
-    The generated dataclass one puts a multi-line frame inside a single row's
-    identity, which is the rendering this verb exists to replace.
-    """
+    """``repr`` is how a row is read in a REPL and in a notebook cell, so it is the line too."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
@@ -336,12 +294,7 @@ def test_a_dimension_called_name_is_still_a_coordinate() -> None:
 
 def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
     """The third way a built row is shorter than its file, beside a masked
-    variable and a masked row.
-
-    What a zero coefficient states, absence already states, so the build
-    prunes it (``_without_zeros``) and the row reads the matrix the sink was
-    handed — which is the whole of its value, and is why the term is gone
-    rather than printed as ``+0``.
+    variable and a masked row: a zero coefficient is pruned, not printed as ``+0``.
     """
     zeroed = {**PRECISE_DATA, 'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 2.0]})}
     with sps.build(PRECISE, zeroed) as model:
@@ -361,9 +314,8 @@ def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
 def test_a_label_the_dimension_cannot_hold_is_refused_in_our_own_tree(coordinate: dict[str, Any], names: str) -> None:
     """Labels arrive from JSON and CSV as the wrong type, and an ``Enum`` refuses strangers.
 
-    All three are one failure — this is not a label the dimension has — and
-    none of them may reach the caller in polars' vocabulary, which names a
-    dtype comparison and not the dimension that was misspelled.
+    All three are one failure, not a label the dimension has, and none reaches
+    the caller in polars' vocabulary.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model, pytest.raises(SpecsolveError, match='not one of its labels'):
         try:

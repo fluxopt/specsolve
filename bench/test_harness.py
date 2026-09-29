@@ -55,9 +55,8 @@ def _dead_pid() -> int:
 
 
 def test_a_second_session_is_refused_naming_the_holder(tmp_path) -> None:
-    """The failure this exists for is silent: a concurrent run's file looks
-    complete and its numbers are junk (#419 measured noise floors of 176% and
-    344%), so the second session has to be refused before anything is timed."""
+    """A concurrent run's file looks complete and its numbers are junk (#419),
+    so the second session is refused before anything is timed."""
     lock = tmp_path / 'bench.lock'
     take_lock(lock)
     with pytest.raises(pytest.UsageError, match='another benchmark is running') as caught:
@@ -86,14 +85,10 @@ def test_a_busy_machine_is_refused_and_an_idle_one_is_not() -> None:
 
 
 def test_the_interlock_is_wired_into_session_start(tmp_path) -> None:
-    """`take_lock` working proves nothing unless a session actually calls it —
-    a feature and its check can coexist for years without meeting (#321 did).
+    """A real second session, refused.
 
-    A real second session, refused: the lock path follows `TMPDIR`, so the
-    child looks at a private tempdir holding a lock owned by this live process.
-    `CI` is stripped because CI legitimately bypasses the interlock, and the
-    lock check runs before the load check, so the refusal asserted here is
-    deterministic on a busy machine too.
+    The lock path follows `TMPDIR`, so the child sees a lock owned by this live
+    process. `CI` is stripped because CI bypasses the interlock.
     """
     (tmp_path / 'specsolve-bench.lock').write_text(f'pid {os.getpid()}, started 03:14')
     env = {k: v for k, v in os.environ.items() if k != 'CI'}
@@ -192,11 +187,8 @@ def _config(sizes: list[str], destination: str) -> Any:
 
 
 def test_a_short_run_may_not_write_the_committed_results(tmp_path: Path) -> None:
-    """`pixi run ladder xs` is a smoke test, and pointed at the committed file it
-    replaces every published table's provenance with four measurements —
-    silently, in a file whose diff nobody reads closely. That is how I nearly
-    lost it: `pixi run ladder --help` does not print help, it starts the run.
-    """
+    """`pixi run ladder xs` pointed at a committed file would replace every
+    published table's provenance with four measurements."""
     for published in sorted(harness.published_results()):
         with pytest.raises(harness.pytest.UsageError, match='cannot write'):
             harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(published)))
@@ -207,13 +199,7 @@ def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) ->
 
 
 def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
-    """One per sink and case, and `latest.json` is not among them.
-
-    The guard stood over `latest.json` after the published run had stopped
-    writing it: `ladder-ci` lands `latest-<sink>-<case>.json` and the workflow
-    deleted the old name outright, so the check passed on a path nothing
-    touched while the files the tables are drawn from were unguarded.
-    """
+    """One per sink and case, as `ladder-ci` writes them."""
     published = harness.published_results()
 
     assert len(published) == 8, 'four cases through two sinks'
@@ -226,21 +212,14 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
 
 
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
-    """`ladder-smoke` lands in `bench/results` too, and is *meant* to be narrow.
-
-    Which is why the guard names the published files rather than defending the
-    directory: a rule over everything under `bench/results` would refuse the one
-    task whose whole job is one rung.
-    """
+    """`ladder-smoke` lands in `bench/results` too, and is meant to be narrow."""
     smoke = Path.cwd() / 'bench/results/latest-smoke.json'
     harness.refuse_to_overwrite_the_provenance(_config(['xs'], str(smoke)))
 
 
 def test_narrower_sinks_still_write_the_provenance() -> None:
-    """The scheduled run takes one sink per job — both in one job project past
-    the ceiling a hosted job is killed at — and each half is still the published
-    run. What makes a run a smoke test is leaving out *rungs*, not
-    destinations."""
+    """The scheduled run takes one sink per job, and each half is still the
+    published run; leaving out rungs is what makes a smoke test."""
     whole = sorted(harness.published_rungs())
     for published in sorted(harness.published_results()):
         harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
@@ -252,14 +231,9 @@ def test_narrower_sinks_still_write_the_provenance() -> None:
 
 
 def test_no_workflow_retypes_the_published_selection() -> None:
-    """A run that retypes the selection is a number whose fingerprint no longer
-    describes it — `bench/README.md` has said so since the harness became
-    pytest, and I still wrote a workflow that did it.
-
-    The rule is about the *published* selection, not about pytest: `bench.yml`
-    and `codspeed.yml` take deliberately narrower ones to answer *did this pull
-    request regress*, and those belong to them. What may not be copied is what
-    the page is taken with, which lives in the `ladder` task.
+    """A run that retypes the published selection is a number whose fingerprint
+    no longer describes it. `bench.yml` and `codspeed.yml` take narrower
+    selections of their own; the published one lives in the `ladder` task.
     """
 
     root = Path(__file__).resolve().parents[1]
@@ -272,10 +246,8 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
 
 def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
-    """`ladder-ci` reads `BENCH_MEMORY_BUDGET` so a diagnostic run is a dispatch
-    input rather than a commit, and falls back to the published number — which
-    therefore exists twice. Drifting them apart makes every scheduled run
-    measure a ladder nobody chose."""
+    """`ladder-ci` falls back to the published memory budget, which therefore
+    exists twice and must not drift."""
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -285,27 +257,15 @@ def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
 
 
 def _committed(path: str) -> list[str]:
-    """Repository-relative paths git has under *path*, whatever the working tree holds.
-
-    A published run clears `bench/results/` before it measures and writes its
-    own into it, so during one the directory answers neither what is published
-    nor what was. The index still does.
-    """
+    """Repository-relative paths git has under *path*; a published run clears the working tree's copy."""
     root = Path(__file__).resolve().parents[1]
     listed = subprocess.run(['git', 'ls-files', path], cwd=root, capture_output=True, text=True, check=True)
     return listed.stdout.split()
 
 
 def test_the_run_clears_every_committed_result_before_it_measures() -> None:
-    """A case that finishes overwrites its own file; a case that is killed does
-    not. So whatever the run does not clear is published as though this run had
-    measured it — run 33481938841 killed `transport` and `storage` on `highs`
-    and rendered a page carrying both byte-identical to what was committed,
-    beside six fresh cases, with nothing saying which was which.
-
-    The workflow removes them by glob, so a results file committed under a name
-    the glob does not reach is stale data with no way to notice.
-    """
+    """A killed case does not overwrite its own file, so whatever the run does
+    not clear is published as though this run had measured it."""
     import fnmatch
 
     root = Path(__file__).resolve().parents[1]
@@ -322,18 +282,14 @@ def test_the_run_clears_every_committed_result_before_it_measures() -> None:
 
 
 def test_the_cell_being_measured_is_on_disk_before_it_is_measured() -> None:
-    """A cell that exhausts the machine is a result, and the process that would
-    record it is the one that dies. So the note is written before the
-    measurement, not after: `bench/memory-watchdog.sh` reads it when it kills a
-    case and writes what it killed into `casualties.json`."""
+    """The process that would record a cell that exhausts the machine is the one
+    that dies, so the note is written before the measurement."""
     harness.pytest_runtest_logstart('bench/test_ladder.py::test_emit[transport-w100-linopy-highs]', ())
     assert harness.INFLIGHT.read_text() == 'bench/test_ladder.py::test_emit[transport-w100-linopy-highs]'
 
 
 def test_a_casualty_list_is_not_read_as_measurements(tmp_path: Path) -> None:
-    """It is a list of records, and `records` parses a run document. Reading it
-    as one is an AttributeError halfway through a render — the trap the
-    ceilings sidecar already carries a docstring about."""
+    """It is a list of records, not a run document."""
     (tmp_path / 'latest.json').write_text('{"benchmarks": [], "machine_info": {}, "commit_info": {}, "datetime": ""}')
     (tmp_path / 'casualties.json').write_text('[{"record": "casualty", "cell": "x"}]')
     found = [p.name for p in bench_results.files(tmp_path)]
@@ -341,11 +297,7 @@ def test_a_casualty_list_is_not_read_as_measurements(tmp_path: Path) -> None:
 
 
 def test_the_ci_ladder_covers_every_published_case() -> None:
-    """`ladder-ci` runs one pytest per case so no process carries a finished
-    case's memory into the next one, which means the case list exists twice —
-    in `ladder`'s default and in the loop. A case added to one and not the other
-    is a column that silently stops being measured.
-    """
+    """`ladder-ci` runs one pytest per case, so the case list exists twice."""
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
@@ -355,16 +307,8 @@ def test_the_ci_ladder_covers_every_published_case() -> None:
 
 
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
-    """One pytest per case is half of it; the loop not stopping is the other half.
-
-    `|| exit 1` gave the three cases after a dead one nothing to run, so a run
-    that lost `transport` came back with no results at all rather than with the
-    three it could still have taken (runs 12 and 16 of the published
-    benchmark). The ladder still fails once it has taken what it can —
-    `report`, `plot` and the artifact sit behind `!cancelled()` rather than
-    behind success, so a partial run is published as a partial run and never
-    read as a whole one.
-    """
+    """A dead case must not end the loop; the ladder still fails once it has
+    taken what it can."""
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
@@ -374,15 +318,8 @@ def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
 
 
 def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
-    """A runner that dies skips every step it has left, `if: always()` included.
-
-    So results that live only on the box until one upload at the end are lost
-    whole: runs 12, 16, 18 and 19 each measured cases they never handed back.
-    One step per case, each uploading before the next can take the box, bounds
-    that to the case the box died on — and the step list is where the published
-    selection has to be reachable, so a case added to `ladder` and not here is a
-    column that silently stops being measured.
-    """
+    """A runner that dies skips every step it has left, `if: always()` included,
+    so each case uploads before the next can take the box."""
 
     root = Path(__file__).resolve().parents[1]
     tasks = tomllib.loads((root / 'pyproject.toml').read_text())['tool']['pixi']['feature']['bench']['tasks']
@@ -398,8 +335,6 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
     )
 
     action = (root / '.github/actions/ladder-case/action.yml').read_text()
-    # The watchdog moved into `ladder-ci`, so a run by hand is watched too and
-    # one step cannot start a second over the case another already holds.
     assert 'bash bench/memory-watchdog.sh &' not in action, 'the step does not start its own watchdog'
     ladder_ci = tomllib.loads((root / 'pyproject.toml').read_text())
     ladder_ci = ladder_ci['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
@@ -409,10 +344,7 @@ def test_every_published_case_is_measured_and_uploaded_on_its_own() -> None:
 
 def test_the_watchdog_says_something_even_when_nothing_moves() -> None:
     """The high-water line prints only when it moves, so a quiet watchdog and a
-    dead one read alike. Run 19 went six minutes in silence and it took an
-    orphaned `sleep` in the runner's cleanup to establish it had been sampling
-    at all — which is a diagnosis that should not need forensics.
-    """
+    dead one would read alike."""
     script = (Path(__file__).resolve().parents[1] / 'bench/memory-watchdog.sh').read_text()
     assert 'BENCH_MEMORY_HEARTBEAT_SECONDS' in script, 'silence has to be distinguishable from death'
 
@@ -420,16 +352,9 @@ def test_the_watchdog_says_something_even_when_nothing_moves() -> None:
 def test_the_watchdog_reaches_the_process_that_holds_the_model() -> None:
     """Killing the case by its pytest flags leaves the memory behind.
 
-    `benchmem(isolate=True)` measures in a `multiprocessing` **spawn**, so the
-    process holding the model is `python -c 'from multiprocessing.spawn import
-    spawn_main…'` and carries none of pytest's arguments. Run 18 killed
-    `transport` at 24 GB used, freed nothing, started `storage` on the same full
-    box and lost the runner fifteen seconds later — inside the settle the
-    watchdog was sleeping through.
-
-    Read off the script rather than run against a real case: this file is
-    collected inside every ladder invocation, so a watchdog exercised here would
-    kill the ladder running it.
+    `benchmem(isolate=True)` measures in a `multiprocessing` spawn child, which
+    carries none of pytest's arguments. Read off the script, because a watchdog
+    exercised here would kill the ladder running this file.
     """
     script = (Path(__file__).resolve().parents[1] / 'bench/memory-watchdog.sh').read_text()
     assert 'multiprocessing.spawn import spawn_main' in script, (
@@ -445,11 +370,7 @@ def test_the_watchdog_reaches_the_process_that_holds_the_model() -> None:
 
 
 def test_the_reproduction_script_runs_what_the_task_runs() -> None:
-    """`bench/reproduce.py` exists so a published number can be re-taken on the
-    versions that produced it. A reproduction running a *different* selection
-    would be worth less than none, so it reads the task rather than repeating
-    it — and this fails if somebody gives it a selection of its own again.
-    """
+    """A reproduction running a different selection would be worth less than none."""
     from bench import reproduce
 
     selection = ' '.join(reproduce.published())
@@ -464,13 +385,7 @@ def test_the_reproduction_script_runs_what_the_task_runs() -> None:
 
 
 def test_the_lock_pins_every_library_an_arm_needs() -> None:
-    """`bench/reproduce.py.lock` is what makes a published number reproducible,
-    and the way it stops being that is quietly: an arm is added, the harness
-    measures it, and the environment somebody else installs has no idea it
-    exists. Two of these resolve from git — specsolve itself, and linopy from a
-    branch that moves — so the lock is the only place their commits are written
-    down at all.
-    """
+    """An arm the harness measures must be installable from `bench/reproduce.py.lock`."""
     locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
     for name, module in sorted(ARMS.items()):
         for required in getattr(module, 'REQUIRES', ()):
@@ -481,9 +396,7 @@ def test_the_lock_pins_every_library_an_arm_needs() -> None:
 
 
 def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
-    """linopy is installed from `master`. A version string cannot pin that and a
-    published number taken against it is otherwise unrepeatable, so the lock has
-    to carry the commit."""
+    """linopy is installed from `master`, which only a commit can pin."""
     locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
     assert 'git = "https://github.com/PyPSA/linopy?rev=master#' in locked, (
         'the lock has to name the linopy commit, not the branch'
@@ -498,13 +411,9 @@ def _locked_commit(package: dict[str, Any]) -> str:
 def _same_install(measured: str, locked: str, commit: str = '') -> bool:
     """Whether the lock installs the build a published number was measured on.
 
-    A git install carries its commit in the local segment and its release
-    number from whatever tag it happens to follow, so one commit reads
-    `0.0.1.dev1+g2e05dd5df` where it was measured and `0.0.1a293.dev4+g2e05dd5df`
-    in the lock. The commit is the half that identifies the code, and a commit
-    that *is* a release tag has no local segment in the lock at all: `uv` reads
-    the tag and writes `0.0.1a320`. So *commit* is the locked source's, which
-    answers for a version that cannot.
+    A git install is identified by the commit in its local segment, since its
+    release number follows whatever tag is nearby. A commit that is a release
+    tag has no local segment in the lock, so *commit* is the locked source's.
     """
     if '+' not in measured:
         return measured == locked
@@ -513,25 +422,10 @@ def _same_install(measured: str, locked: str, commit: str = '') -> bool:
 
 
 def test_the_lock_installs_what_the_published_numbers_were_taken_on() -> None:
-    """The lock's actual promise, and the half nothing was reading.
+    """Every version a published file was measured on is the one the lock installs (#1490).
 
-    The guards above check that a name is present and that linopy's branch is
-    written down as a commit. Neither compares a pin to the run it exists to
-    reproduce, so the page went on documenting
-    `uv run --locked bench/reproduce.py` while the lock named
-    `v0.0.1-alpha.258` and the numbers printed beside it were taken twenty-six
-    alphas later — through a lowering pass that release did not have (#1490).
-
-    A published file records the versions it was measured on, so the run says
-    what the lock has to name and this cannot be kept true by hand.
-
-    **Read from git, not from `bench/results/`.** `pytest bench` collects this
-    file, so this runs *inside* a measuring run — which clears the committed
-    results before it measures and then writes its own, newer than any lock a
-    published number could have. Reading the directory therefore fails every
-    case of a published run: first on an empty directory, then on the versions
-    the run is in the middle of producing. What is committed at `HEAD` is what
-    the page publishes, and it is what the lock has to match.
+    Read from git at `HEAD`, because this runs inside a measuring run, which
+    clears and rewrites `bench/results/`.
     """
     root = Path(__file__).resolve().parents[1]
     lock = tomllib.loads((root / 'bench/reproduce.py.lock').read_text())
@@ -565,14 +459,7 @@ def test_the_lock_installs_what_the_published_numbers_were_taken_on() -> None:
 
 @pytest.mark.parametrize('case_name', ['transport', 'storage'])
 def test_a_width_rung_matches_its_size_twin_variable_for_variable(case_name: str) -> None:
-    """`w10` is `s`, `w1000` is `l` — same variables, same rows, different shape.
-
-    That is the whole point of the second ladder: a library whose cost tracks
-    the row count answers the twins the same way, and one that pays for joins or
-    for materialising a product does not. If the two drift apart the comparison
-    silently becomes two different models, so the multipliers and the
-    per-snapshot width have to stay in step.
-    """
+    """`w10` is `s`, `w1000` is `l` — same variables, same rows, different shape."""
     ladder = {shape.label: shape for shape in CASES[case_name].ladder}
     for width, size in (('w1', 'xs'), ('w10', 's'), ('w100', 'm'), ('w1000', 'l')):
         assert ladder[width].nominal_variables == ladder[size].nominal_variables, (
@@ -583,9 +470,7 @@ def test_a_width_rung_matches_its_size_twin_variable_for_variable(case_name: str
 
 @pytest.mark.parametrize('case_name', ['transport', 'storage'])
 def test_a_width_rung_grows_entities_and_holds_the_snapshots(case_name: str) -> None:
-    """The axis that was missing: every other ladder here grows `snapshot` and
-    freezes the entity counts, which is why `transport`'s bus x generator
-    incidence was 20 x 100 at every rung of it."""
+    """Every other ladder grows `snapshot` and freezes the entity counts."""
     width = [s for s in CASES[case_name].ladder if s.label.startswith('w')]
     snapshots = {s.sizes['snapshot'] for s in width}
     assert len(snapshots) == 1, f'a width rung must hold the snapshot count fixed, got {sorted(snapshots)}'
@@ -610,14 +495,10 @@ def _ceiling(budget: float, selected: tuple[str, ...] = ('xs', 's', 'm', 'l'), m
 
 
 def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
-    """What the time budget cannot catch. `transport/w100` on linopy takes 51 s
-    and 31 GB; over-time leaves a number behind, over-memory leaves the run with
-    no runner at all (#1416).
+    """Over-memory leaves the run with no runner at all (#1416).
 
     The rungs grow tenfold and a measurement holds the model twice, so 3 GB at
-    `xs` projects to 60 GB of machine at `s` rather than 30 — which is the
-    arithmetic that let `transport/w100` through at 8.4 GB projected against a
-    16 GB budget when what it wanted was nearer 28.
+    `xs` projects to 60 GB at `s`.
     """
     ceiling = _ceiling(0.0, memory=16.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 3e9)
@@ -640,19 +521,14 @@ def test_a_rung_inside_both_budgets_lets_the_ladder_continue() -> None:
 
 
 def test_no_memory_budget_measures_everything() -> None:
-    """The default off, so a local run behaves as it did before this existed."""
+    """The memory budget is off by default."""
     ceiling = _ceiling(120.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 0.5, 900e9)
     assert ceiling.reached('linopy', 'dispatch', 'xs', 'lp') is None
 
 
 def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
-    """The rungs grow tenfold, so one measurement settles the next one.
-
-    `dispatch/xs` is 10k variables and `s` is 100k, so a 20 s build at `xs`
-    projects to 200 s — and taking that measurement would buy nothing the
-    projection has not already said.
-    """
+    """The rungs grow tenfold, so a 20 s build at `dispatch/xs` projects to 200 s."""
     ceiling = _ceiling(120.0)
     ceiling.record('pyomo', 'dispatch', 'xs', 'lp', 20.0)
     reason = ceiling.reached('pyomo', 'dispatch', 'xs', 'lp')
@@ -676,13 +552,7 @@ def test_a_measurement_over_budget_stops_the_ladder_without_projecting() -> None
 
 
 def test_the_top_of_the_run_never_projects() -> None:
-    """The last rung *this run asked for* has nothing after it.
-
-    Read off the selection rather than off the case: a ladder measured to `l`
-    still has `xl` and `2xl` defined behind it, four and twelve times wider, and
-    projecting onto a rung nobody asked for stops the climb over work that was
-    never going to happen. On the first published run it did exactly that.
-    """
+    """The last rung this run asked for has nothing after it, whatever the case defines."""
     ceiling = _ceiling(120.0, selected=('xs', 's', 'm', 'l'))
     ceiling.record('specsolve', 'dispatch', 'l', 'lp', 100.0)
     assert ceiling.reached('specsolve', 'dispatch', 'l', 'lp') is None, (
@@ -691,11 +561,7 @@ def test_the_top_of_the_run_never_projects() -> None:
 
 
 def test_a_ceiling_on_one_ladder_leaves_the_other_alone() -> None:
-    """A case can carry two ladders, and they ask different questions — `l` is
-    the longest model, `w1000` the widest. The first published run ceilinged
-    pyomo and `gurobipy-loop` on the size ladder and lost them from the width
-    tables entirely, which is a measurement nobody decided not to take.
-    """
+    """A case can carry two ladders: `l` is the longest model, `w1000` the widest."""
     ceiling = _ceiling(120.0, selected=('xs', 's', 'm', 'l', 'w1', 'w10', 'w100', 'w1000'))
     ceiling.record('pyomo', 'transport', 'm', 'lp', 20.0)
     assert ceiling.reached('pyomo', 'transport', 'l', 'lp') is not None, 'the size ladder stops'
@@ -703,12 +569,7 @@ def test_a_ceiling_on_one_ladder_leaves_the_other_alone() -> None:
 
 
 def test_the_sidecar_says_which_budget_stopped_each_climb() -> None:
-    """The record carries both budgets, so the one that fired has to be on it too.
-
-    Memory is checked first and either can stop a rung, so neither budget's
-    value tells a reader which did — and the prose reason is the only other
-    place it is said.
-    """
+    """The record carries both budgets, so the one that fired has to be on it too."""
     ceiling = _ceiling(30.0, memory=6.0)
     ceiling.record('linopy', 'dispatch', 'm', 'highs', 1.0, 3e9)
     ceiling.record('pyomo', 'dispatch', 'm', 'highs', 20.0, 0.1e9)
@@ -730,14 +591,7 @@ def test_the_sidecar_says_which_budget_stopped_each_climb() -> None:
 def test_a_bound_names_the_budget_that_actually_stopped_the_climb(stopped_by: str | None, expected: str) -> None:
     """Both budgets are on the record and only one of them fired.
 
-    Run 15 of the published benchmark was held to 6 GB and stopped 34 of its 35
-    cells on memory — `linopy` on `transport/m` for projecting 8.94 GB after
-    0.894 s. Read as seconds, every one of those publishes `>30 s`: not a
-    missing number in a table whose job is to be checkable, but a false one.
-
-    `None` is a sidecar written before the harness recorded which budget fired.
-    Those runs carried no memory budget at all, so seconds is both the fallback
-    and what they enforced.
+    `None` is a sidecar from runs that carried no memory budget.
     """
     ceiling = _ceiling_record('size', 'm')
     ceiling.pop('stopped_by')
@@ -747,9 +601,7 @@ def test_a_bound_names_the_budget_that_actually_stopped_the_climb(stopped_by: st
 
 
 def test_both_renderers_read_the_same_bound() -> None:
-    """The table and the chart print the same cell, and the wording is one
-    function so they cannot come to disagree about it — which they did, each
-    formatting `budget` as seconds on its own line."""
+    """The table and the chart print the same cell through one function."""
     ceiling = _ceiling_record('size', 'm', stopped_by='memory')
     report.CEILINGS[:] = [ceiling]
     taken = {
@@ -789,19 +641,9 @@ def test_no_budget_measures_everything() -> None:
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice.
 
-    The linopy oracle could never be a different model — it reads the same YAML
-    (hard rule 3), which is what made it an oracle. A hand-written dialect has
-    no such protection: a transposed index or a load vector read in the wrong
-    order builds a *different model* that benchmarks perfectly, and the faster
-    it is the more likely someone quotes it.
-
-    So the smallest rung of each case is solved both ways and the objectives
-    compared. It is slow for a test — one LP per cell — and it is the whole
-    reason to believe any number these arms produce.
-
-    `unmeasurable` decides which cells there are, rather than an import check
-    beside it: a case only one dialect has been written in is the shape
-    `nodal` arrives as, and that reason is already written down once.
+    A transposed index builds a different model that benchmarks perfectly, so
+    the smallest rung of each case is solved both ways and the objectives
+    compared. `unmeasurable` decides which cells there are.
     """
     reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
     if reason:
@@ -817,15 +659,12 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
 
 
 # ---------------------------------------------------------------------------
-# the entry points still run — every one of these broke unnoticed in one week
+# the entry points still run
 # ---------------------------------------------------------------------------
 
 
 def test_the_report_renders_from_the_committed_results() -> None:
-    """`pixi run report` named three files, two of which no run had ever
-    written, so it raised `FileNotFoundError` on a clean checkout. The readers
-    take the directory now, and this is what says they still find something in
-    it."""
+    """The readers take the `bench/results` directory, and find something in it."""
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         assert report.main([]) == 0
@@ -842,10 +681,8 @@ def test_the_long_table_renders_from_the_committed_results() -> None:
 
 
 def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
-    """Both profilers monkeypatch a private engine class by name, so a refactor
-    in `src/` retires them without touching `bench/`. #1245 moved the build
-    methods off `PolarsEngine` onto `_Assembly` and both died on the next run —
-    a day before anyone looked."""
+    """Both profilers monkeypatch private engine names, so a refactor in `src/`
+    can retire them without touching `bench/` (#1245)."""
     import importlib
 
     from specsolve.relational.engines.polars.assembly import Assembly
@@ -886,9 +723,8 @@ def test_a_timing_record_fans_into_one_row_per_metric() -> None:
 
 
 def test_a_number_the_run_did_not_produce_is_an_absent_row() -> None:
-    """A hole is refused here for the same reason the language refuses one in a
-    value column: a null would have to mean *something*, and nothing it could
-    mean is true of a measurement that was never taken."""
+    """A null would have to mean something, and nothing it could mean is true of
+    a measurement never taken."""
     rows = _long([_timing('specsolve', peak_rss_bytes=None, counts={'columns': 10, 'rows': 1, 'nonzeros': None})])
     assert [r['metric'] for r in rows].count('peak_rss_bytes') == 0, 'no isolate=True, so no rss row at all'
     assert [r['metric'] for r in rows].count('nonzeros') == 0, 'an arm that cannot count nonzeros writes none'
@@ -904,8 +740,7 @@ def test_the_rebuild_loop_becomes_two_phases() -> None:
 
 
 def test_the_long_table_and_the_published_table_agree_on_a_cell() -> None:
-    """The two renderings read one extraction. If they could disagree, the long
-    form would be a second source of truth rather than a second view."""
+    """The two renderings read one extraction."""
     record = _timing('specsolve', wall_seconds=0.5)
     wall = next(r['value'] for r in _long([record]) if r['metric'] == 'wall_seconds')
     assert f'{wall:.2f}' in report.table('dispatch', report.best([record]), 'lp')
@@ -920,8 +755,7 @@ def test_the_fingerprint_is_long_too() -> None:
 
 
 def test_the_run_record_carries_the_cpu_pytest_benchmark_collected(tmp_path: Path) -> None:
-    """`platform.processor()` answers `x86_64` on every Linux runner, so the
-    record used to say nothing about which box a number came from."""
+    """`platform.processor()` answers `x86_64` on every Linux runner."""
     doc = {
         'machine_info': {
             'system': 'Linux',
@@ -957,8 +791,7 @@ def test_one_machine_prints_as_one_line() -> None:
 
 
 def test_a_page_merged_from_two_machines_says_so() -> None:
-    """The ladder takes one sink per job (#1315), so this is the ordinary case
-    the moment two runners draw different CPUs from the pool."""
+    """The ladder takes one sink per job (#1315), so two runners can draw different CPUs."""
     line = report.provenance([_run('AMD EPYC 7763'), _run('Intel Xeon Platinum 8370C')])
     assert 'Taken on 2 machines' in line, 'a merged page must not print one machine for rows from two'
     assert 'AMD EPYC 7763' in line and 'Intel Xeon Platinum 8370C' in line, 'both boxes are named'
@@ -969,8 +802,7 @@ def test_two_files_from_one_machine_are_not_marked() -> None:
 
 
 def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> None:
-    """A `.jsonl` result is taken verbatim, so the reader meets run records
-    written to an older shape and has to render them rather than raise."""
+    """A `.jsonl` result is taken verbatim, so an older run record must render."""
     assert report.provenance([{'record': 'run', 'platform': None}]) == '? (?), python ? — .'
     assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
 
@@ -994,15 +826,9 @@ print(report.marginal(rows))
 def test_the_marginal_table_does_not_reshuffle_between_processes() -> None:
     """A published table a re-render reshuffles has a diff that means nothing.
 
-    Ladders tie by construction — `_ladder` grows every case by the same two
-    factors, so `fleet`, `nodal` and `profiled` share all six widths — and the
-    rows come out of a set, whose iteration order depends on the interpreter's
-    hash seed. Sorting on width alone left those ties in whatever order the set
-    produced: four renders of `latest.json` gave three different orderings.
-
-    Two *processes* under different `PYTHONHASHSEED`, because that is what
-    varies. One process renders the same bytes however wrong the sort is — its
-    seed is fixed at startup — so a same-process check would pass on the bug.
+    `fleet`, `nodal` and `profiled` tie on width, and the rows come out of a
+    set. Two processes under different `PYTHONHASHSEED`, because one process
+    has a fixed seed.
     """
     root = str(Path(__file__).resolve().parent.parent)
     out = []
@@ -1023,12 +849,7 @@ def test_the_marginal_table_does_not_reshuffle_between_processes() -> None:
 
 
 def test_the_marginal_table_survives_a_file_that_never_measured_specsolve() -> None:
-    """`--arms linopy` is a legitimate run, and reporting one used to raise.
-
-    The width was read off `best[(case, size, 'specsolve')]` directly, so a file
-    with no specsolve arm in it died with a `KeyError` inside a sort key — before
-    printing any of the tables that did carry both arms.
-    """
+    """`--arms linopy` is a legitimate run."""
     assert report.marginal([_loop('dispatch', 'linopy', 1200)]) is not None
 
 
@@ -1041,9 +862,8 @@ def test_the_marginal_table_survives_a_file_that_never_measured_specsolve() -> N
     ],
 )
 def test_a_cell_is_marked_by_its_spread_over_its_own_median(iqr: float | None, marked: bool) -> None:
-    """The signal is iqr/median: a minimum whose whole distribution is spread had
-    no clean round to fall back on, which is the one contamination `min` cannot
-    filter out (#797 measured a cell 2.33x wrong)."""
+    """The signal is iqr/median: a whole distribution spread is the contamination
+    `min` cannot filter out (#797)."""
     assert (report.MARK in _rendered(iqr=iqr)) is marked, (
         f'iqr/median of {iqr} against a budget of {report.SPREAD_BUDGET} must {"mark" if marked else "leave"} the cell'
     )
@@ -1067,20 +887,13 @@ def test_marking_leaves_the_published_number_alone() -> None:
 
 
 def test_the_ratio_beside_a_marked_cell_is_marked_too() -> None:
-    """A ratio is only as quotable as the two minima it divides, and #797 is a
-    ratio that would have flipped from 0.73x to 1.23x on one contaminated arm."""
+    """A ratio is only as quotable as the two numbers it divides (#797)."""
     marked = report.density(report.best([_timing('specsolve', size='d100', iqr=1.9), _timing('linopy', size='d100')]))
     assert '| 1.00x~ |' in marked, 'a ratio drawn from a marked minimum carries the doubt'
 
 
 def test_a_cell_with_no_number_in_it_is_never_marked() -> None:
-    """A ratio needs both arms. One noisy arm and nothing to divide it by leaves
-    an em dash, and a mark on that claims doubt about a measurement nobody took.
-
-    The rung below is measured on `specsolve` only while the run as a whole
-    carries a second arm, which is what leaves an empty cell in the table at
-    all now that the columns are whichever arms the run measured.
-    """
+    """A mark on an em dash claims doubt about a measurement nobody took."""
     rows = report.best([_timing('specsolve', iqr=1.9), _timing('linopy', size='l')])
     table = report.table('dispatch', rows, 'lp')
     assert '| \u2014 |' in table, 'the arm that did not run this rung still renders as absent'
@@ -1102,9 +915,7 @@ More prose.
 
 
 def test_a_fenced_block_is_replaced_and_the_prose_around_it_is_not() -> None:
-    """The page is a tracked source file: its prose and headings are reviewed in
-    a diff like any other code, and only what sits inside a fence is
-    mechanical. That is the split `bench.plot` already makes on the chart."""
+    """Only what sits inside a fence is mechanical."""
     written, skipped = report.splice(_FENCED, {'results': '| new | table |'})
     assert skipped == [], 'the page has the fence, so nothing was skipped'
     assert '| new | table |' in written and '| old | table |' not in written
@@ -1125,39 +936,28 @@ def test_writing_twice_changes_nothing_the_second_time() -> None:
     ],
 )
 def test_a_page_that_cannot_take_the_block_is_refused(page: str, complaint: str) -> None:
-    """Refused rather than appended to: a page that quietly grew a second copy
-    of every table would look fine in the render and wrong in the diff."""
+    """Refused rather than appended to."""
     with pytest.raises(SystemExit, match=complaint):
         report.splice(page, {'results': '| new | table |'})
 
 
 def test_a_page_without_a_fence_is_told_so_rather_than_failed() -> None:
-    """The tables live on the chart page now, and a page is entitled to host
-    only the parts it wants. Named in the return rather than raised, so the
-    caller can print what it had nowhere to put — silence would let a renamed
-    fence stop updating a table with nobody the wiser."""
+    """Named in the return rather than raised, so the caller can print what it
+    had nowhere to put."""
     written, skipped = report.splice('# A page\n\nno fence here\n', {'results': '| new | table |'})
     assert skipped == ['results'], 'the fragment is reported, not written'
     assert written == '# A page\n\nno fence here\n', 'and the page is untouched'
 
 
 def test_an_empty_fragment_never_blanks_the_page() -> None:
-    """A results file that rendered nothing would otherwise publish nothing,
-    silently — the failure mode `bench/results.py` warns about, where a run
-    that died leaves a page that looks merely quiet."""
+    """A results file that rendered nothing would otherwise publish nothing, silently."""
     with pytest.raises(SystemExit, match='refusing to blank the page'):
         report.splice(_FENCED, {'results': '   '})
 
 
 def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
-    """A build-only number is not comparable across libraries.
-
-    One that defers materialising its coefficients to its writer spends almost
-    nothing in the build and pays at the seam: on `dispatch` at 1M columns
-    linopy built in 18.6 ms against specsolve's 33.7 ms and then emitted in 0.64 s
-    against 0.44 s, so a ratio drawn here says the opposite of the run it came
-    from. The tables that measure to a common artifact carry the ratios.
-    """
+    """A build-only number is not comparable across libraries: one that defers
+    its coefficients to its writer pays at the seam instead."""
     table = report.marginal([_loop('dispatch', 'specsolve', 1200), _loop('dispatch', 'linopy', 1200)])
     assert 'specsolve: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
     assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
@@ -1165,11 +965,7 @@ def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
 
 
 def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader() -> None:
-    """Five libraries times wall, peak and a ratio each is nineteen columns
-    before the dimensions start, and the ratio is the half a reader can do by
-    eye from the two numbers beside it. The sweeps keep theirs: they compare at
-    one size, with no column of absolutes to read a ratio off.
-    """
+    """The per-model table leaves the ratio to the reader; the sweeps keep theirs."""
     rows = report.best([_timing('specsolve'), _timing('linopy')])
     table = report.table('dispatch', rows, 'lp')
     assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is still a column'
@@ -1185,9 +981,7 @@ def test_a_run_of_one_arm_has_no_ratio_column() -> None:
 
 
 def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: Path) -> None:
-    """`peak_rss_bytes` is `None` for a run taken without `benchmem(isolate=True)`,
-    and the figures divide it — unguarded that is a `TypeError` halfway through
-    a render, where a missing point is what it actually is."""
+    """`peak_rss_bytes` is `None` for a run taken without `benchmem(isolate=True)`."""
     path = tmp_path / 'results.jsonl'
     records = [_timing('specsolve'), _timing('linopy', size='l', peak_rss_bytes=None)]
     path.write_text('\n'.join(json.dumps(r) for r in records))
@@ -1202,22 +996,8 @@ def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: P
 def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None:
     """A case carries two ladders and a panel plots one of them.
 
-    `series` already drops a width measurement, and the ceiling beside it was
-    read anyway: `w100` has no position on an axis of `xs s m l`, so the bound
-    that says which rungs the budget stopped indexed a rung the axis does not
-    hold. That is a `ValueError` in the middle of a render, and it took run 15
-    of the published benchmark after both ladders had finished measuring.
-
-    Latent until an arm is *also* short of a size rung — the memory budget made
-    that ordinary, which is why a chart that had always been wrong here started
-    failing.
-
-    The width record is second so that reading it would also lose the size one:
-    a key without the ladder in it holds one ceiling per arm, so the wrong
-    reading costs a bound that was real as well as raising on one that is not.
-    Both ladders are panels of their own now and the key carries which — this
-    holds the size panel to the size ceiling, and its width twin is asserted in
-    `test_a_width_panel_is_bounded_by_its_own_ladders_ceiling`.
+    The width record is second, so a key without the ladder in it would also
+    lose the size ceiling.
     """
     taken = {
         ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
@@ -1232,13 +1012,7 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
 
 
 def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
-    """The other half of the pair above: a width ceiling bounds the width panel and nothing else.
-
-    Keying the ceilings by ladder is what makes both true at once, and only one
-    direction of it is a regression anybody would notice — a width bound gone
-    missing is a blank cell, where a width bound on the size panel raised in the
-    middle of a render. This holds the quiet direction.
-    """
+    """The other half of the pair above: a width ceiling bounds the width panel and nothing else."""
     taken = {
         ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('w1', 'w10', 'w100', 'w1000')},
         ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('w1', 'w10')},
@@ -1251,12 +1025,8 @@ def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
 
 
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
-    """The rung a ceiling names is one that arm measured — and `series` drops a
-    measurement taken without a peak, so a results set mixing one of those in
-    leaves the ceiling pointing at a rung the axis no longer holds. Indexed
-    against it that is the same `ValueError` a width ceiling raises, reached by
-    the other road.
-    """
+    """`series` drops a measurement taken without a peak, so a ceiling can name
+    a rung the axis does not hold."""
     taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
     ceilings = [_ceiling_record('size', 'm')]
 
@@ -1293,7 +1063,7 @@ def test_the_rounds_default_is_silent_where_the_plugin_is_absent() -> None:
 
 
 def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureRequest) -> None:
-    """A default and the session applying it can coexist without meeting (#321 did)."""
+    """The session applies the default."""
     if not hasattr(request.config.option, 'benchmark_min_rounds'):
         pytest.skip('pytest-benchmark is not installed — bench/ runs through `pixi run -e bench`')
     if flag_passed(request.config, '--benchmark-min-rounds'):
@@ -1305,11 +1075,7 @@ def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureReq
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
-    """A model file nobody committed still has to pass the front door.
-
-    Every arm parses the same YAML, so a generated file the validator refuses
-    would kill every rung of the sweep at once, and only at run time.
-    """
+    """A generated model file still has to pass the front door."""
     from mathspec import to_spec
 
     case = CASES['declarations']
@@ -1321,10 +1087,8 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
 
 
 def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
-    """Loading is not building — `sector` once passed `check()` and died in the
-    engine (#345). The sweep's own smallest rung is a million variables, so the
-    build gate runs on a tiny shape of the same generated model instead.
-    """
+    """Loading is not building (#345). The sweep's smallest rung is a million
+    variables, so this builds a tiny shape of the same generated model."""
     import specsolve as sps
 
     case = CASES['declarations']
@@ -1336,11 +1100,7 @@ def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
 
 
 def test_only_the_masked_declaration_rungs_carry_a_where() -> None:
-    """The paired rungs differ by the mask and by nothing else.
-
-    A dense rung that grew a `where:` would make the pair measure two things,
-    and a masked rung that lost one would make it measure nothing.
-    """
+    """The paired rungs differ by the mask and by nothing else."""
     case = CASES['declarations']
     for shape in case.ladder:
         text = _declarations_spec(shape)
@@ -1383,11 +1143,7 @@ def test_a_masked_rung_without_a_dense_twin_is_refused(counts, masked, complaint
     ],
 )
 def test_every_rung_label_lands_in_its_own_sweep(label: str, sweep: str) -> None:
-    """A masked rung is the declaration sweep's, not the size ladder's.
-
-    `_sweep_of` returning None puts a rung in the size ladder table, where a
-    sweep rung held at one size reads as a model that stopped growing.
-    """
+    """A masked rung is the declaration sweep's, not the size ladder's."""
     found = report._sweep_of(label)
     named = {
         report._DECLARATION_RUNG: 'declaration',
@@ -1411,11 +1167,7 @@ def test_a_declaration_rung_prints_its_count_and_whether_it_is_masked(label: str
 
 
 def test_a_masked_rung_sorts_after_the_twin_it_ties_with() -> None:
-    """A vacuous mask leaves the column count identical, so the label breaks the tie.
-
-    Without it the pair's order follows results-file order and the committed
-    page churns between runs.
-    """
+    """A vacuous mask leaves the column count identical, so the label breaks the tie."""
     rows = report.best(
         [
             _timing(arm, case='declarations', size=size, counts={'columns': 1000, 'rows': 100, 'nonzeros': 1000})
@@ -1451,13 +1203,7 @@ def test_a_static_case_still_reads_its_committed_model(name: str) -> None:
 
 
 def test_the_milp_case_lowers_with_both_domains() -> None:
-    """`commitment` only measures the vtype stream if the plan actually carries it.
-
-    The ladder's other cases are all-continuous, so a YAML edit that dropped
-    `domain: binary` would leave the case measuring dispatch under a MILP's name
-    and nothing downstream would notice — every sink handles an all-continuous
-    model happily.
-    """
+    """`commitment` only measures the vtype stream if the plan actually carries it."""
     from mathspec import to_spec
 
     program = to_spec(str(CASES['commitment'].spec)).program
@@ -1471,8 +1217,7 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
     """The floor's counts match specsolve's on `transport/xs`, so its headroom claim is about one model.
 
     Columns, rows and nonzeros are the cheap fingerprint; the objectives are
-    compared by the test below. A floor that quietly dropped a term would post
-    an unbeatable time for a model nobody built.
+    compared by the test below.
     """
     import specsolve as sps
 
@@ -1489,13 +1234,7 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
 
 
 def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
-    """The measurement's own claim, on the smallest instance it can be made on.
-
-    `warm_payoff.sweep` asserts objective equality step by step; running it
-    here is what makes that a gate rather than a claim in a module nothing
-    exercises. A carried basis may move the route and never the optimum, so a
-    splice that indexed rows wrongly would show up as a different answer.
-    """
+    """A carried basis may move the route and never the optimum."""
     run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
     assert len(run.steps) > 1, 'a single rebuild carries nothing, so the splice would go unexercised'
     for i, step in enumerate(run.steps):
@@ -1505,13 +1244,8 @@ def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
 
 
 def test_the_splice_shifts_a_later_declarations_rows() -> None:
-    """The whole reason the carry is not a truncation.
-
-    `feasibility_cut` follows `optimality_cut`, so a row gained by the first
-    moves every row of the second. Truncating the previous basis to the new
-    height would leave the second family reading the first's statuses — right
-    only for a model whose growth is all in the last declaration.
-    """
+    """`feasibility_cut` follows `optimality_cut`, so a row gained by the first
+    moves every row of the second."""
     was = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 2), 'feasibility_cut': Labelled(pl.LazyFrame(), 2, 2)}
     now = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 3), 'feasibility_cut': Labelled(pl.LazyFrame(), 3, 2)}
     previous = WarmStart(
@@ -1532,14 +1266,7 @@ def test_the_splice_shifts_a_later_declarations_rows() -> None:
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
-    """`check()` runs, and the two models solve to one objective.
-
-    The counts above are a fingerprint, not the answer — they match for a floor
-    that permuted a coefficient. This calls what `--check` calls, which is also
-    the only thing that reaches `workloads.objective`: the counts test never
-    does, so a signature change there went unnoticed until someone ran the flag
-    by hand.
-    """
+    """`check()` runs, and the two models solve to one objective; the counts match a permuted floor too."""
     ours, specsolve = floor.check()
 
     assert ours == pytest.approx(specsolve, rel=1e-9), (
@@ -1555,17 +1282,7 @@ def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
 @pytest.mark.parametrize('named_arm', sorted(ARMS))
 def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> None:
     """`benchmem(isolate=True)` ships the action to a spawned child, so a verb
-    that is not picklable raises before anything is timed — and a rung whose
-    every cell dies that way publishes nothing while looking merely absent.
-
-    `test_window` went a whole published run that way (#1617): both `window`
-    arms returned a closure, `window.<locals>.step`, which `pickle` cannot
-    reach. The contract in `bench/arms/__init__.py` already said every verb is
-    top-level and picklable; nothing asked.
-
-    The *verbs* are what this pickles, not a prepared call — `prepare` runs
-    against a case's parquet, and the point is reached before any of that.
-    """
+    that is not picklable raises before anything is timed (#1617)."""
     module = ARMS[named_arm]
     for verb in ('prepare', 'build_and_emit', 'build_only', 'objective', 'window_setup', 'window'):
         target = getattr(module, verb, None)
@@ -1578,16 +1295,8 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
 
 
 def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
-    """A rolling-horizon window is priced against a model that already exists,
-    so the build cannot be inside the measured call — and under `isolate=True`
-    it cannot be in the parent either, because the child starts empty.
-
-    The split is what satisfies both: `window_setup` builds and loads in the
-    child as pytest-benchmark's pedantic `setup`, which runs untracked before
-    each sample and hands back the arguments, and `window` is the one later
-    window that gets timed. An arm offering one without the other would be
-    measured as a build.
-    """
+    """The build is outside the measured call and inside the spawned child, so
+    `window_setup` and `window` come as a pair."""
     for name, module in sorted(ARMS.items()):
         assert hasattr(module, 'window') == hasattr(module, 'window_setup'), (
             f'the {name} arm offers one half of the window pair — `window_setup` builds and loads '
@@ -1596,23 +1305,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
 
 
 def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
-    """The reproduction of #1617, at the seam that broke: not the verbs one at a
-    time, but the `(action, setup)` pair `benchmem(isolate=True)` actually
-    pickles to its child.
+    """The `(action, setup)` pair `benchmem(isolate=True)` pickles to its child (#1617).
 
-    Every `test_window` cell of the published run of 2026-09-14 died here with
-    ``Can't get local object 'window.<locals>.step'``, because the arms returned
-    a closure over a model the parent had built. Pickling the pair the harness
-    assembles is what the two tests above cannot see between them: each half can
-    be picklable on its own and the payload still carry a closure.
-
-    The size assertion is the other half of the contract — a payload that ships
-    pre-built state would measure *deserializing* the model rather than
-    re-attaching to it, and benchmem warns above 1 MiB.
-
-    The payload is the plugin's own, so unlike the two tests above this one is
-    only asked where pytest-benchmem is installed — the environment the ladder
-    itself runs in.
+    Each half can pickle on its own and the payload still carry a closure. A
+    payload over 1 MiB ships pre-built state.
     """
     plugin = pytest.importorskip(
         'pytest_benchmem.pytest_plugin',
@@ -1638,14 +1334,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
-    """`test_emit` and `test_window` measure the same cell — same case, size,
-    sink and arm — at two moments of a driver's life, so without a phase they
-    are one key.
-
-    They were never both in a results file before #1617, because every window
-    cell died before it was timed. The moment they are, the renderers below take
-    whichever is faster.
-    """
+    """`test_emit` and `test_window` measure the same cell, so without a phase they are one key."""
     doc = {
         'benchmarks': [
             {
@@ -1664,14 +1353,9 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:
-    """The renderers take the lowest wall clock per `(case, size, sink, arm)`,
-    and a later window is faster than the build it is measured against — that is
-    the rung's whole finding. Read into the same key it silently replaces the
-    build, and `docs/about/benchmarks.md` publishes a re-attach under a column
-    that says emit.
+    """A later window is faster than the build, so in the same key it would replace it.
 
-    Both published readers take the `emit` phase, so the window number is
-    reachable through `bench.tidy` and nowhere else.
+    Both published readers take the `emit` phase; `bench.tidy` carries both.
     """
     build = _timing('specsolve', phase='emit', wall_seconds=1.0)
     window = _timing('specsolve', phase='window', wall_seconds=0.1)

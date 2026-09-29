@@ -1,20 +1,9 @@
-"""The docs are read in two places; these are the checks that keep them honest in both.
+"""The docs are read on GitHub and on the site; these checks keep them right in both.
 
-``docs/`` is browsed on GitHub and served as a site, from one set of files. A
-link *inside* ``docs/`` is relative and the build validates it — ``--strict``
-in CI fails on a dead one. A link *outside* ``docs/`` cannot be relative,
-because the site has no `../CONTRIBUTING.md` to resolve to, so it is written as
-a full GitHub URL.
-
-That convention is the whole mechanism, and it is unenforceable by the builder
-in both directions: a relative link escaping ``docs/`` builds a silent 404, and
-a blob URL is opaque to every checker there is — the file it names can be
-deleted and nothing anywhere fails. Hence this module.
-
-``docs/README.md`` used to be exempted here, because ``exclude_docs`` kept it
-out of the site and its relative links out of the tree were correct on GitHub.
-zensical builds no page from a ``README.md`` and validates its links anyway, so
-the page follows the convention like every other one and the exemption is gone.
+A link inside ``docs/`` is relative and the strict build validates it. A link
+outside ``docs/`` is a full GitHub URL, because the site has nothing above
+``docs/`` to resolve to. The builder checks neither a relative link that
+escapes ``docs/`` nor a blob URL.
 """
 
 from __future__ import annotations
@@ -40,13 +29,7 @@ _ABSOLUTE = re.compile(r'^([a-z][a-z0-9+.-]*:|//|#|/)', re.IGNORECASE)
 
 @functools.cache
 def _pages() -> tuple[Path, ...]:
-    """Every Markdown file under `docs/`, `README.md` included.
-
-    `README.md` is the folder view GitHub renders rather than a page of the
-    site, and it is held to the same two rules: it is read in the tree, where a
-    link above `docs/` is as wrong as it is on the site if it is spelled
-    relatively and the file moves.
-    """
+    """Every Markdown file under `docs/`, `README.md` included."""
     return tuple(sorted(DOCS.rglob('*.md')))
 
 
@@ -55,13 +38,7 @@ def _targets(page: Path) -> list[str]:
 
 
 def test_no_relative_link_escapes_the_docs_tree():
-    """The failure mkdocs cannot see.
-
-    `[x](../CONTRIBUTING.md)` is correct in the repo and a 404 on the site.
-    mkdocs resolves it against `docs/`, finds nothing above the root, and —
-    because the target is outside the tree it knows about — does not treat it
-    as a broken internal link. It just ships. Write the full GitHub URL.
-    """
+    """`[x](../CONTRIBUTING.md)` works in the repo, and the build ships it as a 404 on the site."""
     escaping = []
     for page in _pages():
         for target in _targets(page):
@@ -79,13 +56,7 @@ def test_no_relative_link_escapes_the_docs_tree():
 
 
 def test_every_blob_url_names_a_file_that_exists():
-    """The other half: a blob URL is checked by nothing at all.
-
-    mkdocs treats it as external and never follows it; the repo has no reason
-    to notice it. So a page can go on pointing at `bench/results/latest.json`
-    long after the file moves, and the first report is a reader hitting
-    GitHub's 404.
-    """
+    """A blob URL is checked by nothing else: the build treats it as external and never follows it."""
     broken = []
     for page in _pages():
         for target in _targets(page):
@@ -100,10 +71,9 @@ def test_every_blob_url_names_a_file_that_exists():
 def test_links_to_our_own_files_are_all_spelled_the_same_way():
     """One spelling, so the check above cannot be dodged.
 
-    A link at a file in this repo written any other way — `tree/`, `raw/`, a
-    permalinked sha, a branch that will vanish — reaches the right page today
-    and is skipped by the existence check, which only recognises `blob/main`.
-    Issue and PR links are not file links and are left alone.
+    A file link written as `tree/`, `raw/`, a permalinked sha or another
+    branch skips the existence check, which only recognises `blob/main`. Issue
+    and PR links are not file links.
     """
     file_shaped = re.compile(rf'^{re.escape(REPO_URL)}/(blob|tree|raw|blame)/')
     stray = [
@@ -116,12 +86,7 @@ def test_links_to_our_own_files_are_all_spelled_the_same_way():
 
 
 def test_the_convention_is_actually_in_use():
-    """A guard on the guards.
-
-    Every assertion above passes vacuously on a docs tree with no outbound
-    links at all — including one where a bad refactor stripped them. Pin that
-    the arrangement they describe exists.
-    """
+    """The assertions above pass vacuously on a docs tree with no outbound links, so pin that the links exist."""
     urls = [t for page in _pages() for t in _targets(page) if t.startswith(BLOB)]
     assert len(urls) >= 15, f'expected the docs to link out to the repo; found {len(urls)}'
 
@@ -130,8 +95,7 @@ def _nav_pages(entries: list[Any]) -> list[str]:
     """Every page the nav points at, depth first, as `mkdocs.yml` spells it.
 
     An entry is a bare path or a one-key mapping whose value is a path or a
-    deeper list. A value that is not a page in this tree — an address on
-    another site, the hand-written chart page — is not one of these.
+    deeper list. A value that does not end in `.md` is not a page of this tree.
     """
     found: list[str] = []
     for entry in entries:
@@ -144,16 +108,9 @@ def _nav_pages(entries: list[Any]) -> list[str]:
 
 
 def test_every_page_under_docs_has_a_nav_entry():
-    """The strict build stopped asking this when the site moved to zensical.
+    """Every page has a nav entry and every nav entry has a page; the build checks neither.
 
-    mkdocs failed the build on a page with no nav entry, under
-    `validation.nav.omitted_files`. zensical validates links and leaves
-    navigation alone, so an orphan page builds, ships and is reachable only by
-    search. Both directions are asked here, because a nav entry naming a file
-    that is not there is dropped just as quietly.
-
-    `README.md` is the folder view GitHub renders and the site builds no page
-    from it, so it is the one file under `docs/` that belongs in no nav.
+    `README.md` is the folder view GitHub renders and belongs in no nav.
     """
     config = yaml.safe_load((REPO / 'mkdocs.yml').read_text())
     nav = set(_nav_pages(config['nav']))
@@ -164,12 +121,10 @@ def test_every_page_under_docs_has_a_nav_entry():
 
 
 def test_the_home_page_still_carries_its_math_block():
-    """`tools.gallery_math --check` also fills the tabs on `docs/index.md`, and
-    it fills what it finds — a page whose markers were dropped in an edit stops
-    being checked without anything failing. Pin that they are there.
+    """`docs/index.md` keeps the markers `tools.gallery_math --check` fills.
 
-    The content itself is not asserted here; that is the generator's job, and
-    `test_the_gallery_math_is_current` runs it.
+    The generator fills only the markers it finds, so a dropped marker would
+    stop the check without a failure.
     """
     from tools import gallery_math
 
@@ -223,14 +178,7 @@ def _headings(page: Path) -> set[str]:
 
 
 def test_the_translation_table_names_every_built_in_operator():
-    """`What a construct becomes` is a copy of the builder, so something checks it.
-
-    The page's own rule, one section up: a copy nobody checks is a copy that
-    rots. What it would rot into is a reader believing the lane translates a
-    construct it no longer has, or — worse for the oracle — missing one it
-    gained, since an operator with no row is an operator nobody wrote down the
-    linopy call for.
-    """
+    """`What a construct becomes` is a copy of the builder, so something checks it."""
     from mathspec import BUILTIN_NAMES
 
     page = (DOCS / 'about' / 'linopy.md').read_text()
@@ -253,11 +201,8 @@ def _gen_bus_direction(program: Any) -> Any:
 def test_the_plan_table_names_every_expression_node():
     """`The plan, node for node` is a copy of two dispatches, so something checks it.
 
-    The same rule the table above answers to, one layer down: a node with no
-    row is a node whose two readings nobody wrote down, and the row is where a
-    reader learns that the lanes agree at all. The fan-in cell is read back
-    off :func:`fan_in`, since that column is one the compiler *acts* on rather
-    than merely documents.
+    The fan-in cell is read back off :func:`fan_in`, because the compiler acts
+    on that column.
     """
     from mathspec import program
 

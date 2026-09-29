@@ -31,13 +31,7 @@ def _check(**overrides):
 
 
 def test_the_note_reaches_the_caller_as_a_warning_off_check():
-    """The surface, not the inventory: which models earn a note is
-    ``advice``'s rule and is swept in mathspec's own
-    ``test_boundedness.py``. What is asserted here is that ``check`` asks for
-    the notes at all and hands each one to the caller whole — the wording is
-    what the caller reads, so a note truncated to its first clause would pass
-    a test that only counted warnings.
-    """
+    """``check`` hands each note to the caller whole; which models earn one is mathspec's."""
     with pytest.warns(SpecsolveWarning) as record:
         _check()
     message = '\n'.join(str(w.message) for w in record)
@@ -48,13 +42,7 @@ def test_the_note_reaches_the_caller_as_a_warning_off_check():
 
 
 def test_the_note_closes_no_door():
-    """Every verb but `check` is silent, and the unbounded model still builds.
-
-    The trade the warning makes: a caller who goes straight to `solve` is told
-    nothing and gets the solver's answer, which is the bare `unbounded` this
-    finding exists to improve on. Pinned from both ends so neither half moves
-    without the other being read.
-    """
+    """Every verb but `check` is silent, and the unbounded model still builds."""
     data = {'t': [0, 1, 2], 'cap': [1.0, 1.0, 1.0], 'cost': [1.0, 1.0, 1.0]}
     with warnings.catch_warnings():
         warnings.simplefilter('error', SpecsolveWarning)
@@ -66,14 +54,7 @@ def test_the_note_closes_no_door():
 
 
 def test_check_reads_the_notes_off_the_expanded_curve():
-    """`piecewise:` holds its variables through the constraints it expands into.
-
-    Nothing in the file as written names `op_cost`, so a note read off the
-    declarations alone would call a model unbounded that the block bounds two
-    constraints later. The expansion is the language's to do and the caller
-    hands `check` the expanded model; what is pinned here is that the notes
-    are read off that one.
-    """
+    """`piecewise:` bounds its variables through the constraints it expands into."""
     raw = yaml.safe_load((EXAMPLES_DIR / 'piecewise.yaml').read_text())
     del raw['variables']['op_cost']['bounds']
     written_out = to_spec(raw).expand('piecewise')
