@@ -1,9 +1,9 @@
 """Every expression read at one chosen point, on both lanes, with no solver.
 
 ``test_expression_sweep.py`` puts each expression in a constraint and compares
-the objectives. That sees a term only where its row binds: ``sum(y + w, over=f)
-<= 10`` builds a wrong right-hand side on the relational lane, and the sweep
-passes it, because ``y`` is not in the objective. Here every variable is held at
+the objectives. That sees a term only where its row binds: a wrong right-hand
+side for ``sum(y + w, over=f) <= 10`` passed it, because ``y`` is not in the
+objective, and this sweep found it (#1782). Here every variable is held at
 a seeded value and each expression is *read*, as ``result.evaluate`` reads it, on
 both lanes (``tests.differential.at_a_point``). Every coordinate of every term
 is compared, and three limits of the solve sweep fall away:
@@ -74,13 +74,6 @@ def _data() -> dict[str, Any]:
     }
 
 
-#: What the lanes read differently today. Strict: a fix turns its case red until
-#: its entry here goes.
-DIVERGENCES = {
-    'sum((y) + (w), over=f)': '#1782: the relational lane keeps w[b] where y is absent, so the sum does not skip it',
-    'sum((w) + (y), over=f)': '#1782: the same, operands swapped',
-}
-
 #: Every twentieth rewrite joins the depth-two space in the census below.
 CENSUS_STEP = 20
 #: Of the 73 cases that samples, how many answered when the floor was set: all
@@ -100,16 +93,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     shard = metafunc.config.getoption('--sweep-shard')
     if 'node' in metafunc.fixturenames:
         nodes = stride(space(metafunc.config.getoption('--sweep-depth')), shard)
-        metafunc.parametrize('node', [_known(node) for node in nodes])
+        metafunc.parametrize('node', nodes, ids=str)
     if 'rewrite' in metafunc.fixturenames:
         metafunc.parametrize('rewrite', stride(rewrites(), shard), ids=lambda r: f'{r.rule}: {r.before}')
-
-
-def _known(node: Node) -> Any:
-    """*node* as a case, marked where ``DIVERGENCES`` names it."""
-    reason = DIVERGENCES.get(str(node))
-    marks = [pytest.mark.xfail(reason=reason, strict=True)] if reason else []
-    return pytest.param(node, id=str(node), marks=marks)
 
 
 def _answer(agreed: Read, expression: str | Mapping[str, Any]) -> pl.DataFrame | None:
@@ -151,11 +137,7 @@ OPERATORS = [
     pytest.param('w / x', id='divide-by-a-variable'),
     pytest.param('x / y', id='divide-by-a-masked-variable'),
     pytest.param('x / (w * y)', id='divide-by-a-parameter-times-a-masked-variable'),
-    pytest.param(
-        'x / (x - x)',
-        id='divide-by-zero',
-        marks=pytest.mark.xfail(reason='#1783: the linopy lane reads a quotient by zero as inf', strict=True),
-    ),
+    pytest.param('x / (x - x)', id='divide-by-zero'),
     pytest.param('sum(x / y, over=f)', id='sum-of-a-quotient-by-a-masked-variable'),
     pytest.param('sum(x / y + x, over=f)', id='sum-of-a-quotient-by-a-masked-variable-beside-a-present-term'),
     pytest.param('x ** 2', id='square-a-variable'),
@@ -182,6 +164,10 @@ OPERATORS = [
     ),
     pytest.param('sum(x, by=season_of, over=t, into=s)', id='sum-by-a-relation'),
     pytest.param('sum(y, by=season_of, over=t, into=s)', id='sum-a-masked-variable-by-a-relation'),
+    pytest.param('sum(y * w + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-masked-term'),
+    pytest.param(
+        'sum(shift(x, along=t, offset=1) + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-vacated-edge'
+    ),
     pytest.param(
         {
             'dims': ['f', 't'],
@@ -210,7 +196,7 @@ def test_enough_of_the_sweep_reaches_an_answer(agreed: Read) -> None:
     test, so xdist cannot split the count, and always the depth-two slice, so
     the number does not move with ``--sweep-depth``.
     """
-    cases = [str(node) for node in space(2) if str(node) not in DIVERGENCES]
+    cases = [str(node) for node in space(2)]
     cases += [str(pair.before) for pair in rewrites()[::CENSUS_STEP]]
     answered = sum(_answer(agreed, case) is not None for case in cases)
     assert answered >= ANSWERS, (

@@ -139,10 +139,13 @@ class Scope:
         "present at all of them" — so the widening is a cross join with those
         dimensions' own tables, and it changes no answer.
         """
-        for d in want:
-            if d not in have:
-                presence = presence.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
-        return presence.select(*want)
+        return self.spread(presence, [d for d in want if d not in have]).select(*want)
+
+    def spread(self, frame: pl.LazyFrame, dims: Sequence[str]) -> pl.LazyFrame:
+        """*frame* repeated at every label of each of *dims*, which it does not carry."""
+        for d in dims:
+            frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        return frame
 
     def spanned(self, fragments: Sequence[TermFragment]) -> tuple[str, ...]:
         """The dims *fragments* carry between them, in declaration order."""

@@ -173,6 +173,20 @@ def test_a_reduction_does_not_distribute_over_addition_when_an_operand_is_absent
     assert together != pytest.approx(apart, rel=RTOL), 'the two questions must stay distinguishable'
 
 
+def test_a_sum_skips_a_parameter_where_a_masked_operand_beside_it_is_absent():
+    """The same rule when the present operand is a parameter over fewer dimensions.
+
+    ``w`` is over ``f`` alone and ``y`` over ``f`` and ``t``, absent at ``f=b``.
+    The summand ``y + w`` is absent at ``f=b`` for every ``t``, so the row keeps
+    ``w[a]`` alone and ``y[a, t]`` may reach ``10 - 2``. The relational lane kept
+    ``w[b]`` too, because it restricted only an operand that carried every
+    dimension ``y``'s presence is keyed by (#1782).
+    """
+    assert _objective_of('sum(y + w, over=f) <= 10', objective='sum(y)') == pytest.approx(16.0, rel=RTOL), (
+        'each of the two rows caps y[a, t] at 8, not at the 5 that w[b] would leave'
+    )
+
+
 def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     """Row absence, the other half of the same rule.
 
