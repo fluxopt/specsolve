@@ -162,9 +162,9 @@ description = "Everything the required check runs: lint, format, types, suite"
 depends-on = ["lint", "format-check", "typecheck", "test"]
 
 [tool.pixi.tasks.sweep]
-description = "Every expression to depth three, both lanes"
+description = "Every expression to depth three, both lanes, solved and read at a point"
 args = [{ arg = "shard", default = "0/1" }]
-cmd = "pytest tests/test_expression_sweep.py -q -n auto --sweep-depth 3 --sweep-shard {{ shard }}"
+cmd = "pytest tests/test_expression_sweep.py tests/test_expression_at_a_point.py -q -n auto --sweep-depth 3 --sweep-shard {{ shard }}"
 
 # `python -m` puts the project root on sys.path, which `tools.mdx_github_math` needs.
 [tool.pixi.feature.docs.tasks]
