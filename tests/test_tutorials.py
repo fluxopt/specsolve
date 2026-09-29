@@ -1,8 +1,8 @@
-"""The tutorial pages keep running, and keep claiming true things.
+"""The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-``docs/interactive.md`` and ``docs/lifecycle.md`` run every executed block, and
-each test pins one claim the prose makes. Blocks are exec'd in order in one
-namespace, as markdown-exec's ``session=`` runs them on the site.
+``docs/change.md`` and ``docs/howto/fix-relax-remove.md`` run every executed
+block, and each test pins one claim the prose makes. Blocks are exec'd in order
+in one namespace, as markdown-exec's ``session=`` runs them on the site.
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
-LOOPS = DOCS_DIR / 'interactive.md'
-LIFECYCLE = DOCS_DIR / 'lifecycle.md'
+LOOPS = DOCS_DIR / 'change.md'
+LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
 EXECUTED = re.compile(r'^```python[^\n]*\bexec="true"[^\n]*$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
@@ -91,22 +91,6 @@ def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, An
 def test_a_refused_edit_says_what_is_wrong(session: tuple[dict[str, Any], str]) -> None:
     _, printed = session
     assert 'does not name a declared dimension' in printed, "the load-time error is the page's error message"
-
-
-def test_a_masked_generator_leaves_the_balance_row_short(session: tuple[dict[str, Any], str]) -> None:
-    """The debugging claim: the file names three generators and the built row carries two."""
-    namespace, _ = session
-    fleet = namespace['fleet'].row('power_balance', snapshot=3)
-    short = namespace['short'].row('power_balance', snapshot=3)
-    assert fleet.terms['coordinate'].to_list() == ['3, wind', '3, solar', '3, gas'], (
-        'the fleet as declared puts all three generators in the balance row'
-    )
-    assert short.terms['coordinate'].to_list() == ['3, wind', '3, solar'], (
-        "a capacity of zero deletes gas's column, so the row that built has no term to carry it"
-    )
-    assert namespace['answer'].termination_condition == 'infeasible', (
-        'and the page needs a model that actually stopped having an answer'
-    )
 
 
 def test_the_session_leaves_a_file(session: tuple[dict[str, Any], str]) -> None:

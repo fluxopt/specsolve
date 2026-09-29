@@ -2,11 +2,11 @@
 
 This folder is both the published site and what you read on GitHub.
 [index.md](index.md) is the site's front door and this page is the folder
-view. Start at [running a model](guide.md).
+view. Start at [running a model](run.md).
 
 **The nav and the tree are arranged by what a page is for**, the four kinds
-of [Diátaxis](https://diataxis.fr): tutorials (`guide.md`, `interactive.md`
-and `lifecycle.md`, at the root), how-to guides (`howto/`), reference
+of [Diátaxis](https://diataxis.fr): tutorials (`run.md`, `tables.md`,
+`change.md` and `sweep.md`, at the root), how-to guides (`howto/`), reference
 (`reference/`, and the model pages in `examples/`) and explanation
 (`about/`). The rules each kind
 has to meet are

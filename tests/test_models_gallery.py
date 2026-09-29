@@ -251,7 +251,7 @@ def test_no_tab_without_a_reference() -> None:
 
 
 #: Hand-written prose that shows model YAML, checked against the models that
-#: run. `docs/guide.md` links the language rather than teaching it, so it is
+#: run. `docs/run.md` links the language rather than teaching it, so it is
 #: not here.
 TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
 #: Both spellings of a declaration: a list item under `constraints:` and a

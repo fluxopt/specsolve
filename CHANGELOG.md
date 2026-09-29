@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
+
 ## 0.2.1 (2026-09-29)
 
 This release fixes three wrong answers. None of them raised an error. A model

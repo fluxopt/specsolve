@@ -45,7 +45,9 @@ except ModuleNotFoundError:
 REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
     'README.md',
-    'docs/guide.md',
+    'docs/run.md',
+    'docs/howto/warm-start.md',
+    'docs/howto/fix-relax-remove.md',
     'docs/howto/parallel.md',
     'docs/howto/debug.md',
     'docs/howto/archiving.md',

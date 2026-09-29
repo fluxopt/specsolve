@@ -1,6 +1,6 @@
 # Tables in, tables out
 
-The dispatch model from [Run a model](guide.md), fed from parquet files and
+The dispatch model from [Run a model](run.md), fed from parquet files and
 read back as tables. The last two steps keep the solve as an **archive**
 ([glossary](reference/glossary.md#the-chain)), a directory that holds the
 spec and parquet files, and query it.
@@ -147,7 +147,7 @@ A database that reads parquet runs the same query. The SQL for DuckDB is on
 
 | | |
 |---|---|
-| [Sweep a model](sweep.md) | the next tutorial: one model once per scenario, then window by window |
+| [Change a model](change.md) | the next tutorial: new numbers, more rows, new math |
 | [The data contract](reference/data.md) | what each key in `sources` accepts and refuses |
 | [Archiving a solve](howto/archiving.md) | zips, sweeps and archives too big to hold |
 | [Reading a directory of runs](howto/warehouse.md) | many archives as one table |
