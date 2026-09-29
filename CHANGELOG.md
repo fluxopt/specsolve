@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: a how-to guide chooses a solver and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
+
 ## 0.2.1 (2026-09-29)
 
 This release fixes three wrong answers. None of them raised an error. A model
