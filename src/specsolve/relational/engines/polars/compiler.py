@@ -37,6 +37,7 @@ from specsolve.relational.engines.polars.fragments import (
     Presence,
     TermFragment,
     absence_restrictions,
+    acted_along,
     both_regions,
     constant_scalar,
     fan_in,
@@ -289,7 +290,8 @@ class PolarsCompiler:
             """
             inner = ev(e.operand)
             if fan_in(e) != 'one-to-one':
-                inner = propagate_absence(inner)
+                assert isinstance(e, program.Sum | program.GroupSum | program.WindowSum), 'only a sum fans in'
+                inner = propagate_absence(inner, self.scope, acted_along(e))
             return map_fragments(inner, rewrite)
 
         def region(r: program.Region) -> CompiledExpression:

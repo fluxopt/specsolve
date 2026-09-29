@@ -9,9 +9,10 @@ import.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
-__all__ = ['coefficient', 'filled', 'present', 'unmapped', 'vacated', 'variable_term']
+__all__ = ['coefficient', 'divisor', 'filled', 'present', 'unmapped', 'vacated', 'variable_term']
 
 
 def present(model: Any, name: str) -> Any:
@@ -54,6 +55,17 @@ def coefficient(parameter: Any) -> Any:
     slot arrives as NaN, which linopy refuses in a user-supplied constant.
     """
     return parameter.fillna(0.0)
+
+
+def divisor(value: Any) -> Any:
+    """A divisor as a read takes it: absent where it is zero, since a reported quotient by zero has no value (#1776).
+
+    A build keeps the plain divisor. There it is data, and the relational
+    engine leaves a build's divisor as it is.
+    """
+    if hasattr(value, 'where'):
+        return value.where(value != 0)
+    return value if value != 0 else math.nan
 
 
 def vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) -> Any:
