@@ -103,7 +103,7 @@ def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
     """The claim beside its evidence — `test_sink_capability_probes.py`'s twin.
 
     This sink hands gurobipy every model above, the quadratic constraint
-    included. The linopy lane cannot, as ``lanes.LANES`` declares.
+    included.
     """
     capabilities = SOLVERS['gurobi'].capabilities
     for capability in CAPABILITIES:

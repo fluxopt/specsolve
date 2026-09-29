@@ -1,10 +1,8 @@
 """Is the data there where a declaration needs it? The positions that ask.
 
-Everything else in this lane reads an absent parameter row as a zero
-coefficient (the absence rules). These are the positions that reading has no
-answer for — a **divisor**, where zero is not a divisor at all, and a
-**constant piece**, where zero is the bound rather than the absence of one —
-and each is asked at the last moment the gap is still visible:
+Elsewhere an absent parameter row reads as a zero coefficient. A divisor and a
+constant piece have no such reading, so each is asked at the last moment the
+gap is still visible:
 
 =============================  ===================================  ==========================================
 position                       the gap looks like                   asked
@@ -14,12 +12,6 @@ a divisor under a constant     a null value in the piece            before [`con
 a constant piece the row sees  a null after the join onto the rows  on the rows pass itself
 a constant piece summed away   a coordinate the parameter lacks     of the parameter, the piece no longer showing it
 =============================  ===================================  ==========================================
-
-Which parameters stand as constant pieces, and under which region of a
-``cases:`` block, is read off the fragments the compiler built
-([`parameters`][fragments.TermFragment.parameters],
-[`region`][fragments.TermFragment.region]), so the rule is decided once, where
-the pieces are made.
 """
 
 from __future__ import annotations
@@ -50,10 +42,7 @@ def divisors_of(*expressions: program.Expression) -> tuple[program.Expression, .
 def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: program.Expression) -> None:
     """A null coefficient in *stacked* means a divisor had no value where the model divided.
 
-    A quotient left-joins its divisor, so a missing value leaves a null — and a
-    term whose row was masked out, or whose numerator variable is absent, never
-    gets this far. Asked of the stack before any cell collapses, since ``sum``
-    reads a null as zero.
+    Asked before any cell collapses, since ``sum`` reads a null as zero.
 
     Raises:
         DataError: Naming the divisor parameters of *expressions* and the
@@ -73,14 +62,9 @@ def refuse_null_constants(
 ) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided.
 
-    [`refuse_null_coefficients`][] one position over, and asked before
-    [`constant_scalar`][fragments.constant_scalar] rather than after: a constant piece is
-    summed per coordinate on its way to the row, and polars reads a null as
-    zero, so a gap left behind for this to find is filled in by the time the
-    assembled constant is joined. *pieces* are narrowed by the caller to the
-    coordinates the declaration builds; *divisors* are the names the refusal
-    reports, and nothing is read where there are none. *message* words it for
-    the position: a reported expression constrains nothing.
+    Asked before [`constant_scalar`][fragments.constant_scalar] sums the piece,
+    which reads a null as zero. *pieces* are narrowed by the caller to the
+    coordinates the declaration builds. *message* words it for the position.
 
     Raises:
         DataError: Naming *divisors* and the count of undefined values.
@@ -96,13 +80,8 @@ def refuse_null_constants(
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[TermFragment]) -> list[pl.LazyFrame]:
     """Each constant piece cut to the rows built, for [`refuse_null_constants`][].
 
-    A piece keeping the row's own dims is narrowed to the rows built, the
-    semi-join standing in for the inner join that narrows a term; one that
-    lost them to a reduction is asked whole, because the rows summed into a
-    coordinate are exactly the rows a mask over the row's dims cannot speak
-    about. Whole still means *if the declaration builds a row at all*, which
-    is what the single carried row narrows it by — a ``where`` that emptied
-    the frame has answered the question already.
+    A piece that lost the row's dims to a reduction is asked whole, but only if
+    the declaration builds a row at all.
     """
     return [
         p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi')
@@ -121,17 +100,9 @@ def constant_side(
 ) -> pl.DataFrame:
     """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.
 
-    Each constant piece is aggregated to its own coordinates and left-joined
-    onto *rows*, so a coordinate it has no row for contributes zero. **The
-    coverage check rides on that same pass**: the flag is a boolean column
-    dropped once counted, and the refusal precedes any use of the rows. A
-    piece built under a region of a ``cases:`` block is owed only inside it —
-    a null outside is another region's coordinate. It answers for the piece
-    the row is given, which is why a piece that arrives short of the parameter
-    behind it — a translation past the edge, a group no member maps to — is
-    caught here and nowhere else.
-
-    What it cannot answer for is a gap an aggregation summed away, which is
+    A coordinate a piece has no row for contributes zero, and the coverage
+    check rides on the same pass. A piece built under a ``cases:`` region is
+    owed only inside it. A gap an aggregation summed away is
     [`refuse_short_constants`][]' question.
 
     Raises:
@@ -179,14 +150,9 @@ def refuse_short_constants(
 ) -> None:
     """A parameter on a constant side must cover the coordinates the rows ask of it.
 
-    Asked of the *parameter* where [`constant_side`][] asks the assembled
-    piece, because the parameter is what still has the answer once an
-    aggregation has stood between the two: a summed piece carries one row per
-    coordinate it does cover, so the gap it left is not a null a join can find
-    but a row that was never there.
-
-    Nothing is read for a parameter outside *sparse*, the names attaching found
-    short of their coordinate product — a dense one cannot be short anywhere.
+    Asked of the parameter, because once a piece is summed its gap is a row
+    that was never there, not a null a join can find. Only names in *sparse*,
+    the parameters short of their coordinate product, are read.
 
     Raises:
         DataError: Naming the first short parameter, in name order.
@@ -207,12 +173,8 @@ def _uncovered_coordinates(
 ) -> int:
     """How many coordinates *param* owes this constraint and has no row for.
 
-    The rows built carry the dims they share with the parameter; the dims a
-    reduction summed away are owed whole, a ``where`` over the row's dims
-    having no way to narrow them. A region narrows what is owed to the
-    coordinates it claims, as it does for the assembled piece — and a region
-    claiming no built row at all leaves the parameter owing nothing, which is
-    why the narrowing runs even where no dim is shared.
+    Dims a reduction summed away are owed whole. A region narrows even where no
+    dim is shared, since one claiming no built row leaves nothing owed.
     """
     dims = scope.program.parameters[param].dims
     shared = tuple(d for d in dims if d in c.dims)
