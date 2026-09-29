@@ -7,10 +7,35 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+## 0.2.1 (2026-09-29)
+
+This release fixes three wrong answers. None of them raised an error. A model
+that meets one builds a different row, or reads a different value, in 0.2.1.
+No file, archive or import breaks.
+
+- A sum over a variable with a `where:`, beside a parameter over fewer
+  dimensions, such as `sum(y + w, over=f)` with `w` over `f` alone. The
+  parameter now drops out where the variable is absent, in the constraint row
+  and in `evaluate`. Before, it stayed in, so the row had a wrong right-hand
+  side.
+- A divisor, a power's base or an exponent that is a `sum(...)`. It is now
+  taken as its total, in a build and in a read. Before, it was taken summand by
+  summand.
+- A reported quotient whose divisor is absent or zero. It now has no value at
+  that coordinate. Before, it read `inf` or raised a `DataError`.
+
+`Result.dual` now states the sign of a dual: the rate at which the optimal
+objective rises with the row's right side, for every comparator, under either
+sense and on every solver. No value changes. mathspec's reference now defines
+`dual(c)` the same way
+([energy-models/mathspec#751](https://github.com/energy-models/mathspec/pull/751)).
+
+The pull requests since 0.2.0:
+
 - fix(engine): a sum leaves out a parameter where a variable added to it is absent, in the model and in a read ([#1784](https://github.com/fluxopt/specsolve/pull/1784))
-- docs(api): a dual is the rate at which the optimal objective rises with its row's right side, on every sink ([#1774](https://github.com/fluxopt/specsolve/pull/1774))
-- fix(api): a reported quotient is absent where its divisor is absent or zero ([#1776](https://github.com/fluxopt/specsolve/pull/1776))
 - fix(engine): a divisor, a power's base or an exponent that is a sum is taken as its total rather than summand by summand ([#1779](https://github.com/fluxopt/specsolve/pull/1779))
+- fix(api): a reported quotient is absent where its divisor is absent or zero ([#1776](https://github.com/fluxopt/specsolve/pull/1776))
+- docs(api): a dual is the rate at which the optimal objective rises with its row's right side, on every sink ([#1774](https://github.com/fluxopt/specsolve/pull/1774))
 
 ## 0.2.0 (2026-09-25)
 
