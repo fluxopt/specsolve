@@ -40,7 +40,7 @@ xpress = [
     "xpress>=9.5",
 ]
 pyomo = [
-    "pyomo>=6.7",
+    "pyomo>=6.8",
 ]
 
 [project.urls]
@@ -89,7 +89,7 @@ dev = [
     "pre-commit==4.6.2",
     "pyarrow>=16",
     "typst>=0.15.0",
-    "pyomo>=6.7",
+    "pyomo>=6.8",
     # The test oracle. Master: linopy's v1 arithmetic convention is in no release yet (#463).
     "linopy @ git+https://github.com/PyPSA/linopy@master",
     "xarray>=2024.2.0",
