@@ -31,7 +31,7 @@ from specsolve.relational.engines.polars.attaching import attach
 from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
 from specsolve.relational.engines.polars.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.pyomo_model import to_pyomo
+from specsolve.relational.sinks.pyomo import to_pyomo
 from specsolve.relational.sinks.writers.base import NUMBERED
 
 if TYPE_CHECKING:
