@@ -143,7 +143,7 @@ def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any) -> 
                     for t in row.terms.iter_rows(named=True)
                 }
                 held = component[coordinate[0] if len(coordinate) == 1 else coordinate] if coordinate else component
-                bound = held.lower if row.sense == '>=' else held.upper
+                bound = pyo.value(held.lower if row.sense == '>=' else held.upper)
                 assert _terms(held.body) == expected, f'{constraint}{coordinate} holds another row'
                 assert bound == pytest.approx(row.rhs), f'{constraint}{coordinate} compares against another bound'
                 assert held.equality == (row.sense == '=='), f'{constraint}{coordinate} changed its sense'
@@ -162,6 +162,52 @@ def test_a_masked_coordinate_has_no_entry() -> None:
     assert list(m.x) == [0, 2], 'the coordinate cap removed is absent, and one dim indexes by the bare label'
     assert list(m.c) == [0, 2], 'the row with no term is not built'
     assert not m.total.is_indexed(), 'a dimensionless variable is a scalar'
+
+
+#: Every column of ``x`` masked, so anything summing over it has no term.
+EMPTIED_DATA = {'j': [0, 1], 'cap': pl.DataFrame({'j': [0, 1], 'value': [0.0, 0.0]})}
+
+
+def test_a_scalar_constraint_the_build_dropped_has_no_row() -> None:
+    """The build drops a row with no variable term, and a scalar constraint then has none.
+
+    The scalar's rule read its one row unconditionally, so the export raised
+    ``KeyError: ()`` on a model the engine solves.
+    """
+    spec = {
+        'dimensions': {'j': {'dtype': 'int'}},
+        'parameters': {'cap': {'dims': ['j']}},
+        'variables': {
+            'x': {'dims': ['j'], 'where': 'cap > 0', 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': [], 'bounds': {'lower': 1, 'upper': 2}},
+        },
+        'constraints': {'c': {'dims': [], 'expression': 'sum(x, over=j) <= 5'}},
+        'objective': {'sense': 'minimize', 'expression': 'y'},
+    }
+    m, answer = _exported(spec, EMPTIED_DATA)
+    assert len(m.c) == 0, 'the row the build dropped is not in the component'
+    assert _solved(m) == pytest.approx(answer.objective), 'the model without the row is the one the engine solved'
+
+
+def test_a_scalar_set_over_a_fully_masked_variable_has_no_set() -> None:
+    """Ordered along its only dim, a variable with every column masked leaves the one set empty.
+
+    The scalar's rule read that set unconditionally, so the export raised
+    ``KeyError: ()``.
+    """
+    spec = {
+        'dimensions': {'j': {'dtype': 'int'}},
+        'parameters': {'cap': {'dims': ['j']}},
+        'variables': {
+            'x': {'dims': ['j'], 'where': 'cap > 0', 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': [], 'bounds': {'lower': 1, 'upper': 2}},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'y'},
+        'sos': {'pick': {'variable': 'x', 'along': 'j', 'type': 1}},
+    }
+    with sps.build(spec, EMPTIED_DATA) as model:
+        m = model.to_pyomo()
+    assert len(m.pick) == 0, 'a set with no member is not built'
 
 
 def test_a_row_of_only_zeros_stays_infeasible() -> None:

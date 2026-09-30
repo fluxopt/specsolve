@@ -169,13 +169,14 @@ def _component(
 
     With *values*, each entry is read off it by a rule. Pyomo unpacks a tuple
     index into the rule's arguments, and calls a scalar's rule with the model
-    alone, so the two take different rules.
+    alone, so the two take different rules. A scalar the build left empty, such
+    as a row it dropped for having no term, is skipped rather than built.
     """
     if values is None:
         return kind(index, **options) if dims else kind(**options)
 
     def scalar(_m: Any) -> Any:
-        return values[()]
+        return values.get((), kind.Skip)
 
     def indexed(_m: Any, *at: Any) -> Any:
         return values[_index(at)]
