@@ -116,7 +116,7 @@ pip install specsolve
 ```
 
 That brings polars, HiGHS and the language. Add the `[gurobi]` or `[xpress]`
-extra for those solvers, and `[pyomo]` to hand a built model to pyomo. The bridges out of a result, `to_pandas` and
+extra for those solvers. The bridges out of a result, `to_pandas` and
 `to_dataarray`, need pandas and xarray, which you install yourself. To work on
 specsolve, see
 [CONTRIBUTING.md](https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md).

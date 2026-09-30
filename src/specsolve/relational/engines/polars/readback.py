@@ -12,7 +12,7 @@ from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
-from specsolve.relational.sinks.handoff import Declared, Run, SetRun
+from specsolve.relational.sinks.handoff import Declared, Run
 from specsolve.relational.sinks.writers.base import Names
 
 if TYPE_CHECKING:
@@ -181,21 +181,14 @@ def _refuse_a_shared_name(frame: pl.DataFrame, name: str, dims: tuple[str, ...],
 
 
 def declared(model: BuiltModel) -> Declared:
-    """Which declaration, at which coordinate, owns each column, row and set.
+    """Which declaration, at which coordinate, owns each column and row.
 
     Each declaration's frame arrives in label order, and the build keeps them
     in the order it took them, which is the order of their runs.
     """
     variables = [_run(name, owned, model.program.variables[name].dims) for name, owned in model.variables.items()]
     constraints = [_run(name, owned, model.program.constraints[name].dims) for name, owned in model.constraints.items()]
-    sets = []
-    for name, s in model.program.sos.items():
-        dims = model.program.variables[s.variable].dims
-        others = [d for d in dims if d != s.along]
-        frame = model.variables[s.variable].frame.collect(engine=polars_engine())
-        count = frame.select(others).n_unique() if others and frame.height else min(frame.height, 1)
-        sets.append(SetRun(name, s.variable, dims.index(s.along), s.sos_type, count))
-    return Declared(variables, constraints, sets)
+    return Declared(variables, constraints)
 
 
 def _run(name: str, owned: labels.Labelled, dims: tuple[str, ...]) -> Run:

@@ -13,7 +13,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -31,7 +31,6 @@ from specsolve.relational.engines.polars.attaching import attach
 from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
 from specsolve.relational.engines.polars.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.pyomo import to_pyomo
 from specsolve.relational.sinks.writers.base import NUMBERED
 
 if TYPE_CHECKING:
@@ -127,10 +126,6 @@ class PolarsEngine:
             raise SpecsolveError(refused)
         with _clocked(self._seconds, 'write'):
             chosen.write(handoff, path, readback.file_names(self._model) if names else NUMBERED)
-
-    def to_pyomo(self) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
-        """The built model as a ``pyomo.environ.ConcreteModel``. See [`to_pyomo`][specsolve.api.Model.to_pyomo]."""
-        return to_pyomo(self._model.handoff, readback.declared(self._model))
 
     def solve(
         self,

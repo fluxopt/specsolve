@@ -39,9 +39,6 @@ xpress = [
     # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
     "xpress>=9.5",
 ]
-pyomo = [
-    "pyomo>=6.8",
-]
 
 [project.urls]
 Documentation = "https://specsolve.readthedocs.io"
@@ -89,7 +86,7 @@ dev = [
     "pre-commit==4.6.2",
     "pyarrow>=16",
     "typst>=0.15.0",
-    "pyomo>=6.8",
+    "pyomo>=6.7",
     # The test oracle. Master: linopy's v1 arithmetic convention is in no release yet (#463).
     "linopy @ git+https://github.com/PyPSA/linopy@master",
     "xarray>=2024.2.0",
@@ -336,9 +333,5 @@ errors = { explicit-any = false }
 
 [[tool.pyrefly.sub-config]]
 matches = "src/specsolve/relational/sinks/solvers/**"
-errors = { explicit-any = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "src/specsolve/relational/sinks/pyomo.py"
 errors = { explicit-any = false }
 

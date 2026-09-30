@@ -380,27 +380,8 @@ class Run:
 
 
 @dataclass(frozen=True)
-class SetRun:
-    """One ``sos:`` declaration's contiguous run of sets.
-
-    Attributes:
-        name: The declaration.
-        variable: The variable its sets order.
-        along: The position of the ordering dim among that variable's dims.
-        sos_type: 1 or 2.
-        count: How many sets the build produced for it.
-    """
-
-    name: str
-    variable: str
-    along: int
-    sos_type: int
-    count: int
-
-
-@dataclass(frozen=True)
 class Declared:
-    """Which declaration, at which coordinate, owns each column, row and set, in solver order.
+    """Which declaration, at which coordinate, owns each column and row, in solver order.
 
     What a sink reads beside the [`Handoff`][] when it names what it hands
     over, which the handoff's dense indices do not.
@@ -408,7 +389,6 @@ class Declared:
 
     variables: Sequence[Run]
     constraints: Sequence[Run]
-    sets: Sequence[SetRun]
 
 
 def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], np.dtype[np.str_]]:
