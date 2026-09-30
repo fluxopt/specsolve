@@ -16,9 +16,9 @@ takes the handoff and renders it to a file. Everything else follows.
 
 **Beside them, `pyomo_model.py`.** `Model.to_pyomo()` hands the model over as
 a pyomo `ConcreteModel`, one component per declaration. A component is indexed
-by coordinates, and the handoff has none, so this sink also reads `Declared`:
-which declaration owns each column, row and set, at which coordinate. The
-engine's `readback.declared` supplies it. It needs the `[pyomo]` extra, which
+by coordinates, and the handoff has none, so this sink also reads `Declared`,
+defined beside `Handoff` in `handoff.py`: which declaration owns each column,
+row and set, at which coordinate. The engine's `readback.declared` supplies it. It needs the `[pyomo]` extra, which
 it imports when called.
 
 ## Staying loaded

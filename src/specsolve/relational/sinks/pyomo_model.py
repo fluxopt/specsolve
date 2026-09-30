@@ -8,7 +8,6 @@ the build's numbers: it is a flat sum of terms, not the formula the file wrote.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
@@ -16,9 +15,9 @@ from specsolve.errors import SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Hashable, Sequence
 
-    from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.handoff import Declared, Handoff, Run
 
-__all__ = ['OBJECTIVE', 'RESULT_SUFFIXES', 'UNAVAILABLE', 'Declared', 'Run', 'SetRun', 'to_pyomo']
+__all__ = ['OBJECTIVE', 'RESULT_SUFFIXES', 'UNAVAILABLE', 'to_pyomo']
 
 #: What calling the export without the extra says.
 UNAVAILABLE = 'to_pyomo requires the [pyomo] extra: pip install "specsolve[pyomo]"'
@@ -29,51 +28,6 @@ OBJECTIVE = 'objective'
 #: The suffixes pyomo's solver interfaces look up on a model by name and load
 #: results into, so a component of that name breaks every solve.
 RESULT_SUFFIXES = frozenset({'dual', 'rc', 'slack'})
-
-
-@dataclass(frozen=True)
-class Run:
-    """One declaration's contiguous run of columns or rows.
-
-    Attributes:
-        name: The declaration.
-        start: Its first column or row.
-        dims: Its dims, in declaration order.
-        coordinates: One label tuple per column or row, in solver order.
-    """
-
-    name: str
-    start: int
-    dims: tuple[str, ...]
-    coordinates: Sequence[tuple[Any, ...]]
-
-
-@dataclass(frozen=True)
-class SetRun:
-    """One ``sos:`` declaration's contiguous run of sets.
-
-    Attributes:
-        name: The declaration.
-        variable: The variable its sets order.
-        along: The position of the ordering dim among that variable's dims.
-        sos_type: 1 or 2.
-        count: How many sets the build produced for it.
-    """
-
-    name: str
-    variable: str
-    along: int
-    sos_type: int
-    count: int
-
-
-@dataclass(frozen=True)
-class Declared:
-    """Which declaration, at which coordinate, owns each column, row and set, in solver order."""
-
-    variables: Sequence[Run]
-    constraints: Sequence[Run]
-    sets: Sequence[SetRun]
 
 
 def to_pyomo(handoff: Handoff, declared: Declared) -> Any:
@@ -111,10 +65,11 @@ def _variables(pyo: Any, m: Any, handoff: Handoff, runs: Sequence[Run]) -> list[
     lb, ub, vtype = (handoff.cols[c].to_list() for c in ('lb', 'ub', 'vtype'))
     columns: list[Any] = [None] * handoff.column_count
     for run in runs:
-        domain = domains[vtype[run.start]] if run.coordinates else pyo.Reals
-        var = _component(pyo.Var, run.dims, [_index(c) for c in run.coordinates], domain=domain)
+        coordinates = _coordinates(run)
+        domain = domains[vtype[run.start]] if run.height else pyo.Reals
+        var = _component(pyo.Var, run.dims, [_index(c) for c in coordinates], domain=domain)
         _add(m, run.name, 'variable', var)
-        for position, coordinate in enumerate(run.coordinates, start=run.start):
+        for position, coordinate in enumerate(coordinates, start=run.start):
             column = var[_index(coordinate)] if run.dims else var
             column.setlb(lb[position])
             column.setub(ub[position])
@@ -130,7 +85,7 @@ def _constraints(pyo: Any, m: Any, handoff: Handoff, runs: Sequence[Run], column
     sense, rhs = handoff.rows['sense'].cast(str).to_list(), handoff.rows['rhs'].to_list()
     for run in runs:
         rows = {}
-        for row, coordinate in enumerate(run.coordinates, start=run.start):
+        for row, coordinate in enumerate(_coordinates(run), start=run.start):
             span = slice(int(starts[row]), int(starts[row + 1]))
             body = _linear(coeff[span], [columns[c] for c in col[span]])
             if row in quadratic:
@@ -145,21 +100,26 @@ def _sets(pyo: Any, m: Any, handoff: Handoff, declared: Declared, columns: list[
     A declaration's sets are a contiguous run of set numbers, in declaration
     order, so the runs are read off one after another.
     """
-    held = {run.name: run for run in declared.variables}
+    held = {run.name: (run, _coordinates(run)) for run in declared.variables}
     members = handoff.sos.partition_by('set', as_dict=True)
     first = 0
     for sets in declared.sets:
-        variable = held[sets.variable]
+        variable, coordinates = held[sets.variable]
         chosen = {}
         for number in range(first, first + sets.count):
             frame = members[(number,)]
             cols = frame['col'].to_list()
-            coordinate = variable.coordinates[cols[0] - variable.start]
+            coordinate = coordinates[cols[0] - variable.start]
             projected = coordinate[: sets.along] + coordinate[sets.along + 1 :]
             chosen[_index(projected)] = ([columns[c] for c in cols], frame['weight'].to_list())
         first += sets.count
         dims = variable.dims[: sets.along] + variable.dims[sets.along + 1 :]
         _add(m, sets.name, 'sos', _component(pyo.SOSConstraint, dims, list(chosen), chosen, sos=sets.sos_type))
+
+
+def _coordinates(run: Run) -> list[tuple[Any, ...]]:
+    """*run*'s coordinates as label tuples, the empty tuple for each entry of a declaration with no dims."""
+    return run.coordinates.rows() if run.dims else [()] * run.height
 
 
 def _component(

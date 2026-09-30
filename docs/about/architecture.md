@@ -567,7 +567,7 @@ is structure.
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
 | `expressions.py` | expressions spliced into the spec as written and lowered with it — what a reader values when the file never named the quantity |
 | `relational/parquet.py` | answers on disk: the `<kind>/<name>` layout a result and a sweep both write, and the writer that lands a file whole |
-| `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
+| `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index; and `Declared`, which declaration owns each column, row and set at which coordinate, for a sink that names what it hands over |
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `lanes.py` declares each **lane** in the same vocabulary |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix), and beside them `pyomo_model.py`, the model as a pyomo `ConcreteModel` — [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/relational/sinks/README.md) |
 

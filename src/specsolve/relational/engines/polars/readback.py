@@ -12,7 +12,7 @@ from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
-from specsolve.relational.sinks.pyomo_model import Declared, Run, SetRun
+from specsolve.relational.sinks.handoff import Declared, Run, SetRun
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -145,10 +145,8 @@ def declared(model: BuiltModel) -> Declared:
 
 
 def _run(name: str, owned: labels.Labelled, dims: tuple[str, ...]) -> Run:
-    """One declaration's run, each coordinate its labels as Python values."""
-    frame = owned.frame.select(dims).collect(engine=polars_engine()) if dims else None
-    coordinates = frame.rows() if frame is not None else [()] * owned.height
-    return Run(name, owned.start, dims, coordinates)
+    """One declaration's run, its coordinates the label frame's dim columns."""
+    return Run(name, owned.start, owned.height, dims, owned.frame.select(dims).collect(engine=polars_engine()))
 
 
 def laid_out(

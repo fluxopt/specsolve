@@ -16,7 +16,7 @@ import polars as pl
 from mathspec import program
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Iterator, Mapping, Sequence
 
     import numpy as np
 
@@ -357,6 +357,58 @@ class Handoff:
 
         labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
         return self._span(lo, hi).with_columns(pl.Series('row', labels))
+
+
+@dataclass(frozen=True)
+class Run:
+    """One declaration's contiguous run of columns or rows.
+
+    Attributes:
+        name: The declaration.
+        start: Its first column or row.
+        height: How many columns or rows it owns.
+        dims: Its dims, in declaration order.
+        coordinates: One row of labels per column or row, in solver order,
+            one column per dim; no columns for a declaration without dims.
+    """
+
+    name: str
+    start: int
+    height: int
+    dims: tuple[str, ...]
+    coordinates: pl.DataFrame
+
+
+@dataclass(frozen=True)
+class SetRun:
+    """One ``sos:`` declaration's contiguous run of sets.
+
+    Attributes:
+        name: The declaration.
+        variable: The variable its sets order.
+        along: The position of the ordering dim among that variable's dims.
+        sos_type: 1 or 2.
+        count: How many sets the build produced for it.
+    """
+
+    name: str
+    variable: str
+    along: int
+    sos_type: int
+    count: int
+
+
+@dataclass(frozen=True)
+class Declared:
+    """Which declaration, at which coordinate, owns each column, row and set, in solver order.
+
+    What a sink reads beside the [`Handoff`][] when it names what it hands
+    over, which the handoff's dense indices do not.
+    """
+
+    variables: Sequence[Run]
+    constraints: Sequence[Run]
+    sets: Sequence[SetRun]
 
 
 def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], np.dtype[np.str_]]:
