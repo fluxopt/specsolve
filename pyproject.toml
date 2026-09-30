@@ -30,6 +30,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Answers stored as a datarecord record (`specsolve.record`).
+datarecord = ["datarecord[mathspec]"]
 gurobi = [
     # 11 is the release whose status codes the sink maps.
     "gurobipy>=11",
@@ -113,7 +115,9 @@ python = "3.12.*"
 specsolve = { path = ".", editable = true }
 
 [tool.pixi.feature.dev.pypi-dependencies]
-specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress"] }
+specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress", "datarecord"] }
+# datarecord's unreleased stack, at a fixed commit until it releases.
+datarecord = { git = "https://github.com/energy-models/datarecord.git", rev = "5e0fa25d166417c833ee2df1b347df009a50c0f8", extras = ["mathspec"] }
 
 [tool.pixi.feature.floors]
 # pyyaml has no win-64 wheel. linux-aarch64 lets `pixi install` solve on the CodSpeed runner.

@@ -708,22 +708,32 @@ class Result:
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
-        for name, frame in primals.items():
-            write_whole(frame, out / 'primal' / f'{name}.parquet')
-        for name, frame in (self._duals or {}).items():
-            write_whole(frame, out / 'dual' / f'{name}.parquet')
-        for name, frame in (self._activities or {}).items():
-            write_whole(frame, out / 'activity' / f'{name}.parquet')
+        answered, no_expressions = self._answered(primals)
+        for kind, name, frame in answered:
+            write_whole(frame, out / kind / f'{name}.parquet')
+        write_reasons(out, self._no_duals, no_expressions)
+        return out
+
+    def _answered(
+        self, primals: Mapping[str, pl.LazyFrame | pl.DataFrame]
+    ) -> tuple[list[tuple[str, str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
+        """Every ``(kind, name, frame)`` a readable solve answered with, and why an expression is not.
+
+        The one enumeration of an answer: [`save`][] writes it as files and
+        `specsolve.record` as rows, so the two cannot hold different frames.
+        """
+        answered: list[tuple[str, str, pl.LazyFrame | pl.DataFrame]] = [
+            ('primal', name, frame) for name, frame in primals.items()
+        ]
+        answered += [('dual', name, frame) for name, frame in (self._duals or {}).items()]
+        answered += [('activity', name, frame) for name, frame in (self._activities or {}).items()]
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
-                evaluated = reader()
+                answered.append(('expression', name, reader()))
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
-                continue
-            write_whole(evaluated, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, no_expressions)
-        return out
+        return answered, no_expressions
 
     def close(self) -> None:
         """Release what this result holds early. Optional.

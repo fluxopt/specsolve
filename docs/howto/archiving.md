@@ -158,6 +158,37 @@ pl.read_parquet('runs/*/answer/record.parquet').sort('solved_at')
 
 The recipes are [reading a directory of runs](warehouse.md).
 
+## Keep a family of answers as a record
+
+A Monte Carlo campaign, a sweep kept batch by batch, or the steps of an
+iterative scheme are many answers to one spec. With the `datarecord` extra,
+each answer is one run of a [datarecord](https://github.com/energy-models/datarecord)
+record whose schema this package derives from the spec:
+
+```python
+from datarecord import Revision, WorkingRecord
+from datarecord.layered.resolve import write_schema
+from datarecord.mutable import NewChild
+
+from specsolve.record import answer_schema, write_answer
+
+write_schema(answer_schema('dispatch.yaml'), 'answers/')
+root = Revision.create(con)
+working = WorkingRecord(root.record, con)
+with sps.build('dispatch.yaml', sources) as model:
+    result = model.solve()
+    write_answer(working, result, run='s1', metrics=model.diagnostics().metrics())
+working.commit(NewChild(root))
+```
+
+**A run holds what `save` writes, frame for frame.** `primal.p`,
+`dual.power_balance` and `activity.power_balance` vary over `run` and the
+dims their declarations name. The record's and the metrics' columns are one
+row per run, and `reason` says why a quantity is not there.
+
+**The inputs stay where they are.** `input_node=` names the input record's
+node a run solved, so the answer record copies no data.
+
 ## What an archive will not take
 
 **A sweep cut by a hand-built axis.** A list of `(key, sources)` is a set of
