@@ -12,6 +12,7 @@ from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
+from specsolve.relational.sinks.writers.base import Names
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -122,6 +123,65 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         entries.with_columns(pl.col('col').cast(pl.Int64))
         .join(labelled.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left', maintain_order='left')
         .select('variable', 'coordinate', pl.col('coeff').alias('coefficient'))
+    )
+
+
+#: What a label keeps in a file name. LP reads nothing else back, and
+#: ``(``, ``)`` and ``,`` are the name's own.
+_UNSAFE_IN_A_NAME = r"""[^\w!"#$%&'.;?@`{|}~]"""
+
+
+def file_names(model: BuiltModel) -> Names:
+    """Every column and row named by its declaration at its coordinate, ``p(2030,wind)``.
+
+    A label keeps the characters both LP and MPS readers take back and writes
+    each other one as ``_``, so ``2030-01-01`` becomes ``2030_01_01``. A
+    declaration with no dims is ``p()``: a bare name can be a keyword, and
+    ``end`` or ``st`` ends a section.
+
+    Raises:
+        SpecsolveError: Two coordinates of one declaration write as one name,
+            which a reader would take for one column or refuse as a duplicate row.
+    """
+    variables = {name: v.dims for name, v in model.program.variables.items()}
+    constraints = {name: c.dims for name, c in model.program.constraints.items()}
+    return Names(
+        columns=_declared_names(model.variables, variables, 'variable'),
+        rows=_declared_names(model.constraints, constraints, 'constraint'),
+    )
+
+
+def _declared_names(held: Mapping[str, labels.Labelled], dims: Mapping[str, tuple[str, ...]], kind: str) -> pl.Series:
+    """One kind's names in solver order.
+
+    Each declaration owns a contiguous run of labels, *held* lists them in the
+    order the build took them, and each frame arrives in label order, so the
+    runs concatenate without a sort. A quadratic constraint is built last
+    wherever it is declared, which is the order this relies on.
+    """
+    runs = []
+    for name, owned in held.items():
+        cleaned = [pl.col(d).cast(pl.String).str.replace_all(_UNSAFE_IN_A_NAME, '_') for d in dims[name]]
+        spelled = pl.concat_str(cleaned, separator=',') if cleaned else pl.lit('')
+        frame = owned.frame.collect(engine=polars_engine()).with_columns(
+            pl.concat_str(pl.lit(f'{name}('), spelled, pl.lit(')')).alias('#name')
+        )
+        _refuse_a_shared_name(frame, name, dims[name], kind)
+        runs.append(frame.get_column('#name'))
+    return pl.concat(runs) if runs else pl.Series('#name', [], dtype=pl.String)
+
+
+def _refuse_a_shared_name(frame: pl.DataFrame, name: str, dims: tuple[str, ...], kind: str) -> None:
+    """Refuse a declaration two of whose coordinates clean to one name, naming both."""
+    shared = frame.filter(pl.col('#name').is_duplicated())
+    if not shared.height:
+        return
+    first = shared.filter(pl.col('#name') == shared.item(0, '#name')).head(2)
+    a, b = (tuple(first.row(i, named=True)[d] for d in dims) for i in range(2))
+    raise SpecsolveError(
+        f"{kind} '{name}' writes the coordinates {a} and {b} as one name, {shared.item(0, '#name')!r}. "
+        'A name keeps letters, digits and !"#$%&\'.;?@`{|}~ from a label and writes any other character '
+        'as _. Relabel one of the two, or write the file without names.'
     )
 
 

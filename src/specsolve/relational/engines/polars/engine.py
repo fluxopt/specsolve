@@ -31,6 +31,7 @@ from specsolve.relational.engines.polars.attaching import attach
 from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
 from specsolve.relational.engines.polars.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
+from specsolve.relational.sinks.writers.base import NUMBERED
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -107,12 +108,15 @@ class PolarsEngine:
             raise SpecsolveError(_no_built_model(f"to read '{name}' out of"))
         return readback.row(self._built, name, coordinate)
 
-    def write(self, path: str | Path) -> None:
+    def write(self, path: str | Path, *, names: bool = False) -> None:
         """Stream the built model to *path*, in the format its suffix names.
+
+        See [`write`][specsolve.api.Model.write] for *names*.
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct this format cannot spell.
+            SpecsolveError: A construct this format cannot spell, or two
+                coordinates that write as one name.
         """
         path = Path(path)
         suffix = path.suffix.lower()
@@ -121,7 +125,7 @@ class PolarsEngine:
         if (refused := sinks.refusal(self._model.program, suffix)) is not None:
             raise SpecsolveError(refused)
         with _clocked(self._seconds, 'write'):
-            chosen.write(handoff, path)
+            chosen.write(handoff, path, readback.file_names(self._model) if names else NUMBERED)
 
     def solve(
         self,
