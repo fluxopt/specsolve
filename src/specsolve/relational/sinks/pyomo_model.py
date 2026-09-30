@@ -11,8 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -118,8 +116,8 @@ def _variables(pyo: Any, m: Any, handoff: Handoff, runs: Sequence[Run]) -> list[
         _add(m, run.name, 'variable', var)
         for position, coordinate in enumerate(run.coordinates, start=run.start):
             column = var[_index(coordinate)] if run.dims else var
-            column.setlb(_finite(lb[position]))
-            column.setub(_finite(ub[position]))
+            column.setlb(lb[position])
+            column.setub(ub[position])
             columns[position] = column
     return columns
 
@@ -211,11 +209,6 @@ def _compared(body: Any, sense: str, rhs: float) -> Any:
     if sense == '>=':
         return body >= rhs
     return body == rhs
-
-
-def _finite(bound: float) -> float | None:
-    """A bound as pyomo takes it: ``None`` where it is infinite."""
-    return None if np.isinf(bound) else bound
 
 
 def _add(m: Any, name: str, kind: str, component: Any) -> None:

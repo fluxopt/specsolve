@@ -10,6 +10,7 @@ one row would break while leaving every objective intact.
 from __future__ import annotations
 
 import datetime
+import itertools
 import sys
 from typing import Any
 
@@ -22,8 +23,8 @@ from tests.conftest import DISPATCH_SPEC, PORT_REFERENCES, expanded, port_source
 from tests.test_mps_text import COMMITMENT, COMMITMENT_DATA, DISPATCH_DATA, FREE_DATA, FREE_SPEC, QUADRATIC_ROW_SPEC
 from tests.test_quadratic_objective import SOURCES as QUADRATIC_DATA
 from tests.test_quadratic_objective import SPEC as QUADRATIC_OBJECTIVE_SPEC
+from tests.test_sos import CAP, SITES, SIZES, VALUE, best
 from tests.test_sos import DATA as SOS_DATA
-from tests.test_sos import best
 from tests.test_sos import spec as sos_spec
 
 pyo = pytest.importorskip('pyomo.environ', reason='to_pyomo needs the [pyomo] extra')
@@ -209,6 +210,32 @@ def test_a_set_is_indexed_by_its_members_coordinate_without_the_ordering_dim(sos
     assert _solved(m, 'gurobi_direct') == pytest.approx(best(sos_type)), (
         f'the exported {declared} sets do not restrict what they should'
     )
+
+
+@pytest.mark.parametrize('sos_type', [1, 2])
+def test_a_set_over_a_variable_with_no_other_dim_is_one_scalar_set(sos_type: int) -> None:
+    """With the ordering dim the variable's only one, nothing is left to index the set by, and there is one set."""
+    pytest.importorskip('gurobipy', reason='no solver here takes an SOS without it')
+    site = SITES[0]
+    spec = {
+        'dimensions': {'size': {'dtype': 'int'}},
+        'parameters': {'value': {'dims': ['size']}, 'cap': {'dims': ['size']}},
+        'variables': {'take': {'dims': ['size'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(take * value, over=size)'},
+        'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': sos_type}},
+    }
+    data = {
+        'size': SIZES,
+        'value': pl.DataFrame({'size': SIZES, 'value': [VALUE[site, s] for s in SIZES]}),
+        'cap': pl.DataFrame({'size': SIZES, 'value': [CAP[site, s] for s in SIZES]}),
+    }
+    patterns = [(s,) for s in SIZES] + (list(itertools.pairwise(SIZES)) if sos_type == 2 else [])
+    optimum = max(sum(VALUE[site, s] * CAP[site, s] for s in pattern) for pattern in patterns)
+    with sps.build(spec, data) as model:
+        m = model.to_pyomo()
+    assert not m.pick.is_indexed(), 'one set, with nothing left to index it by'
+    assert len(list(m.pick.get_variables())) == len(SIZES), 'the set orders every member'
+    assert _solved(m, 'gurobi_direct') == pytest.approx(optimum), 'the one set does not restrict what it should'
 
 
 @pytest.mark.parametrize('name', ['write', 'name', 'component'], ids=str)

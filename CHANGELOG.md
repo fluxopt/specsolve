@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+- feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#1793](https://github.com/fluxopt/specsolve/pull/1793))
 - docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
 - docs: a how-to guide chooses a solver or writes the model to a file, and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
 - docs: a how-to guide reads an answer into pandas or xarray ([#1789](https://github.com/fluxopt/specsolve/pull/1789))
