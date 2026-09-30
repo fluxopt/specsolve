@@ -12,6 +12,7 @@ from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
+from specsolve.relational.sinks.handoff import Declared, Run, SetRun
 from specsolve.relational.sinks.writers.base import Names
 
 if TYPE_CHECKING:
@@ -143,32 +144,26 @@ def file_names(model: BuiltModel) -> Names:
         SpecsolveError: Two coordinates of one declaration write as one name,
             which a reader would take for one column or refuse as a duplicate row.
     """
-    variables = {name: v.dims for name, v in model.program.variables.items()}
-    constraints = {name: c.dims for name, c in model.program.constraints.items()}
+    owners = declared(model)
     return Names(
-        columns=_declared_names(model.variables, variables, 'variable'),
-        rows=_declared_names(model.constraints, constraints, 'constraint'),
+        columns=_declared_names(owners.variables, 'variable'),
+        rows=_declared_names(owners.constraints, 'constraint'),
     )
 
 
-def _declared_names(held: Mapping[str, labels.Labelled], dims: Mapping[str, tuple[str, ...]], kind: str) -> pl.Series:
-    """One kind's names in solver order.
-
-    Each declaration owns a contiguous run of labels, *held* lists them in the
-    order the build took them, and each frame arrives in label order, so the
-    runs concatenate without a sort. A quadratic constraint is built last
-    wherever it is declared, which is the order this relies on.
-    """
-    runs = []
-    for name, owned in held.items():
-        cleaned = [pl.col(d).cast(pl.String).str.replace_all(_UNSAFE_IN_A_NAME, '_') for d in dims[name]]
-        spelled = pl.concat_str(cleaned, separator=',') if cleaned else pl.lit('')
-        frame = owned.frame.collect(engine=polars_engine()).with_columns(
-            pl.concat_str(pl.lit(f'{name}('), spelled, pl.lit(')')).alias('#name')
-        )
-        _refuse_a_shared_name(frame, name, dims[name], kind)
-        runs.append(frame.get_column('#name'))
-    return pl.concat(runs) if runs else pl.Series('#name', [], dtype=pl.String)
+def _declared_names(runs: Sequence[Run], kind: str) -> pl.Series:
+    """One kind's names in solver order: [`declared`][]'s runs, each spelled and concatenated."""
+    names = []
+    for run in runs:
+        cleaned = [pl.col(d).cast(pl.String).str.replace_all(_UNSAFE_IN_A_NAME, '_') for d in run.dims]
+        if cleaned:
+            spelled = pl.concat_str(pl.lit(f'{run.name}('), pl.concat_str(cleaned, separator=','), pl.lit(')'))
+            frame = run.coordinates.with_columns(spelled.alias('#name'))
+        else:
+            frame = pl.DataFrame({'#name': [f'{run.name}()'] * run.height}, schema={'#name': pl.String})
+        _refuse_a_shared_name(frame, run.name, run.dims, kind)
+        names.append(frame.get_column('#name'))
+    return pl.concat(names) if names else pl.Series('#name', [], dtype=pl.String)
 
 
 def _refuse_a_shared_name(frame: pl.DataFrame, name: str, dims: tuple[str, ...], kind: str) -> None:
@@ -183,6 +178,29 @@ def _refuse_a_shared_name(frame: pl.DataFrame, name: str, dims: tuple[str, ...],
         'A name keeps letters, digits and !"#$%&\'.;?@`{|}~ from a label and writes any other character '
         'as _. Relabel one of the two, or write the file without names.'
     )
+
+
+def declared(model: BuiltModel) -> Declared:
+    """Which declaration, at which coordinate, owns each column, row and set.
+
+    Each declaration's frame arrives in label order, and the build keeps them
+    in the order it took them, which is the order of their runs.
+    """
+    variables = [_run(name, owned, model.program.variables[name].dims) for name, owned in model.variables.items()]
+    constraints = [_run(name, owned, model.program.constraints[name].dims) for name, owned in model.constraints.items()]
+    sets = []
+    for name, s in model.program.sos.items():
+        dims = model.program.variables[s.variable].dims
+        others = [d for d in dims if d != s.along]
+        frame = model.variables[s.variable].frame.collect(engine=polars_engine())
+        count = frame.select(others).n_unique() if others and frame.height else min(frame.height, 1)
+        sets.append(SetRun(name, s.variable, dims.index(s.along), s.sos_type, count))
+    return Declared(variables, constraints, sets)
+
+
+def _run(name: str, owned: labels.Labelled, dims: tuple[str, ...]) -> Run:
+    """One declaration's run, its coordinates the label frame's dim columns."""
+    return Run(name, owned.start, owned.height, dims, owned.frame.select(dims).collect(engine=polars_engine()))
 
 
 def laid_out(

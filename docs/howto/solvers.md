@@ -88,3 +88,27 @@ character is written as `_`, because an LP reader refuses it, so `north sea`
 becomes `north_sea`. A declaration with no dims is written `total()`. When two
 labels of one declaration become the same name, the write is refused and the
 error names both labels.
+
+## Hand the model to pyomo
+
+To extend the model in pyomo, or solve it with a solver pyomo runs, export the
+built model. It needs the `[pyomo]` extra:
+
+```python
+import pyomo.environ as pyo
+
+with sps.build('dispatch.yaml', sources) as model:
+    m = model.to_pyomo()
+pyo.SolverFactory('appsi_highs').solve(m)
+m.p[0, 'wind'].value
+```
+
+Each variable is a `Var` and each constraint a `Constraint`, named as the spec
+declares them and indexed by their labels. A coordinate that a `where` removed
+has no entry. A row holds the numbers the build computed, so new data means a
+new export.
+
+A spec may give a variable and a constraint the same name, and a pyomo model
+has one namespace. The later one takes its kind as a suffix, such as
+`m.start_up_constraint` beside `m.start_up`. So does a declaration named
+`dual`, `rc` or `slack`, because pyomo's solvers write their results there.
