@@ -39,6 +39,9 @@ xpress = [
     # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
     "xpress>=9.5",
 ]
+pyomo = [
+    "pyomo>=6.7",
+]
 
 [project.urls]
 Documentation = "https://specsolve.readthedocs.io"
@@ -333,5 +336,9 @@ errors = { explicit-any = false }
 
 [[tool.pyrefly.sub-config]]
 matches = "src/specsolve/relational/sinks/solvers/**"
+errors = { explicit-any = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "src/specsolve/relational/sinks/pyomo_model.py"
 errors = { explicit-any = false }
 

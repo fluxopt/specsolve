@@ -12,6 +12,7 @@ from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
+from specsolve.relational.sinks.pyomo_model import Declared, Run, SetRun
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -123,6 +124,31 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         .join(labelled.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left', maintain_order='left')
         .select('variable', 'coordinate', pl.col('coeff').alias('coefficient'))
     )
+
+
+def declared(model: BuiltModel) -> Declared:
+    """Which declaration, at which coordinate, owns each column, row and set.
+
+    Each declaration's frame arrives in label order, and the build keeps them
+    in the order it took them, which is the order of their runs.
+    """
+    variables = [_run(name, owned, model.program.variables[name].dims) for name, owned in model.variables.items()]
+    constraints = [_run(name, owned, model.program.constraints[name].dims) for name, owned in model.constraints.items()]
+    sets = []
+    for name, s in model.program.sos.items():
+        dims = model.program.variables[s.variable].dims
+        others = [d for d in dims if d != s.along]
+        frame = model.variables[s.variable].frame.collect(engine=polars_engine())
+        count = frame.select(others).n_unique() if others and frame.height else min(frame.height, 1)
+        sets.append(SetRun(name, s.variable, dims.index(s.along), s.sos_type, count))
+    return Declared(variables, constraints, sets)
+
+
+def _run(name: str, owned: labels.Labelled, dims: tuple[str, ...]) -> Run:
+    """One declaration's run, each coordinate its labels as Python values."""
+    frame = owned.frame.select(dims).collect(engine=polars_engine()) if dims else None
+    coordinates = frame.rows() if frame is not None else [()] * owned.height
+    return Run(name, owned.start, dims, coordinates)
 
 
 def laid_out(

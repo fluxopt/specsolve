@@ -23,7 +23,7 @@ import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from mathspec import advice
@@ -359,6 +359,31 @@ class Model:
                 [`check`][]'s ``sink=`` answer.
         """
         self._engine.write(path)
+
+    def to_pyomo(self) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
+        """The built model as a ``pyomo.environ.ConcreteModel``, to extend or solve in pyomo.
+
+        Each variable is a ``Var``, each constraint a ``Constraint`` and each
+        ``sos:`` set an ``SOSConstraint``, named as declared and indexed by the
+        coordinates the build produced: ``m.p[0, 'wind']``, or ``m.p['wind']``
+        over one dim. A coordinate a ``where`` removed has no entry. The
+        objective is ``m.objective``. A constraint, set or objective whose name
+        an earlier component took is suffixed with its kind, such as
+        ``m.start_up_constraint`` beside the variable ``m.start_up``; so is
+        one named ``dual``, ``rc`` or ``slack``, which pyomo's solvers read
+        results into, such as ``m.slack_variable``. A row
+        holds the build's numbers, a flat sum of terms, so new data means a
+        new export.
+
+        Returns:
+            A new ``ConcreteModel``; a second call builds another.
+
+        Raises:
+            SpecsolveError: pyomo is not installed (the ``[pyomo]`` extra), a
+                declaration is named like an attribute a ``ConcreteModel``
+                already has, or the model has been closed.
+        """
+        return self._engine.to_pyomo()
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
