@@ -554,7 +554,7 @@ def _keyed(labels) -> dict:
         series.index = series.index.set_names('outage', level=level)
     series.index = series.index.set_names([AXES.get(name, name) for name in series.index.names])
     components = [name for name in series.index.names if name in prep.DIM.values()]
-    if len(components) == 1 and 'name' not in series.index.names:
+    if len(components) == 1 and 'name' not in series.index.names and series.index.nlevels > 1:
         series.index = series.index.set_names('name', level=components[0])
     index = series.index
     if index.nlevels > 1:
