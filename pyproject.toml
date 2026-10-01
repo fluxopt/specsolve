@@ -68,12 +68,12 @@ codspeed = [
     "pyarrow>=16",
 ]
 docs = [
-    "zensical==0.0.64",
+    "zensical==0.0.66",
     "mkdocstrings==1.0.6",
     "mkdocstrings-python==2.0.9",
     "griffe-sphinx==0.3.0",
     "markdown-exec==1.12.3",
-    "pymdown-extensions==12.0.1",
+    "pymdown-extensions==12.1",
     "pygments==2.21.0",
     "pytest==9.1.1",
 ]
@@ -81,7 +81,7 @@ dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",
-    "ruff==0.16.8",
+    "ruff==0.16.9",
     "pyrefly==1.3.1",
     "pre-commit==4.6.2",
     "pyarrow>=16",
