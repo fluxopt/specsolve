@@ -493,11 +493,15 @@ class PolarsCompiler:
         return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
 
     def _empty_groups(self, p: TermFragment, g: program.GroupSum) -> pl.LazyFrame:
-        """The produced combinations no member maps to, as constant rows worth zero.
+        """The produced combinations no member of *p* lands in, as constant rows worth zero.
 
         An empty group is the empty sum, not a hole, and
         [`coverage.constant_side`][] cannot tell the two apart, so the zero is
-        written here. Only for a constant part: a row with no terms is not built.
+        written here. Asked of the grouped fragment rather than the relation:
+        a member a ``cases:`` region leaves out lands nowhere, so a group the
+        relation maps members to can still be empty. A parameter short of a
+        member is [`coverage.refuse_short_constants`][]' question. Only for a
+        constant part: a row with no terms is not built.
         """
         into = g.direction.produced_dims
         universe = self.scope.data.dimensions[into[0]].select(pl.col('val').alias(into[0]))
@@ -507,8 +511,7 @@ class PolarsCompiler:
         spanned = [d for d in p.dims if d not in into]
         if spanned:
             universe = p.frame.select(spanned).unique().join(universe, how='cross')
-        reached = landed(mapping(self.scope.data.relations, g.direction), g)
-        empty = universe.join(reached, on=[*g.direction.joined_dims, *into], how='anti')
+        empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
         return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
 
     def _at_fragment(self, p: TermFragment, a: program.Pullback, context: str) -> TermFragment:

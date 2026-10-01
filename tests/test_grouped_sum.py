@@ -542,3 +542,37 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
     assert len(printed) == 1, 'the page prints exactly one frame'
     with pl.Config(restore_defaults=True):
         assert printed[0].rstrip('\n') == str(month_of)
+
+
+#: Every load stands, so the `otherwise` region of `demand` holds no member
+#: at all and its grouped sum lands on no bus.
+DEMAND_BY_REGION = {
+    'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
+    'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool'}},
+    'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
+    'expressions': {
+        'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},
+    },
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, by=load_bus, over=load, into=bus)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
+}
+
+
+def test_a_region_that_holds_no_member_of_a_group_adds_the_empty_sum():
+    """The `otherwise` region of `demand` is empty at both buses, which is a sum of nothing, not a missing value.
+
+    The zero an empty group adds was written only for a bus the relation maps
+    no load to. Here the relation maps a load to every bus and the region
+    leaves each out, so the group was empty with no zero written, and the
+    balance was refused as short of `p_set`.
+    """
+    sources = {
+        'bus': ['north', 'south'],
+        'load': ['a', 'b'],
+        'load_bus': pd.DataFrame({'load': ['a', 'b'], 'bus': ['north', 'south']}),
+        'p_set': pd.Series({'a': 3.0, 'b': 4.0}).rename_axis('load'),
+        'active': pd.Series({'a': True, 'b': True}).rename_axis('load'),
+    }
+    with differential(DEMAND_BY_REGION, sources) as run:
+        assert float(run.result.objective) == pytest.approx(7.0, rel=RTOL), 'each bus generates its own load'
