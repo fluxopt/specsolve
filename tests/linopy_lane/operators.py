@@ -91,6 +91,8 @@ def operator_grouped_sum(
     order. A map's values are validated against their target's labels when they
     are loaded, so this only ever adds a label, never drops a term.
     """
+    if any(not len(labels[target]) for target in into):
+        return _into_nothing(array, mappings, into=into, joined=joined, labels=labels)
     mappings = _renamed(mappings, into)
     present = _present(mappings)
     if not bool(present.all()):
@@ -100,6 +102,27 @@ def operator_grouped_sum(
     groups = (*into, *joined)
     summed = attached.groupby(list(groups)).sum()
     return _reindexed(summed, into=groups, labels=labels)
+
+
+def _into_nothing(
+    array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...], joined: tuple[str, ...], labels: Mapping[str, pd.Index]
+) -> Any:
+    """A grouped sum onto a dimension with no labels: zero over the dims kept, and none along the empty one.
+
+    The fill a null group takes needs a label to stand in, and an empty
+    dimension has none to offer.
+    """
+    from linopy.expressions import LinearExpression
+
+    walked = {dim for mapping in mappings for dim in mapping.dims} - set(joined)
+    dims = array.dims if isinstance(array, xr.DataArray) else array.coord_dims
+    kept = [dim for dim in dims if dim not in walked]
+    zeros = xr.DataArray(
+        np.zeros([array.sizes[dim] for dim in kept] + [0] * len(into)),
+        coords={**{dim: array.indexes[dim] for dim in kept}, **{target: labels[target] for target in into}},
+        dims=[*kept, *into],
+    )
+    return zeros if isinstance(array, xr.DataArray) else LinearExpression.from_constant(array.model, zeros)
 
 
 def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:

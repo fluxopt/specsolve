@@ -64,3 +64,12 @@ Generator-ext-p_nom-upper:
     two copies of one binding row are degenerate — the solver may put the
     cap's whole price on either copy, so PyPSA's per-scenario duals are
     shares of the file's one.
+CVaR:
+  structure: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
+  blocks: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
+CVaR-a:
+  structure: the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it
+  blocks: the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it
+CVaR-theta:
+  structure: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
+  blocks: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
