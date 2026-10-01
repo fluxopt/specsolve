@@ -189,9 +189,11 @@ def template_dims(declared, model) -> dict[str, str]:
 
 
 def template_axis(block, dim: str) -> int:
-    """Where *dim* sits in a row key — keys are ordered snapshot first, then by name, a plain run's scenario dropped."""
-    dims = sorted((d for d in block.dims if not (PLAIN[0] and d == 'scenario')), key=lambda d: (d != 'snapshot', d))
-    return dims.index(dim)
+    """Where *dim* sits in a row key — ordered as [`_keyed`][] orders it, a plain run's scenario dropped."""
+    dims = [d for d in block.dims if not (PLAIN[0] and d == 'scenario')]
+    components = [d for d in dims if d in prep.DIM.values()]
+    spelled = {d: 'name' if len(components) == 1 and len(dims) > 1 and d in components else d for d in dims}
+    return sorted(dims, key=lambda d: (d != 'snapshot', spelled[d])).index(dim)
 
 
 def flattened(name: str, table: object, dims: list[str]) -> object:

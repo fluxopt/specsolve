@@ -60,22 +60,6 @@ Generator-com-status-min_up_time_must_stay_up:
   duals: degenerate with PyPSA's duplicated cap — a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them
 Generator-p-ramp_limit_down:
   negated: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
-Generator-ext-p_nom-lower:
-  blocks: PyPSA keys the build's floor by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by
-  structure: >-
-    PyPSA writes the build's floor once per scenario, each row over the one
-    capacity variable; the file states it once — capacity is chosen before
-    the future is known, and a copy per future is the same row again.
-Generator-ext-p_nom-upper:
-  blocks: PyPSA keys the build's cap by scenario as well as by generator, one copy of the row per future; the file's one row has no scenario to key by
-  structure: >-
-    PyPSA writes the build's cap once per scenario, each row over the one
-    capacity variable; the file states it once — capacity is chosen before
-    the future is known, and a copy per future is the same row again.
-  duals: >-
-    two copies of one binding row are degenerate — the solver may put the
-    cap's whole price on either copy, so PyPSA's per-scenario duals are
-    shares of the file's one.
 CVaR:
   structure: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
   blocks: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
