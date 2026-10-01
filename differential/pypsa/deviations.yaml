@@ -34,6 +34,18 @@ Generator-start_up:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-shut_down:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Link-status:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Link-start_up:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Link-shut_down:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Process-status:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Process-start_up:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
+Process-shut_down:
+  blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Link-p-ramp_limit_down:
   negated: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
 objective_constant:

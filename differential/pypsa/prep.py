@@ -23,16 +23,12 @@ from __future__ import annotations
 
 import itertools
 import math
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import polars as pl
+import pypsa
 from pypsa.descriptors import get_switchable_as_dense
-
-if TYPE_CHECKING:
-    import pypsa
-
 
 #: PyPSA component -> the dimension the file declares for it.
 DIM = {
@@ -630,7 +626,7 @@ def _loss_cuts(n: pypsa.Network, component: str, losses: dict) -> dict[str, obje
         max_segments = int(losses.get('max_segments', 20))
         lossy = r > 0
         p_1 = np.where(lossy, 2 * np.sqrt(atol / r.where(lossy, 1.0)), 0)
-        target = top.where(lossy, 0).max() / pd.Series(np.where(lossy, p_1, 1.0), index=r.index)
+        target = top.max().where(lossy, 0) / pd.Series(np.where(lossy, p_1, 1.0), index=r.index)
         factors = [0.0, 1.0]
         while (factors[-1] < target.where(lossy, 0)).any():
             k = len(factors)
@@ -671,19 +667,32 @@ def _loss_options(optimize: dict, outages: object) -> dict:
 
 
 def losses(n: pypsa.Network, optimize: dict, outages: object) -> dict[str, object]:
+    """The loss cuts of lines and transformers over one ``segment`` dimension.
+
+    PyPSA places secants per component, so one may need fewer than the other.
+    At a segment it lacks, a component takes the zero cut, ``loss >= 0``, as
+    PyPSA gives a branch without resistance.
+    """
     options = _loss_options(optimize, outages)
     tables: dict[str, object] = {'transmission_losses': bool(options)}
-    segments: list[int] = []
-    for component in ('Line', 'Transformer'):
-        cuts = _loss_cuts(n, component, options)
+    cuts = {component: _loss_cuts(n, component, options) for component in ('Line', 'Transformer')}
+    segments = sorted({k for cut in cuts.values() for k in cut['segments']})
+    for component, cut in cuts.items():
         tables |= {
-            f'{component}_loss_max': cuts['max'],
-            f'{component}_loss_slope': cuts['slope'],
-            f'{component}_loss_offset': cuts['offset'],
+            f'{component}_loss_max': cut['max'],
+            f'{component}_loss_slope': _padded(cut['slope'], cut['max'], cut['segments'], segments),
+            f'{component}_loss_offset': _padded(cut['offset'], cut['max'], cut['segments'], segments),
         }
-        segments = sorted(set(segments) | set(cuts['segments']))
     tables['segment'] = pl.Series('segment', segments, dtype=pl.Int64)
     return tables
+
+
+def _padded(table: pd.DataFrame, top: pd.DataFrame, own: list[int], segments: list[int]) -> pd.DataFrame:
+    missing = [k for k in segments if k not in own]
+    if not missing or top.empty:
+        return table
+    zero = top.assign(value=0.0)
+    return pd.concat([table, *(zero.assign(segment=k) for k in missing)], ignore_index=True)
 
 
 def _outage_list(n: pypsa.Network, outages: object) -> list[tuple[str, str]]:
@@ -699,14 +708,32 @@ def outage_label(component: str, name: str) -> str:
     return f'{component}-{name}'
 
 
+def _first_grid(n: pypsa.Network) -> pypsa.Network:
+    """The buses and passive branches of *n*'s first scenario, as a network with none — what PyPSA can find sub-networks in."""
+    grid = pypsa.Network()
+    for component in ('Bus', 'Line', 'Transformer'):
+        static = first_scenario(n.static(component))
+        attrs = n.components[component].defaults.query('status.str.startswith("Input")', engine='python').index
+        given = [a for a in static.columns if a in attrs and a != 'name']
+        if len(static):
+            grid.add(component, static.index, **{a: static[a] for a in given})
+    return grid
+
+
 def security(n: pypsa.Network, outages: object) -> dict[str, object]:
-    """The outages and each branch's share of an outaged branch's flow — PyPSA's BODF per sub-network."""
+    """The outages and each branch's share of an outaged branch's flow — PyPSA's BODF per sub-network.
+
+    On a network with scenarios PyPSA finds no branch in a sub-network, so the
+    BODF is read off the first scenario, which is what a share over
+    ``[line, outage]`` with no scenario states.
+    """
     taken = _outage_list(n, outages)
     rows: dict[str, list[dict]] = {'Line': [], 'Transformer': []}
     if taken:
-        n.determine_network_topology()
-        n.calculate_dependent_values()
-        for sub_network in n.c.sub_networks.static.obj:
+        single = _first_grid(n) if n.has_scenarios else n
+        single.determine_network_topology()
+        single.calculate_dependent_values()
+        for sub_network in single.c.sub_networks.static.obj:
             branches = sub_network.branches_i()
             inside = [(c, name) for c, name in taken if (c, name) in branches]
             if not inside:

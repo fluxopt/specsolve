@@ -144,9 +144,23 @@ def spec_of(stem: str) -> Path:
     return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
 
 
-def stands_for(description: str | None) -> str:
-    """The PyPSA name a declaration's description opens with, in backticks — the declared pages' convention."""
-    return re.match(r'`([^`]+)`', description or '').group(1)
+def stands_for(description: str | None, model=None) -> str:
+    """The PyPSA name a declaration's description opens with, in backticks — the declared pages' convention.
+
+    A description may open with several, comma-separated, where PyPSA names
+    one block differently by mode (tangent rows or stacked secants); the one
+    *model* has is chosen, else the first.
+    """
+    opening = re.match(r'((?:`[^`]+`(?:, )?)+)', description or '').group(1)
+    names = re.findall(r'`([^`]+)`', opening)
+    if model is None or len(names) == 1:
+        return names[0]
+    present = [*model.constraints, *model.variables]
+    for name in names:
+        pattern = templated(name)
+        if any(pattern.match(m) if pattern else m == name for m in present):
+            return name
+    return names[0]
 
 
 def templated(name: str) -> re.Pattern | None:
@@ -160,8 +174,10 @@ def template_dims(declared, model) -> dict[str, str]:
     """Block name -> the dimension PyPSA spells into the constraint's name — the one declared dim its constraint has no axis for (a component dim rides its ``name`` axis)."""
     out = {}
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        their = next((c for c in model.constraints if pattern and pattern.match(c)), None)
+        pattern = templated(stands_for(block.description, model))
+        if pattern is None or pattern.groups != 1:
+            continue
+        their = next((c for c in model.constraints if pattern.match(c)), None)
         if their is None:
             continue
         axes = set(model.constraints[their].coords.dims)
@@ -380,6 +396,13 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
     return out
 
 
+def _gc_dual(dual, label: str) -> pd.DataFrame:
+    """One global constraint's dual as rows — one, or one per scenario where the network has scenarios."""
+    if not dual.ndim:
+        return pd.DataFrame({'name': [label], 'dual': [float(dual)]})
+    return dual.to_dataframe('dual').reset_index().assign(name=label)
+
+
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
     """Every constraint's dual, per coordinate: PyPSA's own linopy model against `result.dual`, raw on both sides.
 
@@ -406,13 +429,13 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     templates = template_dims(declared, n.model)
     pairs = []
     for block_name, block in declared.constraints.items():
-        stands = stands_for(block.description)
+        stands = stands_for(block.description, n.model)
         pattern = templated(stands)
         if pattern is None:
             pairs.append((block_name, stands, None))
         else:
             pairs.extend(
-                (block_name, their_name, found.group(1))
+                (block_name, their_name, found.group(1) if pattern.groups == 1 else None)
                 for their_name in n.model.constraints
                 if (found := pattern.match(their_name))
             )
@@ -434,14 +457,15 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
                 theirs = theirs.drop(columns=['period', 'snapshot'], errors='ignore')
             theirs = theirs.rename(columns=AXES)
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
+            for column in [c for c in theirs.columns if c.endswith('-outage')]:
+                component = column.removesuffix('-outage')
+                theirs['outage'] = [prep.outage_label(component, v) for v in theirs.pop(column)]
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
-            theirs = pd.DataFrame(
-                {
-                    'name': labels,
-                    'dual': [float(n.model.constraints[f'GlobalConstraint-{label}'].dual) for label in labels],
-                }
+            theirs = pd.concat(
+                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'].dual, label) for label in labels]
+                or [pd.DataFrame({'name': [], 'dual': []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
@@ -502,11 +526,11 @@ PLAIN = [True]
 
 
 #: PyPSA's axis names for the file's dimensions — a multi-period model keys by ``(period, timestep)`` where the file has one snapshot, and the growth limit by ``Carrier`` and ``periods``.
-AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period'}
+AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period', 'secant': 'segment'}
 
 
 def _keyed(labels) -> dict:
-    """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
+    """label per coordinate key — dim names dropped, ``snapshot`` first and ``outage`` last, so the two spellings align.
 
     Key components are strings, because a dimension's labels can be ints on
     one side and text on the other. A dimensionless array is its one label at
@@ -521,10 +545,14 @@ def _keyed(labels) -> dict:
         if series.index.nlevels == 1:
             return {(): int(series.iloc[0])}
         series = series.droplevel('scenario')
+    for level in [name for name in series.index.names if str(name).endswith('-outage')]:
+        component = level.removesuffix('-outage')
+        series = series.rename(lambda v, c=component: prep.outage_label(c, v), level=level)
+        series.index = series.index.set_names('outage', level=level)
     series.index = series.index.set_names([AXES.get(name, name) for name in series.index.names])
     index = series.index
     if index.nlevels > 1:
-        order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
+        order = sorted(index.names, key=lambda name: (name != 'snapshot', name == 'outage', name))
         series = series.reorder_levels(order).sort_index()
         return {tuple(str(part) for part in key): int(label) for key, label in series.items()}
     return {str(key): int(label) for key, label in series.items()}
@@ -611,17 +639,23 @@ def structure(
         theirs_rows[kind] = theirs_rows.get(kind, 0) + theirs_rows.pop(f'GlobalConstraint-{label}', 0)
     ours_rows: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        if pattern is not None:
+        stands = stands_for(block.description, theirs)
+        pattern = templated(stands)
+        if pattern is not None and pattern.groups > 1:
+            family = [their_name for their_name in theirs_rows if pattern.match(their_name)]
+            theirs_rows[stands] = theirs_rows.get(stands, 0) + sum(theirs_rows.pop(t) for t in family)
+            if built_rows.get(name, 0):
+                ours_rows[stands][name] = built_rows[name]
+        elif pattern is not None:
             for their_name in theirs_rows:
                 if (found := pattern.match(their_name)) and by_label.get(name, {}).get(found.group(1)):
                     ours_rows[their_name][name] = by_label[name][found.group(1)]
         elif built_rows.get(name, 0):
-            ours_rows[stands_for(block.description)][name] = built_rows[name]
+            ours_rows[stands][name] = built_rows[name]
     ours_columns: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.variables.items():
         if built_columns.get(name, 0):
-            ours_columns[stands_for(block.description)][name] = built_columns[name]
+            ours_columns[stands_for(block.description, theirs)][name] = built_columns[name]
 
     def table(theirs_side: dict, ours_side: dict) -> dict[str, dict]:
         names = {n for n, c in theirs_side.items() if c} | set(ours_side)
@@ -682,6 +716,14 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     return differences, unexplained
 
 
+def _gc_key(their_name: str, key: object) -> object:
+    """A global-constraint row's key as ours spells it — its label, then the scenario where it has one."""
+    label = their_name.removeprefix('GlobalConstraint-')
+    if key == ():
+        return label
+    return (label, *((key,) if isinstance(key, str) else key))
+
+
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, object]:
     """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
 
@@ -690,16 +732,17 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
     """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        if pattern is None:
-            rows[stands_for(block.description)].append((name, None))
+        stands = stands_for(block.description, theirs)
+        pattern = templated(stands)
+        if pattern is None or pattern.groups > 1:
+            rows[stands].append((name, None))
         else:
             for their_name in theirs.constraints:
                 if found := pattern.match(their_name):
                     rows[their_name].append((name, found.group(1)))
     columns = defaultdict(list)
     for name, block in declared.variables.items():
-        columns[stands_for(block.description)].append(name)
+        columns[stands_for(block.description, theirs)].append(name)
 
     ours_to_theirs = _label_map(theirs, ours, columns)
     templates = template_dims(declared, theirs)
@@ -730,16 +773,19 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
         verdict[bucket].append(pypsa_name)
 
     for pypsa_name, our_names in rows.items():
+        family = templated(pypsa_name)
         their_names = (
             [n for n in theirs.constraints if n.startswith('GlobalConstraint-')]
             if not pypsa_name[0].isupper()
+            else [n for n in theirs.constraints if family.match(n)]
+            if family is not None
             else ([pypsa_name] if pypsa_name in theirs.constraints else [])
         )
         their_rows: dict = {}
         for their_name in their_names:
             constraint = theirs.constraints[their_name]
             for key, row in _rows(constraint.flat, constraint.labels, lambda x: x).items():
-                their_rows[key if their_name == pypsa_name else their_name.removeprefix('GlobalConstraint-')] = row
+                their_rows[key if pypsa_name[0].isupper() else _gc_key(their_name, key)] = row
         our_rows: dict = {}
         for our_name, k in our_names:
             if our_name not in ours.constraints:
@@ -752,7 +798,9 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
             our_rows |= found
         if not pypsa_name[0].isupper():
             typed = {label for label, gc in gc_kinds.items() if gc == pypsa_name}
-            their_rows = {key: row for key, row in their_rows.items() if key in typed}
+            their_rows = {
+                key: row for key, row in their_rows.items() if (key if isinstance(key, str) else key[0]) in typed
+            }
         if not our_rows and not their_rows:
             continue
         if our_rows == their_rows:
