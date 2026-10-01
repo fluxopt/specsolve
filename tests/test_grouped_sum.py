@@ -576,3 +576,30 @@ def test_a_region_that_holds_no_member_of_a_group_adds_the_empty_sum():
     }
     with differential(DEMAND_BY_REGION, sources) as run:
         assert float(run.result.objective) == pytest.approx(7.0, rel=RTOL), 'each bus generates its own load'
+
+
+#: `tap` has no labels, so the angle each bus reads is a sum over nothing that
+#: still keeps the bus it is read at.
+SUM_OVER_NOTHING = {
+    'dimensions': {'bus': {'dtype': 'str'}, 'tap': {'dtype': 'str'}},
+    'parameters': {'angle': {'dims': ['bus', 'tap']}},
+    'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
+    'constraints': {'floor': {'dims': ['bus'], 'expression': 'g >= sum(angle, over=tap) + 1'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
+}
+
+
+def test_a_sum_over_a_dimension_with_no_labels_is_zero():
+    """`sum(angle, over=tap)` with no tap is the empty sum, so each bus floors at one.
+
+    A constant summed over a dimension kept no row at a coordinate no member
+    landed in, so the row read a gap there and was refused as short of
+    `angle`, which has no row to be short of.
+    """
+    sources = {
+        'bus': ['north', 'south'],
+        'tap': pd.Index([], name='tap', dtype=str),
+        'angle': pd.DataFrame({'bus': pd.Series([], dtype=str), 'tap': pd.Series([], dtype=str), 'value': []}),
+    }
+    with differential(SUM_OVER_NOTHING, sources) as run:
+        assert float(run.result.objective) == pytest.approx(2.0, rel=RTOL), 'two buses at one each'

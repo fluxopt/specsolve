@@ -474,7 +474,9 @@ class PolarsCompiler:
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
-        return TermFragment(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters)
+        return self._empty_sums(
+            TermFragment(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters)
+        )
 
     def _group_fragment(self, p: TermFragment, g: program.GroupSum, context: str) -> TermFragment:
         """Relabel the dims the direction consumes to the ones it produces, through its relation.
@@ -487,32 +489,30 @@ class PolarsCompiler:
         missing = [d for d in over if d not in p.dims]
         if missing:
             refuse_a_fragment_without_the_dims(p, missing, context, f'sum(by=) over {list(over)}')
-        grouped = self._remap_fragment(p, g)
-        if p.kind != 'const':
-            return grouped
-        return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
+        return self._empty_sums(self._remap_fragment(p, g))
 
-    def _empty_groups(self, p: TermFragment, g: program.GroupSum) -> pl.LazyFrame:
-        """The produced combinations no member of *p* lands in, as constant rows worth zero.
+    def _empty_sums(self, p: TermFragment) -> TermFragment:
+        """Reduced *p* with a zero row at every coordinate of its dims that no member lands in.
 
-        An empty group is the empty sum, not a hole, and
-        [`coverage.constant_side`][] cannot tell the two apart, so the zero is
-        written here. Asked of the grouped fragment rather than the relation:
-        a member a ``cases:`` region leaves out lands nowhere, so a group the
-        relation maps members to can still be empty. A parameter short of a
+        An empty sum is zero, not a hole, and [`coverage.constant_side`][]
+        cannot tell the two apart, so the zero is written here: a dimension
+        with no labels, a group its relation maps no member to, and a member a
+        ``cases:`` region leaves out all land nowhere. Asked of the fragment
+        rather than the relation for that last reason. A parameter short of a
         member is [`coverage.refuse_short_constants`][]' question. Only for a
         constant part: a row with no terms is not built.
         """
-        into = g.direction.produced_dims
-        universe = self.scope.data.dimensions[into[0]].select(pl.col('val').alias(into[0]))
-        for target in into[1:]:
-            labels = self.scope.data.dimensions[target].select(pl.col('val').alias(target))
-            universe = universe.join(labels, how='cross')
-        spanned = [d for d in p.dims if d not in into]
-        if spanned:
-            universe = p.frame.select(spanned).unique().join(universe, how='cross')
+        if p.kind != 'const':
+            return p
+        if not p.dims:
+            zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
+            return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
+        universe = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
+        for dim in p.dims[1:]:
+            universe = universe.join(self.scope.data.dimensions[dim].select(pl.col('val').alias(dim)), how='cross')
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
-        return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
+        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
+        return replace(p, frame=pl.concat([p.frame, zeros]))
 
     def _at_fragment(self, p: TermFragment, a: program.Pullback, context: str) -> TermFragment:
         """Spread the consumed dims back out over the produced ones — the adjoint of a group.
