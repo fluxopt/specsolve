@@ -7,7 +7,7 @@ and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
-it needs a checkout of that repository at the tag `pyproject.toml` pins. No
+it needs a checkout of that repository at the tag `pypsa-parity.yml` names. No
 pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \

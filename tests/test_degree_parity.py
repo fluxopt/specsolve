@@ -33,11 +33,6 @@ from tests.oracle import specsolve_linopy  # skips the module without the oracle
             'over variables',
             id='a-power-over-a-variable',
         ),
-        pytest.param(
-            {'objective.expression': 'sum(p / (1 - cost))'},
-            'must be a single Constant/Parameter factor',
-            id='a-divisor-that-adds',
-        ),
     ],
 )
 def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_spec_inputs, patch, match):

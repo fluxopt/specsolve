@@ -96,8 +96,9 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
         `mathspec`.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:`` — ``mathspec.merge`` composes it.
         SpecsolveError: A *sink* that cannot take this spec, naming the
             construct and the sinks that do; a name belonging to no sink; or
             two declarations whose names differ only by case.
