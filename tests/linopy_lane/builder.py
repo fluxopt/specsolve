@@ -20,6 +20,7 @@ import operator
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
+import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError, SpecsolveError, null_bounds_message
@@ -40,7 +41,6 @@ from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_rel
 if TYPE_CHECKING:
     import linopy
     import pandas as pd
-    import xarray as xr
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 

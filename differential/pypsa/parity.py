@@ -294,8 +294,7 @@ def _keyed_model(model) -> dict[str, object]:
         terms[rows[handoff.rows['row'][r]]] = (str(sense), round(float(rhs), 9), pairs)
     return {
         'columns': {
-            columns[i]: (float(lb), float(ub), str(vtype))
-            for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
+            columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
         },
         'rows': terms,
         'quadratic rows': frozenset(

@@ -105,7 +105,12 @@ def operator_grouped_sum(
 
 
 def _into_nothing(
-    array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...], joined: tuple[str, ...], labels: Mapping[str, pd.Index]
+    array: Any,
+    mappings: tuple[Any, ...],
+    *,
+    into: tuple[str, ...],
+    joined: tuple[str, ...],
+    labels: Mapping[str, pd.Index],
 ) -> Any:
     """A grouped sum onto a dimension with no labels: zero over the dims kept, and none along the empty one.
 

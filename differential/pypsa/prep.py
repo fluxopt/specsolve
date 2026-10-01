@@ -21,6 +21,7 @@ by. A plain run is one scenario and one period, each labelled here.
 
 from __future__ import annotations
 
+import itertools
 import math
 from typing import TYPE_CHECKING
 
@@ -636,7 +637,7 @@ def _loss_cuts(n: pypsa.Network, component: str, losses: dict) -> dict[str, obje
             factors.append(factors[-1] * max(k / (k - 1), 1 + 2 * (rtol + math.sqrt(rtol + rtol**2))))
             if k >= max_segments:
                 break
-        for k, (a, b) in enumerate(zip(factors[:-1], factors[1:], strict=True)):
+        for k, (a, b) in enumerate(itertools.pairwise(factors)):
             slope = (2 * np.sqrt(atol * r) * (a + b)).where(lossy, 0.0)
             offset = pd.Series(-4 * atol * a * b, index=r.index).where(lossy, 0.0)
             slopes.append(melt(top * 0 + slope).assign(segment=k))
@@ -927,12 +928,12 @@ def global_constraints(n: pypsa.Network, multi: bool) -> dict[str, object]:
             if kind == 'primary_energy':
                 emissions = _emissions(n, gc, scenario)
 
-                def rate(carrier: str) -> float:
+                def rate(carrier: str, emissions: pd.Series = emissions) -> float:
                     return float(emissions.get(carrier, 0.0))
             else:
                 target = gc['carrier_attribute']
 
-                def rate(carrier: str) -> float:
+                def rate(carrier: str, target: str = target) -> float:
                     return float(carrier == target)
 
             for component, cyclic_attr, initial_attr, per_period_attr in (
