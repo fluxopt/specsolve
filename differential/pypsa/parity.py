@@ -530,7 +530,10 @@ AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period', 'seca
 
 
 def _keyed(labels) -> dict:
-    """label per coordinate key — dim names dropped, ``snapshot`` first and ``outage`` last, so the two spellings align.
+    """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
+
+    A component dimension sorts as PyPSA's ``name``, which is what it is on
+    PyPSA's side.
 
     Key components are strings, because a dimension's labels can be ints on
     one side and text on the other. A dimensionless array is its one label at
@@ -550,9 +553,12 @@ def _keyed(labels) -> dict:
         series = series.rename(lambda v, c=component: prep.outage_label(c, v), level=level)
         series.index = series.index.set_names('outage', level=level)
     series.index = series.index.set_names([AXES.get(name, name) for name in series.index.names])
+    components = [name for name in series.index.names if name in prep.DIM.values()]
+    if len(components) == 1 and 'name' not in series.index.names:
+        series.index = series.index.set_names('name', level=components[0])
     index = series.index
     if index.nlevels > 1:
-        order = sorted(index.names, key=lambda name: (name != 'snapshot', name == 'outage', name))
+        order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
         series = series.reorder_levels(order).sort_index()
         return {tuple(str(part) for part in key): int(label) for key, label in series.items()}
     return {str(key): int(label) for key, label in series.items()}

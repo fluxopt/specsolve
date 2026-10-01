@@ -85,3 +85,9 @@ CVaR-a:
 CVaR-theta:
   structure: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
   blocks: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
+Line-loss_secants-pos:
+  structure: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
+  blocks: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
+Line-loss_secants-neg:
+  structure: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
+  blocks: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
