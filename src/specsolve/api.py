@@ -354,15 +354,14 @@ class Model:
 
         ::
 
-            with sps.build('dispatch.yaml', sources) as model:
-                model.check('highs')
+            sps.build('dispatch.yaml', sources).check('highs')
 
         The answer is read off the model this build produced, not off the
         file: a square the data prices at zero, an integer variable no column
         is built for or a set with no members asks for nothing. [`solve`][]
         and [`write`][] refuse exactly what this refuses, with the same
         message, so a CI job that builds every example and checks it pays for
-        no solve.
+        no solve, and loads no solver to release.
 
         Args:
             sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an

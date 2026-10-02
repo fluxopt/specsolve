@@ -60,8 +60,8 @@ build and check:
 ```python
 import specsolve as sps
 
-with sps.build('dispatch.yaml', sources) as model:
-    model.check('gurobi')
+model = sps.build('dispatch.yaml', sources)
+model.check('gurobi')
 ```
 
 The full table is
