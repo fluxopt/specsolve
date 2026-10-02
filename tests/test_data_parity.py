@@ -555,14 +555,22 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
 
 
 @pytest.mark.parametrize(
-    'index',
+    ('index', 'rewrite'),
     [
-        pytest.param(['a', 'b', 'a', 'c', 'b'], id='a-bare-sequence'),
-        pytest.param(_tidy(f=['a', 'b', 'a', 'c', 'b'], colour=list('vwxyz')), id='a-table-with-another-column'),
+        pytest.param(['a', 'b', 'a', 'c', 'b'], 'list(dict.fromkeys(labels))', id='a-bare-sequence'),
+        pytest.param(
+            _tidy(f=['a', 'b', 'a', 'c', 'b'], colour=list('vwxyz')),
+            "table.select('f').unique(maintain_order=True)",
+            id='a-table-with-another-column',
+        ),
     ],
 )
-def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: Path, index: Any):
-    """Two rows give one label two positions, so `shift` would read one of them as the other."""
+def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: Path, index: Any, rewrite: str):
+    """Two rows give one label two positions, so `shift` would read one of them as the other.
+
+    The rewrite is in the shape the index came in: a bare sequence was once told
+    to call `.select` on a table it does not have.
+    """
     sources = {
         'f': index,
         'cost': _tidy(f=['a', 'b', 'c'], value=[1.0, 2.0, 3.0]),
@@ -574,4 +582,5 @@ def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: 
     assert "index for dimension 'f' holds 2 label(s) more than once: 'a', 'b'" in message, (
         'the dimension and the repeated labels, in the order they first repeat'
     )
-    assert "table.select('f').unique(maintain_order=True)" in message, 'and the rewrite that keeps the first of each'
+    assert rewrite in message, 'and the rewrite that keeps the first of each, for the shape that was given'
+    assert ('.select(' in message) == ('.select(' in rewrite), 'and no rewrite for a shape that was not given'

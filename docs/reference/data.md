@@ -59,7 +59,8 @@ and that order is what
 [`shift`](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift)
 reads positionally. A label that is on two rows is refused:
 `table.select('generator').unique(maintain_order=True)` keeps the first row of
-each label.
+each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
+sequence.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
@@ -97,7 +98,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a relation table mapping one key twice, or relating one tuple twice | a keyed relation holds one row per key, a bare one each row once |
 | a map with both authors, or neither | names them, and says which way out |
 | an index carrying a column named after a relation with a column over it | names the key it belongs under |
-| an index holding a label twice | names the dimension and the labels, and the `unique(maintain_order=True)` that keeps the first of each |
+| an index holding a label twice | names the dimension and the labels, and the rewrite that keeps the first of each, for a table or a bare sequence |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a `value` column carrying a null or a NaN | names the parameter and the coordinates |
 | a label outside the dimension's index | names the parameter and the strays |

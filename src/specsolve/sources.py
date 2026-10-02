@@ -149,8 +149,8 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
         DataError: A table with no column named after the dimension, labels
             no frame can be made of, or a label held twice.
     """
-    table = as_frame(source, (dim,))
-    table = table if table is not None else _labels_frame(dim, source, dtype)
+    given = as_frame(source, (dim,))
+    table = given if given is not None else _labels_frame(dim, source, dtype)
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(
@@ -158,20 +158,27 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f'{list(available)}). The label column is named after the dimension.'
         )
     labels = table.select(dim).collect()
-    _check_labels_are_unique(dim, labels[dim])
+    _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
 
-def _check_labels_are_unique(dim: str, labels: pl.Series) -> None:
-    """Refuse an index that holds a label twice: a label's position is the row it is on."""
+def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
+    """Refuse an index that holds a label twice: a label's position is the row it is on.
+
+    The rewrite the message names is for the shape the index came in.
+    """
     twice = labels.filter(labels.is_duplicated()).unique(maintain_order=True).to_list()
     if not twice:
         return
     shown = ', '.join(repr(label) for label in twice[:5]) + (' …' if len(twice) > 5 else '')
+    rewrite = (
+        f'Pass the label column alone, each label once: table.select({dim!r}).unique(maintain_order=True)'
+        if given_as_table
+        else 'Pass each label once: list(dict.fromkeys(labels))'
+    )
     raise DataError(
         f"index for dimension '{dim}' holds {len(twice)} label(s) more than once: {shown}. An index "
-        f'lists each label once, and its row is the position `shift` counts. Pass the label column '
-        f'alone, each label once: table.select({dim!r}).unique(maintain_order=True) keeps the first '
+        f'lists each label once, and its row is the position `shift` counts. {rewrite} keeps the first '
         f'occurrence of each.'
     )
 
