@@ -196,17 +196,19 @@ beside a variable `p` is accepted. The two are written under `dual/` and
 
 ### Names that start with `specsolve_`
 
-**A declared name that starts with `specsolve_` is refused**, whichever verb
-lowers the spec. Every column specsolve adds beside a model's own starts with
-that prefix, such as `specsolve_run` on every table an archive holds. The rule
+**A declared name that starts with `specsolve_` is refused**, in any letter
+case, whichever verb lowers the spec. The prefix is reserved for the columns
+specsolve adds, such as `specsolve_run` on every table an archive holds, so a
+declared name cannot collide with one. Case does not tell two columns apart:
+SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
 covers dimensions, relations and their columns, parameters, variables,
 constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
 with the prefix is refused too.
 
 ```
-variable 'specsolve_p' starts with 'specsolve_', which is reserved: every
-column specsolve adds beside a model's own starts with it, so an archive or a
-sweep could write one name twice. Rename it.
+variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
+letter case for the columns specsolve adds, so a declared name cannot collide
+with one. Rename it.
 ```
 
 ### What each sink takes

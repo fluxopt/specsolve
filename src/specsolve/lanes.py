@@ -103,13 +103,13 @@ def _case_collision(program: Program) -> str | None:
     return None
 
 
-#: What every column specsolve adds beside a model's own starts with, so no
-#: name a spec declares may.
+#: The prefix reserved, in any letter case, for the columns specsolve adds, so
+#: that no name a spec declares can collide with one.
 RESERVED = 'specsolve_'
 
 
 def _reserved_name(program: Program) -> str | None:
-    """The first declaration whose name starts with ``specsolve_``, as the sentence refusing it."""
+    """The first declaration whose name starts with ``specsolve_`` in any letter case, as the sentence refusing it."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -126,10 +126,10 @@ def _reserved_name(program: Program) -> str | None:
         *((f"assumption '{name}'", name) for name in program.assumptions),
     )
     for which, name in named:
-        if name.startswith(RESERVED):
+        if name.casefold().startswith(RESERVED):
             return (
-                f'{which} starts with {RESERVED!r}, which is reserved: every column specsolve adds beside a '
-                f"model's own starts with it, so an archive or a sweep could write one name twice. Rename it."
+                f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
+                f'specsolve adds, so a declared name cannot collide with one. Rename it.'
             )
     return None
 
@@ -145,7 +145,7 @@ def lowered(spec: Buildable) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case, or a name that starts with ``specsolve_``.
+            by case, or a name that starts with ``specsolve_`` in any letter case.
     """
     program = declared(spec).program
     if program.given:

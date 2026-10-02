@@ -461,6 +461,18 @@ def test_a_name_that_starts_with_the_reserved_prefix_is_refused(spec, named):
         sps.check(spec)
 
 
+@pytest.mark.parametrize('name', ['Specsolve_run', 'SPECSOLVE_RUN', 'specSolve_p'], ids=str)
+def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
+    """A capital passed the reserved prefix, but SQL, DuckDB and Power BI read column names without case.
+
+    So a variable `Specsolve_run` and the stamped `specsolve_run` were one
+    column to every query engine an archive is read with.
+    """
+    spec = _named(variables={name: {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}})
+    with pytest.raises(sps.SpecsolveError, match=rf"^variable '{name}' starts with 'specsolve_', which is reserved"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""

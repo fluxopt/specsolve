@@ -95,7 +95,7 @@ def check(spec: Buildable) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:`` — ``mathspec.merge`` composes it.
         SpecsolveError: Two declarations whose names differ only by case, or a
-            name that starts with ``specsolve_``, which is reserved.
+            name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
     Warns:

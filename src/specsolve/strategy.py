@@ -1511,10 +1511,10 @@ def _key_column(
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
         key_name = axis._key_name()
-    if key_name.startswith(RESERVED):
+    if key_name.casefold().startswith(RESERVED):
         raise SpecsolveError(
-            f'key_name={key_name!r} starts with {RESERVED!r}, which is reserved for the columns specsolve '
-            f"adds beside a model's own. Name the slice column something else."
+            f'key_name={key_name!r} starts with {RESERVED!r}, which is reserved in any letter case for the '
+            f'columns specsolve adds. Name the slice column something else.'
         )
     if key_name in program.dimensions:
         raise SpecsolveError(
