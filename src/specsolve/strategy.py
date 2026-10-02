@@ -1031,9 +1031,7 @@ def scan_sweep(directory: str | Path) -> Sweep:
         _no_expressions=no_expressions,
         _original=None
         if original is None
-        else _OriginalIndex(
-            original['local'], original['dim'], pl.read_parquet(under / _OWNED_FILE).drop(RUN, strict=False)
-        ),
+        else _OriginalIndex(original['local'], original['dim'], pl.read_parquet(under / _OWNED_FILE)),
         _hand_built=found['hand_built'],
         _spill=_Spill(under, key_name, record[key_name].dtype),
     )
