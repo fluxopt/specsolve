@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(sweep): a sweep reads and archives its answer over the model's own coordinates by default, and keeps the per-window frames only on request ([#1811](https://github.com/fluxopt/specsolve/pull/1811))
+
 ## 0.3.0 (2026-10-02)
 
 specsolve now requires mathspec 0.2.1. This release breaks one import.
