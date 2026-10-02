@@ -376,12 +376,14 @@ class Model:
             sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
                 output suffix (``.lp``, ``.mps``).
             names: Also refuse what [`write`][]'s *names* refuses: two
-                coordinates of one declaration that write as one name.
+                coordinates of one declaration that write as one name. Read
+                by an output suffix only.
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; a name belonging to no sink; or, with *names*,
-                two coordinates of one declaration that write as one name.
+                sinks that do; a name belonging to no sink; *names* for a sink
+                that writes no file; or, with *names*, two coordinates of one
+                declaration that write as one name.
         """
         self._engine.check(sink, names=names)
 

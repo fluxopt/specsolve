@@ -135,11 +135,14 @@ class PolarsEngine:
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; a name belonging to no sink; or, with *names*,
-                two coordinates that write as one name.
+                sinks that do; a name belonging to no sink; *names* for a sink
+                that writes no file; or, with *names*, two coordinates that
+                write as one name.
         """
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
+        if names and sink.lower() not in sinks.WRITERS:
+            raise SpecsolveError(f'names= is read by a written file ({", ".join(sinks.WRITERS)}), not by {sink!r}.')
         if names:
             readback.file_names(self._model)
 
