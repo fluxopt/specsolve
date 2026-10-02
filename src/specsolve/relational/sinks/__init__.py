@@ -2,7 +2,8 @@
 
 A *solver* runs the handoff (``solvers/``, chosen by name); a *writer* renders
 it to a file (``writers/``, chosen by suffix); an *export* hands it to a
-modelling library (``pyomo.py``, chosen by name). Each reads ``handoff.py`` and
+modelling library (``pyomo.py``, and ``linopy_ingest.py`` for the linopy export
+outside the engine, chosen by name). Each reads ``handoff.py`` and
 declares what it takes in ``capabilities.py``; none imports another.
 """
 
@@ -14,6 +15,7 @@ from specsolve.errors import SpecsolveError, unknown_name_message
 from specsolve.relational.sinks import capabilities as caps
 from specsolve.relational.sinks.capabilities import spelled
 from specsolve.relational.sinks.handoff import Handoff
+from specsolve.relational.sinks.linopy_ingest import LINOPY_CAPABILITIES
 from specsolve.relational.sinks.pyomo import PYOMO_CAPABILITIES
 from specsolve.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
 from specsolve.relational.sinks.writers import WRITERS, writer
@@ -36,7 +38,7 @@ __all__ = [
 
 
 #: Every export a caller may name, with what it can ingest. Closed.
-EXPORTS: Mapping[str, caps.Capabilities] = {'pyomo': PYOMO_CAPABILITIES}
+EXPORTS: Mapping[str, caps.Capabilities] = {'linopy': LINOPY_CAPABILITIES, 'pyomo': PYOMO_CAPABILITIES}
 
 #: Every sink's name: solvers, suffixes, then exports.
 _SINKS = (*SOLVERS, *WRITERS, *EXPORTS)

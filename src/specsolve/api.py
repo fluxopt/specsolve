@@ -370,13 +370,14 @@ class Model:
         The answer is read off the model this build produced, not off the
         file: a square the data prices at zero, an integer variable no column
         is built for or a set with no members asks for nothing. [`solve`][],
-        [`write`][] and [`to_pyomo`][] refuse exactly what this refuses, with
-        the same message, so a CI job that builds every example and checks it
+        [`write`][], [`to_pyomo`][] and [`to_linopy`][] refuse exactly what
+        this refuses, with the same message, so a CI job that builds every example and checks it
         pays for no solve, and loads no solver to release.
 
         Args:
             sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
-                suffix (``.lp``, ``.mps``), or an export (``pyomo``).
+                suffix (``.lp``, ``.mps``), or an export (``pyomo``,
+                ``linopy``).
             names: Also refuse what [`write`][]'s *names* refuses: two
                 coordinates of one declaration that write as one name. Read
                 by an output suffix only.
@@ -388,7 +389,9 @@ class Model:
                 sinks that do; a name belonging to no sink; *names* for a sink
                 that writes no file, or *rename* for any sink but ``pyomo``;
                 with *names*, two coordinates of one declaration that write as
-                one name; or, for ``pyomo``, what [`to_pyomo`][] refuses.
+                one name; for ``pyomo``, what [`to_pyomo`][] refuses; or, for
+                ``linopy``, an objective constant or a row with no term that
+                no point meets, which linopy would drop.
         """
         self._engine.check(sink, names=names, rename=rename)
 
@@ -440,12 +443,14 @@ class Model:
             A new ``linopy.Model``; a second call builds another.
 
         Raises:
-            SpecsolveError: linopy is not installed (the ``[linopy]`` extra);
-                the model has a quadratic constraint or an objective constant,
-                which linopy has no form for; a row the build kept has no term
-                and no point meets it, which linopy would drop; or the model
-                has been closed.
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                ``linopy``: a quadratic constraint or an objective constant,
+                which linopy has no form for, or a row the build kept with no
+                term that no point meets, which linopy would drop. Or linopy
+                is not installed (the ``[linopy]`` extra), or the model has
+                been closed.
         """
+        self._engine.check('linopy')
         handoff, declared, dimensions = self._engine.handed_over()
         return to_linopy(handoff, declared, dimensions)
 

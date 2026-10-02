@@ -32,7 +32,7 @@ from specsolve.relational.engines.polars.attaching import attach
 from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
 from specsolve.relational.engines.polars.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks import pyomo
+from specsolve.relational.sinks import linopy_ingest, pyomo
 from specsolve.relational.sinks.writers.base import NUMBERED
 
 if TYPE_CHECKING:
@@ -140,9 +140,9 @@ class PolarsEngine:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; a name belonging to no sink; *names* for a sink
                 that writes no file, or *rename* for any sink but ``pyomo``;
-                with *names*, two coordinates that write as one name; or, for
+                with *names*, two coordinates that write as one name; for
                 ``pyomo``, what [`component_names`][specsolve.relational.sinks.pyomo.component_names]
-                refuses.
+                refuses; or, for ``linopy``, what it would drop.
         """
         handoff = self._model.handoff
         if (refused := sinks.refusal(handoff, sink)) is not None:
@@ -155,6 +155,8 @@ class PolarsEngine:
             readback.file_names(self._model)
         if sink == 'pyomo':
             pyomo.component_names(readback.declared(self._model), rename, objective=handoff.objective_sense is not None)
+        if sink == 'linopy' and (lost := linopy_ingest.refusal(handoff, readback.declared(self._model))) is not None:
+            raise SpecsolveError(lost)
 
     def handed_over(self) -> tuple[sinks.Handoff, Declared, dict[str, pl.DataFrame]]:
         """The built model's tables, which declaration owns each entry, and each dim's ``(val, ord)`` in ordinal order."""

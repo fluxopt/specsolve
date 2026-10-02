@@ -90,13 +90,13 @@ def test_a_quadratic_objective_reaches_the_engine_optimum() -> None:
     assert _solved(m) == pytest.approx(answer.objective), 'the quadratic pairs changed on the way to linopy'
 
 
-def test_a_quadratic_constraint_is_refused_by_name() -> None:
-    """linopy has no quadratic constraint, so the export says which one it cannot carry."""
+def test_a_quadratic_constraint_is_refused_naming_the_sinks_that_take_it() -> None:
+    """linopy has no quadratic constraint, so its table refuses one as every sink's does."""
     with (
         sps.build(QUADRATIC_ROW_SPEC, QUADRATIC_DATA) as model,
         pytest.raises(
             SpecsolveError,
-            match=r"constraint 'coupled' at \{'g': 'a'\} is quadratic, and linopy has no quadratic constraint",
+            match=r"the 'linopy' sink cannot take a quadratic constraint.*Sinks that do take it: \.lp, gurobi, pyomo\.",
         ),
     ):
         model.to_linopy()
@@ -251,6 +251,37 @@ def test_a_row_no_point_meets_is_refused_rather_than_dropped(sense: str, floor: 
             SpecsolveError, match=rf"constraint 'c' at \{{\}} has no term left and reads 0 {sense} {floor}"
         ):
             model.to_linopy()
+
+
+#: A model of each kind linopy would lose, beside the refusal it reads.
+LOST = [
+    pytest.param(QUADRATIC_ROW_SPEC, QUADRATIC_DATA, 'cannot take a quadratic constraint', id='a-quadratic-constraint'),
+    pytest.param(*_termless('>=', 10.0), 'has no term left', id='a-row-no-point-meets'),
+    pytest.param(
+        {
+            'variables': {'x': {'dims': [], 'bounds': {'lower': 1}}},
+            'objective': {'sense': 'minimize', 'expression': 'x + 5'},
+        },
+        {},
+        "linopy's objective holds none",
+        id='an-objective-constant',
+    ),
+]
+
+
+@pytest.mark.parametrize(('spec', 'data', 'refused'), LOST)
+def test_check_refuses_what_the_export_refuses_in_its_words(spec: Any, data: Any, refused: str) -> None:
+    with sps.build(spec, data) as model:
+        with pytest.raises(SpecsolveError, match=refused) as checked:
+            model.check('linopy')
+        with pytest.raises(SpecsolveError) as exported:
+            model.to_linopy()
+    assert str(checked.value) == str(exported.value), 'check and to_linopy refuse in different words'
+
+
+def test_a_model_linopy_takes_checks_clean() -> None:
+    with sps.build(DISPATCH_SPEC, DISPATCH_DATA) as model:
+        model.check('linopy')
 
 
 @pytest.mark.parametrize(('sense', 'floor'), MET)

@@ -41,11 +41,11 @@ def to_linopy(handoff: Handoff, declared: Declared, dimensions: Mapping[str, pl.
     *dimensions* holds each dim's ``(val, ord)`` frame, its labels in ordinal
     order, which is the order the model's coordinates take.
 
+    The caller has asked [`check`][specsolve.Model.check] for ``linopy``
+    already, so nothing here is one linopy would drop.
+
     Raises:
-        SpecsolveError: linopy is not installed; the model has a quadratic
-            constraint or an objective constant, which linopy has no form for;
-            or a row the build kept has no term and no point meets it, which
-            linopy would drop and so turn an infeasible model feasible.
+        SpecsolveError: linopy is not installed.
     """
     try:
         import linopy
@@ -53,7 +53,6 @@ def to_linopy(handoff: Handoff, declared: Declared, dimensions: Mapping[str, pl.
     except ModuleNotFoundError as missing:
         raise SpecsolveError(UNAVAILABLE) from missing
 
-    _refuse_what_linopy_drops(handoff, declared)
     coords = {d: pd.Index(frame.get_column('val').to_list(), name=d) for d, frame in dimensions.items()}
     m = linopy.Model()
     columns = np.full(handoff.column_count, -1, dtype=np.int64)
@@ -70,47 +69,6 @@ def to_linopy(handoff: Handoff, declared: Declared, dimensions: Mapping[str, pl.
             _objective(m, handoff, columns), sense='max' if handoff.objective_sense == 'maximize' else 'min'
         )
     return m
-
-
-def _refuse_what_linopy_drops(handoff: Handoff, declared: Declared) -> None:
-    """Refuse a quadratic row, an objective constant, and a termless row no point meets.
-
-    linopy has no quadratic constraint and no objective constant, and it drops
-    a row without terms, so ``0 >= 10`` would vanish and an infeasible model
-    would solve. A termless row every point meets drops without changing the
-    answer.
-    """
-    if handoff.objective_sense is not None and handoff.objective_constant:
-        raise SpecsolveError(
-            f"the objective has the constant {handoff.objective_constant!r}, and linopy's objective holds none. "
-            'Move the constant out of the objective, or solve the model directly.'
-        )
-    if handoff.qmatrix.height:
-        name, coordinate = _owner(declared, int(handoff.qmatrix.item(0, 'row')))
-        raise SpecsolveError(
-            f"constraint '{name}' at {coordinate} is quadratic, and linopy has no quadratic constraint. "
-            'Solve the model directly, or write it to an .lp file.'
-        )
-    empty = np.flatnonzero(np.diff(handoff.row_starts) == 0)
-    if not empty.size:
-        return
-    rows = handoff.rows[empty]
-    sense, rhs = rows.get_column('sense').cast(pl.String).to_numpy(), rows.get_column('rhs').to_numpy()
-    unmet = ((sense == '<=') & (rhs < 0)) | ((sense == '>=') & (rhs > 0)) | ((sense == '==') & (rhs != 0))
-    if unmet.any():
-        at = int(empty[np.flatnonzero(unmet)[0]])
-        name, coordinate = _owner(declared, at)
-        raise SpecsolveError(
-            f"constraint '{name}' at {coordinate} has no term left and reads 0 {sense[unmet][0]} {rhs[unmet][0]}, "
-            'which no point meets. linopy drops a row without terms, so the exported model would solve. '
-            'Solve the model directly to read the infeasibility.'
-        )
-
-
-def _owner(declared: Declared, row: int) -> tuple[str, dict[str, object]]:
-    """The constraint that owns *row*, and the row's coordinate; every row has one."""
-    run = next(r for r in declared.constraints if r.start <= row < r.start + r.height)
-    return run.name, run.coordinates.row(row - run.start, named=True) if run.dims else {}
 
 
 def _placed(run: Run, dimensions: Mapping[str, pl.DataFrame]) -> np.ndarray:
@@ -174,8 +132,8 @@ def _constraint(
     """Add one constraint, each row's terms along ``_term``, padded with linopy's absent variable.
 
     A family with no term at all is left out, since linopy refuses a
-    constraint with no variable; [`_refuse_what_linopy_drops`][] has already
-    refused any of its rows no point meets.
+    constraint with no variable; the check has already refused any of its rows
+    no point meets.
     """
     import xarray as xr
     from linopy.expressions import LinearExpression
