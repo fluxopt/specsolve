@@ -50,11 +50,17 @@ parameters:
     description: whether the nominal power is a decision
     dims: [generator]
     dtype: bool
+  Generator_p_min_pu:
+    description: least output, per unit of nominal power
+    dims: [scenario, snapshot, generator]
   Generator_p_max_pu:
     description: most output, per unit of nominal power — an availability profile
     dims: [scenario, snapshot, generator]
   Generator_marginal_cost:
     description: cost of one unit of output
+    dims: [scenario, snapshot, generator]
+  Generator_marginal_cost_quadratic:
+    description: cost of the square of one unit of output
     dims: [scenario, snapshot, generator]
   Generator_sign:
     description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
@@ -96,6 +102,12 @@ parameters:
       is lost. Each scenario takes its own, as the delay
     dims: [scenario, link_output]
     dtype: bool
+  Link_marginal_cost:
+    description: cost of one unit of flow
+    dims: [scenario, snapshot, link]
+  Link_marginal_cost_quadratic:
+    description: cost of the square of one unit of flow
+    dims: [scenario, snapshot, link]
   Link_committable:
     description: whether flow is gated by an on/off status decision
     dims: [link]
@@ -276,23 +288,23 @@ constraints:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p >= 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
   Generator_fix_p_upper:
     description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
   Link_fix_p_lower:
     description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
       way'
     dims: [scenario, snapshot, link]
     where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-    expression: Link_p >= (Link_p_min_pu * Link_p_nom) * 1
+    expression: Link_p >= Link_p_min_pu * Link_p_nom
   Link_fix_p_upper:
     description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
     dims: [scenario, snapshot, link]
     where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-    expression: Link_p <= (Link_p_max_pu * Link_p_nom) * 1
+    expression: Link_p <= Link_p_max_pu * Link_p_nom
   Line_fix_s_lower:
     description: '`Line-fix-s-lower` — a fixed line carries at least the negative of its rating, the loss
       counted against it'
@@ -411,7 +423,8 @@ expressions:
       and every transformer phase shift'
   Transformer_capex: {expression: sum(scenario_weight * Transformer_s_nom_ext * Transformer_capital_cost
       * Transformer_capital_weight)}
-  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+      + CVaR_omega * CVaR'}
   Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
       into=bus)'}
   Line_injection: {expression: '-sum(Line_s, by=Line_bus0, over=line, into=bus) + sum(Line_s, by=Line_bus1,
@@ -442,7 +455,7 @@ expressions:
       edge=0, by=snapshot_period, within=period) * Link_efficiency
   scenario_opex:
     dims: [scenario]
-    expression: Generator_opex
+    expression: Generator_opex + Link_opex
     description: what a future costs to run — every operating term, weighted by the snapshot's hours and
       its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
       as PyPSA adds them (`optimize.py:414-429`)
@@ -455,5 +468,11 @@ expressions:
     otherwise: 0
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
       * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
+      over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
       over=snapshot)'}
+  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot) + sum(sum((((Link_p
+      * Link_p) * Link_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot)'}
 objective: {sense: minimize, expression: total_cost}

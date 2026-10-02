@@ -45,26 +45,29 @@ def names(text: str) -> set[str]:
     return set(NAME.findall(text or ''))
 
 
-def _pruned(node: ArithmeticNode, dead: set[str], zero: frozenset[str] = frozenset()) -> ArithmeticNode | None:
+def _pruned(node: ArithmeticNode, dead: set[str]) -> ArithmeticNode | None:
     """*node* with every term over a *dead* name cut; ``None`` where nothing is left, which is zero.
 
     A product, a quotient or a power with a dead factor is zero, and so is an
     operator call whose operand is zero or whose keyword names a dead relation
     or parameter. A sum keeps its live terms, inside brackets as well as at the
-    top. A *zero* parameter kills the product it multiplies but stays where it
-    stands alone, so a row it bounds keeps the dimensions it declares.
+    top. A factor a cut leaves at one folds away, so ``x * (1 - a * b)`` with
+    ``a`` dead reads ``x``.
     """
     if isinstance(node, NameNode):
         return None if node.name in dead else node
     if isinstance(node, UnaryOperatorNode):
-        inner = _pruned(node.operand, dead, zero)
+        inner = _pruned(node.operand, dead)
         return None if inner is None else UnaryOperatorNode(node.op, inner)
     if isinstance(node, BinaryOperatorNode):
-        if node.op in ('*', '/') and _names_in(node, zero):
-            return None
-        left, right = _pruned(node.left, dead, zero), _pruned(node.right, dead, zero)
+        left, right = _pruned(node.left, dead), _pruned(node.right, dead)
         if node.op == '**' and right is None:
             return NumberNode(1.0) if left is not None else None
+        if node.op == '*' and left is not None and right is not None:
+            if _is_one(right):
+                return left
+            if _is_one(left):
+                return right
         if node.op not in ('+', '-'):
             return None if left is None or right is None else BinaryOperatorNode(node.op, left, right)
         if left is None and right is None:
@@ -75,40 +78,32 @@ def _pruned(node: ArithmeticNode, dead: set[str], zero: frozenset[str] = frozens
     if isinstance(node, FunctionCallNode):
         if any(isinstance(v, NameNode) and v.name in dead for v in node.kwargs.values()):
             return None
-        args = [_pruned(arg, dead, zero) for arg in node.args]
+        args = [_pruned(arg, dead) for arg in node.args]
         if any(arg is None for arg in args):
             return None
         return FunctionCallNode(node.name, tuple(args), dict(node.kwargs))
     return node
 
 
-def _names_in(node: BinaryOperatorNode, zero: frozenset[str]) -> bool:
-    """Whether a factor of the product *node* is a *zero* parameter — a numerator's, not a divisor's, and not through a sum inside it."""
-    factors: list[ArithmeticNode] = [node]
-    while factors:
-        factor = factors.pop()
-        if isinstance(factor, NameNode) and factor.name in zero:
-            return True
-        if isinstance(factor, BinaryOperatorNode) and factor.op in ('*', '/'):
-            factors += [factor.left] if factor.op == '/' else [factor.left, factor.right]
-    return False
+def _is_one(node: ArithmeticNode) -> bool:
+    return isinstance(node, NumberNode) and node.value == 1
 
 
-def _cut(expression: str, dead: set[str], zero: frozenset[str] = frozenset()) -> str | None:
-    """*expression* without the terms that name a dead name, or multiply by a zero one; ``None`` when both sides lose every term.
+def _cut(expression: str, dead: set[str]) -> str | None:
+    """*expression* without the terms that name a dead name; ``None`` when both sides lose every term.
 
     The text comes back as written where nothing is cut.
     """
-    if not names(expression) & (dead | zero):
+    if not names(expression) & dead:
         return expression
     parsed = parse_expression(expression)
     if isinstance(parsed, ComparisonNode):
-        left, right = _pruned(parsed.left, dead, zero), _pruned(parsed.right, dead, zero)
+        left, right = _pruned(parsed.left, dead), _pruned(parsed.right, dead)
         if left is None and right is None:
             return None
         zero = NumberNode(0.0)
         return str(ComparisonNode(parsed.op, zero if left is None else left, zero if right is None else right))
-    kept = _pruned(parsed, dead, zero)
+    kept = _pruned(parsed, dead)
     return None if kept is None else str(kept)
 
 
@@ -123,7 +118,7 @@ def _mentions(block: dict[str, Any]) -> set[str]:
     return found
 
 
-def _surviving(expressions: dict[str, Any], dead: set[str], zero: frozenset[str]) -> dict[str, dict[str, Any]]:
+def _surviving(expressions: dict[str, Any], dead: set[str]) -> dict[str, dict[str, Any]]:
     """Every named expression with a term left once the *dead* names are cut, each as a mapping.
 
     An expression that loses every term is dead in turn, so the expressions
@@ -138,7 +133,7 @@ def _surviving(expressions: dict[str, Any], dead: set[str], zero: frozenset[str]
             if 'cases' in block:
                 survived[name] = block
                 continue
-            cut = _cut(block['expression'], dead | gone, zero)
+            cut = _cut(block['expression'], dead | gone)
             if cut is not None:
                 survived[name] = {**block, 'expression': cut}
         newly = set(blocks) - set(survived) - gone
@@ -147,7 +142,7 @@ def _surviving(expressions: dict[str, Any], dead: set[str], zero: frozenset[str]
         gone |= newly
 
 
-def project(raw: dict[str, Any], parity: dict[str, Any], zero: set[str] = frozenset()) -> dict[str, Any]:
+def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built.
 
     A cased quantity is kept whole, because only its regions' masks may say
@@ -162,17 +157,16 @@ def project(raw: dict[str, Any], parity: dict[str, Any], zero: set[str] = frozen
         | (set(raw['parameters']) - fed)
         | (set(raw.get('relations', {})) - fed)
     )
-    zero = frozenset(zero)
-    survived = _surviving(raw.get('expressions', {}), dead, zero)
+    survived = _surviving(raw.get('expressions', {}), dead)
     dead |= set(raw.get('expressions', {})) - set(survived)
     constraints = {}
     for name, block in raw['constraints'].items():
         if not parity['built_rows'].get(name):
             continue
-        cut = _cut(block['expression'], dead, zero)
+        cut = _cut(block['expression'], dead)
         if cut is not None:
             constraints[name] = {**block, 'expression': cut}
-    objective = {**raw['objective'], 'expression': _cut(raw['objective']['expression'], dead, zero)}
+    objective = {**raw['objective'], 'expression': _cut(raw['objective']['expression'], dead)}
 
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):

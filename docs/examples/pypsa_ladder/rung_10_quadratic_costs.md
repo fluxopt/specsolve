@@ -54,6 +54,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{w}`$ | `snapshot_weightings_objective` over $`\mathcal{T}`$ — PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `Generator_p_nom` over $`\Xi \times \mathcal{G}`$ — nominal power |
 | $`\mathrm{ext}`$ | `Generator_p_nom_extendable` over $`\mathcal{G}`$ — whether the nominal power is a decision |
+| $`\underline{\mathrm{p}}`$ | `Generator_p_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — least output, per unit of nominal power |
 | $`\overline{\mathrm{p}}`$ | `Generator_p_max_pu` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — most output, per unit of nominal power — an availability profile |
 | $`\mathrm{c}`$ | `Generator_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
@@ -121,25 +122,25 @@ $`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the 
 **`Generator_fix_p_lower`**
 
 ```math
-p_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
 ```
 
 **`Generator_fix_p_upper`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
 ```
 
 **`Link_fix_p_lower`**
 
 ```math
-f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
+f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
 ```
 
 **`Link_fix_p_upper`**
 
 ```math
-f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
+f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
 ```
 
 **`Bus_nodal_balance`**
@@ -165,7 +166,7 @@ f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_
 **`risk_weighted_opex`**
 
 ```math
-\mathit{risk\_weighted\_opex} = \left( 1 - \omega \right) \cdot \left( \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi} \right)
+\mathit{risk\_weighted\_opex} = \left( 1 - \omega \right) \cdot \left( \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi} \right) + \omega \cdot CVaR
 ```
 
 **`Generator_injection`**
@@ -296,6 +297,9 @@ CVaR \in \mathbb{R}
         description: whether the nominal power is a decision
         dims: [generator]
         dtype: bool
+      Generator_p_min_pu:
+        description: least output, per unit of nominal power
+        dims: [scenario, snapshot, generator]
       Generator_p_max_pu:
         description: most output, per unit of nominal power — an availability profile
         dims: [scenario, snapshot, generator]
@@ -412,23 +416,23 @@ CVaR \in \mathbb{R}
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
         dims: [scenario, snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-        expression: Generator_p >= 0
+        expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
         dims: [scenario, snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-        expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+        expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
           way'
         dims: [scenario, snapshot, link]
         where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-        expression: Link_p >= (Link_p_min_pu * Link_p_nom) * 1
+        expression: Link_p >= Link_p_min_pu * Link_p_nom
       Link_fix_p_upper:
         description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
         dims: [scenario, snapshot, link]
         where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-        expression: Link_p <= (Link_p_max_pu * Link_p_nom) * 1
+        expression: Link_p <= Link_p_max_pu * Link_p_nom
       Bus_nodal_balance:
         description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
           less what the links take away, plus what arrives over them after losses and any delay at every port
@@ -451,7 +455,8 @@ CVaR \in \mathbb{R}
         expression: (Generator_injection + Link_injection) + Load_injection
         description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
           term into the balance, and a load on its right-hand side
-      risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+      risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+          + CVaR_omega * CVaR'}
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
           into=bus)'}
       Link_injection: {expression: '-sum(Link_p, by=Link_bus0, over=link, into=bus) + sum(Link_output_arrival,
@@ -569,40 +574,4 @@ CVaR \in \mathbb{R}
 
 ## The data
 
-The tables this rung is the first to declare (2), as the prep produced them:
-
-`Generator_marginal_cost_quadratic.csv`
-
-```csv
-scenario,snapshot,generator,value
-base,2015-01-01T00:00:00.000000,coal,0.0
-base,2015-01-01T00:00:00.000000,engine,0.01
-base,2015-01-01T00:00:00.000000,gas,0.0
-base,2015-01-01T00:00:00.000000,steam,0.08
-base,2015-01-01T01:00:00.000000,coal,0.0
-base,2015-01-01T01:00:00.000000,engine,0.01
-base,2015-01-01T01:00:00.000000,gas,0.0
-base,2015-01-01T01:00:00.000000,steam,0.08
-base,2015-01-01T02:00:00.000000,coal,0.0
-base,2015-01-01T02:00:00.000000,engine,0.01
-base,2015-01-01T02:00:00.000000,gas,0.0
-base,2015-01-01T02:00:00.000000,steam,0.08
-base,2015-01-01T03:00:00.000000,coal,0.0
-base,2015-01-01T03:00:00.000000,engine,0.01
-base,2015-01-01T03:00:00.000000,gas,0.0
-base,2015-01-01T03:00:00.000000,steam,0.08
-```
-
-`Link_marginal_cost_quadratic.csv`
-
-```csv
-scenario,snapshot,link,value
-base,2015-01-01T00:00:00.000000,wire,0.0
-base,2015-01-01T00:00:00.000000,wire2,0.02
-base,2015-01-01T01:00:00.000000,wire,0.0
-base,2015-01-01T01:00:00.000000,wire2,0.02
-base,2015-01-01T02:00:00.000000,wire,0.0
-base,2015-01-01T02:00:00.000000,wire2,0.02
-base,2015-01-01T03:00:00.000000,wire,0.0
-base,2015-01-01T03:00:00.000000,wire2,0.02
-```
+Every table this spec declares was first declared by a lower rung; its values here are in the prep above.

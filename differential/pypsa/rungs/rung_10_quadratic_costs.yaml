@@ -39,6 +39,9 @@ parameters:
     description: whether the nominal power is a decision
     dims: [generator]
     dtype: bool
+  Generator_p_min_pu:
+    description: least output, per unit of nominal power
+    dims: [scenario, snapshot, generator]
   Generator_p_max_pu:
     description: most output, per unit of nominal power — an availability profile
     dims: [scenario, snapshot, generator]
@@ -155,23 +158,23 @@ constraints:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p >= 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
   Generator_fix_p_upper:
     description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
   Link_fix_p_lower:
     description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
       way'
     dims: [scenario, snapshot, link]
     where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-    expression: Link_p >= (Link_p_min_pu * Link_p_nom) * 1
+    expression: Link_p >= Link_p_min_pu * Link_p_nom
   Link_fix_p_upper:
     description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
     dims: [scenario, snapshot, link]
     where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-    expression: Link_p <= (Link_p_max_pu * Link_p_nom) * 1
+    expression: Link_p <= Link_p_max_pu * Link_p_nom
   Bus_nodal_balance:
     description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
       less what the links take away, plus what arrives over them after losses and any delay at every port
@@ -194,7 +197,8 @@ expressions:
     expression: (Generator_injection + Link_injection) + Load_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+      + CVaR_omega * CVaR'}
   Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
       into=bus)'}
   Link_injection: {expression: '-sum(Link_p, by=Link_bus0, over=link, into=bus) + sum(Link_output_arrival,

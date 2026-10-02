@@ -60,6 +60,9 @@ parameters:
     description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
       … read long — negative where that port consumes rather than delivers
     dims: [snapshot, link_output]
+  Link_marginal_cost:
+    description: cost of one unit of flow
+    dims: [snapshot, link]
   Load_p_set:
     description: demand
     dims: [snapshot, load]
@@ -106,6 +109,12 @@ parameters:
   Generator_start_up_cost:
     description: cost of one start
     dims: [generator]
+  Generator_shut_down_cost:
+    description: cost of one stop
+    dims: [generator]
+  Generator_stand_by_cost:
+    description: cost of one snapshot spent on
+    dims: [snapshot, generator]
   Generator_maintainable:
     description: whether a generator must be taken off for maintenance within the horizon
     dims: [generator]
@@ -358,5 +367,7 @@ expressions:
       given: {when: Generator_ramp_limit_shut_down, expression: Generator_ramp_limit_shut_down}
     otherwise: 1
 objective: {sense: minimize, description: 'operating cost by weighted snapshot, plus what starts, stops
-    and standing by cost', expression: sum((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-    + sum(Generator_start_up * Generator_start_up_cost)}
+    and standing by cost', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective)
+    + sum(Link_p * Link_marginal_cost * snapshot_weightings_objective) + sum(Generator_status * Generator_stand_by_cost
+    * snapshot_weightings_objective) + sum(Generator_start_up * Generator_start_up_cost) + sum(Generator_shut_down
+    * Generator_shut_down_cost)}

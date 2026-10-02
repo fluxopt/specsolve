@@ -32,11 +32,17 @@ parameters:
     description: whether the nominal power is a decision
     dims: [generator]
     dtype: bool
+  Generator_p_min_pu:
+    description: least output, per unit of nominal power
+    dims: [scenario, snapshot, generator]
   Generator_p_max_pu:
     description: most output, per unit of nominal power — an availability profile
     dims: [scenario, snapshot, generator]
   Generator_marginal_cost:
     description: cost of one unit of output
+    dims: [scenario, snapshot, generator]
+  Generator_marginal_cost_quadratic:
+    description: cost of the square of one unit of output
     dims: [scenario, snapshot, generator]
   Generator_sign:
     description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
@@ -128,18 +134,18 @@ constraints:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p >= 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
   Generator_fix_p_upper:
     description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
   Generator_ext_p_lower:
     description: '`Generator-ext-p-lower` — an extendable generator outputs at least its minimum of the
       chosen build'
     dims: [scenario, snapshot, generator]
     where: Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p >= 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom_ext
   Generator_ext_p_upper:
     description: '`Generator-ext-p-upper` — an extendable generator outputs at most what is available
       of the chosen build'
@@ -202,7 +208,8 @@ expressions:
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
   Generator_capex: {expression: sum(scenario_weight * Generator_p_nom_ext * Generator_capital_cost * Generator_capital_weight)}
-  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+      + CVaR_omega * CVaR'}
   Generator_additions: {expression: 'sum(Generator_p_nom_ext * Generator_first_active, by=Generator_carrier,
       over=generator, into=carrier)'}
   Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
@@ -222,6 +229,8 @@ expressions:
       active: {when: Load_active, expression: Load_sign * Load_p_set}
     otherwise: 0
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
+      over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
       * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
       over=snapshot)'}
 objective: {sense: minimize, expression: total_cost}

@@ -75,6 +75,7 @@ The relaxed class of a plain `n.optimize()`: `linearized_unit_commitment`, state
 | $`\underline{\mathrm{f}}`$ | `Link_p_min_pu` over $`\mathcal{T} \times \mathcal{L}`$ — least flow, per unit of nominal power — negative for a link that carries both ways |
 | $`\overline{\mathrm{f}}`$ | `Link_p_max_pu` over $`\mathcal{T} \times \mathcal{L}`$ — most flow, per unit of nominal power |
 | $`\eta`$ | `Link_efficiency` over $`\mathcal{T} \times \mathcal{O}`$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers |
+| $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{load}`$ | `Load_p_set` over $`\mathcal{T} \times \mathcal{D}`$ — demand |
 | $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
@@ -120,7 +121,7 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{c}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} u_{t,g} \cdot \mathrm{c}^{\mathrm{on}}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{up}_{t,g} \cdot \mathrm{c}^{\mathrm{up}}_{g} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{dn}_{t,g} \cdot \mathrm{c}^{\mathrm{dn}}_{g}
+\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{c}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ l \in \mathcal{L}} f_{t,l} \cdot \mathrm{c}^{f}_{t,l} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} u_{t,g} \cdot \mathrm{c}^{\mathrm{on}}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{up}_{t,g} \cdot \mathrm{c}^{\mathrm{up}}_{g} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{dn}_{t,g} \cdot \mathrm{c}^{\mathrm{dn}}_{g}
 ```
 
 #### Subject to
@@ -128,13 +129,13 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 **`Generator_fix_p_lower`**
 
 ```math
-p_{t,g} \ge \underline{\mathrm{p}}_{t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{com}_{g}
+p_{t,g} \ge \underline{\mathrm{p}}_{t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{com}_{g}
 ```
 
 **`Generator_fix_p_upper`**
 
 ```math
-p_{t,g} \le \overline{\mathrm{p}}_{t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{com}_{g}
+p_{t,g} \le \overline{\mathrm{p}}_{t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{com}_{g}
 ```
 
 **`Link_fix_p_lower`**
@@ -397,6 +398,9 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
         description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
           … read long — negative where that port consumes rather than delivers
         dims: [snapshot, link_output]
+      Link_marginal_cost:
+        description: cost of one unit of flow
+        dims: [snapshot, link]
       Load_p_set:
         description: demand
         dims: [snapshot, load]
@@ -488,12 +492,12 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
         description: '`Generator-fix-p-lower` — a generator outputs at least its minimum'
         dims: [snapshot, generator]
         where: not Generator_committable
-        expression: Generator_p >= (Generator_p_min_pu * Generator_p_nom) * 1
+        expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a generator outputs at most what is available'
         dims: [snapshot, generator]
         where: not Generator_committable
-        expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+        expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a link carries at least its minimum, negative for the other way'
         dims: [snapshot, link]
@@ -688,9 +692,10 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
               - Generator_status)}
         otherwise: Generator_ramp_down_rate * Generator_p_nom
     objective: {sense: minimize, description: 'operating cost by weighted snapshot, plus what starts, stops
-        and standing by cost', expression: ((sum((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-        + sum((Generator_status * Generator_stand_by_cost) * snapshot_weightings_objective)) + sum(Generator_start_up
-        * Generator_start_up_cost)) + sum(Generator_shut_down * Generator_shut_down_cost)}
+        and standing by cost', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective)
+        + sum(Link_p * Link_marginal_cost * snapshot_weightings_objective) + sum(Generator_status * Generator_stand_by_cost
+        * snapshot_weightings_objective) + sum(Generator_start_up * Generator_start_up_cost) + sum(Generator_shut_down
+        * Generator_shut_down_cost)}
     ```
 
     The prep — every table the spec declares, from the network — and the solve:
@@ -795,7 +800,7 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
 
 ## The data
 
-The tables this rung is the first to declare (37), as the prep produced them:
+The tables this rung is the first to declare (38), as the prep produced them:
 
 `Generator_bus.csv`
 
@@ -1059,6 +1064,16 @@ snapshot,link_output,value
 2015-01-01T01:00:00.000000,wire_bus1,0.9
 2015-01-01T02:00:00.000000,wire_bus1,0.9
 2015-01-01T03:00:00.000000,wire_bus1,0.9
+```
+
+`Link_marginal_cost.csv`
+
+```csv
+snapshot,link,value
+2015-01-01T00:00:00.000000,wire,0.0
+2015-01-01T01:00:00.000000,wire,0.0
+2015-01-01T02:00:00.000000,wire,0.0
+2015-01-01T03:00:00.000000,wire,0.0
 ```
 
 `Link_output_bus.csv`

@@ -216,9 +216,9 @@ def _verdict(record: dict) -> str:
     )
 
 
-def _symbols(stem: str, projection: dict) -> SymbolTable | None:
+def _symbols(spec: str, projection: dict) -> SymbolTable | None:
     """The file's symbol table cut to what the projection declares — a table naming a dropped name is refused."""
-    path = RUNGS / f'{stem}.symbols.yaml'
+    path = RUNGS / f'{Path(spec).stem}.symbols.yaml'
     if not path.exists():
         return None
     raw = yaml.safe_load(path.read_text())
@@ -239,7 +239,7 @@ def _symbols(stem: str, projection: dict) -> SymbolTable | None:
 
 def page(stem: str, record: dict) -> str:
     projection = yaml.safe_load((RUNGS / f'{stem}.yaml').read_text())
-    math = to_markdown(str(RUNGS / f'{stem}.yaml'), symbols=_symbols(stem, projection), legend=True)
+    math = to_markdown(str(RUNGS / f'{stem}.yaml'), symbols=_symbols(record['parity']['spec'], projection), legend=True)
     number = int(stem[5:7])
     return (
         f'# {_title(stem)}\n\n'

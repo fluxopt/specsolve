@@ -55,6 +55,9 @@ parameters:
     description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
       … read long — negative where that port consumes rather than delivers
     dims: [snapshot, link_output]
+  Link_marginal_cost:
+    description: cost of one unit of flow
+    dims: [snapshot, link]
   Load_p_set:
     description: demand
     dims: [snapshot, load]
@@ -146,12 +149,12 @@ constraints:
     description: '`Generator-fix-p-lower` — a generator outputs at least its minimum'
     dims: [snapshot, generator]
     where: not Generator_committable
-    expression: Generator_p >= (Generator_p_min_pu * Generator_p_nom) * 1
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
   Generator_fix_p_upper:
     description: '`Generator-fix-p-upper` — a generator outputs at most what is available'
     dims: [snapshot, generator]
     where: not Generator_committable
-    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
   Link_fix_p_lower:
     description: '`Link-fix-p-lower` — a link carries at least its minimum, negative for the other way'
     dims: [snapshot, link]
@@ -346,6 +349,7 @@ expressions:
           - Generator_status)}
     otherwise: Generator_ramp_down_rate * Generator_p_nom
 objective: {sense: minimize, description: 'operating cost by weighted snapshot, plus what starts, stops
-    and standing by cost', expression: ((sum((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-    + sum((Generator_status * Generator_stand_by_cost) * snapshot_weightings_objective)) + sum(Generator_start_up
-    * Generator_start_up_cost)) + sum(Generator_shut_down * Generator_shut_down_cost)}
+    and standing by cost', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective)
+    + sum(Link_p * Link_marginal_cost * snapshot_weightings_objective) + sum(Generator_status * Generator_stand_by_cost
+    * snapshot_weightings_objective) + sum(Generator_start_up * Generator_start_up_cost) + sum(Generator_shut_down
+    * Generator_shut_down_cost)}

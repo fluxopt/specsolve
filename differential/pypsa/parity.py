@@ -74,6 +74,8 @@ HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
 #: What the corpus leaves untested, one line per gap as `coverage` prints it — energy-models/mathspec#830.
 UNTESTED = HERE / 'untested.txt'
+#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and masks per rung.
+UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'dims', 'conjuncts'})
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
@@ -221,14 +223,13 @@ def spread(table: object, dims: list[str], scenarios: object) -> object:
     return pl.DataFrame({'scenario': scenarios}).join(table, how='cross')
 
 
-def prepared(spec: Path, n, stem: str | None = None) -> dict[str, object]:
-    """`prep.sources` cut to what *spec* declares — specsolve refuses a key the spec does not take; *stem* names the rung whose `OPTIMIZE` and outages prep reads."""
+def prepared(spec: Path, tables: dict[str, object]) -> dict[str, object]:
+    """`prep.sources`'s *tables* cut to what *spec* declares — specsolve refuses a key the spec does not take."""
     declared = mathspec.to_spec(spec)
     names = {*declared.dimensions, *declared.parameters, *declared.relations}
     dims = {name: p.dims for name, p in declared.parameters.items()} | {
         name: list(relation.key_roles) for name, relation in declared.relations.items()
     }
-    tables = prep.sources(n, keywords(stem) if stem else {}, outages(stem) if stem else None)
     return {
         name: spread(flattened(name, table, dims.get(name, [])), dims.get(name, []), tables['scenario'])
         for name, table in tables.items()
@@ -240,23 +241,17 @@ def prepared(spec: Path, n, stem: str | None = None) -> dict[str, object]:
 FIRST: dict[str, set[str]] = defaultdict(set)
 
 
-def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed: list[str], zero: set[str]) -> Path:
-    """Write the rung's own spec: *spec* cut to what the full build produced, the rung's script and symbols beside it.
-
-    *zero* names the parameters this network sets to zero everywhere, whose
-    products the cut drops too, so a square no unit pays for leaves the file.
-    """
+def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed: list[str]) -> Path:
+    """Write the rung's own spec: *spec* cut to what the full build produced, the rung's script beside it, and the file's symbols once per file."""
     raw = yaml.safe_load(spec.read_text())
-    cut = projection.project(
-        raw, {'built_rows': built_rows, 'built_columns': built_columns, 'attached_nonempty': fed}, zero=zero
-    )
+    cut = projection.project(raw, {'built_rows': built_rows, 'built_columns': built_columns, 'attached_nonempty': fed})
     path = PROJECTIONS / f'{stem}.yaml'
     path.parent.mkdir(exist_ok=True)
     path.write_text(projection.dump(cut))
     shutil.copy(RUNGS / f'{stem}.py', PROJECTIONS / f'{stem}.py')
     symbols = spec.parent / 'symbols' / spec.name
     if symbols.exists():
-        shutil.copy(symbols, PROJECTIONS / f'{stem}.symbols.yaml')
+        shutil.copy(symbols, PROJECTIONS / f'{spec.stem}.symbols.yaml')
     return path
 
 
@@ -272,21 +267,6 @@ def built_counts(model) -> tuple[dict[str, int], dict[str, int]]:
 def fed(sources: dict[str, object]) -> list[str]:
     """The tables a build was handed with at least one row, or a scalar."""
     return sorted(name for name, table in sources.items() if not hasattr(table, '__len__') or len(table))
-
-
-def zero_parameters(sources: dict[str, object], declared) -> set[str]:
-    """The numeric parameters this network sets to zero at every row it gives."""
-    zero = set()
-    for name, p in declared.parameters.items():
-        table = sources.get(name)
-        if getattr(p, 'dtype', None) in ('bool', 'str') or table is None:
-            continue
-        if isinstance(table, pl.DataFrame):
-            if len(table) and table['value'].dtype.is_numeric() and (table['value'] == 0).all():
-                zero.add(name)
-        elif isinstance(table, (int, float)) and not isinstance(table, bool) and table == 0:
-            zero.add(name)
-    return zero
 
 
 def _keyed_model(model) -> dict[str, object]:
@@ -519,12 +499,6 @@ def legacy():
         linopy.options['semantics'] = 'v1'
 
 
-def pypsa_model(stem: str):
-    """The network's own linopy model, as PyPSA builds it."""
-    with legacy():
-        return network(stem).optimize.create_model(**keywords(stem))
-
-
 #: Whether the rung under comparison is a plain run, whose one scenario PyPSA spells no axis for.
 PLAIN = [True]
 
@@ -625,6 +599,8 @@ def _objective(model, relabel) -> tuple:
     flat = model.objective.expression.flat
     terms = []
     for row in flat.itertuples():
+        if not row.coeffs:
+            continue
         if hasattr(row, 'vars1'):
             pair = tuple(sorted((relabel(int(row.vars1)), relabel(int(row.vars2)))))
         else:
@@ -846,17 +822,11 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     n = network(stem)
     PLAIN[0] = not n.has_scenarios
     gc_kinds = {str(label): str(gc['type']) for label, gc in prep.first_scenario(n.global_constraints).iterrows()}
-    if bug is None:
-        theirs = pypsa_model(stem) if outages(stem) is None else None
-        n = solved(stem, n)
-        theirs = n.model if theirs is None else theirs
-        target = float(n.objective) + float(n.objective_constant)
-    else:
-        target = intended(stem)
     spec = spec_of(stem)
     whole = mathspec.to_spec(spec)
     try:
-        sources = prepared(spec, network(stem), stem)
+        tables = prep.sources(n, keywords(stem), outages(stem))
+        sources = prepared(spec, tables)
         full = sps.build(spec, sources)
     except (
         sps.DataError,
@@ -869,14 +839,20 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         print(f'{stem}: prep cannot prepare {spec.name} yet — {note}', file=sys.stderr)
         return {'spec': spec.name, 'unattached': note}, {'error': 'not attached'}, True
     file_rows, file_columns = built_counts(full)
-    cut = rung_spec(stem, spec, file_rows, file_columns, fed(sources), zero_parameters(sources, whole))
-    cut_sources = prepared(cut, network(stem), stem)
+    cut = rung_spec(stem, spec, file_rows, file_columns, fed(sources))
+    cut_sources = prepared(cut, tables)
     model = sps.build(cut, cut_sources)
     same_model(stem, full, model)
     declared = mathspec.to_spec(cut)
     committed(stem, spec.name, declared, cut_sources)
     result = model.solve(solver_name='highs')
     assert result.is_ok, f'{stem}: specsolve did not solve — {result.termination_condition}'
+    if bug is None:
+        n = solved(stem, n)
+        theirs = n.model
+        target = float(n.objective) + float(n.objective_constant)
+    else:
+        target = intended(stem)
     stamps = {
         'spec': spec.name,
         'built_rows': file_rows,
@@ -1051,9 +1027,9 @@ def main() -> int:
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    # the conjunct verdicts feed `coverage` below and are not committed
+    # the full file's inventory and the conjunct verdicts feed `coverage` below and are not committed
     recorded = {
-        stem: record | {'parity': {key: v for key, v in record['parity'].items() if key != 'conjuncts'}}
+        stem: record | {'parity': {key: v for key, v in record['parity'].items() if key not in UNCOMMITTED}}
         for stem, record in stamped.items()
     }
     RECORDS.write_text(json.dumps(recorded, indent=2, sort_keys=True) + '\n')

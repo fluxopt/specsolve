@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-5--global-constraints): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; structure ≠ `CVaR` 0 vs 1 — the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it; `CVaR-a` 0 vs 1 — the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it; `CVaR-theta` 0 vs 1 — the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 102 rows · ≠ 44 vs 47 columns · ✔ 190 nonzeros; duals ✔ 102 rows, 2 negated; **model for model**: 23 blocks equal, 2 documented splits, 3 recorded deviations.
+> ✔ Verified against pypsa 1.3.0 — objective **10282.833333333332** on both sides; structure ≠ `CVaR` 0 vs 1 — the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it; `CVaR-a` 0 vs 1 — the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it; `CVaR-theta` 0 vs 1 — the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it; `operational_limit` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `primary_energy` 3 vs 1+1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 102 rows · ≠ 44 vs 47 columns · ✔ 190 nonzeros; duals ✔ 102 rows, 2 negated; **model for model**: 22 blocks equal, 2 documented splits, 4 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -74,8 +74,10 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{w}`$ | `snapshot_weightings_objective` over $`\mathcal{T}`$ — PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `Generator_p_nom` over $`\Xi \times \mathcal{G}`$ — nominal power |
 | $`\mathrm{ext}`$ | `Generator_p_nom_extendable` over $`\mathcal{G}`$ — whether the nominal power is a decision |
+| $`\underline{\mathrm{p}}`$ | `Generator_p_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — least output, per unit of nominal power |
 | $`\overline{\mathrm{p}}`$ | `Generator_p_max_pu` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — most output, per unit of nominal power — an availability profile |
 | $`\mathrm{c}`$ | `Generator_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
 | $`\mathrm{f}^{\mathrm{nom}}`$ | `Link_p_nom` over $`\Xi \times \mathcal{L}`$ — nominal power |
@@ -85,6 +87,8 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\eta`$ | `Link_efficiency` over $`\Xi \times \mathcal{T} \times \mathcal{O}`$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1522`) |
 | $`\mathrm{d}^{f}`$ | `Link_output_delay` over $`\Xi \times \mathcal{O}`$ — snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero for a port that delivers at once. Each scenario takes its own. PyPSA `1.3.0` groups the ports by delay over all scenarios and shifts each group in every one, so a delay that differs by scenario delivers the flow twice (`constraints.py:1269-1276`, PyPSA/PyPSA\#1941) |
 | $`\mathrm{cyc}^{f}`$ | `Link_output_cyclic_delay` over $`\Xi \times \mathcal{O}`$ — whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`, `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots is lost. Each scenario takes its own, as the delay |
+| $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
+| $`\mathrm{c}^{f,(2)}`$ | `Link_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of the square of one unit of flow |
 | $`\mathrm{com}^{f}`$ | `Link_committable` over $`\mathcal{L}`$ — whether flow is gated by an on/off status decision |
 | $`\mathrm{load}`$ | `Load_p_set` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — demand |
 | $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
@@ -115,8 +119,12 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{reset}`$ | `StorageUnit_state_of_charge_initial_per_period` over $`\Xi \times \mathcal{S}`$ — whether each investment period opens on the initial charge instead of carrying the previous period's; PyPSA reads it only under `multi_investment_periods`, so data prep feeds false otherwise |
 | $`\mathrm{open}`$ | `StorageUnit_opens_late` over $`\mathcal{T} \times \mathcal{S}`$ — whether a snapshot is the first a storage unit stands in, where that is not the first of the horizon — PyPSA's `active.cumsum() == 1` over the snapshots it stands in, past the first snapshot, data prep; false in a run where every unit stands throughout |
 | $`\mathrm{idle}`$ | `StorageUnit_inactive_snapshots` over $`\mathcal{S}`$ — how many snapshots a storage unit does not stand in — PyPSA's `(~active).sum()`, data prep. A cyclic unit reaches back this many snapshots further, so it closes on the last snapshot it stands in |
+| $`\mathrm{c}^{h}`$ | `StorageUnit_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of one unit of dispatch |
+| $`\mathrm{c}^{h,(2)}`$ | `StorageUnit_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of the square of one unit of dispatch; storing is not charged |
+| $`\mathrm{c}^{\mathrm{soc}}`$ | `StorageUnit_marginal_cost_storage` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of one unit of charge held over one snapshot |
 | $`\mathrm{e}^{\mathrm{nom}}`$ | `Store_e_nom` over $`\Xi \times \mathcal{V}`$ — nominal energy capacity |
 | $`\mathrm{ext}^{e}`$ | `Store_e_nom_extendable` over $`\mathcal{V}`$ — whether the nominal energy capacity is a decision |
+| $`\underline{\mathrm{e}}`$ | `Store_e_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — least energy held, per unit of nominal capacity — negative for a store that may go short |
 | $`\overline{\mathrm{e}}`$ | `Store_e_max_pu` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — most energy held, per unit of nominal capacity |
 | $`\mathrm{sgn}^{q}`$ | `Store_sign` over $`\mathcal{V}`$ — the sign the power a store delivers enters its bus's balance with — PyPSA's `sign`, `1` unless given. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
 | $`\rho^{e}`$ | `Store_retention` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — share of energy kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`, data prep |
@@ -126,6 +134,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{reset}^{e}`$ | `Store_e_initial_per_period` over $`\Xi \times \mathcal{V}`$ — whether each investment period opens on the initial energy instead of carrying the previous period's; PyPSA reads it only under `multi_investment_periods`, so data prep feeds false otherwise |
 | $`\mathrm{open}^{e}`$ | `Store_opens_late` over $`\mathcal{T} \times \mathcal{V}`$ — whether a snapshot is the first a store stands in, where that is not the first of the horizon — PyPSA's `active.cumsum() == 1` over the snapshots it stands in, past the first snapshot, data prep; false in a run where every store stands throughout |
 | $`\mathrm{idle}^{e}`$ | `Store_inactive_snapshots` over $`\mathcal{V}`$ — how many snapshots a store does not stand in — PyPSA's `(~active).sum()`, data prep. A cyclic store reaches back this many snapshots further, so it closes on the last snapshot it stands in |
+| $`\mathrm{c}^{q}`$ | `Store_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of one unit of power delivered |
+| $`\mathrm{c}^{q,(2)}`$ | `Store_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of the square of the net power delivered, so charging costs as much as delivering |
+| $`\mathrm{c}^{e}`$ | `Store_marginal_cost_storage` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of one unit of energy held over one snapshot |
 | $`\mathrm{type}`$ | `GlobalConstraint_type` over $`\mathcal{B}`$ — which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`, `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit` |
 | $`\mathrm{sense}`$ | `GlobalConstraint_sense` over $`\Xi \times \mathcal{B}`$ — which way the row binds in each scenario — `<=`, `>=` or `==`; PyPSA reads a row's sense per scenario (`global_constraints.py:556`, `:748`, `:860`) |
 | $`\mathrm{K}`$ | `GlobalConstraint_constant` over $`\Xi \times \mathcal{B}`$ — the constant the total is held against; what a variable cannot carry — an initial charge, times its period's years for each counted period where the storage reopens per period, or a non-extendable build — is folded in here by data prep. PyPSA reads it per scenario (`global_constraints.py:557`, `:749`, `:861`) |
@@ -182,6 +193,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1537-1538`) |
 | $`\mathrm{GlobalConstraint\_snapshot\_closes}`$ | `GlobalConstraint_snapshot_closes` over $`\Xi \times \mathcal{B} \times \mathcal{T}`$ — one at the last snapshot a row counts, and zero elsewhere |
 | $`\mathit{Generator\_opex}`$ | `Generator_opex` over $`\Xi`$ |
+| $`\mathit{Link\_opex}`$ | `Link_opex` over $`\Xi`$ |
+| $`\mathit{StorageUnit\_opex}`$ | `StorageUnit_opex` over $`\Xi`$ |
+| $`\mathit{Store\_opex}`$ | `Store_opex` over $`\Xi`$ |
 
 $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
@@ -206,25 +220,25 @@ $`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, a
 **`Generator_fix_p_lower`**
 
 ```math
-p_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
 ```
 
 **`Generator_fix_p_upper`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
 ```
 
 **`Link_fix_p_lower`**
 
 ```math
-f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
+f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
 ```
 
 **`Link_fix_p_upper`**
 
 ```math
-f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
+f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
 ```
 
 **`StorageUnit_fix_p_dispatch_lower`**
@@ -272,7 +286,7 @@ h^{-}_{\xi,t,s} \le -\underline{\mathrm{h}}_{\xi,t,s} \cdot \mathrm{h}^{\mathrm{
 **`Store_fix_e_lower`**
 
 ```math
-e_{\xi,t,v} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
+e_{\xi,t,v} \ge \underline{\mathrm{e}}_{\xi,t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
 ```
 
 **`Store_fix_e_upper`**
@@ -406,7 +420,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
 **`risk_weighted_opex`**
 
 ```math
-\mathit{risk\_weighted\_opex} = \left( 1 - \omega \right) \cdot \left( \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi} \right)
+\mathit{risk\_weighted\_opex} = \left( 1 - \omega \right) \cdot \left( \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi} \right) + \omega \cdot CVaR
 ```
 
 **`Generator_injection`**
@@ -466,7 +480,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
 **`scenario_opex`**
 
 ```math
-\mathit{scenario\_opex}_{\xi} = \mathit{Generator\_opex}_{\xi} \qquad \forall\, \xi \in \Xi
+\mathit{scenario\_opex}_{\xi} = \mathit{Generator\_opex}_{\xi} + \mathit{Link\_opex}_{\xi} + \mathit{StorageUnit\_opex}_{\xi} + \mathit{Store\_opex}_{\xi} \qquad \forall\, \xi \in \Xi
 ```
 
 **`Load_demand`**
@@ -484,7 +498,25 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
 **`Generator_opex`**
 
 ```math
-\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`Link_opex`**
+
+```math
+\mathit{Link\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot \mathrm{c}^{f}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot f_{\xi,t,l} \cdot \mathrm{c}^{f,(2)}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`StorageUnit_opex`**
+
+```math
+\mathit{StorageUnit\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h,(2)}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{c}^{\mathrm{soc}}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`Store_opex`**
+
+```math
+\mathit{Store\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot \mathrm{c}^{q}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot q_{\xi,t,v} \cdot \mathrm{c}^{q,(2)}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} e_{\xi,t,v} \cdot \mathrm{c}^{e}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 #### Variable domains
@@ -602,11 +634,17 @@ CVaR \in \mathbb{R}
         description: whether the nominal power is a decision
         dims: [generator]
         dtype: bool
+      Generator_p_min_pu:
+        description: least output, per unit of nominal power
+        dims: [scenario, snapshot, generator]
       Generator_p_max_pu:
         description: most output, per unit of nominal power — an availability profile
         dims: [scenario, snapshot, generator]
       Generator_marginal_cost:
         description: cost of one unit of output
+        dims: [scenario, snapshot, generator]
+      Generator_marginal_cost_quadratic:
+        description: cost of the square of one unit of output
         dims: [scenario, snapshot, generator]
       Generator_sign:
         description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
@@ -648,6 +686,12 @@ CVaR \in \mathbb{R}
           is lost. Each scenario takes its own, as the delay
         dims: [scenario, link_output]
         dtype: bool
+      Link_marginal_cost:
+        description: cost of one unit of flow
+        dims: [scenario, snapshot, link]
+      Link_marginal_cost_quadratic:
+        description: cost of the square of one unit of flow
+        dims: [scenario, snapshot, link]
       Link_committable:
         description: whether flow is gated by an on/off status decision
         dims: [link]
@@ -765,6 +809,15 @@ CVaR \in \mathbb{R}
           it stands in
         dims: [storage_unit]
         dtype: int
+      StorageUnit_marginal_cost:
+        description: cost of one unit of dispatch
+        dims: [scenario, snapshot, storage_unit]
+      StorageUnit_marginal_cost_quadratic:
+        description: cost of the square of one unit of dispatch; storing is not charged
+        dims: [scenario, snapshot, storage_unit]
+      StorageUnit_marginal_cost_storage:
+        description: cost of one unit of charge held over one snapshot
+        dims: [scenario, snapshot, storage_unit]
       Store_e_nom:
         description: nominal energy capacity
         dims: [scenario, store]
@@ -772,6 +825,9 @@ CVaR \in \mathbb{R}
         description: whether the nominal energy capacity is a decision
         dims: [store]
         dtype: bool
+      Store_e_min_pu:
+        description: least energy held, per unit of nominal capacity — negative for a store that may go short
+        dims: [scenario, snapshot, store]
       Store_e_max_pu:
         description: most energy held, per unit of nominal capacity
         dims: [scenario, snapshot, store]
@@ -813,6 +869,15 @@ CVaR \in \mathbb{R}
           in
         dims: [store]
         dtype: int
+      Store_marginal_cost:
+        description: cost of one unit of power delivered
+        dims: [scenario, snapshot, store]
+      Store_marginal_cost_quadratic:
+        description: cost of the square of the net power delivered, so charging costs as much as delivering
+        dims: [scenario, snapshot, store]
+      Store_marginal_cost_storage:
+        description: cost of one unit of energy held over one snapshot
+        dims: [scenario, snapshot, store]
       GlobalConstraint_type:
         description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
           `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -905,23 +970,23 @@ CVaR \in \mathbb{R}
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
         dims: [scenario, snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-        expression: Generator_p >= 0
+        expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
       Generator_fix_p_upper:
         description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
         dims: [scenario, snapshot, generator]
         where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-        expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+        expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
       Link_fix_p_lower:
         description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
           way'
         dims: [scenario, snapshot, link]
         where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-        expression: Link_p >= (Link_p_min_pu * Link_p_nom) * 1
+        expression: Link_p >= Link_p_min_pu * Link_p_nom
       Link_fix_p_upper:
         description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
         dims: [scenario, snapshot, link]
         where: not Link_p_nom_extendable AND not Link_committable AND Link_active
-        expression: Link_p <= (Link_p_max_pu * Link_p_nom) * 1
+        expression: Link_p <= Link_p_max_pu * Link_p_nom
       StorageUnit_fix_p_dispatch_lower:
         description: '`StorageUnit-fix-p_dispatch-lower` — dispatch is non-negative'
         dims: [scenario, snapshot, storage_unit]
@@ -966,7 +1031,7 @@ CVaR \in \mathbb{R}
         description: '`Store-fix-e-lower` — a fixed store holds at least its floor'
         dims: [scenario, snapshot, store]
         where: not Store_e_nom_extendable AND Store_active
-        expression: Store_e >= 0
+        expression: Store_e >= Store_e_min_pu * Store_e_nom
       Store_fix_e_upper:
         description: '`Store-fix-e-upper` — a fixed store holds at most its nominal capacity'
         dims: [scenario, snapshot, store]
@@ -1093,7 +1158,8 @@ CVaR \in \mathbb{R}
           * StorageUnit_operational_limit_weight, over=snapshot), over=storage_unit)'}
       Store_operational_limit: {expression: '-sum(sum((Store_e * Store_closing_weight) * Store_operational_limit_weight,
           over=snapshot), over=store)'}
-      risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+      risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+          + CVaR_omega * CVaR'}
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
           into=bus)'}
       Link_injection: {expression: '-sum(Link_p, by=Link_bus0, over=link, into=bus) + sum(Link_output_arrival,
@@ -1148,7 +1214,7 @@ CVaR \in \mathbb{R}
         otherwise: 0
       scenario_opex:
         dims: [scenario]
-        expression: Generator_opex
+        expression: ((Generator_opex + Link_opex) + StorageUnit_opex) + Store_opex
         description: what a future costs to run — every operating term, weighted by the snapshot's hours and
           its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
           as PyPSA adds them (`optimize.py:414-429`)
@@ -1168,7 +1234,26 @@ CVaR \in \mathbb{R}
         otherwise: 0
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
           * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
+          over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
           over=snapshot)'}
+      Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot) + sum(sum((((Link_p
+          * Link_p) * Link_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot)'}
+      StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=storage_unit),
+          over=snapshot) + sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
+          into=snapshot), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
+          into=snapshot), over=storage_unit), over=snapshot)'}
+      Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
+          + sum(sum((((Store_p * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
+          + sum(sum(((Store_e * Store_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)'}
     objective: {sense: minimize, expression: total_cost}
     ```
 

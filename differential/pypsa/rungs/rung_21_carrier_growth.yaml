@@ -37,11 +37,17 @@ parameters:
     description: whether the nominal power is a decision
     dims: [generator]
     dtype: bool
+  Generator_p_min_pu:
+    description: least output, per unit of nominal power
+    dims: [scenario, snapshot, generator]
   Generator_p_max_pu:
     description: most output, per unit of nominal power — an availability profile
     dims: [scenario, snapshot, generator]
   Generator_marginal_cost:
     description: cost of one unit of output
+    dims: [scenario, snapshot, generator]
+  Generator_marginal_cost_quadratic:
+    description: cost of the square of one unit of output
     dims: [scenario, snapshot, generator]
   Generator_sign:
     description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
@@ -197,10 +203,22 @@ parameters:
       it stands in
     dims: [storage_unit]
     dtype: int
+  StorageUnit_marginal_cost:
+    description: cost of one unit of dispatch
+    dims: [scenario, snapshot, storage_unit]
+  StorageUnit_marginal_cost_quadratic:
+    description: cost of the square of one unit of dispatch; storing is not charged
+    dims: [scenario, snapshot, storage_unit]
+  StorageUnit_marginal_cost_storage:
+    description: cost of one unit of charge held over one snapshot
+    dims: [scenario, snapshot, storage_unit]
   Store_e_nom_extendable:
     description: whether the nominal energy capacity is a decision
     dims: [store]
     dtype: bool
+  Store_e_min_pu:
+    description: least energy held, per unit of nominal capacity — negative for a store that may go short
+    dims: [scenario, snapshot, store]
   Store_e_max_pu:
     description: most energy held, per unit of nominal capacity
     dims: [scenario, snapshot, store]
@@ -242,6 +260,15 @@ parameters:
       in
     dims: [store]
     dtype: int
+  Store_marginal_cost:
+    description: cost of one unit of power delivered
+    dims: [scenario, snapshot, store]
+  Store_marginal_cost_quadratic:
+    description: cost of the square of the net power delivered, so charging costs as much as delivering
+    dims: [scenario, snapshot, store]
+  Store_marginal_cost_storage:
+    description: cost of one unit of energy held over one snapshot
+    dims: [scenario, snapshot, store]
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'
@@ -293,12 +320,12 @@ constraints:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p >= 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
   Generator_fix_p_upper:
     description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
     dims: [scenario, snapshot, generator]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
-    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
   StorageUnit_ext_p_dispatch_lower:
     description: '`StorageUnit-ext-p_dispatch-lower` — dispatch is non-negative'
     dims: [scenario, snapshot, storage_unit]
@@ -355,7 +382,7 @@ constraints:
     description: '`Store-ext-e-lower` — an extendable store holds at least its floor of the chosen build'
     dims: [scenario, snapshot, store]
     where: Store_e_nom_extendable AND Store_active
-    expression: Store_e >= 0
+    expression: Store_e >= Store_e_min_pu * Store_e_nom_ext
   Store_ext_e_upper:
     description: '`Store-ext-e-upper` — an extendable store holds at most the chosen build'
     dims: [scenario, snapshot, store]
@@ -463,7 +490,8 @@ expressions:
   StorageUnit_capex: {expression: sum(scenario_weight * StorageUnit_p_nom_ext * StorageUnit_capital_cost
       * StorageUnit_capital_weight)}
   Store_capex: {expression: sum(scenario_weight * Store_e_nom_ext * Store_capital_cost * Store_capital_weight)}
-  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)'}
+  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+      + CVaR_omega * CVaR'}
   StorageUnit_additions: {expression: 'sum(StorageUnit_p_nom_ext * StorageUnit_first_active, by=StorageUnit_carrier,
       over=storage_unit, into=carrier)'}
   Store_additions: {expression: 'sum(Store_e_nom_ext * Store_first_active, by=Store_carrier, over=store,
@@ -476,7 +504,7 @@ expressions:
   Store_injection: {expression: 'sum(Store_sign * Store_p, by=Store_bus, over=store, into=bus)'}
   scenario_opex:
     dims: [scenario]
-    expression: Generator_opex
+    expression: (Generator_opex + StorageUnit_opex) + Store_opex
     description: what a future costs to run — every operating term, weighted by the snapshot's hours and
       its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
       as PyPSA adds them (`optimize.py:414-429`)
@@ -489,5 +517,20 @@ expressions:
     otherwise: 0
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
       * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
+      over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
       over=snapshot)'}
+  StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=storage_unit),
+      over=snapshot) + sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
+      into=snapshot), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
+      into=snapshot), over=storage_unit), over=snapshot)'}
+  Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
+      + sum(sum((((Store_p * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
+      + sum(sum(((Store_e * Store_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)'}
 objective: {sense: minimize, expression: total_cost}

@@ -78,6 +78,7 @@ The relaxed class of a plain `n.optimize()`: `linearized_unit_commitment`, state
 | $`\underline{\mathrm{f}}`$ | `Link_p_min_pu` over $`\mathcal{T} \times \mathcal{L}`$ — least flow, per unit of nominal power — negative for a link that carries both ways |
 | $`\overline{\mathrm{f}}`$ | `Link_p_max_pu` over $`\mathcal{T} \times \mathcal{L}`$ — most flow, per unit of nominal power |
 | $`\eta`$ | `Link_efficiency` over $`\mathcal{T} \times \mathcal{O}`$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers |
+| $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{load}`$ | `Load_p_set` over $`\mathcal{T} \times \mathcal{D}`$ — demand |
 | $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
@@ -90,6 +91,8 @@ The relaxed class of a plain `n.optimize()`: `linearized_unit_commitment`, state
 | $`\mathrm{p}^{0}`$ | `Generator_p_init` over $`\mathcal{G}`$ — the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot |
 | $`\mathrm{rest}`$ | `Generator_must_stay_down` over $`\mathcal{T} \times \mathcal{G}`$ — true while the down time a unit brought into the horizon still binds — PyPSA's `min_down_time - down_time_before` snapshots, where `down_time_before > 0`, data prep for the same reason |
 | $`\mathrm{c}^{\mathrm{up}}`$ | `Generator_start_up_cost` over $`\mathcal{G}`$ — cost of one start |
+| $`\mathrm{c}^{\mathrm{dn}}`$ | `Generator_shut_down_cost` over $`\mathcal{G}`$ — cost of one stop |
+| $`\mathrm{c}^{\mathrm{on}}`$ | `Generator_stand_by_cost` over $`\mathcal{T} \times \mathcal{G}`$ — cost of one snapshot spent on |
 | $`\mathrm{mnt}`$ | `Generator_maintainable` over $`\mathcal{G}`$ — whether a generator must be taken off for maintenance within the horizon |
 | $`\gamma`$ | `Generator_maintenance_pu` over $`\mathcal{G}`$ — the share of the build a maintenance event takes off |
 | $`\mathrm{n}^{\mathrm{mnt}}`$ | `Generator_maintenance_events` over $`\mathcal{G}`$ — how many maintenance events the horizon holds |
@@ -125,7 +128,7 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{c}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{up}_{t,g} \cdot \mathrm{c}^{\mathrm{up}}_{g}
+\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{c}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ l \in \mathcal{L}} f_{t,l} \cdot \mathrm{c}^{f}_{t,l} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} u_{t,g} \cdot \mathrm{c}^{\mathrm{on}}_{t,g} \cdot \mathrm{w}_{t} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{up}_{t,g} \cdot \mathrm{c}^{\mathrm{up}}_{g} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{dn}_{t,g} \cdot \mathrm{c}^{\mathrm{dn}}_{g}
 ```
 
 #### Subject to
@@ -425,6 +428,9 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
         description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
           … read long — negative where that port consumes rather than delivers
         dims: [snapshot, link_output]
+      Link_marginal_cost:
+        description: cost of one unit of flow
+        dims: [snapshot, link]
       Load_p_set:
         description: demand
         dims: [snapshot, load]
@@ -471,6 +477,12 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
       Generator_start_up_cost:
         description: cost of one start
         dims: [generator]
+      Generator_shut_down_cost:
+        description: cost of one stop
+        dims: [generator]
+      Generator_stand_by_cost:
+        description: cost of one snapshot spent on
+        dims: [snapshot, generator]
       Generator_maintainable:
         description: whether a generator must be taken off for maintenance within the horizon
         dims: [generator]
@@ -723,8 +735,10 @@ u_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \math
           given: {when: Generator_ramp_limit_shut_down, expression: Generator_ramp_limit_shut_down}
         otherwise: 1
     objective: {sense: minimize, description: 'operating cost by weighted snapshot, plus what starts, stops
-        and standing by cost', expression: sum((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-        + sum(Generator_start_up * Generator_start_up_cost)}
+        and standing by cost', expression: sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective)
+        + sum(Link_p * Link_marginal_cost * snapshot_weightings_objective) + sum(Generator_status * Generator_stand_by_cost
+        * snapshot_weightings_objective) + sum(Generator_start_up * Generator_start_up_cost) + sum(Generator_shut_down
+        * Generator_shut_down_cost)}
     ```
 
     The prep — every table the spec declares, from the network — and the solve:
