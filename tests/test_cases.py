@@ -398,3 +398,47 @@ def test_a_hole_the_summed_region_reads_is_still_refused():
     both_lanes_refuse(
         SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed}), match=r"parameter 'hi' covers 1 fewer coordinate"
     )
+
+
+#: The flow an outage takes off its line: the line's flow where it stands,
+#: nothing where it does not. Every line stands, so the `otherwise` region is
+#: empty, and the pullback through `outage_line` cannot carry its claim.
+OUTAGE_FLOW = {
+    'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
+    'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
+    'parameters': {
+        'active': {'dims': ['line'], 'dtype': 'bool'},
+        'share': {'dims': ['line', 'outage']},
+        'cap': {'dims': ['line']},
+    },
+    'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'expressions': {
+        'monitored': {'dims': ['line'], 'cases': {'standing': {'when': 'active', 'expression': 's'}}, 'otherwise': 0},
+        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line, over=line, into=outage)'},
+    },
+    'constraints': {
+        'after': {'dims': ['line', 'outage'], 'expression': 'monitored + share * outage_s <= cap'},
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(s, over=line)'},
+}
+
+
+def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
+    """`otherwise: 0` adds nothing anywhere, so no row is short of it.
+
+    The zero was a constant piece claimed by the region where a line does not
+    stand. The pullback dropped that claim, so the piece was owed at every row
+    and, with every line standing, had none: each row was refused as short of
+    `share` and `cap`, which are short of nothing. `a` going out puts half its flow on `b`, so `s_b + s_a / 2 <= 10` and
+    `s_a <= 10` with `s_b <= 10` alone; the most is `s_a = 10, s_b = 5`.
+    """
+    sources = {
+        'line': ['a', 'b'],
+        'outage': ['out_a'],
+        'outage_line': {'outage': ['out_a'], 'line': ['a']},
+        'active': {'line': ['a', 'b'], 'value': [True, True]},
+        'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
+        'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
+    }
+    with differential(OUTAGE_FLOW, _frames(sources)) as run:
+        assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'

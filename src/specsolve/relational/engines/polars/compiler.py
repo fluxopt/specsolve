@@ -280,8 +280,13 @@ class PolarsCompiler:
             return map_fragments(ev(r.value), kept)
 
         def cases(e: program.Cases) -> CompiledExpression:
-            """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted."""
-            built = [region(r) for r in e.regions]
+            """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted.
+
+            A region worth the literal zero adds nothing, so it builds no
+            piece: a piece would carry its region's claim, which a pullback
+            cannot follow, and be owed at every row it lands on.
+            """
+            built = [region(r) for r in e.regions if not _zero(r.value)]
             return CompiledExpression(
                 tuple(f for c in built for f in c.terms),
                 tuple(f for c in built for f in c.consts),
@@ -558,6 +563,10 @@ class PolarsCompiler:
         """Trade the dims *node*'s direction consumes for the ones it produces, through its relation."""
         frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, node.direction), node, p.dims, p.carried)
         return TermFragment(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+
+
+def _zero(e: program.Expression) -> bool:
+    return isinstance(e, program.Constant) and float(e.value) == 0
 
 
 def _scattered(at: pl.Series, values: pl.Series, size: int) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:
