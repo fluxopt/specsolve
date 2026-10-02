@@ -97,7 +97,8 @@ A label keeps its letters, digits and ``!"#$%&'.;?@`{|}~``. Every other
 character is written as `_`, because an LP reader refuses it, so `north sea`
 becomes `north_sea`. A declaration with no dims is written `total()`. When two
 labels of one declaration become the same name, the write is refused and the
-error names both labels.
+error names both labels. `model.check('.lp', names=True)` gives the same refusal
+without writing a file.
 
 ## Hand the model to pyomo
 
@@ -122,9 +123,5 @@ A pyomo model has one namespace. A spec may give a variable and a constraint
 the same name, and some names are already taken: `dual`, `rc` and `slack`,
 where pyomo's solvers write their results, the attributes every
 `ConcreteModel` has, such as `write`, and `objective`. The export does not
-rename anything by itself. It refuses each clash in one error, which suggests a
-`rename` to pass back:
-
-```python
-m = model.to_pyomo(rename={'constraints': {'start_up': 'start_up_constraint'}})
-```
+rename anything. It refuses each clash in one error, so rename the declaration
+in the spec. `model.check('pyomo')` gives the same refusal without the export.

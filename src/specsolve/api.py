@@ -353,13 +353,12 @@ class Model:
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct the format has no section for, as
-                [`check`][specsolve.Model.check] refuses it; or, with *names*,
-                two coordinates of one declaration that write as one name.
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                this suffix and *names*.
         """
         self._engine.write(path, names=names)
 
-    def check(self, sink: str) -> None:
+    def check(self, sink: str, *, names: bool = False) -> None:
         """Refuse the built model where *sink* cannot take it; no solve, no file.
 
         ::
@@ -376,12 +375,15 @@ class Model:
         Args:
             sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
                 output suffix (``.lp``, ``.mps``).
+            names: Also refuse what [`write`][]'s *names* refuses: two
+                coordinates of one declaration that write as one name.
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; or a name belonging to no sink.
+                sinks that do; a name belonging to no sink; or, with *names*,
+                two coordinates of one declaration that write as one name.
         """
-        self._engine.check(sink)
+        self._engine.check(sink, names=names)
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``, to extend or solve in pyomo.
