@@ -22,7 +22,7 @@ import specsolve as sps
 from specsolve import strategy
 from specsolve.api import attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.relational.parquet import LAYOUT, METRICS_FILE, Metrics, digest_of_file
+from specsolve.relational.parquet import LAYOUT, METRICS_FILE, Metrics, digest_of_file, read_reasons, write_reasons
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -675,6 +675,7 @@ CAPPED = override(
     **{
         'variables.cap': {'dims': ['generator'], 'bounds': {'lower': 0}},
         'constraints.capped': {'dims': ['t', 'generator'], 'expression': 'p <= cap'},
+        'constraints.cap_limit': {'dims': ['generator'], 'expression': 'cap <= 50'},
     },
 )
 
@@ -696,6 +697,13 @@ CAPPED = override(
             lambda sweep, per_window: sweep.primal('cap', per_window=per_window),
             id='a-variable-not-over-the-window',
         ),
+        pytest.param(
+            CAPPED,
+            'dual',
+            'cap_limit',
+            lambda sweep, per_window: sweep.dual('cap_limit', per_window=per_window),
+            id='a-constraint-not-over-the-window',
+        ),
     ],
 )
 def test_a_name_with_no_answer_is_left_out_of_the_archive_with_its_reason(
@@ -712,6 +720,14 @@ def test_a_name_with_no_answer_is_left_out_of_the_archive_with_its_reason(
     with pytest.raises(sps.SpecsolveError, match=r'not over the windowed dimension.*per_window=True'):
         read(loaded.answer, False)
     assert read(loaded.answer, True).equals(read(runs, True)), 'per window it is all there'
+
+
+def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
+    """A dual left out by name reads back under its name, never as the reason the whole kind is absent."""
+    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}})
+    assert read_reasons(tmp_path) == (None, {'dual': {'cap_limit': 'not over the window'}}), (
+        'the whole kind keeps its duals, and the one name left out keeps its reason'
+    )
 
 
 @pytest.mark.parametrize(
