@@ -9,46 +9,24 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.3.0 (2026-10-02)
 
-This release breaks one import, and specsolve now requires mathspec 0.2.1.
-Three kinds of model that the language admits now build, where 0.2.1 refused
-them. No file or archive breaks.
+specsolve now requires mathspec 0.2.1. This release breaks one import.
 
-This release breaks one thing:
+- `check(spec, sink=...)` is removed. To ask a sink without a solve, call
+  `build(spec, sources).check(sink)`. A sink refuses only what the built model
+  asks of it.
 
-- `check(spec, sink=...)` raises a `TypeError`. A spec has no data, so it
-  cannot say what a sink must take. To ask a sink without a solve, build the
-  model and call `Model.check`, such as `build(spec, sources).check('highs')`.
-  It refuses with the message that `solve` and `write` give, and solves
-  nothing. The sink is a solver name or an output suffix.
+With mathspec 0.2.1:
 
-A sink now refuses only what the built model asks of it. A square that the data
-prices at zero, an integer variable with no column built, or a set with no
-members asks for nothing. Some models that a sink refused in 0.2.1 now solve.
+- A divisor, a power's base or an exponent may add over parameters, such as
+  `x / (1 - cost)` or `(1 + rate) ** years`.
+- A spec composed from several files with `mathspec.merge` builds. A fragment
+  is refused by name.
 
-specsolve requires mathspec 0.2.1:
+Fixes:
 
-- A divisor, a power's base or an exponent that adds over parameters, such as
-  `x / (1 - cost)` or `(1 + rate) ** years`, now builds. Before, the build
-  stopped at an `AssertionError`. Where a parameter under a divisor has no row,
-  the build refuses the divisor and names the parameter. Under a power, a
-  missing row reads as zero.
-- A spec composed from several files with `mathspec.merge`, which is new in
-  mathspec 0.2.1, builds and solves. A fragment, whose `given:` is not empty, is
-  refused by name and the message points to `mathspec.merge`. Before, `check`
-  only warned and a build raised `KeyError`.
-
-Two fixes for models that were refused:
-
-- A constant sum that no member reaches at a coordinate now adds zero there.
-  This covers a dimension with no labels, a group that no member maps to, and a
-  `cases:` region that leaves out every member of a group. Before, the build
-  refused that coordinate as a missing value.
+- A constant sum that no member reaches at a coordinate adds zero there.
 - A `cases:` region whose value is `0`, read through a relation, no longer
-  makes the build refuse rows as short of parameters that cover them. PyPSA's
-  security-constrained rows met this through `otherwise: 0`.
-
-The PyPSA ladder now certifies all 58 rungs of the mathspec 0.2.1 corpus
-([#1805](https://github.com/fluxopt/specsolve/pull/1805)).
+  makes the build refuse its rows.
 
 The pull requests since 0.2.1:
 
