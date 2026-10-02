@@ -542,3 +542,64 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
     assert len(printed) == 1, 'the page prints exactly one frame'
     with pl.Config(restore_defaults=True):
         assert printed[0].rstrip('\n') == str(month_of)
+
+
+#: Every load stands, so the `otherwise` region of `demand` holds no member
+#: at all and its grouped sum lands on no bus.
+DEMAND_BY_REGION = {
+    'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
+    'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool'}},
+    'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
+    'expressions': {
+        'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},
+    },
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, by=load_bus, over=load, into=bus)'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
+}
+
+
+def test_a_region_that_holds_no_member_of_a_group_adds_the_empty_sum():
+    """The `otherwise` region of `demand` is empty at both buses, which is a sum of nothing, not a missing value.
+
+    The zero an empty group adds was written only for a bus the relation maps
+    no load to. Here the relation maps a load to every bus and the region
+    leaves each out, so the group was empty with no zero written, and the
+    balance was refused as short of `p_set`.
+    """
+    sources = {
+        'bus': ['north', 'south'],
+        'load': ['a', 'b'],
+        'load_bus': pd.DataFrame({'load': ['a', 'b'], 'bus': ['north', 'south']}),
+        'p_set': pd.Series({'a': 3.0, 'b': 4.0}).rename_axis('load'),
+        'active': pd.Series({'a': True, 'b': True}).rename_axis('load'),
+    }
+    with differential(DEMAND_BY_REGION, sources) as run:
+        assert float(run.result.objective) == pytest.approx(7.0, rel=RTOL), 'each bus generates its own load'
+
+
+#: `tap` has no labels, so the angle each bus reads is a sum over nothing that
+#: still keeps the bus it is read at.
+SUM_OVER_NOTHING = {
+    'dimensions': {'bus': {'dtype': 'str'}, 'tap': {'dtype': 'str'}},
+    'parameters': {'angle': {'dims': ['bus', 'tap']}},
+    'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
+    'constraints': {'floor': {'dims': ['bus'], 'expression': 'g >= sum(angle, over=tap) + 1'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
+}
+
+
+def test_a_sum_over_a_dimension_with_no_labels_is_zero():
+    """`sum(angle, over=tap)` with no tap is the empty sum, so each bus floors at one.
+
+    A constant summed over a dimension kept no row at a coordinate no member
+    landed in, so the row read a gap there and was refused as short of
+    `angle`, which has no row to be short of.
+    """
+    sources = {
+        'bus': ['north', 'south'],
+        'tap': pd.Index([], name='tap', dtype=str),
+        'angle': pd.DataFrame({'bus': pd.Series([], dtype=str), 'tap': pd.Series([], dtype=str), 'value': []}),
+    }
+    with differential(SUM_OVER_NOTHING, sources) as run:
+        assert float(run.result.objective) == pytest.approx(2.0, rel=RTOL), 'two buses at one each'
