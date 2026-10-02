@@ -659,13 +659,14 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     One number over `t` was archived as the first window's table. Where a
     later window was shorter, it refused the table's extra labels as strays;
     where it was longer, it read the labels the table was short of as absent.
+    `soc_initial`, one number over no dimension, is the same in every window.
     """
     from tests.test_strategy import WINDOW, horizon_sources
 
     spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t']}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
-    sources = {**horizon_sources(10), 'price': price}
+    sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}
     runs = sps.solve_over(spec, sources, axis, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip')
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
 

@@ -1261,8 +1261,6 @@ def _spread_over_the_axis(
         for name, declared in program.parameters.items()
         if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
     ]
-    if not numbers:
-        return {}
     coordinates = pl.concat([table.select(axis.dim) for table in carried.values()], how='vertical_relaxed')
     coordinates = coordinates.unique().sort(axis.dim)
     return {
