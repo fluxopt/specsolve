@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): an archive lists every name it holds, its kind, description and dimensions in catalog.parquet ([#1812](https://github.com/fluxopt/specsolve/pull/1812))
+
 ## 0.3.0 (2026-10-02)
 
 specsolve now requires mathspec 0.2.1. This release breaks one import.
