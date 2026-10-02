@@ -128,7 +128,10 @@ sink can ingest* below gives it —
                  # highs: absent, and the refusal names the way past it
 ```
 
-— and `sinks.refusal(program, name)` answers before the load. Nothing is
+— and `sinks.refusal(handoff, name)` answers before the load, off the model
+that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
+asks for nothing, and the same goes for a square the data prices at zero or an
+integer variable no column is built for. Nothing is
 rewritten at the hand-off: the language writes a set out itself,
 `to_spec(...).expand()` stating each as binaries and linking rows, and that is
 the model a sink without the concept is given. `_load`, `push`, `_run` and the
