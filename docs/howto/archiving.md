@@ -145,7 +145,10 @@ archived.answer.scan('p')  # keyed by scenario, read at the collect
 sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
-A source the axis cuts is held uncut, the axis column first.
+A source the axis cuts is held uncut, the axis column first. A parameter
+given as one number over a window's local index is held as a table over the
+axis, because a window of each length reads the number over labels of its own.
+Each slice cuts from the archive the tables it attached.
 
 `scan_archive` reads a sweep back spilled, as `spill_to=` left it.
 `load_archive` reads it back held, where it fits, and `sweep.primal('p')`

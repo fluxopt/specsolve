@@ -367,8 +367,9 @@ class EachCoordinate:
     Scenarios, draws, investment periods. Parameters and relations carrying
     *dim* are filtered to one coordinate and the column dropped, so the model
     never mentions it — a *dim* the spec declares is refused, and so is an
-    index that carries it; every other source passes through untouched. The slices run in the coordinates' sorted order, which is the
-    order a ``carry`` chains them in.
+    index that carries it; every other source passes through untouched. The
+    slices run in the coordinates' sorted order, which is the order a
+    ``carry`` chains them in.
     """
 
     dim: str
@@ -1128,9 +1129,10 @@ def solve_over(
             large to hold is archived without ever being held. The archive is
             a second copy of the answers on disk; the memory is what
             *spill_to* bounds. A sliced source is archived whole, the column
-            the axis cuts on included. A hand-built axis is refused, since a
-            list of ``(key, sources)`` is a set of sources per slice: archive
-            one solve each.
+            the axis cuts on included, and one number over a window's local
+            index as a table over the axis. A hand-built axis is refused,
+            since a list of ``(key, sources)`` is a set of sources per slice:
+            archive one solve each.
 
     Returns:
         Every slice's answers, keyed by slice.
@@ -1204,15 +1206,18 @@ def _archive_the_sweep(
     """Write the sweep's question and its answers to *out*.
 
     Each source's tidy table comes from *one_slice*; the ones the axis cuts
-    are written uncut, as [`_uncut`][] gives them. A spilled sweep is packed
-    from its spill.
+    are written uncut, as [`_uncut`][] gives them, and a number over a
+    window's local index over the axis, as [`_spread_over_the_axis`][] gives
+    it. A spilled sweep is packed from its spill.
     """
     manifest = axis_manifest(axis)
     if carry:
         manifest['carry'] = dict(carry)
     tidied = tidy_tables(program, one_slice)
-    cut = {name: _uncut(program, axis, name, table) for name, table in carries(sources, axis.dim).items()}
-    tables = {name: cut.get(name, tidied[name]) for name in sources}
+    carried = carries(sources, axis.dim)
+    cut = {name: _uncut(program, axis, name, table) for name, table in carried.items()}
+    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, carried), **cut}
+    tables = {name: held[name] for name in sources}
     if folded._spill is not None:
         write_archive(out, spec, tables, axis=manifest, answer=folded._spill.directory)
         return
@@ -1231,6 +1236,39 @@ def _uncut(program: Program, axis: EachCoordinate | EachWindow, name: str, table
     )
     local = axis.into if isinstance(axis, EachWindow) else None
     return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
+
+
+def _spread_over_the_axis(
+    program: Program,
+    axis: EachCoordinate | EachWindow,
+    sources: Mapping[str, Source],
+    tidied: Mapping[str, pl.LazyFrame],
+    carried: Mapping[str, pl.LazyFrame],
+) -> dict[str, pl.LazyFrame]:
+    """Each parameter given as one number over a window's local index, as a table over the axis.
+
+    The number spreads over the labels of the window it attaches to, and the
+    local index has one label per coordinate the window holds, so no one
+    window's table is what a window of another length read. Over the axis,
+    each window cuts what its own solve read. A parameter given in any other
+    shape, a relation, and an index other than the local one attach as one
+    table in every slice that builds, so the archive holds the first slice's.
+    """
+    if not isinstance(axis, EachWindow):
+        return {}
+    numbers = [
+        name
+        for name, declared in program.parameters.items()
+        if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
+    ]
+    if not numbers:
+        return {}
+    coordinates = pl.concat([table.select(axis.dim) for table in carried.values()], how='vertical_relaxed')
+    coordinates = coordinates.unique().sort(axis.dim)
+    return {
+        name: coordinates.join(tidied[name].drop(axis.into).unique(maintain_order=True), how='cross')
+        for name in numbers
+    }
 
 
 def _check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis: EachCoordinate | EachWindow) -> None:

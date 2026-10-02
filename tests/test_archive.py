@@ -584,6 +584,18 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
         scanned.answer.primal('p')
 
 
+def _attached_differently(spec, sources, archived: sps.SweepArchive) -> list[tuple[int, str]]:
+    """``(slice, source)`` where a slice cut from *archived* attaches other than one cut from *sources*."""
+    before = [sps.tidy(spec, cut) for _, cut in archived.axis.slices(sources)]
+    after = [sps.tidy(archived.spec, cut) for _, cut in archived.axis.slices(archived.sources)]
+    return [
+        (position, name)
+        for position, (attached, again) in enumerate(zip(before, after, strict=True))
+        for name in attached
+        if not attached[name].equals(again[name])
+    ]
+
+
 def test_a_scenario_sweep_is_an_archive_and_runs_again(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -598,9 +610,11 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     assert study.answer.record['run'].unique().to_list() == ['study'], (
         'and the archive stamped its own name on every slice, which the sweep in memory had none of'
     )
-    assert study.sources['load'].equals(sources['load'].select('scenario', 'snapshot', 'value')), (
+    assert study.sources['load'].columns == ['scenario', 'snapshot', 'value'], (
         'the sliced source is archived whole and tidy, the column the axis cuts on first'
     )
+    differing = _attached_differently(dispatch_yaml, sources, study)
+    assert not differing, f'(slice, source) pairs the archive attaches differently: {differing}'
     again = sps.solve_over(study.spec, study.sources, study.axis)
     assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, slice for slice'
@@ -620,6 +634,46 @@ def test_a_rolling_horizon_keeps_the_way_back_to_the_dimension_it_sliced(tmp_pat
     assert loaded.axis == axis
     assert loaded.answer.scan('soc', original_index=True).collect().equals(stitched), (
         'the lookahead rows are dropped on the way out of the archive as they were in the process'
+    )
+
+
+@pytest.mark.parametrize(
+    'steps', [pytest.param(4, id='the-last-window-shorter'), pytest.param((2, 4, 4), id='the-first-window-shorter')]
+)
+@pytest.mark.parametrize(
+    'price',
+    [
+        pytest.param(1.0, id='one-number'),
+        pytest.param(pl.DataFrame({'t': [0, 1], 'value': [3.0, 1.0]}), id='a-table-over-the-local-index'),
+        pytest.param(
+            pl.DataFrame({'snapshot': range(10), 'value': [float(s % 3) for s in range(10)]}),
+            id='a-table-over-the-axis',
+        ),
+    ],
+)
+def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_over_the_window_took(
+    price: object, steps: int | tuple[int, ...], tmp_path: Path
+) -> None:
+    """Each window attaches from the archive what it attached from the sources.
+
+    One number over `t` was archived as the first window's table. Where a
+    later window was shorter, it refused the table's extra labels as strays;
+    where it was longer, it read the labels the table was short of as absent.
+    """
+    from tests.test_strategy import WINDOW, horizon_sources
+
+    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t']}}}
+    spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
+    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
+    sources = {**horizon_sources(10), 'price': price}
+    runs = sps.solve_over(spec, sources, axis, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip')
+    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
+
+    differing = _attached_differently(spec, sources, archived)
+    assert not differing, f'(window, source) pairs the archive attaches differently: {differing}'
+    again = sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+    assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
+        'the archive re-runs to the sweep it recorded, window for window'
     )
 
 

@@ -81,7 +81,9 @@ class SweepArchive:
         spec: The spec as written.
         sources: What the sweep was given, uncut. A table or a path, as
             [`SolveArchive`][] holds them; a source the axis cuts holds the
-            axis column first.
+            axis column first, and a parameter given as one number over a
+            window's local index is held over the axis instead, so each
+            slice cuts from it what that slice attached.
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.

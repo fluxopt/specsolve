@@ -146,8 +146,10 @@ attaches**, one per name the spec declares, after every check above:
 | a parameter | its dims, then `value` |
 | a relation | the columns it declares |
 
-An [archive](../howto/archiving.md) holds these tables under `sources/`, and
-each one goes back into `sources` as it is.
+An [archive](../howto/archiving.md) of one solve holds these tables under
+`sources/`, and each one goes back into `sources` as it is. An archive of a
+sweep holds what the axis cuts its slices from, so each slice attaches from it
+the tables it attached.
 
 ## Growing or replacing the data
 
