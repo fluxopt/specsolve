@@ -24,7 +24,7 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError, SpecsolveError, null_bounds_message
-from specsolve.relational.sinks.capabilities import Capabilities, required, spelled
+from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
@@ -153,9 +153,24 @@ CAPABILITIES = Capabilities(
 )
 
 
+def _declared(p: program.Program) -> frozenset[Capability]:
+    """What *p* declares, in the sinks' vocabulary — the file's upper bound, since this lane has no built model to read."""
+    footprint = p.footprint
+    needed: set[Capability] = set()
+    if footprint.domains - {'continuous'}:
+        needed.add('integrality')
+    if 'objective' in footprint.quadratic:
+        needed.add('quadratic_objective')
+    if 'constraint' in footprint.quadratic:
+        needed.add('quadratic_constraint')
+    if footprint.sos_types:
+        needed.add('sos')
+    return frozenset(needed)
+
+
 def _refuse_what_the_lane_cannot_build(p: program.Program) -> None:
     """Refuse a construct the language accepts and this lane cannot build, before linopy is asked."""
-    if missing := CAPABILITIES.missing(required(p)):
+    if missing := CAPABILITIES.missing(_declared(p)):
         raise OracleCannotBuildError(
             f'the linopy lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
             f'The language accepts it and specsolve builds it, so this is a limit of the lane rather '

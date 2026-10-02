@@ -27,6 +27,7 @@ nav:
       - Preparing the data: howto/data.md
       # The schema is the language's, so the editor recipe is documented with it.
       - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
+      - Checking a spec without data, in CI: https://mathspec.readthedocs.io/en/latest/howto/check/
       - Warm-starting a re-solve: howto/warm-start.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Choosing a solver: howto/solvers.md
