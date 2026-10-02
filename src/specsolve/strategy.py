@@ -18,7 +18,7 @@ from __future__ import annotations
 import io
 import json
 import warnings
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
@@ -240,7 +240,7 @@ class _OriginalIndex:
 def _one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
     """The type every file writes *key_name* as; keys of mixed types are refused, never coerced."""
     try:
-        return pl.Series(keys).dtype
+        typed = pl.Series(keys)
     except TypeError as mixed:
         kinds = sorted({type(key).__name__ for key in keys})
         raise SpecsolveError(
@@ -248,6 +248,31 @@ def _one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
             f'all write {key_name!r} as one. Every file carries the key, and a column that changes type '
             f'between them cannot be concatenated or loaded into one table. Key the slices consistently.'
         ) from mixed
+    _one_slice_per_text(keys, typed.to_list())
+    return typed.dtype
+
+
+def _one_slice_per_text(keys: Sequence[Label], typed: Sequence[Label]) -> None:
+    """Refuse keys whose text, which the record and metrics name a slice by, does not find one slice.
+
+    ``_rekeyed`` matches each row's ``slice`` text against the text of the
+    keys as the sweep's one type holds them, when the fold ends and when a
+    spill is scanned. A key that type rewrites, or two keys of one text, would
+    fail there, after every slice has solved.
+    """
+    for given, held in zip(keys, typed, strict=True):
+        if str(given) != str(held):
+            raise SpecsolveError(
+                f'the key {str(given)!r} is written as {str(held)!r} once every key of this sweep shares one '
+                f'type, and the record names a slice by its key as text. Key the slices consistently.'
+            )
+    texts = Counter(str(key) for key in keys)
+    repeated = [text for text, count in texts.items() if count > 1]
+    if repeated:
+        raise SpecsolveError(
+            f'the key {repeated[0]!r} names more than one slice of this sweep, and the record names a slice '
+            f'by its key as text, so those slices could not be told apart. Give each slice its own key.'
+        )
 
 
 def _keyed(frame: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -> pl.DataFrame:
@@ -265,7 +290,8 @@ class _Spill:
     name and type. Every file lands whole, and the record file is written
     last: it marks a slice done. ``sweep.json`` names the key and the keys, so
     a directory answers for one sweep, and ``keys.parquet`` holds the keys as
-    their own type, which the rows do not.
+    their own type, which the rows do not. ``sweep.json`` lands after the
+    files a scan reads beside it: it marks the directory stamped.
     """
 
     directory: Path
@@ -303,10 +329,10 @@ class _Spill:
                 )
         else:
             write_format(directory)
-            record.write_text(json.dumps(manifest))
             write_whole(pl.DataFrame([pl.Series(key_name, keys, dtype=key_dtype)]), directory / _KEYS_FILE)
             if original is not None:
                 write_whole(original.owned, directory / _OWNED_FILE)
+            record.write_text(json.dumps(manifest))
         return cls(directory, key_name, key_dtype)
 
     def _file(self, kind: str, position: int, name: str | None = None) -> Path:
@@ -1166,6 +1192,8 @@ def solve_over(
             an axis the program does not allow; a *spill_to* directory holding
             another sweep. All refused before a slice is taken, and every
             one answerable from the declarations before a source is read.
+            Keys of more than one type, or two keys of one text, are refused
+            before a slice is taken too.
         DataError: No source carries the axis, or the axis produced no
             slices.
 

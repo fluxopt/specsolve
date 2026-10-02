@@ -1317,11 +1317,70 @@ def test_a_resume_checks_the_layout_it_is_extending_rather_than_restamping_it(tm
     )
 
 
+class _CrashError(Exception):
+    """The process dying while the spill directory is being stamped."""
+
+
+@pytest.mark.parametrize('lost', ['keys.parquet', 'owned.parquet'])
+def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatch, tmp_path, lost) -> None:
+    """``sweep.json`` lands after the files a scan reads beside it.
+
+    It was written first, so a crash before ``keys.parquet`` or
+    ``owned.parquet`` left a directory the next run took for a stamped one and
+    resumed, and ``scan_sweep`` of it failed on the missing file.
+    """
+    write_whole = strategy.write_whole
+
+    def crashing(frame: pl.DataFrame, path) -> None:
+        if path.name == lost:
+            raise _CrashError
+        write_whole(frame, path)
+
+    out = tmp_path / 'sweep'
+    with monkeypatch.context() as patched:
+        patched.setattr(strategy, 'write_whole', crashing)
+        with pytest.raises(_CrashError):
+            sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+
+    ran = sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+    assert sps.scan_sweep(out).record.equals(ran.record)
+
+
 def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
     """Refused rather than widened: the caller's own labels are not ours to change."""
     sources = scenario_sources()
     with pytest.raises(sps.SpecsolveError, match='more than one type'):
         sps.solve_over(DISPATCH, sources, [(1, sources), (2.5, sources)], key_name='draw')
+
+
+@pytest.mark.parametrize(
+    ('keys', 'match'),
+    [
+        pytest.param(['a', 'a'], "'a' names more than one slice", id='a repeated key'),
+        pytest.param(
+            [float('nan'), float('nan')], "'nan' names more than one slice", id='two nan, unequal yet one text'
+        ),
+        pytest.param([1, True], "'True' is written as '1'", id='a bool among ints'),
+        pytest.param(
+            [datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC), datetime.datetime(2021, 1, 1)],
+            "'2021-01-01 00:00:00' is written as '2021-01-01 00:00:00\\+00:00'",
+            id='a naive datetime among aware ones',
+        ),
+    ],
+)
+def test_a_key_that_cannot_name_one_slice_by_its_text_is_refused_before_a_slice_is_taken(tmp_path, keys, match):
+    """The record and metrics name a slice by its key's text, and are typed back by matching that text.
+
+    A hand-built list with two keys of one text, or a key the sweep's one type
+    rewrote, failed in polars' ``replace_strict`` when the fold ended — after
+    every slice had solved — and again on every ``scan_sweep`` of the spill.
+    """
+    base = scenario_sources()
+    sources = {**base, 'load': _draw(base, 'low')}
+    out = tmp_path / 'spill'
+    with pytest.raises(sps.SpecsolveError, match=match):
+        sps.solve_over(DISPATCH, sources, [(key, sources) for key in keys], key_name='draw', spill_to=out)
+    assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
 
 
 def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
