@@ -7,13 +7,58 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+## 0.3.0 (2026-10-02)
+
+This release breaks one import, and specsolve now requires mathspec 0.2.1.
+Three kinds of model that the language admits now build, where 0.2.1 refused
+them. No file or archive breaks.
+
+This release breaks one thing:
+
+- `check(spec, sink=...)` raises a `TypeError`. A spec has no data, so it
+  cannot say what a sink must take. To ask a sink without a solve, build the
+  model and call `Model.check`, such as `build(spec, sources).check('highs')`.
+  It refuses with the message that `solve` and `write` give, and solves
+  nothing. The sink is a solver name or an output suffix.
+
+A sink now refuses only what the built model asks of it. A square that the data
+prices at zero, an integer variable with no column built, or a set with no
+members asks for nothing. Some models that a sink refused in 0.2.1 now solve.
+
+specsolve requires mathspec 0.2.1:
+
+- A divisor, a power's base or an exponent that adds over parameters, such as
+  `x / (1 - cost)` or `(1 + rate) ** years`, now builds. Before, the build
+  stopped at an `AssertionError`. Where a parameter under a divisor has no row,
+  the build refuses the divisor and names the parameter. Under a power, a
+  missing row reads as zero.
+- A spec composed from several files with `mathspec.merge`, which is new in
+  mathspec 0.2.1, builds and solves. A fragment, whose `given:` is not empty, is
+  refused by name and the message points to `mathspec.merge`. Before, `check`
+  only warned and a build raised `KeyError`.
+
+Two fixes for models that were refused:
+
+- A constant sum that no member reaches at a coordinate now adds zero there.
+  This covers a dimension with no labels, a group that no member maps to, and a
+  `cases:` region that leaves out every member of a group. Before, the build
+  refused that coordinate as a missing value.
+- A `cases:` region whose value is `0`, read through a relation, no longer
+  makes the build refuse rows as short of parameters that cover them. PyPSA's
+  security-constrained rows met this through `otherwise: 0`.
+
+The PyPSA ladder now certifies all 58 rungs of the mathspec 0.2.1 corpus
+([#1805](https://github.com/fluxopt/specsolve/pull/1805)).
+
+The pull requests since 0.2.1:
+
 - feat(sinks): a built model checks whether a sink takes it without a solve, and check no longer takes a sink ([#1806](https://github.com/fluxopt/specsolve/pull/1806))
+- feat: specsolve requires mathspec 0.2.1, where a divisor or a power over parameters may add and a spec may be composed from several files ([#1800](https://github.com/fluxopt/specsolve/pull/1800))
+- fix(engine): a constant sum that no member reaches at a coordinate adds zero there rather than leaving a gap ([#1801](https://github.com/fluxopt/specsolve/pull/1801))
+- fix(engine): a cased quantity whose otherwise is zero no longer reads as short where it is read through a relation ([#1804](https://github.com/fluxopt/specsolve/pull/1804))
 - docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
 - docs: a how-to guide chooses a solver or writes the model to a file, and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
 - docs: a how-to guide reads an answer into pandas or xarray ([#1789](https://github.com/fluxopt/specsolve/pull/1789))
-- feat: specsolve requires mathspec 0.2.1, where a divisor or a power over parameters may add and a spec may be composed from several files ([#1800](https://github.com/fluxopt/specsolve/pull/1800))
-- fix(engine): a constant sum that no member reaches at a coordinate adds zero there rather than leaving a gap ([#1801](https://github.com/fluxopt/specsolve/pull/1801))
-- fix(engine): a cased quantity whose otherwise is zero no longer reads as short where it is read through a relation ([#1802](https://github.com/fluxopt/specsolve/pull/1802))
 
 ## 0.2.1 (2026-09-29)
 
