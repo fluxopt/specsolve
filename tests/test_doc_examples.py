@@ -51,7 +51,6 @@ TRACKED = [
     'docs/howto/solvers.md',
     'docs/howto/parallel.md',
     'docs/howto/debug.md',
-    'docs/howto/ci.md',
     'docs/howto/archiving.md',
     'docs/howto/pandas-xarray.md',
     'docs/reference/api.md',
