@@ -135,6 +135,11 @@ does not buy a place among them. A module only one lane reaches is that lane's, 
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
 
+**`linopy.py` sits outside a fence for another reason.** It is the linopy
+export, and it reads only what the engine built. The engine may not import
+linopy, even when a call reaches it, so the export cannot live in
+`relational/`.
+
 **Eligibility is decided by attempting the lowering.** `lanes.lowered` returns
 a `Program` or raises `sps.LanguageError`. Both lanes call it, so "neither lane
 accepts a file the other refuses" is mechanical rather than maintained.
@@ -307,8 +312,9 @@ the language's rulebook.
    the test oracle both pass the one `lanes.lowered` gate ([above](#thesis)). No
    operator registry exists that could create a divergence. A construct outside
    the language is a load error naming the construct and its rewrite. What that
-   equality buys is [the oracle](linopy.md#2-it-is-the-oracle). linopy is a test
-   dependency, and nothing under `src/` imports it.
+   equality buys is [the oracle](linopy.md#3-it-is-the-oracle). The engine never
+   imports linopy. Only the export, `specsolve/linopy.py`, imports it, when it is
+   called.
 
    **Accepting is not building, and one construct now separates them.**
    `linopy.Model.add_constraints` refuses a `QuadraticExpression`, so the
@@ -574,8 +580,9 @@ is structure.
 **One subpackage, and the directory *is* the rule.** Everything
 under `relational/` is the relational lane, and it imports nothing else from
 the package. Inside it, `engines/` holds implementations and the rest is what
-they implement. No module of the package imports linopy, and none imports
-xarray at module level. `tests/test_architecture.py` holds both rules.
+they implement. No module of the package imports linopy or xarray at module
+level, and only the linopy export imports them when it is called.
+`tests/test_architecture.py` holds both rules.
 
 **A fence whose allowlist is empty is a package waiting to happen.** What
 remains points one way. `relational/`'s fence is at one declared leaf,
@@ -627,7 +634,7 @@ are not Python identifiers.
 Anything this package shares with linopy (solve statuses, result shapes, solver
 metrics, duals) takes linopy's spelling, field names and decomposition. Copy
 them rather than import them (rule 2). The rule and its reason are [relationship
-to linopy](linopy.md#2-it-is-the-oracle); `tests/test_solve_status.py` holds the
+to linopy](linopy.md#3-it-is-the-oracle); `tests/test_solve_status.py` holds the
 copy to the original. Where the design differs it stays ours: there is no
 `Solution` of dense arrays, because values are read back by joining labels to
 coordinates.

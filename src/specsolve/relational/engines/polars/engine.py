@@ -19,6 +19,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
+from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import readback
 from specsolve.relational.engines.polars.assembly import (
     Assembly,
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.sinks.handoff import Declared
     from specsolve.relational.status import SolveStatus
 
 
@@ -140,6 +142,12 @@ class PolarsEngine:
         """
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
+
+    def handed_over(self) -> tuple[sinks.Handoff, Declared, dict[str, pl.DataFrame]]:
+        """The built model's tables, which declaration owns each entry, and each dim's ``(val, ord)`` in ordinal order."""
+        model = self._model
+        dimensions = {d: f.collect(engine=polars_engine()).sort('ord') for d, f in model.attached.dimensions.items()}
+        return model.handoff, readback.declared(model), dimensions
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``. See [`to_pyomo`][specsolve.api.Model.to_pyomo]."""

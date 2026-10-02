@@ -38,6 +38,7 @@ from specsolve.errors import (
 )
 from specsolve.lanes import Buildable, Label, Source, declared, lowered
 from specsolve.layout import beside, check_the_target, write_archive
+from specsolve.linopy import to_linopy
 from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
 from specsolve.relational.parquet import (
     METRICS_FILE,
@@ -56,6 +57,7 @@ from specsolve.sources import attachable, tidy_sources, unknown_source_keys_mess
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    import linopy
     from mathspec.program import Expression, Program
 
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
@@ -414,6 +416,30 @@ class Model:
                 been closed.
         """
         return self._engine.to_pyomo(rename)
+
+    def to_linopy(self) -> linopy.Model:
+        """The built model as a ``linopy.Model``, to extend or solve in linopy.
+
+        Each variable and each constraint keeps its declared name and dims,
+        with every label of each dim as a coordinate and the coordinates the
+        build did not produce masked out: ``m.variables['p'].sel(generator='wind')``.
+        Each ``sos:`` set is linopy's own, along the declared dim. A row holds
+        the build's numbers, a flat sum of terms, so new data means a new
+        export. A constraint the build left with no term at all is not added,
+        since linopy refuses one.
+
+        Returns:
+            A new ``linopy.Model``; a second call builds another.
+
+        Raises:
+            SpecsolveError: linopy is not installed (the ``[linopy]`` extra);
+                the model has a quadratic constraint or an objective constant,
+                which linopy has no form for; a row the build kept has no term
+                and no point meets it, which linopy would drop; or the model
+                has been closed.
+        """
+        handoff, declared, dimensions = self._engine.handed_over()
+        return to_linopy(handoff, declared, dimensions)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.

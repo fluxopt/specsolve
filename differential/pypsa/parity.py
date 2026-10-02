@@ -10,8 +10,7 @@ This file is the rest of the engine side — prepare, build, solve, compare — 
 it needs a checkout of that repository at the tag `pyproject.toml` pins. No
 pixi environment carries pypsa, so run it locally with the workflow's own line:
 
-    pixi exec -s uv uv run --with-editable . \
-        --with "$(grep -o 'linopy @ git+[^"]*' pyproject.toml)" \
+    pixi exec -s uv uv run --with-editable ".[linopy]" \
         --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
         python differential/pypsa/parity.py ../mathspec
 

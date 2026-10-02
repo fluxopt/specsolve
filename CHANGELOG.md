@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): a built model can be handed to linopy with its declared names and dimensions ([#1797](https://github.com/fluxopt/specsolve/pull/1797))
 - feat(api): a written LP or MPS file can name each variable and constraint by its declaration and coordinate ([#1795](https://github.com/fluxopt/specsolve/pull/1795))
 - feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#1793](https://github.com/fluxopt/specsolve/pull/1793))
 - feat(sinks): a built model checks whether a sink takes it without a solve, and check no longer takes a sink ([#1806](https://github.com/fluxopt/specsolve/pull/1806))

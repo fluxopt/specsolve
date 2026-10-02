@@ -155,7 +155,9 @@ def test_runtime_lane_never_imports_linopy_or_xarray():
 
 
 #: Modules that may reach linopy or xarray *lazily*, with the reason.
-LAZY_ORACLE_ALLOWED: dict[str, str] = {}
+LAZY_ORACLE_ALLOWED: dict[str, str] = {
+    'linopy.py': 'the linopy export, behind the [linopy] extra; it reads what the engine built and is never the engine',
+}
 
 
 def test_lazy_oracle_imports_stay_on_the_allowlist():

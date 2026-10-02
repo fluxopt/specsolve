@@ -1535,6 +1535,11 @@ gurobi = [
     { name = "gurobipy" },
     { name = "scipy" },
 ]
+linopy = [
+    { name = "linopy" },
+    { name = "pandas" },
+    { name = "xarray" },
+]
 pyomo = [
     { name = "pyomo" },
 ]
@@ -1580,14 +1585,17 @@ docs = [
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
     { name = "highspy", specifier = ">=1.13" },
+    { name = "linopy", marker = "extra == 'linopy'", git = "https://github.com/PyPSA/linopy?rev=master" },
     { name = "mathspec", specifier = ">=0.2.0" },
     { name = "numpy", specifier = ">=1.26" },
+    { name = "pandas", marker = "extra == 'linopy'", specifier = ">=2.2" },
     { name = "polars", specifier = ">=1.30" },
     { name = "pyomo", marker = "extra == 'pyomo'", specifier = ">=6.8" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
+    { name = "xarray", marker = "extra == 'linopy'", specifier = ">=2024.2.0" },
     { name = "xpress", marker = "extra == 'xpress'", specifier = ">=9.5" },
 ]
-provides-extras = ["gurobi", "pyomo", "xpress"]
+provides-extras = ["gurobi", "linopy", "pyomo", "xpress"]
 
 [package.metadata.requires-dev]
 bench = [{ name = "pytest-benchmem", specifier = ">=0.5.5" }]
