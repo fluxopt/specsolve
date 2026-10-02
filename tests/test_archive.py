@@ -753,6 +753,7 @@ def test_a_rolling_horizon_reads_the_same_names_live_and_off_its_archive(
     windowed dimension made it raise, where the archive had left that name
     out and read the rest.
     """
+    pytest.importorskip('xarray')
     runs = _rolling(tmp_path, CAPPED)
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').answer.to_dataset(kind=kind)
     live = runs.to_dataset(kind=kind)
