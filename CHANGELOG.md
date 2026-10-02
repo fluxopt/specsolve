@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): an archive's record and metrics have the same columns for a solve and for every kind of sweep ([#1810](https://github.com/fluxopt/specsolve/pull/1810))
+
 ## 0.3.0 (2026-10-02)
 
 specsolve now requires mathspec 0.2.1. This release breaks one import.
