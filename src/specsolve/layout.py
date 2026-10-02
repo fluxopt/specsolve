@@ -2,7 +2,7 @@
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
 ``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
-name is, ``answer/`` in the layout both answers save, and ``axis.json``
+file holds, ``answer/`` in the layout both answers save, and ``axis.json``
 where the sources are cut. A directory archive is read
 where it lies; a zip is unpacked first.
 """
@@ -112,10 +112,10 @@ def write_archive(
                 tables[name].collect().write_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
         _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
-        _catalog(lowered(spec)).write_parquet(tree / CATALOG_MEMBER)
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         _copy_the_answer(answer, tree / ANSWER_DIR, run)
+        _catalog(lowered(spec), tree, run).write_parquet(tree / CATALOG_MEMBER)
         if zipped:
             _pack(tree, part)
     except BaseException:
@@ -139,6 +139,8 @@ def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
 
 #: ``catalog.parquet``'s columns, in order.
 _CATALOG_SCHEMA = {
+    'run': pl.String,
+    'path': pl.String,
     'name': pl.String,
     'kind': pl.String,
     'description': pl.String,
@@ -149,27 +151,51 @@ _CATALOG_SCHEMA = {
 }
 
 
-def _catalog(program: Program) -> pl.DataFrame:
-    """What each name an archive holds a file for is, one row per column that holds a dimension's labels.
+#: The directories that hold one file per name of each kind.
+_HELD_UNDER = {
+    'dimension': [SOURCES_DIR],
+    'relation': [SOURCES_DIR],
+    'parameter': [SOURCES_DIR],
+    'variable': [f'{ANSWER_DIR}/primal'],
+    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/activity'],
+    'expression': [f'{ANSWER_DIR}/expression'],
+}
 
-    ``kind`` is ``dimension``, ``relation``, ``parameter``, ``variable``,
-    ``constraint`` or ``expression``. ``column`` is the column of the name's
-    file that holds ``dim``'s labels, and ``dim_position`` its 0-based place
-    among them: a relation's column is its role, any other name's is the
-    dimension itself. A name over no dimension has one row, with all three
-    null. ``dtype`` is what the spec declares: the labels' type for a
-    dimension, the ``value`` column's for a parameter, null for the rest.
-    Long form, with no list column, so a BI tool reads it as it reads any other
-    table. A declared expression that the data cannot evaluate is listed
-    here and has no file; ``answer/reasons.parquet`` says why.
+
+def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
+    """What each file under ``sources/`` and ``answer/<kind>/`` of *tree* holds, one row per column of labels.
+
+    ``path`` is the file's path inside the archive, or in a sweep archive the
+    directory of an answer's slices. With ``dim_position`` it is the key,
+    because a constraint may share its name with a parameter. A name the spec
+    declares and *tree* holds no file for has no row. ``kind`` is
+    ``dimension``, ``relation``, ``parameter``, ``variable``, ``constraint``
+    or ``expression``. ``column`` is the column of the file that holds
+    ``dim``'s labels, and ``dim_position`` its 0-based place among them: a
+    relation's column is its role, any other name's is the dimension itself.
+    A file over no dimension has one row, with all three null. ``dtype`` is
+    what the spec declares: the labels' type for a dimension, the ``value``
+    column's for a parameter, null for the rest. Long form, with no list
+    column, so a BI tool reads it as it reads any other table.
     """
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
-        head = (name, kind, description, dtype)
-        rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
-        if not columns:
-            rows.append((*head, None, None, None))
-    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row')
+        for directory in _HELD_UNDER[kind]:
+            if (path := _held(tree, directory, name)) is None:
+                continue
+            head = (run, path, name, kind, description, dtype)
+            rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
+            if not columns:
+                rows.append((*head, None, None, None))
+    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'dim_position')
+
+
+def _held(tree: Path, directory: str, name: str) -> str | None:
+    """*name*'s path under *directory* of *tree*: one file, a sweep's directory of slices, or ``None``."""
+    for held in (f'{name}.parquet', name):
+        if (tree / directory / held).exists():
+            return f'{directory}/{held}'
+    return None
 
 
 def _declared_files(
@@ -258,6 +284,6 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
         raise LayoutError(
             f'{named} is not an archive: it {what}. One that archive= writes holds exactly '
             f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, 'sources.parquet' digesting "
-            f"them, 'catalog.parquet' saying what each name is, 'answer/' holding what the solve returned, "
+            f"them, 'catalog.parquet' saying what each file holds, 'answer/' holding what the solve returned, "
             f"and 'axis.json' where its sources are sliced."
         )

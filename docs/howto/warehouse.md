@@ -4,7 +4,7 @@ How to read many archives at once: which runs terminated how, what each cost,
 and which input changed between them. One archive is
 [archiving a solve](archiving.md); this is the directory they pile up in.
 
-## The three tables
+## The four tables
 
 An archive is a tree of parquet files, so a directory of them is a table per
 glob. Nothing is loaded and no schema is maintained:
@@ -15,6 +15,7 @@ import polars as pl
 answers = pl.read_parquet('runs/*/answer/record.parquet')
 metrics = pl.read_parquet('runs/*/answer/metrics.parquet')
 inputs = pl.read_parquet('runs/*/sources.parquet')
+catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
 | glob | one row per | says |
@@ -22,10 +23,11 @@ inputs = pl.read_parquet('runs/*/sources.parquet')
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
 | `sources.parquet` | source per archive | what each input's bytes digest to |
+| `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `run` is the archive's own
 name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`. It is on all
-three tables, so nothing has to read the paths.
+four tables, so nothing has to read the paths.
 
 **A directory holding both solves and sweeps does not glob.** A sweep's record
 carries the dimension its axis cut on, and its metrics carry different columns
@@ -46,8 +48,8 @@ answers = pl.concat(
 )
 ```
 
-`sources.parquet` has the same three columns whoever wrote it, so it globs
-either way.
+`sources.parquet` and `catalog.parquet` have the same columns whoever wrote
+them, so they glob either way.
 
 **Use `load_archive` and `scan_archive` for one archive, not for many.** They
 give back a spec, its sources and an answer, which is what re-running a case
@@ -56,7 +58,7 @@ needs. A warehouse question is a query over the parquet.
 ## The run on a value frame
 
 `answer/primal/p.parquet` holds the model's own dimension columns and `value`.
-Nothing in it says which archive it came from, so only the three tables above
+Nothing in it says which archive it came from, so only the four tables above
 answer that.
 
 **Name the directory `run=<name>` and every frame carries the run.** That is
@@ -71,7 +73,7 @@ pl.read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning=True)
 # 0         solar      0.0    nightly-2026-09-10
 ```
 
-**The three tables carry the same name.** The archive is named
+**The four tables carry the same name.** The archive is named
 `nightly-2026-09-10`. The stamp drops the `run=`, so a join on `run` matches
 whichever side a column came from.
 
@@ -81,31 +83,42 @@ warehouse queried where it lies is a directory of directories.
 ## What a file holds
 
 `catalog.parquet` says what each file in the archive holds, so a reader
-needs no `spec.yaml`. It has one row per dimension column of each name:
+needs no `spec.yaml`. It has one row per dimension column of each file under
+`sources/` and `answer/`:
 
 | column | holds |
 |---|---|
-| `name` | the file's name, as in `sources/<name>.parquet` or `answer/primal/<name>.parquet` |
+| `run` | the archive's name, as on the other three tables |
+| `path` | the file's path inside the archive, as `sources/load.parquet` or `answer/dual/load.parquet` |
+| `name` | the name the spec declares |
 | `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
 | `description` | the spec's `description:`, or null |
 | `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
 | `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
-| `dim` | the dimension, or null for a name over no dimension |
-| `dim_position` | the 0-based place of `column` among the name's dimension columns |
+| `dim` | the dimension, or null for a file over no dimension |
+| `dim_position` | the 0-based place of `column` among the file's dimension columns |
 
-**Join it on the file's name to label a frame.** In DuckDB:
+**Join it on the path, not the name.** A constraint can have the name of a
+parameter, so `name = 'load'` can match the parameter's source and the
+constraint's dual. `path` and `dim_position` identify one row. In DuckDB:
 
 ```sql
 select name, kind, description, column, dim
 from 'runs/base/catalog.parquet'
-where name = 'p'
+where path = 'answer/primal/p.parquet'
 order by dim_position;
 ```
 
-The catalog comes from the spec alone. It has no units, because the spec
-declares none. A sweep archive's frames also carry the column of the sweep
-key, which `axis.json` names and the catalog does not list. A named expression
-that the data cannot evaluate is in the catalog and has no file.
+**The catalog lists the files the archive holds, and no other.** A name the
+spec declares has no row where it has no file: every answer of a solve that
+left no values, the duals of a model that has none, and a named expression the
+data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
+why.
+
+The catalog has no units, because the spec declares none. In a sweep archive,
+an answer's `path` is a directory that holds one file per slice, and each
+frame also carries the column of the sweep key, which `axis.json` names and the
+catalog does not list.
 
 ## Compare cases solved apart
 

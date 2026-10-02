@@ -15,7 +15,7 @@ sps.solve('dispatch.yaml', sources, archive='case/')
 ```
 
 That writes `spec.yaml`, one `sources/<key>.parquet` per key the file
-declares, `catalog.parquet` saying what each name is, and `answer/` holding
+declares, `catalog.parquet` saying what each file holds, and `answer/` holding
 everything the solve produced:
 
 ```text
@@ -25,7 +25,7 @@ case/
     sources/load.parquet
     …
     sources.parquet               (run, source, digest) — what each of them is
-    catalog.parquet               what each name is, its description and its dimensions
+    catalog.parquet               (run, path, …) — what each file holds and over which dimensions
     answer/record.parquet      how it terminated, what it reached, when, and under what name
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
