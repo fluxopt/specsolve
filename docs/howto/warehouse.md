@@ -68,10 +68,12 @@ pl.read_parquet('runs/*/answer/primal/p.parquet')
 # 0         solar      0.0    nightly-2026-09-10
 ```
 
-**The column is the archive's, not the model's.** Every column specsolve adds
-beside a model's own starts with `specsolve_`, and a spec that declares a name
-with that prefix is refused. `load_archive` and `scan_archive` drop the column,
-so a frame read back is the frame the solve returned.
+**The column is the archive's, not the model's.** The `specsolve_` prefix is
+reserved for the columns specsolve adds, and a spec that declares a name with
+that prefix, in any letter case, is refused. Both readers drop the column from
+the answer's frames, so a frame read back is the frame the solve returned.
+`load_archive` drops it from the sources too. The sources `scan_archive` gives
+back are the archive's own files, and reading one gives the column back.
 
 ## Compare cases solved apart
 
