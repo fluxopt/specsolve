@@ -275,9 +275,8 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
     One start is made, and the window it opens is priced at the snapshots it
     covers: from 1 it covers 1 and 2 at a cost of 1 each, the cheapest window.
     """
-    import pandas as pd
-
     from tests.differential import differential
+    from tests.oracle import pd
 
     spec = {
         'dimensions': {'snapshot': {'dtype': 'int'}},
