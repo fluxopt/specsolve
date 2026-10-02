@@ -339,15 +339,25 @@ class Model:
             tables = tidy_sources(self._program, self._sources)
             write_archive(out, self._spec, self._sources, tables=tables, axis=None, answer=answer)
 
-    def write(self, path: str | Path) -> None:
+    def write(self, path: str | Path, *, names: bool = False) -> None:
         """Stream the built model to *path*, in the format its suffix names.
+
+        Args:
+            path: Where to write; the suffix picks the format.
+            names: Name each column and row by its declaration and coordinate,
+                ``p(2030,wind)`` and ``balance(2030)``, rather than ``x7`` and
+                ``c3``. A label keeps letters, digits and
+                ``!"#$%&'.;?@`{|}~`` and writes any other character as ``_``;
+                a declaration with no dims is ``total()``. LP and MPS name a
+                model the same way either way.
 
         Raises:
             ValueError: A suffix nothing writes.
             SpecsolveError: A construct the format has no section for, as
-                [`check`][specsolve.Model.check] refuses it.
+                [`check`][specsolve.Model.check] refuses it; or, with *names*,
+                two coordinates of one declaration that write as one name.
         """
-        self._engine.write(path)
+        self._engine.write(path, names=names)
 
     def check(self, sink: str) -> None:
         """Refuse the built model where *sink* cannot take it; no solve, no file.
@@ -538,6 +548,8 @@ def write(
     spec: Buildable,
     sources: Mapping[str, Source],
     out: str | Path,
+    *,
+    names: bool = False,
 ) -> Path:
     """Build *spec* and stream it to a file, in the format *out*'s suffix names.
 
@@ -546,6 +558,8 @@ def write(
         sources: As [`build`][] takes them.
         out: Where to write; ``.lp`` and ``.mps`` are what ship. The two
             describe one model and name its columns and rows the same way.
+        names: Name each column and row by its declaration and coordinate, as
+            [`Model.write`][specsolve.api.Model.write] does.
 
     Returns:
         The path written.
@@ -553,12 +567,13 @@ def write(
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
         SpecsolveError: A construct the format has no section for, read off the
-            built model, naming the sinks that take it.
+            built model, naming the sinks that take it; or, with *names*, two
+            coordinates of one declaration that write as one name.
     """
     out = Path(out)
     writer(out.suffix.lower())
     with build(spec, sources) as model:
-        model.write(out)
+        model.write(out, names=names)
     return out
 
 
