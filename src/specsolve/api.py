@@ -38,7 +38,6 @@ from specsolve.errors import (
 )
 from specsolve.lanes import Buildable, Label, Source, declared, lowered
 from specsolve.layout import beside, check_the_target, write_archive
-from specsolve.relational import sinks
 from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
 from specsolve.relational.parquet import (
     METRICS_FILE,
@@ -64,18 +63,16 @@ if TYPE_CHECKING:
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'write']
 
 
-def check(spec: Buildable, sink: str | None = None) -> Program:
+def check(spec: Buildable) -> Program:
     """Parse, validate and lower a spec; attach no data.
 
     The CI verb: with no data and no solver, a spec repository validates every
     commit. Every other verb reads the spec through the same door, so what this
     refuses they refuse too.
 
-    With *sink*, also: **will that sink take it?** Bare ``check`` says nothing
-    about portability. The answer is read off a declared table with no data
-    attached, so it needs no solver installed, and [`solve`][] and
-    [`write`][] read the same table, so the refusal comes whether or not it was
-    asked for. The solver-independent advice is issued either way.
+    Whether a sink takes the model is not asked here: that is decided from the
+    model a build produces, where [`solve`][] and [`write`][] refuse one the
+    sink cannot ingest and name the sinks that do.
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
@@ -85,9 +82,6 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
             first: ``to_spec(spec).expand('piecewise')`` keeps every ``sos:``
             set for a sink that takes one, and ``to_spec(spec).expand()``
             writes the sets out too, as binaries every sink takes.
-        sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an output
-            suffix (``.lp``, ``.mps``). ``None`` asks only whether the spec is
-            sayable.
 
     Returns:
         The lowered program: what a build reads rows off, for reading the plan.
@@ -98,9 +92,7 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
     Raises:
         LanguageError: A construct outside the streaming language, or a
             ``piecewise:`` block still to be written out.
-        SpecsolveError: A *sink* that cannot take this spec, naming the
-            construct and the sinks that do; a name belonging to no sink; or
-            two declarations whose names differ only by case.
+        SpecsolveError: Two declarations whose names differ only by case.
         ValueError: A schema or expression that does not parse.
 
     Warns:
@@ -109,11 +101,8 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
             nothing to stop it. Issued here and nowhere else.
     """
     program = lowered(spec)
-    refused = sinks.refusal(program, sink) if sink is not None else None
     for note in advice(program):
         warnings.warn(str(note), SpecsolveWarning, stacklevel=2)
-    if refused is not None:
-        raise SpecsolveError(refused)
     return program
 
 
@@ -355,8 +344,8 @@ class Model:
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct the format has no section for, the same as
-                [`check`][]'s ``sink=`` answer.
+            SpecsolveError: A construct the format has no section for, read off
+                the built model, naming the sinks that take it.
         """
         self._engine.write(path)
 
@@ -539,8 +528,8 @@ def write(
 
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
-        SpecsolveError: A construct the format has no section for, as
-            ``check(spec, sink=out.suffix)`` reports.
+        SpecsolveError: A construct the format has no section for, read off the
+            built model, naming the sinks that take it.
     """
     out = Path(out)
     writer(out.suffix.lower())

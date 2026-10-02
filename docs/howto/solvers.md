@@ -50,17 +50,17 @@ limit is `time_limit` on HiGHS and `TimeLimit` on Gurobi:
 result = sps.solve('dispatch.yaml', sources, solver_name='gurobi', solver_options={'TimeLimit': 60})
 ```
 
-## Check a spec against a solver before solving
+## A solver that cannot take the model
 
-Solvers take different constructs: HiGHS has no SOS sets, for example.
-`check` with `sink=` refuses a spec the solver cannot take, and needs no data:
-
-```python
-sps.check('dispatch.yaml', sink='highs')
-```
-
-The refusal names the solvers that do take the construct. The full table is
+Solvers take different constructs: HiGHS has no SOS sets, for example. `solve`
+refuses a built model the solver cannot take, before the load, and the
+refusal names the solvers that do take the construct. The full table is
 [what each sink takes](../reference/api.md#what-each-sink-takes).
+
+The answer is read off the model the build produced, not off the file. A file
+may declare a quadratic cost that the data prices at zero everywhere, or an
+integer variable that a `where:` leaves without a column; that model is an LP,
+and every solver takes it.
 
 ## Write the model to a file
 

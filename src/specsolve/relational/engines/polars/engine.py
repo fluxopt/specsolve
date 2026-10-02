@@ -118,7 +118,7 @@ class PolarsEngine:
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
         handoff = self._model.handoff
-        if (refused := sinks.refusal(self._model.program, suffix)) is not None:
+        if (refused := sinks.refusal(handoff, suffix)) is not None:
             raise SpecsolveError(refused)
         with _clocked(self._seconds, 'write'):
             chosen.write(handoff, path)
@@ -135,7 +135,8 @@ class PolarsEngine:
 
         The solver stays loaded where
         [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
-        the solver cannot ingest is refused before the load.
+        the solver cannot ingest is refused before the load, read off the built
+        model rather than the file.
 
         Args:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
@@ -159,7 +160,7 @@ class PolarsEngine:
         if keep not in KEEPS:
             raise SpecsolveError(unknown_keep_message(keep))
         handoff = self._model.handoff
-        if (refused := sinks.refusal(self._model.program, solver_name)) is not None:
+        if (refused := sinks.refusal(handoff, solver_name)) is not None:
             raise SpecsolveError(refused)
         with _clocked(self._seconds, 'handoff'):
             if keep == 'nothing' and self._solver is not None:
