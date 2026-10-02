@@ -23,7 +23,7 @@ import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from mathspec import advice
@@ -382,6 +382,38 @@ class Model:
                 sinks that do; or a name belonging to no sink.
         """
         self._engine.check(sink)
+
+    def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
+        """The built model as a ``pyomo.environ.ConcreteModel``, to extend or solve in pyomo.
+
+        Each variable is a ``Var``, each constraint a ``Constraint`` and each
+        ``sos:`` set an ``SOSConstraint``, named as declared and indexed by the
+        coordinates the build produced: ``m.p[0, 'wind']``, or ``m.p['wind']``
+        over one dim. A coordinate a ``where`` removed has no entry. The
+        objective is ``m.objective``. A row holds the build's numbers, a flat
+        sum of terms, so new data means a new export.
+
+        Args:
+            rename: Component names for declarations that cannot keep their
+                own, by section as the file names it:
+                ``{'constraints': {'start_up': 'start_up_rule'}}``. A pyomo
+                model has one namespace, so a variable and a constraint the
+                spec gives one name clash, as does a name pyomo's solvers load
+                results into (``dual``, ``rc``, ``slack``), an attribute every
+                ``ConcreteModel`` has (``write``, ``name``), or ``objective``.
+                Nothing is renamed that is not named here.
+
+        Returns:
+            A new ``ConcreteModel``; a second call builds another.
+
+        Raises:
+            SpecsolveError: pyomo is not installed (the ``[pyomo]`` extra);
+                *rename* names a section or a declaration the spec does not
+                have; a name clashes, in which case the error lists every
+                clash and a ``rename`` that names them apart; or the model has
+                been closed.
+        """
+        return self._engine.to_pyomo(rename)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
