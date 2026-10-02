@@ -163,6 +163,8 @@ def lowered(spec: Buildable) -> Program:
             f"Expand it first: to_spec(spec).expand('piecewise') keeps every sos: block for a sink that "
             f'takes a set, and to_spec(spec).expand() expands the sets into binaries too.'
         )
-    if (refused := _case_collision(program) or _reserved_name(program)) is not None:
+    if (refused := _case_collision(program)) is not None:
         raise SpecsolveError(refused)
+    if (reserved := _reserved_name(program)) is not None:
+        raise SpecsolveError(reserved)
     return program
