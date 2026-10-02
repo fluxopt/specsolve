@@ -97,7 +97,8 @@ A label keeps its letters, digits and ``!"#$%&'.;?@`{|}~``. Every other
 character is written as `_`, because an LP reader refuses it, so `north sea`
 becomes `north_sea`. A declaration with no dims is written `total()`. When two
 labels of one declaration become the same name, the write is refused and the
-error names both labels.
+error names both labels. `model.check('.lp', names=True)` gives the same refusal
+without writing a file.
 
 ## Hand the model to pyomo
 
@@ -129,6 +130,8 @@ rename anything by itself. It refuses each clash in one error, which suggests a
 m = model.to_pyomo(rename={'constraints': {'start_up': 'start_up_constraint'}})
 ```
 
+`model.check('pyomo', rename=...)` gives the same answer without the export.
+
 ## Hand the model to linopy
 
 To extend the model in linopy, or solve it with a solver linopy runs, export
@@ -146,5 +149,7 @@ a dim is a coordinate, and the coordinates the build did not make are masked
 out. A variable and a constraint may share a name, because linopy keeps them
 apart.
 
-linopy has no quadratic constraint and no constant in its objective. The
-export refuses a model with either, and the error names it.
+linopy has no quadratic constraint and no constant in its objective, and it
+drops a row with no terms, so a row that no point meets would vanish. The
+export refuses a model with any of these, and the error names it.
+`model.check('linopy')` gives the same refusal without the export.

@@ -272,16 +272,47 @@ def test_two_labels_that_write_as_one_name_are_refused(
 
     Either is worse than a refusal here that names both labels.
     """
-    spec = {
+    with pytest.raises(SpecsolveError, match=rf"{named} writes the coordinates \('a b',\) and \('a_b',\)"):
+        sps.write(_sharing(variables, constraints, objective), SHARED_DATA, tmp_path / 'model.lp', names=True)
+    assert not (tmp_path / 'model.lp').exists(), 'a refused write leaves no file behind'
+
+
+@pytest.mark.parametrize('suffix', ['.lp', '.mps'])
+@pytest.mark.parametrize(('variables', 'constraints', 'objective', 'named'), SHARED)
+def test_check_with_names_refuses_what_a_named_write_refuses(
+    variables: dict[str, Any], constraints: dict[str, Any], objective: str, named: str, suffix: str, tmp_path: Path
+) -> None:
+    """Without *names* the same model checks clean: a numbered file has no label to share."""
+    with sps.build(_sharing(variables, constraints, objective), SHARED_DATA) as model:
+        model.check(suffix)
+        with pytest.raises(SpecsolveError, match=named) as checked:
+            model.check(suffix, names=True)
+        with pytest.raises(SpecsolveError) as written:
+            model.write(tmp_path / f'model{suffix}', names=True)
+    assert str(checked.value) == str(written.value), 'check and write refuse a shared name in different words'
+
+
+def test_check_refuses_names_for_a_sink_that_writes_no_file() -> None:
+    """A solver reads no names, so the question ``names=`` asks has no answer there."""
+    with (
+        sps.build(DISPATCH_SPEC, DISPATCH_DATA) as model,
+        pytest.raises(SpecsolveError, match=r"names= is read by a written file \(\.lp, \.mps\), not by 'highs'"),
+    ):
+        model.check('highs', names=True)
+
+
+#: The labels ``a b`` and ``a_b``, which clean to one name.
+SHARED_DATA = {'g': ['a b', 'a_b'], 'lo': {'a b': 1.0, 'a_b': 2.0}}
+
+
+def _sharing(variables: dict[str, Any], constraints: dict[str, Any], objective: str) -> dict[str, Any]:
+    return {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'lo': {'dims': ['g']}},
         'variables': variables,
         'constraints': constraints,
         'objective': {'sense': 'minimize', 'expression': objective},
     }
-    with pytest.raises(SpecsolveError, match=rf"{named} writes the coordinates \('a b',\) and \('a_b',\)"):
-        sps.write(spec, {'g': ['a b', 'a_b'], 'lo': {'a b': 1.0, 'a_b': 2.0}}, tmp_path / 'model.lp', names=True)
-    assert not (tmp_path / 'model.lp').exists(), 'a refused write leaves no file behind'
 
 
 @pytest.mark.parametrize('suffix', ['.lp', '.mps'])

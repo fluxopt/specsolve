@@ -355,13 +355,12 @@ class Model:
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct the format has no section for, as
-                [`check`][specsolve.Model.check] refuses it; or, with *names*,
-                two coordinates of one declaration that write as one name.
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                this suffix and *names*.
         """
         self._engine.write(path, names=names)
 
-    def check(self, sink: str) -> None:
+    def check(self, sink: str, *, names: bool = False, rename: Mapping[str, Mapping[str, str]] | None = None) -> None:
         """Refuse the built model where *sink* cannot take it; no solve, no file.
 
         ::
@@ -370,20 +369,28 @@ class Model:
 
         The answer is read off the model this build produced, not off the
         file: a square the data prices at zero, an integer variable no column
-        is built for or a set with no members asks for nothing. [`solve`][]
-        and [`write`][] refuse exactly what this refuses, with the same
-        message, so a CI job that builds every example and checks it pays for
-        no solve, and loads no solver to release.
+        is built for or a set with no members asks for nothing. [`solve`][],
+        [`write`][] and [`to_pyomo`][] refuse exactly what this refuses, with
+        the same message, so a CI job that builds every example and checks it
+        pays for no solve, and loads no solver to release.
 
         Args:
-            sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
-                output suffix (``.lp``, ``.mps``).
+            sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
+                suffix (``.lp``, ``.mps``), or an export (``pyomo``).
+            names: Also refuse what [`write`][]'s *names* refuses: two
+                coordinates of one declaration that write as one name. Read
+                by an output suffix only.
+            rename: The component names [`to_pyomo`][] would be given, so a
+                clash they resolve is not refused. Read by ``pyomo`` only.
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; or a name belonging to no sink.
+                sinks that do; a name belonging to no sink; *names* for a sink
+                that writes no file, or *rename* for any sink but ``pyomo``;
+                with *names*, two coordinates of one declaration that write as
+                one name; or, for ``pyomo``, what [`to_pyomo`][] refuses.
         """
-        self._engine.check(sink)
+        self._engine.check(sink, names=names, rename=rename)
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``, to extend or solve in pyomo.
@@ -409,11 +416,12 @@ class Model:
             A new ``ConcreteModel``; a second call builds another.
 
         Raises:
-            SpecsolveError: pyomo is not installed (the ``[pyomo]`` extra);
-                *rename* names a section or a declaration the spec does not
-                have; a name clashes, in which case the error lists every
-                clash and a ``rename`` that names them apart; or the model has
-                been closed.
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                ``pyomo`` and *rename*: pyomo is not installed (the ``[pyomo]``
+                extra); *rename* names a section or a declaration the spec
+                does not have; or a name clashes, in which case the error lists
+                every clash and a ``rename`` that names them apart. Or the
+                model has been closed.
         """
         return self._engine.to_pyomo(rename)
 

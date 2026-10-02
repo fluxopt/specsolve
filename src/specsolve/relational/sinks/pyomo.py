@@ -13,13 +13,28 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.relational.sinks.capabilities import Capabilities
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping, Sequence
 
     from specsolve.relational.sinks.handoff import Declared, Handoff, Run
 
-__all__ = ['to_pyomo']
+__all__ = ['PYOMO_CAPABILITIES', 'component_names', 'to_pyomo']
+
+#: A pyomo model holds every construct the language has; what it refuses is a name.
+PYOMO_CAPABILITIES = Capabilities(
+    supports={
+        'integrality': 'native',
+        'sos': 'native',
+        'quadratic_objective': 'native',
+        'nonconvex_quadratic_objective': 'native',
+        'quadratic_constraint': 'native',
+    }
+)
+
+#: What calling the export or its check without the extra says.
+UNAVAILABLE = 'to_pyomo requires the [pyomo] extra: pip install "specsolve[pyomo]"'
 
 #: The suffixes pyomo's solver interfaces look up on a model by name and load
 #: results into, so a component of that name breaks every solve.
@@ -36,16 +51,12 @@ def to_pyomo(handoff: Handoff, declared: Declared, rename: Mapping[str, Mapping[
     """The built model as a ``ConcreteModel``, as [`Model.to_pyomo`][specsolve.api.Model.to_pyomo] describes it.
 
     Raises:
-        SpecsolveError: pyomo is not installed; *rename* names a section or a
-            declaration the spec does not have; or a component name clashes.
+        SpecsolveError: What [`component_names`][] refuses.
     """
-    try:
-        import pyomo.environ as pyo
-    except ModuleNotFoundError as missing:
-        raise SpecsolveError('to_pyomo requires the [pyomo] extra: pip install "specsolve[pyomo]"') from missing
+    names = component_names(declared, rename, objective=handoff.objective_sense is not None)
+    import pyomo.environ as pyo
 
     m = pyo.ConcreteModel()
-    names = _component_names(m, declared, rename or {}, objective=handoff.objective_sense is not None)
     columns = _variables(pyo, m, handoff, declared.variables, names)
     _constraints(pyo, m, handoff, declared.constraints, columns, names)
     _sets(pyo, m, handoff, declared, columns, names)
@@ -57,8 +68,8 @@ def to_pyomo(handoff: Handoff, declared: Declared, rename: Mapping[str, Mapping[
     return m
 
 
-def _component_names(
-    m: Any, declared: Declared, rename: Mapping[str, Mapping[str, str]], *, objective: bool
+def component_names(
+    declared: Declared, rename: Mapping[str, Mapping[str, str]] | None, *, objective: bool
 ) -> dict[tuple[str, str], str]:
     """Each declaration's component name, keyed by ``(section, declaration)``: as declared, or as *rename* says.
 
@@ -67,10 +78,18 @@ def _component_names(
     them apart. Nothing is renamed that the caller did not rename.
 
     Raises:
-        SpecsolveError: *rename* names a section or a declaration the spec
-            does not have, or a name is taken twice, is a result suffix, or is
-            an attribute every ``ConcreteModel`` has.
+        SpecsolveError: pyomo is not installed, so the names every
+            ``ConcreteModel`` holds are unknown; *rename* names a section or a
+            declaration the spec does not have; or a name is taken twice, is a
+            result suffix, or is an attribute every ``ConcreteModel`` has.
     """
+    try:
+        import pyomo.environ as pyo
+    except ModuleNotFoundError as missing:
+        raise SpecsolveError(UNAVAILABLE) from missing
+
+    m = pyo.ConcreteModel()
+    rename = rename or {}
     declarations = {
         'variables': [run.name for run in declared.variables],
         'constraints': [run.name for run in declared.constraints],

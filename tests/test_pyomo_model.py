@@ -351,6 +351,35 @@ def test_the_suggested_rename_exports_the_model() -> None:
     assert _solved(m) == pytest.approx(answer.objective), 'the renamed model still solves'
 
 
+def test_check_refuses_a_clash_in_the_words_the_export_does() -> None:
+    with sps.build(CLASHING, {}) as model:
+        with pytest.raises(SpecsolveError) as checked:
+            model.check('pyomo')
+        with pytest.raises(SpecsolveError) as exported:
+            model.to_pyomo()
+    assert str(checked.value) == str(exported.value), 'check and to_pyomo refuse a clash in different words'
+
+
+def test_check_takes_the_rename_the_export_takes() -> None:
+    with sps.build(CLASHING, {}) as model:
+        model.check('pyomo', rename=_suggested(CLASHING))
+
+
+def test_a_model_pyomo_takes_checks_clean_and_pyomo_is_named_where_another_sink_refuses() -> None:
+    with sps.build(sos_spec(1), SOS_DATA) as model:
+        model.check('pyomo')
+        with pytest.raises(SpecsolveError, match=r'Sinks that do take it: .*pyomo'):
+            model.check('highs')
+
+
+def test_check_refuses_rename_for_a_sink_other_than_pyomo() -> None:
+    with (
+        sps.build(CLASHING, {}) as model,
+        pytest.raises(SpecsolveError, match=r"rename= is read by pyomo, not by '\.lp'"),
+    ):
+        model.check('.lp', rename={'constraints': {'x': 'x_constraint'}})
+
+
 def test_the_suggestion_keeps_the_callers_rename_and_avoids_every_name_in_use() -> None:
     spec = {**CLASHING, 'variables': {**CLASHING['variables'], 'x_constraint': {'dims': [], 'bounds': {'lower': 0}}}}
     rename = _suggested(spec, {'variables': {'slack': 'spare'}})
@@ -409,8 +438,15 @@ def test_a_rename_that_cannot_apply_is_refused(rename: Any, match: str) -> None:
         model.to_pyomo(rename)
 
 
-def test_without_pyomo_the_export_names_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    'door',
+    [
+        pytest.param(lambda model: model.to_pyomo(), id='the-export'),
+        pytest.param(lambda model: model.check('pyomo'), id='its-check'),
+    ],
+)
+def test_without_pyomo_the_export_names_the_extra(door: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     with sps.build(DISPATCH_SPEC, DISPATCH_DATA) as model:
         monkeypatch.setitem(sys.modules, 'pyomo.environ', None)
         with pytest.raises(SpecsolveError, match=r'pip install "specsolve\[pyomo\]"'):
-            model.to_pyomo()
+            door(model)

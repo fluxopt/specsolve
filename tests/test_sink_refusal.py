@@ -81,7 +81,7 @@ def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
 def test_an_unknown_sink_names_the_ones_there_are():
     with sps.build(PLAIN, dict(SOURCES)) as model, pytest.raises(SpecsolveError, match='unknown sink') as refused:
         model.check('cplex')
-    assert re.search(r'\.lp, \.mps, gurobi, highs, xpress', str(refused.value)), (
+    assert re.search(r'\.lp, \.mps, gurobi, highs, pyomo, xpress', str(refused.value)), (
         'the refusal lists every sink there is, so a reader picks one instead of guessing'
     )
 
