@@ -8,6 +8,7 @@ from mathspec import to_spec
 from mathspec.program import Program
 
 from specsolve.errors import LanguageError, SpecsolveError
+from specsolve.relational.parquet import RESERVED
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -101,11 +102,6 @@ def _case_collision(program: Program) -> str | None:
                 )
             seen[name.casefold()] = (kind, name)
     return None
-
-
-#: The prefix reserved, in any letter case, for the columns specsolve adds, so
-#: that no name a spec declares can collide with one.
-RESERVED = 'specsolve_'
 
 
 def _reserved_name(program: Program) -> str | None:

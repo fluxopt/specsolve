@@ -40,7 +40,7 @@ from specsolve.errors import (
     no_model_behind_this_answer_message,
 )
 from specsolve.frames import as_frame
-from specsolve.lanes import RESERVED, declared
+from specsolve.lanes import declared
 from specsolve.layout import beside, check_the_target, write_archive
 from specsolve.relational.parquet import (
     KINDS,
@@ -48,6 +48,7 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     RECORD_FILE,
     RECORD_SCHEMA,
+    RESERVED,
     RUN,
     Record,
     SliceMetrics,

@@ -32,9 +32,13 @@ if TYPE_CHECKING:
 KINDS = ('primal', 'dual', 'expression')
 LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
 
+#: The prefix reserved, in any letter case, for the columns specsolve adds, so
+#: that no name a spec declares can collide with one.
+RESERVED = 'specsolve_'
+
 #: The column an archive adds to every table it holds, naming the run the
 #: table came from. Read back, a frame comes without it.
-RUN = 'specsolve_run'
+RUN = f'{RESERVED}run'
 
 
 #: The layout a result, a sweep and an archive write to disk. A change to
