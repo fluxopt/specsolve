@@ -421,9 +421,9 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 
 
 def test_every_sink_declares_what_it_can_ingest():
-    """Both families answer the capability axis, in one vocabulary."""
+    """Every family answers the capability axis, in one vocabulary."""
 
-    from specsolve.relational.sinks import SOLVERS, WRITERS
+    from specsolve.relational.sinks import EXPORTS, SOLVERS, WRITERS
     from specsolve.relational.sinks.capabilities import (
         CAPABILITIES,
         Capabilities,
@@ -432,6 +432,7 @@ def test_every_sink_declares_what_it_can_ingest():
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
+    described |= {f'export {name}': capabilities for name, capabilities in EXPORTS.items()}
     for sink, capabilities in described.items():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
         strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))

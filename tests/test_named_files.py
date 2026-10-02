@@ -292,6 +292,15 @@ def test_check_with_names_refuses_what_a_named_write_refuses(
     assert str(checked.value) == str(written.value), 'check and write refuse a shared name in different words'
 
 
+def test_check_refuses_names_for_a_sink_that_writes_no_file() -> None:
+    """A solver reads no names, so the question ``names=`` asks has no answer there."""
+    with (
+        sps.build(DISPATCH_SPEC, DISPATCH_DATA) as model,
+        pytest.raises(SpecsolveError, match=r"names= is read by a written file \(\.lp, \.mps\), not by 'highs'"),
+    ):
+        model.check('highs', names=True)
+
+
 #: The labels ``a b`` and ``a_b``, which clean to one name.
 SHARED_DATA = {'g': ['a b', 'a_b'], 'lo': {'a b': 1.0, 'a_b': 2.0}}
 

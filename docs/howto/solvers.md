@@ -123,5 +123,11 @@ A pyomo model has one namespace. A spec may give a variable and a constraint
 the same name, and some names are already taken: `dual`, `rc` and `slack`,
 where pyomo's solvers write their results, the attributes every
 `ConcreteModel` has, such as `write`, and `objective`. The export does not
-rename anything. It refuses each clash in one error, so rename the declaration
-in the spec. `model.check('pyomo')` gives the same refusal without the export.
+rename anything by itself. It refuses each clash in one error, which suggests a
+`rename` to pass back:
+
+```python
+m = model.to_pyomo(rename={'constraints': {'start_up': 'start_up_constraint'}})
+```
+
+`model.check('pyomo', rename=...)` gives the same answer without the export.

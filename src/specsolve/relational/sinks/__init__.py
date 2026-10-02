@@ -1,8 +1,9 @@
 """Sinks: how a built model leaves the engine. See README.md.
 
 A *solver* runs the handoff (``solvers/``, chosen by name); a *writer* renders
-it to a file (``writers/``, chosen by suffix). Both read ``handoff.py`` and
-declare what they take in ``capabilities.py``; neither imports the other.
+it to a file (``writers/``, chosen by suffix); an *export* hands it to a
+modelling library (``pyomo.py``, chosen by name). Each reads ``handoff.py`` and
+declares what it takes in ``capabilities.py``; none imports another.
 """
 
 from __future__ import annotations
@@ -13,13 +14,15 @@ from specsolve.errors import SpecsolveError, unknown_name_message
 from specsolve.relational.sinks import capabilities as caps
 from specsolve.relational.sinks.capabilities import spelled
 from specsolve.relational.sinks.handoff import Handoff
+from specsolve.relational.sinks.pyomo import PYOMO_CAPABILITIES
 from specsolve.relational.sinks.solvers import SOLVERS, Solver, loaded, solver
 from specsolve.relational.sinks.writers import WRITERS, writer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
 __all__ = [
+    'EXPORTS',
     'SOLVERS',
     'WRITERS',
     'Handoff',
@@ -32,19 +35,28 @@ __all__ = [
 ]
 
 
-def sink_capabilities(name: str) -> caps.Capabilities:
-    """What the sink called *name* can ingest — a solver name, or a suffix.
+#: Every export a caller may name, with what it can ingest. Closed.
+EXPORTS: Mapping[str, caps.Capabilities] = {'pyomo': PYOMO_CAPABILITIES}
 
-    Answered without importing the solver.
+#: Every sink's name: solvers, suffixes, then exports.
+_SINKS = (*SOLVERS, *WRITERS, *EXPORTS)
+
+
+def sink_capabilities(name: str) -> caps.Capabilities:
+    """What the sink called *name* can ingest — a solver name, a suffix, or an export.
+
+    Answered without importing the sink.
 
     Raises:
-        SpecsolveError: A name belonging to neither family.
+        SpecsolveError: A name belonging to no family.
     """
     if name in SOLVERS:
         return SOLVERS[name].capabilities
     if (suffix := name.lower()) in WRITERS:
         return WRITERS[suffix].capabilities
-    raise SpecsolveError(unknown_name_message('sink', name, (*SOLVERS, *WRITERS)))
+    if name in EXPORTS:
+        return EXPORTS[name]
+    raise SpecsolveError(unknown_name_message('sink', name, _SINKS))
 
 
 def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequence[str]], str] | None:
@@ -70,7 +82,7 @@ def refusal(handoff: Handoff, name: str) -> str | None:
     needed = caps.required(handoff)
     if (refuses := _blocker(name, needed)) is None:
         return None
-    return refuses([other for other in (*SOLVERS, *WRITERS) if other != name and _blocker(other, needed) is None])
+    return refuses([other for other in _SINKS if other != name and _blocker(other, needed) is None])
 
 
 def _instead(takers: Sequence[str]) -> str:

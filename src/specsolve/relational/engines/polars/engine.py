@@ -31,7 +31,7 @@ from specsolve.relational.engines.polars.attaching import attach
 from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
 from specsolve.relational.engines.polars.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.pyomo import to_pyomo
+from specsolve.relational.sinks import pyomo
 from specsolve.relational.sinks.writers.base import NUMBERED
 
 if TYPE_CHECKING:
@@ -126,27 +126,38 @@ class PolarsEngine:
         with _clocked(self._seconds, 'write'):
             chosen.write(self._model.handoff, path, readback.file_names(self._model) if names else NUMBERED)
 
-    def check(self, sink: str, *, names: bool = False) -> None:
+    def check(self, sink: str, *, names: bool = False, rename: Mapping[str, Mapping[str, str]] | None = None) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
         Read off the hand-off, so a square the data prices at zero or an
         integer variable with no column built asks for nothing. What
-        [`solve`][] and [`write`][] refuse, this refuses, with the same
-        message.
+        [`solve`][], [`write`][] and [`to_pyomo`][] refuse, this refuses, with
+        the same message.
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; a name belonging to no sink; or, with *names*,
-                two coordinates that write as one name.
+                sinks that do; a name belonging to no sink; *names* for a sink
+                that writes no file, or *rename* for any sink but ``pyomo``;
+                with *names*, two coordinates that write as one name; or, for
+                ``pyomo``, what [`component_names`][specsolve.relational.sinks.pyomo.component_names]
+                refuses.
         """
-        if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
+        handoff = self._model.handoff
+        if (refused := sinks.refusal(handoff, sink)) is not None:
             raise SpecsolveError(refused)
+        if names and sink.lower() not in sinks.WRITERS:
+            raise SpecsolveError(f'names= is read by a written file ({", ".join(sinks.WRITERS)}), not by {sink!r}.')
+        if rename is not None and sink != 'pyomo':
+            raise SpecsolveError(f'rename= is read by pyomo, not by {sink!r}.')
         if names:
             readback.file_names(self._model)
+        if sink == 'pyomo':
+            pyomo.component_names(readback.declared(self._model), rename, objective=handoff.objective_sense is not None)
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``. See [`to_pyomo`][specsolve.api.Model.to_pyomo]."""
-        return to_pyomo(self._model.handoff, readback.declared(self._model), rename)
+        self.check('pyomo', rename=rename)
+        return pyomo.to_pyomo(self._model.handoff, readback.declared(self._model), rename)
 
     def solve(
         self,
