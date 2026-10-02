@@ -21,8 +21,8 @@ defined beside `Handoff` in `handoff.py`: which declaration owns each column,
 row and set, at which coordinate. The engine's `readback.declared` supplies it. It needs the `[pyomo]` extra, which
 it imports when called. `EXPORTS` holds its capabilities under the name
 `pyomo`, so `Model.check('pyomo', rename=...)` asks the same table, and also
-refuses a component name that a pyomo model cannot hold. `to_pyomo` asks that
-check first.
+refuses a component name that a pyomo model cannot hold, through the
+`component_names` that `to_pyomo` itself calls.
 
 ## Staying loaded
 

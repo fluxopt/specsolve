@@ -156,7 +156,6 @@ class PolarsEngine:
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``. See [`to_pyomo`][specsolve.api.Model.to_pyomo]."""
-        self.check('pyomo', rename=rename)
         return pyomo.to_pyomo(self._model.handoff, readback.declared(self._model), rename)
 
     def solve(
