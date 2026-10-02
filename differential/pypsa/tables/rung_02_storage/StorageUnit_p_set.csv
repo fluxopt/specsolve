@@ -1,2 +1,2 @@
-snapshot,storage_unit,value
-2015-01-01T00:00:00.000000,battery,0.0
+scenario,snapshot,storage_unit,value
+base,2015-01-01T00:00:00.000000,battery,0.0

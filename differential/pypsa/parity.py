@@ -72,6 +72,10 @@ CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
 HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
+#: What the corpus leaves untested, one line per gap as `coverage` prints it — energy-models/mathspec#830.
+UNTESTED = HERE / 'untested.txt'
+#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and masks per rung.
+UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'dims', 'conjuncts'})
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
@@ -107,14 +111,60 @@ def keywords(stem: str) -> dict:
     return dict(getattr(importlib.import_module(stem), 'OPTIMIZE', {}))
 
 
+def outages(stem: str) -> object:
+    """The branches a security-constrained rung takes out — the script's ``BRANCH_OUTAGES``, ``None`` on a plain run."""
+    return getattr(importlib.import_module(stem), 'BRANCH_OUTAGES', None)
+
+
+def issue(stem: str) -> int | None:
+    """The PyPSA bug a rung records — the script's ``ISSUE``, whose ``oracle()`` gives the objective PyPSA should reach."""
+    return getattr(importlib.import_module(stem), 'ISSUE', None)
+
+
+def solved(stem: str, n):
+    """*n* solved as the rung asks — security-constrained over its outages where it names any."""
+    with legacy():
+        if outages(stem) is None:
+            status, condition = n.optimize(solver_name='highs', **keywords(stem))
+        else:
+            status, condition = n.optimize.optimize_security_constrained(
+                solver_name='highs', branch_outages=outages(stem), **keywords(stem)
+            )
+    assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
+    return n
+
+
+def intended(stem: str) -> float:
+    """The objective a rung that records a PyPSA bug should reach — its oracle's networks, each at its weight."""
+    oracle = importlib.import_module(stem).oracle()
+    return sum(
+        weight * (float(m.objective) + float(m.objective_constant))
+        for weight, m in ((w, solved(stem, x)) for w, x in oracle)
+    )
+
+
 def spec_of(stem: str) -> Path:
     """The spec file the rung names: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
     return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
 
 
-def stands_for(description: str | None) -> str:
-    """The PyPSA name a declaration's description opens with, in backticks — the declared pages' convention."""
-    return re.match(r'`([^`]+)`', description or '').group(1)
+def stands_for(description: str | None, model=None) -> str:
+    """The PyPSA name a declaration's description opens with, in backticks — the declared pages' convention.
+
+    A description may open with several, comma-separated, where PyPSA names
+    one block differently by mode (tangent rows or stacked secants); the one
+    *model* has is chosen, else the first.
+    """
+    opening = re.match(r'((?:`[^`]+`(?:, )?)+)', description or '').group(1)
+    names = re.findall(r'`([^`]+)`', opening)
+    if model is None or len(names) == 1:
+        return names[0]
+    present = [*model.constraints, *model.variables]
+    for name in names:
+        pattern = templated(name)
+        if any(pattern.match(m) if pattern else m == name for m in present):
+            return name
+    return names[0]
 
 
 def templated(name: str) -> re.Pattern | None:
@@ -128,20 +178,26 @@ def template_dims(declared, model) -> dict[str, str]:
     """Block name -> the dimension PyPSA spells into the constraint's name — the one declared dim its constraint has no axis for (a component dim rides its ``name`` axis)."""
     out = {}
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        their = next((c for c in model.constraints if pattern and pattern.match(c)), None)
+        pattern = templated(stands_for(block.description, model))
+        if pattern is None or pattern.groups != 1:
+            continue
+        their = next((c for c in model.constraints if pattern.match(c)), None)
         if their is None:
             continue
         axes = set(model.constraints[their].coords.dims)
         component = {*prep.DIM.values(), 'bus'} if 'name' in axes else set()
-        (out[name],) = [d for d in block.dims if d not in axes and d not in component]
+        (out[name],) = [
+            d for d in block.dims if d not in axes and d not in component and not (PLAIN[0] and d == 'scenario')
+        ]
     return out
 
 
 def template_axis(block, dim: str) -> int:
-    """Where *dim* sits in a row key — keys are ordered snapshot first, then by name."""
-    dims = sorted(block.dims, key=lambda d: (d != 'snapshot', d))
-    return dims.index(dim)
+    """Where *dim* sits in a row key — ordered as [`_keyed`][] orders it, a plain run's scenario dropped."""
+    dims = [d for d in block.dims if not (PLAIN[0] and d == 'scenario')]
+    components = [d for d in dims if d in prep.DIM.values()]
+    spelled = {d: 'name' if len(components) == 1 and len(dims) > 1 and d in components else d for d in dims}
+    return sorted(dims, key=lambda d: (d != 'snapshot', spelled[d])).index(dim)
 
 
 def flattened(name: str, table: object, dims: list[str]) -> object:
@@ -160,18 +216,23 @@ def flattened(name: str, table: object, dims: list[str]) -> object:
     return cut
 
 
-def prepared(spec: Path, n, stem: str | None = None) -> dict[str, object]:
-    """`prep.sources` cut to what *spec* declares — specsolve refuses a key the spec does not take; *stem* names the rung whose `OPTIMIZE` sizes the loss fan."""
+def spread(table: object, dims: list[str], scenarios: object) -> object:
+    """A table PyPSA keeps once for every scenario, repeated in each where the file reads it by scenario."""
+    if not isinstance(table, pl.DataFrame) or 'scenario' not in dims or 'scenario' in table.columns:
+        return table
+    return pl.DataFrame({'scenario': scenarios}).join(table, how='cross')
+
+
+def prepared(spec: Path, tables: dict[str, object]) -> dict[str, object]:
+    """`prep.sources`'s *tables* cut to what *spec* declares — specsolve refuses a key the spec does not take."""
     declared = mathspec.to_spec(spec)
     names = {*declared.dimensions, *declared.parameters, *declared.relations}
-    losses = keywords(stem).get('transmission_losses', {}) if stem else {}
-    segments = int(losses.get('segments', 0)) if isinstance(losses, dict) else int(losses or 0)
     dims = {name: p.dims for name, p in declared.parameters.items()} | {
         name: list(relation.key_roles) for name, relation in declared.relations.items()
     }
     return {
-        name: flattened(name, table, dims.get(name, []))
-        for name, table in prep.sources(n, segments=segments).items()
+        name: spread(flattened(name, table, dims.get(name, [])), dims.get(name, []), tables['scenario'])
+        for name, table in tables.items()
         if name in names
     }
 
@@ -180,27 +241,91 @@ def prepared(spec: Path, n, stem: str | None = None) -> dict[str, object]:
 FIRST: dict[str, set[str]] = defaultdict(set)
 
 
-def projected(stem: str, spec: Path, parity: dict, n) -> Path:
-    """Write the rung's projection of *spec*, solve it, and hold it to the full file's objective.
-
-    The rung's script and the file's symbol table are copied beside it, so the
-    page needs no checkout.
-    """
+def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed: list[str]) -> Path:
+    """Write the rung's own spec: *spec* cut to what the full build produced, the rung's script beside it, and the file's symbols once per file."""
     raw = yaml.safe_load(spec.read_text())
-    cut = projection.project(raw, parity)
+    cut = projection.project(raw, {'built_rows': built_rows, 'built_columns': built_columns, 'attached_nonempty': fed})
     path = PROJECTIONS / f'{stem}.yaml'
     path.parent.mkdir(exist_ok=True)
     path.write_text(projection.dump(cut))
     shutil.copy(RUNGS / f'{stem}.py', PROJECTIONS / f'{stem}.py')
     symbols = spec.parent / 'symbols' / spec.name
     if symbols.exists():
-        shutil.copy(symbols, PROJECTIONS / f'{stem}.symbols.yaml')
-    result = sps.solve(path, prepared(path, n, stem))
-    assert result.is_ok, f'{stem}: the projection did not solve — {result.termination_condition}'
-    assert math.isclose(float(result.objective), parity['specsolve_objective'], rel_tol=1e-9, abs_tol=1e-6), (
-        f'{stem}: the projection lands on {result.objective}, the file on {parity["specsolve_objective"]} — the cut lost a term'
-    )
+        shutil.copy(symbols, PROJECTIONS / f'{spec.stem}.symbols.yaml')
     return path
+
+
+def built_counts(model) -> tuple[dict[str, int], dict[str, int]]:
+    """Rows per constraint block and columns per variable block of one build, before any solve."""
+    built = model._engine._model
+    return (
+        {name: held.height for name, held in built.constraints.items()},
+        {name: held.height for name, held in built.variables.items()},
+    )
+
+
+def fed(sources: dict[str, object]) -> list[str]:
+    """The tables a build was handed with at least one row, or a scalar."""
+    return sorted(name for name, table in sources.items() if not hasattr(table, '__len__') or len(table))
+
+
+def _keyed_model(model) -> dict[str, object]:
+    """One build as label-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
+    built = model._engine._model
+    handoff = built.handoff
+
+    def keys(held: dict) -> dict[int, tuple]:
+        out = {}
+        for name, labelled in held.items():
+            frame = labelled.frame.collect()
+            label = 'var_label' if 'var_label' in frame.columns else 'row'
+            dims = [c for c in frame.columns if c != label]
+            for row in frame.iter_rows(named=True):
+                out[row[label]] = (name, *(str(row[d]) for d in dims))
+        return out
+
+    columns, rows = keys(built.variables), keys(built.constraints)
+    starts = list(handoff.row_starts)
+    matrix = handoff.matrix
+    terms = {}
+    for r, (sense, rhs) in enumerate(zip(handoff.rows['sense'], handoff.rows['rhs'], strict=True)):
+        span = matrix.slice(starts[r], starts[r + 1] - starts[r])
+        pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span['col'], span['coeff'], strict=True) if v)
+        terms[rows[handoff.rows['row'][r]]] = (str(sense), round(float(rhs), 9), pairs)
+    return {
+        'columns': {
+            columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
+        },
+        'rows': terms,
+        'quadratic rows': frozenset(
+            (rows[r], columns[a], columns[b], round(v, 9)) for r, a, b, v in handoff.qmatrix.iter_rows() if v
+        ),
+        'objective': frozenset((columns[c], round(v, 9)) for c, v in handoff.obj.iter_rows() if v),
+        'quadratic objective': frozenset(
+            (frozenset((columns[a], columns[b])), round(v, 9)) for a, b, v in handoff.quad.iter_rows() if v
+        ),
+        'sense': handoff.objective_sense,
+        'constant': round(handoff.objective_constant, 9),
+    }
+
+
+def same_model(stem: str, full, cut) -> None:
+    """The rung's spec builds the model the whole file builds on the same network, coefficient for coefficient.
+
+    This is what makes the cut a projection rather than a second model.
+    """
+    ours, whole = _keyed_model(cut), _keyed_model(full)
+    for part, held in whole.items():
+        if ours[part] == held:
+            continue
+        if isinstance(held, dict):
+            missing = sorted(set(held) - set(ours[part]), key=str)[:3]
+            extra = sorted(set(ours[part]) - set(held), key=str)[:3]
+            changed = sorted((k for k in set(held) & set(ours[part]) if held[k] != ours[part][k]), key=str)[:3]
+            detail = f'only in the file {missing}, only in the cut {extra}, differing {changed}'
+        else:
+            detail = f'file {sorted(map(str, held))[:3]} … cut {sorted(map(str, ours[part]))[:3]}'
+        raise AssertionError(f'{stem}: the rung spec builds other {part} than the file — {detail}')
 
 
 def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> None:
@@ -246,14 +371,6 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     return verdicts
 
 
-def built(result, declared) -> tuple[dict[str, int], dict[str, int]]:
-    """The labels the relational lane actually built, per file block — masked ones excluded, like PyPSA's records."""
-    return (
-        {name: len(result.activity(name)) for name in declared.constraints},
-        {name: len(result.primal(name)) for name in declared.variables},
-    )
-
-
 def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int]]:
     """Rows built per label of a templated block's dimension — what each PyPSA row family is held to."""
     out = {}
@@ -261,6 +378,13 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
         counts = result.activity(name).to_pandas().groupby(dim).size()
         out[name] = {str(k): int(c) for k, c in counts.items()}
     return out
+
+
+def _gc_dual(dual, label: str) -> pd.DataFrame:
+    """One global constraint's dual as rows — one, or one per scenario where the network has scenarios."""
+    if not dual.ndim:
+        return pd.DataFrame({'name': [label], 'dual': [float(dual)]})
+    return dual.to_dataframe('dual').reset_index().assign(name=label)
 
 
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
@@ -289,18 +413,20 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     templates = template_dims(declared, n.model)
     pairs = []
     for block_name, block in declared.constraints.items():
-        stands = stands_for(block.description)
+        stands = stands_for(block.description, n.model)
         pattern = templated(stands)
         if pattern is None:
             pairs.append((block_name, stands, None))
         else:
             pairs.extend(
-                (block_name, their_name, found.group(1))
+                (block_name, their_name, found.group(1) if pattern.groups == 1 else None)
                 for their_name in n.model.constraints
                 if (found := pattern.match(their_name))
             )
     for block_name, their_name, k in pairs:
         ours = result.dual(block_name).to_pandas().rename(columns={'value': 'ours'})
+        if PLAIN[0] and 'scenario' in ours.columns:
+            ours = ours.drop(columns='scenario')
         if k is not None:
             dim = templates[block_name]
             ours = ours[ours[dim].astype(str) == k].drop(columns=dim)
@@ -315,14 +441,15 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
                 theirs = theirs.drop(columns=['period', 'snapshot'], errors='ignore')
             theirs = theirs.rename(columns=AXES)
             theirs = theirs.rename(columns={c: 'name' for c in theirs.columns if c.endswith('_i')})
+            for column in [c for c in theirs.columns if c.endswith('-outage')]:
+                component = column.removesuffix('-outage')
+                theirs['outage'] = [prep.outage_label(component, v) for v in theirs.pop(column)]
             ours = ours.rename(columns={c: 'name' for c in ours.columns if c in prep.DIM.values() or c == 'bus'})
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
-            theirs = pd.DataFrame(
-                {
-                    'name': labels,
-                    'dual': [float(n.model.constraints[f'GlobalConstraint-{label}'].dual) for label in labels],
-                }
+            theirs = pd.concat(
+                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'].dual, label) for label in labels]
+                or [pd.DataFrame({'name': [], 'dual': []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
@@ -372,18 +499,19 @@ def legacy():
         linopy.options['semantics'] = 'v1'
 
 
-def pypsa_model(stem: str):
-    """The network's own linopy model, as PyPSA builds it."""
-    with legacy():
-        return network(stem).optimize.create_model(**keywords(stem))
+#: Whether the rung under comparison is a plain run, whose one scenario PyPSA spells no axis for.
+PLAIN = [True]
 
 
 #: PyPSA's axis names for the file's dimensions — a multi-period model keys by ``(period, timestep)`` where the file has one snapshot, and the growth limit by ``Carrier`` and ``periods``.
-AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period'}
+AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period', 'secant': 'segment'}
 
 
 def _keyed(labels) -> dict:
     """label per coordinate key — dim names dropped, ``snapshot`` first, so the two spellings align.
+
+    A component dimension sorts as PyPSA's ``name``, which is what it is on
+    PyPSA's side.
 
     Key components are strings, because a dimension's labels can be ints on
     one side and text on the other. A dimensionless array is its one label at
@@ -394,7 +522,18 @@ def _keyed(labels) -> dict:
     series = labels.to_series()
     if 'timestep' in series.index.names:
         series = series.droplevel('period')
+    if PLAIN[0] and 'scenario' in series.index.names:
+        if series.index.nlevels == 1:
+            return {(): int(series.iloc[0])}
+        series = series.droplevel('scenario')
+    for level in [name for name in series.index.names if str(name).endswith('-outage')]:
+        component = level.removesuffix('-outage')
+        series = series.rename(lambda v, c=component: prep.outage_label(c, v), level=level)
+        series.index = series.index.set_names('outage', level=level)
     series.index = series.index.set_names([AXES.get(name, name) for name in series.index.names])
+    components = [name for name in series.index.names if name in prep.DIM.values()]
+    if len(components) == 1 and 'name' not in series.index.names and series.index.nlevels > 1:
+        series.index = series.index.set_names('name', level=components[0])
     index = series.index
     if index.nlevels > 1:
         order = sorted(index.names, key=lambda name: (name != 'snapshot', name))
@@ -460,6 +599,8 @@ def _objective(model, relabel) -> tuple:
     flat = model.objective.expression.flat
     terms = []
     for row in flat.itertuples():
+        if not row.coeffs:
+            continue
         if hasattr(row, 'vars1'):
             pair = tuple(sorted((relabel(int(row.vars1)), relabel(int(row.vars2)))))
         else:
@@ -484,17 +625,23 @@ def structure(
         theirs_rows[kind] = theirs_rows.get(kind, 0) + theirs_rows.pop(f'GlobalConstraint-{label}', 0)
     ours_rows: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        if pattern is not None:
+        stands = stands_for(block.description, theirs)
+        pattern = templated(stands)
+        if pattern is not None and pattern.groups > 1:
+            family = [their_name for their_name in theirs_rows if pattern.match(their_name)]
+            theirs_rows[stands] = theirs_rows.get(stands, 0) + sum(theirs_rows.pop(t) for t in family)
+            if built_rows.get(name, 0):
+                ours_rows[stands][name] = built_rows[name]
+        elif pattern is not None:
             for their_name in theirs_rows:
                 if (found := pattern.match(their_name)) and by_label.get(name, {}).get(found.group(1)):
                     ours_rows[their_name][name] = by_label[name][found.group(1)]
         elif built_rows.get(name, 0):
-            ours_rows[stands_for(block.description)][name] = built_rows[name]
+            ours_rows[stands][name] = built_rows[name]
     ours_columns: dict[str, dict[str, int]] = defaultdict(dict)
     for name, block in declared.variables.items():
         if built_columns.get(name, 0):
-            ours_columns[stands_for(block.description)][name] = built_columns[name]
+            ours_columns[stands_for(block.description, theirs)][name] = built_columns[name]
 
     def table(theirs_side: dict, ours_side: dict) -> dict[str, dict]:
         names = {n for n, c in theirs_side.items() if c} | set(ours_side)
@@ -555,6 +702,14 @@ def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
     return differences, unexplained
 
 
+def _gc_key(their_name: str, key: object) -> object:
+    """A global-constraint row's key as ours spells it — its label, then the scenario where it has one."""
+    label = their_name.removeprefix('GlobalConstraint-')
+    if key == ():
+        return label
+    return (label, *((key,) if isinstance(key, str) else key))
+
+
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, object]:
     """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
 
@@ -563,16 +718,17 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
     """
     rows = defaultdict(list)
     for name, block in declared.constraints.items():
-        pattern = templated(stands_for(block.description))
-        if pattern is None:
-            rows[stands_for(block.description)].append((name, None))
+        stands = stands_for(block.description, theirs)
+        pattern = templated(stands)
+        if pattern is None or pattern.groups > 1:
+            rows[stands].append((name, None))
         else:
             for their_name in theirs.constraints:
                 if found := pattern.match(their_name):
                     rows[their_name].append((name, found.group(1)))
     columns = defaultdict(list)
     for name, block in declared.variables.items():
-        columns[stands_for(block.description)].append(name)
+        columns[stands_for(block.description, theirs)].append(name)
 
     ours_to_theirs = _label_map(theirs, ours, columns)
     templates = template_dims(declared, theirs)
@@ -603,16 +759,19 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
         verdict[bucket].append(pypsa_name)
 
     for pypsa_name, our_names in rows.items():
+        family = templated(pypsa_name)
         their_names = (
             [n for n in theirs.constraints if n.startswith('GlobalConstraint-')]
             if not pypsa_name[0].isupper()
+            else [n for n in theirs.constraints if family.match(n)]
+            if family is not None
             else ([pypsa_name] if pypsa_name in theirs.constraints else [])
         )
         their_rows: dict = {}
         for their_name in their_names:
             constraint = theirs.constraints[their_name]
             for key, row in _rows(constraint.flat, constraint.labels, lambda x: x).items():
-                their_rows[key if their_name == pypsa_name else their_name.removeprefix('GlobalConstraint-')] = row
+                their_rows[key if pypsa_name[0].isupper() else _gc_key(their_name, key)] = row
         our_rows: dict = {}
         for our_name, k in our_names:
             if our_name not in ours.constraints:
@@ -625,7 +784,9 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
             our_rows |= found
         if not pypsa_name[0].isupper():
             typed = {label for label, gc in gc_kinds.items() if gc == pypsa_name}
-            their_rows = {key: row for key, row in their_rows.items() if key in typed}
+            their_rows = {
+                key: row for key, row in their_rows.items() if (key if isinstance(key, str) else key[0]) in typed
+            }
         if not our_rows and not their_rows:
             continue
         if our_rows == their_rows:
@@ -649,20 +810,24 @@ def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, objec
 
 
 def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
-    """One rung through everything: the objective across the fence, the model against the model, the coverage."""
+    """One rung through everything: the objective across the fence, the model against the model, the coverage.
+
+    A rung that records a PyPSA bug is held to its oracle's objective alone:
+    PyPSA's own model of it is the one that is wrong, so there is no model to
+    compare against.
+    """
     from tests import linopy_lane as lpl
 
-    theirs = pypsa_model(stem)
+    bug = issue(stem)
     n = network(stem)
-    gc_kinds = {str(label): str(gc['type']) for label, gc in n.global_constraints.iterrows()}
-    with legacy():
-        status, condition = n.optimize(solver_name='highs', **keywords(stem))
-    assert status == 'ok', f'{stem}: pypsa did not solve — {status} / {condition}'
+    PLAIN[0] = not n.has_scenarios
+    gc_kinds = {str(label): str(gc['type']) for label, gc in prep.first_scenario(n.global_constraints).iterrows()}
     spec = spec_of(stem)
-    declared = mathspec.to_spec(spec)
+    whole = mathspec.to_spec(spec)
     try:
-        sources = prepared(spec, network(stem), stem)
-        built_model = sps.build(spec, sources)
+        tables = prep.sources(n, keywords(stem), outages(stem))
+        sources = prepared(spec, tables)
+        full = sps.build(spec, sources)
     except (
         sps.DataError,
         TypeError,
@@ -673,10 +838,33 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:160]
         print(f'{stem}: prep cannot prepare {spec.name} yet — {note}', file=sys.stderr)
         return {'spec': spec.name, 'unattached': note}, {'error': 'not attached'}, True
-    result = built_model.solve(solver_name='highs')
+    file_rows, file_columns = built_counts(full)
+    cut = rung_spec(stem, spec, file_rows, file_columns, fed(sources))
+    cut_sources = prepared(cut, tables)
+    model = sps.build(cut, cut_sources)
+    same_model(stem, full, model)
+    declared = mathspec.to_spec(cut)
+    committed(stem, spec.name, declared, cut_sources)
+    result = model.solve(solver_name='highs')
     assert result.is_ok, f'{stem}: specsolve did not solve — {result.termination_condition}'
-    solver = solver_size(n, built_model)
-    built_rows, built_columns = built(result, declared)
+    if bug is None:
+        n = solved(stem, n)
+        theirs = n.model
+        target = float(n.objective) + float(n.objective_constant)
+    else:
+        target = intended(stem)
+    stamps = {
+        'spec': spec.name,
+        'built_rows': file_rows,
+        'built_columns': file_columns,
+        'dims': {name: len(table) for name, table in sources.items() if name in whole.dimensions},
+        'attached_nonempty': fed(sources),
+        'conjuncts': conjunct_verdicts(full, whole.program),
+    }
+    if bug is not None:
+        return diverging(bug, stamps, result, target)
+    solver = solver_size(n, model)
+    built_rows, built_columns = built_counts(model)
     by_label = built_by_label(result, template_dims(declared, n.model))
     shape = structure(theirs, declared, gc_kinds, built_rows, built_columns, by_label) | {'solver': solver}
     differences, unexplained = explained(stem, shape, REASONS)
@@ -684,17 +872,8 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         print(line, file=sys.stderr)
     parity = {
         'specsolve_objective': round(float(result.objective), 6),
-        'matches': math.isclose(
-            float(result.objective), float(n.objective) + float(n.objective_constant), rel_tol=1e-9, abs_tol=1e-6
-        ),
-        'spec': spec.name,
-        'built_rows': built_rows,
-        'built_columns': built_columns,
-        'dims': {name: len(table) for name, table in sources.items() if name in declared.dimensions},
-        'attached_nonempty': sorted(
-            name for name, table in sources.items() if not hasattr(table, '__len__') or len(table)
-        ),
-        'conjuncts': conjunct_verdicts(built_model, mathspec.to_spec(spec).program),
+        'matches': math.isclose(float(result.objective), target, rel_tol=1e-9, abs_tol=1e-6),
+        **stamps,
         'duals': duals(result, n, declared, gc_kinds, REASONS),
         'structure': {
             'rows': [
@@ -710,16 +889,33 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
             'differences': differences,
         },
     }
-    cut = projected(stem, spec, parity, n)
-    committed(stem, spec.name, mathspec.to_spec(cut), prepared(cut, n, stem))
     try:
-        ours = lpl.build(spec, sources)
+        ours = lpl.build(cut, cut_sources)
     except Exception as error:
         note = f'{type(error).__name__}: {error}'.splitlines()[0][:200]
         return parity, {'error': note}, parity['matches'] and priced(parity) and shaped(parity)
     verdict = compare(theirs, ours, declared, gc_kinds)
-    structural = verdict
-    return parity, structural, parity['matches'] and priced(parity) and shaped(parity) and not verdict['mismatch']
+    return parity, verdict, parity['matches'] and priced(parity) and shaped(parity) and not verdict['mismatch']
+
+
+def diverging(bug: int, stamps: dict, result, target: float) -> tuple:
+    """The stamps of a rung that records a PyPSA bug: its objective against the oracle's, and what it built."""
+    reason = f'PyPSA/PyPSA#{bug} — PyPSA 1.3.0 gets this network wrong, so the objective is held to the oracle and no model is compared'
+    parity = {
+        'specsolve_objective': round(float(result.objective), 6),
+        'matches': math.isclose(float(result.objective), target, rel_tol=1e-9, abs_tol=1e-6),
+        'diverges': bug,
+        **stamps,
+        'duals': {'compared': 0, 'skipped': reason, 'negated': {}, 'per_name': {}, 'differences': {}},
+        'structure': {
+            'rows': [None, sum(stamps['built_rows'].values())],
+            'columns': [None, sum(stamps['built_columns'].values())],
+            'solver': None,
+            'per_name': {'rows': {}, 'columns': {}},
+            'differences': {},
+        },
+    }
+    return parity, {'error': reason}, parity['matches']
 
 
 def priced(parity: dict) -> bool:
@@ -822,16 +1018,18 @@ def main() -> int:
                 print(f'{stem}: duals of {name} differ by {d["max_abs_diff"]} with no reason', file=sys.stderr)
         shape_ = parity['structure']
         shaped_ = (
-            f'{shape_["rows"][0]} rows, {shape_["columns"][0]} columns'
+            f'held to the oracle, PyPSA/PyPSA#{parity["diverges"]}'
+            if 'diverges' in parity
+            else f'{shape_["rows"][0]} rows, {shape_["columns"][0]} columns'
             if not shape_['differences']
             else f'{len(shape_["differences"])} of {len(shape_["per_name"]["rows"]) + len(shape_["per_name"]["columns"])} names differ'
         )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
         if not good:
             broken.append(stem)
-    # the conjunct verdicts feed `coverage` below and are not committed
+    # the full file's inventory and the conjunct verdicts feed `coverage` below and are not committed
     recorded = {
-        stem: record | {'parity': {key: v for key, v in record['parity'].items() if key != 'conjuncts'}}
+        stem: record | {'parity': {key: v for key, v in record['parity'].items() if key not in UNCOMMITTED}}
         for stem, record in stamped.items()
     }
     RECORDS.write_text(json.dumps(recorded, indent=2, sort_keys=True) + '\n')
@@ -855,7 +1053,13 @@ def main() -> int:
         )
         if key in entry and name not in used
     )
-    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+    found = coverage(stamped)
+    known = [line for line in UNTESTED.read_text().splitlines() if line and not line.startswith('#')]
+    gaps = (
+        [gap for gap in found if gap not in known]
+        + [f'untested.txt: a rung tests this now, so the line goes — {line}' for line in known if line not in found]
+        + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+    )
     for gap in gaps:
         print(gap, file=sys.stderr)
     if broken or gaps:
