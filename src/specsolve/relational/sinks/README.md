@@ -129,7 +129,7 @@ sink can ingest* below gives it —
 ```
 
 — and `sinks.refusal(handoff, name)` answers before the load, off the model
-that was built: a `sos:` block whose dimension has no labels builds no set and
+that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is
 rewritten at the hand-off: the language writes a set out itself,

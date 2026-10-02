@@ -196,11 +196,11 @@ beside a variable `p` is accepted. The two are written under `dual/` and
 
 ### What each sink takes
 
-`solve` and `write` refuse a built model the sink cannot ingest, and the
-refusal names the sinks that do. The answer is read off the model the build
-produced, not the file: a square the data prices at zero, an integer variable
-no column is built for or a set with no members asks for nothing. Where a
-model can land is
+`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+sinks that do, and `solve` and `write` refuse the same. The answer is read off
+the model the build produced, not the file: a square the data prices at zero,
+an integer variable no column is built for or a set with no members asks for
+nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
 from whether it is sayable. The four quadratic rows, and the two sections
 HiGHS writes but will not read back, are probed against the shipped solvers by

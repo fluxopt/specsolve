@@ -70,9 +70,9 @@ def check(spec: Buildable) -> Program:
     commit. Every other verb reads the spec through the same door, so what this
     refuses they refuse too.
 
-    Whether a sink takes the model is not asked here: that is decided from the
-    model a build produces, where [`solve`][] and [`write`][] refuse one the
-    sink cannot ingest and name the sinks that do.
+    Whether a sink takes the model is not asked here: that is a fact about
+    the model a build produces, and [`Model.check`][specsolve.Model.check]
+    answers it with no solve.
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
@@ -344,10 +344,35 @@ class Model:
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct the format has no section for, read off
-                the built model, naming the sinks that take it.
+            SpecsolveError: A construct the format has no section for, as
+                [`check`][specsolve.Model.check] refuses it.
         """
         self._engine.write(path)
+
+    def check(self, sink: str) -> None:
+        """Refuse the built model where *sink* cannot take it; no solve, no file.
+
+        ::
+
+            with sps.build('dispatch.yaml', sources) as model:
+                model.check('highs')
+
+        The answer is read off the model this build produced, not off the
+        file: a square the data prices at zero, an integer variable no column
+        is built for or a set with no members asks for nothing. [`solve`][]
+        and [`write`][] refuse exactly what this refuses, with the same
+        message, so a CI job that builds every example and checks it pays for
+        no solve.
+
+        Args:
+            sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
+                output suffix (``.lp``, ``.mps``).
+
+        Raises:
+            SpecsolveError: A construct the sink cannot take, naming it and the
+                sinks that do; or a name belonging to no sink.
+        """
+        self._engine.check(sink)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.

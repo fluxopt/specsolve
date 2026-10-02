@@ -1,7 +1,8 @@
 """Whether a sink takes a model is asked of the model that was built, not of the file.
 
-The answer needs no installed solver — it is read off a declared table — and
-a refusal names the sinks that would have taken it. The file is an upper
+`Model.check(sink)` asks it with no solve. The answer needs no installed
+solver — it is read off a declared table — and a refusal names the sinks that
+would have taken it. The file is an upper
 bound: a square the data prices at zero, an integer variable no column is
 built for and a set whose variable has no column ask for nothing.
 """
@@ -45,15 +46,24 @@ INTEGRAL = PLAIN | {'variables': {'p': {'dims': ['g'], 'domain': 'integer', 'bou
 
 
 def _handoff(spec, sources=SOURCES):
-    """The built model a capability question is asked of."""
+    """The built model a capability question is asked of, as a stub sink is asked it."""
     with sps.build(spec, dict(sources)) as model:
         return model._engine._model.handoff
 
 
+def _refusal(spec, sink: str, sources=SOURCES) -> str | None:
+    """What `Model.check` says of *sink*, or ``None`` where it takes the build."""
+    with sps.build(spec, dict(sources)) as model:
+        try:
+            model.check(sink)
+        except SpecsolveError as refused:
+            return str(refused)
+    return None
+
+
 def _refusing(spec, sources=SOURCES) -> set[str]:
     """Every shipped sink that would turn the built model away."""
-    handoff = _handoff(spec, sources)
-    return {name for name in (*SOLVERS, *WRITERS) if sinks.refusal(handoff, name) is not None}
+    return {name for name in (*SOLVERS, *WRITERS) if _refusal(spec, name, sources) is not None}
 
 
 def test_a_plain_lp_is_taken_by_every_sink():
@@ -70,7 +80,7 @@ def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
 
 def test_an_unknown_sink_names_the_ones_there_are():
     with sps.build(PLAIN, dict(SOURCES)) as model, pytest.raises(SpecsolveError, match='unknown sink') as refused:
-        model.solve('cplex')
+        model.check('cplex')
     assert re.search(r'\.lp, \.mps, gurobi, highs, xpress', str(refused.value)), (
         'the refusal lists every sink there is, so a reader picks one instead of guessing'
     )
@@ -79,7 +89,7 @@ def test_an_unknown_sink_names_the_ones_there_are():
 def test_the_question_needs_no_solver_installed(monkeypatch):
     """The table answers for a solver that is not installed; `solver()` refuses it."""
     monkeypatch.setattr(SOLVERS['gurobi'], 'is_available', classmethod(lambda cls: False))
-    assert sinks.refusal(_handoff(WITH_A_SET), 'gurobi') is None
+    assert _refusal(WITH_A_SET, 'gurobi') is None
     with pytest.raises(ModuleNotFoundError):
         sinks.solver('gurobi')
 
@@ -144,9 +154,26 @@ def test_what_the_file_declares_and_the_data_never_builds_asks_highs_for_nothing
     integrality, a quadratic row, a set — and feeds data under which the build
     produces none of it. The built model is an LP, and HiGHS solves it.
     """
-    assert sinks.refusal(_handoff(spec, sources), 'highs') is None, 'the built model asks for nothing highs lacks'
+    assert _refusal(spec, 'highs', sources) is None, 'the built model asks for nothing highs lacks'
     with sps.solve(spec, dict(sources)) as result:
         assert result.is_ok
+
+
+@pytest.mark.parametrize(
+    ('spec', 'sink', 'verb'),
+    [
+        pytest.param(WITH_A_SET, 'highs', lambda model, tmp: model.solve('highs'), id='solve'),
+        pytest.param(WITH_A_QUADRATIC_ROW, '.mps', lambda model, tmp: model.write(tmp / 'm.mps'), id='write'),
+    ],
+)
+def test_check_refuses_exactly_what_the_verb_refuses(spec, sink, verb, tmp_path):
+    """One path, one message: a CI job that checks instead of solving learns the same thing."""
+    with sps.build(spec, dict(SOURCES)) as model:
+        with pytest.raises(SpecsolveError) as checked:
+            model.check(sink)
+        with pytest.raises(SpecsolveError) as acted:
+            verb(model, tmp_path)
+    assert str(checked.value) == str(acted.value)
 
 
 def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(monkeypatch):

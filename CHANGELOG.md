@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(sinks): a sink refuses what was built rather than what the file could declare, and check no longer takes a sink ([#1806](https://github.com/fluxopt/specsolve/pull/1806))
+- feat(sinks): a built model checks whether a sink takes it without a solve, and check no longer takes a sink ([#1806](https://github.com/fluxopt/specsolve/pull/1806))
 - docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
 - docs: a how-to guide chooses a solver or writes the model to a file, and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
 - docs: a how-to guide reads an answer into pandas or xarray ([#1789](https://github.com/fluxopt/specsolve/pull/1789))

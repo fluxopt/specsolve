@@ -13,9 +13,9 @@ sps.check('dispatch.yaml')
 ```
 
 `check` raises on a construct outside the language. Whether the solver takes
-the model is decided at the build: `solve` refuses a built model the solver
-cannot take, such as an `sos:` set on `highs`, which has no such concept until
-`Spec.expand()` writes it out as binaries
+the model is decided at the build: `model.check('highs')` refuses a built
+model the solver cannot take, such as an `sos:` set, which HiGHS has no
+concept of until `Spec.expand()` writes it out as binaries
 ([what each sink takes](../reference/api.md#what-each-sink-takes)).
 
 ## 2. Read the shape the build produced

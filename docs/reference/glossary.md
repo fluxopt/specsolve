@@ -77,7 +77,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **check** · **build** · **solve** · **write**
 : `check(spec)` validates and lowers. `build(spec, sources)` returns a
-  [Model](#the-chain).
+  [Model](#the-chain), whose `check(sink)` asks whether a sink takes it.
   `solve` and `write` build and then solve or stream in one call. There is no
   Python API for constructing a spec. Each has
   [its entry](api.md#run-a-spec).

@@ -54,7 +54,17 @@ result = sps.solve('dispatch.yaml', sources, solver_name='gurobi', solver_option
 
 Solvers take different constructs: HiGHS has no SOS sets, for example. `solve`
 refuses a built model the solver cannot take, before the load, and the
-refusal names the solvers that do take the construct. The full table is
+refusal names the solvers that do take the construct. To ask without solving,
+build and check:
+
+```python
+import specsolve as sps
+
+with sps.build('dispatch.yaml', sources) as model:
+    model.check('gurobi')
+```
+
+The full table is
 [what each sink takes](../reference/api.md#what-each-sink-takes).
 
 The answer is read off the model the build produced, not off the file. A file
