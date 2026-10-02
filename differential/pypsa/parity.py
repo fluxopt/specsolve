@@ -72,6 +72,8 @@ CORPUS = Path(sys.argv[1] if len(sys.argv) > 1 else 'corpus').resolve()
 RUNGS = CORPUS / 'examples' / 'references' / 'pypsa'
 HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
+#: What the corpus leaves untested, one line per gap as `coverage` prints it — energy-models/mathspec#830.
+UNTESTED = HERE / 'untested.txt'
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
@@ -1075,7 +1077,13 @@ def main() -> int:
         )
         if key in entry and name not in used
     )
-    gaps = coverage(stamped) + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+    found = coverage(stamped)
+    known = [line for line in UNTESTED.read_text().splitlines() if line and not line.startswith('#')]
+    gaps = (
+        [gap for gap in found if gap not in known]
+        + [f'untested.txt: a rung tests this now, so the line goes — {line}' for line in known if line not in found]
+        + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+    )
     for gap in gaps:
         print(gap, file=sys.stderr)
     if broken or gaps:

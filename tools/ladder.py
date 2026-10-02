@@ -379,7 +379,8 @@ def index(stamped: dict) -> str:
         '| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the"
-        ' file attached to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only'
+        " rung's own spec attached to the tables `prep.py` makes of it."
+        ' A difference in structure, duals or the linopy lane is allowed only'
         ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
         ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
@@ -390,10 +391,12 @@ def index(stamped: dict) -> str:
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"
-        ' partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.\n\n'
-        "Each rung's own model is the file projected onto what the rung builds; the runner solves the projection"
-        " too and holds it to the full file's objective (relative 1e-9), so a cut that lost a term is a red run"
-        ' rather than a shorter page.\n'
+        ' partially true somewhere and every parameter is fed somewhere. The runner fails on a gap not listed in'
+        ' `differential/pypsa/untested.txt`, and on a listed one a rung now closes; the rungs that would close them'
+        ' are [mathspec#830](https://github.com/energy-models/mathspec/issues/830).\n\n'
+        "Each rung's own model is the file cut to what the rung builds. The runner builds the whole file on the"
+        " rung's network, cuts it to the rows and columns that build produced, and proves the cut builds the same"
+        ' model, coefficient for coefficient, before anything solves; every comparison above solves the cut.\n'
     )
 
 
