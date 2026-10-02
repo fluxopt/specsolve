@@ -15,7 +15,11 @@ sps.solve('dispatch.yaml', sources, archive='case/')
 ```
 
 That writes `spec.yaml`, one `sources/<key>.parquet` per key the file
-declares, and `answer/` holding everything the solve produced:
+declares, and `answer/` holding everything the solve produced. Each source is
+held as the table the solve read, which
+[`sps.tidy`](../reference/api.md#specsolve.tidy) returns: a dimension as its
+labels and `specsolve_position`, a parameter as its dims and `value`, a
+relation as its columns:
 
 ```text
 case/
@@ -140,6 +144,8 @@ archived = sps.scan_archive('sweep/')
 archived.answer.scan('p')  # keyed by scenario, read at the collect
 sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
+
+A source the axis cuts is held uncut, the axis column first.
 
 `scan_archive` reads a sweep back spilled, as `spill_to=` left it.
 `load_archive` reads it back held, where it fits, and `sweep.primal('p')`

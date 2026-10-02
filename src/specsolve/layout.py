@@ -26,8 +26,6 @@ if TYPE_CHECKING:
 
     from mathspec import Spec
 
-    from specsolve.lanes import Source
-
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
@@ -67,9 +65,8 @@ def _staging_for(out: Path) -> Path:
 def write_archive(
     out: Path,
     spec: Spec,
-    sources: Mapping[str, Source],
-    *,
     tables: Mapping[str, pl.LazyFrame],
+    *,
     axis: Mapping[str, object] | None,
     answer: Path,
 ) -> Path:
@@ -79,11 +76,8 @@ def write_archive(
         out: Where to write; its parent is made if it does not exist. A
             directory named ``run=<name>`` is stamped ``<name>``.
         spec: The spec as written, held as ``spec.yaml``.
-        sources: What was attached, keyed as the file declares. A parquet path
-            is copied as its own bytes; anything else is written as *tables*
-            has it.
-        tables: The tidy table each source stands for, for every source that
-            is not a path.
+        tables: The tidy table each source stands for, keyed as the file
+            declares, each written as ``sources/<key>.parquet``.
         axis: The axis manifest, or ``None`` where the sources are not cut.
         answer: A directory holding the answer's own layout. Its record and
             metrics land as one file each, stamped with the run.
@@ -100,12 +94,9 @@ def write_archive(
         (tree / SOURCES_DIR).mkdir(parents=True)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         digests: dict[str, str] = {}
-        for name, given in sources.items():
+        for name, table in tables.items():
             member = tree / SOURCES_DIR / f'{name}.parquet'
-            if isinstance(given, (str, Path)):
-                shutil.copyfile(given, member)
-            else:
-                tables[name].collect().write_parquet(member, compression='zstd')
+            table.sink_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
         _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
         if axis is not None:

@@ -32,9 +32,10 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     """Read the caller's ``sources`` into the frames both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a
-    parameter as tidy ``(dims…, value)``, a dimension's index as the table it
-    arrived as with the labels under the dimension's own name, a relation as
-    the table it declares, one column per column under the column's own name.
+    parameter as tidy ``(dims…, value)``, a dimension's index as its one
+    column of labels under the dimension's own name, in the order they
+    arrived, a relation as the table it declares, one column per column under
+    the column's own name.
 
     Args:
         program: The lowered spec.
@@ -43,7 +44,8 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
-            accepts or short of the columns its declaration needs; a parameter
+            accepts or short of the columns its declaration needs; an index
+            holding a label twice; a parameter
             with two rows for one coordinate, a label its dimension lacks, a
             null or NaN value, or a column of another type than it declares;
             a relation with a null, a row twice, or a label its column's
@@ -80,6 +82,26 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
     validate_assumptions(program, sources)
     return sources
+
+
+#: The column a dimension's table numbers its labels in, from 0 in index order.
+POSITION = 'specsolve_position'
+
+
+def tidy_tables(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+    """The tables a solve attaches: [`tidy_sources`][] with each dimension's labels numbered.
+
+    A dimension comes back as ``(dim, specsolve_position)``, the position an
+    ``Int64`` from 0 in index order; a parameter and a relation as
+    [`tidy_sources`][] gives them.
+
+    Raises:
+        DataError: As [`tidy_sources`][] raises.
+    """
+    tables = tidy_sources(program, data)
+    for dim in program.dimensions:
+        tables[dim] = tables[dim].with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
+    return tables
 
 
 def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
@@ -121,11 +143,11 @@ def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
 
 
 def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
-    """One dimension's index, read once and held in memory.
+    """One dimension's labels, read once and held in memory as one column in the order they arrived.
 
     Raises:
-        DataError: A table with no column named after the dimension, or labels
-            no frame can be made of.
+        DataError: A table with no column named after the dimension, labels
+            no frame can be made of, or a label held twice.
     """
     table = as_frame(source, (dim,))
     table = table if table is not None else _labels_frame(dim, source, dtype)
@@ -135,7 +157,23 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    return table.collect().lazy()
+    labels = table.select(dim).collect()
+    _check_labels_are_unique(dim, labels[dim])
+    return labels.lazy()
+
+
+def _check_labels_are_unique(dim: str, labels: pl.Series) -> None:
+    """Refuse an index that holds a label twice: a label's position is the row it is on."""
+    twice = labels.filter(labels.is_duplicated()).unique(maintain_order=True).to_list()
+    if not twice:
+        return
+    shown = ', '.join(repr(label) for label in twice[:5]) + (' …' if len(twice) > 5 else '')
+    raise DataError(
+        f"index for dimension '{dim}' holds {len(twice)} label(s) more than once: {shown}. An index "
+        f'lists each label once, and its row is the position `shift` counts. Pass the label column '
+        f'alone, each label once: table.select({dim!r}).unique(maintain_order=True) keeps the first '
+        f'occurrence of each.'
+    )
 
 
 #: The declared dimension dtypes as the column an empty index becomes.
@@ -428,7 +466,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[La
             f"for '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
         )
-    return source.select(dim).unique(maintain_order=True).collect()[dim].to_list()
+    return source.select(dim).collect()[dim].to_list()
 
 
 def _checked_parameter(

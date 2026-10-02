@@ -49,12 +49,14 @@ class SolveArchive:
 
     Attributes:
         spec: The spec as written, read back as one ``Spec`` whatever went in.
-        sources: What was attached, keyed as the file declares it: a table
-            from [`load_archive`][], the path to one from [`scan_archive`][].
+        sources: What was attached, keyed as the file declares it, as
+            [`tidy`][specsolve.api.tidy] returns it: a table from
+            [`load_archive`][], the path to one from [`scan_archive`][].
         answer: What came back.
         source_digests: ``(run, source, digest)``, one row per source, so two
             archives of one spec over different numbers name the input that
-            moved. A digest is of the parquet bytes the archive holds, so two
+            moved. A digest is of the parquet bytes the archive holds, the
+            tidy table each source stands for, so two
             polars versions can write one table to different digests, and
             reading an archive does not verify them.
         metrics: What reaching the answer took, as one
@@ -78,7 +80,8 @@ class SweepArchive:
     Attributes:
         spec: The spec as written.
         sources: What the sweep was given, uncut. A table or a path, as
-            [`SolveArchive`][] holds them.
+            [`SolveArchive`][] holds them; a source the axis cuts holds the
+            axis column first.
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.

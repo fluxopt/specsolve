@@ -72,6 +72,9 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     assert not differing, (
         f'frames that came back changed: {differing} — the archive carries the labels, values and dtypes'
     )
+    tidied = sps.tidy(expanded(port_spec(name)), sources)
+    unlike = [key for key, table in tidied.items() if not unpacked[key].equals(table)]
+    assert not unlike, f'members that are not the table tidy() returns: {unlike}'
 
 
 def test_the_round_trip_solves_to_the_same_objective(
@@ -103,8 +106,10 @@ def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_y
 
     assert cost.columns == ['generator', 'value'], 'a positional sequence is spread over its labels'
     assert cost['value'].to_list() == list(DISPATCH_COST), 'in the order the index declares them'
-    assert snapshot.columns == ['snapshot'], 'a bare label range is written as an index table'
-    assert snapshot.height == DISPATCH_SNAPSHOTS, 'one row per label'
+    assert snapshot.columns == ['snapshot', 'specsolve_position'], 'a bare label range is written as an index table'
+    assert snapshot['specsolve_position'].to_list() == list(range(DISPATCH_SNAPSHOTS)), (
+        'one row per label, numbered in index order'
+    )
 
 
 def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
@@ -127,16 +132,18 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         )
 
 
-def test_a_parquet_path_is_copied_as_its_own_bytes(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
-    """Decoding and re-encoding parquet is byte-identical output for the CPU of a full read (#459)."""
+def test_a_parquet_path_is_archived_as_the_table_the_solve_read(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The archive holds one form whatever arrived, so a path is not copied as its own bytes."""
     load = dispatch_frame_inputs['load'].with_columns(pl.lit('a stray column').alias('note'))
     path = tmp_path / 'load.parquet'
     load.write_parquet(path)
-    archive = _archived(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}, tmp_path / 'dispatch.zip')
-    with zipfile.ZipFile(archive) as zipped:
-        assert zipped.read('sources/load.parquet') == path.read_bytes(), (
-            'the file travels untouched, stray column included — it is filtered where it attaches, as a path is'
-        )
+    sources = {**dispatch_frame_inputs, 'load': str(path)}
+    archive = _archived(dispatch_yaml, sources, tmp_path / 'dispatch')
+
+    held = pl.read_parquet(archive / 'sources' / 'load.parquet')
+    assert held.equals(sps.tidy(dispatch_yaml, sources)['load']), 'the stray column is gone, as it is at attach'
 
 
 def test_unpack_lays_the_archive_out_in_the_directory(
@@ -591,8 +598,8 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     assert study.answer.record['run'].unique().to_list() == ['study'], (
         'and the archive stamped its own name on every slice, which the sweep in memory had none of'
     )
-    assert study.sources['load'].equals(sources['load']), (
-        'the sliced source is archived whole, the column the axis cuts on included'
+    assert study.sources['load'].equals(sources['load'].select('scenario', 'snapshot', 'value')), (
+        'the sliced source is archived whole and tidy, the column the axis cuts on first'
     )
     again = sps.solve_over(study.spec, study.sources, study.axis)
     assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
@@ -716,7 +723,7 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': 1, 'specsolve': sps.__version__}, (
+    assert json.loads((out / 'format.json').read_text()) == {'layout': 2, 'specsolve': sps.__version__}, (
         'the layout this package writes, beside the version that wrote it'
     )
 
@@ -731,7 +738,7 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
     with pytest.raises(sps.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
-    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 1' in str(refused.value), (
+    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 2' in str(refused.value), (
         'the refusal names the layout it found and the version that wrote it'
     )
 

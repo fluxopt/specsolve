@@ -35,7 +35,7 @@ LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expre
 
 #: The layout a result, a sweep and an archive write to disk. A change to
 #: any of them raises it. Compared, never branched on.
-LAYOUT = 1
+LAYOUT = 2
 FORMAT_FILE = 'format.json'
 
 

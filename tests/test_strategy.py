@@ -10,6 +10,7 @@ import contextlib
 import datetime
 import json
 import multiprocessing
+import re
 import shutil
 import sys
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
@@ -2098,3 +2099,39 @@ def test_evaluate_over_the_original_index_refuses_a_quantity_reduced_over_the_sl
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').answer
     with pytest.raises(sps.SpecsolveError, match="over 'snapshot'"):
         answer.evaluate('sum(p * cost)', original_index=True)
+
+
+#: An index of another dimension that carries the axis column, under each axis.
+CUT_INDEXES = [
+    pytest.param(
+        MYOPIC,
+        lambda: {
+            **myopic_sources(),
+            'generator': pl.DataFrame({'generator': ['wind', 'gas', 'wind', 'gas'], 'period': [1, 1, 2, 2]}),
+        },
+        sps.EachCoordinate('period'),
+        "index for dimension 'generator' carries a 'period' column, and EachCoordinate('period')",
+        id='each-coordinate',
+    ),
+    pytest.param(
+        WINDOW,
+        lambda: {**horizon_sources(8), 'generator': pl.DataFrame({'generator': GENERATORS, 'snapshot': [0, 1]})},
+        sps.EachWindow('snapshot', steps=4, lookahead=0, into='t'),
+        "index for dimension 'generator' carries a 'snapshot' column, and EachWindow('snapshot')",
+        id='each-window',
+    ),
+]
+
+
+@pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_INDEXES)
+def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a_slice(spec, sources, axis, match):
+    """An index lists the labels every slice has; which of them a slice has is a parameter or a relation.
+
+    Cut by the axis, the index would make each slice a model over other labels.
+    """
+    with (
+        mock.patch.object(type(axis), '_slice', side_effect=AssertionError('the axis cut the sources')),
+        pytest.raises(sps.DataError, match=re.escape(match)) as refused,
+    ):
+        sps.solve_over(spec, sources(), axis)
+    assert 'in a parameter or a relation over' in str(refused.value), 'the message names the rewrite'

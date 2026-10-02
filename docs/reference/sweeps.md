@@ -74,11 +74,15 @@ Solved as a list, the slices key by `key_name=` and `original_index=` is
 refused. Two axes compose as a comprehension over the slices of one, each
 sliced again by the other.
 
-**Sources cross a slice in every shape `build` takes.** A table carrying the
-axis, table or parquet path, is filtered. A number, a `{label: value}` map or a
-bare sequence passes through as it is. A table carrying the axis that is short
-of a coordinate another table has raises an `SpecsolveWarning` before a slice is
-taken, naming both tables. That slice builds the source empty. An absent row is
+**Sources cross a slice in every shape `build` takes.** A parameter or a
+relation whose table carries the axis is filtered, as a table or as a parquet
+path. Every other source passes through as it is. **An index of another
+dimension that carries the axis is refused** before a slice is taken, because
+an index lists the labels that every slice has. Say which labels a slice has in
+a parameter or a relation over the dimension and the axis, where a missing row
+reads as absent. A table carrying the axis that is short of a coordinate
+another table has raises a `SpecsolveWarning` before a slice is taken, naming
+both tables. That slice builds the source empty. An absent row is
 how a model masks, so the gap is reported rather than refused.
 
 ## Reading a sweep

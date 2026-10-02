@@ -51,7 +51,7 @@ from specsolve.relational.parquet import (
 )
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import attachable, tidy_sources, unknown_source_keys_message
+from specsolve.sources import attachable, tidy_sources, tidy_tables, unknown_source_keys_message
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
 
-__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'write']
+__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
 
 def check(spec: Buildable) -> Program:
@@ -105,6 +105,30 @@ def check(spec: Buildable) -> Program:
     for note in advice(program):
         warnings.warn(str(note), SpecsolveWarning, stacklevel=2)
     return program
+
+
+def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
+    """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
+
+    What an archive holds under ``sources/``, so a table that comes back
+    from here goes back in as a source unchanged. Every source is read and
+    checked as [`build`][] reads and checks it.
+
+    Args:
+        spec: As [`check`][] takes it.
+        sources: As [`build`][] takes them.
+
+    Returns:
+        Each dimension as ``(dim, specsolve_position)``: its labels once each,
+        and the ``Int64`` position from 0 that ``shift`` counts. Each
+        parameter as ``(dims…, value)``. Each relation as the columns it
+        declares.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        DataError: As [`build`][] refuses the sources.
+    """
+    return {name: table.collect() for name, table in tidy_tables(lowered(spec), sources).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -295,11 +319,9 @@ class Model:
                 the model solves again from the file alone. A ``.zip`` suffix
                 packs it into one file and anything else is a directory. What
                 the build and its solves have spent goes in beside the answer,
-                as [`Metrics`][specsolve.relational.parquet.Metrics]. The
-                sources go in through the door [`build`][] reads them through:
-                a parquet path is copied as its own bytes, anything else is
-                written as the table it stands for, and members are stored
-                uncompressed.
+                as [`Metrics`][specsolve.relational.parquet.Metrics]. Each
+                source goes in as the table [`tidy`][] returns for it, and
+                members are stored uncompressed.
 
         Returns:
             The solution, holding this model.
@@ -337,8 +359,7 @@ class Model:
             answer = answered.save(scratch)
             taken = self._engine.diagnostics().metrics()
             write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            tables = tidy_sources(self._program, self._sources)
-            write_archive(out, self._spec, self._sources, tables=tables, axis=None, answer=answer)
+            write_archive(out, self._spec, tidy_tables(self._program, self._sources), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

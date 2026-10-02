@@ -21,7 +21,7 @@ inputs = pl.read_parquet('runs/*/sources.parquet')
 |---|---|---|
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
-| `sources.parquet` | source per archive | what each input's bytes digest to |
+| `sources.parquet` | source per archive | what each input's table digests to |
 
 **Every row says which archive it came from.** `run` is the archive's own
 name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`. It is on all
@@ -127,7 +127,8 @@ inputs.sort('run').with_columns(before=pl.col('digest').shift().over('source')).
 ```
 
 **The digest is of the bytes the archive holds**, so hashing
-`sources/load.parquet` gives the row back. Two archives of the same data
+`sources/load.parquet` gives the row back. That file is the table the solve
+read, not the file it was given. Two archives of the same data
 written by different versions of polars can differ, and reading an archive
 does not verify the digests
 ([the rule](../reference/api.md#specsolve.SolveArchive)).

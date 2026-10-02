@@ -60,7 +60,7 @@ from specsolve.relational.parquet import (
     write_whole,
 )
 from specsolve.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
-from specsolve.sources import least_value, tidy_sources
+from specsolve.sources import least_value, tidy_tables
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
@@ -364,10 +364,10 @@ def _least(program: Program, sources: Mapping[str, Source], name: str) -> int:
 class EachCoordinate:
     """One slice per coordinate of *dim* — a column the sources carry.
 
-    Scenarios, draws, investment periods. Sources carrying *dim* are filtered
-    to one coordinate and the column dropped, so the model never mentions it —
-    a *dim* the spec declares is refused; every other source passes through
-    untouched. The slices run in the coordinates' sorted order, which is the
+    Scenarios, draws, investment periods. Parameters and relations carrying
+    *dim* are filtered to one coordinate and the column dropped, so the model
+    never mentions it — a *dim* the spec declares is refused, and so is an
+    index that carries it; every other source passes through untouched. The slices run in the coordinates' sorted order, which is the
     order a ``carry`` chains them in.
     """
 
@@ -1092,8 +1092,8 @@ def solve_over(
         spec: As [`check`][specsolve.api.check] takes it. Parsed once, whichever
             executor runs the slices.
         sources: As [`build`][specsolve.api.build] takes them, every shape
-            included; the axis filters the tables that carry it and passes
-            the rest through.
+            included; the axis filters the parameters and relations that carry
+            it and passes the rest through.
         axis: [`EachCoordinate`][], [`EachWindow`][], or a list of
             ``(key, sources)`` written by hand.
         carry: ``{parameter: variable}``: one slice's answer copied into the
@@ -1142,8 +1142,8 @@ def solve_over(
             an axis the program does not allow; a *spill_to* directory holding
             another sweep. All refused before a slice is taken, and every
             one answerable from the declarations before a source is read.
-        DataError: No source carries the axis, or the axis produced no
-            slices.
+        DataError: No source carries the axis, an index of another
+            dimension carries it, or the axis produced no slices.
 
     Warns:
         SpecsolveWarning: A source carrying the axis that is short of a
@@ -1163,6 +1163,7 @@ def solve_over(
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
         _check_the_carry(plan, axis, sources)
+        _check_no_index_is_cut(program, sources, axis)
         axis._check_the_program(program, sources)
         slices, original = axis._slice(sources, key_name)
         hand_built = False
@@ -1202,18 +1203,55 @@ def _archive_the_sweep(
 ) -> None:
     """Write the sweep's question and its answers to *out*.
 
-    Each source's tidy shape comes from *one_slice*; the ones the axis cuts
-    are written uncut. A spilled sweep is packed from its spill.
+    Each source's tidy table comes from *one_slice*; the ones the axis cuts
+    are written uncut, as [`_uncut`][] gives them. A spilled sweep is packed
+    from its spill.
     """
     manifest = axis_manifest(axis)
     if carry:
         manifest['carry'] = dict(carry)
-    tables = {**tidy_sources(program, one_slice), **carries(sources, axis.dim)}
+    tidied = tidy_tables(program, one_slice)
+    cut = {name: _uncut(program, axis, name, table) for name, table in carries(sources, axis.dim).items()}
+    tables = {name: cut.get(name, tidied[name]) for name in sources}
     if folded._spill is not None:
-        write_archive(out, spec, sources, tables=tables, axis=manifest, answer=folded._spill.directory)
+        write_archive(out, spec, tables, axis=manifest, answer=folded._spill.directory)
         return
     with beside(out) as scratch:
-        write_archive(out, spec, sources, tables=tables, axis=manifest, answer=folded.save(scratch))
+        write_archive(out, spec, tables, axis=manifest, answer=folded.save(scratch))
+
+
+def _uncut(program: Program, axis: EachCoordinate | EachWindow, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
+    """A source the axis cuts, as its tidy columns with the axis column first.
+
+    A window's local index is not a column of the uncut table: the axis
+    column stands where it would be.
+    """
+    declared = (
+        [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
+    )
+    local = axis.into if isinstance(axis, EachWindow) else None
+    return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
+
+
+def _check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis: EachCoordinate | EachWindow) -> None:
+    """Refuse an index of a dimension other than the axis's own that carries the axis column.
+
+    An index says which labels the model has, and a sweep cuts the tables that
+    carry the axis, so a carried index would make each slice a model over
+    other labels. The axis's own index carries the axis as its labels, and
+    the axis refuses that dimension in its own words.
+    """
+    for dim in program.dimensions:
+        table = as_frame(sources[dim]) if dim in sources and dim != axis.dim else None
+        if table is None or axis.dim not in table.collect_schema().names():
+            continue
+        raise DataError(
+            f"index for dimension '{dim}' carries a '{axis.dim}' column, and {type(axis).__name__}"
+            f"('{axis.dim}') cuts every table that carries '{axis.dim}'. An index is not cut: it lists "
+            f"the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
+            f"slice has in a parameter or a relation over ('{dim}', '{axis.dim}'), where a missing row "
+            f'already reads as absent.'
+        )
 
 
 def attach_sweep_readers(
