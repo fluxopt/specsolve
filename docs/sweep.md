@@ -107,11 +107,11 @@ rolling = sps.solve_over(
 print(rolling.record.select('hour_start', 'termination_condition', 'objective'))
 ```
 
-Each window is keyed by the hour it starts at. `original_index=True` keeps the
-hours each window owns, and reads them back over `hour` as one schedule:
+Each window is keyed by the hour it starts at. The readers return the answer:
+the hours each window owns, read back over `hour` as one schedule:
 
 ```python exec="true" source="material-block" result="text" session="sweep"
-print(rolling.primal('soc', original_index=True))
+print(rolling.primal('soc'))
 ```
 
 The store charges in the windy hours and discharges in the calm ones. The

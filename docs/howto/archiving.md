@@ -121,29 +121,60 @@ with sps.build('dispatch.yaml', sources) as model:
     model.update({'p_max': doubled}).solve(archive='case/')
 ```
 
+## Archive a sweep
+
+`archive=` on `solve_over` writes the sweep's answer at the paths a single
+solve uses, one file per name. A rolling horizon's `answer/primal/soc.parquet`
+is over `snapshot`, as `sweep.primal('soc')` returns it:
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t')
+sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/')
+```
+
+The archive carries the axis and the carry, so the sweep runs again from the
+file alone:
+
+```python
+archived = sps.load_archive('roll/')
+
+archived.answer.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
+sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+```
+
+**Keep the windows where you will read them per window.** `keep_windows=True`
+also writes each window's frames, lookahead rows included, under
+`answer/windows/`. Then `per_window=True` reads off the archive:
+
+```python
+sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)
+sps.load_archive('roll/').answer.primal('soc', per_window=True)  # (snapshot_start, t, value)
+```
+
+Without them, `per_window=True` and an expression the file never named are
+refused. Solve again from the archive to get them back.
+
 ## Archive a sweep too large to hold
 
 `spill_to=` writes each slice's frames as the fold goes, so the sweep holds
-one slice at a time. `archive=` packs the whole sweep. Pass both and the spill
-is what the archive packs, so the sweep is archived without ever being held:
+one slice at a time. `archive=` packs the whole sweep. Pass both and the
+archive reads its answer off the spill, so the sweep is archived without ever
+being held:
 
 ```python
 axis = sps.EachCoordinate('scenario')
 sps.solve_over('dispatch.yaml', sources, axis, spill_to='work/', archive='sweep/')
 ```
 
-The archive carries the axis, so the sweep runs again from the file alone:
-
 ```python
 archived = sps.scan_archive('sweep/')
 
 archived.answer.scan('p')  # keyed by scenario, read at the collect
-sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
-`scan_archive` reads a sweep back spilled, as `spill_to=` left it.
-`load_archive` reads it back held, where it fits, and `sweep.primal('p')`
-answers on that one.
+`scan_archive` leaves the answer on disk, and `scan` reads it. `load_archive`
+reads it into memory, where it fits, and `sweep.primal('p')` answers on that
+one.
 
 ## Read a directory of them
 
