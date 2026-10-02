@@ -220,16 +220,16 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 ## Row types
 
-**Record** · **Metrics** · **SliceMetrics**
-: The three saved rows, each a `NamedTuple` that names its own columns:
+**Record** · **Metrics**
+: The two saved rows, each a `NamedTuple` that names its own columns:
   [`Record`](api.md#specsolve.relational.parquet.Record), how a solve
-  terminated; [`Metrics`](api.md#specsolve.relational.parquet.Metrics), what
-  it took; and [`SliceMetrics`](api.md#specsolve.relational.parquet.SliceMetrics),
-  one slice of a sweep's share of that.
+  terminated, and [`Metrics`](api.md#specsolve.relational.parquet.Metrics),
+  what it took. A sweep writes one of each per slice, with the same columns
+  as a single solve; `slice_axis` and `slice` say which slice.
 
   A **row** is a value and gets a type; a **table** stays a
   [Table](#the-data). So a result hands back its one `Record`, while
-  `Record` and `SliceMetrics` are the rows behind `sweep.record` and
+  `Record` and `Metrics` are the rows behind `sweep.record` and
   `sweep.metrics` rather than what those hand back, and a reader that wants
   one row of a table asks the frame for it.
 

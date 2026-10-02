@@ -22,7 +22,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve.api import Model
-from specsolve.relational.parquet import SliceMetrics
+from specsolve.relational.parquet import Metrics, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
@@ -263,6 +263,8 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'solved_at',
         'run',
         'model_digest',
+        'slice_axis',
+        'slice',
     ], 'the record, keyed'
     assert set(runs.primal('p').columns) == {'scenario', 'snapshot', 'generator', 'value'}
     assert runs.primal('p').height == 3 * 4 * 2
@@ -1265,12 +1267,13 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
         'dual',
         'expression',
         'format.json',
+        'keys.parquet',
         'metrics',
         'owned.parquet',
         'primal',
         'record',
         'sweep.json',
-    ], 'the three kinds, the record, the manifest, the layout it is in, and the way back'
+    ], 'the three kinds, the record, the manifest, the keys, the layout it is in, and the way back'
     assert sorted(p.name for p in (out / 'expression').iterdir()) == ['spend', 'window_spend'], (
         'every declared expression the slices evaluated'
     )
@@ -1799,25 +1802,19 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
     with _entered(make_executor() if make_executor else None) as executor:
         runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=executor)
     frame = runs.metrics
-    assert frame.columns == [
-        'scenario',
-        'columns',
-        'rows',
-        'nonzeros',
-        'loaded',
-        'attach_seconds',
-        'build_seconds',
-        'handoff_seconds',
-        'solve_seconds',
-    ], 'the key, then the size, then the one flag, then the clocks in the order the phases run'
+    assert frame.columns == ['scenario', *Metrics._fields], 'the key, then the columns a single solve writes'
     assert frame['scenario'].to_list() == runs.keys
+    assert frame['slice'].to_list() == ['high', 'low', 'mid'], 'the key again, as text, in slice order'
+    assert frame['slice_axis'].unique().to_list() == ['scenario'], 'every row names the axis it is a slice of'
     assert frame['columns'].unique().to_list() == [8], 'every slice is the same model over different numbers'
     assert (frame.select(pl.col('attach_seconds', 'build_seconds', 'solve_seconds') >= 0).to_numpy()).all(), (
         'a clock is never negative'
     )
-    assert frame['loaded'].to_list() == ([True, False, False] if executor is None else [True] * 3), (
+    assert frame['solves'].to_list() == [1, 1, 1], "each row is one slice's solve, not the model's running total"
+    assert frame['loads'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
         'a serial sweep loads the solver once and pushes values after; a pooled one builds every slice cold'
     )
+    assert frame['write_seconds'].to_list() == [0.0] * 3, 'a sweep writes no model file'
 
 
 # ---------------------------------------------------------------------------
@@ -1832,24 +1829,30 @@ def _spilled(directory, **kwargs) -> strategy.Sweep:
     return sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, spill_to=directory, **kwargs)
 
 
-def test_a_slices_metrics_are_written_in_the_columns_its_type_declares(tmp_path):
-    """The fold and the spill both write a slice's metrics as `SliceMetrics` declares them."""
+@pytest.mark.parametrize(
+    ('table', 'row_type'), [pytest.param('record', Record, id='record'), pytest.param('metrics', Metrics, id='metrics')]
+)
+def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path, table, row_type):
+    """The spill writes a slice's rows as `Record` and `Metrics` declare them, the slice named in
+    `slice_axis` and `slice` rather than in a column of the key's own name, so a glob over sweeps
+    and single solves reads one schema."""
     runs = _spilled(tmp_path / 'sweep')
-    written = pl.read_parquet(sorted((tmp_path / 'sweep' / 'metrics').glob('*.parquet')))
+    written = pl.read_parquet(sorted((tmp_path / 'sweep' / table).glob('*.parquet')))
 
-    assert written.columns == [runs.key_name, *SliceMetrics._fields], (
-        'the key the sweep is cut on, then the metrics in the order the type declares them'
-    )
-    assert runs.metrics.columns == written.columns, 'the held table is the spilled one, column for column'
+    assert written.columns == list(row_type._fields), 'the columns the type declares, in its order, and no key column'
+    assert written['slice_axis'].unique().to_list() == [runs.key_name], 'the axis the sweep is cut on'
+    assert written['slice'].to_list() == [str(key) for key in runs.keys], 'each slice key as text'
+    held = getattr(runs, table)
+    assert held.columns == [runs.key_name, *written.columns], 'the held table is the written one, keyed'
 
 
 def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
     """A resume reads a slice's record back as values, so a file short of a column is refused by name."""
     _spilled(tmp_path / 'sweep')
     first = min((tmp_path / 'sweep' / 'metrics').glob('*.parquet'))
-    pl.read_parquet(first).drop('loaded').write_parquet(first)
+    pl.read_parquet(first).drop('loads').write_parquet(first)
 
-    with pytest.raises(sps.LayoutError, match=r"SliceMetrics row that is short of \['loaded'\]"):
+    with pytest.raises(sps.LayoutError, match=r"Metrics row that is short of \['loads'\]"):
         _spilled(tmp_path / 'sweep')
 
 
@@ -1936,13 +1939,14 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_p
     with pytest.raises(RuntimeError, match='went away'):
         _spilled(tmp_path)
     monkeypatch.setattr(strategy, '_answers', answered)
+    assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
     resumed = _spilled(tmp_path)
     assert answer_of(resumed).equals(answer_of(priced))
     assert resumed.scan('soc', original_index=True).collect().equals(priced.primal('soc', original_index=True))
-    loaded = priced.metrics['loaded'].to_list()
-    loaded[2] = True
-    assert resumed.metrics['loaded'].to_list() == loaded, (
+    loads = priced.metrics['loads'].to_list()
+    loads[2] = 1
+    assert resumed.metrics['loads'].to_list() == loads, (
         'the two read back are the record they left, and the third loads where the uninterrupted run updated'
     )
 
