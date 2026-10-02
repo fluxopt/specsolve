@@ -6,9 +6,11 @@ take is a refusal naming both rather than a ``kError`` from inside a library.
 - A sink takes a construct or it does not; nothing is rewritten at the
   hand-off.
 - An exclusion is a pair a sink takes separately and refuses together.
-- ``nonconvex_quadratic_objective`` is decided by the data, so ``check``
-  cannot answer it; the sink that meets it at solve time reads the takers off
-  this table.
+- What a model needs is read off the hand-off, so a square the data prices
+  at zero, an integer variable no column is built for or a set with no
+  members asks for nothing. ``nonconvex_quadratic_objective`` is decided by
+  the coefficients' signs as well, so no table answers it; the sink that meets
+  it at solve time reads the takers off this one.
 - A descriptor describes the sink as shipped, not the library it wraps.
 """
 
@@ -21,7 +23,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
-    from mathspec.program import Program
+    from specsolve.relational.sinks.handoff import Handoff
 
 #: What a model may need a sink to have.
 Capability = Literal[
@@ -75,17 +77,22 @@ class Capabilities:
         return None
 
 
-def required(program: Program, /) -> frozenset[Capability]:
-    """What *program* needs a sink to have, decided with no data attached, so convexity never appears."""
-    footprint = program.footprint
+def required(handoff: Handoff, /) -> frozenset[Capability]:
+    """What the built model in *handoff* needs a sink to have.
+
+    Read off what was built rather than what the file declares: the build
+    drops a zero coefficient, so a square the data never prices is not a
+    quadratic term, and a declared integer variable with no column built asks
+    for no integrality. Convexity never appears.
+    """
     needed: set[Capability] = set()
-    if footprint.domains - {'continuous'}:
+    if (handoff.cols['vtype'] != 'continuous').any():
         needed.add('integrality')
-    if 'objective' in footprint.quadratic:
+    if handoff.quad.height:
         needed.add('quadratic_objective')
-    if 'constraint' in footprint.quadratic:
+    if handoff.qmatrix.height:
         needed.add('quadratic_constraint')
-    if footprint.sos_types:
+    if handoff.sos.height:
         needed.add('sos')
     return frozenset(needed)
 
