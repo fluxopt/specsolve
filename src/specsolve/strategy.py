@@ -753,6 +753,15 @@ class Sweep:
             return frame
         return frame if self._stitch is None else self._stitch.restore(frame, self.key_name)
 
+    def _unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
+        """Why *frame*, as the slices produced it, has no answer; ``None`` where it has one.
+
+        Only an EachWindow sweep stitches, so only its frames can lack an
+        answer. The archive leaves out the file of a name this refuses, and
+        [`to_dataset`][] leaves the name out, so the two agree.
+        """
+        return None if self._stitch is None else self._stitch.unstitchable(frame)
+
     def scan(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pl.LazyFrame:
         """One name's answer as a `polars.LazyFrame`.
 
@@ -920,20 +929,23 @@ class Sweep:
 
         Args:
             names: What to include; none means every name of *kind* the
-                sweep holds.
+                sweep has an answer for. A name an EachWindow sweep cannot
+                stitch is left out, as an archive leaves out its file; named,
+                or read ``per_window``, it is read as [`primal`][] reads it.
             kind: ``primal``, ``dual`` or ``expression``.
             per_window: Read an EachWindow sweep one window at a time instead
                 of its answer.
 
         Raises:
-            SpecsolveError: The sweep holds no values of *kind* at all, or its
-                frames are on disk; or as [`primal`][] raises.
+            SpecsolveError: The sweep has no answer of *kind* at all — the
+                message names each name it left out, and why — or its frames
+                are on disk; or as [`primal`][] raises.
         """
         held = names or self._names_held(kind, per_window=per_window)
         return tidy_to_dataset(held, lambda name: self.to_dataarray(name, kind, per_window=per_window))
 
     def save(self, directory: str | Path) -> Path:
-        """Everything the sweep holds, per window, written as ``spill_to=`` would have written it.
+        """Everything the sweep holds, per slice, written as ``spill_to=`` would have written it.
 
         The same layout: ``<kind>/<name>/<position>.parquet`` for every
         primal, dual and expression, the slice key a column of each, with
@@ -959,7 +971,7 @@ class Sweep:
         write_reasons(spill.directory, self._no_duals, self._absent)
         for position, key in enumerate(self.keys):
             meta = Record(**self.record.drop(self.key_name).row(position, named=True))
-            taken = SliceMetrics(**self.metrics.drop(self.key_name).row(position, named=True))
+            taken = SliceMetrics(**self.metrics.select(SliceMetrics._fields).row(position, named=True))
             frames = {
                 kind: {name: keyed[key] for name, keyed in names.items() if key in keyed}
                 for kind, names in by_key.items()
@@ -969,14 +981,27 @@ class Sweep:
         return spill.directory
 
     def _names_held(self, kind: str, *, per_window: bool) -> tuple[str, ...]:
-        """Every name of *kind* the sweep holds, sorted; none at all is refused."""
+        """Every name of *kind* there is an answer for, sorted; none at all is refused.
+
+        Per window, every name the windows hold. A live sweep leaves out what
+        ``_unstitchable`` refuses, which an archive's answer already lacks.
+        """
         self._held_here()
         kind = reader_kind(kind)
         if per_window:
             self._check_per_window()
-        held = self._answer[kind] if self._answer is not None and not per_window else self._held(kind)
+        left_out = dict(self._absent.get(kind, {}))
+        if self._answer is not None and not per_window:
+            held: Mapping[str, object] = self._answer[kind]
+        else:
+            held = {}
+            for name, frames in self._held(kind).items():
+                if not per_window and (why := self._unstitchable(frames[0])):
+                    left_out[name] = why
+                else:
+                    held[name] = frames
         if not held:
-            absent = self._no_duals if kind == 'dual' else None
+            absent = (self._no_duals if kind == 'dual' else None) or _none_answered(LABELS[kind], left_out)
             raise SpecsolveError(absent or _nothing_to_read(LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
 
@@ -993,12 +1018,19 @@ _NO_WINDOWS = (
 )
 
 #: Where an archive keeps a windowed sweep's per-window frames, under its ``answer/``.
-WINDOWS_DIR = 'windows'
+_WINDOWS_DIR = 'windows'
 
 
 def _by_key(frames: Sequence[pl.DataFrame], key_name: str) -> dict[Label, pl.DataFrame]:
     """One name's held frames by the slice key each carries, the key column dropped; an empty frame is left out."""
     return {frame[key_name][0]: frame.drop(key_name) for frame in frames if frame.height}
+
+
+def _none_answered(kind: str, left_out: Mapping[str, str]) -> str | None:
+    """The message for a sweep whose every *kind* was left out of its answer, or ``None`` where none was."""
+    if not left_out:
+        return None
+    return f'no {kind} of this sweep has an answer, and each one says why:\n{_listed(dict(sorted(left_out.items())))}'
 
 
 def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], record: pl.DataFrame) -> str:
@@ -1118,7 +1150,7 @@ def read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
         }
         for kind in KINDS
     }
-    windows = under / WINDOWS_DIR
+    windows = under / _WINDOWS_DIR
     opened = replace(opened, _answer=answer, _windows=windows.is_dir())
     spill = _Spill(windows, opened.key_name, opened.record[opened.key_name].dtype) if windows.is_dir() else None
     if not whole:
@@ -1351,14 +1383,14 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
         for name in spill.held(kind):
             frame = spill.scan(kind, name)
             assert frame is not None, 'a name the spill lists has files'
-            if sweep._stitch is not None and (why := sweep._stitch.unstitchable(frame)):
+            if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
             write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
         if keep_windows and (spill.directory / kind).is_dir():
-            shutil.copytree(spill.directory / kind, under / WINDOWS_DIR / kind)
+            shutil.copytree(spill.directory / kind, under / _WINDOWS_DIR / kind)
     if keep_windows:
-        (under / WINDOWS_DIR).mkdir(exist_ok=True)
+        (under / _WINDOWS_DIR).mkdir(exist_ok=True)
     write_reasons(under, sweep._no_duals, absent)
     return under
 

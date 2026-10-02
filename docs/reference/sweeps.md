@@ -131,6 +131,11 @@ per_window=True for the value of each window, or read a quantity that keeps 't'
 and aggregate its answer.
 ```
 
+**`to_dataset()` with no names reads every name that has an answer.** It
+leaves out a quantity that is not over the windowed dimension, as an archive
+leaves out its file. A name you give is read or refused as above. With
+`per_window=True`, every name is read.
+
 **`save` writes every kind, per window.** `sweep.save('runs/')` writes what
 `spill_to=` would have written, so the directory is a spilled sweep. The call
 that made the sweep, pointed at it with `spill_to=`, reads it back without
