@@ -103,6 +103,37 @@ def _case_collision(program: Program) -> str | None:
     return None
 
 
+#: What every column specsolve adds beside a model's own starts with, so no
+#: name a spec declares may.
+RESERVED = 'specsolve_'
+
+
+def _reserved_name(program: Program) -> str | None:
+    """The first declaration whose name starts with [`RESERVED`][], as the sentence refusing it."""
+    named = (
+        *((f"dimension '{name}'", name) for name in program.dimensions),
+        *((f"relation '{name}'", name) for name in program.relations),
+        *(
+            (f"column '{role}' of relation '{relation}'", role)
+            for relation, held in program.relations.items()
+            for role, _ in held.columns
+        ),
+        *((f"parameter '{name}'", name) for name in program.parameters),
+        *((f"variable '{name}'", name) for name in program.variables),
+        *((f"constraint '{name}'", name) for name in program.constraints),
+        *((f"named expression '{name}'", name) for name in program.expressions),
+        *((f"sos set '{name}'", name) for name in program.sos),
+        *((f"assumption '{name}'", name) for name in program.assumptions),
+    )
+    for which, name in named:
+        if name.startswith(RESERVED):
+            return (
+                f'{which} starts with {RESERVED!r}, which is reserved: every column specsolve adds beside a '
+                f"model's own starts with it, so an archive or a sweep could write one name twice. Rename it."
+            )
+    return None
+
+
 def lowered(spec: Buildable) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
@@ -114,7 +145,7 @@ def lowered(spec: Buildable) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case.
+            by case, or a name that starts with [`RESERVED`][].
     """
     program = declared(spec).program
     if program.given:
@@ -132,6 +163,6 @@ def lowered(spec: Buildable) -> Program:
             f"Expand it first: to_spec(spec).expand('piecewise') keeps every sos: block for a sink that "
             f'takes a set, and to_spec(spec).expand() expands the sets into binaries too.'
         )
-    if (refused := _case_collision(program)) is not None:
+    if (refused := _case_collision(program) or _reserved_name(program)) is not None:
         raise SpecsolveError(refused)
     return program

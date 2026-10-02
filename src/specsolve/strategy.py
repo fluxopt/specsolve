@@ -40,7 +40,7 @@ from specsolve.errors import (
     no_model_behind_this_answer_message,
 )
 from specsolve.frames import as_frame
-from specsolve.lanes import declared
+from specsolve.lanes import RESERVED, declared
 from specsolve.layout import beside, check_the_target, write_archive
 from specsolve.relational.parquet import (
     KINDS,
@@ -48,6 +48,7 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     RECORD_FILE,
     RECORD_SCHEMA,
+    RUN,
     Record,
     SliceMetrics,
     check_format,
@@ -335,12 +336,12 @@ class _Spill:
     def scan(self, kind: str, name: str) -> pl.LazyFrame | None:
         """Every slice's frame of *name*, lazily and in slice order, or ``None`` where no slice wrote one."""
         under = self.directory / kind / name
-        return pl.scan_parquet(sorted(under.glob('*.parquet'))) if under.is_dir() else None
+        return pl.scan_parquet(sorted(under.glob('*.parquet'))).drop(RUN, strict=False) if under.is_dir() else None
 
     def whole(self, kind: str, name: str) -> list[pl.DataFrame]:
         """The same frames read into memory, one per slice that wrote one, each keeping its key column."""
         under = self.directory / kind / name
-        return [pl.read_parquet(file) for file in sorted(under.glob('*.parquet'))]
+        return [pl.read_parquet(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))]
 
 
 def _listed(entries: Mapping[str, str]) -> str:
@@ -1030,7 +1031,9 @@ def scan_sweep(directory: str | Path) -> Sweep:
         _no_expressions=no_expressions,
         _original=None
         if original is None
-        else _OriginalIndex(original['local'], original['dim'], pl.read_parquet(under / _OWNED_FILE)),
+        else _OriginalIndex(
+            original['local'], original['dim'], pl.read_parquet(under / _OWNED_FILE).drop(RUN, strict=False)
+        ),
         _hand_built=found['hand_built'],
         _spill=_Spill(under, key_name, record[key_name].dtype),
     )
@@ -1510,6 +1513,11 @@ def _key_column(
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
         key_name = axis._key_name()
+    if key_name.startswith(RESERVED):
+        raise SpecsolveError(
+            f'key_name={key_name!r} starts with {RESERVED!r}, which is reserved for the columns specsolve '
+            f"adds beside a model's own. Name the slice column something else."
+        )
     if key_name in program.dimensions:
         raise SpecsolveError(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '

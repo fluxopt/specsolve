@@ -194,6 +194,21 @@ it. A constraint may carry a variable's name already, so a constraint `P`
 beside a variable `p` is accepted. The two are written under `dual/` and
 `primal/`, which nothing folds together.
 
+### Names that start with `specsolve_`
+
+**A declared name that starts with `specsolve_` is refused**, whichever verb
+lowers the spec. Every column specsolve adds beside a model's own starts with
+that prefix, such as `specsolve_run` on every table an archive holds. The rule
+covers dimensions, relations and their columns, parameters, variables,
+constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
+with the prefix is refused too.
+
+```
+variable 'specsolve_p' starts with 'specsolve_', which is reserved: every
+column specsolve adds beside a model's own starts with it, so an archive or a
+sweep could write one name twice. Rename it.
+```
+
 ### What each sink takes
 
 `Model.check(sink)` refuses a built model the sink cannot ingest, naming the
