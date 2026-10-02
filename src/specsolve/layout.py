@@ -1,8 +1,9 @@
 """The archive's layout: a spec, its data and its answer as a directory, or that directory zipped.
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
-``sources.parquet`` digesting them, ``answer/`` in the layout both answers
-save, and ``axis.json`` where the sources are cut. A directory archive is read
+``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
+name is, ``answer/`` in the layout both answers save, and ``axis.json``
+where the sources are cut. A directory archive is read
 where it lies; a zip is unpacked first.
 """
 
@@ -19,12 +20,14 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.errors import LayoutError
+from specsolve.lanes import lowered
 from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, consolidated, digest_of_file
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from mathspec import Spec
+    from mathspec.program import Program
 
     from specsolve.lanes import Source
 
@@ -32,6 +35,7 @@ if TYPE_CHECKING:
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
 DIGESTS_MEMBER = 'sources.parquet'
+CATALOG_MEMBER = 'catalog.parquet'
 SOURCES_DIR = 'sources'
 ANSWER_DIR = 'answer'
 
@@ -108,6 +112,7 @@ def write_archive(
                 tables[name].collect().write_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
         _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
+        _catalog(lowered(spec)).write_parquet(tree / CATALOG_MEMBER)
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         _copy_the_answer(answer, tree / ANSWER_DIR, run)
@@ -130,6 +135,57 @@ def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
         {'run': [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},
         schema={'run': pl.String, 'source': pl.String, 'digest': pl.String},
     )
+
+
+#: ``catalog.parquet``'s columns, in order.
+_CATALOG_SCHEMA = {
+    'name': pl.String,
+    'kind': pl.String,
+    'description': pl.String,
+    'dtype': pl.String,
+    'column': pl.String,
+    'dim': pl.String,
+    'dim_position': pl.Int32,
+}
+
+
+def _catalog(program: Program) -> pl.DataFrame:
+    """What each name an archive holds a file for is, one row per column that holds a dimension's labels.
+
+    ``kind`` is ``dimension``, ``relation``, ``parameter``, ``variable``,
+    ``constraint`` or ``expression``. ``column`` is the column of the name's
+    file that holds ``dim``'s labels, and ``dim_position`` its 0-based place
+    among them: a relation's column is its role, any other name's is the
+    dimension itself. A name over no dimension has one row, with all three
+    null. ``dtype`` is what the spec declares: the labels' type for a
+    dimension, the ``value`` column's for a parameter, null for the rest.
+    Long form, with no list column, so a BI tool reads it as it reads any other
+    table. A declared expression that the data cannot evaluate is listed
+    here and has no file; ``answer/reasons.parquet`` says why.
+    """
+    rows: list[tuple[object, ...]] = []
+    for name, kind, description, dtype, columns in _declared_files(program):
+        head = (name, kind, description, dtype)
+        rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
+        if not columns:
+            rows.append((*head, None, None, None))
+    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row')
+
+
+def _declared_files(
+    program: Program,
+) -> Iterator[tuple[str, str, str | None, str | None, Sequence[tuple[str, str]]]]:
+    """``(name, kind, description, dtype, (column, dim) pairs)`` per name, in the order the spec declares them."""
+    for name, dimension in program.dimensions.items():
+        yield name, 'dimension', dimension.description, dimension.dtype, [(name, name)]
+    for name, relation in program.relations.items():
+        yield name, 'relation', relation.description, None, relation.columns
+    for name, parameter in program.parameters.items():
+        yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
+    answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
+    for kind, declared in answered.items():
+        for name, declaration in declared.items():
+            yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
 def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
@@ -193,7 +249,7 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
     strays = [
         member
         for member in found
-        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER}
+        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER, CATALOG_MEMBER}
         and not member.startswith(f'{ANSWER_DIR}/')
         and not (member.startswith(f'{SOURCES_DIR}/') and member.endswith('.parquet') and member.count('/') == 1)
     ]
@@ -202,5 +258,6 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
         raise LayoutError(
             f'{named} is not an archive: it {what}. One that archive= writes holds exactly '
             f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, 'sources.parquet' digesting "
-            f"them, 'answer/' holding what the solve returned, and 'axis.json' where its sources are sliced."
+            f"them, 'catalog.parquet' saying what each name is, 'answer/' holding what the solve returned, "
+            f"and 'axis.json' where its sources are sliced."
         )

@@ -105,7 +105,8 @@ for file in sorted(case.rglob('*')):
 ```
 
 `spec.yaml` is the spec. `sources/` holds one parquet file per key, and
-`sources.parquet` a digest of each. `answer/` holds the record of the solve,
+`sources.parquet` a digest of each. `catalog.parquet` says what each name is.
+`answer/` holds the record of the solve,
 its metrics, and one parquet file per variable and constraint. The record is a
 table too:
 

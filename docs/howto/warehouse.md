@@ -78,6 +78,35 @@ whichever side a column came from.
 **A zip cannot use the layout.** No query engine reads inside one, so a
 warehouse queried where it lies is a directory of directories.
 
+## What a file holds
+
+`catalog.parquet` says what each file in the archive holds, so a reader
+needs no `spec.yaml`. It has one row per dimension column of each name:
+
+| column | holds |
+|---|---|
+| `name` | the file's name, as in `sources/<name>.parquet` or `answer/primal/<name>.parquet` |
+| `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
+| `description` | the spec's `description:`, or null |
+| `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
+| `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
+| `dim` | the dimension, or null for a name over no dimension |
+| `dim_position` | the 0-based place of `column` among the name's dimension columns |
+
+**Join it on the file's name to label a frame.** In DuckDB:
+
+```sql
+select name, kind, description, column, dim
+from 'runs/base/catalog.parquet'
+where name = 'p'
+order by dim_position;
+```
+
+The catalog comes from the spec alone. It has no units, because the spec
+declares none. A sweep archive's frames also carry the column of the sweep
+key, which `axis.json` names and the catalog does not list. A named expression
+that the data cannot evaluate is in the catalog and has no file.
+
 ## Compare cases solved apart
 
 `solved_at` is when the solver returned, so runs solved on different machines

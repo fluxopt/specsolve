@@ -20,7 +20,8 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve.api import attach_readers
-from specsolve.layout import ANSWER_DIR, _staging_for
+from specsolve.lanes import lowered
+from specsolve.layout import ANSWER_DIR, _catalog, _staging_for
 from specsolve.relational.parquet import METRICS_FILE, Metrics, digest_of_file
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
@@ -115,10 +116,11 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         assert beside_the_answer == {
             'spec.yaml',
             'sources.parquet',
+            'catalog.parquet',
             *(f'sources/{k}.parquet' for k in dispatch_frame_inputs),
         }, (
-            'the layout is spec.yaml, one parquet member per source key, the table digesting them, and the '
-            'answer under its own'
+            'the layout is spec.yaml, one parquet member per source key, the table digesting them, the catalog '
+            'saying what each name is, and the answer under its own'
         )
         assert any(name.startswith('answer/') for name in members), 'every archive carries the answer that made it'
         assert set(members.values()) == {zipfile.ZIP_STORED}, 'members are stored — parquet is already compressed'
@@ -361,6 +363,59 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     assert dict(study.source_digests.select('source', 'digest').iter_rows()) == {
         file.stem: digest_of_file(file) for file in held.glob('*.parquet')
     }, 'each of the whole sources the sweep was cut from'
+
+
+def test_the_catalog_says_what_each_name_is_and_which_column_holds_each_dimension() -> None:
+    spec = to_spec(
+        {
+            'dimensions': {'line': {}, 'bus': {'description': 'nodes', 'dtype': 'int'}},
+            'relations': {'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}}},
+            'parameters': {'cap': {'dims': ['line'], 'description': 'line rating'}, 'price': {'dims': []}},
+            'variables': {'flow': {'dims': ['line']}, 'total': {'dims': []}},
+            'constraints': {'within': {'dims': ['line'], 'expression': 'flow <= cap'}},
+            'expressions': {'spend': {'expression': 'price * total', 'description': 'what the flow costs'}},
+            'objective': {'expression': 'total'},
+        }
+    )
+    assert _catalog(lowered(spec)).rows() == [
+        ('line', 'dimension', None, 'str', 'line', 'line', 0),
+        ('bus', 'dimension', 'nodes', 'int', 'bus', 'bus', 0),
+        ('ends', 'relation', None, None, 'line', 'line', 0),
+        ('ends', 'relation', None, None, 'bus0', 'bus', 1),
+        ('ends', 'relation', None, None, 'bus1', 'bus', 2),
+        ('cap', 'parameter', 'line rating', 'float', 'line', 'line', 0),
+        ('price', 'parameter', None, 'float', None, None, None),
+        ('flow', 'variable', None, None, 'line', 'line', 0),
+        ('total', 'variable', None, None, None, None, None),
+        ('within', 'constraint', None, None, 'line', 'line', 0),
+        ('spend', 'expression', 'what the flow costs', None, None, None, None),
+    ], (
+        'one row per column that holds labels, in declaration order: a relation names each role and its dimension, '
+        'a name over no dimension has one row with no column, and dtype is only what the spec declares'
+    )
+
+
+def _named_files(archive: Path) -> set[str]:
+    """Every name the archive holds a file for: a source, or a frame of the answer."""
+    answered = {entry.name.removesuffix('.parquet') for entry in (archive / ANSWER_DIR).glob('*/*')}
+    return answered | {file.stem for file in (archive / 'sources').glob('*.parquet')}
+
+
+@pytest.mark.parametrize('sweep', [pytest.param(False, id='solve'), pytest.param(True, id='sweep')])
+def test_every_archive_catalogs_every_name_it_holds_a_file_for(
+    sweep: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    out = tmp_path / 'case'
+    if sweep:
+        sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+        sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out)
+    else:
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out).close()
+    catalog = pl.read_parquet(out / 'catalog.parquet')
+
+    assert catalog.equals(_catalog(lowered(to_spec(dispatch_yaml)))), "the catalog is the spec's, whoever wrote it"
+    assert _named_files(out) == set(catalog['name']), 'every file is named in the catalog, and every name has one'
+    assert sps.load_archive(out).spec == to_spec(dispatch_yaml), 'and an archive holding it still reads back'
 
 
 def test_an_archive_records_what_reaching_its_answer_cost(
@@ -716,7 +771,7 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': 1, 'specsolve': sps.__version__}, (
+    assert json.loads((out / 'format.json').read_text()) == {'layout': 2, 'specsolve': sps.__version__}, (
         'the layout this package writes, beside the version that wrote it'
     )
 
@@ -731,7 +786,7 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
     with pytest.raises(sps.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
-    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 1' in str(refused.value), (
+    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 2' in str(refused.value), (
         'the refusal names the layout it found and the version that wrote it'
     )
 
