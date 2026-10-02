@@ -1,9 +1,13 @@
-description: 'The two-stage class of a plain `n.optimize()`: a network with scenarios, stated on rung
-  1''s transport and rung 3''s expansion in a file of its own. Everything over a snapshot spans a scenario
-  as well; capacity does not — it is chosen once, before the future is known — and the cost is the expectation
-  over the scenarios'' weights. With a risk preference PyPSA adds the CVaR rows: an excess per scenario
-  and the tail''s average, blended into the objective. A dimension a run may not have cannot ride on `examples/pypsa.yaml`,
-  so this class lives here.'
+description: A plain `n.optimize()`, and its multi-period and stochastic classes, in one file. Every second-stage
+  quantity spans a `scenario` (a future dispatch is chosen in) and every asset stands in the investment
+  `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it
+  per scenario. Capacity is chosen once, before the future is known, and paid once per active period at
+  its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights,
+  with a share priced at the tail through the CVaR rows, which stand only where that share is positive.
+  A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses
+  to the standard one. A security-constrained run copies each branch flow limit once per outage in an
+  `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight,
+  and the outage factors are data prep.
 dimensions:
   scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
   snapshot: {description: dispatch periods, dtype: datetime}
@@ -14,7 +18,9 @@ dimensions:
       `bus2`, … columns read long, so a link of any number of output ports is one term in the balance,
       data prep'}
   load: {description: 'demands, each on one bus'}
+  period: {description: investment periods — PyPSA's `investment_periods`, dtype: int}
 relations:
+  snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
   Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
   Link_bus0: {description: the bus a link leaves, key: link, values: bus}
   Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
@@ -23,73 +29,125 @@ relations:
       any number of them', key: link_output, values: bus}
   Load_bus: {description: the bus a load sits on, key: load, values: bus}
 parameters:
-  scenario_weight:
-    description: PyPSA's `scenario_weightings.weight` — the probability of a future
-    dims: [scenario]
-  CVaR_omega:
-    description: PyPSA's `risk_preference['omega']` — the share of the operating cost priced at the tail
-      rather than in expectation
-    dims: []
-  CVaR_inv_tail:
-    description: PyPSA's `1 / (1 - alpha)` — the tail's own probability, inverted in data prep because
-      a divisor is one factor
-    dims: []
   snapshot_weightings_objective:
     description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
     dims: [snapshot]
   Generator_p_nom:
     description: nominal power
-    dims: [generator]
+    dims: [scenario, generator]
   Generator_p_nom_extendable:
     description: whether the nominal power is a decision
     dims: [generator]
     dtype: bool
-  Generator_p_nom_min:
-    description: least nominal power an extendable generator may be built at
-    dims: [generator]
-  Generator_p_nom_max:
-    description: most nominal power an extendable generator may be built at
-    dims: [generator]
-  Generator_capital_cost:
-    description: cost of one unit of nominal power — PyPSA's `capital_cost`, periodized as an annuity
-      in data prep
-    dims: [generator]
-  Generator_p_min_pu:
-    description: least output, per unit of nominal power
-    dims: [snapshot, generator]
   Generator_p_max_pu:
     description: most output, per unit of nominal power — an availability profile
     dims: [scenario, snapshot, generator]
   Generator_marginal_cost:
     description: cost of one unit of output
-    dims: [snapshot, generator]
+    dims: [scenario, snapshot, generator]
+  Generator_sign:
+    description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
+      for a unit that draws power. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+    dims: [generator]
+  Generator_committable:
+    description: whether output is gated by an on/off status decision
+    dims: [generator]
+    dtype: bool
   Link_p_nom:
     description: nominal power
+    dims: [scenario, link]
+  Link_p_nom_extendable:
+    description: whether the nominal power is a decision
     dims: [link]
+    dtype: bool
   Link_p_min_pu:
     description: least flow, per unit of nominal power — negative for a link that carries both ways
-    dims: [snapshot, link]
+    dims: [scenario, snapshot, link]
   Link_p_max_pu:
     description: most flow, per unit of nominal power
-    dims: [snapshot, link]
+    dims: [scenario, snapshot, link]
   Link_efficiency:
     description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
-      … read long — negative where that port consumes rather than delivers
-    dims: [link_output]
-  Link_marginal_cost:
-    description: cost of one unit of flow
-    dims: [snapshot, link]
+      … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow
+      arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1522`)
+    dims: [scenario, snapshot, link_output]
+  Link_output_delay:
+    description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
+      long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero
+      for a port that delivers at once. Each scenario takes its own. PyPSA `1.3.0` groups the ports by
+      delay over all scenarios and shifts each group in every one, so a delay that differs by scenario
+      delivers the flow twice (`constraints.py:1269-1276`, PyPSA/PyPSA#1941)
+    dims: [scenario, link_output]
+    dtype: int
+  Link_output_cyclic_delay:
+    description: whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots
+      is lost. Each scenario takes its own, as the delay
+    dims: [scenario, link_output]
+    dtype: bool
+  Link_committable:
+    description: whether flow is gated by an on/off status decision
+    dims: [link]
+    dtype: bool
   Load_p_set:
     description: demand
     dims: [scenario, snapshot, load]
+  Load_sign:
+    description: the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+    dims: [load]
+  Load_active:
+    description: whether a load stands in the model — PyPSA's `active`. A load has no build year and no
+      lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`consistency.py:1195`)
+    dims: [load]
+    dtype: bool
+  scenario_weight:
+    description: PyPSA's `scenario_weightings.weight` — the probability of a future
+    dims: [scenario]
+  CVaR_omega:
+    description: PyPSA's `risk_preference['omega']` — the share of operating cost priced at the tail rather
+      than in expectation; zero recovers the risk-neutral model
+    dims: []
+  CVaR_alpha:
+    description: PyPSA's `risk_preference['alpha']` — the confidence level; the tail holds the other `1
+      - alpha` of the probability
+    dims: []
+  period_weight_objective:
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs
+    dims: [period]
+  Generator_active:
+    description: whether a generator stands in a snapshot's period — PyPSA's `active`, from build year
+      and lifetime, data prep
+    dims: [snapshot, generator]
+    dtype: bool
+  Link_active:
+    description: whether a link stands in a snapshot's period — PyPSA's `active`, data prep
+    dims: [snapshot, link]
+    dtype: bool
+  Generator_capital_weight:
+    description: the sum of period weights a generator stands in — PyPSA's `active * period_weighting`,
+      summed, data prep
+    dims: [generator]
+  Generator_p_nom_min:
+    description: least nominal power an extendable generator may be built at
+    dims: [scenario, generator]
+  Generator_p_nom_max:
+    description: most nominal power an extendable generator may be built at
+    dims: [scenario, generator]
+  Generator_capital_cost:
+    description: cost of one unit of nominal power — PyPSA's `capital_cost`, periodized as an annuity
+      in data prep
+    dims: [scenario, generator]
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'
     dims: [scenario, snapshot, generator]
+    where: Generator_active
   Link_p:
     description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
       withdraws there and injects at every bus the link''s output ports deliver to'
     dims: [scenario, snapshot, link]
+    where: Link_active
   Generator_p_nom_ext:
     description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
       PyPSA name carries the fixed regime'
@@ -108,68 +166,118 @@ variables:
     dims: []
 constraints:
   Generator_fix_p_lower:
-    description: '`Generator-fix-p-lower` — a generator outputs at least its minimum'
+    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
     dims: [scenario, snapshot, generator]
-    where: not Generator_p_nom_extendable
-    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p >= 0
   Generator_fix_p_upper:
-    description: '`Generator-fix-p-upper` — a generator outputs at most what is available'
+    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
     dims: [scenario, snapshot, generator]
-    where: not Generator_p_nom_extendable
-    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p <= (Generator_p_max_pu * Generator_p_nom) * 1
+  Link_fix_p_lower:
+    description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
+      way'
+    dims: [scenario, snapshot, link]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p >= (Link_p_min_pu * Link_p_nom) * 1
+  Link_fix_p_upper:
+    description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
+    dims: [scenario, snapshot, link]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p <= (Link_p_max_pu * Link_p_nom) * 1
   Generator_ext_p_lower:
     description: '`Generator-ext-p-lower` — an extendable generator outputs at least its minimum of the
       chosen build'
     dims: [scenario, snapshot, generator]
-    where: Generator_p_nom_extendable
-    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom_ext
+    where: Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p >= 0
   Generator_ext_p_upper:
     description: '`Generator-ext-p-upper` — an extendable generator outputs at most what is available
       of the chosen build'
     dims: [scenario, snapshot, generator]
-    where: Generator_p_nom_extendable
+    where: Generator_p_nom_extendable AND not Generator_committable AND Generator_active
     expression: Generator_p <= Generator_p_max_pu * Generator_p_nom_ext
   Generator_ext_p_nom_lower:
-    description: '`Generator-ext-p_nom-lower` — the chosen build is at least its floor'
-    dims: [generator]
+    description: '`Generator-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
+    dims: [scenario, generator]
     where: Generator_p_nom_extendable
     expression: Generator_p_nom_ext >= Generator_p_nom_min
   Generator_ext_p_nom_upper:
-    description: '`Generator-ext-p_nom-upper` — the chosen build is at most its cap; a cap of infinity
-      is no row'
-    dims: [generator]
+    description: '`Generator-ext-p_nom-upper` — the chosen build is at most its cap in every scenario;
+      a cap of infinity is no row'
+    dims: [scenario, generator]
     where: Generator_p_nom_extendable AND Generator_p_nom_max
     expression: Generator_p_nom_ext <= Generator_p_nom_max
-  Link_fix_p_lower:
-    description: '`Link-fix-p-lower` — a link carries at least its minimum, negative for the other way'
-    dims: [scenario, snapshot, link]
-    expression: Link_p >= Link_p_min_pu * Link_p_nom
-  Link_fix_p_upper:
-    description: '`Link-fix-p-upper` — a link carries at most its nominal power'
-    dims: [scenario, snapshot, link]
-    expression: Link_p <= Link_p_max_pu * Link_p_nom
   Bus_nodal_balance:
-    description: '`Bus-nodal_balance` — what is generated at a bus, less what the links take away, plus
-      what arrives over them after losses, meets the load there'
+    description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
+      less what the links take away, plus what arrives over them after losses and any delay at every port
+      they deliver to, each process port drawing or delivering at its own rate and each passive branch
+      carrying its flow, meets the load there, less half of every incident line''s and transformer''s
+      loss — PyPSA dissipates a branch''s loss half at either end. Each generator, storage unit, store
+      and load term enters with its component''s `sign` (`constraints.py:1428-1429`, `:1538`), and an
+      inactive load not at all. A bus nothing is attached to has no row; PyPSA refuses one that carries
+      load, and this file does not yet.'
     dims: [scenario, snapshot, bus]
-    expression: sum(Generator_p, by=Generator_bus, over=generator, into=bus) - sum(Link_p, by=Link_bus0,
-      over=link, into=bus) + sum(at(Link_p, by=Link_output_link, over=link, into=link_output) * Link_efficiency,
-      by=Link_output_bus, over=link_output, into=bus) == sum(Load_p_set, by=Load_bus, over=load, into=bus)
+    expression: Bus_injection == 0
   CVaR_excess:
     description: '`CVaR-excess-{s}` — a scenario''s operating cost beyond the tail''s start is its excess;
       PyPSA names one row per scenario'
     dims: [scenario]
+    where: CVaR_omega > 0
     expression: CVaR_a - scenario_opex + CVaR_theta >= 0
   CVaR_def:
     description: '`CVaR-def` — the tail''s average is at least where it starts plus the expected excess
       over the tail''s probability'
     dims: []
-    expression: CVaR_theta + CVaR_inv_tail * sum(scenario_weight * CVaR_a, over=scenario) <= CVaR
+    where: CVaR_omega > 0
+    expression: CVaR_theta + 1 / (1 - CVaR_alpha) * sum(scenario_weight * CVaR_a, over=scenario) <= CVaR
 expressions:
-  scenario_opex: {description: 'what a future costs to run — the operating terms, before their weight',
-    expression: 'sum(sum(Generator_p * Generator_marginal_cost * snapshot_weightings_objective, over=generator),
-      over=snapshot) + sum(sum(Link_p * Link_marginal_cost * snapshot_weightings_objective, over=link),
+  scenario_opex:
+    dims: [scenario]
+    expression: Generator_opex
+    description: what a future costs to run — every operating term, weighted by the snapshot's hours and
+      its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
+      as PyPSA adds them (`optimize.py:414-429`)
+  total_cost:
+    dims: []
+    expression: Generator_capex + risk_weighted_opex
+    description: what the system costs — capacity once per active period at its expected cost over the
+      scenarios, operation in expectation over the scenarios, and a share of it at the tail
+  Bus_injection:
+    dims: [scenario, snapshot, bus]
+    expression: (Generator_injection + Link_injection) + Load_injection
+    description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
+      term into the balance, and a load on its right-hand side
+  Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
       over=snapshot)'}
-objective: {sense: minimize, description: 'capacity once, operation in expectation, and a share of it
-    at the tail', expression: 'sum(Generator_p_nom_ext * Generator_capital_cost) + (1 - CVaR_omega) *
-    sum(scenario_weight * scenario_opex, over=scenario) + CVaR_omega * CVaR'}
+  Generator_capex: {expression: sum(scenario_weight * Generator_p_nom_ext * Generator_capital_cost * Generator_capital_weight)}
+  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
+      + CVaR_omega * CVaR'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
+      into=bus)'}
+  Link_injection: {expression: '-sum(Link_p, by=Link_bus0, over=link, into=bus) + sum(Link_output_arrival,
+      by=Link_output_bus, over=link_output, into=bus)'}
+  Load_injection: {expression: 'sum(Load_demand, by=Load_bus, over=load, into=bus)'}
+  Link_output_arrival:
+    description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
+      `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives;
+      where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not
+      the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay`
+      zero) delivers its flow unshifted, cyclic or not
+    dims: [scenario, snapshot, link_output]
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link, over=link,
+          into=link_output), along=snapshot, offset=Link_output_delay, edge=''wrap'', by=snapshot_period,
+          within=period) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link, over=link, into=link_output), along=snapshot, offset=Link_output_delay,
+      edge=0, by=snapshot_period, within=period) * Link_efficiency
+  Load_demand:
+    description: what a load draws from its bus's balance — its demand times its sign where it is active,
+      nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1537-1538`)
+    dims: [scenario, snapshot, load]
+    cases:
+      active: {when: Load_active, expression: Load_sign * Load_p_set}
+    otherwise: 0
+objective: {sense: minimize, expression: total_cost}

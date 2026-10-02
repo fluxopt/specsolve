@@ -4,6 +4,6 @@ period,generator,value
 2020,wind20,1.0
 2020,wind30,0.0
 2030,gas30,1.0
-2030,old_gas,1.0
+2030,old_gas,0.0
 2030,wind20,0.0
 2030,wind30,1.0

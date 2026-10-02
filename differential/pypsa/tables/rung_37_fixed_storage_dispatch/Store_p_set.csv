@@ -1,0 +1,3 @@
+scenario,snapshot,store,value
+base,2015-01-01T00:00:00.000000,tank37,10.0
+base,2015-01-01T03:00:00.000000,tank37,-5.0
