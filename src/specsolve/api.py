@@ -578,8 +578,8 @@ type Reading = Callable[[Path], pl.LazyFrame]
 def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
     """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
 
-    An archive's [`RUN`][specsolve.relational.parquet.RUN] column is left on
-    disk, so a frame read out of one equals the frame the solve returned.
+    An archive's ``specsolve_run`` column is left on disk, so a frame read
+    out of one equals the frame the solve returned.
     """
     if not under.is_dir():
         return {}

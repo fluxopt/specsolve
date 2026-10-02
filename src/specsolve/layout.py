@@ -90,7 +90,7 @@ def write_archive(
 
     Returns:
         *out*, which lands whole or not at all. Every table in it carries
-        [`RUN`][specsolve.relational.parquet.RUN].
+        ``specsolve_run``.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
@@ -150,7 +150,7 @@ def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
 
 
 def _stamped(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*, a parquet file with the [`RUN`][specsolve.relational.parquet.RUN] column set to *run*.
+    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*.
 
     Streamed, so a spilled answer larger than memory is stamped too, and
     landed through a part file, so *target* may be *source*. Anything that is

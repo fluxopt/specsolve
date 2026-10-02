@@ -109,7 +109,7 @@ RESERVED = 'specsolve_'
 
 
 def _reserved_name(program: Program) -> str | None:
-    """The first declaration whose name starts with [`RESERVED`][], as the sentence refusing it."""
+    """The first declaration whose name starts with ``specsolve_``, as the sentence refusing it."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -145,7 +145,7 @@ def lowered(spec: Buildable) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case, or a name that starts with [`RESERVED`][].
+            by case, or a name that starts with ``specsolve_``.
     """
     program = declared(spec).program
     if program.given:

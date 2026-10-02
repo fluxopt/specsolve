@@ -136,7 +136,7 @@ class Record(NamedTuple):
     #: a ``.zip``, so ``runs/nightly-2026-09-10.zip`` writes
     #: ``nightly-2026-09-10`` and a directory called ``case.v2`` keeps both
     #: halves of its name. Null until the archive is written. Every other
-    #: table the archive holds carries the same column, [`RUN`][].
+    #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
     #: A digest of the model this answered — the spec *and* its data, where
     #: [`spec_digest`][] is the document alone. ``None`` for an answer that
