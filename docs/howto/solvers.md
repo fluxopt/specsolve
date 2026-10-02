@@ -97,4 +97,5 @@ A label keeps its letters, digits and ``!"#$%&'.;?@`{|}~``. Every other
 character is written as `_`, because an LP reader refuses it, so `north sea`
 becomes `north_sea`. A declaration with no dims is written `total()`. When two
 labels of one declaration become the same name, the write is refused and the
-error names both labels.
+error names both labels. `model.check('.lp', names=True)` gives the same refusal
+without writing a file.

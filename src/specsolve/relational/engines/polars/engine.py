@@ -125,7 +125,7 @@ class PolarsEngine:
         with _clocked(self._seconds, 'write'):
             chosen.write(self._model.handoff, path, readback.file_names(self._model) if names else NUMBERED)
 
-    def check(self, sink: str) -> None:
+    def check(self, sink: str, *, names: bool = False) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
         Read off the hand-off, so a square the data prices at zero or an
@@ -135,10 +135,13 @@ class PolarsEngine:
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; or a name belonging to no sink.
+                sinks that do; a name belonging to no sink; or, with *names*,
+                two coordinates that write as one name.
         """
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
+        if names:
+            readback.file_names(self._model)
 
     def solve(
         self,
