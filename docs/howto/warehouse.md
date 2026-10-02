@@ -57,7 +57,7 @@ needs. A warehouse question is a query over the parquet.
 
 `answer/primal/p.parquet` holds the model's own dimension columns and `value`.
 Nothing in it says which archive it came from, so only the three tables above
-answer that.
+answer that. A sweep archive writes the same file.
 
 **Name the directory `run=<name>` and every frame carries the run.** That is
 the hive layout. A query engine reads it as a column, and no file stores it:
@@ -69,6 +69,23 @@ pl.read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning=True)
 # snapshot  generator  value  run
 # 0         wind       90.5   nightly-2026-09-10
 # 0         solar      0.0    nightly-2026-09-10
+```
+
+**A scenario sweep's frame carries its key, so a mix with solves does not
+glob.** `EachCoordinate('scenario')` writes a `scenario` column that a solve
+does not write. polars refuses the glob, as it refuses the record:
+
+```text
+SchemaError: extra column in file outside of expected schema: scenario
+```
+
+Union by name, as for the record. `scenario` is null on the rows of a solve:
+
+```python
+pl.concat(
+    [pl.read_parquet(file, hive_partitioning=True) for file in sorted(glob('runs/*/answer/primal/p.parquet'))],
+    how='diagonal',
+)
 ```
 
 **The three tables carry the same name.** The archive is named
@@ -161,13 +178,17 @@ order by build_seconds + solve_seconds desc;
 ```
 
 **A value frame carries `run` where the directory is named for it.** DuckDB
-reads the same hive layout, and the query says nothing about it:
+reads the same hive layout. `union_by_name` keeps the `scenario` of a sweep:
 
 ```sql
-select run, snapshot, generator, value
-from read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning = true)
+select *
+from read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning = true, union_by_name = true)
 order by run, snapshot;
 ```
+
+Without `union_by_name`, DuckDB takes the columns of the first file it reads.
+When that file is a solve, the rows of a scenario sweep lose `scenario` and no
+error occurs.
 
 Inside one archive every frame is tidy, so the values join to the sources they
 were solved from on the coordinates both carry:
