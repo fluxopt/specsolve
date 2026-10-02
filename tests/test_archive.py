@@ -350,6 +350,27 @@ def test_the_digest_table_names_every_source_the_archive_holds(
     )
 
 
+@pytest.mark.parametrize('read', [sps.load_archive, sps.scan_archive], ids=['loaded', 'scanned'])
+def test_the_sources_an_archive_gives_back_archive_again_to_the_same_digests(
+    read: Callable[[Path], sps.SolveArchive | sps.SweepArchive], dispatch_yaml: Path, dispatch_frame_inputs, tmp_path
+) -> None:
+    """A scanned source is the member itself, so it carries the first archive's `specsolve_run`.
+
+    That column was copied and digested with the bytes, so archiving what
+    `scan_archive` gave back moved every digest, though not one number had.
+    """
+    sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'first').close()
+    sps.solve(*_question(read(tmp_path / 'first')), archive=tmp_path / 'second').close()
+    first, second = sps.load_archive(tmp_path / 'first'), sps.load_archive(tmp_path / 'second')
+
+    assert second.source_digests.drop(RUN).equals(first.source_digests.drop(RUN)), (
+        'the same tables archived again digest alike, whichever reader gave them back'
+    )
+    assert pl.read_parquet(tmp_path / 'second' / 'sources' / 'load.parquet')[RUN].unique().to_list() == ['second'], (
+        'and the member is stamped with the run that wrote it, not the one it was read from'
+    )
+
+
 def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:

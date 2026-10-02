@@ -80,8 +80,9 @@ def write_archive(
             name without ``.zip`` is the run every table is stamped with.
         spec: The spec as written, held as ``spec.yaml``.
         sources: What was attached, keyed as the file declares. A parquet path
-            is copied, anything else written as *tables* has it; the digest
-            is of those bytes, before the run is stamped on.
+            is copied, less any ``specsolve_run`` it carries; anything else is
+            written as *tables* has it. The digest is of those bytes, before
+            the run is stamped on.
         tables: The tidy table each source stands for, for every source that
             is not a path.
         axis: The axis manifest, or ``None`` where the sources are not cut.
@@ -104,7 +105,7 @@ def write_archive(
         for name, given in sources.items():
             member = tree / SOURCES_DIR / f'{name}.parquet'
             if isinstance(given, (str, Path)):
-                shutil.copyfile(given, member)
+                _copied_unstamped(Path(given), member)
             else:
                 tables[name].collect().write_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
@@ -123,6 +124,20 @@ def write_archive(
     part.replace(out)
     shutil.rmtree(staging)
     return out
+
+
+def _copied_unstamped(source: Path, target: Path) -> None:
+    """*source* at *target* without a ``specsolve_run`` column, before the member is digested.
+
+    A source [`scan_archive`][specsolve.scan_archive] gave back is the
+    member itself, stamped with the run it came from; digested as it lies, the
+    old run's name would move every digest. A file with no such column is
+    copied byte for byte, so the digest stays that of the caller's own bytes.
+    """
+    if RUN not in pl.read_parquet_schema(source):
+        shutil.copyfile(source, target)
+        return
+    pl.read_parquet(source).drop(RUN).write_parquet(target, compression='zstd')
 
 
 def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
