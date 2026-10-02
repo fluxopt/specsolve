@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(data): an archive holds each source as the tidy table the solve read, and tidy() returns those tables ([#1813](https://github.com/fluxopt/specsolve/pull/1813))
+
 ## 0.3.0 (2026-10-02)
 
 specsolve now requires mathspec 0.2.1. This release breaks one import.
