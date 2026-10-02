@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
 - docs: a how-to guide chooses a solver or writes the model to a file, and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
 - docs: a how-to guide reads an answer into pandas or xarray ([#1789](https://github.com/fluxopt/specsolve/pull/1789))
+- feat: specsolve requires mathspec 0.2.1, where a divisor or a power over parameters may add and a spec may be composed from several files ([#1800](https://github.com/fluxopt/specsolve/pull/1800))
 
 ## 0.2.1 (2026-09-29)
 

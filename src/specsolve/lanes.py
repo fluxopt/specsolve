@@ -110,12 +110,21 @@ def lowered(spec: Buildable) -> Program:
     expanded.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
             by case.
     """
     program = declared(spec).program
+    if program.given:
+        given = program.given
+        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions})
+        raise LanguageError(
+            f'this spec reads {", ".join(repr(name) for name in read)} under given:, which another file declares, '
+            f'so it is a fragment of a model rather than the whole of one. Compose it with the files that declare '
+            f'them first: mathspec.merge([...]) folds each given name into the file that introduces it.'
+        )
     if program.piecewise:
         named = ', '.join(f"'{name}'" for name in program.piecewise)
         raise LanguageError(

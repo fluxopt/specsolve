@@ -90,8 +90,9 @@ def check(spec: Buildable) -> Program:
         `mathspec`.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:`` — ``mathspec.merge`` composes it.
         SpecsolveError: Two declarations whose names differ only by case.
         ValueError: A schema or expression that does not parse.
 
