@@ -76,8 +76,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The verbs
 
 **check** · **build** · **solve** · **write**
-: `check(spec)` validates and lowers; `check(spec, sink)` also asks whether
-  that sink takes it. `build(spec, sources)` returns a [Model](#the-chain).
+: `check(spec)` validates and lowers. `build(spec, sources)` returns a
+  [Model](#the-chain), whose `check(sink)` asks whether a sink takes it.
   `solve` and `write` build and then solve or stream in one call. There is no
   Python API for constructing a spec. Each has
   [its entry](api.md#run-a-spec).
@@ -163,8 +163,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : Where the [handoff](#the-built-form) lands: a solver (`highs`, `gurobi`,
   `xpress`) or a file writer (`.lp`, `.mps`). `linopy` is a lane, not a sink.
   What a sink can ingest is its **capability**: a special-ordered set is one,
-  and a sink without it refuses a model carrying a set rather than rewriting
-  it ([what each sink takes](api.md#what-each-sink-takes)).
+  and a sink without it refuses a built model carrying a set rather than
+  rewriting it ([what each sink takes](api.md#what-each-sink-takes)).
 
 **Sources**
 : The data you attach: parameter, dimension and relation names to tables, and

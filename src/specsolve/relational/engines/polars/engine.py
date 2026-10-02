@@ -117,11 +117,24 @@ class PolarsEngine:
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
-        handoff = self._model.handoff
-        if (refused := sinks.refusal(self._model.program, suffix)) is not None:
-            raise SpecsolveError(refused)
+        self.check(suffix)
         with _clocked(self._seconds, 'write'):
-            chosen.write(handoff, path)
+            chosen.write(self._model.handoff, path)
+
+    def check(self, sink: str) -> None:
+        """Refuse the built model where the sink called *sink* cannot take it.
+
+        Read off the hand-off, so a square the data prices at zero or an
+        integer variable with no column built asks for nothing. What
+        [`solve`][] and [`write`][] refuse, this refuses, with the same
+        message.
+
+        Raises:
+            SpecsolveError: A construct the sink cannot take, naming it and the
+                sinks that do; or a name belonging to no sink.
+        """
+        if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
+            raise SpecsolveError(refused)
 
     def solve(
         self,
@@ -135,7 +148,8 @@ class PolarsEngine:
 
         The solver stays loaded where
         [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
-        the solver cannot ingest is refused before the load.
+        the solver cannot ingest is refused before the load, read off the built
+        model rather than the file.
 
         Args:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
@@ -158,9 +172,8 @@ class PolarsEngine:
         """
         if keep not in KEEPS:
             raise SpecsolveError(unknown_keep_message(keep))
+        self.check(solver_name)
         handoff = self._model.handoff
-        if (refused := sinks.refusal(self._model.program, solver_name)) is not None:
-            raise SpecsolveError(refused)
         with _clocked(self._seconds, 'handoff'):
             if keep == 'nothing' and self._solver is not None:
                 self._solver.close()

@@ -275,13 +275,10 @@ def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
         specsolve_linopy.build(path, SOURCES)
 
 
-def test_highs_refuses_it_before_the_build_and_names_who_takes_it():
-    with pytest.raises(SpecsolveError, match='no such concept'):
-        sps.check(SPEC, sink='highs')
-    with pytest.raises(SpecsolveError, match='gurobi'):
-        sps.check(SPEC, sink='highs')
-    with pytest.raises(SpecsolveError, match='no such concept'):
+def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
+    with pytest.raises(SpecsolveError, match='no such concept') as refused:
         sps.solve(SPEC, SOURCES)
+    assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
