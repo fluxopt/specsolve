@@ -25,9 +25,9 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 | `sources.parquet` | source per archive | what each input's bytes digest to |
 | `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
-**Every row says which archive it came from.** `run` is the archive's own
-name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`. It is on all
-four tables, so nothing has to read the paths.
+**Every row says which archive it came from.** `specsolve_run` is the
+archive's own name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`.
+Every table in an archive carries it, so nothing has to read the paths.
 
 **A directory holding both solves and sweeps does not glob.** A sweep's record
 carries the dimension its axis cut on, and its metrics carry different columns
@@ -57,28 +57,25 @@ needs. A warehouse question is a query over the parquet.
 
 ## The run on a value frame
 
-`answer/primal/p.parquet` holds the model's own dimension columns and `value`.
-Nothing in it says which archive it came from, so only the four tables above
-answer that.
-
-**Name the directory `run=<name>` and every frame carries the run.** That is
-the hive layout. A query engine reads it as a column, and no file stores it:
+`answer/primal/p.parquet` holds the model's own dimension columns, `value`,
+and `specsolve_run`. A tool that combines files and drops their paths, such as
+Power BI's "Combine files", still gets the run:
 
 ```python
-sps.solve('dispatch.yaml', sources, archive='runs/run=nightly-2026-09-10/')
+sps.solve('dispatch.yaml', sources, archive='runs/nightly-2026-09-10/')
 
-pl.read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning=True)
-# snapshot  generator  value  run
+pl.read_parquet('runs/*/answer/primal/p.parquet')
+# snapshot  generator  value  specsolve_run
 # 0         wind       90.5   nightly-2026-09-10
 # 0         solar      0.0    nightly-2026-09-10
 ```
 
-**The four tables carry the same name.** The archive is named
-`nightly-2026-09-10`. The stamp drops the `run=`, so a join on `run` matches
-whichever side a column came from.
-
-**A zip cannot use the layout.** No query engine reads inside one, so a
-warehouse queried where it lies is a directory of directories.
+**The column is the archive's, not the model's.** The `specsolve_` prefix is
+reserved for the columns specsolve adds, and a spec that declares a name with
+that prefix, in any letter case, is refused. Both readers drop the column from
+the answer's frames, so a frame read back is the frame the solve returned.
+`load_archive` drops it from the sources too. The sources `scan_archive` gives
+back are the archive's own files, and reading one gives the column back.
 
 ## What a file holds
 
@@ -88,7 +85,7 @@ needs no `spec.yaml`. It has one row per dimension column of each file under
 
 | column | holds |
 |---|---|
-| `run` | the archive's name, as on the other three tables |
+| `specsolve_run` | the archive's name, as on every other table it holds |
 | `path` | the file's path inside the archive, as `sources/load.parquet` or `answer/dual/load.parquet` |
 | `name` | the name the spec declares |
 | `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
@@ -115,10 +112,11 @@ left no values, the duals of a model that has none, and a named expression the
 data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
 why.
 
-The catalog has no units, because the spec declares none. In a sweep archive,
-an answer's `path` is a directory that holds one file per slice, and each
-frame also carries the column of the sweep key, which `axis.json` names and the
-catalog does not list.
+The catalog has no units, because the spec declares none. It has no row for
+`specsolve_run`, which every file carries and which holds no labels. In a sweep
+archive, an answer's `path` is a directory that holds one file per slice, and
+each frame also carries the column of the sweep key, which `axis.json` names
+and the catalog does not list.
 
 ## Compare cases solved apart
 
@@ -127,7 +125,7 @@ still order:
 
 ```python
 table = pl.read_parquet('runs/*/answer/record.parquet')
-table.sort('solved_at').select('run', 'status', 'objective')
+table.sort('solved_at').select('specsolve_run', 'status', 'objective')
 ```
 
 **Check the digests before you read the numbers.** `spec_digest` is a digest of
@@ -158,20 +156,20 @@ moved = base.source_digests.join(other.source_digests, on='source', suffix='_oth
 moved['source'].to_list()  # ['load']
 ```
 
-**Across a whole directory it is a window rather than a join**, `run` being on
-every row:
+**Across a whole directory it is a window rather than a join**,
+`specsolve_run` being on every row:
 
 ```python
 inputs = pl.read_parquet('runs/*/sources.parquet')
-inputs.sort('run').with_columns(before=pl.col('digest').shift().over('source')).filter(
+inputs.sort('specsolve_run').with_columns(before=pl.col('digest').shift().over('source')).filter(
     pl.col('before').is_not_null() & (pl.col('before') != pl.col('digest'))
 )
 ```
 
-**The digest is of the bytes the archive holds**, so hashing
-`sources/load.parquet` gives the row back. Two archives of the same data
-written by different versions of polars can differ, and reading an archive
-does not verify the digests
+**The digest is of the source before the run is stamped on**, so one table
+archived under two names digests alike. A parquet path digests as the file you
+passed. Two archives of the same data written by different versions of polars
+can differ, and reading an archive does not verify the digests
 ([the rule](../reference/api.md#specsolve.SolveArchive)).
 
 ## See what the runs cost
@@ -180,14 +178,14 @@ does not verify the digests
 query says which cases are growing and where the time goes:
 
 ```python
-metrics.select('run', 'rows', 'nonzeros', 'build_seconds', 'solve_seconds').sort(
+metrics.select('specsolve_run', 'rows', 'nonzeros', 'build_seconds', 'solve_seconds').sort(
     pl.col('build_seconds') + pl.col('solve_seconds'), descending=True
 )
 ```
 
 The columns are [the metrics](../reference/api.md#specsolve.relational.parquet.Metrics). A sweep
 records a `SliceMetrics` per slice instead, keyed by the axis and stamped
-with `run` like any other row
+with `specsolve_run` like any other row
 ([reading a sweep](../reference/sweeps.md#reading-a-sweep)).
 
 ## Query it from a database
@@ -197,18 +195,18 @@ without polars in the way. In DuckDB, `union_by_name` takes the two kinds of
 archive together:
 
 ```sql
-select run, rows, nonzeros, build_seconds, solve_seconds
+select specsolve_run, rows, nonzeros, build_seconds, solve_seconds
 from read_parquet('runs/*/answer/metrics.parquet', union_by_name = true)
 order by build_seconds + solve_seconds desc;
 ```
 
-**A value frame carries `run` where the directory is named for it.** DuckDB
-reads the same hive layout, and the query says nothing about it:
+**A value frame carries `specsolve_run` too**, so a query across runs reads it
+as any other column:
 
 ```sql
-select run, snapshot, generator, value
-from read_parquet('runs/*/answer/primal/p.parquet', hive_partitioning = true)
-order by run, snapshot;
+select specsolve_run, snapshot, generator, value
+from read_parquet('runs/*/answer/primal/p.parquet')
+order by specsolve_run, snapshot;
 ```
 
 Inside one archive every frame is tidy, so the values join to the sources they
@@ -217,7 +215,7 @@ were solved from on the coordinates both carry:
 ```sql
 select p.snapshot, p.generator, p.value, load.value as load
 from 'runs/base/answer/primal/p.parquet' p
-join 'runs/base/sources/load.parquet' load using (snapshot);
+join 'runs/base/sources/load.parquet' load using (snapshot, specsolve_run);
 ```
 
 **A zip has to be unpacked first**, because no query engine reads inside one.
