@@ -74,7 +74,7 @@ story. **A test asserting the old behaviour is not a blocker**; say in the PR
 what coverage moved where. A release that breaks a model file or an import
 raises the minor version, and its notes name the break. A change to what a
 result, a sweep or an archive writes to disk also raises `LAYOUT` in
-`relational/parquet.py`, so an answer in the old layout is refused by name.
+`relational/answer_layout.py`, so an answer in the old layout is refused by name.
 
 ## A claim carries its evidence
 

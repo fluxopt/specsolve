@@ -1,13 +1,16 @@
-"""Answers on disk as parquet: the layout a result and a sweep both write, and the writer that lands a file whole.
+"""The answer's layout on disk: what a result and a sweep write, the rows they record, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the three kinds a solve
 answers with — the primals, the duals, the named expressions. A result
 writes one file under each name; a sweep one per slice, and reads them back
 as one. Beside them is the [`Record`][], which says how the solve
-terminated: a result writes one row, a sweep one per slice.
+terminated, and the [`Metrics`][], what it took: a result writes one row of
+each, a sweep one per slice.
 
 A saved result also holds ``activity/<name>`` for every constraint, and
 ``reasons.parquet`` saying why a kind or a name is deliberately not there.
+An archive holds this layout under its own ``answer/``
+([`specsolve.archive_layout`][]).
 """
 
 from __future__ import annotations
@@ -27,10 +30,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from mathspec import Spec
+
 #: The three kinds of frame a solve answers with, named after the reader each
-#: comes back through, and what each is a frame of.
+#: comes back through, and each the directory its frames are saved under.
 KINDS = ('primal', 'dual', 'expression')
-LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
+
+#: The directory a saved result keeps each constraint's activity under,
+#: beside the [`KINDS`][]; a sweep saves none.
+ACTIVITY = 'activity'
 
 #: The prefix reserved, in any letter case, for the columns specsolve adds, so
 #: that no name a spec declares can collide with one.
@@ -102,13 +110,8 @@ def check_format(directory: Path) -> None:
 _DIGEST_WIDTH = 16
 
 
-def digest_of_bytes(data: bytes) -> str:
-    """A short, stable name for *data* — what the digests here are made with."""
-    return hashlib.sha256(data).hexdigest()[:_DIGEST_WIDTH]
-
-
 def digest_of_file(path: Path) -> str:
-    """The same name for a file's bytes, read a chunk at a time."""
+    """A short, stable name for a file's bytes, read a chunk at a time."""
     sha = hashlib.sha256()
     with path.open('rb') as handle:
         while chunk := handle.read(1 << 20):
@@ -116,14 +119,14 @@ def digest_of_file(path: Path) -> str:
     return sha.hexdigest()[:_DIGEST_WIDTH]
 
 
-def digest_of(yaml: str) -> str:
+def digest_of(spec: Spec) -> str:
     """A short, stable name for a spec — what two answers must share to be comparable.
 
-    Over the YAML a ``Spec`` round-trips to, which is what an archive writes
-    as ``spec.yaml``. The data is not in it: two scenarios of one spec share
+    Over the YAML *spec* round-trips to, which is what an archive writes as
+    ``spec.yaml``. The data is not in it: two scenarios of one spec share
     this.
     """
-    return digest_of_bytes(yaml.encode())
+    return hashlib.sha256(spec.to_yaml().encode()).hexdigest()[:_DIGEST_WIDTH]
 
 
 class Provenance(NamedTuple):
@@ -404,7 +407,7 @@ def clear_the_answer(directory: Path) -> None:
     """Remove what a saved answer holds, leaving anything else in *directory* alone."""
     import shutil
 
-    for kind in (*KINDS, 'activity'):
+    for kind in (*KINDS, ACTIVITY):
         shutil.rmtree(directory / kind, ignore_errors=True)
     for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
         (directory / member).unlink(missing_ok=True)
@@ -437,8 +440,8 @@ def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]
     return next((why for kind, name, why in rows if kind == 'dual' and not name), None), absent
 
 
-def reader_kind(kind: str) -> str:
-    """*kind*, checked to be one of [`KINDS`][].
+def checked_kind(kind: str) -> str:
+    """*kind*, returned once it is checked to be one of [`KINDS`][].
 
     Raises:
         SpecsolveError: A *kind* that names no reader.
@@ -446,6 +449,25 @@ def reader_kind(kind: str) -> str:
     if kind not in KINDS:
         raise SpecsolveError(f'kind is one of {", ".join(KINDS)}, not {kind!r}')
     return kind
+
+
+def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
+    """Every ``<name>.parquet`` under *under*, keyed by name; empty where *under* does not exist.
+
+    An archive's [`RUN`][] column is left on disk, so a frame read out of one
+    equals the frame the solve returned.
+
+    Args:
+        under: One kind's directory.
+        whole: Read each frame into memory now, rather than as a
+            `polars.scan_parquet` collected at the first read.
+    """
+    if not under.is_dir():
+        return {}
+    return {
+        file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
+        for file in sorted(under.glob('*.parquet'))
+    }
 
 
 def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:

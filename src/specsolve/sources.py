@@ -16,8 +16,8 @@ from mathspec import did_you_mean
 from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
+from specsolve.relational.answer_layout import RESERVED
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.parquet import RESERVED
 
 if TYPE_CHECKING:
     from mathspec.program import DimensionDeclaration, ParameterDeclaration, Program, RelationDeclaration
