@@ -113,7 +113,7 @@ keep.
 
 `metrics` is a `Metrics`: how big the model was, how many solves the clocks
 cover, and wall-clock seconds in each phase, as one value
-([the attributes](../reference/api.md#specsolve.relational.parquet.Metrics)).
+([the attributes](../reference/api.md#specsolve.relational.answer_layout.Metrics)).
 
 ```python
 case = sps.load_archive('case/')

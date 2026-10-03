@@ -17,7 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import NoSolutionError
-from specsolve.relational.parquet import Metrics, Record, _column_types
+from specsolve.relational.answer_layout import Metrics, Record, _column_types
 from specsolve.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from specsolve.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
 from specsolve.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS

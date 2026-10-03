@@ -25,7 +25,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve.api import Model
-from specsolve.relational.parquet import Metrics, Provenance, Record
+from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------

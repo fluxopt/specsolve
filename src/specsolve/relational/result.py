@@ -18,20 +18,21 @@ from specsolve.errors import (
     no_model_behind_this_answer_message,
     unknown_name_message,
 )
-from specsolve.relational.collect import polars_engine
-from specsolve.relational.parquet import (
+from specsolve.relational.answer_layout import (
+    ACTIVITY,
     NO_PROVENANCE,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
     Provenance,
     Record,
+    checked_kind,
     clear_the_answer,
-    reader_kind,
     write_format,
     write_reasons,
     write_whole,
 )
+from specsolve.relational.collect import polars_engine
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -271,7 +272,7 @@ class Diagnostics:
 
         What ``archive=`` records beside the answer, and what a caller feeding
         its own store reads off a model it solved.
-        [`Metrics`][specsolve.relational.parquet.Metrics] says what each field
+        [`Metrics`][specsolve.relational.answer_layout.Metrics] says what each field
         means. A phase this build never entered reads zero, and ``run`` is
         null.
         """
@@ -357,7 +358,7 @@ class Result:
     #: Why there is no certificate — the status, or the solver setting that
     #: would have produced one. ``None`` whenever [`_dual_rays`][] holds it.
     _no_dual_ray: str | None = None
-    #: [`digest_of`][specsolve.relational.parquet.digest_of] the spec this
+    #: [`digest_of`][specsolve.relational.answer_layout.digest_of] the spec this
     #: answered, or ``None`` for a solve run off a lowered program.
     _spec_digest: str | None = None
     #: When the solver returned, in UTC.
@@ -623,7 +624,7 @@ class Result:
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
-        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[reader_kind(kind)]
+        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[checked_kind(kind)]
         return reader(name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
@@ -634,7 +635,7 @@ class Result:
             SpecsolveError: This result was closed, or *kind* is ``dual`` and
                 the duals are undefined.
         """
-        if reader_kind(kind) == 'primal':
+        if checked_kind(kind) == 'primal':
             return tuple(self._readable(self._primals, 'the solution'))
         if kind == 'dual':
             frames = self._readable(self._duals, 'the duals')
@@ -681,7 +682,7 @@ class Result:
         """Every kind this solve answered with, one file per name, into *directory*.
 
         ``record.parquet`` holds the
-        [`Record`][specsolve.relational.parquet.Record] — how the solve
+        [`Record`][specsolve.relational.answer_layout.Record] — how the solve
         terminated and what it reached; a solve that reached no objective
         writes null there rather than ``nan``. Then ``primal/<name>.parquet``
         for every variable, ``dual/<name>.parquet`` for every constraint where
@@ -727,7 +728,7 @@ class Result:
         for name, frame in (self._duals or {}).items():
             write_whole(frame, out / 'dual' / f'{name}.parquet')
         for name, frame in (self._activities or {}).items():
-            write_whole(frame, out / 'activity' / f'{name}.parquet')
+            write_whole(frame, out / ACTIVITY / f'{name}.parquet')
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:

@@ -31,27 +31,28 @@ import numpy as np
 import polars as pl
 from mathspec import advice
 
+from specsolve.archive_layout import beside, check_the_target, write_archive
 from specsolve.errors import (
     LayoutError,
     SpecsolveError,
     SpecsolveWarning,
 )
 from specsolve.lanes import Buildable, Label, Source, declared, lower, lowered
-from specsolve.layout import beside, check_the_target, write_archive
-from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
-from specsolve.relational.parquet import (
+from specsolve.relational.answer_layout import (
+    ACTIVITY,
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
-    RUN,
     Provenance,
     Record,
     check_format,
     digest_of,
     installed,
     read_reasons,
+    saved_frames,
     write_whole,
 )
+from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
 from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
@@ -223,7 +224,7 @@ class Model:
         self._spec = declared(spec)
         self._program = lowered(self._spec)
         #: The document's digest; the data's is [`_model_digest`][].
-        self._spec_digest = digest_of(self._spec.to_yaml())
+        self._spec_digest = digest_of(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
@@ -341,7 +342,7 @@ class Model:
                 the model solves again from the file alone. A ``.zip`` suffix
                 packs it into one file and anything else is a directory. What
                 the build and its solves have spent goes in beside the answer,
-                as [`Metrics`][specsolve.relational.parquet.Metrics]. Each
+                as [`Metrics`][specsolve.relational.answer_layout.Metrics]. Each
                 source goes in as the table [`tidy`][] returns for it, with
                 ``specsolve_run`` added, and members are stored uncompressed.
 
@@ -609,27 +610,6 @@ def write(
     return out
 
 
-def _whole(file: Path) -> pl.LazyFrame:
-    """*file* read into memory now, as the `polars.LazyFrame` a saved frame is held as."""
-    return pl.read_parquet(file).lazy()
-
-
-#: How a saved frame is read: [`_whole`][] now, `polars.scan_parquet` at the
-#: first collect.
-type Reading = Callable[[Path], pl.LazyFrame]
-
-
-def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
-    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
-
-    An archive's ``specsolve_run`` column is left on disk, so a frame read
-    out of one equals the frame the solve returned.
-    """
-    if not under.is_dir():
-        return {}
-    return {file.stem: read(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))}
-
-
 def _absent(reason: str) -> Callable[[], pl.DataFrame]:
     """A named expression's reader that raises *reason* at the read."""
 
@@ -666,7 +646,7 @@ def load_result(directory: str | Path) -> Result:
         LayoutError: A directory holding no ``record.parquet``, or one whose
             layout has moved since it was written.
     """
-    return _answer_under(Path(directory), _whole)
+    return _answer_under(Path(directory), whole=True)
 
 
 def scan_result(directory: str | Path) -> Result:
@@ -688,11 +668,11 @@ def scan_result(directory: str | Path) -> Result:
     Raises:
         LayoutError: As [`load_result`][] raises it.
     """
-    return _answer_under(Path(directory), pl.scan_parquet)
+    return _answer_under(Path(directory), whole=False)
 
 
-def _answer_under(out: Path, read: Reading) -> Result:
-    """The saved answer under *out*, its frames read *read*'s way."""
+def _answer_under(out: Path, *, whole: bool) -> Result:
+    """The saved answer under *out*, its frames read into memory now where *whole*, else scanned."""
     record_file = out / RECORD_FILE
     if not record_file.is_file():
         raise LayoutError(
@@ -705,15 +685,16 @@ def _answer_under(out: Path, read: Reading) -> Result:
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
-        name: (lambda frame=frame: frame.collect()) for name, frame in _saved_frames(out / 'expression', read).items()
+        name: (lambda frame=frame: frame.collect())
+        for name, frame in saved_frames(out / 'expression', whole=whole).items()
     }
     expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
-        _saved_frames(out / 'primal', read),
-        _saved_frames(out / 'dual', read),
-        _saved_frames(out / 'activity', read),
+        saved_frames(out / 'primal', whole=whole),
+        saved_frames(out / 'dual', whole=whole),
+        saved_frames(out / ACTIVITY, whole=whole),
         'nothing',
         expressions,
         _no_duals=no_duals,

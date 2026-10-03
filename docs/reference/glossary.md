@@ -225,8 +225,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Record** · **Metrics**
 : The two saved rows, each a `NamedTuple` that names its own columns:
-  [`Record`](api.md#specsolve.relational.parquet.Record), how a solve
-  terminated, and [`Metrics`](api.md#specsolve.relational.parquet.Metrics),
+  [`Record`](api.md#specsolve.relational.answer_layout.Record), how a solve
+  terminated, and [`Metrics`](api.md#specsolve.relational.answer_layout.Metrics),
   what it took. A sweep writes one of each per slice, with the same columns
   as a single solve; `slice_axis` and `slice` say which slice.
 

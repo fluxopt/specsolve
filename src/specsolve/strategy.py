@@ -32,6 +32,7 @@ from mathspec import did_you_mean
 from mathspec.program import parameters_of
 
 from specsolve.api import build, check
+from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
 from specsolve.errors import (
     DataError,
     LayoutError,
@@ -41,10 +42,8 @@ from specsolve.errors import (
 )
 from specsolve.frames import as_frame
 from specsolve.lanes import declared, lower
-from specsolve.layout import ANSWER_DIR, beside, check_the_target, write_archive
-from specsolve.relational.parquet import (
+from specsolve.relational.answer_layout import (
     KINDS,
-    LABELS,
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
@@ -53,11 +52,12 @@ from specsolve.relational.parquet import (
     Metrics,
     Record,
     check_format,
+    checked_kind,
     consolidated,
     read_reasons,
-    reader_kind,
     refuse_reserved,
     row_of,
+    saved_frames,
     write_format,
     write_reasons,
     write_whole,
@@ -79,6 +79,9 @@ if TYPE_CHECKING:
 
 #: A frame lazy or not, going in and coming back out the same way.
 _Frame = TypeVar('_Frame', pl.DataFrame, pl.LazyFrame)
+
+#: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
+_LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
 
 #: The codec a frame is written with to cross a process.
 _COMPRESSION = 'zstd'
@@ -180,7 +183,7 @@ class _Answer:
     meta: Record
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
-    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve.relational.parquet.KINDS]:
+    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve.relational.answer_layout.KINDS]:
     #: every variable, every constraint's dual and every declared named
     #: expression, evaluated at this slice's solution. A kind the slice
     #: produced nothing of is absent.
@@ -629,7 +632,7 @@ class Sweep:
     """
 
     key_name: str
-    #: One [`Record`][specsolve.relational.parquet.Record] per slice, in slice
+    #: One [`Record`][specsolve.relational.answer_layout.Record] per slice, in slice
     #: order — how every slice terminated, whether or not it produced an
     #: answer. The key column comes first, as its own type, so the table joins
     #: to the frames; ``slice_axis`` and ``slice`` name the slice again as
@@ -637,7 +640,7 @@ class Sweep:
     #: slice that reached no objective holds null there rather than ``nan``,
     #: so the column aggregates over the slices that solved.
     record: pl.DataFrame
-    #: One [`Metrics`][specsolve.relational.parquet.Metrics] per slice, keyed as
+    #: One [`Metrics`][specsolve.relational.answer_layout.Metrics] per slice, keyed as
     #: [`record`][] is and in slice order — [`diagnostics`][specsolve.api.Model.diagnostics]
     #: one dimension wider, its counts and clocks only. Each row is the slice's
     #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
@@ -758,7 +761,7 @@ class Sweep:
             held, frame = slices, pl.concat(slices[name]).lazy() if name in slices else None
         if frame is None:
             absent = self._absent.get(kind, {}).get(name) or (self._no_duals if kind == 'dual' else None)
-            raise SpecsolveError(absent or _nothing_to_read(LABELS[kind], name, held, self.record))
+            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.record))
         if self._answer is not None and not per_window:
             return frame
         return self._answered(frame, per_window=per_window)
@@ -806,7 +809,7 @@ class Sweep:
         """
         if self._disk is None:
             return self._frame(name, kind, per_window=per_window).lazy()
-        return self._named(reader_kind(kind), name, per_window=per_window)
+        return self._named(checked_kind(kind), name, per_window=per_window)
 
     def primal(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One variable's answer.
@@ -910,11 +913,13 @@ class Sweep:
         no_model = no_model_behind_this_answer_message()
         if not isinstance(expression, str):
             return no_model
-        return f'{_nothing_to_read(LABELS["expression"], expression, self._expression_names(), self.record)} {no_model}'
+        return (
+            f'{_nothing_to_read(_LABELS["expression"], expression, self._expression_names(), self.record)} {no_model}'
+        )
 
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
-        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[reader_kind(kind)]
+        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[checked_kind(kind)]
         return reader(name, per_window=per_window)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
@@ -1012,7 +1017,7 @@ class Sweep:
         ``_unstitchable`` refuses, which an archive's answer already lacks.
         """
         self._held_here()
-        kind = reader_kind(kind)
+        kind = checked_kind(kind)
         if per_window:
             self._check_per_window()
         left_out = dict(self._absent.get(kind, {}))
@@ -1026,8 +1031,8 @@ class Sweep:
                 else:
                     held[name] = frames
         if not held:
-            absent = (self._no_duals if kind == 'dual' else None) or _none_answered(LABELS[kind], left_out)
-            raise SpecsolveError(absent or _nothing_to_read(LABELS[kind], 'anything', held, self.record))
+            absent = (self._no_duals if kind == 'dual' else None) or _none_answered(_LABELS[kind], left_out)
+            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
 
     def __len__(self) -> int:
@@ -1173,13 +1178,7 @@ def read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
             than at the call that asks, as [`scan_sweep`][] does.
     """
     opened = _opened_sweep(under)
-    answer = {
-        kind: {
-            file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
-            for file in sorted((under / kind).glob('*.parquet'))
-        }
-        for kind in KINDS
-    }
+    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
     kept = json.loads((under / _MANIFEST_FILE).read_text())['windows']
     opened = replace(opened, _answer=answer, _windows=kept)
     spill = _Spill(under / _WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype) if kept else None

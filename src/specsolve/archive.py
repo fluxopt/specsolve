@@ -2,7 +2,7 @@
 
 [`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
 disk. ``archive=`` on the verbs that solve writes one, through
-[`specsolve.layout`][].
+[`specsolve.archive_layout`][].
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ import polars as pl
 from mathspec import to_spec
 
 from specsolve.api import build, load_result, scan_result
+from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
 from specsolve.errors import SpecsolveError
-from specsolve.layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
-from specsolve.relational.parquet import METRICS_FILE, RUN, Metrics, digest_of, row_of
+from specsolve.relational.answer_layout import METRICS_FILE, RUN, Metrics, digest_of, row_of
 from specsolve.strategy import (
     EachCoordinate,
     EachWindow,
@@ -62,7 +62,7 @@ class SolveArchive:
             versions can write one table to different digests, and reading
             an archive does not verify them.
         metrics: What reaching the answer took, as one
-            [`Metrics`][specsolve.relational.parquet.Metrics].
+            [`Metrics`][specsolve.relational.answer_layout.Metrics].
     """
 
     spec: Spec
@@ -171,7 +171,7 @@ def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
 
     A ``None`` digest is not compared.
     """
-    mine = digest_of(spec.to_yaml())
+    mine = digest_of(spec)
     if others := sorted({other for other in answered if other is not None and other != mine}):
         raise SpecsolveError(
             f'this archive holds an answer that came back from a different spec: the answer carries '

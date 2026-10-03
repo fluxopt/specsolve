@@ -25,8 +25,8 @@ import specsolve as sps
 from specsolve import strategy
 from specsolve.api import _provenance
 from specsolve.archive import _attach_readers
-from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.relational.parquet import (
+from specsolve.archive_layout import ANSWER_DIR, _staging_for
+from specsolve.relational.answer_layout import (
     LAYOUT,
     METRICS_FILE,
     RUN,

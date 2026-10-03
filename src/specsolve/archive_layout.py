@@ -2,9 +2,11 @@
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
 ``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
-file holds, ``answer/`` in the layout both answers save, and ``axis.json``
-where the sources are cut. A directory archive is read
-where it lies; a zip is unpacked first.
+file holds, ``answer/`` in the answer's own layout
+([`specsolve.relational.answer_layout`][]), and ``axis.json`` where the
+sources are cut. A directory archive is read where it lies; a zip is
+unpacked first. Writing one is here; reading one back is
+[`specsolve.archive`][].
 """
 
 from __future__ import annotations
@@ -21,7 +23,15 @@ import polars as pl
 
 from specsolve.errors import LayoutError
 from specsolve.lanes import lowered
-from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, RUN, consolidated, digest_of_file, write_whole
+from specsolve.relational.answer_layout import (
+    ACTIVITY,
+    METRICS_FILE,
+    RECORD_FILE,
+    RUN,
+    consolidated,
+    digest_of_file,
+    write_whole,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -151,7 +161,7 @@ _HELD_UNDER = {
     'relation': [SOURCES_DIR],
     'parameter': [SOURCES_DIR],
     'variable': [f'{ANSWER_DIR}/primal'],
-    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/activity'],
+    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/{ACTIVITY}'],
     'expression': [f'{ANSWER_DIR}/expression'],
 }
 
@@ -211,8 +221,7 @@ def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
         copy_function=lambda source, target: _stamped(Path(source), Path(target), run),
     )
     for file in consolidating:
-        stamped = consolidated(answer, file).with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
-        stamped.write_parquet(into / file, compression='zstd')
+        _with_run(consolidated(answer, file), run).write_parquet(into / file, compression='zstd')
 
 
 def _stamped(source: Path, target: Path, run: str) -> None:
@@ -225,7 +234,12 @@ def _stamped(source: Path, target: Path, run: str) -> None:
     if source.suffix != '.parquet':
         shutil.copy2(source, target)
         return
-    write_whole(pl.scan_parquet(source).with_columns(pl.lit(run, dtype=pl.String).alias(RUN)), target)
+    write_whole(_with_run(pl.scan_parquet(source), run), target)
+
+
+def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
+    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
 
 
 def _pack(tree: Path, into: Path) -> None:

@@ -198,7 +198,7 @@ metrics.select('specsolve_run', 'rows', 'nonzeros', 'build_seconds', 'solve_seco
 )
 ```
 
-The columns are [the metrics](../reference/api.md#specsolve.relational.parquet.Metrics). A sweep
+The columns are [the metrics](../reference/api.md#specsolve.relational.answer_layout.Metrics). A sweep
 writes one row per slice, with the slice's own share of the clocks and
 `solves` of `1`
 ([reading a sweep](../reference/sweeps.md#reading-a-sweep)).
