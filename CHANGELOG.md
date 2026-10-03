@@ -10,6 +10,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(sweep): a spilled or scanned sweep's readers read the name they are asked for instead of refusing ([#1830](https://github.com/fluxopt/specsolve/pull/1830))
 - refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
 - refactor(archive): Record, Metrics and Provenance are imported from specsolve.relational.answer_layout, which an archive's own layout nests ([#1823](https://github.com/fluxopt/specsolve/pull/1823))
+- feat(api): a written LP or MPS file can name each variable and constraint by its declaration and coordinate ([#1795](https://github.com/fluxopt/specsolve/pull/1795))
 
 ## 0.4.0 (2026-10-03)
 

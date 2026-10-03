@@ -14,7 +14,7 @@ from mathspec import program
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.writers.text import append_lines, chunk_key, digits, number
+from specsolve.relational.sinks.writers.text import NUMBERED, Names, append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
@@ -43,18 +43,18 @@ _LP_DOMAIN_SECTION = {
 EMIT_BUDGET = 2_000_000
 
 
-def write_lp_file(handoff: Handoff, path: str | Path) -> None:
-    """Write the model as LP text."""
+def write_lp_file(handoff: Handoff, path: str | Path, names: Names = NUMBERED) -> None:
+    """Write the model as LP text, its columns and rows called what *names* calls them."""
     path = Path(path)
-    objective = handoff.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
+    objective = handoff.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col'), names))
     bounds = (
         handoff.cols.lazy()
         .with_row_index('col')
         .select(
             pl.concat_str(
                 _bound(pl.col('lb'), '-infinity').alias('lb'),
-                pl.lit(' <= x').alias('open'),
-                digits(pl.col('col')),
+                pl.lit(' <= ').alias('open'),
+                names.column(pl.col('col')),
                 pl.lit(' <= ').alias('close'),
                 _bound(pl.col('ub'), '+infinity').alias('ub'),
             )
@@ -68,14 +68,15 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
         append_lines(objective, f)
         if handoff.quad.height:
             f.write(b'+ [\n')
-            append_lines(_quadratic_terms(handoff), f)
+            append_lines(_quadratic_terms(handoff, names), f)
             f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
         for block in handoff.row_blocks(EMIT_BUDGET):
-            append_lines(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
+            entries = handoff.matrix_block(block.lo, block.hi)
+            append_lines(_constraint_lines(handoff, block.lo, block.hi, entries, names), f)
         for row, pairs in handoff.quadratic_blocks():
-            append_lines(_quadratic_row_lines(handoff, row, pairs), f)
+            append_lines(_quadratic_row_lines(handoff, row, pairs, names), f)
 
         f.write(b'\nbounds\n')
         append_lines(bounds, f)
@@ -85,54 +86,54 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
             if chosen.select(pl.len()).collect().item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
-            append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
+            append_lines(chosen.select(names.column(pl.col('col'))), f)
 
         if handoff.sos.height:
             f.write(b'\nsos\n')
-            append_lines(_set_lines(handoff), f)
+            append_lines(_set_lines(handoff, names), f)
 
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
+def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame, names: Names) -> pl.LazyFrame:
     """One quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``.
 
     Not doubled: the format divides only the objective's bracket by two.
     """
     entries = handoff.matrix_block(row, row + 1)
-    header = pl.LazyFrame({'line': [f'c{row}:']})
-    linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
+    header = pl.select(pl.concat_str(names.row(pl.lit(row)), pl.lit(':')).alias('line')).lazy()
+    linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col'), names).alias('line'))
     opened = pl.LazyFrame({'line': ['+ [']})
-    quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
+    quadratic = pairs.lazy().select(_pair(pl.col('coeff'), names).alias('line'))
     closed = (
         handoff.rows.lazy().filter(pl.col('row') == row).select(pl.concat_str(pl.lit('] '), _footer()).alias('line'))
     )
     return pl.concat([header, linear, opened, quadratic, closed])
 
 
-def _quadratic_terms(handoff: Handoff) -> pl.LazyFrame:
+def _quadratic_terms(handoff: Handoff, names: Names) -> pl.LazyFrame:
     """The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
 
     The format divides the section by two, so every coefficient is doubled, on
     the diagonal and off it alike. A pair arrives ordered, summed and
     deduplicated, so nothing here sorts.
     """
-    return handoff.quad.lazy().select(_pair(pl.col('coeff') * 2))
+    return handoff.quad.lazy().select(_pair(pl.col('coeff') * 2, names))
 
 
-def _pair(coeff: pl.Expr) -> pl.Expr:
+def _pair(coeff: pl.Expr, names: Names) -> pl.Expr:
     """One quadratic pair as ``+2 x3 * x7``, or ``x3 ^ 2`` for a squared column: no parser accepts ``x3 * x3``."""
     return pl.concat_str(
         *_signed(coeff),
-        pl.lit(' x'),
-        digits(pl.col('col_l')),
+        pl.lit(' '),
+        names.column(pl.col('col_l')),
         pl.when(pl.col('col_l') == pl.col('col_r'))
         .then(pl.lit(' ^ 2'))
-        .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
+        .otherwise(pl.concat_str(pl.lit(' * '), names.column(pl.col('col_r')))),
     )
 
 
-def _set_lines(handoff: Handoff) -> pl.LazyFrame:
+def _set_lines(handoff: Handoff, names: Names) -> pl.LazyFrame:
     """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line, in linopy's spelling.
 
     ``maintain_order`` keeps a set's line the same bytes twice.
@@ -142,7 +143,7 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
         .group_by('set', maintain_order=True)
         .agg(
             pl.col('type').first(),
-            pl.concat_str(pl.lit('x'), digits(pl.col('col')), pl.lit(':'), digits(pl.col('weight')))
+            pl.concat_str(names.column(pl.col('col')), pl.lit(':'), digits(pl.col('weight')))
             .str.join(' ')
             .alias('members'),
         )
@@ -159,7 +160,7 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     )
 
 
-def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame, names: Names) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
@@ -177,15 +178,15 @@ def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame)
     matrix = entries.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
-        pl.concat_str(pl.lit('c').alias('c'), digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
+        pl.concat_str(names.row(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
     )
     placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
         _key(pl.lit(1, dtype=pl.Int64)),
-        pl.lit('+0 x0').alias('line'),
+        pl.concat_str(pl.lit('+0 '), names.column(pl.lit(0))).alias('line'),
     )
     terms = matrix.sort('row', 'col').select(
         _key(pl.col('col').cast(pl.Int64) + 2),
-        _term(pl.col('coeff'), pl.col('col')).alias('line'),
+        _term(pl.col('coeff'), pl.col('col'), names).alias('line'),
     )
     footer = rows.select(_key(pl.lit(slots - 1, dtype=pl.Int64)), _footer().alias('line'))
     return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
@@ -200,9 +201,9 @@ def _footer() -> pl.Expr:
     )
 
 
-def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
+def _term(coeff: pl.Expr, col: pl.Expr, names: Names) -> pl.Expr:
     """One ``+1.5 x7`` term."""
-    return pl.concat_str(*_signed(coeff), pl.lit(' x'), digits(col))
+    return pl.concat_str(*_signed(coeff), pl.lit(' '), names.column(col))
 
 
 def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:

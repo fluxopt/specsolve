@@ -1,7 +1,7 @@
 """The writer family: the handoff in, a file out. See ../README.md.
 
 One module per format, chosen by the output's suffix. Each answers
-``(handoff, path) -> None``, and streams.
+``(handoff, path, names) -> None``, and streams.
 """
 
 from __future__ import annotations
@@ -19,8 +19,9 @@ if TYPE_CHECKING:
 
     from specsolve.relational.sinks.capabilities import Capabilities
     from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.writers.text import Names
 
-    Write = Callable[[Handoff, Path], None]
+    Write = Callable[[Handoff, Path, Names], None]
 
 __all__ = ['WRITERS', 'Writer', 'writer']
 

@@ -83,3 +83,19 @@ sps.write('dispatch.yaml', sources, 'dispatch.lp')
 
 The two formats carry different constructs: MPS has no quadratic objective or
 indicator, for example. The table above covers both.
+
+A written column is `x0` and a row is `c0` unless you ask for names. With
+`names=True`, each column and row is named by its declaration and coordinate,
+such as `p(0,wind)` and `balance(0)`. Use it when the tool that reads the file
+finds a variable by name, as JuMP's `variable_by_name` does:
+
+```python
+sps.write('dispatch.yaml', sources, 'dispatch.lp', names=True)
+```
+
+A label keeps its letters, digits and ``!"#$%&'.;?@`{|}~``. Every other
+character is written as `_`, because an LP reader refuses it, so `north sea`
+becomes `north_sea`. A declaration with no dims is written `total()`. When two
+labels of one declaration become the same name, the write is refused and the
+error names both labels. `model.check('.lp', names=True)` gives the same refusal
+without writing a file.

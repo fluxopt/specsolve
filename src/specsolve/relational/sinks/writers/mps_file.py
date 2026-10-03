@@ -2,7 +2,8 @@
 
 MPS is column-major and the engine's matrix is row-major, so this writer sorts
 the matrix by column. The names are the LP writer's — ``x0`` a column, ``c0`` a
-row, ``s0`` a set — and every section is written in label order.
+row, ``s0`` a set, or the declared names both take — and every section is
+written in label order.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import polars as pl
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES, ranges
-from specsolve.relational.sinks.writers.text import append_lines, chunk_key, digits, number
+from specsolve.relational.sinks.writers.text import NUMBERED, Names, append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
@@ -36,8 +37,8 @@ _MARKER = "    MARKER 'MARKER' '{}'"
 EMIT_BUDGET = 500_000
 
 
-def write_mps_file(handoff: Handoff, path: str | Path) -> None:
-    """Write the model as MPS text."""
+def write_mps_file(handoff: Handoff, path: str | Path, names: Names = NUMBERED) -> None:
+    """Write the model as MPS text, its columns and rows called what *names* calls them."""
     path = Path(path)
     entries, starts = _column_major(handoff)
 
@@ -47,25 +48,25 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
             f.write(b'OBJSENSE\n    MAX\n')
 
         f.write(b'ROWS\n N  obj\n')
-        append_lines(_row_lines(handoff), f)
+        append_lines(_row_lines(handoff, names), f)
 
         f.write(b'COLUMNS\n')
         width = handoff.matrix.height / max(1, handoff.column_count)
         for lo, hi in ranges(handoff.column_count, EMIT_BUDGET, width):
             owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
-            append_lines(_column_lines(handoff, lo, hi, owned), f)
+            append_lines(_column_lines(handoff, lo, hi, owned, names), f)
 
         f.write(b'RHS\n')
         if handoff.objective_constant:
             f.write(f'    rhs obj {-handoff.objective_constant!r}\n'.encode())
-        append_lines(_rhs_lines(handoff), f)
+        append_lines(_rhs_lines(handoff, names), f)
 
         f.write(b'BOUNDS\n')
-        _write_bounds(handoff, f)
+        _write_bounds(handoff, f, names)
 
         if handoff.sos.height:
             f.write(b'SOS\n')
-            append_lines(_set_lines(handoff), f)
+            append_lines(_set_lines(handoff, names), f)
 
         f.write(b'ENDATA\n')
 
@@ -77,26 +78,26 @@ def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int,
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
 
-def _row_lines(handoff: Handoff) -> pl.LazyFrame:
+def _row_lines(handoff: Handoff, names: Names) -> pl.LazyFrame:
     """One ``ROWS`` entry per constraint row, after the objective's ``N``."""
     return handoff.rows.lazy().select(
         pl.concat_str(
             pl.lit(' '),
             pl.col('sense').replace_strict(_MPS_SENSE, return_dtype=pl.String),
-            pl.lit('  c'),
-            digits(pl.col('row')),
+            pl.lit('  '),
+            names.row(pl.col('row')),
         )
     )
 
 
-def _rhs_lines(handoff: Handoff) -> pl.LazyFrame:
+def _rhs_lines(handoff: Handoff, names: Names) -> pl.LazyFrame:
     """Each row's right-hand side, in row order."""
     return handoff.rows.lazy().select(
-        pl.concat_str(pl.lit('    rhs c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('rhs')))
+        pl.concat_str(pl.lit('    rhs '), names.row(pl.col('row')), pl.lit(' '), number(pl.col('rhs')))
     )
 
 
-def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame, names: Names) -> pl.LazyFrame:
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     A column's lines occupy ``slots`` consecutive keys — the integer marker, its
@@ -117,7 +118,7 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
         .with_columns(pl.col('col').cast(pl.Int64))
     )
     integral = columns.filter(pl.col('vtype') != 'continuous')
-    name = pl.concat_str(pl.lit('    x'), digits(pl.col('col')))
+    name = pl.concat_str(pl.lit('    '), names.column(pl.col('col')))
     cost = columns.join(handoff.obj.lazy().with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left').select(
         _key(pl.lit(1, dtype=pl.Int64)),
         pl.concat_str(name, pl.lit(' obj '), number(pl.col('coeff').fill_null(0.0))).alias('line'),
@@ -127,7 +128,7 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
         .with_columns(pl.col('col').cast(pl.Int64))
         .select(
             _key(pl.col('row').cast(pl.Int64) + 2),
-            pl.concat_str(name, pl.lit(' c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('coeff'))).alias(
+            pl.concat_str(name, pl.lit(' '), names.row(pl.col('row')), pl.lit(' '), number(pl.col('coeff'))).alias(
                 'line'
             ),
         )
@@ -139,14 +140,14 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
     return pl.concat([*markers, cost, terms]).sort('key').select('line')
 
 
-def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
+def _write_bounds(handoff: Handoff, f: IO[bytes], names: Names) -> None:
     """Every column's lower bound, then every column's upper.
 
     A reader given every lower bound does not apply the MPS rule that an ``UP``
     below zero implies an unbounded lower one.
     """
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
-        name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col('col')))
+        name = pl.concat_str(pl.lit(' bnd '), names.column(pl.col('col')))
         append_lines(
             handoff.cols.lazy()
             .with_row_index('col')
@@ -159,7 +160,7 @@ def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
         )
 
 
-def _set_lines(handoff: Handoff) -> pl.LazyFrame:
+def _set_lines(handoff: Handoff, names: Names) -> pl.LazyFrame:
     """Each special-ordered set as its header line and one line per member.
 
     The stream arrives grouped by set and ascending in weight, so the key is the
@@ -177,6 +178,6 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     )
     lines = members.select(
         (pl.col('ord') * 2 + 1).alias('key'),
-        pl.concat_str(pl.lit('    x'), digits(pl.col('col')), pl.lit(' '), digits(pl.col('weight'))).alias('line'),
+        pl.concat_str(pl.lit('    '), names.column(pl.col('col')), pl.lit(' '), digits(pl.col('weight'))).alias('line'),
     )
     return pl.concat([headers, lines]).sort('key').select('line')
