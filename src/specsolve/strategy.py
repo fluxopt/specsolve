@@ -185,8 +185,7 @@ def solve_over(
 ) -> Sweep:
     """Solve *spec* once per slice of *axis* and fold the answers together.
 
-    The rules — what a carry copies, how the key column is named, which
-    executor to choose — are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
+    The rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 
     Args:
         spec: As [`check`][specsolve.api.check] takes it. Parsed once, whichever
@@ -215,30 +214,26 @@ def solve_over(
         keep: As [`solve`][specsolve.api.Model.solve] takes it, reaching every
             slice. Under an executor every slice is a first solve and keeps
             nothing, whatever was asked.
-        spill_to: A directory to write each slice's frames to as the fold goes,
-            so the sweep's memory stays at one slice however many there
-            are. A reader reads the name it is asked for off the files, and
-            [`Sweep.scan`][] reads it lazily. A directory holds
-            one sweep: run the same sweep at it again and the slices already
-            there are not solved again, which is how an interrupted sweep
-            resumes.
-        archive: Where to write the whole thing — the model, the sources the
-            sweep was cut from, the axis that cut them, and every slice's
-            answer — so that ``sps.load_archive`` gives all four back and the
-            sweep runs again from the file alone. A ``.zip`` suffix packs it
-            into one file and anything else is a directory. The archive holds
-            the answer, one file per name at ``answer/<kind>/<name>.parquet``
-            as a single solve's archive does; a name with no answer, such as
-            a quantity reduced over an EachWindow sweep's windowed dimension,
-            is left out and ``answer/reasons.parquet`` says why. Given beside
-            *spill_to*, the spill is what the archive packs, so a sweep too
-            large to hold is archived without ever being held. The archive is
-            a second copy of the answers on disk; the memory is what
-            *spill_to* bounds. A sliced source is archived whole, the column
-            the axis cuts on included, and one number over a window's local
-            index as a table over the axis. A hand-built axis is refused,
-            since a list of ``(key, sources)`` is a set of sources per slice:
-            archive one solve each.
+        spill_to: A directory each slice's frames are written to as the fold
+            goes, so the sweep holds one slice in memory however many there
+            are; [`Sweep.scan`][] reads a name off it lazily. A directory
+            holds one sweep: the same sweep run at it again does not solve the
+            slices already there, which is how an interrupted sweep resumes.
+        archive: Where to write the model, the sources the sweep was cut from,
+            the axis that cut them and every slice's answer, so that
+            ``sps.load_archive`` gives all four back and the sweep runs again
+            from the file alone. A ``.zip`` suffix packs it into one file;
+            anything else is a directory. The answer is one file per name at
+            ``answer/<kind>/<name>.parquet``, as for a single solve; a name
+            with no answer, such as a quantity reduced over an EachWindow
+            sweep's windowed dimension, is left out and
+            ``answer/reasons.parquet`` says why. Beside *spill_to* the archive
+            packs the spill, so a sweep too large to hold is archived without
+            being held; the archive is a second copy of the answers on disk.
+            A sliced source is archived whole, and one number over
+            a window's local index as a table over the axis. Refused for a
+            hand-built axis, which is a set of sources per slice: archive one
+            solve each.
         keep_windows: Also archive an [`EachWindow`][] sweep's frames per
             window, lookahead rows included, under ``answer/windows/``, so
             that ``per_window=True`` reads off the archive. Refused for any
@@ -248,15 +243,14 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: A carry that cannot line up, has no seed, collapses a
-            dimension the axis does not advance along, or is asked together with
-            an executor; a key that collides with a column the frames carry;
-            an axis the program does not allow; a *spill_to* directory holding
-            another sweep; *keep_windows* without *archive* or on an axis that
-            does not cut windows. All refused before a slice is taken, and every
-            one answerable from the declarations before a source is read.
-            Keys of more than one type, or two keys of one text, are refused
-            before a slice is taken too.
+        SpecsolveError: Before a slice is taken: a carry that cannot line up,
+            has no seed, collapses a dimension the axis does not advance
+            along, or is asked together with an executor; a key that collides
+            with a column the frames carry; an axis the program does not
+            allow; a *spill_to* directory holding another sweep;
+            *keep_windows* without *archive* or on an axis that does not cut
+            windows — each answerable from the declarations alone; keys of
+            more than one type, or two keys of one text.
         DataError: No source carries the axis, an index of another
             dimension carries it, or the axis produced no slices.
 
@@ -315,8 +309,8 @@ def solve_over(
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
     """*sources* with each one-shot iterator read into a list.
 
-    Every slice reads the sources it does not cut, and the archive reads them
-    again, so an iterator would be spent after the first read.
+    Every slice and the archive read a source the axis does not cut, so an
+    iterator would be spent after the first read.
     """
     return {name: list(obj) if isinstance(obj, Iterator) else obj for name, obj in sources.items()}
 
@@ -334,11 +328,9 @@ def _archive_the_sweep(
 ) -> None:
     """Write the sweep's question and its answer to *out*.
 
-    Each source's tidy table comes from *one_slice*; the ones the axis cuts
-    are written uncut, as [`_uncut`][] gives them, and a number over a
-    window's local index over the axis, as [`_spread_over_the_axis`][] gives
-    it. A spilled sweep's answer is read off its spill, so it is never held;
-    a held one is spilled to scratch first.
+    Each source's tidy table comes from *one_slice*, except the ones
+    [`_uncut`][] and [`_spread_over_the_axis`][] give. A held sweep is spilled
+    to scratch first, so the answer is always read off a spill.
     """
     manifest = axis_manifest(axis)
     if carry:
@@ -357,14 +349,12 @@ def _archive_the_sweep(
 def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*.
 
-    One file per kind and name, holding the answer as the readers return it
-    and streamed from the spill. A name an EachWindow sweep cannot stitch
-    has no file, and ``reasons.parquet`` says why. The record and metrics are
-    written in a single solve's columns, so ``keys.parquet`` is copied
-    beside them to give the keys their type back. With *keep_windows*, the
-    spill's per-window files are copied under ``windows/``, and ``sweep.json``
-    records that they were kept: a zip holds files only, so a ``windows/``
-    no window wrote a file to is not there to say so.
+    One file per kind and name, as the readers return it, streamed from the
+    spill; a name an EachWindow sweep cannot stitch has none, and
+    ``reasons.parquet`` says why. The record and metrics take a single solve's
+    columns, so ``keys.parquet`` beside them gives the keys their type back.
+    ``sweep.json`` records *keep_windows*: a zip holds files only, so an empty
+    ``windows/`` is not there to say so.
     """
     spill = sweep._spill
     assert spill is not None, 'the answer is read off a spill, so a sweep too large to hold is never held'
@@ -411,12 +401,10 @@ def _spread_over_the_axis(
 ) -> dict[str, pl.LazyFrame]:
     """Each parameter given as one number over a window's local index, as a table over the axis.
 
-    The number spreads over the labels of the window it attaches to, and the
-    local index has one label per coordinate the window holds, so no one
-    window's table is what a window of another length read. Over the axis,
-    each window cuts what its own solve read. A parameter given in any other
-    shape, a relation, and an index other than the local one attach as one
-    table in every slice that builds, so the archive holds the first slice's.
+    The local index has one label per coordinate a window holds, so no one
+    window's table is what a window of another length read; over the axis,
+    each window cuts what its own solve read. Every other source attaches as
+    one table in every slice, so the archive holds the first slice's.
     """
     if not isinstance(axis, EachWindow):
         return {}
@@ -474,10 +462,10 @@ def _serially(
     """Each slice's answer, off one model updated in place.
 
     A slice naming other sources than the last is rebuilt, since ``update`` is
-    partial; a rebuild closes the previous model first. A generator because
-    slice ``i+1``'s carry is read from slice ``i``'s frames after the yield;
-    the caller closes it to release the model. A slice the spill holds is read
-    back, and one solved here is written before it is yielded.
+    partial. A generator because slice ``i+1``'s carry is read from slice
+    ``i``'s frames after the yield; the caller closes it to release the model.
+    A slice the spill holds is read back, and one solved here is written
+    before it is yielded.
     """
     model: Model | None = None
     named: frozenset[str] | None = None

@@ -1,16 +1,13 @@
 """The answer's layout on disk: what a result and a sweep write, the rows they record, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the three kinds a solve
-answers with — the primals, the duals, the named expressions. A result
-writes one file under each name; a sweep one per slice, and reads them back
-as one. Beside them is the [`Record`][], which says how the solve
-terminated, and the [`Metrics`][], what it took: a result writes one row of
-each, a sweep one per slice.
-
-A saved result also holds ``activity/<name>`` for every constraint, and
-``reasons.parquet`` saying why a kind or a name is deliberately not there.
-An archive holds this layout under its own ``answer/``
-([`specsolve.archive_layout`][]).
+answers with — primals, duals, named expressions: one file per name from a
+result, one per slice from a sweep, read back as one. Beside them, the
+[`Record`][] says how the solve terminated and the [`Metrics`][] what it
+took, one row of each per result or per slice. A saved result also holds
+``activity/<name>`` for every constraint, and ``reasons.parquet`` saying why
+a kind or a name is deliberately not there. An archive holds this layout
+under its own ``answer/`` ([`specsolve.archive_layout`][]).
 """
 
 from __future__ import annotations
@@ -214,22 +211,11 @@ class Record(NamedTuple):
         model_digest: str | None = None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
-        """The row a solve that terminated this way writes.
+        """The row a solve that terminated this way writes; each argument fills the column of its name.
 
-        ``status`` is derived from *termination_condition*.
-
-        Args:
-            termination_condition: What the solver said.
-            objective: What the solve reached. Written only where there are
-                values to read.
-            has_primal: Whether there are values, which the condition alone
-                does not say.
-            spec_digest: A digest of the spec answered, or ``None``.
-            solved_at: When the solver returned, in UTC. ``None`` where the
-                solve carried no clock.
-            model_digest: The built model's digest, or ``None`` where this
-                answer never held one.
-            provenance: What produced the answer.
+        ``status`` is derived from *termination_condition*, *objective* is
+        kept only where *has_primal* says there are values, and *provenance*
+        fills its own fields' columns.
         """
         return cls(
             status_of(termination_condition),
@@ -289,16 +275,15 @@ class Metrics(NamedTuple):
     """What a build and its solves took, as the row an archive records beside the answer.
 
     The scalars of [`Diagnostics`][specsolve.relational.result.Diagnostics],
-    with the same columns whoever writes them, so rows written by runs that
-    never met concatenate into one table.
+    with the same columns whoever writes them, so rows from unrelated runs
+    concatenate into one table.
 
-    **Cumulative over the solves it counts.** [`solves`][] says how many
-    solves the clocks cover. It reads ``1`` for the archive
-    [`specsolve.solve`][] writes, and ``1`` on each slice's row of a sweep,
-    whose clocks are that slice's own share. There [`loads`][] is ``1`` where
-    the solver took the slice from scratch and ``0`` where values were pushed
-    onto the model it held, and [`write_seconds`][] is zero, a sweep writing no
-    model file.
+    **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
+    for the archive [`specsolve.solve`][] writes and on each slice's row of a
+    sweep, whose clocks are that slice's own share. There [`loads`][] is ``1``
+    where the solver took the slice from scratch and ``0`` where values were
+    pushed onto the model it held, and [`write_seconds`][] is zero, a sweep
+    writing no model file.
     """
 
     #: The shape the build produced, in the solver's own vocabulary.

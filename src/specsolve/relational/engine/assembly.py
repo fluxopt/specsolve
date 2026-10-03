@@ -235,10 +235,9 @@ class Assembly:
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
-        Terms normalise to the left, constants to the right. The [`coverage`][]
-        checks run in its table's order, before an aggregate can hide a hole.
-        A row is built where either matrix has a term, and the labelled block
-        narrows to the rows that survived.
+        The [`coverage`][] checks run in its table's order, before an aggregate
+        can hide a hole. A row is built where either matrix has a term, and the
+        labelled block narrows to the rows that survived.
         """
         quadratic = declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)

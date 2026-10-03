@@ -48,10 +48,7 @@ class _Order:
 
     @classmethod
     def of(cls, scope: Scope, dimension: str, partition: program.Partition | None) -> _Order:
-        """Rank *dimension* inside each group of *partition*, or along the whole of it.
-
-        A coordinate the partition places nowhere is not in the table and joins to nothing.
-        """
+        """Rank *dimension* inside each group of *partition*, or along the whole of it."""
         grouping = Grouping.whole(scope.data, dimension) if partition is None else Grouping.of(scope.data, partition)
         incoming = grouping.table.select(
             pl.col('val').alias(dimension), pl.col(GROUP_RANK).alias(_ORD_IN), *grouping.key, pl.col(GROUP_SIZE)
@@ -99,10 +96,9 @@ def translate_rows(
 def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> Piece:
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
-    The lag table is built to the widest window the data asks for; a named
-    width keeps only the lags its entity reaches. A window vacates nothing, so
-    an operand with no presence gains one only under a partition, for the
-    coordinates in no group.
+    The lag table is built to the widest window the data asks for. A window
+    vacates nothing, so an operand with no presence gains one only under a
+    partition, for the coordinates in no group.
     """
     if s.along not in p.dims:
         refuse_a_piece_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')

@@ -1,8 +1,8 @@
 """Attach runtime data to a lowered program — the one door both lanes enter.
 
-What the caller passed (parquet paths, any table exposing the Arrow PyCapsule
-protocol, or a plain-Python shape) becomes the tidy frames both lanes read by
-name, and every check on whether that data is usable is made here, once.
+Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
+plain-Python shape become the tidy frames both lanes read by name. Every check
+on whether that data is usable is made here, once.
 """
 
 from __future__ import annotations
@@ -44,27 +44,21 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
 def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
     """Read the caller's ``sources`` into the frames both lanes build against.
 
-    Every source comes back as an in-memory `polars.LazyFrame`: a
-    parameter as tidy ``(dims…, value)``, a dimension's index as its one
-    column of labels under the dimension's own name, in the order they
-    arrived, a relation as the table it declares, one column per column under
-    the column's own name.
-
-    Args:
-        program: The lowered spec.
-        data: Parameter, dimension and relation names to the caller's tables.
+    Every source comes back as an in-memory `polars.LazyFrame`: a parameter
+    as tidy ``(dims…, value)``, a dimension's index as one column of labels
+    under its own name in the order they arrived, a relation as one column
+    per declared column.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
             accepts or short of the columns its declaration needs; an index
-            holding a label twice; a parameter
-            with two rows for one coordinate, a label its dimension lacks, a
-            null or NaN value, or a column of another type than it declares;
-            a relation with a null, a row twice, or a label its column's
-            dimension lacks; or an ``assumptions:`` entry the data does not
-            hold, a ``piecewise:`` method's conditions on its breakpoints
-            among them.
+            holding a label twice; a parameter with two rows for one
+            coordinate, a label its dimension lacks, a null or NaN value, or a
+            column of another type than it declares; a relation with a null, a
+            row twice, or a label its column's dimension lacks; or an
+            ``assumptions:`` entry the data does not hold, a ``piecewise:``
+            method's conditions on its breakpoints among them.
     """
     refuse_unknown_sources(program, data)
     _check_relation_sources(program, data)
@@ -175,10 +169,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
 
 def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
-    """Refuse an index that holds a label twice: a label's position is the row it is on.
-
-    The rewrite the message names is for the shape the index came in.
-    """
+    """Refuse an index that holds a label twice: a label's position is the row it is on."""
     twice = labels.filter(labels.is_duplicated()).unique(maintain_order=True).to_list()
     if not twice:
         return
@@ -397,7 +388,7 @@ def _parameter_frame(
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
-    """The least value parameter *name*'s source holds, read without any dimension's labels; ``0`` where it holds no rows.
+    """The least value parameter *name*'s source holds, read without any labels; ``0`` where it holds no rows.
 
     Raises:
         DataError: No source for *name*, or a shape no reader accepts.
@@ -422,9 +413,8 @@ def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, p
     than widening to float: a mask's truthiness is read off the column type.
 
     Raises:
-        DataError: A shape that does not fit the declared dims, a sequence
-            whose length does not match, or a dimension whose labels nothing
-            supplies.
+        DataError: A shape that does not fit the declared dims, a sequence of
+            the wrong length, or a dimension whose labels nothing supplies.
     """
     if isinstance(obj, Mapping):
         if len(dims) != 1:
@@ -523,8 +513,7 @@ def _check_one_row_per_coordinate(
     """A parameter is a function of its dims: one row per coordinate, every label a real one.
 
     Labels are checked against the dimensions whose index has been read; one
-    still missing is refused once every source is in. A parameter with no dims
-    takes exactly one row.
+    still missing is refused once every source is in.
     """
     if not p.dims:
         if frame.height != 1:

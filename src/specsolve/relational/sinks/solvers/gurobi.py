@@ -55,9 +55,9 @@ _LINOPY_DIVERGENCES = {
 class Gurobi(Solver):
     """Gurobi, holding one model at ``.handle``, a `gurobipy.Model`.
 
-    Constructing one loads the model and stops there. ``batch_rows`` is a
-    nonzero budget that splits the matrix across calls; ``None`` is one call.
-    ``close``, or leaving a ``with``, releases the model and its environment.
+    ``batch_rows`` is a nonzero budget that splits the matrix across calls;
+    ``None`` is one call. ``close``, or leaving a ``with``, releases the model
+    and its environment.
     """
 
     #: The loaded model, the handles that read it back, and the environment.
@@ -140,11 +140,7 @@ class Gurobi(Solver):
         self._m.update()
 
     def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, or its incumbent where Gurobi holds none.
-
-        Gurobi refuses ``VBasis`` where no basis exists, so the refusal routes
-        to the incumbent, or to ``None`` where there is none.
-        """
+        """The basis the last solve left, else its incumbent, else ``None``; Gurobi refuses ``VBasis`` without one."""
         import numpy as np
 
         gurobipy = _gurobipy()
@@ -181,11 +177,7 @@ class Gurobi(Solver):
             at += block.shape[0]
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded and read it back.
-
-        The one ``GurobiError`` translated is a caller's ``QCPDual`` on a
-        nonconvex quadratic constraint.
-        """
+        """The one ``GurobiError`` translated is a caller's ``QCPDual`` on a nonconvex quadratic constraint."""
         gurobipy = _gurobipy()
         try:
             self._m.optimize()

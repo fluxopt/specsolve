@@ -388,19 +388,17 @@ def expression_readers(
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
-    A spec that declares no variables is a calculation, so every expression
-    has a value with no solver.
-
     Args:
-        program: A lowered program with no variables — a calculation.
-        sources: Tidied sources, as [`tidy_sources`][specsolve.sources.tidy_sources] produces.
+        program: A lowered program with no variables — a calculation, so every
+            expression has a value with no solver.
+        sources: Tidied sources, as
+            [`tidy_sources`][specsolve.sources.tidy_sources] produces.
         lower: How an ad-hoc expression becomes a plan node in the model's
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
         One deferred reader per declared named expression, and the ad-hoc
-        evaluator (or ``None``); calling either compiles and evaluates against
-        the attached data.
+        evaluator; either compiles on call.
     """
     compiler = Compiler(Scope(program, attach(program, sources), {}))
     return readback.readers(compiler, program.expressions, lower)

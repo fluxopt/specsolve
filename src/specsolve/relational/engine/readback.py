@@ -131,9 +131,8 @@ def laid_out(
     """One declaration's coordinates in label order, beside its share of *values*.
 
     The share is a column, not a concatenated frame, so a mismatched length
-    raises instead of padding with nulls. Dim columns leave as ``String``,
-    because a caller joins them against their own data and polars refuses
-    ``Enum`` against ``String``.
+    raises instead of padding with nulls. Dim columns leave as ``String``
+    ([`_as_strings`][]).
     """
     return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
 

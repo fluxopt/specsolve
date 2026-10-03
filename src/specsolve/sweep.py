@@ -102,10 +102,10 @@ def one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
 def _one_slice_per_text(keys: Sequence[Label], typed: Sequence[Label]) -> None:
     """Refuse keys whose text, which the record and metrics name a slice by, does not find one slice.
 
-    ``_rekeyed`` matches each row's ``slice`` text against the text of the
-    keys as the sweep's one type holds them, when the fold ends and when a
-    spill is scanned. A key that type rewrites, or two keys of one text, would
-    fail there, after every slice has solved.
+    ``_rekeyed`` matches each row's ``slice`` text against the keys' text in
+    the sweep's one type, when the fold ends and when a spill is scanned, so
+    a key that type rewrites, or two keys of one text, would fail there,
+    after every slice has solved.
     """
     for given, held in zip(keys, typed, strict=True):
         if str(given) != str(held):
@@ -131,14 +131,13 @@ def with_key(frame: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType)
 class Spill:
     """A sweep's answers on disk instead of in memory, one file per slice and name.
 
-    ``<kind>/<name>/<position>.parquet`` holds the frames, keyed, and
-    ``record/`` and ``metrics/`` the rows, which name their slice in
-    ``slice_axis`` and ``slice`` rather than in a column of the key's own
-    name and type. Every file lands whole, and the record file is written
-    last: it marks a slice done. ``sweep.json`` names the key and the keys, so
-    a directory answers for one sweep, and ``keys.parquet`` holds the keys as
-    their own type, which the rows do not. ``sweep.json`` lands after the
-    files a scan reads beside it: it marks the directory stamped.
+    ``<kind>/<name>/<position>.parquet`` holds the keyed frames, and
+    ``record/`` and ``metrics/`` the rows, which name their slice as text in
+    ``slice_axis`` and ``slice``; ``keys.parquet`` holds the keys as their own
+    type. ``sweep.json`` names the key and the keys, so a directory answers
+    for one sweep. Every file lands whole. A slice's record file is written
+    last and marks it done; ``sweep.json`` lands after the files a scan reads
+    beside it and marks the directory stamped.
     """
 
     directory: Path
@@ -229,18 +228,17 @@ class Spill:
 class Sweep:
     """What a fold returned: the answer over the model's own coordinates, and a record per slice.
 
-    [`Result`][specsolve.relational.result.Result]'s readers — same names,
-    same shapes — and every one returns **the answer** by default. An
-    [`EachWindow`][] sweep is read over the dimension it sliced: each
-    coordinate comes from the window that owns it, and the lookahead rows
-    every overlapping window recomputed are dropped. An [`EachCoordinate`][]
-    sweep, or a hand-built one, is keyed by slice, the key prepended, since
-    each slice is a whole answer of its own. Nothing is combined across
+    [`Result`][specsolve.relational.result.Result]'s readers, same names and
+    shapes, and each returns **the answer** by default. An [`EachWindow`][]
+    sweep is read over the dimension it sliced: each coordinate comes from
+    the window that owns it, and the lookahead rows are dropped. An
+    [`EachCoordinate`][] or hand-built sweep is keyed by slice, the key
+    prepended, each slice being a whole answer. Nothing is combined across
     slices.
 
-    ``per_window=True`` reads an EachWindow sweep one window at a time
-    instead: keyed by where each window started, over the index inside it,
-    lookahead rows included.
+    ``per_window=True`` reads an EachWindow sweep one window at a time:
+    keyed by where each window started, over the index inside it, lookahead
+    rows included.
     """
 
     key_name: str
@@ -367,9 +365,8 @@ class Sweep:
     def _answered[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F, *, per_window: bool) -> F:
         """*frame*, as the slices produced it, read the way the caller asked.
 
-        [`EachWindow`][] stitches through its [`Stitch`][]. Any other axis's
-        slices are the answer, so the frame comes back unchanged, as it does
-        per window, which the caller has already checked there are.
+        [`EachWindow`][] stitches through its [`Stitch`][]. Any other axis, and
+        a read per window the caller has already checked, gets *frame* unchanged.
         """
         if per_window or self._stitch is None:
             return frame
@@ -419,8 +416,7 @@ class Sweep:
         Args:
             name: A variable the sweep's spec declares.
             per_window: Read an EachWindow sweep one window at a time instead
-                of its answer: keyed by where each window started, lookahead
-                rows included.
+                of its answer.
 
         Raises:
             SpecsolveError: No slice of the sweep produced *name*; a variable
@@ -449,23 +445,16 @@ class Sweep:
         """The value of *expression* at every slice's solution, as an answer.
 
         [`evaluate`][specsolve.relational.result.Result.evaluate] over the
-        sweep, and [`primal`][]'s shape and arguments. *expression* is what
-        one ``expressions:`` entry takes: a name the file declares, an
-        expression string, or the mapping carrying ``cases:`` with ``dims:``
-        and ``otherwise:``.
+        sweep, with [`primal`][]'s shape. A declared name is read from what
+        the sweep holds, live or off disk. Anything else is valued at each
+        slice's own solution with no re-solve, which needs the spec, sources
+        and axis the sweep [`load_archive`][specsolve.archive.load_archive]
+        hands back carries; a Sweep a live solve returned retains no model. An
+        expression over a parameter the sweep **carried** is refused, that
+        value being a previous slice's answer rather than stored data.
 
-        A declared name is read from what the sweep holds, live or off
-        disk. Anything else is valued at each slice's own solution with no
-        re-solve, so it is available on the sweep
-        [`load_archive`][specsolve.archive.load_archive] hands back, which
-        carries the spec, sources and axis; a Sweep a live solve returned says
-        it retains no model. An expression over a
-        parameter the sweep **carried** is refused, that value being a
-        previous slice's answer rather than stored data.
-
-        In the answer of an EachWindow sweep each coordinate carries the
-        value of the window that owns it, so summing it does not double-count
-        the lookahead.
+        In an EachWindow sweep's answer each coordinate carries the value of
+        the window that owns it, so a sum does not double-count the lookahead.
 
         Args:
             expression: A declared name, an expression string, or the ``cases:``
@@ -474,13 +463,13 @@ class Sweep:
                 of its answer.
 
         Raises:
-            SpecsolveError: No slice produced a declared *expression* — an
-                evaluation that failed on every slice carries its own reason —
-                an undeclared
-                expression on a Sweep with no model behind it, or one that reads
-                a parameter the sweep carried; a quantity reduced over an
-                EachWindow sweep's windowed dimension, which has an answer only
-                per window; or ``per_window`` as [`primal`][] raises it.
+            SpecsolveError: No slice produced a declared *expression* (an
+                evaluation that failed on every slice carries its own reason);
+                an undeclared expression on a Sweep with no model behind it, or
+                one that reads a parameter the sweep carried; a quantity
+                reduced over an EachWindow sweep's windowed dimension, which
+                has an answer only per window; or ``per_window`` as
+                [`primal`][] raises it.
             LanguageError: A construct outside the language, or a name the spec
                 does not declare.
         """
@@ -515,39 +504,26 @@ class Sweep:
         return reader(name, per_window=per_window)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
-        """One name's answer as a tidy `pandas.DataFrame`.
+        """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.
 
         The name is resolved before pandas is imported, so a sweep that never
         held *name* says so on any install.
-
-        Args:
-            name: A variable, a constraint or a named expression, as *kind*
-                says.
-            kind: ``primal``, ``dual`` or ``expression`` — the reader this
-                stands in for.
-            per_window: Read an EachWindow sweep one window at a time instead
-                of its answer.
         """
         return tidy_to_pandas(self._frame(name, kind, per_window=per_window))
 
     def to_dataarray(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> xr.DataArray:
         """One name's answer as a `xarray.DataArray`; [`to_pandas`][]'s arguments.
 
-        An EachWindow sweep's answer is indexed by the dimension it sliced, so
-        a rolling horizon's dispatch comes back indexed by time. Any other
-        sweep adds the slice key as a dimension, named by the axis:
-        ``(scenario, …)``. There, and per window, where the extra dimension is
-        ``<dim>_start``, a slice that reached no solution has no rows and
-        comes back NaN, the same answer a masked coordinate gets from
-        ``Result``.
+        An EachWindow sweep's answer is indexed by the dimension it sliced.
+        Any other sweep adds the slice key as a dimension named by the axis,
+        ``(scenario, …)``, and a read per window adds ``<dim>_start``; there a
+        slice that reached no solution comes back NaN, as a masked coordinate
+        does from ``Result``.
         """
         return tidy_to_dataarray(self.to_pandas(name, kind, per_window=per_window), name)
 
     def to_dataset(self, *names: str, kind: str = 'primal', per_window: bool = False) -> xr.Dataset:
         """The named answers of one *kind* as one `xarray.Dataset`; all of that kind by default.
-
-        One kind per call, since a dual and a variable may share a name;
-        [`save`][] writes every kind.
 
         Args:
             names: What to include; none means every name of *kind* the
@@ -567,18 +543,14 @@ class Sweep:
         return tidy_to_dataset(held, lambda name: self.to_dataarray(name, kind, per_window=per_window))
 
     def save(self, directory: str | Path) -> Path:
-        """Everything the sweep holds, per slice, written as ``spill_to=`` would have written it.
+        """Everything the sweep holds, per slice, in the layout ``spill_to=`` writes.
 
-        The same layout: ``<kind>/<name>/<position>.parquet`` for every
-        primal, dual and expression, the slice key a column of each, with
-        ``record/``, ``metrics/`` and the manifest beside them. So the
-        directory is a spilled sweep: [`scan`][] reads it, and the call
-        that made this sweep, pointed at it with ``spill_to=``, reads it back
-        without solving a slice.
-
-        A sweep whose every slice terminated without values writes each
-        slice's record and no frames, as one such solve does, rather than
-        refusing.
+        ``<kind>/<name>/<position>.parquet`` for every primal, dual and
+        expression, the slice key a column of each, with ``record/``,
+        ``metrics/`` and the manifest beside them. [`scan`][] reads it, and
+        the call that made this sweep, pointed at it with ``spill_to=``, reads
+        it back without solving a slice. A sweep whose every slice terminated
+        without values writes each slice's record and no frames.
 
         Returns:
             The directory.
@@ -668,16 +640,10 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], record: p
 def load_sweep(directory: str | Path) -> Sweep:
     """Read back a sweep [`Sweep.save`][] wrote, or one ``solve_over(spill_to=)`` spilled.
 
-    The sweep comes back **held**: every slice's frames are in memory when this
-    returns, so it owes *directory* nothing afterwards. A sweep larger than
-    memory is [`scan_sweep`][] instead.
-
-    [`Sweep.record`][] and [`Sweep.metrics`][] are one row per slice
-    either way, and the readers return the answer on both, the manifest
-    carrying what a window owns.
-
-    Args:
-        directory: Where the sweep was written.
+    Every slice's frames are in memory when this returns, so the sweep owes
+    *directory* nothing afterwards; a sweep larger than memory is
+    [`scan_sweep`][] instead. The readers return the answer, the manifest
+    carrying what each window owns.
 
     Returns:
         The sweep, keyed as it was solved.
@@ -693,18 +659,13 @@ def load_sweep(directory: str | Path) -> Sweep:
 
 
 def scan_sweep(directory: str | Path) -> Sweep:
-    """The sweep under *directory*, its frames left where they lie.
+    """The sweep under *directory*, its frames left where they lie; *directory* has to outlive it.
 
-    [`load_sweep`][]'s other half, and the value a sweep solved with
-    ``spill_to=`` already is: nothing but the record is read until a reader
-    asks for a name. [`Sweep.primal`][] and its siblings read that name into
-    memory; [`Sweep.scan`][] hands it back as a `polars.LazyFrame`, which is
-    the reader for a name too large to hold.
-
-    *directory* has to outlive the sweep.
-
-    Args:
-        directory: As [`load_sweep`][] takes it.
+    [`load_sweep`][]'s other half, and what a sweep solved with ``spill_to=``
+    already is: only the record is read until a reader asks for a name.
+    [`Sweep.primal`][] and its siblings read that name into memory;
+    [`Sweep.scan`][] hands it back as a `polars.LazyFrame`, for a name too
+    large to hold.
 
     Raises:
         LayoutError: As [`load_sweep`][] raises it.

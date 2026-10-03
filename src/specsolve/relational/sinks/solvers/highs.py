@@ -154,9 +154,8 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 class Highs(Solver):
     """HiGHS, holding one model at ``.handle``, a `highspy.Highs`.
 
-    Constructing one loads the model and stops there. A re-solve changes
-    bounds, costs and right-hand sides on the held model and starts from the
-    basis the last solve ended on.
+    A re-solve pushes bounds, costs and right-hand sides onto the held model
+    and starts from the basis the last solve ended on.
     """
 
     #: The loaded model. ``close`` drops it.
@@ -249,11 +248,7 @@ class Highs(Solver):
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve and read the answer back.
-
-        A ``kError`` from ``run()`` leaves the model status unset, so on a
-        quadratic model it is refused explicitly.
-        """
+        """A ``kError`` from ``run()`` leaves the status unset, so on a quadratic model it is refused explicitly."""
         import highspy
 
         if self._handle.run() == highspy.HighsStatus.kError and handoff.quad.height:

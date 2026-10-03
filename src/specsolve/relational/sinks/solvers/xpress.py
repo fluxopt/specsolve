@@ -1,10 +1,8 @@
 """The ``xpress`` solver: the model in two calls, straight into the Optimizer.
 
-The same hand-off as [`highs`][specsolve.relational.sinks.solvers.highs], reading the
-same ``dense_columns``, ``dense_rows`` and ``row_blocks``. The objective's
-constant is the negated objective coefficient of column ``-1``. ``xpress`` is
-imported inside the functions, so importing this module stays free for a
-caller who never solves with it.
+The objective's constant is the negated objective coefficient of column
+``-1``. ``xpress`` is imported inside the functions, so importing this module
+stays free for a caller who never solves with it.
 """
 
 from __future__ import annotations
@@ -46,10 +44,8 @@ _SOLVE_FAILED = 2
 class Xpress(Solver):
     """FICO Xpress, holding one model at ``.handle``, an `xpress.problem`.
 
-    Constructing one loads the model and stops there; the problem owns its
-    licence and releases it when it is collected. A push writes bounds, costs
-    and right-hand sides by index. Duals are ``None`` rather than zero-filled
-    on a model that has none.
+    The problem owns its licence and releases it when it is collected. Duals
+    are ``None`` rather than zero-filled on a model that has none.
     """
 
     #: The loaded problem; ``close`` drops it, and the licence with it.

@@ -61,12 +61,11 @@ class ResultArchive:
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
         source_digests: ``(specsolve_run, source, digest)``, one row per
-            source, so two archives of one spec over different numbers name
-            the input that moved. A digest is of the tidy table's parquet
-            bytes, written before the run was stamped on, so two archives of
-            one table under different names digest it alike; two polars
-            versions can write one table to different digests, and reading
-            an archive does not verify them.
+            source, so two archives of one spec name the input that moved. A
+            digest is of the tidy table's parquet bytes before
+            ``specsolve_run`` is added, so one table digests alike under two
+            names. Two polars versions may digest one table differently, and
+            reading an archive does not verify digests.
         metrics: What reaching the answer took, as one
             [`Metrics`][specsolve.relational.answer_layout.Metrics].
     """
@@ -87,21 +86,18 @@ class SweepArchive:
 
     Attributes:
         spec: The spec as written.
-        sources: What the sweep was given, uncut. A table or a path, as
-            [`ResultArchive`][] holds them; a source the axis cuts holds the
-            axis column first, and a parameter given as one number over a
-            window's local index is held over the axis instead, so each
-            slice cuts from it what that slice attached.
+        sources: What the sweep was given, uncut, as [`ResultArchive`][]
+            holds them. A source the axis cuts holds the axis column first; a
+            parameter given as one number over a window's local index is held
+            over the axis, so each slice cuts from it what it attached.
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.
-        sweep: The sweep, whose readers return the answer the archive
-            holds. Held from [`load_archive`][], on disk from
-            [`scan_archive`][]. ``per_window=True`` reads an EachWindow
-            sweep's windows where ``keep_windows=True`` kept them, and is
-            refused otherwise.
-        source_digests: As [`ResultArchive`][] holds it, of the uncut
-            sources.
+        sweep: The archived answer, in memory from [`load_archive`][], on
+            disk from [`scan_archive`][]. ``per_window=True`` reads an
+            EachWindow sweep's windows where ``keep_windows=True`` kept them,
+            and is refused otherwise.
+        source_digests: As [`ResultArchive`][] holds it, of the uncut sources.
     """
 
     spec: Spec
@@ -144,9 +140,9 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
 
-    As [`load_archive`][], except that *into* is required for a zip, and kept:
-    the members have to outlive the value. ``LayoutError`` for a zip with no
-    *into*.
+    As [`load_archive`][], except that *into* is required for a zip, and kept,
+    since the members have to outlive the value; a zip with no *into* raises
+    ``LayoutError``.
     """
     return _read(opened(path, into), whole=False)
 
@@ -188,8 +184,8 @@ def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
 def _refuse_another_model(answer: Result, model: Model) -> None:
     """Refuse a saved answer against a model built from other data than the one it answered.
 
-    The spec is compared where the pair is read; the data needs a build, so it
-    is compared here. An answer carrying no digest is taken as given.
+    The spec is compared where the pair is read; the data needs a build. An
+    answer carrying no digest is taken as given.
 
     Raises:
         SpecsolveError: Sources that build a model other than the answered one.
@@ -212,12 +208,6 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
     *spec* is rebuilt over *sources* at the first undeclared read, never
     solved, and cached. A rebuild from other data than the solve ran on is
     refused. *answer* comes back unchanged where the solve left no values.
-
-    Args:
-        answer: A saved solve, as [`load_result`][specsolve.api.load_result] or [`scan_result`][specsolve.api.scan_result]
-            read it back.
-        spec: The model the answer solved, as [`build`][specsolve.api.build] takes it.
-        sources: What it was solved with, as [`build`][specsolve.api.build] takes them.
     """
     if not answer._primals:
         return answer
@@ -243,12 +233,12 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
 
 
 def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
-    """The sweep an archive's ``answer/`` holds: one file per name holding its answer, and the windows where kept.
+    """The sweep an archive's ``answer/`` holds: one file per name, and the windows where kept.
 
-    The readers read the answer files; ``per_window=True`` reads the windows,
-    and is refused naming ``keep_windows=True`` where the archive has none.
-    The ``specsolve_run`` column every archived frame carries is left on disk,
-    so a frame read out of one equals the frame the live sweep returns.
+    ``per_window=True`` is refused naming ``keep_windows=True`` where the
+    archive has no windows. The ``specsolve_run`` column every archived frame
+    carries is left on disk, so a frame read out of one equals the frame the
+    live sweep returns.
 
     Args:
         under: The archive's ``answer/``.

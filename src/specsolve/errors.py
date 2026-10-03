@@ -2,8 +2,7 @@
 
 The spec half — `LanguageError` and what derives from it — belongs to
 ``mathspec`` and is re-exported here, so one ``except`` clause covers the
-package. A message lives here only where two modules raise it — the engine and
-the test oracle, most often.
+package. A message lives here only where two modules raise it.
 """
 
 from __future__ import annotations
