@@ -7,6 +7,55 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+## 0.4.0 (2026-10-03)
+
+An archive now says what produced it, and a directory of archives reads as one
+table per file. This release breaks archives, spills and saved results from
+0.3.0, a model file that uses a reserved name, one import and one keyword.
+
+Breaks:
+
+- An archive, a sweep spill or a saved result written by 0.3.0 is refused by
+  name. Its `format.json` names the specsolve that wrote it: read it with that
+  release.
+- A spec that declares a name starting with `specsolve_`, in any letter case,
+  is refused. Rename the name. The prefix is reserved for the columns
+  specsolve adds.
+- The readers of a sweep return the answer. An `EachWindow` sweep comes back
+  over the model's own coordinates, and the lookahead rows are dropped.
+  `original_index=` is removed. To get the frames of each window, pass
+  `per_window=True`.
+- A sweep archive holds the answer. To archive the frames of each window too,
+  pass `keep_windows=True` to `solve_over`.
+- `SliceMetrics` is removed. A row of `sweep.metrics` is a `Metrics` row, and
+  `loaded` is now `loads`, which is `0` or `1`.
+- The `run` column of `record` and `metrics` is now `specsolve_run`.
+
+New:
+
+- Every table in an archive carries `specsolve_run`, the archive's own name.
+  `record.parquet` and `metrics.parquet` have the same columns for a solve and
+  for every kind of sweep. A sweep names each slice in `slice_axis` and
+  `slice`.
+- `catalog.parquet` lists each file an archive holds, with its kind,
+  description and dimensions.
+- An archive holds each source as the tidy table that the solve read.
+  `sps.tidy(spec, sources)` returns those tables.
+- The record names the solver, its version, its options, and the specsolve
+  and mathspec versions. The options are a JSON string. To record more
+  options than the solver's list, pass `record_options=`.
+- specsolve requires `mathspec>=0.2.1,<0.3`, so a release installed later
+  gets the mathspec it was released with.
+
+Fixes:
+
+- A sweep key named like a metrics column, such as `loads`, is refused before a
+  slice is solved.
+- A sweep over an index given as an iterator reads it once, and every slice
+  and the archive see the same labels.
+
+The pull requests since 0.3.0:
+
 - fix(deps): an installed specsolve release keeps the mathspec minor version it was released against ([#1816](https://github.com/fluxopt/specsolve/pull/1816))
 - feat(archive): every archived table carries the run it came from as specsolve_run, and names starting with specsolve_ are reserved ([#1809](https://github.com/fluxopt/specsolve/pull/1809))
 - feat(archive): an archive's record and metrics have the same columns for a solve and for every kind of sweep ([#1810](https://github.com/fluxopt/specsolve/pull/1810))
