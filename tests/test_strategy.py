@@ -2214,10 +2214,10 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'study.zip')
     sweep = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'out')
     expr = 'sum(p * cost, over=generator)'
-    swept = sweep.answer.evaluate(expr)
+    swept = sweep.sweep.evaluate(expr)
     for key, slice_sources in axis.slices(scenario_sources()):
         live = sps.solve(DISPATCH, slice_sources).evaluate(expr)
-        got = swept.filter(pl.col(sweep.answer.key_name) == key).drop(sweep.answer.key_name)
+        got = swept.filter(pl.col(sweep.sweep.key_name) == key).drop(sweep.sweep.key_name)
         columns = live.columns[:-1]
         assert got.sort(columns).equals(live.sort(columns)), f'slice {key!r} evaluates at its own primal, no re-solve'
 
@@ -2226,8 +2226,8 @@ def test_a_scanned_sweep_archive_evaluates_the_same(tmp_path):
     """A sweep left on disk (`scan_archive`) evaluates against those frames, the same values held reads."""
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), archive=tmp_path / 'study.zip')
     expr = 'sum(p * cost, over=generator)'
-    whole = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'whole').answer.evaluate(expr)
-    scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').answer.evaluate(expr)
+    whole = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'whole').sweep.evaluate(expr)
+    scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').sweep.evaluate(expr)
     assert scanned.equals(whole), 'a scanned sweep evaluates against the frames on disk, the same answer'
 
 
@@ -2253,17 +2253,17 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
         keep_windows=True,
     )
     sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
-    assert sweep.answer.evaluate('sum(p * cost)', per_window=True).height, (
+    assert sweep.sweep.evaluate('sum(p * cost)', per_window=True).height, (
         'an expression over static data evaluates per slice'
     )
     with pytest.raises(sps.SpecsolveError, match='carried'):
-        sweep.answer.evaluate('soc_initial')
+        sweep.sweep.evaluate('soc_initial')
 
 
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
     """`evaluate` stitches as `primal` does — the sliced dim back, the slice key gone."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip', keep_windows=True)
-    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').answer
+    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     reindexed = answer.evaluate('sum(p, over=generator)')
     assert reindexed.columns == ['snapshot', 'value'], 'the sliced dim is restored and the slice key dropped'
     by_hand = answer.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
@@ -2276,7 +2276,7 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
     """A scalar-per-window quantity has no local index to restore, so its answer is refused — as `expression` is."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip', keep_windows=True)
-    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').answer
+    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     with pytest.raises(sps.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
 

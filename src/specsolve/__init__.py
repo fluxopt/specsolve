@@ -20,7 +20,7 @@ from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
 from specsolve.api import Model, build, check, evaluate, load_result, scan_result, solve, tidy, write
-from specsolve.archive import SolveArchive, SweepArchive, load_archive, scan_archive
+from specsolve.archive import ResultArchive, SweepArchive, load_archive, scan_archive
 from specsolve.axes import EachCoordinate, EachWindow
 from specsolve.errors import (
     DataError,
@@ -46,8 +46,8 @@ __all__ = [
     'Model',
     'NoSolutionError',
     'Result',
+    'ResultArchive',
     'SchemaError',
-    'SolveArchive',
     'SpecsolveError',
     'SpecsolveWarning',
     'Sweep',

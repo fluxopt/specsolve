@@ -45,11 +45,11 @@ if TYPE_CHECKING:
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Result
 
-__all__ = ['SolveArchive', 'SweepArchive', 'load_archive', 'scan_archive']
+__all__ = ['ResultArchive', 'SweepArchive', 'load_archive', 'scan_archive']
 
 
 @dataclass(frozen=True)
-class SolveArchive:
+class ResultArchive:
     """A spec, the data it was solved with, and what one solve of it returned.
 
     ``sps.solve(archive.spec, archive.sources)`` asks the question again.
@@ -60,7 +60,7 @@ class SolveArchive:
             [`tidy`][specsolve.api.tidy] returns it: a table from
             [`load_archive`][], the path to one from [`scan_archive`][],
             which also holds the ``specsolve_run`` column.
-        answer: What came back.
+        result: What the solve returned.
         source_digests: ``(specsolve_run, source, digest)``, one row per
             source, so two archives of one spec over different numbers name
             the input that moved. A digest is of the tidy table's parquet
@@ -74,7 +74,7 @@ class SolveArchive:
 
     spec: Spec
     sources: Mapping[str, Source]
-    answer: Result
+    result: Result
     source_digests: pl.DataFrame
     metrics: Metrics
 
@@ -83,25 +83,25 @@ class SolveArchive:
 class SweepArchive:
     """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
 
-    ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis, carry=sweep.carry)``
+    ``sps.solve_over(archive.spec, archive.sources, archive.axis, carry=archive.carry)``
     runs it again.
 
     Attributes:
         spec: The spec as written.
         sources: What the sweep was given, uncut. A table or a path, as
-            [`SolveArchive`][] holds them; a source the axis cuts holds the
+            [`ResultArchive`][] holds them; a source the axis cuts holds the
             axis column first, and a parameter given as one number over a
             window's local index is held over the axis instead, so each
             slice cuts from it what that slice attached.
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.
-        answer: The sweep, whose readers return the answer the archive
+        sweep: The sweep, whose readers return the answer the archive
             holds. Held from [`load_archive`][], on disk from
             [`scan_archive`][]. ``per_window=True`` reads an EachWindow
             sweep's windows where ``keep_windows=True`` kept them, and is
             refused otherwise.
-        source_digests: As [`SolveArchive`][] holds it, of the uncut
+        source_digests: As [`ResultArchive`][] holds it, of the uncut
             sources.
     """
 
@@ -109,11 +109,11 @@ class SweepArchive:
     sources: Mapping[str, Source]
     axis: Axis
     carry: Mapping[str, str]
-    answer: Sweep
+    sweep: Sweep
     source_digests: pl.DataFrame
 
 
-def load_archive(path: str | Path, into: str | Path | None = None) -> SolveArchive | SweepArchive:
+def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back whole: the sources as tables, the answer's frames in memory.
 
     Args:
@@ -124,7 +124,7 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
 
     Returns:
         A [`SweepArchive`][] where the archive carries an axis, a
-        [`SolveArchive`][] where it does not.
+        [`ResultArchive`][] where it does not.
 
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
@@ -142,7 +142,7 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
         return _read(opened(held, scratch), whole=True)
 
 
-def scan_archive(path: str | Path, into: str | Path | None = None) -> SolveArchive | SweepArchive:
+def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
 
     As [`load_archive`][], except that *into* is required for a zip, and kept:
@@ -152,7 +152,7 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
     return _read(opened(path, into), whole=False)
 
 
-def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
+def _read(under: Path, *, whole: bool) -> ResultArchive | SweepArchive:
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
         member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
@@ -165,7 +165,7 @@ def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         _check_the_pairing(spec, [answer.spec_digest])
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return SolveArchive(spec, sources, answer, digests, metrics)
+        return ResultArchive(spec, sources, answer, digests, metrics)
     manifest = json.loads(axis_member.read_text())
     axis, carry = axis_from(manifest), manifest.get('carry', {})
     answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
@@ -237,7 +237,7 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
             )
             model = build(spec, sources)
             _refuse_another_model(answer, model)
-            built.append(model.evaluator(primals, duals, no_duals))
+            built.append(model._evaluator(primals, duals, no_duals))
         return built[0](written)
 
     return replace(answer, _evaluate=evaluate)
@@ -291,7 +291,7 @@ def _per_slice(
         if not slice_primals:
             continue
         slice_duals = {name: by_key[key] for name, by_key in dual.items() if key in by_key} or None
-        yield key, build(spec, slice_sources).evaluator(slice_primals, slice_duals, sweep._no_duals)
+        yield key, build(spec, slice_sources)._evaluator(slice_primals, slice_duals, sweep._no_duals)
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

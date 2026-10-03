@@ -462,7 +462,7 @@ class Model:
         """
         return self._engine.row(name, coordinate)
 
-    def evaluator(
+    def _evaluator(
         self,
         primals: Mapping[str, pl.DataFrame],
         duals: Mapping[str, pl.DataFrame] | None,
