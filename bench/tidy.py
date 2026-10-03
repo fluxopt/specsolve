@@ -10,8 +10,9 @@ Dims in columns, one metric per row; whatever reads it does its own pivot.
 
 A missing number is an absent row, never a null, so every value column is
 complete. ``phase`` is ``emit`` for build-and-emit, ``window`` for a later
-window of a rolling horizon, and ``first`` and ``steady`` for the two halves of
-the rebuild loop; only here is ``window`` rendered.
+window of a rolling horizon whose values moved, ``window-reshaped`` for one
+whose shape moved, and ``first`` and ``steady`` for the two halves of the
+rebuild loop; only here are the windows rendered.
 
 The fingerprint (`--runs`) is long too: one row per fact.
 """

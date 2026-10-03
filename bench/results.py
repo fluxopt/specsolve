@@ -59,9 +59,11 @@ def _commit(info: dict[str, Any]) -> str | None:
     return f'{head}-dirty' if info.get('dirty') else head
 
 
-def _phase(name: str) -> str:
-    """Which rung a timing record came off: `test_emit` and `test_window` measure the same cell (#1617)."""
-    return 'window' if name.startswith('test_window') else 'emit'
+def _phase(name: str, params: dict[str, Any]) -> str:
+    """Which rung a timing record came off: `test_emit` and both `test_window` changes measure the same cell (#1617)."""
+    if not name.startswith('test_window'):
+        return 'emit'
+    return 'window-reshaped' if params.get('change') == 'shape' else 'window'
 
 
 def _benchmem(extra: dict[str, Any], field: str) -> float | None:
@@ -125,7 +127,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         yield {
             **common,
             'record': 'timing',
-            'phase': _phase(b['name']),
+            'phase': _phase(b['name'], params),
             'sink': params.get('sink'),
             'wall_seconds': stats.get('median'),
             'fastest_seconds': stats.get('min'),
