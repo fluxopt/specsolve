@@ -7,10 +7,44 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- refactor(api): what a call returns is imported from specsolve.types, and what it raises from specsolve.errors ([#1833](https://github.com/fluxopt/specsolve/pull/1833))
-- feat(sweep): a spilled or scanned sweep's readers read the name they are asked for instead of refusing ([#1830](https://github.com/fluxopt/specsolve/pull/1830))
-- refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
+## 0.5.0 (2026-10-03)
+
+The top level of `specsolve` now holds only what you call. What a call returns
+is in `specsolve.types`, and what it raises is in `specsolve.errors`. Any other
+name under `specsolve.` is internal. A spilled sweep now reads like one held in
+memory. This release breaks imports, one class name, one attribute and one
+method. Nothing on disk changed: archives, spills and saved results written by
+0.4.0 read back.
+
+Breaks:
+
+- `Model`, `Result`, `Sweep`, `ResultArchive` and `SweepArchive` are imported
+  from `specsolve.types`, and so are the rows they hold: `Record`,
+  `Provenance`, `Metrics`, `Diagnostics` and `ConstraintRow`. Write
+  `sps.types.Result` for `sps.Result`. `specsolve.relational.parquet` is
+  removed.
+- Every error and `SpecsolveWarning` is imported from `specsolve.errors`.
+  Write `sps.errors.DataError` for `sps.DataError`.
+- `SolveArchive` is now `ResultArchive`. What an archive holds is
+  `archive.result` for one solve and `archive.sweep` for a sweep; `.answer` is
+  removed.
+- `Model.evaluator` is private. An archive and a sweep still evaluate an
+  expression the file never named.
+
+New:
+
+- On a spilled or scanned sweep, `primal`, `dual`, `evaluate`, `to_pandas`,
+  `to_dataarray`, `to_dataset` and `save` read the name they are asked for
+  instead of refusing. `sweep.scan(name)` returns the same frame, not yet read.
+- The reference has an internal glossary: the names the code uses for its own
+  parts, for anyone reading `src/`.
+
+The pull requests since 0.4.0:
+
 - refactor(archive): Record, Metrics and Provenance are imported from specsolve.relational.answer_layout, which an archive's own layout nests ([#1823](https://github.com/fluxopt/specsolve/pull/1823))
+- refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
+- feat(sweep): a spilled or scanned sweep's readers read the name they are asked for instead of refusing ([#1830](https://github.com/fluxopt/specsolve/pull/1830))
+- refactor(api): what a call returns is imported from specsolve.types, and what it raises from specsolve.errors ([#1833](https://github.com/fluxopt/specsolve/pull/1833))
 
 ## 0.4.0 (2026-10-03)
 
