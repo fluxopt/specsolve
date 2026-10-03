@@ -695,7 +695,7 @@ class Result:
         expression that failed, and one with an empty *name* for the duals.
 
         ``format.json`` stamps the directory with the layout it is written in
-        and the specsolve that wrote it: ``{"layout": 1, "specsolve": "…"}``.
+        and the specsolve that wrote it: ``{"layout": 2, "specsolve": "…"}``.
         Every reader refuses another layout with a
         [`LayoutError`][specsolve.errors.LayoutError] that says to solve the
         model again and save it.
@@ -736,7 +736,7 @@ class Result:
                 no_expressions[name] = str(absent)
                 continue
             write_whole(evaluated, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, no_expressions)
+        write_reasons(out, self._no_duals, {'expression': no_expressions})
         return out
 
     def close(self) -> None:

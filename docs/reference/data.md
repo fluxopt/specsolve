@@ -52,10 +52,15 @@ table with both as columns. `series.reset_index()` is the whole change.
 
 **Each dimension's index is resolved before any parameter loads**, from a key
 in `sources` named after the dimension. That key holds a table with a column of
-that name, a parquet path, or a bare sequence of the labels. The first
-occurrence of each label is its position, and that order is what
+that name, a parquet path, or a bare sequence of the labels. Attach reads only
+the column named after the dimension, and other columns of the table are
+ignored. **An index lists each label once.** A label's row is its position,
+and that order is what
 [`shift`](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift)
-reads positionally.
+reads positionally. A label that is on two rows is refused:
+`table.select('generator').unique(maintain_order=True)` keeps the first row of
+each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
+sequence.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
@@ -93,6 +98,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a relation table mapping one key twice, or relating one tuple twice | a keyed relation holds one row per key, a bare one each row once |
 | a map with both authors, or neither | names them, and says which way out |
 | an index carrying a column named after a relation with a column over it | names the key it belongs under |
+| an index holding a label twice | names the dimension and the labels, and the rewrite that keeps the first of each, for a table or a bare sequence |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a `value` column carrying a null or a NaN | names the parameter and the coordinates |
 | a label outside the dimension's index | names the parameter and the strays |
@@ -128,6 +134,23 @@ cost = {'wind': 1.0, 'gsa': 2.0}  # 'gas' misspelled — refused by name
 
 A dimension whose labels came from the parameters would read `gsa` as a third
 generator.
+
+## The tables a solve reads
+
+**[`sps.tidy(spec, sources)`](api.md#specsolve.tidy) returns the tables a solve
+attaches**, one per name the spec declares, after every check above:
+
+| Declared | Columns |
+|---|---|
+| a dimension | `<dim>, specsolve_position`: each label once, and its position as an `Int64` from 0 |
+| a parameter | its dims, then `value` |
+| a relation | the columns it declares |
+
+An [archive](../howto/archiving.md) of one solve holds these tables under
+`sources/`, each with `specsolve_run` added. A build reads only the columns
+above, so each one goes back into `sources` as it is. An archive of a
+sweep holds what the axis cuts its slices from, so each slice attaches from it
+the tables it attached.
 
 ## Growing or replacing the data
 
