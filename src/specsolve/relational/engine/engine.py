@@ -19,6 +19,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
+from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -31,7 +32,7 @@ from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks import pyomo
+from specsolve.relational.sinks import linopy_ingest, pyomo
 from specsolve.relational.sinks.writers.text import NUMBERED
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.sinks.handoff import Declared
     from specsolve.relational.status import SolveStatus
 
 
@@ -138,9 +140,9 @@ class Engine:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; a name belonging to no sink; *names* for a sink
                 that writes no file, or *rename* for any sink but ``pyomo``;
-                with *names*, two coordinates that write as one name; or, for
+                with *names*, two coordinates that write as one name; for
                 ``pyomo``, what [`component_names`][specsolve.relational.sinks.pyomo.component_names]
-                refuses.
+                refuses; or, for ``linopy``, what it would drop.
         """
         handoff = self._model.handoff
         if (refused := sinks.refusal(handoff, sink)) is not None:
@@ -153,6 +155,14 @@ class Engine:
             readback.file_names(self._model)
         if sink == 'pyomo':
             pyomo.component_names(readback.declared(self._model), rename, objective=handoff.objective_sense is not None)
+        if sink == 'linopy' and (lost := linopy_ingest.refusal(handoff, readback.declared(self._model))) is not None:
+            raise SpecsolveError(lost)
+
+    def handed_over(self) -> tuple[sinks.Handoff, Declared, dict[str, pl.DataFrame]]:
+        """The built model's tables, which declaration owns each entry, and each dim's ``(val, ord)`` in ordinal order."""
+        model = self._model
+        dimensions = {d: f.collect(engine=collect_engine()).sort('ord') for d, f in model.attached.dimensions.items()}
+        return model.handoff, readback.declared(model), dimensions
 
     def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
         """The built model as a ``pyomo.environ.ConcreteModel``. See [`to_pyomo`][specsolve.api.Model.to_pyomo]."""

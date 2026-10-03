@@ -131,3 +131,25 @@ m = model.to_pyomo(rename={'constraints': {'start_up': 'start_up_constraint'}})
 ```
 
 `model.check('pyomo', rename=...)` gives the same answer without the export.
+
+## Hand the model to linopy
+
+To extend the model in linopy, or solve it with a solver linopy runs, export
+the built model. It needs the `[linopy]` extra:
+
+```python
+with sps.build('dispatch.yaml', sources) as model:
+    m = model.to_linopy()
+m.solve(solver_name='highs')
+m.variables['p'].solution.sel(generator='wind')
+```
+
+Each variable and each constraint keeps its name and its dims. Every label of
+a dim is a coordinate, and the coordinates the build did not make are masked
+out. A variable and a constraint may share a name, because linopy keeps them
+apart.
+
+linopy has no quadratic constraint and no constant in its objective, and it
+drops a row with no terms, so a row that no point meets would vanish. The
+export refuses a model with any of these, and the error names it.
+`model.check('linopy')` gives the same refusal without the export.

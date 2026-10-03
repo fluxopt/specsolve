@@ -154,7 +154,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   validates at load time, lowers to the plan and streams on polars. The test
   suite's **linopy lane** builds the same spec as a `linopy.Model`, as the
   oracle the relational lane is checked against
-  ([relationship to linopy](../about/linopy.md#2-it-is-the-oracle)).
+  ([relationship to linopy](../about/linopy.md#3-it-is-the-oracle)).
 
 **Engine**
 : The relational lane's builder: it fills the model's tables from the attached

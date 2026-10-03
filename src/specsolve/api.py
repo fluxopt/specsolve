@@ -38,6 +38,7 @@ from specsolve.errors import (
     SpecsolveWarning,
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve.linopy import to_linopy
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     METRICS_FILE,
@@ -60,6 +61,7 @@ from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    import linopy
     from mathspec.program import Expression, Program
 
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
@@ -388,12 +390,14 @@ class Model:
 
         The answer is read off the built model, not the file: a square the
         data prices at zero, an integer variable with no built column or a set
-        with no members asks for nothing. [`solve`][], [`write`][] and
-        [`to_pyomo`][] refuse exactly what this refuses, with the same message.
+        with no members asks for nothing. [`solve`][], [`write`][],
+        [`to_pyomo`][] and [`to_linopy`][] refuse exactly what this refuses,
+        with the same message.
 
         Args:
             sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
-                suffix (``.lp``, ``.mps``), or an export (``pyomo``).
+                suffix (``.lp``, ``.mps``), or an export (``pyomo``,
+                ``linopy``).
             names: Also refuse what [`write`][]'s *names* refuses: two
                 coordinates of one declaration that write as one name. Read
                 by an output suffix only.
@@ -405,7 +409,9 @@ class Model:
                 sinks that do; a name belonging to no sink; *names* for a sink
                 that writes no file, or *rename* for any sink but ``pyomo``;
                 with *names*, two coordinates of one declaration that write as
-                one name; or, for ``pyomo``, what [`to_pyomo`][] refuses.
+                one name; for ``pyomo``, what [`to_pyomo`][] refuses; or, for
+                ``linopy``, an objective constant or a row with no term that
+                no point meets, which linopy would drop.
         """
         self._engine.check(sink, names=names, rename=rename)
 
@@ -441,6 +447,32 @@ class Model:
                 model has been closed.
         """
         return self._engine.to_pyomo(rename)
+
+    def to_linopy(self) -> linopy.Model:
+        """The built model as a ``linopy.Model``, to extend or solve in linopy.
+
+        Each variable and each constraint keeps its declared name and dims,
+        with every label of each dim as a coordinate and the coordinates the
+        build did not produce masked out: ``m.variables['p'].sel(generator='wind')``.
+        Each ``sos:`` set is linopy's own, along the declared dim. A row holds
+        the build's numbers, a flat sum of terms, so new data means a new
+        export. A constraint the build left with no term at all is not added,
+        since linopy refuses one.
+
+        Returns:
+            A new ``linopy.Model``; a second call builds another.
+
+        Raises:
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                ``linopy``: a quadratic constraint or an objective constant,
+                which linopy has no form for, or a row the build kept with no
+                term that no point meets, which linopy would drop. Or linopy
+                is not installed (the ``[linopy]`` extra), or the model has
+                been closed.
+        """
+        self._engine.check('linopy')
+        handoff, declared, dimensions = self._engine.handed_over()
+        return to_linopy(handoff, declared, dimensions)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.

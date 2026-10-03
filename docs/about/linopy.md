@@ -1,30 +1,49 @@
 # Relationship to linopy
 
 Everything about [linopy](https://github.com/PyPSA/linopy) in one place, for a
-reader who arrives from linopy or PyPSA. There are two separate
+reader who arrives from linopy or PyPSA. There are three separate
 relationships:
 
 | | What | Where it matters |
 |---|---|---|
-| **Not a dependency** | nothing in the package imports it | packaging |
+| **Not a dependency** | the engine never imports it | packaging |
+| **An export** | `Model.to_linopy()` hands a built model over | the `[linopy]` extra |
 | **The oracle** | how we know the answers are right | testing |
 
 ## 1. It is not a dependency
 
 `sps.solve`, `sps.build`, `sps.write` and `sps.check` go YAML → polars → HiGHS
 or file, and import nothing from linopy, xarray or pandas. The bare-install job
-runs the whole suite with none of the three present. No install of specsolve
-brings linopy: it is a test dependency, in the `dev` group.
+runs the whole suite with none of the three present. A plain install of
+specsolve brings no linopy.
 
 The `to_pandas` / `to_dataarray` bridges out of a
 [result](../reference/glossary.md#the-chain) need pandas and xarray, which the
 caller installs.
 
-**Nothing a bare install can reach names linopy, including a traceback.** The
-public exception tree is rooted at `SpecsolveError`, with no alias
+**Nothing a bare install can reach names linopy, except the export.**
+`to_linopy` names the extra it needs. The public exception tree is rooted at
+`SpecsolveError`, with no alias
 ([#389](https://github.com/fluxopt/specsolve/issues/389)).
 
-## 2. It is the oracle
+## 2. It is an export
+
+`Model.to_linopy()` gives the built model to linopy, with the `[linopy]` extra
+installed. Each variable and each constraint keeps its name and its dims, so
+`m.variables['p'].sel(generator='wind')` works. The coordinates a `where`
+removed are masked out. A row holds the numbers the build computed, not the
+formula the file wrote.
+
+The export reads what the engine built. It is not part of the engine, so it
+sits outside `relational/` in `specsolve/linopy.py`, and it imports linopy only
+when it is called. The extra names the same linopy as the oracle, the `master`
+branch, so a release to PyPI needs a published linopy first.
+
+linopy has no quadratic constraint and no constant in its objective, and it
+drops a constraint row that has no term. The export refuses a model that would
+lose any of these, and the error names the construct.
+
+## 3. It is the oracle
 
 Correctness here is **the same YAML, built both ways, produces the same
 model**. The differential suite builds a model through the relational engine
@@ -37,6 +56,10 @@ resolved AST*, the narrow waist in
 [the architecture notes](architecture.md#one-contract-many-consumers). If each
 path resolved names on its own, the suite would compare two dialects rather than
 check one language.
+
+The oracle does not use the export. `tests/linopy_lane` builds its model from
+the program on its own, so the two can disagree, and the comparison stays a
+check.
 
 The oracle has one blind spot: a **shared misreading** passes the differential
 suite green. Only a published optimum from outside catches it, and

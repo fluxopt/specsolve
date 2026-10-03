@@ -333,7 +333,7 @@ class SetRun:
     name: str
     variable: str
     along: int
-    sos_type: int
+    sos_type: program.SosType
 
 
 @dataclass(frozen=True)

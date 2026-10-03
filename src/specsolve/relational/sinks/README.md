@@ -24,6 +24,13 @@ it imports when called. `EXPORTS` holds its capabilities under the name
 refuses a component name that a pyomo model cannot hold, through the
 `component_names` that `to_pyomo` itself calls.
 
+**And `linopy_ingest.py`.** The linopy export is `specsolve.linopy`, outside
+the engine, since it builds linopy and xarray objects. What linopy can take is
+read off the handoff alone, so its table and its refusal of what linopy would
+drop, an objective constant or a row with no term that no point meets, live
+here. `EXPORTS` holds the table under `linopy`; `Model.check('linopy')` asks
+both, and `to_linopy` asks that check before it builds.
+
 ## Staying loaded
 
 `base.py` is what a solver **is**: a loaded model with a lifecycle, which is

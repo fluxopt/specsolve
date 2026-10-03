@@ -42,6 +42,12 @@ xpress = [
 pyomo = [
     "pyomo>=6.8",
 ]
+linopy = [
+    # The oracle's linopy: its v1 arithmetic convention is in no release yet (#463).
+    "linopy @ git+https://github.com/PyPSA/linopy@master",
+    "xarray>=2024.2.0",
+    "pandas>=2.2",
+]
 
 [project.urls]
 Documentation = "https://specsolve.readthedocs.io"
@@ -52,6 +58,10 @@ Changelog = "https://github.com/fluxopt/specsolve/blob/main/CHANGELOG.md"
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0"
+
+# The [linopy] extra names the oracle's linopy by its git URL, which PyPI refuses: a release needs a published linopy first.
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/specsolve"]
