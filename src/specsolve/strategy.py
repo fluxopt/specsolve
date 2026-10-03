@@ -19,6 +19,7 @@ import io
 import json
 import warnings
 from collections import defaultdict
+from collections.abc import Iterator
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
@@ -65,7 +66,7 @@ from specsolve.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy
 from specsolve.sources import least_value, tidy_tables
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 
     import pandas as pd
     import xarray as xr
@@ -1160,6 +1161,7 @@ def solve_over(
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
     document = declared(spec)
+    sources = _held(sources)
     archiving = _archiving(archive, axis)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
@@ -1193,6 +1195,15 @@ def solve_over(
         out, cut = archiving
         _archive_the_sweep(out, document, program, cut, dict(carry or {}), sources, folded, slices[0].sources)
     return folded
+
+
+def _held(sources: Mapping[str, Source]) -> dict[str, Source]:
+    """*sources* with each one-shot iterator read into a list.
+
+    Every slice reads the sources it does not cut, and the archive reads them
+    again, so an iterator would be spent after the first read.
+    """
+    return {name: list(obj) if isinstance(obj, Iterator) else obj for name, obj in sources.items()}
 
 
 def _archive_the_sweep(

@@ -161,6 +161,38 @@ def test_a_parquet_path_is_archived_as_the_table_the_solve_read(
     assert digests['load'] == _unstamped_digest(member, tmp_path), 'and the digest is of that table, less the stamp'
 
 
+def test_an_index_given_as_an_iterator_is_archived_as_the_labels_the_solve_read(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The archive read the sources a second time after the solve, so a one-shot iterator came back empty.
+
+    The solve answered, then the archive raised a `DataError` naming labels
+    the exhausted iterator did not hold, and the answer was lost.
+    """
+    sources = {**dispatch_frame_inputs, 'generator': iter(DISPATCH_GENERATORS)}
+    archive = _archived(dispatch_yaml, sources, tmp_path / 'dispatch')
+
+    held = pl.read_parquet(archive / 'sources' / 'generator.parquet')
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels the build read, in index order'
+
+
+def test_a_path_rewritten_after_the_build_is_archived_as_the_table_the_solve_read(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The archive read a path again after the solve, so a file rewritten meanwhile was archived as the new table."""
+    path = tmp_path / 'load.parquet'
+    dispatch_frame_inputs['load'].write_parquet(path)
+    with sps.build(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}) as model:
+        dispatch_frame_inputs['load'].with_columns(pl.col('value') * 0.5).write_parquet(path)
+        with model.solve(archive=tmp_path / 'dispatch'):
+            pass
+
+    held = pl.read_parquet(tmp_path / 'dispatch' / 'sources' / 'load.parquet')
+    assert held['value'].to_list() == dispatch_frame_inputs['load']['value'].to_list(), (
+        'the values the build read, not the ones the file holds now'
+    )
+
+
 def test_unpack_lays_the_archive_out_in_the_directory(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -411,6 +443,21 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     assert dict(study.source_digests.select('source', 'digest').iter_rows()) == {
         file.stem: _unstamped_digest(file, tmp_path) for file in held.glob('*.parquet')
     }, 'and each digest is of the whole table the member holds, less the stamp'
+
+
+def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """Every slice and the archive read each source again, so a one-shot iterator was empty after the first read.
+
+    The second slice raised a `DataError` naming labels the exhausted iterator
+    did not hold.
+    """
+    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high']), 'generator': iter(DISPATCH_GENERATORS)}
+    sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+
+    held = pl.read_parquet(tmp_path / 'study' / 'sources' / 'generator.parquet')
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in index order'
 
 
 def test_an_archive_records_what_reaching_its_answer_cost(

@@ -52,7 +52,7 @@ from specsolve.relational.parquet import (
 )
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import attachable, tidy_sources, tidy_tables, unknown_source_keys_message
+from specsolve.sources import attachable, numbered, tidy_sources, tidy_tables, unknown_source_keys_message
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -222,6 +222,8 @@ class Model:
         #: The document's digest; the data's is [`_model_digest`][].
         self._spec_digest = digest_of(self._spec.to_yaml())
         self._sources = dict(sources)
+        #: What the last build read, as [`tidy_sources`][] gave it.
+        self._tidied: dict[str, pl.LazyFrame] = {}
         self._engine = PolarsEngine()
         self._fill()
 
@@ -234,9 +236,15 @@ class Model:
         return expressions.lower(self._spec, written)
 
     def _fill(self) -> None:
-        """Build from what is attached now; a failure closes the model rather than leaving it stale."""
+        """Build from what is attached now; a failure closes the model rather than leaving it stale.
+
+        What the build read is kept, so an archive holds it rather than reading
+        the sources again: a one-shot iterator is spent by then, and a path may
+        have been rewritten.
+        """
         try:
-            self._engine.build(self._program, tidy_sources(self._program, self._sources))
+            self._tidied = tidy_sources(self._program, self._sources)
+            self._engine.build(self._program, self._tidied)
         except BaseException:
             self._engine.close()
             raise
@@ -362,7 +370,7 @@ class Model:
             answer = answered.save(scratch)
             taken = self._engine.diagnostics().metrics()
             write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            write_archive(out, self._spec, tidy_tables(self._program, self._sources), axis=None, answer=answer)
+            write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

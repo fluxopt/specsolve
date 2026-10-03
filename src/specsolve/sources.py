@@ -99,7 +99,15 @@ def tidy_tables(program: Program, data: Mapping[str, Source]) -> dict[str, pl.La
     Raises:
         DataError: As [`tidy_sources`][] raises.
     """
-    tables = tidy_sources(program, data)
+    return numbered(program, tidy_sources(program, data))
+
+
+def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+    """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered as [`tidy_tables`][] numbers them.
+
+    Nothing is read again, so a model archives what its build read.
+    """
+    tables = dict(tidied)
     for dim in program.dimensions:
         tables[dim] = tables[dim].with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
     return tables
