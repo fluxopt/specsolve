@@ -31,15 +31,12 @@ import numpy as np
 import polars as pl
 from mathspec import advice
 
-from specsolve import expressions
 from specsolve.errors import (
-    DataError,
     LayoutError,
     SpecsolveError,
     SpecsolveWarning,
-    another_model_behind_this_answer_message,
 )
-from specsolve.lanes import Buildable, Label, Source, declared, lowered
+from specsolve.lanes import Buildable, Label, Source, declared, lower, lowered
 from specsolve.layout import beside, check_the_target, write_archive
 from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
 from specsolve.relational.parquet import (
@@ -57,7 +54,7 @@ from specsolve.relational.parquet import (
 )
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import attachable, numbered, tidy_sources, tidy_tables, unknown_source_keys_message
+from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -136,7 +133,8 @@ def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFra
         LanguageError: A construct outside the streaming language.
         DataError: As [`build`][] refuses the sources.
     """
-    return {name: table.collect() for name, table in tidy_tables(lowered(spec), sources).items()}
+    program = lowered(spec)
+    return {name: table.collect() for name, table in numbered(program, tidy_sources(program, sources)).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -203,7 +201,7 @@ def evaluate(spec: Buildable, sources: Mapping[str, Source], expression: str | M
     program = lowered(document)
     _refuse_a_decision(program)
     readers, evaluator = expression_readers(
-        program, tidy_sources(program, sources), lambda written: expressions.lower(document, written)
+        program, tidy_sources(program, sources), lambda written: lower(document, written)
     )
     return evaluated(readers, evaluator, expression)
 
@@ -238,7 +236,7 @@ class Model:
         Held here because the engine may not see the model as written
         (docs/about/architecture.md, hard rule 2).
         """
-        return expressions.lower(self._spec, written)
+        return lower(self._spec, written)
 
     def _fill(self) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.
@@ -286,10 +284,11 @@ class Model:
 
         Raises:
             DataError: A name the spec does not declare, since an update that
-                named nothing would solve the old numbers again. An update that
-                raises releases the model, as a build that raises does.
+                named nothing would solve the old numbers again; refused before
+                anything changes. Data the build refuses releases the model, as
+                a build that raises does.
         """
-        _refuse_unknown(sources, attachable(self._program))
+        refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
         self._fill()
         return self
@@ -516,12 +515,6 @@ class Model:
         return False
 
 
-def _refuse_unknown(given: Mapping[str, object], declared: Mapping[str, object]) -> None:
-    """Refuse an update naming anything *declared* does not hold."""
-    if unknown := set(given) - set(declared):
-        raise DataError(unknown_source_keys_message(unknown, declared))
-
-
 def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
     """Attach *sources* to *spec* and build it — the model with your data on it.
 
@@ -710,21 +703,6 @@ def _answer_under(out: Path, read: Reading) -> Result:
     record = Record(**pl.read_parquet(record_file).row(0, named=True))
     status = record.solve_status
     objective = float('nan') if record.objective is None else record.objective
-    if not status.is_readable:
-        return Result(
-            status,
-            objective,
-            {},
-            {},
-            {},
-            'nothing',
-            _spec_digest=record.spec_digest,
-            _solved_at=record.solved_at,
-            _model_digest=record.model_digest,
-            _run=record.specsolve_run,
-            _provenance=record.provenance,
-        )
-
     no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda frame=frame: frame.collect()) for name, frame in _saved_frames(out / 'expression', read).items()
@@ -784,53 +762,3 @@ def _provenance(
         installed('specsolve'),
         installed('mathspec'),
     )
-
-
-def _refuse_another_model(answer: Result, model: Model) -> None:
-    """Refuse a saved answer against a model built from other data than the one it answered.
-
-    The spec is compared where the pair is read; the data needs a build, so it
-    is compared here. An answer carrying no digest is taken as given.
-
-    Raises:
-        SpecsolveError: Sources that build a model other than the answered one.
-    """
-    answered = answer.model_digest()
-    if answered is not None and answered != (rebuilt := model._model_digest()):
-        raise SpecsolveError(another_model_behind_this_answer_message(answered, rebuilt))
-
-
-def attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression readable through [`evaluate`][specsolve.relational.result.Result.evaluate].
-
-    *spec* is rebuilt over *sources* at the first undeclared read, never
-    solved, and cached. A rebuild from other data than the solve ran on is
-    refused. *answer* comes back unchanged where the solve left no values.
-
-    Args:
-        answer: A saved solve, as [`load_result`][] or [`scan_result`][]
-            read it back.
-        spec: The model the answer solved, as [`build`][] takes it.
-        sources: What it was solved with, as [`build`][] takes them.
-    """
-    if not answer._primals:
-        return answer
-    frames = answer._primals
-    dual_frames = answer._duals
-    no_duals = answer._no_duals
-    built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
-
-    def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
-        if not built:
-            primals = {name: frame.collect() for name, frame in frames.items()}
-            duals = (
-                {name: frame.collect() for name, frame in dual_frames.items()}
-                if no_duals is None and dual_frames
-                else None
-            )
-            model = build(spec, sources)
-            _refuse_another_model(answer, model)
-            built.append(model.evaluator(primals, duals, no_duals))
-        return built[0](written)
-
-    return replace(answer, _evaluate=evaluate)

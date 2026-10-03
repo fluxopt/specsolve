@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import json
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
 from mathspec import to_spec
 
-from specsolve.api import attach_readers, load_result, scan_result
+from specsolve.api import build, load_result, scan_result
 from specsolve.errors import SpecsolveError
 from specsolve.layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
 from specsolve.relational.parquet import METRICS_FILE, RUN, Metrics, digest_of, row_of
@@ -30,11 +30,12 @@ from specsolve.strategy import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from mathspec import Spec
 
-    from specsolve.lanes import Source
+    from specsolve.api import Model
+    from specsolve.lanes import Buildable, Source
     from specsolve.relational.result import Result
 
 __all__ = ['SolveArchive', 'SweepArchive', 'load_archive', 'scan_archive']
@@ -154,7 +155,7 @@ def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
     saved = under / ANSWER_DIR
     axis_member = under / AXIS_MEMBER
     if not axis_member.is_file():
-        answer = attach_readers((load_result if whole else scan_result)(saved), spec, sources)
+        answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         _check_the_pairing(spec, [answer.spec_digest])
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return SolveArchive(spec, sources, answer, digests, metrics)
@@ -176,3 +177,60 @@ def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
             f'this archive holds an answer that came back from a different spec: the answer carries '
             f'{others} and the spec.yaml beside it digests to {mine}, so re-solving it would give another answer.'
         )
+
+
+def _refuse_another_model(answer: Result, model: Model) -> None:
+    """Refuse a saved answer against a model built from other data than the one it answered.
+
+    The spec is compared where the pair is read; the data needs a build, so it
+    is compared here. An answer carrying no digest is taken as given.
+
+    Raises:
+        SpecsolveError: Sources that build a model other than the answered one.
+    """
+    answered = answer.model_digest()
+    if answered is not None and answered != (rebuilt := model._model_digest()):
+        raise SpecsolveError(
+            f'this answer came back from another model: it answered the model digesting to {answered} '
+            f'and the spec and sources beside it build {rebuilt}. The document matched, so what differs '
+            f'is the data — and reading a quantity the file never named against other numbers would '
+            f'value it at an answer nobody solved for.\n'
+            f'  Read the answer against the data the solve ran on. An archive holds that pair, so one '
+            f'refused here has had a source replaced since it was written.'
+        )
+
+
+def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
+    """*answer* with an undeclared expression readable through [`evaluate`][specsolve.relational.result.Result.evaluate].
+
+    *spec* is rebuilt over *sources* at the first undeclared read, never
+    solved, and cached. A rebuild from other data than the solve ran on is
+    refused. *answer* comes back unchanged where the solve left no values.
+
+    Args:
+        answer: A saved solve, as [`load_result`][specsolve.api.load_result] or [`scan_result`][specsolve.api.scan_result]
+            read it back.
+        spec: The model the answer solved, as [`build`][specsolve.api.build] takes it.
+        sources: What it was solved with, as [`build`][specsolve.api.build] takes them.
+    """
+    if not answer._primals:
+        return answer
+    frames = answer._primals
+    dual_frames = answer._duals
+    no_duals = answer._no_duals
+    built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
+
+    def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
+        if not built:
+            primals = {name: frame.collect() for name, frame in frames.items()}
+            duals = (
+                {name: frame.collect() for name, frame in dual_frames.items()}
+                if no_duals is None and dual_frames
+                else None
+            )
+            model = build(spec, sources)
+            _refuse_another_model(answer, model)
+            built.append(model.evaluator(primals, duals, no_duals))
+        return built[0](written)
+
+    return replace(answer, _evaluate=evaluate)

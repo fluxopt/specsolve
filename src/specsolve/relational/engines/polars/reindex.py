@@ -15,6 +15,7 @@ import polars as pl
 
 from specsolve.relational.engines.polars.fragments import Presence, TermFragment, refuse_a_fragment_without_the_dims
 from specsolve.relational.engines.polars.relations import GROUP_RANK, GROUP_SIZE, Grouping
+from specsolve.relational.engines.polars.scope import join_on
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -242,7 +243,7 @@ class _Edge:
         if self.offsets is not None:
             offsets, keys = self.offsets
             on = [key for key in keys if key in grouping.key]
-            table = table.join(offsets, on=on, how='inner') if on else table.join(offsets, how='cross')
+            table = join_on(table, offsets, on, 'inner')
             offset = pl.col(_OFFSET)
         else:
             assert not isinstance(s.offset, str)
@@ -255,11 +256,7 @@ class _Edge:
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
-        edge = self.coordinates(vacated=True)
-        for d in others:
-            if d in self.keys:
-                continue
-            edge = edge.join(scope.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        edge = scope.spread(self.coordinates(vacated=True), [d for d in others if d not in self.keys])
         return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, self.shift.along, 'cval')
 
     def vacated_of(self, scope: Scope, presence: Presence, dims: tuple[str, ...]) -> pl.LazyFrame:
@@ -277,7 +274,7 @@ class _Edge:
         source = presence.frame if all(d in have for d in others) else scope.widen(presence.frame, have, dims)
         keys = [d for d in self.keys if d in others]
         rows = source.select(*others).unique()
-        return rows.join(edge, on=keys, how='inner') if keys else rows.join(edge, how='cross')
+        return join_on(rows, edge, keys, 'inner')
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:

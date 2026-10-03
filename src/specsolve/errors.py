@@ -2,8 +2,8 @@
 
 The spec half — `LanguageError` and what derives from it — belongs to
 ``mathspec`` and is re-exported here, so one ``except`` clause covers the
-package. A message lives here only where the engine and the test oracle both
-raise it.
+package. A message lives here only where two modules raise it — the engine and
+the test oracle, most often.
 """
 
 from __future__ import annotations
@@ -59,11 +59,11 @@ __all__ = [
     'DataError',
     'DimensionError',
     'LanguageError',
+    'LayoutError',
     'NoSolutionError',
     'SchemaError',
     'SpecsolveError',
     'SpecsolveWarning',
-    'did_you_mean',
 ]
 
 
@@ -90,17 +90,6 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
-def reported_divisor_message(name: str, missing: int) -> str:
-    """The message for a divisor parameter a reported expression reads short of a row."""
-    return (
-        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing parameter row is not absence, so the quotient '
-        f'is not dropped there, and there is no number to divide by.\n'
-        f'  Supply the missing rows.\n'
-        f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
-    )
-
-
 def null_bounds_message(name: str, rows: int) -> str:
     """The message for a bound parameter missing values at some coordinates."""
     return (
@@ -112,16 +101,6 @@ def null_bounds_message(name: str, rows: int) -> str:
     )
 
 
-def carried_parameter_message(carried: list[str]) -> str:
-    """An expression to evaluate across a sweep that reads a carried parameter."""
-    return (
-        f'this expression reads {carried}, which the sweep carried from one slice into the next, and a '
-        f"carried value is a previous slice's answer rather than stored data — so it cannot be put back "
-        f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis, carry=...) '
-        f'and evaluate on what comes back, or read a quantity over the sweep that reads no carried parameter.'
-    )
-
-
 def no_model_behind_this_answer_message() -> str:
     """An expression to read in an answer that has no model behind it."""
     return (
@@ -129,18 +108,6 @@ def no_model_behind_this_answer_message() -> str:
         'it: an answer read back off disk carries the values without the model to splice the '
         'expression into. Re-ask with sps.solve(archive.spec, archive.sources), which reads any '
         'expression; a name the spec declares is readable either way.'
-    )
-
-
-def another_model_behind_this_answer_message(answered: str, rebuilt: str) -> str:
-    """A saved answer read against a model its sources do not rebuild."""
-    return (
-        f'this answer came back from another model: it answered the model digesting to {answered} '
-        f'and the spec and sources beside it build {rebuilt}. The document matched, so what differs '
-        f'is the data — and reading a quantity the file never named against other numbers would '
-        f'value it at an answer nobody solved for.\n'
-        f'  Read the answer against the data the solve ran on. An archive holds that pair, so one '
-        f'refused here has had a source replaced since it was written.'
     )
 
 

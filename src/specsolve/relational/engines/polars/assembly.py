@@ -19,8 +19,8 @@ from specsolve.relational import sinks
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.fragments import TermFragment, absence_restrictions, join_on
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engines.polars.fragments import TermFragment, absence_restrictions
+from specsolve.relational.engines.polars.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
 if TYPE_CHECKING:
@@ -447,15 +447,6 @@ def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] 
     return (min(lows), max(highs)) if lows else None
 
 
-def _without_zeros(matrix: pl.DataFrame) -> pl.DataFrame:
-    """*matrix* without its exactly-zero coefficients.
-
-    A pruned share no longer says which rows had terms, so
-    [`Assembly._matrix_share`][] reads that set before pruning.
-    """
-    return matrix.filter(pl.col('coeff') != 0)
-
-
 def _collapsed(
     stacked: pl.DataFrame, keys: tuple[str, ...], *, ordered: bool, space: int | None = None
 ) -> tuple[pl.DataFrame, bool]:
@@ -520,10 +511,14 @@ def _repeats_a_label(labels: pl.Series, count: int) -> bool:
 
 
 def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
-    """*matrix* without its zeros — unchanged, and not rechunked, when it has none."""
+    """*matrix* without its exactly-zero coefficients — unchanged, and not rechunked, when it has none.
+
+    A pruned share no longer says which rows had terms, so
+    [`Assembly._matrix_share`][] reads that set before pruning.
+    """
     if not matrix.select(pl.col('coeff').eq(0).any()).item():
         return matrix
-    return _without_zeros(matrix).rechunk()
+    return matrix.filter(pl.col('coeff') != 0).rechunk()
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, ...], np.dtype[np.int64]]:

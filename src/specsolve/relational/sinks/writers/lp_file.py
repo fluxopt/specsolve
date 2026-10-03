@@ -23,13 +23,9 @@ if TYPE_CHECKING:
 #: Every construct the language can reach, quadratic rows included. A reader
 #: may still refuse a section: HiGHS's refuses two.
 LP_FILE_CAPABILITIES = Capabilities(
-    supports={
-        'integrality': 'native',
-        'sos': 'native',
-        'quadratic_objective': 'native',
-        'nonconvex_quadratic_objective': 'native',
-        'quadratic_constraint': 'native',
-    }
+    supports=frozenset(
+        {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+    )
 )
 
 

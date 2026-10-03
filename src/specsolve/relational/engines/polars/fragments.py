@@ -20,26 +20,14 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.engines.polars.scope import join_on
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from polars._typing import JoinStrategy, MaintainOrderJoin
+    from polars._typing import JoinStrategy
 
     from specsolve.relational.engines.polars.scope import Scope
-
-
-def join_on(
-    left: pl.LazyFrame,
-    right: pl.LazyFrame,
-    dims: Sequence[str],
-    how: JoinStrategy,
-    maintain_order: MaintainOrderJoin | None = None,
-) -> pl.LazyFrame:
-    """``left.join(right)`` keyed by *dims* — a cross join where there are none."""
-    if dims:
-        return left.join(right, on=list(dims), how=how, maintain_order=maintain_order)
-    return left.join(right, how='cross', maintain_order=maintain_order)
 
 
 #: The right-hand operand's value while a join holds both. The spaces make it
@@ -289,6 +277,17 @@ def negate(p: TermFragment) -> TermFragment:
     return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
 
 
+def _paired(
+    a: TermFragment, b: TermFragment, right: pl.LazyFrame, how: JoinStrategy
+) -> tuple[pl.LazyFrame, tuple[str, ...]]:
+    """*a*'s frame joined to *right*, *b*'s frame with its value renamed, and the dims out, *a*'s first.
+
+    The join is on the dims the two share, so *b* broadcasts over the rest.
+    """
+    joined = join_on(a.frame, right, [d for d in a.dims if d in b.dims], how)
+    return joined, a.dims + tuple(d for d in b.dims if d not in a.dims)
+
+
 def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False) -> TermFragment:
     """``a * c`` (or ``a / c``) where *c* is a const fragment, broadcast over the dims not shared.
 
@@ -299,11 +298,7 @@ def join_mul(a: TermFragment, c: TermFragment, kind: Kind, divide: bool = False)
     quotient being absent too. The presences of both sides travel out: at a
     read *c* may be a variable at its primal.
     """
-    shared = [d for d in a.dims if d in c.dims]
-    out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
-    right = c.frame.rename({'cval': _RHS})
-    how = 'left' if divide else 'inner'
-    joined = a.frame.join(right, on=shared, how=how) if shared else a.frame.join(right, how='cross')
+    joined, out_dims = _paired(a, c, c.frame.rename({'cval': _RHS}), 'left' if divide else 'inner')
     if divide:
         for presence in c.presences:
             joined = presence.restrict(joined, presence.keys(c.dims))
@@ -335,10 +330,7 @@ def join_pow(a: TermFragment, b: TermFragment) -> TermFragment:
     An inner join, unlike divide's left: a null base or exponent would poison
     the coefficient it multiplies rather than report anything.
     """
-    shared = [d for d in a.dims if d in b.dims]
-    out_dims = a.dims + tuple(d for d in b.dims if d not in a.dims)
-    right = b.frame.rename({'cval': _RHS})
-    joined = a.frame.join(right, on=shared, how='inner') if shared else a.frame.join(right, how='cross')
+    joined, out_dims = _paired(a, b, b.frame.rename({'cval': _RHS}), 'inner')
     frame = joined.with_columns(pl.col('cval').pow(pl.col(_RHS)).alias('cval')).select(
         *out_dims, *carried_columns('const')
     )
@@ -360,10 +352,7 @@ def join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
     canonicalised later, once column labels exist
     ([`Assembly._build_objective`][specsolve.relational.engines.polars.assembly.Assembly._build_objective]).
     """
-    shared = [d for d in a.dims if d in b.dims]
-    out_dims = a.dims + tuple(d for d in b.dims if d not in a.dims)
-    right = b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS})
-    joined = a.frame.join(right, on=shared, how='inner') if shared else a.frame.join(right, how='cross')
+    joined, out_dims = _paired(a, b, b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS}), 'inner')
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
         *out_dims, *carried_columns('quad')
     )

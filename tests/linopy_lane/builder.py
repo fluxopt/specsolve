@@ -144,12 +144,7 @@ def _build_sos(ctx: EvaluationContext) -> None:
 #: ``linopy.Model.add_constraints`` refuses a ``QuadraticExpression`` outright
 #: and no reformulation of it is exact.
 CAPABILITIES = Capabilities(
-    supports={
-        'integrality': 'native',
-        'sos': 'native',
-        'quadratic_objective': 'native',
-        'nonconvex_quadratic_objective': 'native',
-    },
+    supports=frozenset({'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective'}),
 )
 
 

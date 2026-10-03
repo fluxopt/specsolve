@@ -107,5 +107,5 @@ def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
     """
     capabilities = SOLVERS['gurobi'].capabilities
     for capability in CAPABILITIES:
-        assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
+        assert capability in capabilities.supports, f'{capability} solved natively above'
     assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'

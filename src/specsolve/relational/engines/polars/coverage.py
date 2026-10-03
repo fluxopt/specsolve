@@ -23,8 +23,9 @@ from mathspec import program
 
 from specsolve.errors import DataError, sparse_divisor_message, uncovered_constant_message
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars.fragments import constant_scalar, join_on
+from specsolve.relational.engines.polars.fragments import constant_scalar
 from specsolve.relational.engines.polars.predicates import masked
+from specsolve.relational.engines.polars.scope import join_on
 from specsolve.relational.sinks.handoff import SENSE
 
 if TYPE_CHECKING:

@@ -16,6 +16,7 @@ import polars as pl
 from mathspec import program
 
 if TYPE_CHECKING:
+    import hashlib
     from collections.abc import Iterator, Mapping
 
     import numpy as np
@@ -191,13 +192,16 @@ class Handoff:
             _finite(pl.col('ub'), infinity).alias('ub'),
             (pl.col('vtype') != 'continuous').alias('integral'),
         )
-        cost = _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
         return ColumnVectors(
             lb=prepared['lb'].to_numpy(),
             ub=prepared['ub'].to_numpy(),
-            cost=cost,
+            cost=self._dense_cost(),
             integral=prepared['integral'].to_numpy(),
         )
+
+    def _dense_cost(self) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:
+        """The objective's linear coefficient per column, zero for a column in no term; ``obj`` is sparse and unordered."""
+        return _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
 
     def dense_rows(self, infinity: float) -> RowVectors:
         """The row vectors over the solver's row index, ready to hand over.
@@ -249,13 +253,8 @@ class Handoff:
         Every vector read has an order contract — the label-ordered columns,
         the row-ordered matrix and rows — so two builds of one model agree.
         """
-        import hashlib
-
-        import numpy as np
-
-        digest = hashlib.blake2b(digest_size=16)
-        digest.update(f'{self.column_count} {self.row_count} {self.objective_sense}'.encode())
-        for vector in (
+        return _digest(
+            f'{self.column_count} {self.row_count} {self.objective_sense}'.encode(),
             self.cols['vtype'].to_physical().to_numpy(),
             self.quad['col_l'].to_numpy(),
             self.quad['col_r'].to_numpy(),
@@ -269,9 +268,7 @@ class Handoff:
             self.matrix['coeff'].to_numpy(),
             self.row_starts,
             *(self.sos[column].to_numpy() for column in self.sos.columns),
-        ):
-            digest.update(np.ascontiguousarray(vector).data)
-        return digest.digest()
+        ).digest()
 
     @cached_property
     def contents(self) -> str:
@@ -295,23 +292,15 @@ class Handoff:
 
         Read on first ask and kept, the frames being immutable.
         """
-        import hashlib
-
-        import numpy as np
-
-        digest = hashlib.blake2b(digest_size=16)
-        digest.update(self.structure)
-        digest.update(f'{self.objective_constant}'.encode())
-        for vector in (
+        return _digest(
+            self.structure + f'{self.objective_constant}'.encode(),
             self.cols['lb'].to_numpy(),
             self.cols['ub'].to_numpy(),
-            _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0),
+            self._dense_cost(),
             self.quad['coeff'].to_numpy(),
             self.rows['row'].to_numpy(),
             self.rows['rhs'].to_numpy(),
-        ):
-            digest.update(np.ascontiguousarray(vector).data)
-        return digest.hexdigest()
+        ).hexdigest()
 
     def sets(self) -> Iterator[tuple[int, pl.Series, pl.Series]]:
         """Each special-ordered set: its type, member columns, and weights.
@@ -359,28 +348,20 @@ class Handoff:
         return self._span(lo, hi).with_columns(pl.Series('row', labels))
 
 
-def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], np.dtype[np.str_]]:
-    """[`SENSE_CODES`][] as one solver's spellings, indexed by code.
+def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
+    """A 16-byte blake2b over *head* and then each of *vectors*' bytes, in the order given.
 
-    A sense added to [`SENSE_CODES`][] and not to *spelling* raises instead.
+    Each vector's order contract is its frame's, so two builds of one model
+    digest alike.
     """
+    import hashlib
+
     import numpy as np
 
-    out = np.empty(len(SENSE_CODES), dtype='<U1')
-    for sense, code in SENSE_CODES.items():
-        out[code] = spelling[sense]
-    return out
-
-
-def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
-    """One quantity a solver produced, in its own index — every sink's read-back.
-
-    A series rather than a ``(label, value)`` frame: the read-back takes a
-    declaration's share by slicing.
-    """
-    import numpy as np
-
-    return pl.Series('value', np.asarray(values, dtype=np.float64))
+    digest = hashlib.blake2b(head, digest_size=16)
+    for vector in vectors:
+        digest.update(np.ascontiguousarray(vector).data)
+    return digest
 
 
 def _finite(value: pl.Expr, infinity: float) -> pl.Expr:

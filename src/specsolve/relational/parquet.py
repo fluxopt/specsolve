@@ -36,6 +36,20 @@ LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expre
 #: that no name a spec declares can collide with one.
 RESERVED = 'specsolve_'
 
+
+def refuse_reserved(name: str, which: str) -> None:
+    """Refuse *name*, which *which* describes, where it starts with [`RESERVED`][] in any letter case.
+
+    Raises:
+        SpecsolveError: A name a column specsolve adds could collide with.
+    """
+    if name.casefold().startswith(RESERVED):
+        raise SpecsolveError(
+            f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
+            f'specsolve adds, so it could collide with one. Rename it.'
+        )
+
+
 #: The column an archive adds to every table it holds, naming the run the
 #: table came from. Read back, a frame comes without it.
 RUN = f'{RESERVED}run'
@@ -312,6 +326,22 @@ class Metrics(NamedTuple):
     #: [`Record.slice`][] say it; null for a single solve.
     slice_axis: str | None = None
     slice: str | None = None
+
+    def since(self, earlier: Metrics) -> Metrics:
+        """This row less *earlier*'s counts and clocks: the share of the solves between the two."""
+        return self._replace(**{name: getattr(self, name) - getattr(earlier, name) for name in _CUMULATIVE})
+
+
+#: The [`Metrics`][] columns a model sums over its solves.
+_CUMULATIVE = (
+    'solves',
+    'loads',
+    'attach_seconds',
+    'build_seconds',
+    'handoff_seconds',
+    'solve_seconds',
+    'write_seconds',
+)
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].

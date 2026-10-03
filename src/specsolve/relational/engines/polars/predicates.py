@@ -14,9 +14,9 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError, position_out_of_range_message, short_groups_message
-from specsolve.relational.engines.polars.fragments import join_on
 from specsolve.relational.engines.polars.reindex import translate_rows
 from specsolve.relational.engines.polars.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
+from specsolve.relational.engines.polars.scope import join_on
 
 if TYPE_CHECKING:
     import datetime

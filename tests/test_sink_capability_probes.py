@@ -160,7 +160,7 @@ def test_the_highs_lp_reader_refuses_the_sos_section(tmp_path: Path):
     h.setOptionValue('output_flag', False)
     assert h.readModel(str(path)) == highspy.HighsStatus.kError, (
         f'{TABLE} says the HiGHS reader refuses an sos section. If it takes one now, HiGHS has the '
-        f"concept and its descriptor should declare `'sos': 'native'`."
+        f"concept and its descriptor should list `'sos'`."
     )
 
 
@@ -195,10 +195,10 @@ def test_a_second_hessian_replaces_the_first_and_keeps_the_model():
 def test_the_highs_descriptor_says_what_these_probes_measured():
     """The HiGHS descriptor declares what the probes above measured."""
     capabilities = SOLVERS['highs'].capabilities
-    assert capabilities.support('quadratic_objective') == 'native', 'a convex Hessian solved, above'
-    assert capabilities.support('nonconvex_quadratic_objective') == 'absent', 'a non-PSD Hessian was refused, above'
-    assert capabilities.support('quadratic_constraint') == 'absent', 'there is no entry point to call, above'
-    assert capabilities.support('sos') == 'absent', (
+    assert 'quadratic_objective' in capabilities.supports, 'a convex Hessian solved, above'
+    assert 'nonconvex_quadratic_objective' not in capabilities.supports, 'a non-PSD Hessian was refused, above'
+    assert 'quadratic_constraint' not in capabilities.supports, 'there is no entry point to call, above'
+    assert 'sos' not in capabilities.supports, (
         'HiGHS has no set concept — its own LP reader refusing the section is that same fact from the other side'
     )
     assert capabilities.excluded(['quadratic_objective', 'integrality']) is not None, (

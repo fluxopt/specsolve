@@ -11,9 +11,10 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 import polars as pl
+from mathspec import did_you_mean
 
 from specsolve.assumptions import validate_assumptions
-from specsolve.errors import DataError, did_you_mean
+from specsolve.errors import DataError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.parquet import RESERVED
@@ -27,6 +28,17 @@ if TYPE_CHECKING:
 def attachable(program: Program) -> dict[str, ParameterDeclaration | DimensionDeclaration | RelationDeclaration]:
     """Every name data may be attached to — declared parameters, dimensions and relations, one flat namespace."""
     return {**program.parameters, **program.dimensions, **program.relations}
+
+
+def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None:
+    """Refuse a key of *data* that names no parameter, dimension or relation *program* declares.
+
+    Raises:
+        DataError: A key naming nothing the spec declares.
+    """
+    known = attachable(program)
+    if unknown := set(data) - set(known):
+        raise DataError(_unknown_source_keys_message(unknown, known))
 
 
 def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
@@ -54,10 +66,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             hold, a ``piecewise:`` method's conditions on its breakpoints
             among them.
     """
-    known = attachable(program)
-    if unknown := set(data) - set(known):
-        raise DataError(unknown_source_keys_message(unknown, known))
-
+    refuse_unknown_sources(program, data)
     _check_relation_sources(program, data)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
@@ -72,14 +81,14 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
     for pname, pdef in program.parameters.items():
         if pname not in data:
-            raise DataError(f"no data provided for parameter '{pname}'")
+            raise DataError(_no_parameter_source_message(pname))
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
         sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
 
     for dname in program.dimensions:
         if dname not in sources:
-            raise DataError(no_index_source_message(dname))
+            raise DataError(_no_index_source_message(dname))
 
     validate_assumptions(program, sources)
     return sources
@@ -89,22 +98,11 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 POSITION = f'{RESERVED}position'
 
 
-def tidy_tables(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
-    """The tables a solve attaches: [`tidy_sources`][] with each dimension's labels numbered.
+def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+    """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
-    ``Int64`` from 0 in index order; a parameter and a relation as
-    [`tidy_sources`][] gives them.
-
-    Raises:
-        DataError: As [`tidy_sources`][] raises.
-    """
-    return numbered(program, tidy_sources(program, data))
-
-
-def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
-    """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered as [`tidy_tables`][] numbers them.
-
+    ``Int64`` from 0 in index order; a parameter and a relation unchanged.
     Nothing is read again, so a model archives what its build read.
     """
     tables = dict(tidied)
@@ -113,7 +111,7 @@ def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, 
     return tables
 
 
-def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
+def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
     """A source key naming nothing the file declares."""
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
@@ -124,7 +122,12 @@ def unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> st
     )
 
 
-def no_index_source_message(dim: str) -> str:
+def _no_parameter_source_message(name: str) -> str:
+    """A declared parameter with no source."""
+    return f"no data provided for parameter '{name}'"
+
+
+def _no_index_source_message(dim: str) -> str:
     """A dimension with no index."""
     return (
         f"dimension '{dim}' has no index: pass its labels under key '{dim}' — a table "
@@ -393,20 +396,22 @@ def _parameter_frame(
     return table if table is not None else _spread(name, obj, p.dims, sources)
 
 
-def least_value(name: str, p: ParameterDeclaration, obj: Source) -> float | None:
-    """The least value one parameter's source holds, read without any dimension's labels.
-
-    Returns:
-        The least value, or ``None`` where the source holds no rows.
+def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
+    """The least value parameter *name*'s source holds, read without any dimension's labels; ``0`` where it holds no rows.
 
     Raises:
-        DataError: A shape no reader accepts.
+        DataError: No source for *name*, or a shape no reader accepts.
     """
+    if name not in sources:
+        raise DataError(_no_parameter_source_message(name))
+    obj = sources[name]
     if isinstance(obj, (bool, int, float)):
-        return float(obj)
-    if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-        return min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
-    return _parameter_frame(name, p, obj, {}).select(pl.col('value').min()).collect().item()
+        least = float(obj)
+    elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+        least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
+    else:
+        least = _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col('value').min()).collect().item()
+    return 0 if least is None else int(least)
 
 
 def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:

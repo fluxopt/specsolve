@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import SpecsolveError, reported_divisor_message, unknown_name_message
+from specsolve.errors import SpecsolveError, unknown_name_message
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.engines.polars import coverage, labels
 from specsolve.relational.engines.polars.fragments import absence_restrictions
@@ -135,13 +135,16 @@ def laid_out(
     because a caller joins them against their own data and polars refuses
     ``Enum`` against ``String``.
     """
-    labelled = held.frame.select(*dims).with_columns(held.share(values))
-    return labelled.with_columns(pl.col(d).cast(pl.String) for d in string_dims(attached, dims))
+    return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
 
 
-def string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
-    """Those of *dims* attaching encoded as ``Enum``."""
-    return [d for d in dims if attached.is_enum_encoded(d)]
+def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
+    """*frame* with those of *dims* that attaching encoded as ``Enum`` cast back to ``String``.
+
+    A caller joins a dim column against its own data, and polars refuses
+    ``Enum`` against ``String``.
+    """
+    return frame.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
 
 
 def reordered(
@@ -183,12 +186,7 @@ def _aligned(
         )
     if not dims:
         return stored['value'].rename(SOLUTION)
-    order = (
-        held.frame.select(*dims)
-        .collect()
-        .with_columns(pl.col(d).cast(pl.String) for d in string_dims(attached, dims))
-        .with_row_index(_LABEL_ORDER)
-    )
+    order = _as_strings(held.frame.select(*dims).collect(), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
     if joined['value'].null_count():
         raise SpecsolveError(
@@ -244,7 +242,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompil
         [p.frame for p in compiled.consts],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
-        reported_divisor_message,
+        _reported_divisor_message,
     )
 
     fragments = compiled.consts
@@ -253,4 +251,15 @@ def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompil
     added = compiler.added(fragments, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=polars_engine())
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
-    return ordered.with_columns(pl.col(d).cast(pl.String) for d in string_dims(compiler.scope.data, dims))
+    return _as_strings(ordered, compiler.scope.data, dims)
+
+
+def _reported_divisor_message(name: str, missing: int) -> str:
+    """The message for a divisor parameter a reported expression reads short of a row."""
+    return (
+        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
+        f'the expression divides at. A missing parameter row is not absence, so the quotient '
+        f'is not dropped there, and there is no number to divide by.\n'
+        f'  Supply the missing rows.\n'
+        f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
+    )
