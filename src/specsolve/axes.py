@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Program
 
-    from specsolve.lanes import Label, Source
+    from specsolve.inputs import Label, Source
 
 
 class Slice(NamedTuple):
@@ -338,7 +338,7 @@ def axis_from(manifest: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-
     return EachWindow(manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'])
 
 
-def carries(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
+def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
     """The sources that carry a column called *dim*, by name; a sweep and its archive both cut these."""
     tables = {name: table for name, obj in sources.items() if (table := as_frame(obj)) is not None}
     return {name: table for name, table in tables.items() if dim in table.collect_schema().names()}
@@ -346,7 +346,7 @@ def carries(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
 
 def _coordinates(sources: Mapping[str, Source], dim: str, verb: str) -> tuple[dict[str, pl.LazyFrame], list[Label]]:
     """The sources a slice has to filter, by name, and the coordinates to slice, sorted by value."""
-    carrying = carries(sources, dim)
+    carrying = sources_with_column(sources, dim)
     if not carrying:
         raise DataError(
             f"no source carries a '{dim}' column, so there is nothing to {verb} over. "

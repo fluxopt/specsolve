@@ -47,7 +47,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from specsolve.lanes import declared, lower, lowered
+from specsolve.inputs import declared, lower, lowered
 from specsolve.sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from specsolve.lanes import Buildable, Source
+    from specsolve.inputs import Buildable, Source
 
 linopy.options['semantics'] = 'v1'
 

@@ -34,7 +34,7 @@ Capability = Literal[
     'quadratic_constraint',
 ]
 
-CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
+ALL_CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
 
 
 @dataclass(frozen=True)
@@ -51,8 +51,8 @@ class Capabilities:
     excludes: tuple[frozenset[Capability], ...] = ()
 
     def missing(self, required: Collection[Capability]) -> list[Capability]:
-        """Those of *required* this sink cannot take at all, in [`CAPABILITIES`][] order."""
-        return [c for c in CAPABILITIES if c in required and c not in self.supports]
+        """Those of *required* this sink cannot take at all, in [`ALL_CAPABILITIES`][] order."""
+        return [c for c in ALL_CAPABILITIES if c in required and c not in self.supports]
 
     def excluded(self, required: Collection[Capability]) -> frozenset[Capability] | None:
         """The first conjunction *required* contains that this sink refuses.

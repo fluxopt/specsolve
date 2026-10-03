@@ -26,7 +26,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from specsolve.lanes import lowered
+from specsolve.inputs import lowered
 from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file

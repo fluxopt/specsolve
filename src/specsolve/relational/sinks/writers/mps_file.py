@@ -15,7 +15,7 @@ import polars as pl
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES, ranges
-from specsolve.relational.sinks.writers.base import chunk_key, digits, number, sink
+from specsolve.relational.sinks.writers.base import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
@@ -47,25 +47,25 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
             f.write(b'OBJSENSE\n    MAX\n')
 
         f.write(b'ROWS\n N  obj\n')
-        sink(_row_lines(handoff), f)
+        append_lines(_row_lines(handoff), f)
 
         f.write(b'COLUMNS\n')
         width = handoff.matrix.height / max(1, handoff.column_count)
         for lo, hi in ranges(handoff.column_count, EMIT_BUDGET, width):
             owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
-            sink(_column_lines(handoff, lo, hi, owned), f)
+            append_lines(_column_lines(handoff, lo, hi, owned), f)
 
         f.write(b'RHS\n')
         if handoff.objective_constant:
             f.write(f'    rhs obj {-handoff.objective_constant!r}\n'.encode())
-        sink(_rhs_lines(handoff), f)
+        append_lines(_rhs_lines(handoff), f)
 
         f.write(b'BOUNDS\n')
         _write_bounds(handoff, f)
 
         if handoff.sos.height:
             f.write(b'SOS\n')
-            sink(_set_lines(handoff), f)
+            append_lines(_set_lines(handoff), f)
 
         f.write(b'ENDATA\n')
 
@@ -150,7 +150,7 @@ def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
     """
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
         name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col('col')))
-        sink(
+        append_lines(
             handoff.cols.lazy()
             .with_row_index('col')
             .select(

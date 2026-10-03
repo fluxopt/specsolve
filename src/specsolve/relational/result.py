@@ -32,7 +32,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import polars_engine
+from specsolve.relational.collect import collect_engine
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -505,7 +505,7 @@ class Result:
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
-        return _named(frames, name, 'variable').collect(engine=polars_engine())
+        return _named(frames, name, 'variable').collect(engine=collect_engine())
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``.
@@ -533,7 +533,7 @@ class Result:
         frames = self._readable(self._duals, f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'constraint').collect(engine=polars_engine())
+        return _named(frames, name, 'constraint').collect(engine=collect_engine())
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -575,7 +575,7 @@ class Result:
         if self._no_dual_ray is not None:
             raise SpecsolveError(self._no_dual_ray)
         assert self._dual_rays is not None, 'a ray is released with the primals, which _unclosed just checked'
-        return _named(self._dual_rays, name, 'constraint').collect(engine=polars_engine())
+        return _named(self._dual_rays, name, 'constraint').collect(engine=collect_engine())
 
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``.
@@ -591,7 +591,7 @@ class Result:
             KeyError: No constraint is called *name*.
         """
         frames = self._readable(self._activities, f"the activity of '{name}'")
-        return _named(frames, name, 'constraint').collect(engine=polars_engine())
+        return _named(frames, name, 'constraint').collect(engine=collect_engine())
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``.
@@ -732,11 +732,11 @@ class Result:
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
-                evaluated = reader()
+                frame = reader()
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
                 continue
-            write_whole(evaluated, out / 'expression' / f'{name}.parquet')
+            write_whole(frame, out / 'expression' / f'{name}.parquet')
         write_reasons(out, self._no_duals, {'expression': no_expressions})
         return out
 

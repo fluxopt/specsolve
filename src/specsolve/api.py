@@ -37,7 +37,7 @@ from specsolve.errors import (
     SpecsolveError,
     SpecsolveWarning,
 )
-from specsolve.lanes import Buildable, Label, Source, declared, lower, lowered
+from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     METRICS_FILE,

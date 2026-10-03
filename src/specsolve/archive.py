@@ -21,7 +21,7 @@ from specsolve.api import build, load_result, scan_result
 from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
 from specsolve.axes import axis_from
 from specsolve.errors import SpecsolveError
-from specsolve.lanes import lower
+from specsolve.inputs import lower
 from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
 from specsolve.sweep import (
     MANIFEST_FILE,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from specsolve.api import Model
     from specsolve.axes import Axis
-    from specsolve.lanes import Buildable, Label, Source
+    from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Result
 
 __all__ = ['SolveArchive', 'SweepArchive', 'load_archive', 'scan_archive']

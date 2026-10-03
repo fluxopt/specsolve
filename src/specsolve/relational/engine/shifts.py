@@ -1,4 +1,4 @@
-"""Re-indexing along one dimension's own order: ``shift`` and ``sum_back``.
+"""Shifts along one dimension's own order: ``shift``, and ``sum_back``, a sum of shifts.
 
 ``shift`` is a pointwise remap of the dimension through its ordinal and
 ``sum_back`` a one-to-many one. They share the ordinal arithmetic and the
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.relational.engine.fragments import Presence, TermFragment, refuse_a_fragment_without_the_dims
+from specsolve.relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
 from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
 from specsolve.relational.engine.scope import join_on
 
@@ -73,7 +73,7 @@ class _Order:
         """*source* with the walked dimension moved by *moved*.
 
         *dims* is the caller's, since a presence frame need not carry the
-        fragment's. *prepared* adds the operator's extra join between the two keyed sides.
+        piece's. *prepared* adds the operator's extra join between the two keyed sides.
         """
         dimension = self.grouping.dimension
         kept = [d for d in dims if d != dimension]
@@ -90,13 +90,13 @@ def translate_rows(
 ) -> pl.LazyFrame:
     """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
-    The predicate form of [`translate_fragment`][]: a missing row already reads as false.
+    The predicate form of [`translate_piece`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
     return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
 
 
-def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context: str) -> TermFragment:
+def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> Piece:
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for; a named
@@ -105,7 +105,7 @@ def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context
     coordinates in no group.
     """
     if s.along not in p.dims:
-        refuse_a_fragment_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
+        refuse_a_piece_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
     order = _Order.of(scope, s.along, s.partition)
 
     width_name = s.width if isinstance(s.width, str) else None
@@ -142,7 +142,7 @@ def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context
     return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, context: str) -> TermFragment:
+def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) -> Piece:
     """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
     Every fill over a constant is written, ``0`` included, so the slot has a
@@ -150,7 +150,7 @@ def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, cont
     term, and lowering refuses every nonzero fill over a variable.
     """
     if s.along not in p.dims:
-        refuse_a_fragment_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
+        refuse_a_piece_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
     others = [d for d in p.dims if d != s.along]
     order = _Order.of(scope, s.along, s.partition)
     edge = _Edge.of(scope, order, s)

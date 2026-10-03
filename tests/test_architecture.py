@@ -425,13 +425,13 @@ def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
     from specsolve.relational.sinks import SOLVERS, WRITERS
-    from specsolve.relational.sinks.capabilities import CAPABILITIES, Capabilities
+    from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
     for sink, capabilities in described.items():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
-        strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
+        strangers = sorted(set(capabilities.supports) - set(ALL_CAPABILITIES))
         assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
         for combination in capabilities.excludes:
             unsupported = sorted(combination - capabilities.supports)
@@ -523,9 +523,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / 'lanes.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / 'inputs.py', 'Buildable'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve.lanes.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve.inputs.Buildable takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 
@@ -575,9 +575,9 @@ def test_both_lanes_lower_a_spec_through_one_function():
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute) and node.attr == 'program' and isinstance(node.value, ast.Call)
     }
-    assert reading == {'lanes.py'}, (
+    assert reading == {'inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
-        f'lanes.lowered, which is what refuses a spec this package cannot build or write down'
+        f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
     )
 
 
@@ -601,7 +601,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve.relational.engine.fragments import fan_in
+    from specsolve.relational.engine.pieces import fan_in
 
     x = program.Variable('x')
     declared = {

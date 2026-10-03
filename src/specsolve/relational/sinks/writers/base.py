@@ -1,4 +1,4 @@
-"""The family base: what every format writes the same way. It renders no format of its own."""
+"""The family base: what every format writes the same way — numbers, indices, sort keys, and lines appended to the file. It renders no format of its own."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ from typing import IO
 
 import polars as pl
 
-__all__ = ['chunk_key', 'digits', 'number', 'sink']
+__all__ = ['append_lines', 'chunk_key', 'digits', 'number']
 
 
-def sink(frame: pl.LazyFrame, f: IO[bytes]) -> None:
+def append_lines(frame: pl.LazyFrame, f: IO[bytes]) -> None:
     """Append a one-column frame to *f*, one raw line per row.
 
     Polars writes through the caller's handle, so an ``f.write()`` between two
-    sinks lands between them. ``maintain_order`` is stated because its default
+    calls lands between them. ``maintain_order`` is stated because its default
     is documented as unstable.
     """
     frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)

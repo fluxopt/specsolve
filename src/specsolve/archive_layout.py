@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.errors import LayoutError
-from specsolve.lanes import lowered
+from specsolve.inputs import lowered
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     METRICS_FILE,

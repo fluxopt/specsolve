@@ -27,10 +27,10 @@ import polars as pl
 
 from specsolve.api import build, check
 from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
-from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, carries, check_no_index_is_cut
+from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
 from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame
-from specsolve.lanes import declared
+from specsolve.inputs import declared
 from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from mathspec.program import Program
 
     from specsolve.api import Model
-    from specsolve.lanes import Buildable, Label, Source
+    from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Diagnostics, Keep, Result
 
 
@@ -270,7 +270,7 @@ def solve_over(
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
     document = declared(spec)
-    sources = _held(sources)
+    sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
@@ -311,7 +311,7 @@ def solve_over(
     return folded
 
 
-def _held(sources: Mapping[str, Source]) -> dict[str, Source]:
+def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
     """*sources* with each one-shot iterator read into a list.
 
     Every slice reads the sources it does not cut, and the archive reads them
@@ -343,9 +343,9 @@ def _archive_the_sweep(
     if carry:
         manifest['carry'] = dict(carry)
     tidied = numbered(program, tidy_sources(program, one_slice))
-    carried = carries(sources, axis.dim)
-    cut = {name: _uncut(program, axis, name, table) for name, table in carried.items()}
-    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, carried), **cut}
+    sliced = sources_with_column(sources, axis.dim)
+    cut = {name: _uncut(program, axis, name, table) for name, table in sliced.items()}
+    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, sliced), **cut}
     tables = {name: held[name] for name in sources}
     with beside(out) as scratch:
         spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
@@ -377,7 +377,7 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
-        for name in spill.held(kind):
+        for name in spill.names(kind):
             frame = spill.scan(kind, name)
             assert frame is not None, 'a name the spill lists has files'
             if why := sweep._unstitchable(frame):
@@ -408,7 +408,7 @@ def _spread_over_the_axis(
     axis: Axis,
     sources: Mapping[str, Source],
     tidied: Mapping[str, pl.LazyFrame],
-    carried: Mapping[str, pl.LazyFrame],
+    sliced: Mapping[str, pl.LazyFrame],
 ) -> dict[str, pl.LazyFrame]:
     """Each parameter given as one number over a window's local index, as a table over the axis.
 
@@ -426,7 +426,7 @@ def _spread_over_the_axis(
         for name, declared in program.parameters.items()
         if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
     ]
-    coordinates = pl.concat([table.select(axis.dim) for table in carried.values()], how='vertical_relaxed')
+    coordinates = pl.concat([table.select(axis.dim) for table in sliced.values()], how='vertical_relaxed')
     coordinates = coordinates.unique().sort(axis.dim)
     return {
         name: coordinates.join(tidied[name].drop(axis.into).unique(maintain_order=True), how='cross')

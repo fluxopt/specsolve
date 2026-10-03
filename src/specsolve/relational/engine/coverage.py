@@ -8,7 +8,7 @@ gap is still visible:
 position                       the gap looks like                   asked
 =============================  ===================================  ==========================================
 a divisor under a term         a null coefficient in the share      before the terminal aggregate reads it as 0
-a divisor under a constant     a null value in the piece            before [`constant_scalar`][fragments.constant_scalar] sums it away
+a divisor under a constant     a null value in the piece            before [`constant_scalar`][pieces.constant_scalar] sums it away
 a constant piece the row sees  a null after the join onto the rows  on the rows pass itself
 a constant piece summed away   a coordinate the parameter lacks     of the parameter, the piece no longer showing it
 =============================  ===================================  ==========================================
@@ -22,8 +22,8 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError, sparse_divisor_message, uncovered_constant_message
-from specsolve.relational.collect import polars_engine
-from specsolve.relational.engine.fragments import constant_scalar
+from specsolve.relational.collect import collect_engine
+from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
 from specsolve.relational.engine.scope import join_on
 from specsolve.relational.sinks.handoff import SENSE
@@ -31,7 +31,7 @@ from specsolve.relational.sinks.handoff import SENSE
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
-    from specsolve.relational.engine.fragments import TermFragment
+    from specsolve.relational.engine.pieces import Piece
     from specsolve.relational.engine.scope import Scope
 
 
@@ -63,7 +63,7 @@ def refuse_null_constants(
 ) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided.
 
-    Asked before [`constant_scalar`][fragments.constant_scalar] sums the piece,
+    Asked before [`constant_scalar`][pieces.constant_scalar] sums the piece,
     which reads a null as zero. *pieces* are narrowed by the caller to the
     coordinates the declaration builds. *message* words it for the position.
 
@@ -78,7 +78,7 @@ def refuse_null_constants(
         raise DataError(f'{subject}: {message(", ".join(sorted(divisors)), undefined)}')
 
 
-def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[TermFragment]) -> list[pl.LazyFrame]:
+def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.LazyFrame]:
     """Each constant piece cut to the rows built, for [`refuse_null_constants`][].
 
     A piece that lost the row's dims to a reduction is asked whole, but only if
@@ -95,7 +95,7 @@ def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[TermFragment]) -> list
 def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
-    consts: Sequence[tuple[TermFragment, float]],
+    consts: Sequence[tuple[Piece, float]],
     c: program.ConstraintDeclaration,
     subject: str,
 ) -> pl.DataFrame:
@@ -131,7 +131,7 @@ def constant_side(
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *([uncovered.alias(gap_column)] if uncovered is not None else []),
-    ).collect(engine=polars_engine())
+    ).collect(engine=collect_engine())
     if uncovered is None:
         return built
     gaps = int(built.get_column(gap_column).sum())
@@ -144,7 +144,7 @@ def constant_side(
 def refuse_short_constants(
     scope: Scope,
     rows: pl.LazyFrame,
-    consts: Sequence[TermFragment],
+    consts: Sequence[Piece],
     c: program.ConstraintDeclaration,
     subject: str,
     sparse: Collection[str],

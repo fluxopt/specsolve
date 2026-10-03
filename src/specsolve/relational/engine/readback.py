@@ -8,9 +8,9 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError, unknown_name_message
-from specsolve.relational.collect import polars_engine
+from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
-from specsolve.relational.engine.fragments import absence_restrictions
+from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engine.compiler import Compiler
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
-SOLUTION = '__solution value__'
+_SOLUTION = '__solution value__'
 _EXPRESSION_ROW = '__expression row__'
 _LABEL_ORDER = '__label order__'
 
@@ -166,7 +166,7 @@ def reordered(
     pieces = [
         _aligned(attached, name, registry[name], declared[name].dims, frames.get(name)) for _, name in in_start_order
     ]
-    return pl.concat(pieces) if pieces else pl.Series(SOLUTION, [], dtype=pl.Float64)
+    return pl.concat(pieces) if pieces else pl.Series(_SOLUTION, [], dtype=pl.Float64)
 
 
 def _aligned(
@@ -178,14 +178,14 @@ def _aligned(
     missing *stored* is no error there.
     """
     if held.height == 0:
-        return pl.Series(SOLUTION, [], dtype=pl.Float64)
+        return pl.Series(_SOLUTION, [], dtype=pl.Float64)
     if stored is None:
         raise SpecsolveError(
             f"the saved answer holds no '{name}' frame, but this model builds it, so it is not this model's "
             f'answer. Re-solve rather than read.'
         )
     if not dims:
-        return stored['value'].rename(SOLUTION)
+        return stored['value'].rename(_SOLUTION)
     order = _as_strings(held.frame.select(*dims).collect(), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
     if joined['value'].null_count():
@@ -193,7 +193,7 @@ def _aligned(
             f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
-    return joined['value'].rename(SOLUTION)
+    return joined['value'].rename(_SOLUTION)
 
 
 def readers(
@@ -245,11 +245,11 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         _reported_divisor_message,
     )
 
-    fragments = compiled.consts
-    dims = compiler.scope.spanned(fragments)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(fragments)).lazy()
-    added = compiler.added(fragments, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=polars_engine())
+    pieces = compiled.consts
+    dims = compiler.scope.spanned(pieces)
+    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
+    added = compiler.summed_onto(pieces, carrier, absent='zero')
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=collect_engine())
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
