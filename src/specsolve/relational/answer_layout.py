@@ -164,7 +164,7 @@ class Record(NamedTuple):
     termination_condition: str
     #: What the solve reached, or ``None`` where it reached nothing — null
     #: rather than ``nan``, which every aggregate reads as a number.
-    #: [`Result.objective`][] is a float and reads it back as ``nan``.
+    #: [`Result.objective`][specsolve.types.Result.objective] is a float and reads it back as ``nan``.
     objective: float | None
     #: Whether the solve produced values, which the condition alone does not
     #: say: a run stopped at a limit before any incumbent is ``ok`` with

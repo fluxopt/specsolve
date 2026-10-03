@@ -129,16 +129,16 @@ accept the same file, attach the same tables and refuse the same constructs.
 oracle stops at the `linopy.Model`, which the tests solve and read back with
 linopy.
 
-**Eleven modules sit outside a fence, and each is legitimately both halves**:
+**Thirteen modules sit outside a fence, and each is legitimately both halves**:
 `sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `axes.py`,
-`sweep.py`, `inputs.py`, `frames.py`, `archive_layout.py`, `archive.py` and
-`errors.py`. Size
+`sweep.py`, `inputs.py`, `frames.py`, `archive_layout.py`, `archive.py`,
+`types.py`, `errors.py` and `messages.py`. Size
 does not buy a place among them. A module only one lane reaches is that lane's, down to a
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
 
 **Eligibility is decided by attempting the lowering.** `inputs.lowered` returns
-a `Program` or raises `sps.LanguageError`. Both lanes call it, so "neither lane
+a `Program` or raises `sps.errors.LanguageError`. Both lanes call it, so "neither lane
 accepts a file the other refuses" is mechanical rather than maintained.
 The oracle asks only for the verdict and discards the plan. Errors split spec
 from run. Everything under `LanguageError` is decidable without data,
@@ -197,19 +197,29 @@ protects: a new consumer is free, a new primitive is taxed.
 
 ### The Python surface
 
-**Twenty-eight names, and the count is the feature.** The spec is the YAML file,
-and Python is how you *run* it. So nothing on the surface constructs math or
-reaches the plan. The names, by role:
+**Three modules hold the surface, and each holds one kind of name.**
+`specsolve` holds what a caller calls. `specsolve.types` holds what a call
+returns, and `specsolve.errors` holds what a call raises or warns. Every other
+module under `specsolve.` is internal, whatever its name, and any release can
+change it.
+
+**Fifteen names to call, and the count is the feature.** The spec is the YAML
+file, and Python is how you *run* it. So nothing on the surface constructs math
+or reaches the plan. The names, by role:
 
 - the five verbs `check`, `build`, `evaluate`, `solve` and `write`;
-- the fold `solve_over` with its two axes;
+- the fold `solve_over` with its two axes, the only classes a caller builds;
 - `tidy`, the tables a solve reads from the sources, as an archive holds them;
-- the two archives that carry a spec, its data and its answer, `ResultArchive`
-  and `SweepArchive`, with `load_archive`, `load_result` and `load_sweep` to read
-  one back whole and `scan_archive`, `scan_result` and `scan_sweep` to read it
-  off the directory it lies in;
-- the three types a verb hands back, `Model`, `Result` and `Sweep`;
-- the error tree under `SpecsolveError`, `NoSolutionError` and `SpecsolveWarning`.
+- `load_archive`, `load_result` and `load_sweep` to read an answer back whole,
+  and `scan_archive`, `scan_result` and `scan_sweep` to read it off the
+  directory it lies in.
+
+`specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
+`Sweep`, and the two archives that carry a spec, its data and its answer,
+`ResultArchive` and `SweepArchive`. It also holds the rows they hand back:
+`ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`.
+`specsolve.errors` holds the error tree under `SpecsolveError`,
+`NoSolutionError` and `SpecsolveWarning`.
 
 What each one takes and returns is its docstring, which
 [the Python API](../reference/api.md) renders. The docstrings are the reference,
@@ -222,8 +232,9 @@ needs no solver installed.
 `mathspec.`'s, counted in its own `__all__`. One name, one home. `check` hands
 back a `Program` and every verb accepts a `Spec`. Obtaining either means calling
 `mathspec`, so a caller annotating one is already in the package that owns it.
-**The errors are the only exception**, because a caller meets them *without
-choosing to*: a `LanguageError` arrives unbidden out of `sps.solve`.
+**The language's errors are the only exception**: `specsolve.errors`
+re-exports them, because a caller meets them *without choosing to*. A
+`LanguageError` arrives unbidden out of `sps.solve`.
 
 **Nothing here reads a `Spec`.** Attaching, the guards and both lanes take the
 `Program`. A verb reads a `Spec` only for the `Program` it carries, through
@@ -232,15 +243,11 @@ line: editing it, dumping it and typesetting it.
 
 **What a verb hands back is part of its signature.** A caller that *wraps* this
 package writes the type down. A type it cannot import is a type it cannot write.
-So `Model`, `Result` and `Sweep` are named here. So are `NoSolutionError`, which
-every reader on a `Result` raises, and `SpecsolveWarning`, which `check` emits. A
-sweep that records an infeasible scenario rather than dying on it needs both by
-name. None of the five constructs math or reaches the plan.
-
-**The namespace is flat.** `solve_over` and its axes sit at the top level
-beside `solve`. The surface test exempts submodules (`not inspect.ismodule`).
-So moving names under `specsolve.something` moves them out from under the list
-a reviewer reads.
+So every type a call returns, down to the rows it holds, is in
+`specsolve.types`. `NoSolutionError`, which every reader on a `Result` raises,
+and `SpecsolveWarning`, which `check` emits, are in `specsolve.errors`. A sweep
+that records an infeasible scenario rather than dying on it needs both by name.
+None of these types constructs math or reaches the plan.
 
 **A handle's methods answer "what do I do with this", never "what is this"**:
 `solve`, `write`, `close` and `update` pass. What the objects carry is [the
@@ -256,10 +263,14 @@ The single positional fallback (an *unnamed* pandas index) is narrow on
 purpose. Renaming a named level would transpose the data silently whenever two
 dims share a label space.
 
-`tests/test_architecture.py` pins all of it: `__all__` must match its own
-list by role, **and** no public non-module attribute may exist outside it. The first
-direction catches a name documented and never exported, the second a helper
-that leaked into the namespace from the top of `__init__.py`.
+`tests/test_architecture.py` pins all of it, in each of the three modules:
+`__all__` must match its own list, **and** no public non-module attribute may
+exist outside it. The first direction catches a name documented and never
+exported, the second a helper that leaked into the namespace from an import.
+The same file holds each module to its kind: no class but the two axes at the
+top level, only classes in `types`, and only errors and warnings in `errors`.
+`tests/test_docs_site.py` holds the API page to the same names, so the page
+cannot document a name at an internal path.
 
 ## Hard rules
 
@@ -301,9 +312,9 @@ the language's rulebook.
    to: `sinks/`, `status.py`, and the plan vocabulary, which is
    `mathspec.program`'s. No contract module names a module inside it. There
    is one engine, so there is no `Engine` protocol and no directory per
-   engine; a second one adds them. The engine imports nothing from the package bar one
-   declared leaf (`errors.py`, in `ENGINE_MAY_IMPORT`), which keeps the
-   subpackage extractable. **`errors.py` is a leaf by name and not by cost**: it
+   engine; a second one adds them. The engine imports nothing from the package bar two
+   declared leaves (`errors.py` and `messages.py`, in `ENGINE_MAY_IMPORT`), which
+   keeps the subpackage extractable. **`errors.py` is a leaf by name and not by cost**: it
    re-exports the language's half of the hierarchy, so importing it loads the
    language. What the engine raises through it is `DataError`, a verdict about
    the *data*, and `SpecsolveError`, a verdict about the engine's reach.
@@ -331,8 +342,8 @@ the language's rulebook.
    `Spec` and the `Program` it lowers to. Whether that seam is ever blessed is
    open ([#381](https://github.com/fluxopt/specsolve/issues/381)). The Python
    surface is the runner (`api.py`) and the driver over it (`strategy.py`); the
-   plan is internal. The whole of it is [twenty-eight
-   names](#the-python-surface), pinned by a test.
+   plan is internal. The whole of it is [three modules and
+   thirty-three names](#the-python-surface), pinned by a test.
 
 ## The plan, node for node
 
@@ -553,7 +564,9 @@ is structure.
 | `sources.py` | the one door: caller data (parquet paths, in-memory tables, plain-Python shapes) read into tidy tables and checked against the declarations |
 | `assumptions.py` | the one guard that needs numbers: every `assumptions:` entry the file wrote, and each condition a `piecewise:` method puts on its breakpoints, evaluated as the masks the language states them as |
 | `frames.py` | the boundary: caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the oracle |
-| `errors.py` | the run half, and the whole re-exported: what a caller catches off `sps.`; a wording lives here only where two modules raise it |
+| `types.py` | public: every type a call returns, re-exported from the module that defines it, so a caller annotates without reaching inside |
+| `errors.py` | public: the run half of the error tree, and the language's half re-exported, so one `except` covers both |
+| `messages.py` | a wording two modules raise, written once; a leaf the engine may import |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `axes.py` | how a sweep cuts its sources: `EachCoordinate`, `EachWindow`, and the stitch that puts a window's frames back over the dimension it cut |
 | `sweep.py` | what a fold returns: `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
@@ -583,8 +596,8 @@ it implements. No module of the package imports linopy, and none imports
 xarray at module level. `tests/test_architecture.py` holds both rules.
 
 **A fence whose allowlist is empty is a package waiting to happen.** What
-remains points one way. `relational/`'s fence is at one declared leaf,
-`errors.py` (hard rule 2). The language's fence is nowhere, because the language
+remains points one way. `relational/`'s fence is at two declared leaves,
+`errors.py` and `messages.py` (hard rule 2). The language's fence is nowhere, because the language
 is not here.
 
 ### What counts as language

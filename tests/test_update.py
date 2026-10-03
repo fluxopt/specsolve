@@ -244,7 +244,7 @@ def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
     """Every constraint's prices, or ``None`` where this answer carries none."""
     try:
         return {name: result.dual(name) for name in program.constraints}
-    except sps.SpecsolveError:
+    except sps.errors.SpecsolveError:
         return None
 
 
@@ -528,7 +528,7 @@ def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown
     a driver cannot see: it re-solves the numbers already attached and reports the
     answer. `build` needs no such check — it attaches every declared name or
     fails."""
-    with pytest.raises(sps.DataError, match=unknown):
+    with pytest.raises(sps.errors.DataError, match=unknown):
         call(model)
 
 
@@ -613,10 +613,10 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
     of two, which is worse than having nothing to answer with.
     """
     model.solve()
-    with pytest.raises(sps.DataError):
+    with pytest.raises(sps.errors.DataError):
         model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
 
-    with pytest.raises(sps.SpecsolveError, match='no built model to hand over'):
+    with pytest.raises(sps.errors.SpecsolveError, match='no built model to hand over'):
         model.solve()
 
 

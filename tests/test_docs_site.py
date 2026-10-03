@@ -250,13 +250,30 @@ def test_the_plan_table_names_every_expression_node():
 API_ENTRY = re.compile(r'^::: (\S+)$', re.MULTILINE)
 
 
-def test_every_name_the_package_exports_has_an_entry_on_the_api_page():
-    """The reference is the docstrings, so a name without an entry has no reference at all."""
+def _exported() -> set[str]:
+    """Every public name, by the path the API page renders it under."""
     import specsolve
 
+    return {f'specsolve.{name}' for name in specsolve.__all__} | {
+        f'specsolve.{module}.{name}' for module in ('types', 'errors') for name in getattr(specsolve, module).__all__
+    }
+
+
+def test_every_name_the_package_exports_has_an_entry_on_the_api_page():
+    """The reference is the docstrings, so a name without an entry has no reference at all."""
     rendered = set(API_ENTRY.findall((DOCS / 'reference' / 'api.md').read_text()))
-    missing = sorted(name for name in specsolve.__all__ if f'specsolve.{name}' not in rendered)
-    assert not missing, f'names in specsolve.__all__ with no ::: entry on reference/api.md: {missing}'
+    missing = sorted(_exported() - rendered)
+    assert not missing, f'exported names with no ::: entry on reference/api.md: {missing}'
+
+
+def test_every_entry_on_the_api_page_is_an_exported_name():
+    """An entry at an internal path publishes a name the package does not export."""
+    rendered = set(API_ENTRY.findall((DOCS / 'reference' / 'api.md').read_text()))
+    internal = sorted(rendered - _exported())
+    assert not internal, (
+        f'::: entries on reference/api.md that specsolve, specsolve.types and specsolve.errors do not export: '
+        f'{internal}'
+    )
 
 
 #: A Sphinx role, which mkdocstrings prints as it stands.

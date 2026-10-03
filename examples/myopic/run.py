@@ -125,7 +125,7 @@ def main() -> None:
     print(f'each period starts from the fleet the last one left, across {len(YEARS)} periods')
 
 
-def _check_the_carry_moved_the_fleet(sweep: sps.Sweep) -> None:
+def _check_the_carry_moved_the_fleet(sweep: sps.types.Sweep) -> None:
     """Period *i+1* inherited exactly the fleet period *i* ended with.
 
     `existing` is never read back — it is a parameter, not a variable — so the

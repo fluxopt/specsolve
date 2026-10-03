@@ -17,8 +17,15 @@ result.dual('power_balance')
 
 ## Reference
 
-Every public name, rendered from its docstring. The [glossary](glossary.md)
-defines *model*, *result*, *sink* and the other house terms the entries use.
+Every public name, rendered from its docstring. Three modules hold them:
+
+- `specsolve` holds what you call;
+- `specsolve.types` holds what a call hands back;
+- `specsolve.errors` holds what a call raises or warns.
+
+Any other name under `specsolve.` is internal, and any release can change it.
+The [glossary](glossary.md) defines *model*, *result*, *sink* and the other
+house terms the entries use.
 
 ### Run a spec
 
@@ -64,50 +71,50 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
 
 ### What comes back
 
-::: specsolve.Model
+::: specsolve.types.Model
     options:
       heading_level: 4
 
-::: specsolve.relational.result.ConstraintRow
+::: specsolve.types.ConstraintRow
     options:
       heading_level: 4
 
-::: specsolve.Result
+::: specsolve.types.Result
     options:
       heading_level: 4
 
-::: specsolve.Sweep
+::: specsolve.types.Sweep
+    options:
+      heading_level: 4
+
+::: specsolve.types.ResultArchive
+    options:
+      heading_level: 4
+
+::: specsolve.types.SweepArchive
     options:
       heading_level: 4
 
 The rows and frames those hand back: how a solve terminated, what produced
 it, what the build and its solves took, and what a slice of a sweep took.
 
-::: specsolve.relational.result.Diagnostics
+::: specsolve.types.Diagnostics
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Record
+::: specsolve.types.Record
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Provenance
+::: specsolve.types.Provenance
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Metrics
+::: specsolve.types.Metrics
     options:
       heading_level: 4
 
-### Carry an answer
-
-::: specsolve.ResultArchive
-    options:
-      heading_level: 4
-
-::: specsolve.SweepArchive
-    options:
-      heading_level: 4
+### Read an answer back
 
 ::: specsolve.load_archive
     options:
@@ -141,37 +148,37 @@ message names the rewrite. `LanguageError`, with `SchemaError` and
 `DimensionError`, is a fault in the spec, and is the language's own:
 [which error you get](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#which-error-you-get).
 
-::: specsolve.SpecsolveError
+::: specsolve.errors.SpecsolveError
     options:
       heading_level: 4
 
-::: specsolve.LanguageError
+::: specsolve.errors.LanguageError
     options:
       heading_level: 4
 
-::: specsolve.SchemaError
+::: specsolve.errors.SchemaError
     options:
       heading_level: 4
 
-::: specsolve.DimensionError
+::: specsolve.errors.DimensionError
     options:
       heading_level: 4
 
 The rest are specsolve's:
 
-::: specsolve.DataError
+::: specsolve.errors.DataError
     options:
       heading_level: 4
 
-::: specsolve.LayoutError
+::: specsolve.errors.LayoutError
     options:
       heading_level: 4
 
-::: specsolve.NoSolutionError
+::: specsolve.errors.NoSolutionError
     options:
       heading_level: 4
 
-::: specsolve.SpecsolveWarning
+::: specsolve.errors.SpecsolveWarning
     options:
       heading_level: 4
 

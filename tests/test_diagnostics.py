@@ -304,7 +304,7 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
         built = model.diagnostics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
-        with pytest.raises(sps.DataError, match='used as a divisor'):
+        with pytest.raises(sps.errors.DataError, match='used as a divisor'):
             model.update(HALF_A_DIVISOR)
         after = model.diagnostics()
 

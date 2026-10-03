@@ -70,7 +70,7 @@ itself a reason to add anything.
 subsystem) read-back, a join rather than a scatter; serialisation to parquet;
 elastic relaxation; dualisation, since transposing a COO matrix is swapping two
 column names. Model statistics and coefficient ranges were the first of these
-and already ship ([diagnostics](../reference/api.md#specsolve.relational.result.Diagnostics)).
+and already ship ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
 
 **Ahead of comparable declarative layers:** a sparse-by-construction build with
 no dense intermediate, and a hand-off straight to the solver rather than

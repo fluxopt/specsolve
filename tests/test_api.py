@@ -162,7 +162,7 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_in
 )
 def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_frame_inputs, sources, match):
     frames = dispatch_frame_inputs
-    with pytest.raises(sps.DataError, match=match):
+    with pytest.raises(sps.errors.DataError, match=match):
         sps.build(dispatch_yaml, {**frames, **sources}).close()
 
 
@@ -184,7 +184,7 @@ _TWO_DIMS = {
 )
 def test_a_flat_shape_cannot_cover_two_dimensions(source, match):
     """Both carry one axis, and the rewrite is the table that carries both."""
-    with pytest.raises(sps.DataError, match=match):
+    with pytest.raises(sps.errors.DataError, match=match):
         sps.build(_TWO_DIMS, {'cap': source}).close()
 
 
@@ -192,7 +192,7 @@ def test_a_one_level_series_cannot_cover_two_dimensions():
     """A pandas Series is a sequence with its index along: one axis, declined the same way."""
     pandas = pytest.importorskip('pandas')
     series = pandas.Series([1.0, 2.0], index=pandas.Index(['wind', 'gas'], name='g'))
-    with pytest.raises(sps.DataError, match='a sequence runs along one dimension'):
+    with pytest.raises(sps.errors.DataError, match='a sequence runs along one dimension'):
         sps.build(_TWO_DIMS, {'cap': series}).close()
 
 
@@ -205,7 +205,7 @@ def test_a_positional_source_needs_the_labels_it_is_written_against():
         'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
-    with pytest.raises(sps.DataError, match='nothing else supplies an index'):
+    with pytest.raises(sps.errors.DataError, match='nothing else supplies an index'):
         sps.build(spec, {'cap': [1.0, 2.0]}).close()
 
 
@@ -312,21 +312,21 @@ def test_check_reports_language_errors_before_any_data_is_bound(
     """
     raw = {**to_spec(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
 
-    with pytest.raises(sps.LanguageError, match=match):
+    with pytest.raises(sps.errors.LanguageError, match=match):
         sps.check(raw)
     sources = dispatch_frame_inputs
-    with pytest.raises(sps.LanguageError, match=match):
+    with pytest.raises(sps.errors.LanguageError, match=match):
         sps.build(raw, sources)
 
 
 def test_error_hierarchy_is_one_catchable_tree():
     """One ``except`` covers the package, and the model/run split is real."""
-    for cls in (sps.LanguageError, sps.DataError):
-        assert issubclass(cls, sps.SpecsolveError)
-    for cls in (sps.SchemaError, sps.DimensionError):
-        assert issubclass(cls, sps.LanguageError)
-    assert not issubclass(sps.DataError, sps.LanguageError)
-    assert issubclass(sps.SpecsolveError, ValueError)
+    for cls in (sps.errors.LanguageError, sps.errors.DataError):
+        assert issubclass(cls, sps.errors.SpecsolveError)
+    for cls in (sps.errors.SchemaError, sps.errors.DimensionError):
+        assert issubclass(cls, sps.errors.LanguageError)
+    assert not issubclass(sps.errors.DataError, sps.errors.LanguageError)
+    assert issubclass(sps.errors.SpecsolveError, ValueError)
 
 
 def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
@@ -334,7 +334,7 @@ def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispa
     from specsolve.relational.sinks import SOLVERS
 
     sources = dispatch_frame_inputs
-    with pytest.raises(sps.SpecsolveError, match='unknown solver'):
+    with pytest.raises(sps.errors.SpecsolveError, match='unknown solver'):
         sps.solve(dispatch_yaml, sources, solver_name='cplex')
     assert set(SOLVERS) == {'highs', 'gurobi', 'xpress'}
 
@@ -360,7 +360,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models."""
-    with pytest.raises(sps.LanguageError, match='merge the declarations'):
+    with pytest.raises(sps.errors.LanguageError, match='merge the declarations'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
 
@@ -399,7 +399,7 @@ def _named(**declared) -> dict:
 )
 def test_two_names_in_one_namespace_differing_only_by_case_are_refused(spec):
     """`p` beside `P` is refused: on a case-insensitive filesystem their files fold into one."""
-    with pytest.raises(sps.SpecsolveError, match='differ only by case'):
+    with pytest.raises(sps.errors.SpecsolveError, match='differ only by case'):
         sps.check(spec)
 
 
@@ -460,7 +460,7 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
 )
 def test_a_name_that_starts_with_the_reserved_prefix_is_refused(spec, named):
     """Every column specsolve adds starts with `specsolve_`, so a declared name that does could collide with one."""
-    with pytest.raises(sps.SpecsolveError, match=rf"^{named} starts with 'specsolve_', which is reserved"):
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^{named} starts with 'specsolve_', which is reserved"):
         sps.check(spec)
 
 
@@ -472,7 +472,9 @@ def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
     column to every query engine an archive is read with.
     """
     spec = _named(variables={name: {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}})
-    with pytest.raises(sps.SpecsolveError, match=rf"^variable '{name}' starts with 'specsolve_', which is reserved"):
+    with pytest.raises(
+        sps.errors.SpecsolveError, match=rf"^variable '{name}' starts with 'specsolve_', which is reserved"
+    ):
         sps.check(spec)
 
 
@@ -487,7 +489,7 @@ def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp
         'solve': lambda: sps.solve(spec, sources),
         'archive': lambda: sps.solve(spec, sources, archive=tmp_path / 'case.zip'),
     }[door]
-    with pytest.raises(sps.SpecsolveError, match='differ only by case'):
+    with pytest.raises(sps.errors.SpecsolveError, match='differ only by case'):
         call()
     assert not (tmp_path / 'case.zip').exists(), 'and a refused archive leaves no file behind'
 
@@ -565,9 +567,9 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
-        with pytest.raises(sps.SpecsolveError):
+        with pytest.raises(sps.errors.SpecsolveError):
             result.evaluate('ratio')
-        with pytest.raises(sps.SpecsolveError, match='integer'):
+        with pytest.raises(sps.errors.SpecsolveError, match='integer'):
             result.to_dataset(kind='dual')
     assert sorted(p.name for p in out.iterdir()) == [
         'activity',
@@ -605,9 +607,9 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
-        with pytest.raises(sps.SpecsolveError) as no_dual:
+        with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.SpecsolveError) as no_ratio:
+        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
             result.evaluate('ratio')
 
     absent = pl.read_parquet(out / 'reasons.parquet')
@@ -649,15 +651,15 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
     with sps.solve(spec, sources) as result:
         loaded = sps.load_result(result.save(tmp_path))
-        with pytest.raises(sps.SpecsolveError) as no_dual:
+        with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.SpecsolveError) as no_ratio:
+        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
             result.evaluate('ratio')
 
     assert loaded.evaluate('twice').equals(pl.DataFrame({'t': [0, 1], 'value': [4.0, 6.0]}))
-    with pytest.raises(sps.SpecsolveError, match='integer'):
+    with pytest.raises(sps.errors.SpecsolveError, match='integer'):
         loaded.dual('meet')
-    with pytest.raises(sps.SpecsolveError) as loaded_no_ratio:
+    with pytest.raises(sps.errors.SpecsolveError) as loaded_no_ratio:
         loaded.evaluate('ratio')
     assert (str(loaded_no_ratio.value), str(no_ratio.value)) == (str(no_ratio.value), str(no_ratio.value)), (
         'the expression names the same reason it named in the process that solved'
@@ -672,14 +674,14 @@ def test_a_solve_that_left_no_values_loads_back_and_still_has_none(tmp_path):
     assert loaded.termination_condition == 'infeasible'
     assert not loaded.has_primal, 'the record says the solve produced none, so no reader is offered any'
     assert loaded.objective != loaded.objective, 'nan, as the solve reported it'
-    with pytest.raises(sps.NoSolutionError, match='infeasible'):
+    with pytest.raises(sps.errors.NoSolutionError, match='infeasible'):
         loaded.primal('p')
 
 
 def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
     empty = tmp_path / 'nothing'
     empty.mkdir()
-    with pytest.raises(sps.LayoutError, match=r'record\.parquet'):
+    with pytest.raises(sps.errors.LayoutError, match=r'record\.parquet'):
         sps.load_result(empty)
 
 
@@ -739,7 +741,7 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
     assert result.primal('p').height == height, 'still readable, with no close in sight'
 
     result.close()
-    with pytest.raises(sps.SpecsolveError, match='this result was closed'):
+    with pytest.raises(sps.errors.SpecsolveError, match='this result was closed'):
         result.primal('p')
 
 
@@ -844,7 +846,7 @@ def test_every_bridge_takes_a_kind(dispatch_solution, dispatch_yaml):
     assert set(dispatch_solution.to_dataset(kind='dual').data_vars) == set(sps.check(dispatch_yaml).constraints), (
         'all of one kind by default, as to_dataset() is all of the variables'
     )
-    with pytest.raises(sps.SpecsolveError, match='primal, dual, expression'):
+    with pytest.raises(sps.errors.SpecsolveError, match='primal, dual, expression'):
         dispatch_solution.to_pandas('p', 'objective')
 
 
@@ -933,7 +935,7 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
         'Spec.model_validate': lambda: Spec.model_validate(raw),
     }
     for door, call in doors.items():
-        with pytest.raises(sps.SpecsolveError) as ei:
+        with pytest.raises(sps.errors.SpecsolveError) as ei:
             call()
         assert 'errors.pydantic.dev' not in str(ei.value), f"{door} leaks pydantic's envelope"
 
@@ -949,7 +951,7 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
     assert frame.height > 0, 'a frame read before the close is its own data'
     assert sol.objective == objective, 'and the outcome needs no model to report'
     for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
-        with pytest.raises(sps.SpecsolveError, match='this result was closed'):
+        with pytest.raises(sps.errors.SpecsolveError, match='this result was closed'):
             read()
 
 
