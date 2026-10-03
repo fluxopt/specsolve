@@ -584,3 +584,62 @@ def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: 
     )
     assert rewrite in message, 'and the rewrite that keeps the first of each, for the shape that was given'
     assert ('.select(' in message) == ('.select(' in rewrite), 'and no rewrite for a shape that was not given'
+
+
+#: A temporal dimension whose index bounds a variable.
+TEMPORAL_BOUND_SPEC = {
+    'dimensions': {'t': {'dtype': 'datetime'}},
+    'parameters': {'cap': {'dims': ['t']}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+def _instants(unit: str, time_zone: str | None = None, *, nanoseconds: int = 0) -> pl.Series:
+    """Two instants a day apart, held in *unit*, the first *nanoseconds* past midnight."""
+    import datetime
+
+    midnight = pl.Series([datetime.datetime(2030, 1, 1), datetime.datetime(2030, 1, 2)]).cast(pl.Datetime('ns'))
+    return (midnight + pl.Series([nanoseconds, 0]).cast(pl.Duration('ns'))).cast(pl.Datetime(unit, time_zone))
+
+
+@pytest.mark.xfail(reason='a datetime index in another unit than microseconds crashes the build', strict=True)
+@pytest.mark.parametrize(
+    ('index', 'column'),
+    [
+        pytest.param('ns', 'ns', id='nanoseconds-both'),
+        pytest.param('ms', 'ms', id='milliseconds-both'),
+        pytest.param('ns', 'us', id='nanosecond-index-microsecond-column'),
+        pytest.param('us', 'ns', id='microsecond-index-nanosecond-column'),
+    ],
+)
+def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column):
+    path = _written(tmp_path, TEMPORAL_BOUND_SPEC)
+    sources = {
+        't': pl.DataFrame({'t': _instants(index)}),
+        'cap': pl.DataFrame({'t': _instants(column), 'value': [3.0, 4.0]}),
+    }
+
+    with sps.solve(path, sources) as run:
+        assert run.objective == pytest.approx(7.0), 'each instant takes its own cap'
+    built = specsolve_linopy.build(path, sources)
+    built.solve(solver_name='highs', output_flag=False)
+    assert float(built.objective.value) == pytest.approx(7.0), 'and the linopy lane reads the same two instants'
+
+
+def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_path):
+    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
+    days = _instants('ns')
+    sources = {
+        **_P_MAX,
+        'cap': pl.DataFrame({'d': days, 'value': [3.0, 7.0]}),
+        'd': pl.DataFrame({'d': days}),
+        'g': ['w', 's'],
+        'day_of': pl.DataFrame({'g': ['w', 's'], 'd': days.gather([0, 0])}),
+    }
+
+    with sps.solve(path, sources) as run:
+        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
+    built = specsolve_linopy.build(path, sources)
+    built.solve(solver_name='highs', output_flag=False)
+    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
