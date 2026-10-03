@@ -722,7 +722,7 @@ class Result:
                 no_expressions[name] = str(absent)
                 continue
             write_whole(evaluated, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, no_expressions)
+        write_reasons(out, self._no_duals, {'expression': no_expressions})
         return out
 
     def close(self) -> None:

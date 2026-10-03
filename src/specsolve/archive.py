@@ -26,8 +26,7 @@ from specsolve.strategy import (
     Sweep,
     attach_sweep_readers,
     axis_from,
-    load_sweep,
-    scan_sweep,
+    read_archived_sweep,
 )
 
 if TYPE_CHECKING:
@@ -84,8 +83,11 @@ class SweepArchive:
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.
-        answer: Every slice's answer, keyed by slice. Held from
-            [`load_archive`][], spilled from [`scan_archive`][].
+        answer: The sweep, whose readers return the answer the archive
+            holds. Held from [`load_archive`][], on disk from
+            [`scan_archive`][]. ``per_window=True`` reads an EachWindow
+            sweep's windows where ``keep_windows=True`` kept them, and is
+            refused otherwise.
         source_digests: As [`SolveArchive`][] holds it, of the uncut
             sources.
     """
@@ -153,7 +155,7 @@ def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
         return SolveArchive(spec, sources, answer, digests, metrics)
     manifest = json.loads(axis_member.read_text())
     axis, carry = axis_from(manifest), manifest.get('carry', {})
-    answer = attach_sweep_readers((load_sweep if whole else scan_sweep)(saved), spec, sources, axis, carry)
+    answer = attach_sweep_readers(read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
     _check_the_pairing(spec, answer.record['spec_digest'].to_list())
     return SweepArchive(spec, sources, axis, carry, answer, digests)
 

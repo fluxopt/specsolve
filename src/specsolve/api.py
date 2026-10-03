@@ -673,11 +673,11 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _run=record.specsolve_run,
         )
 
-    no_duals, no_expressions = read_reasons(out)
+    no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda frame=frame: frame.collect()) for name, frame in _saved_frames(out / 'expression', read).items()
     }
-    expressions.update({name: _absent(why) for name, why in no_expressions.items()})
+    expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
