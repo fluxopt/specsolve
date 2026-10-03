@@ -1,4 +1,4 @@
-"""The family base: what every format writes the same way — numbers, indices, sort keys, and lines appended to the file. It renders no format of its own."""
+"""The writers' shared module: what every format writes the same way — numbers, indices, sort keys, and lines appended to the file. It renders no format of its own."""
 
 from __future__ import annotations
 
