@@ -1859,10 +1859,10 @@ def _key_column(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
             f'with a column the frames already carry. Name it something the spec does not use.'
         )
-    fixed = ('value', *Record._fields)
+    fixed = tuple(dict.fromkeys(('value', *Record._fields, *Metrics._fields)))
     if key_name in fixed:
         raise SpecsolveError(
-            f'key_name={key_name!r} is a column every sweep frame carries ({", ".join(fixed)}), so the slice '
+            f'key_name={key_name!r} is a column a sweep frame carries ({", ".join(fixed)}), so the slice '
             f'key would replace it rather than sit beside it. Name it something else.'
         )
     return key_name

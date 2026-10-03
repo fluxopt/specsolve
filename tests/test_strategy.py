@@ -1896,6 +1896,18 @@ def test_a_key_that_collides_with_a_fixed_column_is_refused(key_name):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name=key_name)
 
 
+@pytest.mark.parametrize('key_name', ['columns', 'rows', 'solves', 'loads', 'build_seconds'], ids=str)
+def test_a_key_named_like_a_metrics_column_is_refused_before_a_slice_is_solved(key_name):
+    """`Sweep.metrics` carries the key beside every `Metrics` column.
+
+    The guard named only the `Record` columns, so a key named like a metric
+    passed it: every slice solved, then polars refused the frame with a
+    `DuplicateError`, and again on every read of a spilled sweep.
+    """
+    with pytest.raises(sps.SpecsolveError, match=f'key_name={key_name!r} .* column'):
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name=key_name)
+
+
 @pytest.mark.parametrize('make_executor', EXECUTORS[:2])
 def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     """The spec is parsed once per call, whichever executor runs the slices.
