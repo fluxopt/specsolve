@@ -20,6 +20,7 @@ from specsolve.errors import (
 )
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.parquet import (
+    NO_PROVENANCE,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
@@ -370,7 +371,7 @@ class Result:
     #: written, not when the solver returns.
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
-    _provenance: Provenance = Provenance()
+    _provenance: Provenance = NO_PROVENANCE
 
     def model_digest(self) -> str | None:
         """Which model this answered — the document and the data it was attached to.

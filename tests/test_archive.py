@@ -20,9 +20,8 @@ import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve.api import attach_readers
+from specsolve.api import _provenance, attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.api import _provenance
 from specsolve.relational.parquet import METRICS_FILE, Metrics, Provenance, Record, digest_of_file
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (

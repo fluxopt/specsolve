@@ -24,7 +24,7 @@ import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 from mathspec import advice
@@ -696,7 +696,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
     )
 
 
-def _provenance(solver_name: str, solver_options: Mapping[str, Any] | None) -> Provenance:
+def _provenance(solver_name: str, solver_options: Mapping[str, object] | None) -> Provenance:
     """What a solve on *solver_name* with *solver_options* records about itself.
 
     The options are written as one JSON object, because a column of structs is

@@ -124,6 +124,10 @@ class Provenance(NamedTuple):
     mathspec_version: str | None = None
 
 
+#: The provenance of an answer no solve wrote.
+NO_PROVENANCE = Provenance()
+
+
 class Record(NamedTuple):
     """How a solve terminated, what it reached, and which spec it answered.
 
@@ -174,7 +178,7 @@ class Record(NamedTuple):
         spec_digest: str | None,
         solved_at: datetime | None,
         model_digest: str | None = None,
-        provenance: Provenance = Provenance(),
+        provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes.
 
