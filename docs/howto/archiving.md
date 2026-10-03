@@ -16,7 +16,10 @@ sps.solve('dispatch.yaml', sources, archive='case/')
 
 That writes `spec.yaml`, one `sources/<key>.parquet` per key the file
 declares, `catalog.parquet` saying what each file holds, and `answer/` holding
-everything the solve produced:
+everything the solve produced. Each source is held as the table the solve read,
+which [`sps.tidy`](../reference/api.md#specsolve.tidy) returns, with
+`specsolve_run` added: a dimension as its labels and `specsolve_position`, a
+parameter as its dims and `value`, a relation as its columns:
 
 ```text
 case/
@@ -145,6 +148,11 @@ archived = sps.load_archive('roll/')
 archived.answer.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
 sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
 ```
+
+A source the axis cuts is held uncut, the axis column first. A parameter
+given as one number over a window's local index is held as a table over the
+axis, because a window of each length reads the number over labels of its own.
+Each slice cuts from the archive the tables it attached.
 
 **Keep the windows where you will read them per window.** `keep_windows=True`
 also writes each window's frames, lookahead rows included, under

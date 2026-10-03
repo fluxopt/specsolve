@@ -24,7 +24,7 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 |---|---|---|
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
-| `sources.parquet` | source per archive | what each input's bytes digest to |
+| `sources.parquet` | source per archive | what each input's table digests to |
 | `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `specsolve_run` is the
@@ -125,7 +125,8 @@ data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
 why.
 
 The catalog has no units, because the spec declares none. It has no row for
-`specsolve_run`, which every file carries and which holds no labels. In a sweep
+`specsolve_run`, which every file carries, or for a dimension's
+`specsolve_position`. Neither holds labels. In a sweep
 archive, an answer's `path` is a directory that holds one file per slice, and
 each frame also carries the column of the sweep key, which `axis.json` names
 and the catalog does not list.
@@ -178,10 +179,12 @@ inputs.sort('specsolve_run').with_columns(before=pl.col('digest').shift().over('
 )
 ```
 
-**The digest is of the source before the run is stamped on**, so one table
-archived under two names digests alike. A parquet path digests as the file you
-passed. Two archives of the same data written by different versions of polars
-can differ, and reading an archive does not verify the digests
+**The digest is of the table the solve read, before the run is stamped on**,
+so one table archived under two names digests alike. That table is the one
+under `sources/`, not the file you passed, and hashing the member does not give
+the row back, because the member also carries `specsolve_run`. Two archives of
+the same data written by different versions of polars can differ, and reading
+an archive does not verify the digests
 ([the rule](../reference/api.md#specsolve.SolveArchive)).
 
 ## See what the runs cost

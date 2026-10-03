@@ -16,10 +16,6 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
-#: Scratch column for first-occurrence order. The spaces make it
-#: unrepresentable as a declared name.
-_ROW_POSITION = '__row position__'
-
 
 @dataclass(frozen=True)
 class AttachedSources:
@@ -73,16 +69,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
 
 def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
-    """A dimension's ``(val, ord)`` from its index, a label's ordinal being the row it first appears at."""
-    return (
-        index.select(d)
-        .with_row_index(_ROW_POSITION)
-        .group_by(d)
-        .agg(pl.col(_ROW_POSITION).min())
-        .sort(_ROW_POSITION)
-        .with_row_index('ord')
-        .select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
-    )
+    """A dimension's ``(val, ord)`` from its index, a label's ordinal being its row."""
+    return index.with_row_index('ord').select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
 
 
 def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:

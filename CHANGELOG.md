@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(archive): an archive's record and metrics have the same columns for a solve and for every kind of sweep ([#1810](https://github.com/fluxopt/specsolve/pull/1810))
 - feat(archive): an archive lists every name it holds, its kind, description and dimensions in catalog.parquet ([#1812](https://github.com/fluxopt/specsolve/pull/1812))
 - feat(sweep): a sweep reads and archives its answer over the model's own coordinates by default, and keeps the per-window frames only on request ([#1811](https://github.com/fluxopt/specsolve/pull/1811))
+- feat(data): an archive holds each source as the tidy table the solve read, and tidy() returns those tables ([#1813](https://github.com/fluxopt/specsolve/pull/1813))
 
 ## 0.3.0 (2026-10-02)
 

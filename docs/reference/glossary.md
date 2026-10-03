@@ -115,8 +115,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The data
 
 **Index**
-: A dimension's labels in order, supplied under the dimension's own key in
-  `sources`. `shift` reads that order positionally
+: A dimension's labels in order, each once, supplied under the dimension's
+  own key in `sources`. `shift` reads that order positionally
   ([the data contract](data.md#where-coordinates-come-from)).
 
 **Coordinate**

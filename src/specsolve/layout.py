@@ -29,8 +29,6 @@ if TYPE_CHECKING:
     from mathspec import Spec
     from mathspec.program import Program
 
-    from specsolve.lanes import Source
-
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
@@ -71,9 +69,8 @@ def _staging_for(out: Path) -> Path:
 def write_archive(
     out: Path,
     spec: Spec,
-    sources: Mapping[str, Source],
-    *,
     tables: Mapping[str, pl.LazyFrame],
+    *,
     axis: Mapping[str, object] | None,
     answer: Path,
 ) -> Path:
@@ -83,12 +80,9 @@ def write_archive(
         out: Where to write; its parent is made if it does not exist. Its
             name without ``.zip`` is the run every table is stamped with.
         spec: The spec as written, held as ``spec.yaml``.
-        sources: What was attached, keyed as the file declares. A parquet path
-            is copied, less any ``specsolve_run`` it carries; anything else is
-            written as *tables* has it. The digest is of those bytes, before
-            the run is stamped on.
-        tables: The tidy table each source stands for, for every source that
-            is not a path.
+        tables: The tidy table each source stands for, keyed as the file
+            declares, each written as ``sources/<key>.parquet``. The digest
+            is of those bytes, before the run is stamped on.
         axis: The axis manifest, or ``None`` where the sources are not cut.
         answer: A directory holding the answer's own layout. Its record and
             metrics land as one file each.
@@ -106,12 +100,9 @@ def write_archive(
         (tree / SOURCES_DIR).mkdir(parents=True)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         digests: dict[str, str] = {}
-        for name, given in sources.items():
+        for name, table in tables.items():
             member = tree / SOURCES_DIR / f'{name}.parquet'
-            if isinstance(given, (str, Path)):
-                _copied_unstamped(Path(given), member)
-            else:
-                tables[name].collect().write_parquet(member, compression='zstd')
+            table.sink_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
             _stamped(member, member, run)
         _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
@@ -129,20 +120,6 @@ def write_archive(
     part.replace(out)
     shutil.rmtree(staging)
     return out
-
-
-def _copied_unstamped(source: Path, target: Path) -> None:
-    """*source* at *target* without a ``specsolve_run`` column, before the member is digested.
-
-    A source [`scan_archive`][specsolve.scan_archive] gave back is the
-    member itself, stamped with the run it came from; digested as it lies, the
-    old run's name would move every digest. A file with no such column is
-    copied byte for byte, so the digest stays that of the caller's own bytes.
-    """
-    if RUN not in pl.read_parquet_schema(source):
-        shutil.copyfile(source, target)
-        return
-    pl.read_parquet(source).drop(RUN).write_parquet(target, compression='zstd')
 
 
 def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
@@ -184,8 +161,8 @@ def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
 
     ``path`` and ``dim_position`` are the key, because a constraint may share
     its name with a parameter. ``dim_position`` is the place in the name's
-    declaration, not in the file: a parameter passed as a path keeps the
-    caller's column order. A name *tree* holds no file for has no row.
+    declaration, not in the file: a sweep's source holds the axis column
+    first. A name *tree* holds no file for has no row.
     """
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):

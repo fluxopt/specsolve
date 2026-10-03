@@ -20,6 +20,7 @@ import json
 import shutil
 import warnings
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
@@ -64,10 +65,10 @@ from specsolve.relational.parquet import (
     write_whole,
 )
 from specsolve.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
-from specsolve.sources import least_value, tidy_sources
+from specsolve.sources import least_value, tidy_tables
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 
     import pandas as pd
     import xarray as xr
@@ -413,11 +414,12 @@ def _least(program: Program, sources: Mapping[str, Source], name: str) -> int:
 class EachCoordinate:
     """One slice per coordinate of *dim* — a column the sources carry.
 
-    Scenarios, draws, investment periods. Sources carrying *dim* are filtered
-    to one coordinate and the column dropped, so the model never mentions it —
-    a *dim* the spec declares is refused; every other source passes through
-    untouched. The slices run in the coordinates' sorted order, which is the
-    order a ``carry`` chains them in.
+    Scenarios, draws, investment periods. Parameters and relations carrying
+    *dim* are filtered to one coordinate and the column dropped, so the model
+    never mentions it — a *dim* the spec declares is refused, and so is an
+    index that carries it; every other source passes through untouched. The
+    slices run in the coordinates' sorted order, which is the order a
+    ``carry`` chains them in.
     """
 
     dim: str
@@ -1284,8 +1286,8 @@ def solve_over(
         spec: As [`check`][specsolve.api.check] takes it. Parsed once, whichever
             executor runs the slices.
         sources: As [`build`][specsolve.api.build] takes them, every shape
-            included; the axis filters the tables that carry it and passes
-            the rest through.
+            included; the axis filters the parameters and relations that carry
+            it and passes the rest through.
         axis: [`EachCoordinate`][], [`EachWindow`][], or a list of
             ``(key, sources)`` written by hand.
         carry: ``{parameter: variable}``: one slice's answer copied into the
@@ -1324,9 +1326,10 @@ def solve_over(
             large to hold is archived without ever being held. The archive is
             a second copy of the answers on disk; the memory is what
             *spill_to* bounds. A sliced source is archived whole, the column
-            the axis cuts on included. A hand-built axis is refused, since a
-            list of ``(key, sources)`` is a set of sources per slice: archive
-            one solve each.
+            the axis cuts on included, and one number over a window's local
+            index as a table over the axis. A hand-built axis is refused,
+            since a list of ``(key, sources)`` is a set of sources per slice:
+            archive one solve each.
         keep_windows: Also archive an [`EachWindow`][] sweep's frames per
             window, lookahead rows included, under ``answer/windows/``, so
             that ``per_window=True`` reads off the archive. Refused for any
@@ -1345,8 +1348,8 @@ def solve_over(
             one answerable from the declarations before a source is read.
             Keys of more than one type, or two keys of one text, are refused
             before a slice is taken too.
-        DataError: No source carries the axis, or the axis produced no
-            slices.
+        DataError: No source carries the axis, an index of another
+            dimension carries it, or the axis produced no slices.
 
     Warns:
         SpecsolveWarning: A source carrying the axis that is short of a
@@ -1359,6 +1362,7 @@ def solve_over(
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
     document = declared(spec)
+    sources = _held(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
@@ -1366,6 +1370,7 @@ def solve_over(
 
     if isinstance(axis, (EachCoordinate, EachWindow)):
         _check_the_carry(plan, axis, sources)
+        _check_no_index_is_cut(program, sources, axis)
         axis._check_the_program(program, sources)
         slices, stitch = axis._slice(sources, key_name)
     else:
@@ -1394,6 +1399,15 @@ def solve_over(
     return folded
 
 
+def _held(sources: Mapping[str, Source]) -> dict[str, Source]:
+    """*sources* with each one-shot iterator read into a list.
+
+    Every slice reads the sources it does not cut, and the archive reads them
+    again, so an iterator would be spent after the first read.
+    """
+    return {name: list(obj) if isinstance(obj, Iterator) else obj for name, obj in sources.items()}
+
+
 def _archive_the_sweep(
     out: Path,
     spec: Spec,
@@ -1407,18 +1421,24 @@ def _archive_the_sweep(
 ) -> None:
     """Write the sweep's question and its answer to *out*.
 
-    Each source's tidy shape comes from *one_slice*; the ones the axis cuts
-    are written uncut. A spilled sweep's answer is read off its spill, so it
-    is never held; a held one is spilled to scratch first.
+    Each source's tidy table comes from *one_slice*; the ones the axis cuts
+    are written uncut, as [`_uncut`][] gives them, and a number over a
+    window's local index over the axis, as [`_spread_over_the_axis`][] gives
+    it. A spilled sweep's answer is read off its spill, so it is never held;
+    a held one is spilled to scratch first.
     """
     manifest = axis_manifest(axis)
     if carry:
         manifest['carry'] = dict(carry)
-    tables = {**tidy_sources(program, one_slice), **carries(sources, axis.dim)}
+    tidied = tidy_tables(program, one_slice)
+    carried = carries(sources, axis.dim)
+    cut = {name: _uncut(program, axis, name, table) for name, table in carried.items()}
+    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, carried), **cut}
+    tables = {name: held[name] for name in sources}
     with beside(out) as scratch:
         spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
         answer = _the_answer(spilled, scratch / ANSWER_DIR, keep_windows=keep_windows)
-        write_archive(out, spec, sources, tables=tables, axis=manifest, answer=answer)
+        write_archive(out, spec, tables, axis=manifest, answer=answer)
 
 
 def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
@@ -1456,6 +1476,71 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
             shutil.copytree(spill.directory / kind, under / _WINDOWS_DIR / kind)
     write_reasons(under, sweep._no_duals, absent)
     return under
+
+
+def _uncut(program: Program, axis: EachCoordinate | EachWindow, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
+    """A source the axis cuts, as its tidy columns with the axis column first.
+
+    A window's local index is not a column of the uncut table: the axis
+    column stands where it would be.
+    """
+    declared = (
+        [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
+    )
+    local = axis.into if isinstance(axis, EachWindow) else None
+    return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
+
+
+def _spread_over_the_axis(
+    program: Program,
+    axis: EachCoordinate | EachWindow,
+    sources: Mapping[str, Source],
+    tidied: Mapping[str, pl.LazyFrame],
+    carried: Mapping[str, pl.LazyFrame],
+) -> dict[str, pl.LazyFrame]:
+    """Each parameter given as one number over a window's local index, as a table over the axis.
+
+    The number spreads over the labels of the window it attaches to, and the
+    local index has one label per coordinate the window holds, so no one
+    window's table is what a window of another length read. Over the axis,
+    each window cuts what its own solve read. A parameter given in any other
+    shape, a relation, and an index other than the local one attach as one
+    table in every slice that builds, so the archive holds the first slice's.
+    """
+    if not isinstance(axis, EachWindow):
+        return {}
+    numbers = [
+        name
+        for name, declared in program.parameters.items()
+        if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
+    ]
+    coordinates = pl.concat([table.select(axis.dim) for table in carried.values()], how='vertical_relaxed')
+    coordinates = coordinates.unique().sort(axis.dim)
+    return {
+        name: coordinates.join(tidied[name].drop(axis.into).unique(maintain_order=True), how='cross')
+        for name in numbers
+    }
+
+
+def _check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis: EachCoordinate | EachWindow) -> None:
+    """Refuse an index of a dimension other than the axis's own that carries the axis column.
+
+    An index says which labels the model has, and a sweep cuts the tables that
+    carry the axis, so a carried index would make each slice a model over
+    other labels. The axis's own index carries the axis as its labels, and
+    the axis refuses that dimension in its own words.
+    """
+    for dim in program.dimensions:
+        table = as_frame(sources[dim]) if dim in sources and dim != axis.dim else None
+        if table is None or axis.dim not in table.collect_schema().names():
+            continue
+        raise DataError(
+            f"index for dimension '{dim}' carries a '{axis.dim}' column, and {type(axis).__name__}"
+            f"('{axis.dim}') cuts every table that carries '{axis.dim}'. An index is not cut: it lists "
+            f"the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
+            f"slice has in a parameter or a relation over ('{dim}', '{axis.dim}'), where a missing row "
+            f'already reads as absent.'
+        )
 
 
 def attach_sweep_readers(

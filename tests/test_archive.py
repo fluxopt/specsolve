@@ -59,6 +59,13 @@ def _question(archive: sps.SolveArchive | sps.SweepArchive) -> tuple[Spec, Mappi
     return archive.spec, archive.sources
 
 
+def _unstamped_digest(member: Path, scratch: Path) -> str:
+    """The digest of an archived source as the archive takes it: its table written before the run was stamped on."""
+    unstamped = scratch / f'{member.stem}.unstamped.parquet'
+    pl.read_parquet(member).drop(RUN).lazy().sink_parquet(unstamped, compression='zstd')
+    return digest_of_file(unstamped)
+
+
 def _archived(spec, sources, out: Path) -> Path:
     """The archive a solve writes, which is the only way one is made."""
     with sps.solve(spec, sources, archive=out):
@@ -82,6 +89,9 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     assert not differing, (
         f'frames that came back changed: {differing} — the archive carries the labels, values and dtypes'
     )
+    tidied = sps.tidy(expanded(port_spec(name)), sources)
+    unlike = [key for key, table in tidied.items() if not unpacked[key].equals(table)]
+    assert not unlike, f'members that are not the table tidy() returns: {unlike}'
 
 
 def test_the_round_trip_solves_to_the_same_objective(
@@ -113,8 +123,12 @@ def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_y
 
     assert cost.columns == ['generator', 'value', RUN], 'a positional sequence is spread over its labels'
     assert cost['value'].to_list() == list(DISPATCH_COST), 'in the order the index declares them'
-    assert snapshot.columns == ['snapshot', RUN], 'a bare label range is written as an index table'
-    assert snapshot.height == DISPATCH_SNAPSHOTS, 'one row per label'
+    assert snapshot.columns == ['snapshot', 'specsolve_position', RUN], (
+        'a bare label range is written as an index table'
+    )
+    assert snapshot['specsolve_position'].to_list() == list(range(DISPATCH_SNAPSHOTS)), (
+        'one row per label, numbered in index order'
+    )
 
 
 def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
@@ -138,21 +152,56 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         )
 
 
-def test_a_parquet_path_is_archived_as_its_table_and_digested_as_its_own_bytes(
+def test_a_parquet_path_is_archived_as_the_table_the_solve_read(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """The member gains the run column; the digest is of the file the caller passed."""
+    """The archive holds one form whatever arrived, so a path is neither copied nor digested as its own bytes."""
     load = dispatch_frame_inputs['load'].with_columns(pl.lit('a stray column').alias('note'))
     path = tmp_path / 'load.parquet'
     load.write_parquet(path)
-    sps.solve(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}, archive=tmp_path / 'case').close()
-    held = pl.read_parquet(tmp_path / 'case' / 'sources' / 'load.parquet')
+    sources = {**dispatch_frame_inputs, 'load': str(path)}
+    archive = _archived(dispatch_yaml, sources, tmp_path / 'dispatch')
+    member = archive / 'sources' / 'load.parquet'
 
-    assert held.equals(load.with_columns(pl.lit('case').alias(RUN))), (
-        'the table travels whole, stray column included — it is filtered where it attaches, as a path is'
+    held = pl.read_parquet(member)
+    assert held.drop(RUN).equals(sps.tidy(dispatch_yaml, sources)['load']), (
+        'the stray column is gone, as it is at attach, and the run column is the only one added'
     )
-    digests = dict(pl.read_parquet(tmp_path / 'case' / 'sources.parquet').select('source', 'digest').iter_rows())
-    assert digests['load'] == digest_of_file(path), 'and the digest is of the bytes the caller passed, not the stamp'
+    assert held[RUN].unique().to_list() == ['dispatch'], 'stamped with the run that wrote it'
+    digests = dict(pl.read_parquet(archive / 'sources.parquet').select('source', 'digest').iter_rows())
+    assert digests['load'] == _unstamped_digest(member, tmp_path), 'and the digest is of that table, less the stamp'
+
+
+def test_an_index_given_as_an_iterator_is_archived_as_the_labels_the_solve_read(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The archive read the sources a second time after the solve, so a one-shot iterator came back empty.
+
+    The solve answered, then the archive raised a `DataError` naming labels
+    the exhausted iterator did not hold, and the answer was lost.
+    """
+    sources = {**dispatch_frame_inputs, 'generator': iter(DISPATCH_GENERATORS)}
+    archive = _archived(dispatch_yaml, sources, tmp_path / 'dispatch')
+
+    held = pl.read_parquet(archive / 'sources' / 'generator.parquet')
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels the build read, in index order'
+
+
+def test_a_path_rewritten_after_the_build_is_archived_as_the_table_the_solve_read(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The archive read a path again after the solve, so a file rewritten meanwhile was archived as the new table."""
+    path = tmp_path / 'load.parquet'
+    dispatch_frame_inputs['load'].write_parquet(path)
+    with sps.build(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}) as model:
+        dispatch_frame_inputs['load'].with_columns(pl.col('value') * 0.5).write_parquet(path)
+        with model.solve(archive=tmp_path / 'dispatch'):
+            pass
+
+    held = pl.read_parquet(tmp_path / 'dispatch' / 'sources' / 'load.parquet')
+    assert held['value'].to_list() == dispatch_frame_inputs['load']['value'].to_list(), (
+        'the values the build read, not the ones the file holds now'
+    )
 
 
 def test_unpack_lays_the_archive_out_in_the_directory(
@@ -367,8 +416,9 @@ def test_the_sources_an_archive_gives_back_archive_again_to_the_same_digests(
 ) -> None:
     """A scanned source is the member itself, so it carries the first archive's `specsolve_run`.
 
-    That column was copied and digested with the bytes, so archiving what
-    `scan_archive` gave back moved every digest, though not one number had.
+    Digested with that column, archiving what `scan_archive` gave back would
+    move every digest though not one number had; the tidy table the solve
+    reads leaves it out.
     """
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'first').close()
     sps.solve(*_question(read(tmp_path / 'first')), archive=tmp_path / 'second').close()
@@ -397,8 +447,28 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     assert study.source_digests[RUN].unique().to_list() == ['study'], (
         'stamped with the archive name as a solve archive is, the sweep key belonging to the slices and not the data'
     )
-    digests = dict(study.source_digests.select('source', 'digest').iter_rows())
-    assert digests['load'] == digest_of_file(whole), 'the digest is of the whole source the sweep was cut from'
+    held = tmp_path / 'study' / 'sources'
+    assert pl.read_parquet(held / 'load.parquet')['scenario'].unique().sort().to_list() == ['high', 'low'], (
+        'the member is the whole source the sweep was cut from, not one slice of it'
+    )
+    assert dict(study.source_digests.select('source', 'digest').iter_rows()) == {
+        file.stem: _unstamped_digest(file, tmp_path) for file in held.glob('*.parquet')
+    }, 'and each digest is of the whole table the member holds, less the stamp'
+
+
+def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """Every slice and the archive read each source again, so a one-shot iterator was empty after the first read.
+
+    The second slice raised a `DataError` naming labels the exhausted iterator
+    did not hold.
+    """
+    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high']), 'generator': iter(DISPATCH_GENERATORS)}
+    sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+
+    held = pl.read_parquet(tmp_path / 'study' / 'sources' / 'generator.parquet')
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in index order'
 
 
 #: A relation with a role, a named expression over no dimension, and a
@@ -470,8 +540,8 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
     )
 
 
-def test_a_dimension_position_is_its_place_in_the_declaration_not_in_the_file(tmp_path: Path) -> None:
-    """A parameter passed as a path keeps the caller's column order, so the file's order is not the spec's."""
+def test_a_dimension_position_is_its_place_in_the_declaration_whatever_order_the_caller_wrote(tmp_path: Path) -> None:
+    """A parameter passed as a path in another column order is archived as its tidy table, in the spec's order."""
     spec = to_spec(
         {
             'dimensions': {'generator': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
@@ -494,12 +564,10 @@ def test_a_dimension_position_is_its_place_in_the_declaration_not_in_the_file(tm
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet')
     places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('dim', 'dim_position').rows()
 
-    assert [column for column in held if column in {'generator', 'snapshot'}] == ['snapshot', 'generator'], (
-        'the archived file keeps the order the caller wrote, snapshot before generator'
+    assert list(held) == ['generator', 'snapshot', 'value', RUN], (
+        "the archived file is the tidy table: the declared order rather than the caller's, the stray column gone"
     )
-    assert places == [('generator', 0), ('snapshot', 1)], (
-        'dim_position follows the order p_max declares its dimensions, not the order the file holds them'
-    )
+    assert places == [('generator', 0), ('snapshot', 1)], 'dim_position follows the order p_max declares its dimensions'
 
 
 def _held_files(archive: Path) -> set[str]:
@@ -773,6 +841,18 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
         scanned.answer.primal('p')
 
 
+def _attached_differently(spec, sources, archived: sps.SweepArchive) -> list[tuple[int, str]]:
+    """``(slice, source)`` where a slice cut from *archived* attaches other than one cut from *sources*."""
+    before = [sps.tidy(spec, cut) for _, cut in archived.axis.slices(sources)]
+    after = [sps.tidy(archived.spec, cut) for _, cut in archived.axis.slices(archived.sources)]
+    return [
+        (position, name)
+        for position, (attached, again) in enumerate(zip(before, after, strict=True))
+        for name in attached
+        if not attached[name].equals(again[name])
+    ]
+
+
 def test_a_scenario_sweep_is_an_archive_and_runs_again(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -787,9 +867,11 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     assert study.answer.record[RUN].unique().to_list() == ['study'], (
         'and the archive stamped its own name on every slice, which the sweep in memory had none of'
     )
-    assert study.sources['load'].equals(sources['load']), (
-        'the sliced source is archived whole, the column the axis cuts on included'
+    assert study.sources['load'].columns == ['scenario', 'snapshot', 'value'], (
+        'the sliced source is archived whole and tidy, the column the axis cuts on first'
     )
+    differing = _attached_differently(dispatch_yaml, sources, study)
+    assert not differing, f'(slice, source) pairs the archive attaches differently: {differing}'
     again = sps.solve_over(study.spec, study.sources, study.axis)
     assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, slice for slice'
@@ -805,6 +887,47 @@ def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: obj
     sources = horizon_sources(12)
     return sps.solve_over(
         spec, sources, ROLLING, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip', **archive
+    )
+
+
+@pytest.mark.parametrize(
+    'steps', [pytest.param(4, id='the-last-window-shorter'), pytest.param((2, 4, 4), id='the-first-window-shorter')]
+)
+@pytest.mark.parametrize(
+    'price',
+    [
+        pytest.param(1.0, id='one-number'),
+        pytest.param(pl.DataFrame({'t': [0, 1], 'value': [3.0, 1.0]}), id='a-table-over-the-local-index'),
+        pytest.param(
+            pl.DataFrame({'snapshot': range(10), 'value': [float(s % 3) for s in range(10)]}),
+            id='a-table-over-the-axis',
+        ),
+    ],
+)
+def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_over_the_window_took(
+    price: object, steps: int | tuple[int, ...], tmp_path: Path
+) -> None:
+    """Each window attaches from the archive what it attached from the sources.
+
+    One number over `t` was archived as the first window's table. Where a
+    later window was shorter, it refused the table's extra labels as strays;
+    where it was longer, it read the labels the table was short of as absent.
+    `soc_initial`, one number over no dimension, is the same in every window.
+    """
+    from tests.test_strategy import WINDOW, horizon_sources
+
+    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t']}}}
+    spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
+    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
+    sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}
+    runs = sps.solve_over(spec, sources, axis, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip')
+    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
+
+    differing = _attached_differently(spec, sources, archived)
+    assert not differing, f'(window, source) pairs the archive attaches differently: {differing}'
+    again = sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+    assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
+        'the archive re-runs to the sweep it recorded, window for window'
     )
 
 
