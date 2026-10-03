@@ -93,7 +93,7 @@ needs no `spec.yaml`. It has one row per dimension column of each file under
 | `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
 | `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
 | `dim` | the dimension, or null for a file over no dimension |
-| `dim_position` | the 0-based place of `column` among the file's dimension columns |
+| `dim_position` | the 0-based place of `column` in the order the spec declares the name's dimensions, which can differ from the order of the file's columns |
 
 **Join it on the path, not the name.** A constraint can have the name of a
 parameter, so `name = 'load'` can match the parameter's source and the

@@ -460,6 +460,38 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
     )
 
 
+def test_a_dimension_position_is_its_place_in_the_declaration_not_in_the_file(tmp_path: Path) -> None:
+    """A parameter passed as a path keeps the caller's column order, so the file's order is not the spec's."""
+    spec = to_spec(
+        {
+            'dimensions': {'generator': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
+            'parameters': {'p_max': {'dims': ['generator', 'snapshot']}},
+            'variables': {'p': {'dims': ['generator', 'snapshot'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+            'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+        }
+    )
+    path = tmp_path / 'p_max.parquet'
+    pl.DataFrame(
+        {
+            'value': [100.0, 90.0],
+            'snapshot': [0, 0],
+            'note': ['a stray column'] * 2,
+            'generator': ['wind', 'gas'],
+        }
+    ).write_parquet(path)
+    _archived(spec, {'generator': ['wind', 'gas'], 'snapshot': [0], 'p_max': str(path)}, tmp_path / 'case')
+    held = pl.read_parquet_schema(tmp_path / 'case' / 'sources' / 'p_max.parquet')
+    catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet')
+    places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('dim', 'dim_position').rows()
+
+    assert [column for column in held if column in {'generator', 'snapshot'}] == ['snapshot', 'generator'], (
+        'the archived file keeps the order the caller wrote, snapshot before generator'
+    )
+    assert places == [('generator', 0), ('snapshot', 1)], (
+        'dim_position follows the order p_max declares its dimensions, not the order the file holds them'
+    )
+
+
 def _held_files(archive: Path) -> set[str]:
     """Every source, and every frame of the answer, as its path inside *archive*: a file, or a sweep's directory."""
     held = [*(archive / 'sources').glob('*.parquet'), *(archive / ANSWER_DIR).glob('*/*')]

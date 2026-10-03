@@ -182,19 +182,10 @@ _HELD_UNDER = {
 def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
     """What each file under ``sources/`` and ``answer/<kind>/`` of *tree* holds, one row per column of labels.
 
-    ``path`` is the file's path inside the archive, or in a sweep archive the
-    directory of an answer's slices. With ``dim_position`` it is the key,
-    because a constraint may share its name with a parameter. A name the spec
-    declares and *tree* holds no file for has no row. ``kind`` is
-    ``dimension``, ``relation``, ``parameter``, ``variable``, ``constraint``
-    or ``expression``. ``column`` is the column of the file that holds
-    ``dim``'s labels, and ``dim_position`` its 0-based place among them: a
-    relation's column is its role, any other name's is the dimension itself.
-    A file over no dimension has one row, with all three null. ``dtype`` is
-    what the spec declares: the labels' type for a dimension, the ``value``
-    column's for a parameter, null for the rest. ``specsolve_run``, which
-    every file carries, holds no labels and has no row. Long form, with no
-    list column, so a BI tool reads it as it reads any other table.
+    ``path`` and ``dim_position`` are the key, because a constraint may share
+    its name with a parameter. ``dim_position`` is the place in the name's
+    declaration, not in the file: a parameter passed as a path keeps the
+    caller's column order. A name *tree* holds no file for has no row.
     """
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
