@@ -420,7 +420,12 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'solve_seconds',
         'write_seconds',
         RUN,
-    ), 'the sizes, the counters, one clock per phase in the order the phases run, then the run that took them'
+        'slice_axis',
+        'slice',
+    ), (
+        'the sizes, the counters, one clock per phase in the order the phases run, the run that took them, '
+        'then the sweep slice, null here'
+    )
     written = pl.read_parquet(tmp_path / 'case' / ANSWER_DIR / METRICS_FILE)
     assert written.columns == list(Metrics._fields), "and the file carries the type's columns, in its order"
     assert written.height == 1, 'one solve writes one row'
@@ -889,7 +894,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     """`save` on an archive's sweep writes the slices the live sweep holds.
 
     The archive stamps `specsolve_run` on the metrics as on the record, and
-    `save` passed every metrics column to `SliceMetrics`, which declares no
+    `save` passed every metrics column to `SliceMetrics`, which declared no
     `specsolve_run`, so it raised `TypeError`.
     """
     if windowed:
@@ -903,11 +908,12 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     stamped = [
         table.relative_to(resaved).as_posix()
         for table in sorted(resaved.rglob('*.parquet'))
-        if table.parent.name != 'record' and RUN in pl.read_parquet_schema(table)
+        if table.parent.name not in {'record', 'metrics'} and RUN in pl.read_parquet_schema(table)
     ]
 
     assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
-    assert saved.metrics.equals(runs.metrics), 'and the metrics are the slices own, with no run stamped on'
+    assert saved.metrics.drop(RUN).equals(runs.metrics.drop(RUN)), 'and the metrics are the slices own'
+    assert saved.metrics[RUN].equals(saved.record[RUN]), 'naming the run they came from as the record does'
     assert stamped == [], 'no frame the save writes carries the run, what each window owns included'
 
 
@@ -954,6 +960,38 @@ def test_a_coordinate_sweep_archive_evaluates_an_undeclared_expression_per_slice
         assert valued.sort('scenario', 'snapshot').equals(by_hand.sort('scenario', 'snapshot')), (
             f'{read.__name__}: each slice valued at its own solution, keyed by it'
         )
+
+
+@pytest.mark.parametrize('table', ['record.parquet', METRICS_FILE], ids=str)
+def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
+    table: str, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """A warehouse tool reads a glob with the schema of one file, so every archive writes the same columns.
+
+    A sweep once wrote its key under the axis's own name and a slice's metrics
+    in other columns than a solve's, and a strict glob refused the mix.
+    """
+    runs = tmp_path / 'runs'
+    sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=runs / 'single').close()
+    sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    sps.solve_over(dispatch_yaml, sweep_sources, sps.EachCoordinate('scenario'), archive=runs / 'scenarios')
+    window = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
+    sps.solve_over(WINDOW, horizon_sources(12), window, carry={'soc_initial': 'soc'}, archive=runs / 'rolling')
+
+    files = sorted(runs.glob(f'*/{ANSWER_DIR}/{table}'))
+    schemas = {file.parts[-3]: pl.read_parquet_schema(file) for file in files}
+    assert len({tuple(schema.items()) for schema in schemas.values()}) == 1, (
+        f'one schema across a solve and two kinds of sweep: {schemas}'
+    )
+    globbed = pl.read_parquet(str(runs / '*' / ANSWER_DIR / table)).sort(RUN, 'slice')
+    assert globbed.select(RUN, 'slice_axis', 'slice').rows() == [
+        ('rolling', 'snapshot_start', '0'),
+        ('rolling', 'snapshot_start', '4'),
+        ('rolling', 'snapshot_start', '8'),
+        ('scenarios', 'scenario', 'high'),
+        ('scenarios', 'scenario', 'low'),
+        ('single', None, None),
+    ], 'a plain glob reads every row, the slice named as text and null for the single solve'
 
 
 def test_an_archive_whose_answer_names_another_spec_is_refused(
