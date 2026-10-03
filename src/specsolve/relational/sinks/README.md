@@ -158,9 +158,9 @@ places it bites are worth naming because neither is a choice:
 ## Adding one
 
 **A solver:** `solvers/<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — plus the
-`build_<name>` seam `bench/` measures, and one line in `SOLVERS` holding the
-class.
+subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
+`SOLVERS` holding the class. Constructing it loads the model and stops there,
+which is what `bench/` measures.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it

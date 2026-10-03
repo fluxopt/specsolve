@@ -253,7 +253,7 @@ against each other. Publish a whole ladder or none of it.
 
 | | `lp` | `highs` | `gurobi` |
 |---|---|---|---|
-| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `build_highs(...)` | `sps.build(...)` then `build_gurobi(...)` |
+| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` |
 | `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
@@ -276,7 +276,7 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`addMVar`/`addMConstr` seam our own `build_gurobi` does, so what separates it
+`addMVar`/`addMConstr` seam our own `Gurobi` constructor does, so what separates it
 from `specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
@@ -398,7 +398,7 @@ written against this table:
 | **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
 | `import` | `import specsolve` |
 | `build` | `sps.build(...)` — the engine scans the parquet itself |
-| `emit` | `model.write(path)` / `build_highs(_handoff(model))` |
+| `emit` | `model.write(path)` / `Highs(_handoff(model))` |
 | `teardown` | `model.close()` — releases the built model |
 | **after the clock** | row, column and nonzero counts off the built frames |
 

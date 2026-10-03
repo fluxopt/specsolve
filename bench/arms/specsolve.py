@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -82,27 +83,17 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp, sps.build(spec, sources) as model:
         if sink == 'lp':
             model.write(Path(tmp) / 'model.lp')
-        elif sink == 'gurobi':
-            from specsolve.relational.sinks.solvers.gurobi import build_gurobi
-
-            build_gurobi(_handoff(model)).close()
         else:
-            from specsolve.relational.sinks.solvers.highs import build_highs
-
-            build_highs(_handoff(model)).close()
+            _loaded(sink, model).close()
 
         return _counts(_handoff(model), nonzeros=True)
 
 
 def _loaded(sink: str, model: Any) -> Any:
-    """A solver holding *model*, for a sink that has one."""
-    if sink == 'gurobi':
-        from specsolve.relational.sinks.solvers.gurobi import build_gurobi
-
-        return build_gurobi(_handoff(model))
-    from specsolve.relational.sinks.solvers.highs import build_highs
-
-    return build_highs(_handoff(model))
+    """A solver holding *model*, for a sink that has one: its class, or the ``build_<sink>`` an older checkout loads through."""
+    module = importlib.import_module(f'specsolve.relational.sinks.solvers.{sink}')
+    load = getattr(module, f'build_{sink}', None) or getattr(module, sink.capitalize())
+    return load(_handoff(model))
 
 
 def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tuple[Any, ...], dict[str, Any]]:

@@ -52,25 +52,13 @@ _LINOPY_DIVERGENCES = {
 }
 
 
-def build_gurobi(
-    handoff: Handoff,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Gurobi:
-    """Load the model into a `gurobipy.Model` and stop there.
-
-    ``batch_rows`` is a nonzero budget that splits the matrix across calls;
-    ``None`` is one call.
-
-    Returns:
-        The [`Gurobi`][] holding the model, at ``.handle``. ``close``, or
-        leaving a ``with``, releases both the model and its environment.
-    """
-    return Gurobi(handoff, batch_rows, solver_options)
-
-
 class Gurobi(Solver):
-    """Gurobi, holding one model: [`Solver`][]'s member for the opt-in sink."""
+    """Gurobi, holding one model at ``.handle``, a `gurobipy.Model`.
+
+    Constructing one loads the model and stops there. ``batch_rows`` is a
+    nonzero budget that splits the matrix across calls; ``None`` is one call.
+    ``close``, or leaving a ``with``, releases the model and its environment.
+    """
 
     #: The loaded model, the handles that read it back, and the environment.
     #: ``close`` drops them.

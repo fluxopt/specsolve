@@ -4,7 +4,7 @@ One runtime for two arms: `gurobipy-loop` and `gurobipy-matrix` differ only in
 which formulation module they call.
 
 The seam is `update()`, inside the clock, because gurobipy defers every
-`addVar` and `addConstr` until the model is flushed; `build_gurobi` ends with
+`addVar` and `addConstr` until the model is flushed; constructing `Gurobi` ends with
 the same call. `OutputFlag` goes off at `Env` construction, so the licence
 banner is never written. There is one sink.
 """

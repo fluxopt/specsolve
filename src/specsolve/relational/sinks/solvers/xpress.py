@@ -43,25 +43,13 @@ _SOLVE_UNSTARTED = 0
 _SOLVE_FAILED = 2
 
 
-def build_xpress(
-    handoff: Handoff,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Xpress:
-    """Load the model into an `xpress.problem` and stop there: the seam `bench/` measures.
-
-    Returns:
-        The [`Xpress`][] holding the problem, at ``.handle``. The problem
-        owns its licence and releases it when it is collected.
-    """
-    return Xpress(handoff, batch_rows, solver_options)
-
-
 class Xpress(Solver):
-    """FICO Xpress, holding one model.
+    """FICO Xpress, holding one model at ``.handle``, an `xpress.problem`.
 
-    A push writes bounds, costs and right-hand sides by index. Duals are
-    ``None`` rather than zero-filled on a model that has none.
+    Constructing one loads the model and stops there; the problem owns its
+    licence and releases it when it is collected. A push writes bounds, costs
+    and right-hand sides by index. Duals are ``None`` rather than zero-filled
+    on a model that has none.
     """
 
     #: The loaded problem; ``close`` drops it, and the licence with it.
