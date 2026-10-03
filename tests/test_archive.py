@@ -501,7 +501,7 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     assert catalog[RUN].unique().to_list() == ['case'], 'every row carries the archive it came from'
     for path, column in catalog.drop_nulls('column').select('path', 'column').iter_rows():
         assert column in _columns_of(out / path), f'{path} holds the column {column!r} its row names'
-        assert RUN in _columns_of(out / path), f'{path} carries the run, as every table in an archive does'
+    assert all(RUN in _columns_of(out / path) for path in held), 'every file listed carries the run'
     assert RUN not in set(catalog['column']), 'the run on every file holds no labels, so the catalog lists it nowhere'
 
 
