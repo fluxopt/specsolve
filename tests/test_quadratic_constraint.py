@@ -262,7 +262,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``lanes.lowered`` gate — and refuses it before linopy is asked,
+    model — one ``inputs.lowered`` gate — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 

@@ -399,7 +399,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 
     from specsolve.relational.sinks import SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers') - {'base'}
+    solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
         module = importlib.import_module(f'specsolve.relational.sinks.solvers.{name}')
@@ -417,7 +417,9 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
-    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
+    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {
+        FAMILY_SHARED['writers']
+    }
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
 
 
@@ -425,13 +427,13 @@ def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
     from specsolve.relational.sinks import SOLVERS, WRITERS
-    from specsolve.relational.sinks.capabilities import CAPABILITIES, Capabilities
+    from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
     for sink, capabilities in described.items():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
-        strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
+        strangers = sorted(set(capabilities.supports) - set(ALL_CAPABILITIES))
         assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
         for combination in capabilities.excludes:
             unsupported = sorted(combination - capabilities.supports)
@@ -467,15 +469,20 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
     )
 
 
+#: The one module each sink family shares: the solver lifecycle, the text renderings.
+FAMILY_SHARED = {'solvers': 'base', 'writers': 'text'}
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    A leaf reads ``handoff.py``, its family's ``base``, ``capabilities``, and
-    its own dependency — nothing else in the family.
+    A leaf reads ``handoff.py``, its family's shared module
+    (``FAMILY_SHARED``), ``capabilities``, and its own dependency — nothing
+    else in the family.
     """
-    shareable = ('.handoff', '.base', '.capabilities')
     offenders = {}
-    for family in ('solvers', 'writers'):
+    for family, shared in FAMILY_SHARED.items():
+        shareable = ('.handoff', '.capabilities', f'.{family}.{shared}')
         for path in sorted((SINKS / family).glob('*.py')):
             reached = {
                 name
@@ -485,8 +492,8 @@ def test_no_sink_reaches_a_sibling():
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
     assert not offenders, (
-        f'sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family base '
-        f'and its own dependency; anything else shared belongs on one of those two'
+        f"sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family's shared "
+        f'module and its own dependency; anything else shared belongs on one of those two'
     )
 
 
@@ -523,9 +530,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / 'lanes.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / 'inputs.py', 'Buildable'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve.lanes.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve.inputs.Buildable takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 
@@ -575,9 +582,9 @@ def test_both_lanes_lower_a_spec_through_one_function():
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute) and node.attr == 'program' and isinstance(node.value, ast.Call)
     }
-    assert reading == {'lanes.py'}, (
+    assert reading == {'inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
-        f'lanes.lowered, which is what refuses a spec this package cannot build or write down'
+        f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
     )
 
 
@@ -601,7 +608,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve.relational.engine.fragments import fan_in
+    from specsolve.relational.engine.pieces import fan_in
 
     x = program.Variable('x')
     declared = {

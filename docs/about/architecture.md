@@ -19,7 +19,9 @@ through the same public calls `sps.solve` makes. Its output is committed as
 [examples/walkthrough.out](https://github.com/fluxopt/specsolve/blob/main/examples/walkthrough.out)
 and asserted line for line by `tests/test_walkthrough.py`.
 
-[The glossary](../reference/glossary.md) defines the nouns this page uses. The
+[The glossary](../reference/glossary.md) defines the nouns a caller meets, and
+[the internal glossary](../reference/internals.md) the names the code uses for
+its own parts. The
 package builds a program along one *lane*, the relational lane (`relational/`),
 which streams a plan to a sink. The test suite builds the same program a second
 way, as a `linopy.Model` (`tests/linopy_lane/`), and compares the two: that is
@@ -129,13 +131,13 @@ linopy.
 
 **Eleven modules sit outside a fence, and each is legitimately both halves**:
 `sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `axes.py`,
-`sweep.py`, `lanes.py`, `frames.py`, `archive_layout.py`, `archive.py` and
+`sweep.py`, `inputs.py`, `frames.py`, `archive_layout.py`, `archive.py` and
 `errors.py`. Size
 does not buy a place among them. A module only one lane reaches is that lane's, down to a
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
 
-**Eligibility is decided by attempting the lowering.** `lanes.lowered` returns
+**Eligibility is decided by attempting the lowering.** `inputs.lowered` returns
 a `Program` or raises `sps.LanguageError`. Both lanes call it, so "neither lane
 accepts a file the other refuses" is mechanical rather than maintained.
 The oracle asks only for the verdict and discards the plan. Errors split spec
@@ -225,7 +227,7 @@ choosing to*: a `LanguageError` arrives unbidden out of `sps.solve`.
 
 **Nothing here reads a `Spec`.** Attaching, the guards and both lanes take the
 `Program`. A verb reads a `Spec` only for the `Program` it carries, through
-`lanes.lowered`. The spec *as written* is `mathspec`'s side of the
+`inputs.lowered`. The spec *as written* is `mathspec`'s side of the
 line: editing it, dumping it and typesetting it.
 
 **What a verb hands back is part of its signature.** A caller that *wraps* this
@@ -306,7 +308,7 @@ the language's rulebook.
    language. What the engine raises through it is `DataError`, a verdict about
    the *data*, and `SpecsolveError`, a verdict about the engine's reach.
 3. **One language, two builds, and linopy is only the oracle.** The package and
-   the test oracle both pass the one `lanes.lowered` gate ([above](#thesis)). No
+   the test oracle both pass the one `inputs.lowered` gate ([above](#thesis)). No
    operator registry exists that could create a divergence. A construct outside
    the language is a load error naming the construct and its rewrite. What that
    equality buys is [the oracle](linopy.md#2-it-is-the-oracle). linopy is a test
@@ -351,20 +353,20 @@ two verdicts it still *raises* are its own: `DataError` about the data, and a
 cannot build (#1137).
 
 **Fan-in** is the column the lanes *act* on. It says how an output row's slots
-relate to the input's. `fragments.fan_in` answers it for every node, and the
+relate to the input's. `pieces.fan_in` answers it for every node, and the
 relational lane's compiler asks it. Anything but one-to-one mixes several input slots into one output row. So
 absence has to be pushed into the operand before the rewrite consumes it
 ([#1142](https://github.com/fluxopt/specsolve/issues/1142)).
 
 | plan node | the file writes | fan-in | the relational query |
 | --- | --- | --- | --- |
-| `Constant` | a number | one-to-one | a one-row const fragment |
+| `Constant` | a number | one-to-one | a one-row const piece |
 | `Parameter` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const fragment with the same presence, a zero at every absent slot under `absence: zero` |
-| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const fragment present exactly where a row stands |
+| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `absence: zero` |
+| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
-| `Add` | `x + y`, `x - y` | one-to-one | the two fragment lists concatenated |
-| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic fragment |
+| `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic piece |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate |
@@ -372,7 +374,7 @@ absence has to be pushed into the operand before the rewrite consumes it
 | `Pullback` | `at(x, by=r, over=d, into=c)` | one-to-one | the same table joined the other way, fanning out |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
-| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the fragment lists concatenated |
+| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the piece lists concatenated |
 | `Named` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 A `Cases` is the one node carrying a **mask in a value position**. It is also
@@ -384,7 +386,7 @@ regions cover.
 
 **A read is the one walk where every leaf is a number.** A named expression is
 evaluated after the solve, never built. The relational lane compiles a variable
-to its primal and `dual(c)` to the constraint's row duals, as const fragments.
+to its primal and `dual(c)` to the constraint's row duals, as const pieces.
 The oracle reads `.solution` and `.dual` and does xarray arithmetic. So the
 language holds an entry the math never reads to no degree. A product of two
 variables, a variable under a power and a division by one are arithmetic over
@@ -395,7 +397,7 @@ entry still reads.
 **Neither reduction aggregates.** A `Sum` drops columns, a `GroupSum` swaps
 them and a `WindowSum` replicates rows. Every duplicate collapses once, in the
 terminal `SUM(coeff) GROUP BY row, col` at assembly. The polars column
-conventions are in `compiler.py` and `fragments.py`.
+conventions are in `compiler.py` and `pieces.py`.
 
 ## The relational lane
 
@@ -405,7 +407,7 @@ the solver between solves. `labels.py`, `readback.py` and `result.py` sit beside
 the engine, because each answers a question the engine only *uses*.
 `scope.py` sits under all of them: the program, its attached data and the
 variable frames built so far, which is what every helper takes and the
-compiler holds beside the walk it adds. `fragments.py`, `predicates.py`,
+compiler holds beside the walk it adds. `pieces.py`, `predicates.py`,
 `reindex.py`, `coverage.py` and `status.py` are off the spine and undrawn. `frames.py`, the other boundary, is top level because
 all three consumers read it. The [module map](#module-map) says what each does.
 
@@ -546,7 +548,7 @@ is structure.
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, and `load_result` / `scan_result` for an answer read back off disk; linopy-free |
 | `archive_layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/` in the answer's own layout, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together |
 | `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `SolveArchive` and `SweepArchive`. It reads; it never writes |
-| `lanes.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through; `lower`, an expression the file never named spliced into the spec as written and lowered with it |
+| `inputs.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through; `lower`, an expression the file never named spliced into the spec as written and lowered with it |
 | `relational/collect.py` | which polars engine materialises a frame: the streaming one where this polars has it, asked once; a build without it, the browser's, gets the in-memory one |
 | `sources.py` | the one door: caller data (parquet paths, in-memory tables, plain-Python shapes) read into tidy tables and checked against the declarations |
 | `assumptions.py` | the one guard that needs numbers: every `assumptions:` entry the file wrote, and each condition a `piecewise:` method puts on its breakpoints, evaluated as the masks the language states them as |
@@ -558,9 +560,9 @@ is structure.
 | `relational/engine/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
 | `relational/engine/compiler.py` | plan → lazy queries; pure, reads nothing |
 | `relational/engine/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
-| `relational/engine/reindex.py` | `shift` and `sum_back`: a fragment's rows moved along one dimension's own order, and the edge |
+| `relational/engine/shifts.py` | `shift` and `sum_back`: a piece's rows moved along one dimension's own order, and the edge |
 | `relational/engine/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes and nothing else |
-| `relational/engine/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
+| `relational/engine/pieces.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
 | `relational/engine/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
 | `relational/engine/attaching.py` | the door's tables → `AttachedSources`, the frozen, `Enum`-encoded tables every query is written against |
@@ -571,7 +573,7 @@ is structure.
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
 | `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
 | `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
-| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `lanes.py` declares each **lane** in the same vocabulary |
+| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; the oracle declares what it builds in the same vocabulary (`tests/linopy_lane/builder.py`) |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/relational/sinks/README.md) |
 
 **One subpackage, and the directory *is* the rule.** Everything
@@ -669,5 +671,5 @@ The dim rule, the degree verdict and the dense-label assignment
 (`relational/engine/labels.py`, shared by variables and constraint
 rows) are not per-operator work: each has
 [one implementation](#what-counts-as-language). What a consumer still owns is
-what is about *building*: the fragment rewrite the relational compiler
+what is about *building*: the piece rewrite the relational compiler
 performs, and the linopy call the oracle makes.

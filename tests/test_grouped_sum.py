@@ -322,7 +322,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
     `sum(x * w, by=gen_bus, over=generator, into=bus)` with `x` indexed by snapshot
-    alone: `generator` reaches the fragment by broadcast from `w`, so two
+    alone: `generator` reaches the piece by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
     is entitled to reject the whole model, and HiGHS does.
@@ -383,9 +383,9 @@ BROADCAST_OBJECTIVE_SOURCES = {
 def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     """A coefficient is the *sum* over the dims the objective projects away.
 
-    The matrix keeps a fragment's dims — a constraint row is a function of dims
+    The matrix keeps a piece's dims — a constraint row is a function of dims
     that include them — so one row there is one `(row, col)` cell. The
-    objective drops them, and a fragment that still carries one then holds
+    objective drops them, and a piece that still carries one then holds
     several rows per column.
     """
     with sps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as model:

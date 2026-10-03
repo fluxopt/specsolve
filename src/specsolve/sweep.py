@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import xarray as xr
 
-    from specsolve.lanes import Label
+    from specsolve.inputs import Label
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
@@ -208,7 +208,7 @@ class Spill:
         found = {name: self._file('primal', position, name) for name in names}
         return {name: pl.read_parquet(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
-    def held(self, kind: str) -> list[str]:
+    def names(self, kind: str) -> list[str]:
         under = self.directory / kind
         return sorted(path.name for path in under.iterdir()) if under.is_dir() else []
 
@@ -333,7 +333,7 @@ class Sweep:
     def keys(self) -> list[Label]:
         return self.record[self.key_name].to_list()
 
-    def _held_here(self) -> None:
+    def _refuse_on_disk(self) -> None:
         if self._disk is not None:
             raise SpecsolveError(
                 f"this sweep's frames are on disk under {str(self._disk)!r} rather than in memory: "
@@ -364,7 +364,7 @@ class Sweep:
             held: Mapping[str, object] = self._answer[kind]
             frame = self._answer[kind].get(name)
         elif self._spill is not None:
-            held = dict.fromkeys(self._spill.held(kind))
+            held = dict.fromkeys(self._spill.names(kind))
             frame = self._spill.scan(kind, name)
         else:
             slices = self._frames.get(kind, {})
@@ -440,7 +440,7 @@ class Sweep:
                 that was not cut into windows, or on an archive written
                 without them.
         """
-        self._held_here()
+        self._refuse_on_disk()
         return self._named('primal', name, per_window=per_window).collect()
 
     def dual(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
@@ -455,7 +455,7 @@ class Sweep:
             SpecsolveError: No slice produced duals for *name* — the message says
                 which of the two it was — or as [`primal`][] raises.
         """
-        self._held_here()
+        self._refuse_on_disk()
         return self._named('dual', name, per_window=per_window).collect()
 
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
@@ -500,7 +500,7 @@ class Sweep:
         if isinstance(expression, str) and (
             expression in self._expression_names() or expression in self._absent.get('expression', {})
         ):
-            self._held_here()
+            self._refuse_on_disk()
             return self._named('expression', expression, per_window=per_window).collect()
         if self._evaluate is None:
             raise SpecsolveError(self._nothing_to_evaluate(expression))
@@ -513,7 +513,7 @@ class Sweep:
         if self._answer is not None:
             return self._answer['expression']
         return (
-            dict.fromkeys(self._spill.held('expression'))
+            dict.fromkeys(self._spill.names('expression'))
             if self._spill is not None
             else self._frames.get('expression', {})
         )
@@ -605,7 +605,7 @@ class Sweep:
             SpecsolveError: The sweep's frames are on disk already, or it was
                 read off an archive written without its windows.
         """
-        self._held_here()
+        self._refuse_on_disk()
         by_key = {kind: slice_index(self, kind) for kind in KINDS}
         spill = Spill.opened(directory, self.key_name, self.keys, self.record[self.key_name].dtype, self._stitch)
         write_reasons(spill.directory, self._no_duals, self._absent)
@@ -626,7 +626,7 @@ class Sweep:
         Per window, every name the windows hold. A live sweep leaves out what
         ``_unstitchable`` refuses, which an archive's answer already lacks.
         """
-        self._held_here()
+        self._refuse_on_disk()
         kind = checked_kind(kind)
         if per_window:
             self._check_per_window()
@@ -722,7 +722,7 @@ def load_sweep(directory: str | Path) -> Sweep:
 def held_in_memory(sweep: Sweep, spill: Spill) -> Sweep:
     """*sweep* with *spill*'s per-slice frames read into memory."""
     return replace(
-        sweep, _frames={kind: {name: spill.whole(kind, name) for name in spill.held(kind)} for kind in KINDS}
+        sweep, _frames={kind: {name: spill.whole(kind, name) for name in spill.names(kind)} for kind in KINDS}
     )
 
 
@@ -802,7 +802,7 @@ def slice_index(sweep: Sweep, kind: str) -> dict[str, dict[Label, pl.DataFrame]]
     if sweep._spill is None:
         return {name: _by_key(frames, sweep.key_name) for name, frames in sweep._frames.get(kind, {}).items()}
     index: dict[str, dict[Label, pl.DataFrame]] = {}
-    for name in sweep._spill.held(kind):
+    for name in sweep._spill.names(kind):
         frame = sweep._spill.scan(kind, name)
         if frame is not None:
             index[name] = _by_key(frame.collect().partition_by(sweep.key_name), sweep.key_name)

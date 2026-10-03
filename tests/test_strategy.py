@@ -1918,7 +1918,7 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     """
     from mathspec import Spec, validation
 
-    from specsolve import lanes
+    from specsolve import inputs
 
     parsed: list[object] = []
     original = validation.to_spec
@@ -1929,7 +1929,7 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
         return original(spec)
 
     monkeypatch.setattr(validation, 'to_spec', spy)
-    monkeypatch.setattr(lanes, 'to_spec', spy)
+    monkeypatch.setattr(inputs, 'to_spec', spy)
     with _entered(make_executor()) as executor:
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=executor)
     assert len(parsed) == 1, f'the model was parsed {len(parsed)} times for three slices'

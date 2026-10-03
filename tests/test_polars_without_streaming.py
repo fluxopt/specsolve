@@ -29,13 +29,13 @@ def polars_without_streaming(monkeypatch):
         return original(self, *args, engine=engine, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', refuse)
-    collect.polars_engine.cache_clear()
+    collect.collect_engine.cache_clear()
     yield
-    collect.polars_engine.cache_clear()
+    collect.collect_engine.cache_clear()
 
 
 def test_the_probe_sees_the_refusal(polars_without_streaming):
-    assert collect.polars_engine() == 'in-memory'
+    assert collect.collect_engine() == 'in-memory'
 
 
 def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
@@ -50,5 +50,5 @@ def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
 
 
 def test_the_streaming_engine_is_used_where_polars_has_one():
-    collect.polars_engine.cache_clear()
-    assert collect.polars_engine() == 'streaming', 'the polars this suite runs on has the streaming engine'
+    collect.collect_engine.cache_clear()
+    assert collect.collect_engine() == 'streaming', 'the polars this suite runs on has the streaming engine'

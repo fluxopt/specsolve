@@ -17,12 +17,12 @@ from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.relational.answer_layout import RESERVED
-from specsolve.relational.collect import polars_engine
+from specsolve.relational.collect import collect_engine
 
 if TYPE_CHECKING:
     from mathspec.program import DimensionDeclaration, ParameterDeclaration, Program, RelationDeclaration
 
-    from specsolve.lanes import Label, Source
+    from specsolve.inputs import Label, Source
 
 
 def attachable(program: Program) -> dict[str, ParameterDeclaration | DimensionDeclaration | RelationDeclaration]:
@@ -510,7 +510,7 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = table.select(wanted).collect(engine=polars_engine())
+    frame = table.select(wanted).collect(engine=collect_engine())
     _check_one_row_per_coordinate(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)

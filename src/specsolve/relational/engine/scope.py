@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from specsolve.relational.engine.attaching import AttachedSources
-    from specsolve.relational.engine.fragments import TermFragment
     from specsolve.relational.engine.labels import Labelled
+    from specsolve.relational.engine.pieces import Piece
 
 
 def join_on(
@@ -129,9 +129,9 @@ class Scope:
             frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return frame
 
-    def spanned(self, fragments: Sequence[TermFragment]) -> tuple[str, ...]:
-        """The dims *fragments* carry between them, in declaration order."""
-        return self.in_declaration_order(d for p in fragments for d in p.dims)
+    def spanned(self, pieces: Sequence[Piece]) -> tuple[str, ...]:
+        """The dims *pieces* carry between them, in declaration order."""
+        return self.in_declaration_order(d for p in pieces for d in p.dims)
 
     def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.

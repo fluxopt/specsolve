@@ -41,6 +41,7 @@ nav:
       - Sweeps and rolling horizons: reference/sweeps.md
       - The data contract: reference/data.md
       - Glossary: reference/glossary.md
+      - Internal glossary: reference/internals.md
       # The language is a dependency and is documented with itself.
       - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:

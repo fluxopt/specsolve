@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from specsolve.relational.sinks import SOLVERS, WRITERS
-from specsolve.relational.sinks.capabilities import CAPABILITIES, Capabilities
+from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
 EMPTY = Capabilities(supports=frozenset({}))
 
@@ -56,7 +56,7 @@ def test_an_exclusion_fires_inside_a_larger_requirement():
 
 def test_nothing_is_excluded_where_no_exclusion_is_declared():
     assert HIGHS_SHAPED.excluded([]) is None
-    assert Capabilities(supports=frozenset({'integrality'})).excluded(CAPABILITIES) is None
+    assert Capabilities(supports=frozenset({'integrality'})).excluded(ALL_CAPABILITIES) is None
 
 
 @pytest.mark.parametrize(
@@ -89,6 +89,6 @@ def test_the_lp_writer_carries_what_it_writes():
     is the *writer's*, not the reader's: HiGHS parses neither the `sos` section
     nor the quadratic-constraint one this writer emits."""
     capabilities = WRITERS['.lp'].capabilities
-    assert capabilities.missing(CAPABILITIES) == [], 'every section the language can reach is emitted now'
+    assert capabilities.missing(ALL_CAPABILITIES) == [], 'every section the language can reach is emitted now'
     assert 'quadratic_constraint' in capabilities.supports, 'the section this branch taught it to write'
     assert capabilities.excludes == ()

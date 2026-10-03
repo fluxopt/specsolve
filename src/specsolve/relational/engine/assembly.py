@@ -16,10 +16,10 @@ from mathspec import program
 
 from specsolve.errors import DataError, null_bounds_message
 from specsolve.relational import sinks
-from specsolve.relational.collect import polars_engine
+from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.fragments import TermFragment, absence_restrictions
+from specsolve.relational.engine.pieces import Piece, absence_restrictions
 from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
@@ -156,7 +156,7 @@ class Assembly:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(pieces).collect(engine=polars_engine())
+        stacked = pl.concat(pieces).collect(engine=collect_engine())
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
@@ -179,7 +179,7 @@ class Assembly:
         bounded = labels.in_position_order(
             self.compiler.bounds(labelled.lazy(), name, v)
             .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
-            .collect(engine=polars_engine()),
+            .collect(engine=collect_engine()),
             'var_label',
         )
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
@@ -215,7 +215,7 @@ class Assembly:
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES['col']).alias('col'),
-        ).collect(engine=polars_engine())
+        ).collect(engine=collect_engine())
 
         position = pl.col('#set position')
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
@@ -301,7 +301,7 @@ class Assembly:
         return rows, matrix, qmatrix
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quads: list[tuple[TermFragment, float]], name: str, c: program.ConstraintDeclaration
+        self, frame: pl.LazyFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -318,7 +318,7 @@ class Assembly:
             )
             for p, sign in quads
         ]
-        stacked = pl.concat(pieces).collect(engine=polars_engine())
+        stacked = pl.concat(pieces).collect(engine=collect_engine())
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
         return share
@@ -372,15 +372,13 @@ class Assembly:
         pieces = [
             p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
         ]
-        stacked = pl.concat(pieces).collect(engine=polars_engine())
+        stacked = pl.concat(pieces).collect(engine=collect_engine())
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
         return objective
 
-    def _objective_quadratic(
-        self, quads: tuple[TermFragment, ...], expression: program.Expression
-    ) -> pl.DataFrame | None:
+    def _objective_quadratic(self, quads: tuple[Piece, ...], expression: program.Expression) -> pl.DataFrame | None:
         """The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
 
         One row per unordered pair, at the coefficient the file wrote, not
@@ -390,7 +388,7 @@ class Assembly:
         if not quads:
             return None
         pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
-        stacked = pl.concat(pieces).collect(engine=polars_engine())
+        stacked = pl.concat(pieces).collect(engine=collect_engine())
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
@@ -476,7 +474,7 @@ def _collapsed(
     aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
     if ordered:
         aggregated = aggregated.sort(*keys)
-    collected = aggregated.collect(engine=polars_engine())
+    collected = aggregated.collect(engine=collect_engine())
     share = _pruned(collected)
     return share, dropped or share.height != collected.height
 
