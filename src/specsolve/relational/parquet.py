@@ -32,10 +32,18 @@ if TYPE_CHECKING:
 KINDS = ('primal', 'dual', 'expression')
 LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
 
+#: The prefix reserved, in any letter case, for the columns specsolve adds, so
+#: that no name a spec declares can collide with one.
+RESERVED = 'specsolve_'
+
+#: The column an archive adds to every table it holds, naming the run the
+#: table came from. Read back, a frame comes without it.
+RUN = f'{RESERVED}run'
+
 
 #: The layout a result, a sweep and an archive write to disk. A change to
 #: any of them raises it. Compared, never branched on.
-LAYOUT = 1
+LAYOUT = 2
 FORMAT_FILE = 'format.json'
 
 
@@ -131,8 +139,9 @@ class Record(NamedTuple):
     #: What the archive holding this answer was called — its file name without
     #: a ``.zip``, so ``runs/nightly-2026-09-10.zip`` writes
     #: ``nightly-2026-09-10`` and a directory called ``case.v2`` keeps both
-    #: halves of its name. Null until the archive is written.
-    run: str | None = None
+    #: halves of its name. Null until the archive is written. Every other
+    #: table the archive holds carries the same column, ``specsolve_run``.
+    specsolve_run: str | None = None
     #: A digest of the model this answered — the spec *and* its data, where
     #: [`spec_digest`][] is the document alone. ``None`` for an answer that
     #: never held one.
@@ -245,9 +254,10 @@ class Metrics(NamedTuple):
     handoff_seconds: float
     solve_seconds: float
     write_seconds: float
-    #: What the archive holding this row was called, as [`Record.run`][]: its
-    #: file name without a ``.zip``. Null until one is written.
-    run: str | None = None
+    #: What the archive holding this row was called, as
+    #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
+    #: until one is written.
+    specsolve_run: str | None = None
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
@@ -355,7 +365,9 @@ def write_reasons(directory: Path, no_duals: str | None, no_expressions: Mapping
 def read_reasons(directory: Path) -> tuple[str | None, dict[str, str]]:
     """What [`write_reasons`][] wrote: the duals' reason, and one per named expression."""
     file = directory / REASONS_FILE
-    rows: list[tuple[str, str, str]] = pl.read_parquet(file).rows() if file.is_file() else []
+    rows: list[tuple[str, str, str]] = (
+        pl.read_parquet(file, columns=['kind', 'name', 'reason']).rows() if file.is_file() else []
+    )
     return (
         next((why for kind, _, why in rows if kind == 'dual'), None),
         {name: why for kind, name, why in rows if kind == 'expression'},

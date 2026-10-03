@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.errors import LayoutError
-from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, consolidated, digest_of_file
+from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, RUN, consolidated, digest_of_file, write_whole
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -76,23 +76,25 @@ def write_archive(
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
     Args:
-        out: Where to write; its parent is made if it does not exist. A
-            directory named ``run=<name>`` is stamped ``<name>``.
+        out: Where to write; its parent is made if it does not exist. Its
+            name without ``.zip`` is the run every table is stamped with.
         spec: The spec as written, held as ``spec.yaml``.
         sources: What was attached, keyed as the file declares. A parquet path
-            is copied as its own bytes; anything else is written as *tables*
-            has it.
+            is copied, less any ``specsolve_run`` it carries; anything else is
+            written as *tables* has it. The digest is of those bytes, before
+            the run is stamped on.
         tables: The tidy table each source stands for, for every source that
             is not a path.
         axis: The axis manifest, or ``None`` where the sources are not cut.
         answer: A directory holding the answer's own layout. Its record and
-            metrics land as one file each, stamped with the run.
+            metrics land as one file each.
 
     Returns:
-        *out*, which lands whole or not at all.
+        *out*, which lands whole or not at all. Every table in it carries
+        ``specsolve_run``.
     """
     zipped = out.suffix == '.zip'
-    run = out.name.removesuffix('.zip').removeprefix('run=')
+    run = out.name.removesuffix('.zip')
     staging = _staging_for(out)
     part = staging / out.name
     tree = staging / 'tree' if zipped else part
@@ -103,10 +105,11 @@ def write_archive(
         for name, given in sources.items():
             member = tree / SOURCES_DIR / f'{name}.parquet'
             if isinstance(given, (str, Path)):
-                shutil.copyfile(given, member)
+                _copied_unstamped(Path(given), member)
             else:
                 tables[name].collect().write_parquet(member, compression='zstd')
             digests[name] = digest_of_file(member)
+            _stamped(member, member, run)
         _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
@@ -123,23 +126,55 @@ def write_archive(
     return out
 
 
+def _copied_unstamped(source: Path, target: Path) -> None:
+    """*source* at *target* without a ``specsolve_run`` column, before the member is digested.
+
+    A source [`scan_archive`][specsolve.scan_archive] gave back is the
+    member itself, stamped with the run it came from; digested as it lies, the
+    old run's name would move every digest. A file with no such column is
+    copied byte for byte, so the digest stays that of the caller's own bytes.
+    """
+    if RUN not in pl.read_parquet_schema(source):
+        shutil.copyfile(source, target)
+        return
+    pl.read_parquet(source).drop(RUN).write_parquet(target, compression='zstd')
+
+
 def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
-    """``(run, source, digest)`` in source order, so one model's data digests to one table."""
+    """``(specsolve_run, source, digest)`` in source order, so one model's data digests to one table."""
     names = sorted(digests)
     return pl.DataFrame(
-        {'run': [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},
-        schema={'run': pl.String, 'source': pl.String, 'digest': pl.String},
+        {RUN: [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},
+        schema={RUN: pl.String, 'source': pl.String, 'digest': pl.String},
     )
 
 
 def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
-    """*answer*'s layout under *into*, its record and metrics as one file each, stamped with *run*."""
+    """*answer*'s layout under *into*, its record and metrics as one file each, every table stamped with *run*."""
     consolidating = (RECORD_FILE, METRICS_FILE)
     apart = {*consolidating, *(file.removesuffix('.parquet') for file in consolidating)}
-    shutil.copytree(answer, into, ignore=lambda at, names: apart & set(names) if Path(at) == answer else set())
+    shutil.copytree(
+        answer,
+        into,
+        ignore=lambda at, names: apart & set(names) if Path(at) == answer else set(),
+        copy_function=lambda source, target: _stamped(Path(source), Path(target), run),
+    )
     for file in consolidating:
-        stamped = consolidated(answer, file).with_columns(pl.lit(run, dtype=pl.String).alias('run'))
+        stamped = consolidated(answer, file).with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
         stamped.write_parquet(into / file, compression='zstd')
+
+
+def _stamped(source: Path, target: Path, run: str) -> None:
+    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*.
+
+    Streamed, so a spilled answer larger than memory is stamped too, and
+    landed through a part file, so *target* may be *source*. Anything that is
+    not parquet is copied as it is.
+    """
+    if source.suffix != '.parquet':
+        shutil.copy2(source, target)
+        return
+    write_whole(pl.scan_parquet(source).with_columns(pl.lit(run, dtype=pl.String).alias(RUN)), target)
 
 
 def _pack(tree: Path, into: Path) -> None:
