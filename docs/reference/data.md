@@ -152,6 +152,24 @@ above, so each one goes back into `sources` as it is. An archive of a
 sweep holds what the axis cuts its slices from, so each slice attaches from it
 the tables it attached.
 
+### Column types in an archive
+
+**An archive writes each column as a type that parquet readers agree on.**
+Three types arrive from polars and pandas, and readers such as Power BI and
+Spark read them differently. The archive casts each one, in `sources/` and in
+`answer/`:
+
+| A column that arrives as | is written as |
+|---|---|
+| an unsigned integer, such as `UInt32` | `Int64` |
+| a timestamp in nanoseconds, such as a pandas `datetime64[ns]` | the same timestamp in microseconds |
+| a timestamp in a time zone other than UTC | the same instant in UTC, in microseconds |
+
+A table read back from an archive has the written type, and it attaches as the
+original did. A nanosecond timestamp loses what is below a microsecond. Every
+other column is written as it arrived. The record's own `solved_at` is in UTC
+already.
+
 ## Growing or replacing the data
 
 **A built model takes new numbers with

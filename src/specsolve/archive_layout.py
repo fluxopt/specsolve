@@ -235,8 +235,25 @@ def _stamped(source: Path, target: Path, run: str) -> None:
 
 
 def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
-    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
+    """*frame* as an archive holds it: the [`RUN`][specsolve.relational.answer_layout.RUN] column set to *run*, and every column of a type parquet readers agree on."""
+    return frame.with_columns(*_agreed(frame.collect_schema()), pl.lit(run, dtype=pl.String).alias(RUN))
+
+
+def _agreed(schema: pl.Schema) -> list[pl.Expr]:
+    """A cast for each column of *schema* that parquet readers disagree on, to the type they agree on.
+
+    An unsigned integer becomes ``Int64``, and a timestamp in nanoseconds or
+    in a zone other than UTC becomes microseconds in UTC, or naive where it was
+    naive. The instant is kept: parquet stores a zoned timestamp as UTC already.
+    """
+    casts: list[pl.Expr] = []
+    for name, dtype in schema.items():
+        if dtype.is_unsigned_integer():
+            casts.append(pl.col(name).cast(pl.Int64))
+        elif isinstance(dtype, pl.Datetime) and (dtype.time_unit == 'ns' or dtype.time_zone not in (None, 'UTC')):
+            column = pl.col(name) if dtype.time_zone is None else pl.col(name).dt.convert_time_zone('UTC')
+            casts.append(column.dt.cast_time_unit('us'))
+    return casts
 
 
 def _pack(tree: Path, into: Path) -> None:

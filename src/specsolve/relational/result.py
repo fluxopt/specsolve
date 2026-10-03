@@ -651,7 +651,7 @@ class Result:
         record alone. The same model and data write the same bytes.
 
         ``format.json`` stamps the layout and the specsolve that wrote it:
-        ``{"layout": 2, "specsolve": "…"}``. Every reader refuses another
+        ``{"layout": 3, "specsolve": "…"}``. Every reader refuses another
         layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
         to solve the model again and save it.
 
