@@ -23,7 +23,8 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve.errors import DataError, SpecsolveError, null_bounds_message
+from specsolve.errors import DataError, SpecsolveError
+from specsolve.messages import null_bounds_message
 from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note

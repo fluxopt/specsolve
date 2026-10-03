@@ -185,7 +185,7 @@ under `sources/`, not the file you passed, and hashing the member does not give
 the row back, because the member also carries `specsolve_run`. Two archives of
 the same data written by different versions of polars can differ, and reading
 an archive does not verify the digests
-([the rule](../reference/api.md#specsolve.ResultArchive)).
+([the rule](../reference/api.md#specsolve.types.ResultArchive)).
 
 ## See what the runs cost
 
@@ -198,7 +198,7 @@ metrics.select('specsolve_run', 'rows', 'nonzeros', 'build_seconds', 'solve_seco
 )
 ```
 
-The columns are [the metrics](../reference/api.md#specsolve.relational.answer_layout.Metrics). A sweep
+The columns are [the metrics](../reference/api.md#specsolve.types.Metrics). A sweep
 writes one row per slice, with the slice's own share of the clocks and
 `solves` of `1`
 ([reading a sweep](../reference/sweeps.md#reading-a-sweep)).

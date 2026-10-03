@@ -31,7 +31,7 @@ report.sparse_parameters  # parameters whose table is short of their coordinates
 A count smaller than you expected is a mask, or a table with a row missing.
 `omissions` names the constraint, `sparse_parameters` the parameter; which one
 you have is the difference between a `where:` you wrote and a row you lost
-([diagnostics](../reference/api.md#specsolve.relational.result.Diagnostics)).
+([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## 3. Read the row that is wrong
 
@@ -44,7 +44,7 @@ The line is the row as the solver got it: every coefficient the data
 produced, and no term for a variable a `where:` removed. Here `solar` is
 absent because its `p_max` is `0.0`. A term you expected and do not see is a
 mask; a coefficient you did not expect is the data
-([`Model.row`](../reference/api.md#specsolve.Model.row)).
+([`Model.row`](../reference/api.md#specsolve.types.Model.row)).
 
 ## 4. When the solve is infeasible
 

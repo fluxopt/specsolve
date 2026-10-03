@@ -3,7 +3,7 @@
 How to start each solve in a loop from the work the solve before it did. It
 suits a loop whose solves differ by a small step: a rolling horizon, a myopic
 pathway, a search that inches. The reference is
-[`Model.solve`](../reference/api.md#specsolve.Model.solve).
+[`Model.solve`](../reference/api.md#specsolve.types.Model.solve).
 
 ## Keep the solver's progress
 
@@ -19,11 +19,11 @@ for numbers in steps:
     print(result.kept)  # progress
 ```
 
-[`kept`](../reference/api.md#specsolve.Result.kept) says
+[`kept`](../reference/api.md#specsolve.types.Result.kept) says
 what the solve actually kept. The first solve of a model keeps `'nothing'`,
 because no work came before it. An `update` that moves a mask or a coordinate
 set also gives `'nothing'`: the columns change, so the model is loaded again
-([`Model.update`](../reference/api.md#specsolve.Model.update)).
+([`Model.update`](../reference/api.md#specsolve.types.Model.update)).
 
 The default, `keep='solver'`, reuses the loaded model and discards the work.
 The answer is the same under every `keep`; only the time changes.

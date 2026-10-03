@@ -12,12 +12,8 @@ from datetime import datetime  # noqa: TC003  — a Record annotation this modul
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from specsolve.errors import (
-    NoSolutionError,
-    SpecsolveError,
-    no_model_behind_this_answer_message,
-    unknown_name_message,
-)
+from specsolve.errors import NoSolutionError, SpecsolveError
+from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     NO_PROVENANCE,

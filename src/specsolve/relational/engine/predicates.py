@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, assert_never
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import DataError, position_out_of_range_message, short_groups_message
+from specsolve.errors import DataError
+from specsolve.messages import position_out_of_range_message, short_groups_message
 from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
 from specsolve.relational.engine.scope import join_on
 from specsolve.relational.engine.shifts import translate_rows

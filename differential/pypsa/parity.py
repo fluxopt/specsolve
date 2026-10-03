@@ -401,7 +401,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     """
     try:
         result.dual(next(iter(declared.constraints)))
-    except sps.SpecsolveError as error:
+    except sps.errors.SpecsolveError as error:
         return {
             'compared': 0,
             'skipped': str(error).splitlines()[0][:120],
@@ -829,7 +829,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         sources = prepared(spec, tables)
         full = sps.build(spec, sources)
     except (
-        sps.DataError,
+        sps.errors.DataError,
         TypeError,
         KeyError,
         ValueError,

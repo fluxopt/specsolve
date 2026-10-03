@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from mathspec import Spec
 
 
-def _question(archive: sps.ResultArchive | sps.SweepArchive) -> tuple[Spec, Mapping[str, object]]:
+def _question(archive: sps.types.ResultArchive | sps.types.SweepArchive) -> tuple[Spec, Mapping[str, object]]:
     """The pair every verb takes, read off an archive."""
     return archive.spec, archive.sources
 
@@ -227,7 +227,7 @@ def test_unpack_lays_the_archive_out_in_the_directory(
 
 def test_a_refused_model_writes_nothing(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
     out = tmp_path / 'dispatch.zip'
-    with pytest.raises(sps.DataError, match="no data provided for parameter 'cost'"):
+    with pytest.raises(sps.errors.DataError, match="no data provided for parameter 'cost'"):
         sps.solve(dispatch_yaml, {k: v for k, v in dispatch_frame_inputs.items() if k != 'cost'}, archive=out)
     assert not out.exists(), 'a model that cannot be built writes no archive'
 
@@ -245,7 +245,7 @@ def test_a_zip_outside_the_layout_is_refused(members: dict[str, bytes], says: st
     with zipfile.ZipFile(path, 'w') as zipped:
         for name, data in members.items():
             zipped.writestr(name, data)
-    with pytest.raises(sps.LayoutError) as excinfo:
+    with pytest.raises(sps.errors.LayoutError) as excinfo:
         _question(sps.load_archive(path, tmp_path / 'out'))
     assert says in str(excinfo.value), 'the message names what was found, and the layout archive= writes'
     assert not (tmp_path / 'out').exists(), 'nothing is extracted from a zip that is not an archive'
@@ -280,7 +280,7 @@ def test_a_directory_archive_holds_what_the_zip_holds_and_is_read_where_it_lies(
     ],
 )
 def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
-    read: Callable[..., sps.ResultArchive | sps.SweepArchive],
+    read: Callable[..., sps.types.ResultArchive | sps.types.SweepArchive],
     suffix: str,
     into: str | None,
     says: str,
@@ -291,7 +291,7 @@ def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
     """A scanned zip needs an `into` to unpack to; a directory has nothing to unpack."""
     out = tmp_path / f'case{suffix}'
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out)
-    with pytest.raises(sps.LayoutError, match=says):
+    with pytest.raises(sps.errors.LayoutError, match=says):
         read(out, None if into is None else tmp_path / into)
 
 
@@ -317,7 +317,7 @@ def test_a_directory_that_already_holds_something_is_refused(
     out = tmp_path / 'case'
     out.mkdir()
     (out / 'mine.txt').write_text('not an archive')
-    with pytest.raises(sps.LayoutError, match='already holds something'):
+    with pytest.raises(sps.errors.LayoutError, match='already holds something'):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out)
     assert sorted(f.name for f in out.iterdir()) == ['mine.txt'], 'and what was there is untouched'
 
@@ -334,7 +334,7 @@ def test_a_directory_that_already_holds_something_is_refused(
 )
 def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """Lowering has no inverse, so a Program is refused at the door, before anything is built."""
-    with pytest.raises(sps.SpecsolveError, match='lowered Program is not a spec this takes'):
+    with pytest.raises(sps.errors.SpecsolveError, match='lowered Program is not a spec this takes'):
         verb(sps.check(dispatch_yaml), dispatch_frame_inputs)
 
 
@@ -419,7 +419,10 @@ def test_the_digest_table_names_every_source_the_archive_holds(
 
 @pytest.mark.parametrize('read', [sps.load_archive, sps.scan_archive], ids=['loaded', 'scanned'])
 def test_the_sources_an_archive_gives_back_archive_again_to_the_same_digests(
-    read: Callable[[Path], sps.ResultArchive | sps.SweepArchive], dispatch_yaml: Path, dispatch_frame_inputs, tmp_path
+    read: Callable[[Path], sps.types.ResultArchive | sps.types.SweepArchive],
+    dispatch_yaml: Path,
+    dispatch_frame_inputs,
+    tmp_path,
 ) -> None:
     """A scanned source is the member itself, so it carries the first archive's `specsolve_run`.
 
@@ -449,7 +452,7 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
     study = sps.load_archive(tmp_path / 'study')
 
-    assert isinstance(study, sps.SweepArchive), 'the archive carries an axis, or this is testing the other type'
+    assert isinstance(study, sps.types.SweepArchive), 'the archive carries an axis, or this is testing the other type'
     assert study.source_digests['source'].to_list() == sorted(study.sources), 'one row per source, as for one solve'
     assert study.source_digests[RUN].unique().to_list() == ['study'], (
         'stamped with the archive name as a solve archive is, the sweep key belonging to the slices and not the data'
@@ -696,7 +699,7 @@ def test_an_archive_whose_metrics_are_short_of_a_column_is_refused_by_name(
     metrics = tmp_path / 'case' / ANSWER_DIR / METRICS_FILE
     pl.read_parquet(metrics).drop('write_seconds').write_parquet(metrics)
 
-    with pytest.raises(sps.LayoutError, match=r"Metrics row that is short of \['write_seconds'\]") as excinfo:
+    with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['write_seconds'\]") as excinfo:
         sps.load_archive(tmp_path / 'case')
     assert 'solve the model again' in str(excinfo.value), 'and the message names the way out'
 
@@ -800,7 +803,7 @@ def test_every_table_an_archive_holds_says_which_run_it_came_from(
     } == {table.relative_to(tmp_path / 'out').as_posix(): ['nightly-2026-09-10'] for table in tables}, (
         'every table carries the archive name, sources and answer frames alike'
     )
-    answer = case.sweep if isinstance(case, sps.SweepArchive) else case.result
+    answer = case.sweep if isinstance(case, sps.types.SweepArchive) else case.result
     assert answer.primal('p').equals(live), 'a frame read back is the frame the solve returned'
     assert all(RUN not in frame.columns for frame in case.sources.values()), 'and a source read back is the table given'
 
@@ -848,7 +851,7 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
     assert loaded.sweep.primal('p').equals(scanned.sweep.scan('p').collect()), 'and lazily'
 
 
-def _attached_differently(spec, sources, archived: sps.SweepArchive) -> list[tuple[int, str]]:
+def _attached_differently(spec, sources, archived: sps.types.SweepArchive) -> list[tuple[int, str]]:
     """``(slice, source)`` where a slice cut from *archived* attaches other than one cut from *sources*."""
     before = [sps.tidy(spec, cut) for _, cut in archived.axis.slices(sources)]
     after = [sps.tidy(archived.spec, cut) for _, cut in archived.axis.slices(archived.sources)]
@@ -889,7 +892,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
 
 
-def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: object) -> sps.Sweep:
+def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: object) -> sps.types.Sweep:
     """The rolling horizon, archived to ``roll.zip`` with *archive*'s keywords."""
     sources = horizon_sources(12)
     return sps.solve_over(
@@ -989,11 +992,14 @@ def unkept(tmp_path_factory: pytest.TempPathFactory) -> Path:
     ],
 )
 def test_a_rolling_horizon_archive_refuses_the_windows_it_did_not_keep(
-    read: Callable[..., sps.SweepArchive], refused: Callable[[sps.Sweep, Path], object], unkept: Path, tmp_path: Path
+    read: Callable[..., sps.types.SweepArchive],
+    refused: Callable[[sps.types.Sweep, Path], object],
+    unkept: Path,
+    tmp_path: Path,
 ) -> None:
     """Every read that needs the windows is refused, naming the way back."""
     sweep = read(unkept, tmp_path / 'opened').sweep
-    with pytest.raises(sps.SpecsolveError, match=r'written without keep_windows=True.*sps\.solve_over'):
+    with pytest.raises(sps.errors.SpecsolveError, match=r'written without keep_windows=True.*sps\.solve_over'):
         refused(sweep, tmp_path / 'resaved')
 
 
@@ -1019,7 +1025,10 @@ def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: P
     ],
 )
 def test_a_rolling_horizon_whose_windows_wrote_nothing_still_kept_them(
-    read: Callable[..., sps.SweepArchive], per_window: Callable[[sps.Sweep], object], suffix: str, tmp_path: Path
+    read: Callable[..., sps.types.SweepArchive],
+    per_window: Callable[[sps.types.Sweep], object],
+    suffix: str,
+    tmp_path: Path,
 ) -> None:
     """Every window infeasible, so none writes a frame, and `per_window=True` says so as the live sweep does.
 
@@ -1031,12 +1040,12 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_still_kept_them(
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
     out = tmp_path / f'roll{suffix}'
     runs = sps.solve_over(WINDOW, sources, ROLLING, archive=out, keep_windows=True)
-    with pytest.raises(sps.SpecsolveError) as live:
+    with pytest.raises(sps.errors.SpecsolveError) as live:
         runs.primal('soc', per_window=True)
     archived = read(out, tmp_path / 'opened' if suffix else None).sweep
 
     assert 'holds no variable frames at all' in str(live.value), 'no window solved, and the live sweep says so'
-    with pytest.raises(sps.SpecsolveError) as raised:
+    with pytest.raises(sps.errors.SpecsolveError) as raised:
         per_window(archived)
     assert str(raised.value) == str(live.value), 'the archive says what the live sweep says'
 
@@ -1116,7 +1125,7 @@ def test_a_name_with_no_answer_is_left_out_of_the_archive_with_its_reason(
         assert f'answer/{kind}/{name}.parquet' not in packed.namelist(), 'no answer, so no answer file'
         reasons = pl.read_parquet(packed.read('answer/reasons.parquet'))
     assert reasons.filter((pl.col('kind') == kind) & (pl.col('name') == name)).height == 1, 'one reason for it'
-    with pytest.raises(sps.SpecsolveError, match=r'not over the windowed dimension.*per_window=True'):
+    with pytest.raises(sps.errors.SpecsolveError, match=r'not over the windowed dimension.*per_window=True'):
         read(loaded.sweep, False)
     assert read(loaded.sweep, True).equals(read(runs, True)), 'per window it is all there'
 
@@ -1142,7 +1151,7 @@ def test_a_rolling_horizon_reads_the_same_names_live_and_off_its_archive(
     assert live.equals(archived), 'the same answer, read live or off the archive'
     assert unstitchable not in live.data_vars, 'the name with no answer over the window is left out of both'
     assert unstitchable in runs.to_dataset(kind=kind, per_window=True).data_vars, 'and per window it is read'
-    with pytest.raises(sps.SpecsolveError, match='not over the windowed dimension'):
+    with pytest.raises(sps.errors.SpecsolveError, match='not over the windowed dimension'):
         runs.to_dataset(unstitchable, kind=kind)
 
 
@@ -1160,7 +1169,7 @@ def test_a_kind_with_no_answer_over_the_window_names_what_it_left_out(archived: 
     """
     runs = _rolling(tmp_path, WINDOW_TOTAL)
     sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').sweep if archived else runs
-    with pytest.raises(sps.SpecsolveError, match=r'window_spend.*not over the windowed dimension'):
+    with pytest.raises(sps.errors.SpecsolveError, match=r'window_spend.*not over the windowed dimension'):
         sweep.to_dataset(kind='expression')
 
 
@@ -1221,7 +1230,7 @@ def test_keep_windows_is_refused_where_there_are_no_windows_to_keep(
 
     monkeypatch.setattr(strategy, 'build', no_build)
     out = tmp_path / 'never.zip' if archived else None
-    with pytest.raises(sps.SpecsolveError, match=says):
+    with pytest.raises(sps.errors.SpecsolveError, match=says):
         sps.solve_over(WINDOW, horizon_sources(12), axis, archive=out, keep_windows=True)
 
 
@@ -1282,7 +1291,7 @@ def test_an_archive_whose_answer_names_another_spec_is_refused(
         for name in held.namelist():
             edited.writestr(name, pyyaml.safe_dump(other) if name == 'spec.yaml' else held.read(name))
 
-    with pytest.raises(sps.SpecsolveError, match='came back from a different spec'):
+    with pytest.raises(sps.errors.SpecsolveError, match='came back from a different spec'):
         sps.load_archive(tampered, tmp_path / 'out')
     assert sps.load_archive(archive, tmp_path / 'fine').spec == to_spec(dispatch_yaml), (
         'and the archive as written reads back as the model it holds'
@@ -1312,7 +1321,7 @@ def test_a_sweep_archive_whose_answer_names_another_spec_is_refused(
     other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1.0})
     (tmp_path / 'study' / 'spec.yaml').write_text(pyyaml.safe_dump(other))
 
-    with pytest.raises(sps.SpecsolveError, match='came back from a different spec'):
+    with pytest.raises(sps.errors.SpecsolveError, match='came back from a different spec'):
         sps.load_archive(tmp_path / 'study')
 
 
@@ -1527,25 +1536,25 @@ def test_an_answer_in_another_layout_is_refused_by_name(
         out = solved.save(tmp_path / 'solution')
     (out / 'format.json').write_text(json.dumps({'layout': 0, 'specsolve': '0.0.1a359'}))
 
-    with pytest.raises(sps.LayoutError, match='solve the model again and save it') as refused:
+    with pytest.raises(sps.errors.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
     assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {LAYOUT}' in str(refused.value), (
         'the refusal names the layout it found and the version that wrote it'
     )
 
     (out / 'format.json').write_text(json.dumps({'answer': 0}))  # what 0.1.0 wrote
-    with pytest.raises(sps.LayoutError, match='with no layout stamp'):
+    with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
         sps.load_result(out)
 
     (out / 'format.json').unlink()
-    with pytest.raises(sps.LayoutError, match='with no layout stamp'):
+    with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
         sps.load_result(out)
 
 
 def test_a_hand_built_axis_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """A list of `(key, sources)` is refused, and sent to one archive per solve."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    with pytest.raises(sps.SpecsolveError, match='archive one solve each'):
+    with pytest.raises(sps.errors.SpecsolveError, match='archive one solve each'):
         sps.solve_over(dispatch_yaml, sources, [('a', sources)], key_name='case', archive='never.zip')
 
 
@@ -1563,7 +1572,7 @@ def _by_scenario(names: list[str]) -> pl.DataFrame:
 def test_a_sweep_refuses_a_lowered_program_before_it_solves_a_slice(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """A sweep refuses it at the same door, and before the first slice is taken."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    with pytest.raises(sps.SpecsolveError, match='was lowered from'):
+    with pytest.raises(sps.errors.SpecsolveError, match='was lowered from'):
         sps.solve_over(sps.check(dispatch_yaml), sources, sps.EachCoordinate('scenario'), archive='never.zip')
 
 
@@ -1625,7 +1634,7 @@ def test_an_archive_whose_data_was_replaced_is_refused_at_the_rebuild(
     moved.write_parquet(tmp_path / 'case' / 'sources' / 'cost.parquet')
 
     tampered = sps.load_archive(tmp_path / 'case')
-    with pytest.raises(sps.SpecsolveError, match='came back from another model') as refused:
+    with pytest.raises(sps.errors.SpecsolveError, match='came back from another model') as refused:
         tampered.result.evaluate(_UNDECLARED)
     assert 'what differs is the data' in str(refused.value), 'and the refusal says which half moved'
     assert want == pytest.approx(intact.result.evaluate(_UNDECLARED)['value'].sum(), rel=1e-9), (
@@ -1694,5 +1703,5 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
 
 def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
-    with pytest.raises(sps.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
+    with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')

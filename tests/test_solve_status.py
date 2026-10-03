@@ -206,7 +206,7 @@ def test_a_record_column_that_names_no_written_type_is_refused_at_import():
     class Unwritable(NamedTuple):
         when: bytes
 
-    with pytest.raises(sps.SpecsolveError, match='_WRITTEN_AS'):
+    with pytest.raises(sps.errors.SpecsolveError, match='_WRITTEN_AS'):
         _column_types(Unwritable)
 
     for row_type in (Record, Metrics):
