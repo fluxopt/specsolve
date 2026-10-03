@@ -699,6 +699,10 @@ def test_a_rolling_horizon_lists_its_windows_in_their_own_catalog(tmp_path: Path
     assert windows.filter(path='answer/windows/primal/soc', column='t')['dim'].to_list() == ['t'], (
         'inside a window the frame holds the local index the spec declares'
     )
+    owned = windows.filter(path='answer/windows/owned.parquet').select('column', 'dim').rows()
+    assert owned == [('snapshot', 'snapshot'), ('snapshot_start', 'snapshot'), ('t', 't')], (
+        'what each window owns maps the window and its local index to a coordinate of the sliced dimension'
+    )
 
 
 def test_an_archive_records_what_reaching_its_answer_cost(
