@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(archive): an archive's catalog describes each file as it is written, and kept windows have a catalog of their own ([#1838](https://github.com/fluxopt/specsolve/pull/1838))
+
 ## 0.5.0 (2026-10-03)
 
 The top level of `specsolve` now holds only what you call. What a call returns
