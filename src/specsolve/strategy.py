@@ -354,7 +354,8 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     ``reasons.parquet`` says why. The record and metrics take a single solve's
     columns, so ``keys.parquet`` beside them gives the keys their type back.
     ``sweep.json`` records *keep_windows*: a zip holds files only, so an empty
-    ``windows/`` is not there to say so.
+    ``windows/`` is not there to say so. What each window owns is kept in
+    ``windows/`` beside them, the answer being stitched already.
     """
     spill = sweep._spill
     assert spill is not None, 'the answer is read off a spill, so a sweep too large to hold is never held'
@@ -362,8 +363,9 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     manifest = json.loads((spill.directory / MANIFEST_FILE).read_text())
     (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
     shutil.copyfile(spill.directory / KEYS_FILE, under / KEYS_FILE)
-    if sweep._stitch is not None:
-        shutil.copyfile(spill.directory / OWNED_FILE, under / OWNED_FILE)
+    if keep_windows:
+        (under / WINDOWS_DIR).mkdir()
+        shutil.copyfile(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE)
     write_whole(sweep.record.drop(sweep.key_name), under / RECORD_FILE)
     write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
