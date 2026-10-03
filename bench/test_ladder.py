@@ -46,13 +46,16 @@ def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any,
     gurobi sink put 0.45 s and 0.67 s in one distribution (#1288).
 
     Pedantic mode takes its rounds from the caller, so `--benchmark-min-rounds`
-    is read here. Under CodSpeed there is no such option, and the plain call
-    stands.
+    is read here. Under CodSpeed there is no such option. A setup still goes
+    in pedantic form there: its instruments call the target more than once —
+    a warm-up, then the measured call — and only the pedantic form runs the
+    setup before each, so a window that consumes its model starts from it
+    every time.
     """
     rounds = getattr(request.config.option, 'benchmark_min_rounds', None)
     if rounds is None:
         if setup is not None:
-            args, _ = setup()
+            return benchmark.pedantic(fn, setup=setup)
         return benchmark(fn, *args)
     return benchmark.pedantic(
         fn,
