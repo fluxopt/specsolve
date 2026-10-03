@@ -1,7 +1,7 @@
 # Sweeps and rolling horizons
 
 This page is the reference for `solve_over`: the axes it takes, the `Sweep` it
-returns, and the `carry`, `executor` and `spill_to=` keywords.
+returns, and the `carry`, `executor`, `spill_to=` and `archive=` keywords.
 
 `solve_over` runs one [model](glossary.md#the-chain) once per slice and folds
 the answers together. A slice is one set of [sources](glossary.md#how-it-runs)
@@ -23,7 +23,7 @@ An axis says how the sources split into slices. `solve_over` accepts three:
 dimension; [`EachWindow`](api.md#specsolve.EachWindow), one slice per window of
 consecutive labels; and a sequence of `(key, sources)` pairs written by hand. A
 hand-built axis must pass `key_name=`. A list names no dimension, so the model
-is not asked whether it can be cut that way and `original_index=` is refused.
+is not asked whether it can be cut that way, and its answer is keyed by slice.
 
 ```python
 sweep = sps.solve_over(
@@ -32,7 +32,7 @@ sweep = sps.solve_over(
     sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
     carry={'soc_initial': 'soc'},
 )
-sweep.primal('soc')  # (snapshot_start, t, value) — the window, and the index inside it
+sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 ```
 
 `into` has no default, and a seam's `where: "t == 0"` matches on it.
@@ -47,7 +47,7 @@ sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48, into='t')
 
 The blocks are taken in order and laid end to end. A sequence that stops short
 of the axis is refused. The labels past the last block would be solved by no
-window, and the stitch would come back short:
+window, and the answer would come back short:
 
 ```text
 DataError: steps keeps 7 coordinate(s) across 2 window(s), and 'snapshot' has 12 —
@@ -70,66 +70,77 @@ slices = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t').slices(sou
 sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that was infeasible
 ```
 
-Solved as a list, the slices key by `key_name=` and `original_index=` is
-refused. Two axes compose as a comprehension over the slices of one, each
+Solved as a list, the slices key by `key_name=`, and the answer is keyed by
+slice. Two axes compose as a comprehension over the slices of one, each
 sliced again by the other.
 
-**Sources cross a slice in every shape `build` takes.** A table carrying the
-axis, table or parquet path, is filtered. A number, a `{label: value}` map or a
-bare sequence passes through as it is. A table carrying the axis that is short
-of a coordinate another table has raises an `SpecsolveWarning` before a slice is
-taken, naming both tables. That slice builds the source empty. An absent row is
+**Sources cross a slice in every shape `build` takes.** A parameter or a
+relation whose table carries the axis is filtered, as a table or as a parquet
+path. Every other source passes through as it is. **An index of another
+dimension that carries the axis is refused** before a slice is taken, because
+an index lists the labels that every slice has. Say which labels a slice has in
+a parameter or a relation over the dimension and the axis, where a missing row
+reads as absent. A table carrying the axis that is short of a coordinate
+another table has raises a `SpecsolveWarning` before a slice is taken, naming
+both tables. That slice builds the source empty. An absent row is
 how a model masks, so the gap is reported rather than refused.
 
 ## Reading a sweep
 
-**`Sweep` reads like [`Result`](api.md#specsolve.Result), one dimension wider.**
-`primal`, `dual`, `evaluate`, `to_pandas`, `to_dataarray`, `to_dataset` and
-`save` keep their names, and every table has the slice key prepended.
+**Every reader returns the answer.** `primal`, `dual`, `evaluate`, `scan`,
+`to_pandas`, `to_dataarray` and `to_dataset` keep the names and shapes of
+[`Result`](api.md#specsolve.Result). For `EachWindow` the answer is over the
+real labels of the sliced dimension. Each label comes from the window that owns
+it, and the final window gives all of its rows. For `EachCoordinate` and a
+hand-built axis, each slice is a whole answer, so the table is keyed by slice.
+
+```python
+sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
+sweep.dual('balance')  # the same, for a price
+sweep.evaluate('spend')  # the model's own quantity, over the real labels
+```
 
 **You name the extra dimension, not the library.** `EachCoordinate('scenario')`
 keys on `scenario`, so `sweep.to_dataarray('p')` is
 `(scenario, snapshot, generator)`.
 
-**`original_index=` asks for the answer over the real labels.** It is a
-keyword on the readers, not a reader of its own:
+**`per_window=True` reads each window as it was solved.** It is a keyword on
+every reader, beside `kind=` where a reader has one. The table is keyed by
+where each window started and is over the index inside the window. It keeps the
+lookahead rows:
 
 ```python
-sweep.primal('soc')  # (snapshot_start, t, value) — keyed by slice
-sweep.primal('soc', original_index=True)  # (snapshot, value) — the answer
-sweep.dual('balance', original_index=True)  # the same, for a price
-sweep.evaluate('spend', original_index=True)  # the model's own quantity, over real coordinates
+sweep.primal('soc', per_window=True)  # (snapshot_start, t, value) — every row every window solved
+sweep.to_dataarray('balance', 'dual', per_window=True)  # (snapshot_start, t)
 ```
 
-For `EachWindow` this is the stitched answer over the global labels. Each
-window contributes the labels its block owns, and the final window all of
-its rows. For `EachCoordinate` nothing was re-indexed, and its key column
-already is a label of the sliced dimension, so the table comes back unchanged.
-
-**A hand-built axis refuses it.** A list of slices does not say what its keys
-are labels of, so there is no dimension to read them back over:
-
-```python
-sweep = sps.solve_over('window.yaml', sources, windows, key_name='window')
-sweep.primal('soc', original_index=True)
-```
+**A sweep that was not cut into windows refuses `per_window=True`.** Its answer
+already is one table per slice:
 
 ```text
-SpecsolveError: a hand-built axis does not say what its keys are coordinates of,
-so this sweep has no dimension to read 'window' back over. Read it keyed, which
-is what its slices were solved over, or slice with EachWindow — it keys by where
-each window started, records which coordinates each one owns, and stitches.
+SpecsolveError: per_window=True reads an EachWindow sweep one window at a time,
+and this sweep was not cut into windows: its answer already is one frame per
+slice, keyed by 'scenario'. Read it without per_window.
 ```
 
-**Keyed is the default, because stitching is lossy.** It drops the lookahead
-rows the sweep solved. For the same reason `to_dataset` and `save` have
-no `original_index`.
+**A quantity that is not over the windowed dimension has no answer.** Over a
+window, `sum(p * cost)` is one number, so no label of `snapshot` owns it. The
+reader refuses it and names the read that works:
 
-**`original_index` sits beside `kind=` where a reader has one**, so
-`sweep.to_dataarray('balance', 'dual', original_index=True)` is the stitched
-price over time.
+```text
+SpecsolveError: this has no answer over 'snapshot': the frame has no 't' column,
+because the quantity is not over the windowed dimension — each row covers a whole
+window, lookahead included under an overlapping window. Read it with
+per_window=True for the value of each window, or read a quantity that keeps 't'
+and aggregate its answer.
+```
 
-**`save` writes every kind.** `sweep.save('runs/')` writes what
+**`to_dataset()` with no names reads every name that has an answer.** It
+leaves out a quantity that is not over the windowed dimension, as an archive
+leaves out its file. A name you give is read or refused as above. With
+`per_window=True`, every name is read.
+
+**`save` writes every kind, per window.** `sweep.save('runs/')` writes what
 `spill_to=` would have written, so the directory is a spilled sweep. The call
 that made the sweep, pointed at it with `spill_to=`, reads it back without
 solving; so do `sps.load_sweep('runs/')`, which reads every slice's frames in
@@ -137,17 +148,18 @@ and answers `primal`, and `sps.scan_sweep('runs/')`, which leaves them there for
 `scan` ([`load_sweep`](api.md#specsolve.load_sweep)).
 
 **There is no per-slice reader.** One slice is a partition of a table you
-already hold: `sweep.primal('p').partition_by(sweep.key_name, as_dict=True)`.
+already hold: `sweep.primal('p').partition_by(sweep.key_name, as_dict=True)`,
+with `per_window=True` for a windowed sweep.
 
 | Rule | |
 |---|---|
 | **everything a slice produced is kept** | Every variable's primals and every constraint's duals come back through `sweep.primal(name)` and `sweep.dual(name)`. Each slice's *model* is released as the loop goes, so build peak stays at one slice. |
 | **duals are keyed, never combined** | `sweep.dual(name)` has the shape of `sweep.primal(name)`; averaging, taking the last or reading one slice alone is yours to do. A slice whose model had an integer variable contributes no duals, and `sweep.record` says which slice. |
-| **expressions are evaluated per slice** | Every declared `expressions:` name is evaluated at each slice's solution and read through `sweep.evaluate(name)`, and an expression the file never named through the same verb off a sweep archive. Under `original_index=True` only the rows each window owns survive, so summing the stitched table cannot double-count the lookahead. A quantity *reduced over* the sliced dimension is refused there, and the error names the per-slice read. |
+| **expressions are evaluated per slice** | Every declared `expressions:` name is evaluated at each slice's solution and read through `sweep.evaluate(name)`, and an expression the file never named through the same verb off a sweep archive. In the answer of a windowed sweep only the rows each window owns survive, so summing it cannot double-count the lookahead. A quantity *reduced over* the windowed dimension has no answer, and the error names `per_window=True`. |
 | **no aggregate objective** | `sweep.record` is a table keyed by slice, the objective one of its columns. Scenarios are a distribution, not a sum, and summing window objectives double-counts the overlap. |
-| **the lookahead is `t >= step`** | Overlapping windows return every row they solved, lookahead included. What each window owns is `sweep.primal('soc').filter(pl.col('t') < step)`. |
+| **the lookahead is `t >= step`** | Per window, overlapping windows return every row they solved, lookahead included. What each window owns is `sweep.primal('soc', per_window=True).filter(pl.col('t') < step)`. |
 | **a slice that did not solve contributes no rows** | A `primal` table can be shorter than the sweep. `record` is always one row per slice and says which did not solve, holding null where a slice reached no objective. |
-| **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`; the key column `snapshot_start` holds where each window began. |
+| **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`. Per window, the key column `snapshot_start` holds where each window began. |
 | **a hand-built axis names its own key** | A plain list cannot say what its keys are labels *of*, so it must pass `key_name='draw'`. `key_name` overrides the derived name on any axis. It is refused when it collides with a column the tables already carry: a dimension the spec declares, `value`, or a column of `record` or `metrics`, such as `status`, `objective`, `solves` or `loads`. A name that starts with `specsolve_`, in any letter case, is refused too, as that prefix is reserved. |
 | **`sweep.metrics` says what each slice took** | One [`Metrics`](api.md#specsolve.relational.parquet.Metrics) per slice, keyed like `record`. Each row is that slice's own share, so `solves` is `1`. [`Sweep.metrics`](api.md#specsolve.Sweep.metrics) says what `loads` means under a serial fold and under `executor=`. In an **archive** the table carries `specsolve_run` too, so a warehouse of them says which run a slice's cost belongs to. |
 | **on disk, the slice is two text columns** | `record` and `metrics` in memory start with the key column, in the key's own type, so they join to the frames. On disk they do not: `slice_axis` holds the key name and `slice` the key as text, and both are null for a single solve. So every `record.parquet` and `metrics.parquet` has the same columns, from a solve or from any sweep. A key therefore names one slice by its text: two keys of one text, such as a repeated key, are refused before a slice is taken, and so is a key that the sweep's one key type would rewrite, such as `True` among integers. |
@@ -163,18 +175,50 @@ goes rather than held, so the sweep's memory stays at one slice:
 sweep = sps.solve_over(
     'window.yaml', sources, sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'), spill_to='runs/'
 )
-sweep.scan('soc')  # a LazyFrame: (snapshot_start, t, value), every window, in order
-sweep.scan('balance', 'dual', original_index=True).collect()  # the same readers, the same keywords
+sweep.scan('soc')  # a LazyFrame: (snapshot, value), the answer
+sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, the same keywords
 ```
 
 | Rule | |
 |---|---|
-| **`scan` is the reader** | `sweep.scan(name, kind='primal')` returns `primal`, `dual` or `expression` as a `LazyFrame` over the files, `original_index=` included. On a held sweep it is the same reader made lazy. The frame readers and the exports refuse a spilled sweep and name `scan`. |
-| **one file per slice and name** | `<kind>/<name>/<position>.parquet`, with the slice key a column of each, one type across every file a sweep writes. `record/` and `metrics/` hold the record, one row per slice, which names its slice in `slice_axis` and `slice`; `sweep.record` and `sweep.metrics` stay in memory. An **archive** holds those two as one file each, `record.parquet` and `metrics.parquet`. |
+| **`scan` is the reader** | `sweep.scan(name, kind='primal')` returns `primal`, `dual` or `expression` as a `LazyFrame` over the files, `per_window=` included. The answer of a windowed sweep is stitched lazily, at the collect. On a held sweep it is the same reader made lazy. The frame readers and the exports refuse a spilled sweep and name `scan`. |
+| **one file per slice and name** | `<kind>/<name>/<position>.parquet`, per window, with the slice key a column of each, one type across every file a sweep writes. `record/` and `metrics/` hold the record, one row per slice, which names its slice in `slice_axis` and `slice`; `sweep.record` and `sweep.metrics` stay in memory. An **archive** holds those two as one file each, `record.parquet` and `metrics.parquet`. |
 | **every file lands whole** | A file is written beside its final name and renamed into place. The record file is written last and marks a slice done, so a slice interrupted part way is solved again rather than read back short. |
 | **an interrupted sweep resumes** | Run the same call at the same directory. A slice already there is read back, and under a `carry` its state is read off its file. Only the unfinished slices are built. |
 | **a directory holds one sweep** | `sweep.json` records the key name and the keys, and `keys.parquet` holds the keys in their own type. A different sweep pointed at the directory is refused. Changed data or a changed spec is not detected, so delete the directory to solve again. |
 | **the parent writes** | Under `executor=` a worker's answer crosses back to the parent, which writes it. |
+
+## Archiving a sweep
+
+`archive=` writes the model, the sources the sweep was cut from, the axis and
+the answer, so the sweep runs again from the file alone
+([archiving](../howto/archiving.md)):
+
+```python
+sweep = sps.solve_over(
+    'window.yaml',
+    sources,
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
+    archive='roll.zip',
+    keep_windows=True,
+)
+```
+
+| Rule | |
+|---|---|
+| **an archive holds the answer** | One file per name at `answer/<kind>/<name>.parquet`, the path the archive of a single solve uses. Each holds what the reader returns, and `specsolve_run`, which every file of an archive carries, the windows included. `sps.load_archive` and `sps.scan_archive` read the files back, and the readers return them without `specsolve_run`. |
+| **a name with no answer is left out with its reason** | A quantity that is not over the windowed dimension has no file. `answer/reasons.parquet` holds the reason, and the reader raises it. |
+| **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, so `per_window=True` reads off the archive. `answer/sweep.json` records that the windows were kept, so a sweep in which no window wrote a frame reads as the live sweep does. |
+| **without the windows, a per-window read is refused** | So is an expression the file never named, which is valued at the solution of each window. The error names the way back. |
+| **`keep_windows=True` needs windows and an archive** | On another axis, or without `archive=`, it is refused before a slice is solved. |
+
+```text
+SpecsolveError: this archive holds the answer only, because it was written without
+keep_windows=True, so it has no per-window frames to read. Solving again from the
+archived spec and sources restores them: load_archive gives both, with the axis
+and the carry, so sps.solve_over(archive.spec, archive.sources, archive.axis,
+carry=archive.carry) runs the sweep again.
+```
 
 ## Carrying state between slices
 

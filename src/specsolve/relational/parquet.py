@@ -340,27 +340,31 @@ def clear_the_answer(directory: Path) -> None:
         (directory / member).unlink(missing_ok=True)
 
 
-def write_reasons(directory: Path, no_duals: str | None, no_expressions: Mapping[str, str]) -> None:
+def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:
     """``(kind, name, reason)`` for what a solve could not produce, or no file at all.
 
     An empty *name* is the whole kind, which is how the duals are absent.
+    *absent* is ``{kind: {name: reason}}``, one reason per name left out.
     """
     rows = [] if no_duals is None else [{'kind': 'dual', 'name': '', 'reason': no_duals}]
-    rows += [{'kind': 'expression', 'name': name, 'reason': why} for name, why in no_expressions.items()]
+    rows += [
+        {'kind': kind, 'name': name, 'reason': why} for kind, names in absent.items() for name, why in names.items()
+    ]
     if rows:
         write_whole(pl.DataFrame(rows), directory / REASONS_FILE)
 
 
-def read_reasons(directory: Path) -> tuple[str | None, dict[str, str]]:
-    """What [`write_reasons`][] wrote: the duals' reason, and one per named expression."""
+def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]]:
+    """What [`write_reasons`][] wrote: the duals' reason, and ``{kind: {name: reason}}`` for each name left out."""
     file = directory / REASONS_FILE
     rows: list[tuple[str, str, str]] = (
         pl.read_parquet(file, columns=['kind', 'name', 'reason']).rows() if file.is_file() else []
     )
-    return (
-        next((why for kind, _, why in rows if kind == 'dual'), None),
-        {name: why for kind, name, why in rows if kind == 'expression'},
-    )
+    absent: dict[str, dict[str, str]] = {}
+    for kind, name, why in rows:
+        if name:
+            absent.setdefault(kind, {})[name] = why
+    return next((why for kind, name, why in rows if kind == 'dual' and not name), None), absent
 
 
 def reader_kind(kind: str) -> str:

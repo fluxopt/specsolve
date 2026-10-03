@@ -80,12 +80,13 @@ large model, name the few you need: each arrives dense.
 
 ## From a sweep
 
-A [sweep](../reference/sweeps.md) has the same three bridges. The slice key
-becomes a dimension, such as `scenario`. `original_index=True` reads a rolling
-horizon over the dimension it sliced instead, so the answer comes back
-indexed by time:
+A [sweep](../reference/sweeps.md) has the same three bridges, and each returns
+the answer. The slice key of a scenario sweep becomes a dimension, such as
+`scenario`. A rolling horizon comes back over the dimension it sliced, so the
+answer is indexed by time. `per_window=True` reads it window by window instead:
 
 ```python
 sweep.to_dataarray('p')  # (scenario, snapshot, generator)
-rolling.to_pandas('soc', original_index=True)  # over hour, not hour_start
+rolling.to_pandas('soc')  # over hour
+rolling.to_pandas('soc', per_window=True)  # over hour_start and t, lookahead included
 ```

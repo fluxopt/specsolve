@@ -42,6 +42,10 @@ defines *model*, *result*, *sink* and the other house terms the entries use.
     options:
       heading_level: 4
 
+::: specsolve.tidy
+    options:
+      heading_level: 4
+
 ### Run it many times
 
 The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.

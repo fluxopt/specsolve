@@ -114,7 +114,7 @@ def dimension_coords(
         The master coordinates by dimension, and one array per value column,
         by the relation's name and the column's.
     """
-    master = {d: pd.Index(pd.unique(to_pandas(tidy[d].select(d).collect())[d]), name=d) for d in program.dimensions}
+    master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
     return master, _relation_arrays(program, tidy, master)
 
 
