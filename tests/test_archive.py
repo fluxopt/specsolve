@@ -113,7 +113,9 @@ def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_y
 
     assert cost.columns == ['generator', 'value', RUN], 'a positional sequence is spread over its labels'
     assert cost['value'].to_list() == list(DISPATCH_COST), 'in the order the index declares them'
-    assert snapshot.columns == ['snapshot', 'specsolve_position', RUN], 'a bare label range is written as an index table'
+    assert snapshot.columns == ['snapshot', 'specsolve_position', RUN], (
+        'a bare label range is written as an index table'
+    )
     assert snapshot['specsolve_position'].to_list() == list(range(DISPATCH_SNAPSHOTS)), (
         'one row per label, numbered in index order'
     )
