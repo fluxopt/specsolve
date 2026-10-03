@@ -284,7 +284,8 @@ class Model:
                 created, so ``ComputeServer``, ``TokenServer`` and
                 ``WLSAccessID`` reach it too. The result's
                 [`provenance`][specsolve.relational.result.Result.provenance]
-                records them, with a licence credential's value redacted.
+                records them: the value of an option that changes the answer,
+                such as a time limit or a gap, and the name alone of any other.
             keep: How much of the session this solve may keep: ``solver``,
                 ``progress`` or ``nothing``. ``solver``, the
                 default, reuses the solver holding the model and discards the
@@ -700,12 +701,13 @@ def _provenance(solver_name: str, solver_options: Mapping[str, object] | None) -
     """What a solve on *solver_name* with *solver_options* records about itself.
 
     The options are written as one JSON object, because a column of structs is
-    one that several BI tools cannot read. A credential's value never reaches
-    the archive, which is written to storage other people read.
+    one that several BI tools cannot read. Only an option on the solver's
+    ``recorded_options`` keeps its value: an archive goes to storage other
+    people read, and a list of what to hide would leak whatever it missed.
     """
     served = solver(solver_name)
     options = {
-        name: '<redacted>' if name.casefold() in served.credentials else value
+        name: value if name.casefold() in served.recorded_options else '<not recorded>'
         for name, value in (solver_options or {}).items()
     }
     return Provenance(

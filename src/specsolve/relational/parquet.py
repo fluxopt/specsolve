@@ -117,8 +117,9 @@ class Provenance(NamedTuple):
     #: The installed version of the solver's Python package.
     solver_version: str | None = None
     #: The options the solver ran with, as one JSON object with sorted keys:
-    #: ``{}`` where none were passed. A licence credential keeps its key and
-    #: has the value ``<redacted>``.
+    #: ``{}`` where none were passed. An option that changes the answer, such
+    #: as a time limit or a gap, keeps its value; any other has the value
+    #: ``<not recorded>``, so a licence credential never reaches an archive.
     solver_options: str | None = None
     specsolve_version: str | None = None
     mathspec_version: str | None = None

@@ -43,9 +43,11 @@ else writes one.
 **The record says what produced the answer.** `answer/record.parquet` names
 the solver, its version and the options it ran with, and the specsolve and
 mathspec versions that built the model. So you can install the same
-environment again. The options are one JSON string with sorted keys. A
-Gurobi licence credential, such as `WLSSecret`, keeps its key and has the
-value `<redacted>`, because an archive often goes to shared storage.
+environment again. The options are one JSON string with sorted keys. An
+option that changes the answer, such as a time limit, a gap, a seed or a
+tolerance, keeps its value. Any other option keeps its name and has the value
+`<not recorded>`. An archive often goes to shared storage, and a Gurobi
+licence credential such as `WLSSecret` is passed as an option.
 `result.provenance` gives the same five fields without an archive.
 
 ## Read it back

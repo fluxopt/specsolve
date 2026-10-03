@@ -86,16 +86,19 @@ class Gurobi(Solver):
     _env: Any
 
     requires = ('gurobipy', 'scipy.sparse')
-    credentials = frozenset(
+    recorded_options = frozenset(
         {
-            'wlsaccessid',
-            'wlssecret',
-            'licenseid',
-            'csapiaccessid',
-            'csapisecret',
-            'serverpassword',
-            'cloudaccessid',
-            'cloudsecretkey',
+            'timelimit',
+            'mipgap',
+            'mipgapabs',
+            'seed',
+            'threads',
+            'method',
+            'presolve',
+            'feasibilitytol',
+            'optimalitytol',
+            'intfeastol',
+            'numericfocus',
         }
     )
     unavailable_message = (

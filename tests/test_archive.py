@@ -23,6 +23,7 @@ import specsolve as sps
 from specsolve.api import _provenance, attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
 from specsolve.relational.parquet import METRICS_FILE, Metrics, Provenance, Record, digest_of_file
+from specsolve.relational.sinks.solvers import SOLVERS
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -756,7 +757,7 @@ def test_a_solve_with_no_options_records_an_empty_object() -> None:
 
 
 @pytest.mark.parametrize(
-    'credential',
+    'option',
     [
         pytest.param('WLSAccessID', id='wls-access-id'),
         pytest.param('WLSSecret', id='wls-secret'),
@@ -766,17 +767,61 @@ def test_a_solve_with_no_options_records_an_empty_object() -> None:
         pytest.param('ServerPassword', id='server-password'),
         pytest.param('CloudAccessID', id='cloud-access-id'),
         pytest.param('CloudSecretKey', id='cloud-secret-key'),
-        pytest.param('wlssecret', id='any-letter-case'),
+        pytest.param('SomeParameterAFutureGurobiAdds', id='unknown-to-specsolve'),
     ],
 )
-def test_a_credential_option_is_written_redacted(credential: str) -> None:
+def test_an_option_off_the_solvers_list_is_recorded_by_name_alone(option: str) -> None:
     """Gurobi takes its licence credentials as options, and an archive goes to shared storage.
 
-    The key stays, so the record still says a credential was set.
+    Only an option on the solver's list keeps its value, so a name nobody
+    listed cannot leak. The name stays, so the record still says it was set.
+    `TimeLimit` is on the list in another letter case, as Gurobi reads it.
     """
     pytest.importorskip('gurobipy')
-    written = json.loads(_provenance('gurobi', {credential: 'hunter2', 'TimeLimit': 60}).solver_options or '')
-    assert written == {credential: '<redacted>', 'TimeLimit': 60}, 'the value is gone, the key and the rest stay'
+    written = json.loads(_provenance('gurobi', {option: 'hunter2', 'TimeLimit': 60}).solver_options or '')
+    assert written == {option: '<not recorded>', 'TimeLimit': 60}, (
+        'the value is gone, the key and the listed option stay'
+    )
+
+
+def _known_to_highs(name: str) -> bool:
+    import highspy
+
+    status, _ = highspy.Highs().getOptionValue(name)
+    return status == highspy.HighsStatus.kOk
+
+
+def _known_to_gurobi(name: str) -> bool:
+    import gurobipy
+
+    return name in {parameter.casefold() for parameter in dir(gurobipy.GRB.Param)}
+
+
+def _known_to_xpress(name: str) -> bool:
+    import xpress
+
+    try:
+        xpress.problem().getControl(name)
+    except xpress.InterfaceError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize(
+    ('name', 'package', 'known'),
+    [
+        pytest.param('highs', 'highspy', _known_to_highs, id='highs'),
+        pytest.param('gurobi', 'gurobipy', _known_to_gurobi, id='gurobi'),
+        pytest.param('xpress', 'xpress', _known_to_xpress, id='xpress'),
+    ],
+)
+def test_every_recorded_option_is_one_the_solver_knows(name: str, package: str, known) -> None:
+    """A misspelt name on the list records nothing, and no test would see that otherwise."""
+    pytest.importorskip(package)
+    listed = SOLVERS[name].recorded_options
+    assert [option for option in sorted(listed) if not known(option)] == [], (
+        f'every option {name} records is one {name} takes'
+    )
 
 
 def test_the_record_ends_with_the_provenance_columns() -> None:
