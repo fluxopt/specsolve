@@ -39,6 +39,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
+from bench.test_ladder import RELOADS
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
@@ -1290,6 +1291,7 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
         'build_only',
         'objective',
         'window_setup',
+        'sweep',
         'window',
         'read_setup',
         'read',
@@ -1334,7 +1336,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
     for name, module in sorted(ARMS.items()):
         if not hasattr(module, 'window'):
             continue
-        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared))
+        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared, 'values'))
         mem_setup, tracked = plugin._pedantic_action(module.window, (), {}, setup)
         try:
             blob = pickle.dumps((tracked, mem_setup))
@@ -1361,25 +1363,38 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
                 ('test_emit', {}),
                 ('test_window', {'change': 'values'}),
                 ('test_window', {'change': 'shape'}),
+                ('test_window', {'change': 'one'}),
+                ('test_window', {'change': 'cold'}),
                 ('test_window', {}),
+                ('test_sweep', {}),
+                ('test_read', {'into': 'frames'}),
             )
         ]
     }
     path = tmp_path / 'latest.json'
     path.write_text(json.dumps(doc))
     phases = [r.get('phase') for r in bench_results.records(path) if r.get('record') == 'timing']
-    assert phases == ['emit', 'window', 'window-reshaped', 'window'], (
+    assert phases == [
+        'emit',
+        'window',
+        'window-reshaped',
+        'window-one',
+        'window-cold',
+        'window',
+        'sweep',
+        'read-frames',
+    ], (
         'each rung names its own phase, in the order the file writes them, and a window from before '
         'the change was a parameter is the values window it measured'
     )
 
 
-@pytest.mark.parametrize('change', ['values', 'shape'])
+@pytest.mark.parametrize('change', sorted(RELOADS))
 @pytest.mark.parametrize(
     'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
 )
 def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -> None:
-    """`test_window`'s two changes are there to measure the two paths an update can take.
+    """`test_window`'s changes are there to measure the paths an update can take.
 
     The ladder checks which one ran, but only when it measures; this holds every
     case's smallest rung to it on every pull request, and with it that the
@@ -1392,11 +1407,11 @@ def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -
     following = prepared
     if change == 'shape':
         following = module.prepare(case_name, 'xs', case.data(shortened(shape)), {})
-    args, kwargs = module.window_setup('highs', prepared, following)
+    args, kwargs = module.window_setup('highs', prepared, following, change)
     counts = module.window(*args, **kwargs)
-    assert counts['reloaded'] == (change == 'shape'), (
-        f'{case_name}: a window whose {change} moved should '
-        f'{"load the solver from scratch" if change == "shape" else "push onto the loaded solver"}'
+    assert counts['reloaded'] == RELOADS[change], (
+        f'{case_name}: a {change} window should '
+        f'{"load the solver from scratch" if RELOADS[change] else "push onto the loaded solver"}'
     )
 
 
@@ -1438,7 +1453,7 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
     assert {'attach', 'build'} <= module.build_only(prepared)['phases'].keys(), 'a build is attached and built'
 
-    args, kwargs = module.window_setup('highs', prepared, prepared)
+    args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
     model = args[0]
     window = module.window(*args, **kwargs)['phases']
     assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
@@ -1475,3 +1490,15 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
+
+
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_a_sweep_loads_once_and_says_what_the_solver_took(case_name: str) -> None:
+    """`test_sweep` asserts one load and attributes the solve, on every case's smallest rung."""
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    counts = module.sweep('highs', module.prepare(case_name, 'xs', case.data(case.shape('xs')), {}))
+    assert counts['loads'] == 1, 'the first slice loads and every later one, its values unchanged, pushes'
+    assert counts['phases']['solve'] > 0, "the solver's share is attributed, not left inside the wall time"

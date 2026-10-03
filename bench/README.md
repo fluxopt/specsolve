@@ -557,17 +557,38 @@ and nonzero counts against specsolve's — on every bare `pytest bench`.
 runs — the rebuild, the digest a loaded solver is checked against, and then
 either a push of bounds, costs and right-hand sides or a load from scratch.
 Which of those two an update takes is decided by the data, so the test is
-parametrized by what the window moves: `values` re-attaches the same sources,
-which the loaded solver takes by value, and `shape` attaches the rung one
-snapshot shorter (`cases.shortened`), which it cannot. Values are not varied,
-because a push sends whole vectors whatever they hold.
+parametrized by what the window moves:
+
+| change | the window | path |
+|---|---|---|
+| `values` | re-attaches the same sources | push |
+| `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
+| `one` | updates the first declared parameter alone, as `update` is usually called | push |
+| `cold` | re-attaches the same sources under `keep='nothing'` | load |
+
+Values are not varied, because a push sends whole vectors whatever they hold.
+`one` costs a whole rebuild all the same — `update` re-reads every source — so
+it is the baseline an incremental build would have to beat. `keep='progress'`
+differs from the default only in what the solver remembers, which moves the
+solve and not anything timed here; `bench/warm_payoff.py` is where a carried
+basis is weighed.
 
 The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the
 same on every case's smallest rung on every pull request. The phases are
-`window` and `window-reshaped`, and only `bench.tidy` renders them.
+`window`, `window-reshaped`, `window-one` and `window-cold`, and only
+`bench.tidy` renders them.
+
+`test_sweep` is `solve_over` across four hand-built slices of one rung, folded
+in order on one model: the first slice loads and the rest push, which the test
+asserts. A sweep cannot be timed short of its solves, so the solver runs on
+every slice, and the sweep's own per-slice clocks are summed into the result's
+phases — `solve_seconds` is what the wall time owes the solver, and the rest is
+the sweep's. Its phase is `sweep`. It is taken at `xs` and `s` only
+(`SWEPT_SIZES`): above them the solver is the cost, and on `commitment` a MILP
+solved four times over.
 
 ## Reading an answer back
 
