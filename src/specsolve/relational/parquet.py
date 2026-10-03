@@ -142,8 +142,8 @@ class Record(NamedTuple):
     """How a solve terminated, what it reached, and which spec it answered.
 
     One row per solve, and the same columns whoever wrote them: a result
-    writes one, a sweep one per slice keyed by its own key. A run that left no
-    values writes this and nothing else.
+    writes one, a sweep one per slice, which [`slice_axis`][] and
+    [`slice`][] name. A run that left no values writes this and nothing else.
     """
 
     status: str
@@ -172,6 +172,12 @@ class Record(NamedTuple):
     #: [`spec_digest`][] is the document alone. ``None`` for an answer that
     #: never held one.
     model_digest: str | None = None
+    #: What the sweep that solved this called its slices — ``scenario``,
+    #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
+    #: null for a single solve. Fixed names rather than a column named for the
+    #: axis, so every table written here has the same columns.
+    slice_axis: str | None = None
+    slice: str | None = None
     #: [`Provenance`][]'s fields, one column each.
     solver: str | None = None
     solver_version: str | None = None
@@ -269,9 +275,13 @@ class Metrics(NamedTuple):
     with the same columns whoever writes them, so rows written by runs that
     never met concatenate into one table.
 
-    **Cumulative over the model's life.** [`solves`][] says how many solves
-    the clocks cover; it reads ``1`` for the archive [`specsolve.solve`][]
-    writes.
+    **Cumulative over the solves it counts.** [`solves`][] says how many
+    solves the clocks cover. It reads ``1`` for the archive
+    [`specsolve.solve`][] writes, and ``1`` on each slice's row of a sweep,
+    whose clocks are that slice's own share. There [`loads`][] is ``1`` where
+    the solver took the slice from scratch and ``0`` where values were pushed
+    onto the model it held, and [`write_seconds`][] is zero, a sweep writing no
+    model file.
     """
 
     #: The shape the build produced, in the solver's own vocabulary.
@@ -298,42 +308,21 @@ class Metrics(NamedTuple):
     #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
     #: until one is written.
     specsolve_run: str | None = None
+    #: Which sweep slice this row is, as [`Record.slice_axis`][] and
+    #: [`Record.slice`][] say it; null for a single solve.
+    slice_axis: str | None = None
+    slice: str | None = None
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)
 
 
-class SliceMetrics(NamedTuple):
-    """What one slice of a sweep took — [`Metrics`][] one dimension in.
-
-    A slice's clocks are its own share rather than a cumulative total, and
-    ``loaded`` says whether the solver took this slice from scratch. Written per
-    slice by the spill and read back as one table.
-    """
-
-    #: The shape this slice built, as [`Metrics`][] reports a whole model's.
-    columns: int
-    rows: int
-    nonzeros: int
-    #: Whether the solver took this slice's model from scratch instead of
-    #: having values pushed onto one it already held. Under a serial fold the
-    #: first slice does and the rest do not, so a later ``True`` is a slice
-    #: whose data moved a mask; under an executor every slice loads.
-    loaded: bool
-    #: This slice's own seconds per phase. A sweep writes no file per slice, so
-    #: there is no ``write``.
-    attach_seconds: float
-    build_seconds: float
-    handoff_seconds: float
-    solve_seconds: float
-
-
 def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: Path) -> R:
     """One row read off disk as the type that declares its columns.
 
     Args:
-        row_type: [`Record`][], [`Metrics`][] or [`SliceMetrics`][].
+        row_type: [`Record`][] or [`Metrics`][].
         columns: The row as read, ``name: value``.
         found: What to name in the message — the file or directory it came from.
 
