@@ -21,12 +21,7 @@ __all__ = ['LINOPY_CAPABILITIES', 'refusal']
 
 #: linopy has no quadratic constraint; it holds every other construct.
 LINOPY_CAPABILITIES = Capabilities(
-    supports={
-        'integrality': 'native',
-        'sos': 'native',
-        'quadratic_objective': 'native',
-        'nonconvex_quadratic_objective': 'native',
-    }
+    supports=frozenset({'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective'})
 )
 
 

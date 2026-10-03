@@ -69,8 +69,8 @@ sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, reco
 ```python
 case = sps.load_archive('case/')
 
-case.answer.objective  # what it reached
-case.answer.primal('p')  # the values it came back with
+case.result.objective  # what it reached
+case.result.primal('p')  # the values it came back with
 sps.solve(case.spec, case.sources)  # the same question, asked again
 ```
 
@@ -94,7 +94,7 @@ also holds `specsolve_run`, which a build ignores:
 
 ```python
 archived = sps.scan_archive('sweep.zip', 'sweep/')
-archived.answer.scan('p')  # read at the collect, one name at a time
+archived.sweep.scan('p')  # read at the collect, one name at a time
 ```
 
 Scan the archive that does not fit in memory, and the one you will read
@@ -113,7 +113,7 @@ keep.
 
 `metrics` is a `Metrics`: how big the model was, how many solves the clocks
 cover, and wall-clock seconds in each phase, as one value
-([the attributes](../reference/api.md#specsolve.relational.parquet.Metrics)).
+([the attributes](../reference/api.md#specsolve.relational.answer_layout.Metrics)).
 
 ```python
 case = sps.load_archive('case/')
@@ -164,7 +164,7 @@ file alone:
 ```python
 archived = sps.load_archive('roll/')
 
-archived.answer.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
+archived.sweep.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
 sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
 ```
 
@@ -179,7 +179,7 @@ also writes each window's frames, lookahead rows included, under
 
 ```python
 sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)
-sps.load_archive('roll/').answer.primal('soc', per_window=True)  # (snapshot_start, t, value)
+sps.load_archive('roll/').sweep.primal('soc', per_window=True)  # (snapshot_start, t, value)
 ```
 
 Without them, `per_window=True` and an expression the file never named are
@@ -200,7 +200,7 @@ sps.solve_over('dispatch.yaml', sources, axis, spill_to='work/', archive='sweep/
 ```python
 archived = sps.scan_archive('sweep/')
 
-archived.answer.scan('p')  # keyed by scenario, read at the collect
+archived.sweep.scan('p')  # keyed by scenario, read at the collect
 ```
 
 `scan_archive` leaves the answer on disk, and `scan` reads it. `load_archive`

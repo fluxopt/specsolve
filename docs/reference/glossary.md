@@ -64,7 +64,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Archive**
 : A spec, the data it was solved with and what came back, written together as
   one zip or one directory by `archive=` ([archiving](../howto/archiving.md)).
-  It reads back as a `SolveArchive`, or a `SweepArchive` where the sources were
+  It reads back as a `ResultArchive`, or a `SweepArchive` where the sources were
   cut. Every table it holds carries `specsolve_run`, the archive's own name,
   stamped when it is written. Never "artifact".
 
@@ -218,15 +218,15 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   `sweep.primal(name)` and the exports — the **frame readers**, the ones that
   hand back a table — answer off them. A **spilled** sweep left them in a
   directory, which is what `spill_to=` writes and what `scan_sweep` reads: there
-  `sweep.scan(name)` is the reader and the frame readers refuse
-  ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+  a frame reader reads the one name it is asked for, and `sweep.scan(name)`
+  hands it back lazily ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
 
 ## Row types
 
 **Record** · **Metrics**
 : The two saved rows, each a `NamedTuple` that names its own columns:
-  [`Record`](api.md#specsolve.relational.parquet.Record), how a solve
-  terminated, and [`Metrics`](api.md#specsolve.relational.parquet.Metrics),
+  [`Record`](api.md#specsolve.relational.answer_layout.Record), how a solve
+  terminated, and [`Metrics`](api.md#specsolve.relational.answer_layout.Metrics),
   what it took. A sweep writes one of each per slice, with the same columns
   as a single solve; `slice_axis` and `slice` say which slice.
 

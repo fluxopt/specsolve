@@ -10,12 +10,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
+import polars as pl
+
 from specsolve.errors import SpecsolveError
+from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    import polars as pl
+    import numpy as np
 
     from specsolve.relational.sinks.capabilities import Capabilities
     from specsolve.relational.sinks.handoff import Handoff
@@ -82,8 +85,6 @@ class Solver(ABC):
         solver = solvers.loaded(held, name, handoff, options)
         solver.run(handoff)  # …repeatedly
         solver.close()
-
-    A subclass owns the hand-off: loading, pushing values, running, releasing.
     """
 
     def __init__(
@@ -164,12 +165,10 @@ class Solver(ABC):
 
     @abstractmethod
     def warm_start(self) -> WarmStart | None:
-        """What the loaded model holds to warm a later session, if anything.
+        """What the loaded model holds to warm a later session.
 
-        Returns:
-            The basis after an LP solve, the incumbent after a mixed-integer
-            one, and ``None`` where the model holds neither, as before any
-            solve.
+        The basis after an LP solve, the incumbent after a mixed-integer one,
+        or ``None`` where it holds neither, as before any solve.
         """
 
     def warm(self, ws: WarmStart) -> None:
@@ -245,6 +244,11 @@ class Solver(ABC):
         returns what [`dual_ray`][] gives.
         """
 
+    def _unreadable(self, status: SolveStatus) -> SolveAnswer:
+        """The answer for a solve that left nothing worth reading, carrying the [`dual_ray`][] where it was infeasible."""
+        return SolveAnswer.unreadable(status, self.dual_ray() if status.termination_condition == 'infeasible' else None)
+
+    @abstractmethod
     def dual_ray(self) -> pl.Series | None:
         """A weight per row certifying that this infeasible model has no solution.
 
@@ -256,14 +260,12 @@ class Solver(ABC):
             The weights in row order, or ``None`` where this solver produced
             none.
         """
-        return None
 
     @abstractmethod
     def forget(self) -> None:
-        """Discard the work the last solve did, keeping the model loaded.
+        """Make the next run begin as if the loaded model had never been solved.
 
-        The next run begins as if the model had never been solved. A member
-        with nothing to discard implements this as a no-op.
+        A member with nothing to discard implements this as a no-op.
         """
 
     @property
@@ -271,8 +273,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: the caller does not release it, [`close`][]
-        does.
+        Owned by this holder: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod
@@ -291,3 +292,27 @@ class Solver(ABC):
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
+
+
+def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], np.dtype[np.str_]]:
+    """[`SENSE_CODES`][] as one solver's spellings, indexed by code.
+
+    A sense added to [`SENSE_CODES`][] and not to *spelling* raises instead.
+    """
+    import numpy as np
+
+    out = np.empty(len(SENSE_CODES), dtype='<U1')
+    for sense, code in SENSE_CODES.items():
+        out[code] = spelling[sense]
+    return out
+
+
+def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
+    """One quantity a solver produced, in its own index — every sink's read-back.
+
+    A series rather than a ``(label, value)`` frame: the read-back takes a
+    declaration's share by slicing.
+    """
+    import numpy as np
+
+    return pl.Series('value', np.asarray(values, dtype=np.float64))

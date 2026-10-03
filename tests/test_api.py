@@ -352,9 +352,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
     sources = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
-    monkeypatch.setattr(
-        api.PolarsEngine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal')
-    )
+    monkeypatch.setattr(api.Engine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal'))
 
     with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
         sps.solve(dispatch_yaml, sources, solver_name='gurobi')

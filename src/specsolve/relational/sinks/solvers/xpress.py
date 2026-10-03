@@ -1,10 +1,8 @@
 """The ``xpress`` solver: the model in two calls, straight into the Optimizer.
 
-The same hand-off as [`highs`][specsolve.relational.sinks.solvers.highs], reading the
-same ``dense_columns``, ``dense_rows`` and ``row_blocks``. The objective's
-constant is the negated objective coefficient of column ``-1``. ``xpress`` is
-imported inside the functions, so importing this module stays free for a
-caller who never solves with it.
+The objective's constant is the negated objective coefficient of column
+``-1``. ``xpress`` is imported inside the functions, so importing this module
+stays free for a caller who never solves with it.
 """
 
 from __future__ import annotations
@@ -12,8 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import solver_vector, spelled_senses
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -44,25 +41,11 @@ _SOLVE_UNSTARTED = 0
 _SOLVE_FAILED = 2
 
 
-def build_xpress(
-    handoff: Handoff,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Xpress:
-    """Load the model into an `xpress.problem` and stop there: the seam `bench/` measures.
-
-    Returns:
-        The [`Xpress`][] holding the problem, at ``.handle``. The problem
-        owns its licence and releases it when it is collected.
-    """
-    return Xpress(handoff, batch_rows, solver_options)
-
-
 class Xpress(Solver):
-    """FICO Xpress, holding one model.
+    """FICO Xpress, holding one model at ``.handle``, an `xpress.problem`.
 
-    A push writes bounds, costs and right-hand sides by index. Duals are
-    ``None`` rather than zero-filled on a model that has none.
+    The problem owns its licence and releases it when it is collected. Duals
+    are ``None`` rather than zero-filled on a model that has none.
     """
 
     #: The loaded problem; ``close`` drops it, and the licence with it.
@@ -88,7 +71,7 @@ class Xpress(Solver):
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
     #: sink does not hand it one.
-    capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
+    capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
         self._p = _built(handoff, batch_rows, self._options)
@@ -153,9 +136,7 @@ class Xpress(Solver):
         self._p.optimize()
         status = _status_of(self._p)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
         return SolveAnswer(
             status,
             float(self._p.attributes.objval),

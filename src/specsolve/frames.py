@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.lanes import ArrowTable
+from specsolve.inputs import ArrowTable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     import pandas as pd
 
-    from specsolve.lanes import Source
+    from specsolve.inputs import Source
 
 
 __all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'to_pandas']

@@ -6,18 +6,16 @@ take is a refusal naming both rather than a ``kError`` from inside a library.
 - A sink takes a construct or it does not; nothing is rewritten at the
   hand-off.
 - An exclusion is a pair a sink takes separately and refuses together.
-- What a model needs is read off the hand-off, so a square the data prices
-  at zero, an integer variable no column is built for or a set with no
-  members asks for nothing. ``nonconvex_quadratic_objective`` is decided by
-  the coefficients' signs as well, so no table answers it; the sink that meets
-  it at solve time reads the takers off this one.
+- What a model needs is read off the hand-off by [`required`][], which never
+  asks for ``nonconvex_quadratic_objective``: the coefficients' signs decide
+  it. A descriptor still records it, the capability probes check it, and the
+  sink that meets one at solve time sends the caller to the sinks that list it.
 - A descriptor describes the sink as shipped, not the library it wraps.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
 
 if TYPE_CHECKING:
@@ -34,10 +32,7 @@ Capability = Literal[
     'quadratic_constraint',
 ]
 
-#: Whether a sink takes one capability.
-Support = Literal['native', 'absent']
-
-CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
+ALL_CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
 
 
 @dataclass(frozen=True)
@@ -45,32 +40,19 @@ class Capabilities:
     """One sink's answer for every capability, and the pairs it refuses.
 
     Attributes:
-        supports: What the sink does with each capability it has; a name left
-            out is ``absent``, so a descriptor lists only what it *can* do.
+        supports: The capabilities the sink takes; one left out it cannot.
         excludes: Sets of capabilities it has individually and refuses together.
     """
 
-    supports: Mapping[Capability, Support]
+    supports: frozenset[Capability]
     excludes: tuple[frozenset[Capability], ...] = ()
 
-    def __post_init__(self) -> None:
-        """Take a read-only copy of *supports*, which a sink holds as a ``ClassVar``."""
-        object.__setattr__(self, 'supports', MappingProxyType(dict(self.supports)))
-
-    def support(self, capability: Capability) -> Support:
-        """What this sink does with *capability* — ``absent`` where it says nothing."""
-        return self.supports.get(capability, 'absent')
-
     def missing(self, required: Collection[Capability]) -> list[Capability]:
-        """Those of *required* this sink cannot take at all, in [`CAPABILITIES`][] order."""
-        return [c for c in CAPABILITIES if c in required and self.support(c) == 'absent']
+        """Those of *required* this sink cannot take at all, in [`ALL_CAPABILITIES`][] order."""
+        return [c for c in ALL_CAPABILITIES if c in required and c not in self.supports]
 
     def excluded(self, required: Collection[Capability]) -> frozenset[Capability] | None:
-        """The first conjunction *required* contains that this sink refuses.
-
-        Returns:
-            The excluded set, or ``None``.
-        """
+        """The first set in ``excludes`` that *required* contains, or ``None``."""
         for combination in self.excludes:
             if combination <= set(required):
                 return combination
@@ -80,10 +62,9 @@ class Capabilities:
 def required(handoff: Handoff, /) -> frozenset[Capability]:
     """What the built model in *handoff* needs a sink to have.
 
-    Read off what was built rather than what the file declares: the build
-    drops a zero coefficient, so a square the data never prices is not a
-    quadratic term, and a declared integer variable with no column built asks
-    for no integrality. Convexity never appears.
+    Read off what was built rather than what the file declares: a square the
+    data prices at zero, an integer variable no column is built for, or a set
+    with no members asks for nothing. Convexity never appears.
     """
     needed: set[Capability] = set()
     if (handoff.cols['vtype'] != 'continuous').any():
