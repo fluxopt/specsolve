@@ -62,7 +62,7 @@ RUN = f'{RESERVED}run'
 
 #: The layout a result, a sweep and an archive write to disk. A change to
 #: any of them raises it. Compared, never branched on.
-LAYOUT = 2
+LAYOUT = 3
 FORMAT_FILE = 'format.json'
 
 
