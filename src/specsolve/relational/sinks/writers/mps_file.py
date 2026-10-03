@@ -15,7 +15,7 @@ import polars as pl
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES, ranges
-from specsolve.relational.sinks.writers.base import append_lines, chunk_key, digits, number
+from specsolve.relational.sinks.writers.text import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff

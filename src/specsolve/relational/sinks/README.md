@@ -12,7 +12,7 @@ takes the handoff and renders it to a file. Everything else follows.
 | answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
 ## Staying loaded
 
@@ -101,8 +101,8 @@ how it is drained. That is the point: `mps_file.py` is a module beside
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a
-family `base`, which holds no member's own answer: `solvers/base.py` is the
-lifecycle without a solver in it, `writers/base.py` the renderings without a
+family's one shared module, which holds no member's own answer: `solvers/base.py` is the
+lifecycle without a solver in it, `writers/text.py` the renderings without a
 format in them.
 
 ## Row-major, and the one format that is not
@@ -169,7 +169,7 @@ deliberately diverge.
 
 **A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
 holding a `Writer(write, capabilities)` — a function has nowhere to carry a
-fact about itself, so the pair travels together. Render through `base.py`
+fact about itself, so the pair travels together. Render through `text.py`
 rather than casting in the module — that is what makes two files describe one
 model to a reader holding both.
 

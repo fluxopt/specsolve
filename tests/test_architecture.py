@@ -399,7 +399,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 
     from specsolve.relational.sinks import SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers') - {'base'}
+    solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
         module = importlib.import_module(f'specsolve.relational.sinks.solvers.{name}')
@@ -417,7 +417,9 @@ def test_each_sink_family_is_its_directory_and_its_registry():
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
         assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
-    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
+    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {
+        FAMILY_SHARED['writers']
+    }
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
 
 
@@ -467,15 +469,20 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
     )
 
 
+#: The one module each sink family shares: the solver lifecycle, the text renderings.
+FAMILY_SHARED = {'solvers': 'base', 'writers': 'text'}
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    A leaf reads ``handoff.py``, its family's ``base``, ``capabilities``, and
-    its own dependency — nothing else in the family.
+    A leaf reads ``handoff.py``, its family's shared module
+    (``FAMILY_SHARED``), ``capabilities``, and its own dependency — nothing
+    else in the family.
     """
-    shareable = ('.handoff', '.base', '.capabilities')
     offenders = {}
-    for family in ('solvers', 'writers'):
+    for family, shared in FAMILY_SHARED.items():
+        shareable = ('.handoff', '.capabilities', f'.{family}.{shared}')
         for path in sorted((SINKS / family).glob('*.py')):
             reached = {
                 name
@@ -485,8 +492,8 @@ def test_no_sink_reaches_a_sibling():
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
     assert not offenders, (
-        f'sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family base '
-        f'and its own dependency; anything else shared belongs on one of those two'
+        f"sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family's shared "
+        f'module and its own dependency; anything else shared belongs on one of those two'
     )
 
 
