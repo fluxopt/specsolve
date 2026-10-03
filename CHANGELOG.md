@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): an archive writes every column as a type that parquet readers agree on ([#1835](https://github.com/fluxopt/specsolve/pull/1835))
+
 ## 0.5.0 (2026-10-03)
 
 The top level of `specsolve` now holds only what you call. What a call returns
