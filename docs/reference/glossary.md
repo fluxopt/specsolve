@@ -55,10 +55,11 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Answer**
 : What came back, whichever verb asked: a `Result` for one solve, a
-  [`Sweep`](#sweeps) for a sweep. `save` writes one as a directory —
+  [`Sweep`](#sweeps) for a sweep. `Result.save` writes one as a directory —
   `record.parquet` for how it terminated, then `primal/`, `dual/`,
   `activity/` and `expression/` — and an archive holds that directory as
-  `answer/`.
+  `answer/`. The archive of a sweep holds its answer at the same paths, one
+  file per name.
 
 **Archive**
 : A spec, the data it was solved with and what came back, written together as
@@ -114,8 +115,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The data
 
 **Index**
-: A dimension's labels in order, supplied under the dimension's own key in
-  `sources`. `shift` reads that order positionally
+: A dimension's labels in order, each once, supplied under the dimension's
+  own key in `sources`. `shift` reads that order positionally
   ([the data contract](data.md#where-coordinates-come-from)).
 
 **Coordinate**
@@ -201,10 +202,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   solved as one model, and its key is the [label](#the-verbs) its rows are
   prefixed with in every table the sweep hands back.
 
-**Sweep**
-: A sweep's answer: `Result`'s readers one dimension wider, the key column
-  first. `original_index=True` reads a table back over the sliced
-  dimension's own labels.
+**Sweep** · **per window**
+: What `solve_over` returns: `Result`'s readers, each returning the answer.
+  A windowed sweep answers over the labels of the dimension it sliced. Any
+  other sweep answers keyed by slice, the key column first. `per_window=True`
+  reads a windowed sweep one window at a time, keyed by where each window
+  started, lookahead rows included.
 
 **carry**
 : `carry={parameter: variable}` hands one slice's solution to the next as

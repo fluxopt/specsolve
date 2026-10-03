@@ -4,7 +4,7 @@ How to read many archives at once: which runs terminated how, what each cost,
 and which input changed between them. One archive is
 [archiving a solve](archiving.md); this is the directory they pile up in.
 
-## The three tables
+## The four tables
 
 An archive is a tree of parquet files, so a directory of them is a table per
 glob. Nothing is loaded and no schema is maintained. The same globs work in
@@ -17,13 +17,15 @@ import polars as pl
 answers = pl.read_parquet('runs/*/answer/record.parquet')
 metrics = pl.read_parquet('runs/*/answer/metrics.parquet')
 inputs = pl.read_parquet('runs/*/sources.parquet')
+catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
 | glob | one row per | says |
 |---|---|---|
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name, and on which solver and package versions |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
-| `sources.parquet` | source per archive | what each input's bytes digest to |
+| `sources.parquet` | source per archive | what each input's table digests to |
+| `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `specsolve_run` is the
 archive's own name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`.
@@ -53,8 +55,9 @@ needs. A warehouse question is a query over the parquet.
 ## The run on a value frame
 
 `answer/primal/p.parquet` holds the model's own dimension columns, `value`,
-and `specsolve_run`. A tool that combines files and drops their paths, such as
-Power BI's "Combine files", still gets the run:
+and `specsolve_run`. A sweep archive writes the same file. A tool that
+combines files and drops their paths, such as Power BI's "Combine files", still
+gets the run:
 
 ```python
 sps.solve('dispatch.yaml', sources, archive='runs/nightly-2026-09-10/')
@@ -65,12 +68,68 @@ pl.read_parquet('runs/*/answer/primal/p.parquet')
 # 0         solar      0.0    nightly-2026-09-10
 ```
 
+**A scenario sweep's frame carries its key, so a mix with solves does not
+glob.** `EachCoordinate('scenario')` writes a `scenario` column that a solve
+does not write. polars refuses the glob, as it refuses the record:
+
+```text
+SchemaError: extra column in file outside of expected schema: scenario
+```
+
+Union by name, as for the record. `scenario` is null on the rows of a solve:
+
+```python
+pl.concat([pl.read_parquet(file) for file in sorted(glob('runs/*/answer/primal/p.parquet'))], how='diagonal')
+```
+
 **The column is the archive's, not the model's.** The `specsolve_` prefix is
 reserved for the columns specsolve adds, and a spec that declares a name with
 that prefix, in any letter case, is refused. Both readers drop the column from
 the answer's frames, so a frame read back is the frame the solve returned.
 `load_archive` drops it from the sources too. The sources `scan_archive` gives
 back are the archive's own files, and reading one gives the column back.
+
+## What a file holds
+
+`catalog.parquet` says what each file in the archive holds, so a reader
+needs no `spec.yaml`. It has one row per dimension column of each file under
+`sources/` and `answer/`:
+
+| column | holds |
+|---|---|
+| `specsolve_run` | the archive's name, as on every other table it holds |
+| `path` | the file's path inside the archive, as `sources/load.parquet` or `answer/dual/load.parquet` |
+| `name` | the name the spec declares |
+| `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
+| `description` | the spec's `description:`, or null |
+| `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
+| `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
+| `dim` | the dimension, or null for a file over no dimension |
+| `dim_position` | the 0-based place of `column` in the order the spec declares the name's dimensions, which can differ from the order of the file's columns |
+
+**Join it on the path, not the name.** A constraint can have the name of a
+parameter, so `name = 'load'` can match the parameter's source and the
+constraint's dual. `path` and `dim_position` identify one row. In DuckDB:
+
+```sql
+select name, kind, description, column, dim
+from 'runs/base/catalog.parquet'
+where path = 'answer/primal/p.parquet'
+order by dim_position;
+```
+
+**The catalog lists the files the archive holds, and no other.** A name the
+spec declares has no row where it has no file: every answer of a solve that
+left no values, the duals of a model that has none, and a named expression the
+data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
+why.
+
+The catalog has no units, because the spec declares none. It has no row for
+`specsolve_run`, which every file carries, or for a dimension's
+`specsolve_position`. Neither holds labels. In a sweep
+archive, an answer's `path` is a directory that holds one file per slice, and
+each frame also carries the column of the sweep key, which `axis.json` names
+and the catalog does not list.
 
 ## Compare cases solved apart
 
@@ -120,10 +179,12 @@ inputs.sort('specsolve_run').with_columns(before=pl.col('digest').shift().over('
 )
 ```
 
-**The digest is of the source before the run is stamped on**, so one table
-archived under two names digests alike. A parquet path digests as the file you
-passed. Two archives of the same data written by different versions of polars
-can differ, and reading an archive does not verify the digests
+**The digest is of the table the solve read, before the run is stamped on**,
+so one table archived under two names digests alike. That table is the one
+under `sources/`, not the file you passed, and hashing the member does not give
+the row back, because the member also carries `specsolve_run`. Two archives of
+the same data written by different versions of polars can differ, and reading
+an archive does not verify the digests
 ([the rule](../reference/api.md#specsolve.SolveArchive)).
 
 ## See what the runs cost
@@ -155,13 +216,17 @@ order by build_seconds + solve_seconds desc;
 ```
 
 **A value frame carries `specsolve_run` too**, so a query across runs reads it
-as any other column:
+as any other column. `union_by_name` keeps the `scenario` of a sweep:
 
 ```sql
-select specsolve_run, snapshot, generator, value
-from read_parquet('runs/*/answer/primal/p.parquet')
+select *
+from read_parquet('runs/*/answer/primal/p.parquet', union_by_name = true)
 order by specsolve_run, snapshot;
 ```
+
+Without `union_by_name`, DuckDB takes the columns of the first file it reads.
+When that file is a solve, the rows of a scenario sweep lose `scenario` and no
+error occurs.
 
 Inside one archive every frame is tidy, so the values join to the sources they
 were solved from on the coordinates both carry:

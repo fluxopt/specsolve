@@ -19,7 +19,7 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from specsolve.api import Model, build, check, evaluate, load_result, scan_result, solve, write
+from specsolve.api import Model, build, check, evaluate, load_result, scan_result, solve, tidy, write
 from specsolve.archive import SolveArchive, SweepArchive, load_archive, scan_archive
 from specsolve.errors import (
     DataError,
@@ -61,6 +61,7 @@ __all__ = [
     'scan_sweep',
     'solve',
     'solve_over',
+    'tidy',
     'write',
 ]
 
