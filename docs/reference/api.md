@@ -87,21 +87,21 @@ it, what the build and its solves took, and what a slice of a sweep took.
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Record
+::: specsolve.relational.answer_layout.Record
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Provenance
+::: specsolve.relational.answer_layout.Provenance
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Metrics
+::: specsolve.relational.answer_layout.Metrics
     options:
       heading_level: 4
 
 ### Carry an answer
 
-::: specsolve.SolveArchive
+::: specsolve.ResultArchive
     options:
       heading_level: 4
 

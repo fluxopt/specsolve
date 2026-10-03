@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import SENSE_CODES, solver_vector
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.handoff import SENSE_CODES
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -48,18 +48,6 @@ _CONDITION_OF_HIGHS_STATUS = {
 }
 
 
-def build_highs(
-    handoff: Handoff,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Highs:
-    """Load the model into a `highspy.Highs` and stop there: the seam `bench/` measures.
-
-    Returns:
-        The [`Highs`][] holding the model, at ``.handle``.
-    """
-    return Highs(handoff, None, solver_options)
-
-
 def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated `highspy.Highs`.
 
@@ -74,7 +62,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
             'HiGHS has no quadratic-constraint concept at all — no entry point takes one — and '
             f'this model has {handoff.row_count - handoff.linear_row_count} such rows. Solving through '
             'sps.solve() '
-            'refuses this earlier and names the sinks that do take it; reaching build_highs '
+            'refuses this earlier and names the sinks that do take it; constructing Highs '
             'directly skips that, and loading the rows without their quadratic part would be a '
             'different model that solves.'
         )
@@ -164,10 +152,10 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 
 
 class Highs(Solver):
-    """HiGHS, holding one model.
+    """HiGHS, holding one model at ``.handle``, a `highspy.Highs`.
 
-    A re-solve changes bounds, costs and right-hand sides on the held model and
-    starts from the basis the last solve ended on.
+    A re-solve pushes bounds, costs and right-hand sides onto the held model
+    and starts from the basis the last solve ended on.
     """
 
     #: The loaded model. ``close`` drops it.
@@ -193,10 +181,7 @@ class Highs(Solver):
     #: No SOS concept, and a Hessian beside integrality is refused; the pair is
     #: probed in ``test_sink_capability_probes.py``.
     capabilities = Capabilities(
-        supports={
-            'integrality': 'native',
-            'quadratic_objective': 'native',
-        },
+        supports=frozenset({'integrality', 'quadratic_objective'}),
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
     )
 
@@ -263,11 +248,7 @@ class Highs(Solver):
             _took(self._handle.setSolution(solution), 'the carried incumbent')
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve and read the answer back.
-
-        A ``kError`` from ``run()`` leaves the model status unset, so on a
-        quadratic model it is refused explicitly.
-        """
+        """A ``kError`` from ``run()`` leaves the status unset, so on a quadratic model it is refused explicitly."""
         import highspy
 
         if self._handle.run() == highspy.HighsStatus.kError and handoff.quad.height:
@@ -285,9 +266,7 @@ class Highs(Solver):
             )
         status = _status_of(self._handle)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
 
         objective = self._handle.getInfo().objective_function_value + handoff.objective_constant
         solution = self._handle.getSolution()

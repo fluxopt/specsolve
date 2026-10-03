@@ -262,7 +262,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``lanes.lowered`` gate — and refuses it before linopy is asked,
+    model — one ``inputs.lowered`` gate — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 
@@ -282,13 +282,13 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
-    """The backstop for the seam `bench/` uses: `build_highs` is past the
+    """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
-    from specsolve.relational.sinks.solvers.highs import build_highs
+    from specsolve.relational.sinks.solvers.highs import Highs
 
     with sps.build(SPEC, SOURCES) as model, pytest.raises(SpecsolveError, match='no quadratic-constraint concept'):
-        build_highs(model._engine._model.handoff)
+        Highs(model._engine._model.handoff)
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():

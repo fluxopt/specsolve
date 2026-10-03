@@ -1,4 +1,4 @@
-"""Re-indexing along one dimension's own order: ``shift`` and ``sum_back``.
+"""Shifts along one dimension's own order: ``shift``, and ``sum_back``, a sum of shifts.
 
 ``shift`` is a pointwise remap of the dimension through its ordinal and
 ``sum_back`` a one-to-many one. They share the ordinal arithmetic and the
@@ -13,15 +13,16 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.relational.engines.polars.fragments import Presence, TermFragment, refuse_a_fragment_without_the_dims
-from specsolve.relational.engines.polars.relations import GROUP_RANK, GROUP_SIZE, Grouping
+from specsolve.relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
+from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
+from specsolve.relational.engine.scope import join_on
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from mathspec import program
 
-    from specsolve.relational.engines.polars.scope import Scope
+    from specsolve.relational.engine.scope import Scope
 
 
 #: Scratch columns.
@@ -47,10 +48,7 @@ class _Order:
 
     @classmethod
     def of(cls, scope: Scope, dimension: str, partition: program.Partition | None) -> _Order:
-        """Rank *dimension* inside each group of *partition*, or along the whole of it.
-
-        A coordinate the partition places nowhere is not in the table and joins to nothing.
-        """
+        """Rank *dimension* inside each group of *partition*, or along the whole of it."""
         grouping = Grouping.whole(scope.data, dimension) if partition is None else Grouping.of(scope.data, partition)
         incoming = grouping.table.select(
             pl.col('val').alias(dimension), pl.col(GROUP_RANK).alias(_ORD_IN), *grouping.key, pl.col(GROUP_SIZE)
@@ -72,7 +70,7 @@ class _Order:
         """*source* with the walked dimension moved by *moved*.
 
         *dims* is the caller's, since a presence frame need not carry the
-        fragment's. *prepared* adds the operator's extra join between the two keyed sides.
+        piece's. *prepared* adds the operator's extra join between the two keyed sides.
         """
         dimension = self.grouping.dimension
         kept = [d for d in dims if d != dimension]
@@ -89,22 +87,21 @@ def translate_rows(
 ) -> pl.LazyFrame:
     """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
-    The predicate form of [`translate_fragment`][]: a missing row already reads as false.
+    The predicate form of [`translate_piece`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
     return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
 
 
-def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context: str) -> TermFragment:
+def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> Piece:
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
-    The lag table is built to the widest window the data asks for; a named
-    width keeps only the lags its entity reaches. A window vacates nothing, so
-    an operand with no presence gains one only under a partition, for the
-    coordinates in no group.
+    The lag table is built to the widest window the data asks for. A window
+    vacates nothing, so an operand with no presence gains one only under a
+    partition, for the coordinates in no group.
     """
     if s.along not in p.dims:
-        refuse_a_fragment_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
+        refuse_a_piece_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
     order = _Order.of(scope, s.along, s.partition)
 
     width_name = s.width if isinstance(s.width, str) else None
@@ -141,7 +138,7 @@ def window_fragment(scope: Scope, p: TermFragment, s: program.WindowSum, context
     return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, context: str) -> TermFragment:
+def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) -> Piece:
     """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
     Every fill over a constant is written, ``0`` included, so the slot has a
@@ -149,7 +146,7 @@ def translate_fragment(scope: Scope, p: TermFragment, s: program.Translate, cont
     term, and lowering refuses every nonzero fill over a variable.
     """
     if s.along not in p.dims:
-        refuse_a_fragment_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
+        refuse_a_piece_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
     others = [d for d in p.dims if d != s.along]
     order = _Order.of(scope, s.along, s.partition)
     edge = _Edge.of(scope, order, s)
@@ -242,7 +239,7 @@ class _Edge:
         if self.offsets is not None:
             offsets, keys = self.offsets
             on = [key for key in keys if key in grouping.key]
-            table = table.join(offsets, on=on, how='inner') if on else table.join(offsets, how='cross')
+            table = join_on(table, offsets, on, 'inner')
             offset = pl.col(_OFFSET)
         else:
             assert not isinstance(s.offset, str)
@@ -255,11 +252,7 @@ class _Edge:
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
-        edge = self.coordinates(vacated=True)
-        for d in others:
-            if d in self.keys:
-                continue
-            edge = edge.join(scope.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+        edge = scope.spread(self.coordinates(vacated=True), [d for d in others if d not in self.keys])
         return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, self.shift.along, 'cval')
 
     def vacated_of(self, scope: Scope, presence: Presence, dims: tuple[str, ...]) -> pl.LazyFrame:
@@ -277,7 +270,7 @@ class _Edge:
         source = presence.frame if all(d in have for d in others) else scope.widen(presence.frame, have, dims)
         keys = [d for d in self.keys if d in others]
         rows = source.select(*others).unique()
-        return rows.join(edge, on=keys, how='inner') if keys else rows.join(edge, how='cross')
+        return join_on(rows, edge, keys, 'inner')
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:

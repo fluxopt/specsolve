@@ -26,8 +26,8 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from specsolve.lanes import lowered
-from specsolve.relational.engines.polars.engine import PolarsEngine
+from specsolve.inputs import lowered
+from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file
 from tests.oracle import linopy, specsolve_linopy, xr
@@ -35,7 +35,7 @@ from tests.oracle import linopy, specsolve_linopy, xr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve.relational.engines.polars.engine import Result
+    from specsolve.relational.engine.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9
@@ -62,7 +62,7 @@ class Agreement:
     result: Result
     """The relational solution; live until the ``with`` block exits."""
 
-    engine: PolarsEngine
+    engine: Engine
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""
 
@@ -97,7 +97,7 @@ def differential(
             raise NoFiniteAnswerError('the linopy oracle is infeasible or unbounded — fix the data, not the tolerance')
 
         program = lowered(model)
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(program, tidy_sources(program, dict(sources)))
             result = engine.solve()
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'
@@ -125,7 +125,7 @@ def at_a_point(
 
     No solver runs. Each variable takes a seeded value at every coordinate it
     exists at, the linopy lane reads it as ``.solution`` and the relational
-    lane through ``Model.evaluator``, so ``read(expression)`` values the
+    lane through ``Model._evaluator``, so ``read(expression)`` values the
     expression on both and returns the relational frame once the two are the
     same frame: the same coordinates, the same values to ``RTOL``.
 
@@ -138,7 +138,7 @@ def at_a_point(
     m = specsolve_linopy.build(model, dict(sources))
     point = _hold(m)
     with sps.build(model, dict(sources)) as built:
-        relational = built.evaluator(point, None, 'a chosen point has no duals')
+        relational = built._evaluator(point, None, 'a chosen point has no duals')
 
         def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
             ours = relational(expression)

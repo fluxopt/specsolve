@@ -11,17 +11,28 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.relational.engines.polars.fragments import join_on
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from specsolve.relational.engines.polars.attaching import AttachedSources
-    from specsolve.relational.engines.polars.fragments import TermFragment
-    from specsolve.relational.engines.polars.labels import Labelled
+    from specsolve.relational.engine.attaching import AttachedSources
+    from specsolve.relational.engine.labels import Labelled
+    from specsolve.relational.engine.pieces import Piece
+
+
+def join_on(
+    left: pl.LazyFrame,
+    right: pl.LazyFrame,
+    dims: Sequence[str],
+    how: JoinStrategy,
+    maintain_order: MaintainOrderJoin | None = None,
+) -> pl.LazyFrame:
+    """``left.join(right)`` keyed by *dims* — a cross join where there are none."""
+    if dims:
+        return left.join(right, on=list(dims), how=how, maintain_order=maintain_order)
+    return left.join(right, how='cross', maintain_order=maintain_order)
 
 
 #: Carries the single row of the empty coordinate product, since polars cannot
@@ -112,15 +123,15 @@ class Scope:
         """
         return self.spread(presence, [d for d in want if d not in have]).select(*want)
 
-    def spread(self, frame: pl.LazyFrame, dims: Sequence[str]) -> pl.LazyFrame:
+    def spread(self, frame: pl.LazyFrame, dims: Iterable[str]) -> pl.LazyFrame:
         """*frame* repeated at every label of each of *dims*, which it does not carry."""
         for d in dims:
             frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return frame
 
-    def spanned(self, fragments: Sequence[TermFragment]) -> tuple[str, ...]:
-        """The dims *fragments* carry between them, in declaration order."""
-        return self.in_declaration_order(d for p in fragments for d in p.dims)
+    def spanned(self, pieces: Sequence[Piece]) -> tuple[str, ...]:
+        """The dims *pieces* carry between them, in declaration order."""
+        return self.in_declaration_order(d for p in pieces for d in p.dims)
 
     def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.

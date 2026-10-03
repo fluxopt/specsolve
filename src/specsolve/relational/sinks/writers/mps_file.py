@@ -16,7 +16,7 @@ import polars as pl
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES, ranges
-from specsolve.relational.sinks.writers.base import NUMBERED, Names, chunk_key, digits, number, sink
+from specsolve.relational.sinks.writers.text import NUMBERED, Names, append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 #: What this writer emits. It writes no quadratic extension section, so a
 #: quadratic model is refused rather than written without its quadratic part.
-MPS_FILE_CAPABILITIES = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
+MPS_FILE_CAPABILITIES = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
 
 #: The MPS spelling of each [`SENSE_CODES`][] comparison; a new sense raises here at import.
@@ -48,34 +48,31 @@ def write_mps_file(handoff: Handoff, path: str | Path, names: Names = NUMBERED) 
             f.write(b'OBJSENSE\n    MAX\n')
 
         f.write(b'ROWS\n N  obj\n')
-        sink(_row_lines(handoff, names), f)
+        append_lines(_row_lines(handoff, names), f)
 
         f.write(b'COLUMNS\n')
         width = handoff.matrix.height / max(1, handoff.column_count)
         for lo, hi in ranges(handoff.column_count, EMIT_BUDGET, width):
             owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
-            sink(_column_lines(handoff, lo, hi, owned, names), f)
+            append_lines(_column_lines(handoff, lo, hi, owned, names), f)
 
         f.write(b'RHS\n')
         if handoff.objective_constant:
             f.write(f'    rhs obj {-handoff.objective_constant!r}\n'.encode())
-        sink(_rhs_lines(handoff, names), f)
+        append_lines(_rhs_lines(handoff, names), f)
 
         f.write(b'BOUNDS\n')
         _write_bounds(handoff, f, names)
 
         if handoff.sos.height:
             f.write(b'SOS\n')
-            sink(_set_lines(handoff, names), f)
+            append_lines(_set_lines(handoff, names), f)
 
         f.write(b'ENDATA\n')
 
 
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
-    """The matrix in ``(col, row)`` order, and where each column's entries begin.
-
-    The offsets let a column range slice the matrix rather than filter it once per chunk.
-    """
+    """The matrix in ``(col, row)`` order, and the offsets a column range slices it by."""
     entries = handoff.matrix_block(0, handoff.row_count).sort('col', 'row')
     counts = np.bincount(entries['col'].to_numpy(), minlength=handoff.column_count)
     return entries, np.concatenate(([0], np.cumsum(counts)))
@@ -151,7 +148,7 @@ def _write_bounds(handoff: Handoff, f: IO[bytes], names: Names) -> None:
     """
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
         name = pl.concat_str(pl.lit(' bnd '), names.column(pl.col('col')))
-        sink(
+        append_lines(
             handoff.cols.lazy()
             .with_row_index('col')
             .select(

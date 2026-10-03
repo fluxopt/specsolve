@@ -1,10 +1,10 @@
 """Polars engine: build the model frames, hand them to a sink, read the answer back.
 
 The engine owns the lifecycle — a build, its solver, the counters and clocks
-[`PolarsEngine.diagnostics`][] reports — and none of the three questions it
-asks on the way: what the data is ([`attaching`][specsolve.relational.engines.polars.attaching]),
-what each declaration contributes ([`assembly`][specsolve.relational.engines.polars.assembly]),
-how a row or a solve reads back ([`readback`][specsolve.relational.engines.polars.readback]).
+[`Engine.diagnostics`][] reports — and none of the three questions it
+asks on the way: what the data is ([`attaching`][specsolve.relational.engine.attaching]),
+what each declaration contributes ([`assembly`][specsolve.relational.engine.assembly]),
+how a row or a solve reads back ([`readback`][specsolve.relational.engine.readback]).
 The lane is described in docs/about/architecture.md.
 """
 
@@ -19,19 +19,19 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
-from specsolve.relational.engines.polars import readback
-from specsolve.relational.engines.polars.assembly import (
+from specsolve.relational.engine import readback
+from specsolve.relational.engine.assembly import (
     Assembly,
     BuiltModel,
     Measured,
     declares_quadratic,
     short_parameters,
 )
-from specsolve.relational.engines.polars.attaching import attach
-from specsolve.relational.engines.polars.compiler import PolarsCompiler, Solution
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.attaching import attach
+from specsolve.relational.engine.compiler import Compiler, Solution
+from specsolve.relational.engine.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.writers.base import NUMBERED
+from specsolve.relational.sinks.writers.text import NUMBERED
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -51,7 +51,7 @@ def _no_built_model(doing: str) -> str:
     )
 
 
-class PolarsEngine:
+class Engine:
     """Build a ``Program`` into polars frames, then sink it."""
 
     def __init__(self) -> None:
@@ -319,7 +319,7 @@ class PolarsEngine:
             return {}, None
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
-        compiler = PolarsCompiler(Scope(model.program, model.attached, dict(model.variables)), solution)
+        compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
         return readback.readers(compiler, model.program.expressions, lower)
 
     def reconstruct(
@@ -369,7 +369,7 @@ class PolarsEngine:
             self._solver = None
         self._built = None
 
-    def __enter__(self) -> PolarsEngine:
+    def __enter__(self) -> Engine:
         return self
 
     def __exit__(self, *exc: object) -> Literal[False]:
@@ -398,21 +398,19 @@ def expression_readers(
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
-    A spec that declares no variables is a calculation, so every expression
-    has a value with no solver.
-
     Args:
-        program: A lowered program with no variables — a calculation.
-        sources: Tidied sources, as [`tidy_sources`][specsolve.sources.tidy_sources] produces.
+        program: A lowered program with no variables — a calculation, so every
+            expression has a value with no solver.
+        sources: Tidied sources, as
+            [`tidy_sources`][specsolve.sources.tidy_sources] produces.
         lower: How an ad-hoc expression becomes a plan node in the model's
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
         One deferred reader per declared named expression, and the ad-hoc
-        evaluator (or ``None``); calling either compiles and evaluates against
-        the attached data.
+        evaluator; either compiles on call.
     """
-    compiler = PolarsCompiler(Scope(program, attach(program, sources), {}))
+    compiler = Compiler(Scope(program, attach(program, sources), {}))
     return readback.readers(compiler, program.expressions, lower)
 
 

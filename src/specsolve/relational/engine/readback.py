@@ -7,22 +7,22 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import SpecsolveError, reported_divisor_message, unknown_name_message
-from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars import coverage, labels
-from specsolve.relational.engines.polars.fragments import absence_restrictions
+from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.relational.collect import collect_engine
+from specsolve.relational.engine import coverage, labels
+from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
-from specsolve.relational.sinks.writers.base import Names
+from specsolve.relational.sinks.writers.text import Names
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve.relational.engines.polars.assembly import BuiltModel
-    from specsolve.relational.engines.polars.attaching import AttachedSources
-    from specsolve.relational.engines.polars.compiler import PolarsCompiler
+    from specsolve.relational.engine.assembly import BuiltModel
+    from specsolve.relational.engine.attaching import AttachedSources
+    from specsolve.relational.engine.compiler import Compiler
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
-SOLUTION = '__solution value__'
+_SOLUTION = '__solution value__'
 _EXPRESSION_ROW = '__expression row__'
 _LABEL_ORDER = '__label order__'
 
@@ -165,7 +165,7 @@ def _declared_names(
         cleaned = [pl.col(d).cast(pl.String).str.replace_all(_UNSAFE_IN_A_NAME, '_') for d in dims]
         if cleaned:
             spelled = pl.concat_str(pl.lit(f'{name}('), pl.concat_str(cleaned, separator=','), pl.lit(')'))
-            frame = held.frame.select(*dims, spelled.alias('#name')).collect(engine=polars_engine())
+            frame = held.frame.select(*dims, spelled.alias('#name')).collect(engine=collect_engine())
         else:
             frame = pl.DataFrame({'#name': [f'{name}()'] * held.height}, schema={'#name': pl.String})
         _refuse_a_shared_name(frame, name, dims, kind)
@@ -193,17 +193,19 @@ def laid_out(
     """One declaration's coordinates in label order, beside its share of *values*.
 
     The share is a column, not a concatenated frame, so a mismatched length
-    raises instead of padding with nulls. Dim columns leave as ``String``,
-    because a caller joins them against their own data and polars refuses
+    raises instead of padding with nulls. Dim columns leave as ``String``
+    ([`_as_strings`][]).
+    """
+    return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
+
+
+def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
+    """*frame* with those of *dims* that attaching encoded as ``Enum`` cast back to ``String``.
+
+    A caller joins a dim column against its own data, and polars refuses
     ``Enum`` against ``String``.
     """
-    labelled = held.frame.select(*dims).with_columns(held.share(values))
-    return labelled.with_columns(pl.col(d).cast(pl.String) for d in string_dims(attached, dims))
-
-
-def string_dims(attached: AttachedSources, dims: Sequence[str]) -> list[str]:
-    """Those of *dims* attaching encoded as ``Enum``."""
-    return [d for d in dims if attached.is_enum_encoded(d)]
+    return frame.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
 
 
 def reordered(
@@ -225,7 +227,7 @@ def reordered(
     pieces = [
         _aligned(attached, name, registry[name], declared[name].dims, frames.get(name)) for _, name in in_start_order
     ]
-    return pl.concat(pieces) if pieces else pl.Series(SOLUTION, [], dtype=pl.Float64)
+    return pl.concat(pieces) if pieces else pl.Series(_SOLUTION, [], dtype=pl.Float64)
 
 
 def _aligned(
@@ -237,31 +239,26 @@ def _aligned(
     missing *stored* is no error there.
     """
     if held.height == 0:
-        return pl.Series(SOLUTION, [], dtype=pl.Float64)
+        return pl.Series(_SOLUTION, [], dtype=pl.Float64)
     if stored is None:
         raise SpecsolveError(
             f"the saved answer holds no '{name}' frame, but this model builds it, so it is not this model's "
             f'answer. Re-solve rather than read.'
         )
     if not dims:
-        return stored['value'].rename(SOLUTION)
-    order = (
-        held.frame.select(*dims)
-        .collect()
-        .with_columns(pl.col(d).cast(pl.String) for d in string_dims(attached, dims))
-        .with_row_index(_LABEL_ORDER)
-    )
+        return stored['value'].rename(_SOLUTION)
+    order = _as_strings(held.frame.select(*dims).collect(), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
     if joined['value'].null_count():
         raise SpecsolveError(
             f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
-    return joined['value'].rename(SOLUTION)
+    return joined['value'].rename(_SOLUTION)
 
 
 def readers(
-    compiler: PolarsCompiler,
+    compiler: Compiler,
     named: Mapping[str, program.ExpressionDeclaration],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
@@ -285,7 +282,7 @@ def readers(
     return declared, evaluate
 
 
-def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompiler) -> pl.DataFrame:
+def expression_frame(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:
     """Named expression *expr* evaluated at the solve *compiler* holds — ``(dims…, value)``.
 
     It answers as a constraint over the same expression would: a coordinate a
@@ -306,13 +303,24 @@ def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompil
         [p.frame for p in compiled.consts],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
-        reported_divisor_message,
+        _reported_divisor_message,
     )
 
-    fragments = compiled.consts
-    dims = compiler.scope.spanned(fragments)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(fragments)).lazy()
-    added = compiler.added(fragments, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=polars_engine())
+    pieces = compiled.consts
+    dims = compiler.scope.spanned(pieces)
+    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
+    added = compiler.summed_onto(pieces, carrier, absent='zero')
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=collect_engine())
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
-    return ordered.with_columns(pl.col(d).cast(pl.String) for d in string_dims(compiler.scope.data, dims))
+    return _as_strings(ordered, compiler.scope.data, dims)
+
+
+def _reported_divisor_message(name: str, missing: int) -> str:
+    """The message for a divisor parameter a reported expression reads short of a row."""
+    return (
+        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
+        f'the expression divides at. A missing parameter row is not absence, so the quotient '
+        f'is not dropped there, and there is no number to divide by.\n'
+        f'  Supply the missing rows.\n'
+        f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
+    )

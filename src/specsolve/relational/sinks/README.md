@@ -10,9 +10,9 @@ takes the handoff and renders it to a file. Everything else follows.
 | | solvers/ | writers/ |
 |---|---|---|
 | answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
-| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `tables.lp` |
+| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
 ## Staying loaded
 
@@ -31,11 +31,11 @@ that evidence at the load; a subclass owns **the hand-off**:
 | | |
 |---|---|
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(tables)` | `_run`, plus the refusal of a vector that does not span the model |
+| `Solver.run(handoff)` | `_run`, plus the refusal of a vector that does not span the model |
 | `Solver.warm(ws)` | `_warm`, plus the refusal of a `WarmStart` from another solver or another shape |
-| `_load(tables, batch_rows)` | hand the model over and hold what reads it back |
-| `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
-| `_run(tables)` | solve what is loaded, and read it back |
+| `_load(handoff, batch_rows)` | hand the model over and hold what reads it back |
+| `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
+| `_run(handoff)` | solve what is loaded, and read it back |
 | `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
 | `_warm(ws)` | set it on the loaded model, spans already checked |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
@@ -60,7 +60,7 @@ that starts from nothing, and that trade goes either way by model. Splitting
 them is what lets a caller take the first without the second.
 
 A **genuine rebuild** gets no carry at all: the new session holds a fresh model
-and starts cold, and `PolarsEngine.solve(keep='nothing')` is how a caller asks
+and starts cold, and `Engine.solve(keep='nothing')` is how a caller asks
 for that on purpose — the held solver is discarded, so cold is structural
 rather than scrubbed.
 
@@ -97,13 +97,13 @@ the frames because a constant has no column to attach to.
 
 A sink never learns how the handoff was filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
-`lp_file.py`, not another method on `PolarsEngine`.
+`lp_file.py`, not another method on `Engine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a
-family `base`, which holds no member's own answer: `solvers/base.py` is the
-lifecycle without a solver in it, `writers/base.py` the three renderings
-without a format in them.
+family's one shared module, which holds no member's own answer: `solvers/base.py` is the
+lifecycle without a solver in it, `writers/text.py` the renderings without a
+format in them.
 
 ## Row-major, and the one format that is not
 
@@ -124,8 +124,8 @@ at all. A sink **declares** whether it takes one, in the descriptor *what a
 sink can ingest* below gives it —
 
 ```python
-'sos': 'native'  # gurobi: addSOS, no binaries and no bound to have
-                 # highs: absent, and the refusal names the way past it
+supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound to have
+# highs: left out, and the refusal names the way past it
 ```
 
 — and `sinks.refusal(handoff, name)` answers before the load, off the model
@@ -158,9 +158,9 @@ places it bites are worth naming because neither is a choice:
 ## Adding one
 
 **A solver:** `solvers/<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — plus the
-`build_<name>` seam `bench/` measures, and one line in `SOLVERS` holding the
-class.
+subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
+`SOLVERS` holding the class. Constructing it loads the model and stops there,
+which is what `bench/` measures.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it
@@ -169,7 +169,7 @@ deliberately diverge.
 
 **A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
 holding a `Writer(write, capabilities)` — a function has nowhere to carry a
-fact about itself, so the pair travels together. Render through `base.py`
+fact about itself, so the pair travels together. Render through `text.py`
 rather than casting in the module — that is what makes two files describe one
 model to a reader holding both.
 

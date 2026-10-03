@@ -180,7 +180,7 @@ def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(mon
     """The refusal path itself, which no shipped sink reaches, through a stub."""
 
     class Stub:
-        capabilities = Capabilities(supports={})
+        capabilities = Capabilities(supports=frozenset({}))
 
     monkeypatch.setitem(SOLVERS, 'stub', Stub)
     message = sinks.refusal(_handoff(WITH_A_SET), 'stub')
@@ -195,7 +195,7 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
 
     class Stub:
         capabilities = Capabilities(
-            supports={'integrality': 'native', 'sos': 'native'},
+            supports=frozenset({'integrality', 'sos'}),
             excludes=(frozenset({'sos', 'integrality'}),),
         )
 

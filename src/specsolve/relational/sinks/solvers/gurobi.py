@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import solver_vector, spelled_senses
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -53,25 +52,13 @@ _LINOPY_DIVERGENCES = {
 }
 
 
-def build_gurobi(
-    handoff: Handoff,
-    batch_rows: int | None = None,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Gurobi:
-    """Load the model into a `gurobipy.Model` and stop there.
+class Gurobi(Solver):
+    """Gurobi, holding one model at ``.handle``, a `gurobipy.Model`.
 
     ``batch_rows`` is a nonzero budget that splits the matrix across calls;
-    ``None`` is one call.
-
-    Returns:
-        The [`Gurobi`][] holding the model, at ``.handle``. ``close``, or
-        leaving a ``with``, releases both the model and its environment.
+    ``None`` is one call. ``close``, or leaving a ``with``, releases the model
+    and its environment.
     """
-    return Gurobi(handoff, batch_rows, solver_options)
-
-
-class Gurobi(Solver):
-    """Gurobi, holding one model: [`Solver`][]'s member for the opt-in sink."""
 
     #: The loaded model, the handles that read it back, and the environment.
     #: ``close`` drops them.
@@ -108,13 +95,9 @@ class Gurobi(Solver):
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
     capabilities = Capabilities(
-        supports={
-            'integrality': 'native',
-            'sos': 'native',
-            'quadratic_objective': 'native',
-            'nonconvex_quadratic_objective': 'native',
-            'quadratic_constraint': 'native',
-        }
+        supports=frozenset(
+            {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+        )
     )
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
@@ -157,11 +140,7 @@ class Gurobi(Solver):
         self._m.update()
 
     def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, or its incumbent where Gurobi holds none.
-
-        Gurobi refuses ``VBasis`` where no basis exists, so the refusal routes
-        to the incumbent, or to ``None`` where there is none.
-        """
+        """The basis the last solve left, else its incumbent, else ``None``; Gurobi refuses ``VBasis`` without one."""
         import numpy as np
 
         gurobipy = _gurobipy()
@@ -198,11 +177,7 @@ class Gurobi(Solver):
             at += block.shape[0]
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded and read it back.
-
-        The one ``GurobiError`` translated is a caller's ``QCPDual`` on a
-        nonconvex quadratic constraint.
-        """
+        """The one ``GurobiError`` translated is a caller's ``QCPDual`` on a nonconvex quadratic constraint."""
         gurobipy = _gurobipy()
         try:
             self._m.optimize()
@@ -217,9 +192,7 @@ class Gurobi(Solver):
             ) from None
         status = _status_of(self._m)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
         return SolveAnswer(
             status,
             self._m.ObjVal,

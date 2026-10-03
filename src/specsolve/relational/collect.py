@@ -11,11 +11,11 @@ from typing import Literal
 
 import polars as pl
 
-__all__ = ['polars_engine']
+__all__ = ['collect_engine']
 
 
 @cache
-def polars_engine() -> Literal['streaming', 'in-memory']:
+def collect_engine() -> Literal['streaming', 'in-memory']:
     """The engine every ``collect`` names: streaming where this polars has it, in-memory otherwise."""
     try:
         pl.LazyFrame({'probe': [0]}).collect(engine='streaming')

@@ -14,9 +14,9 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError, position_out_of_range_message, short_groups_message
-from specsolve.relational.engines.polars.fragments import join_on
-from specsolve.relational.engines.polars.reindex import translate_rows
-from specsolve.relational.engines.polars.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
+from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
+from specsolve.relational.engine.scope import join_on
+from specsolve.relational.engine.shifts import translate_rows
 
 if TYPE_CHECKING:
     import datetime
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from polars._typing import JoinStrategy
 
-    from specsolve.relational.engines.polars.scope import Scope
+    from specsolve.relational.engine.scope import Scope
 
 
 class Carrier:
@@ -236,15 +236,15 @@ def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
     """
     # in-function: the compiler imports this module
-    from specsolve.relational.engines.polars.compiler import PolarsCompiler
+    from specsolve.relational.engine.compiler import Compiler
 
-    compiler = PolarsCompiler(scope)
+    compiler = Compiler(scope)
     compiled = compiler.expression(side, 'a where comparing expressions')
     assert not (compiled.terms or compiled.quads), (
         'a where compares expressions the language keeps every variable out of'
     )
     dims = scope.spanned(compiled.consts)
-    added = compiler.added(compiled.consts, masked(scope, dims, None), absent='spreads')
+    added = compiler.summed_onto(compiled.consts, masked(scope, dims, None), absent='spreads')
     return added.select(*dims, 'cval'), dims
 
 

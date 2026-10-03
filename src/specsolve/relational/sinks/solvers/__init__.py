@@ -2,7 +2,7 @@
 
 One module per solver, named for it. Each defines a
 [`Solver`][specsolve.relational.sinks.solvers.base.Solver] subclass of that name,
-plus ``build_<name>``, the load-only seam `bench/` measures.
+whose constructor loads the model and stops there.
 """
 
 from __future__ import annotations

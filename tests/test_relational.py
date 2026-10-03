@@ -38,9 +38,9 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.engine import PolarsEngine
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.engine import Engine
+from specsolve.relational.engine.scope import Scope
 from specsolve.relational.sinks import SOLVERS
 from specsolve.relational.sinks.handoff import ranges
 from specsolve.relational.sinks.solvers.highs import Highs
@@ -262,7 +262,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `PolarsEngine.build` takes a *program* and the frames
+    Below the front door: `Engine.build` takes a *program* and the frames
     a built model reads, which is the same shape `tidy_sources` hands over — an
     index of labels, and each map as its own two-column relation.
     """
@@ -294,7 +294,7 @@ class TestTwoModelsRoundTrip:
         gens, load = dispatch_data
         oracle = dispatch_linopy_objective(gens, load)
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
 
             result = engine.solve()
@@ -319,7 +319,7 @@ class TestTwoModelsRoundTrip:
         oracle = transport_linopy_objective(gens, lines, load)
         assert np.isfinite(oracle), 'oracle model must be feasible'
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(transport_program(), tidy_sources(transport_program(), transport_sources(gens, lines, load)))
 
             result = engine.solve()
@@ -629,7 +629,7 @@ class TestTheLabelSpace:
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
-            with PolarsEngine() as engine:
+            with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
@@ -833,7 +833,7 @@ class TestTheLabelSpace:
 
 def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
-    with PolarsEngine() as engine:
+    with Engine() as engine:
         engine.build(program, tidy_sources(program, sources))
         obj = engine._model.handoff.obj
         return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
@@ -923,7 +923,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated(self):
         """The case the skipped aggregate must not break.
 
-        `x + 2 * x` is two term fragments landing on one solver column, so the
+        `x + 2 * x` is two term pieces landing on one solver column, so the
         assembly has to add them. Its coefficient must be 3, and the row must hold
         one entry for that column rather than two — a solver handed the same
         column twice in one row is entitled to reject the model.
@@ -932,7 +932,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
-            assert matrix.height == 2, 'one entry per row, not one per fragment'
+            assert matrix.height == 2, 'one entry per row, not one per piece'
             assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
             result = model.solve()
         assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
@@ -961,7 +961,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone(self, expression, height, coeff):
         """Both outcomes of the terminal aggregate, on models differing only in overlap.
 
-        Two fragments over disjoint variables repeat nothing and must come out
+        Two pieces over disjoint variables repeat nothing and must come out
         untouched; two over the same variable land on one cell and must be summed.
         A matrix holding the same `(row, col)` twice is not a slower model, it is
         one the sinks disagree about.
@@ -991,7 +991,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(self, ends):
         """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
-        Both fragments carry `f`, so counting variables says the aggregate is
+        Both pieces carry `f`, so counting variables says the aggregate is
         reachable and every nonzero in the model gets sorted to find out. Which
         labels they share is decided by the *line* table — two rows here, forty at
         the `l` rung, against 12.6M nonzeros — so it is asked there.
@@ -1006,7 +1006,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             program = Spec(**spec).program
             built = model._engine._model
-            compiler = PolarsCompiler(Scope(built.program, built.attached, built.variables))
+            compiler = Compiler(Scope(built.program, built.attached, built.variables))
             terms = compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1017,8 +1017,8 @@ class TestWhatReachesTheSolverAsAnEntry:
     @pytest.mark.parametrize(
         ('expression', 'expected'),
         [
-            pytest.param('sum(p * cost)', {0: 2.0, 1: 3.0}, id='one-fragment-one-row-per-column'),
-            pytest.param('sum(p * cost) + sum(p * cost)', {0: 4.0, 1: 6.0}, id='two-fragments-summed-onto-one-column'),
+            pytest.param('sum(p * cost)', {0: 2.0, 1: 3.0}, id='one-piece-one-row-per-column'),
+            pytest.param('sum(p * cost) + sum(p * cost)', {0: 4.0, 1: 6.0}, id='two-pieces-summed-onto-one-column'),
         ],
     )
     def test_the_objective_sums_the_coefficients_that_land_on_one_column(self, expression, expected):
@@ -1038,11 +1038,11 @@ class TestWhatReachesTheSolverAsAnEntry:
         assert _objective_table(Spec(**base).program, sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
-        """A fragment's dims can match the variable's while its rows do not.
+        """A piece's dims can match the variable's while its rows do not.
 
         `sum(q * price, over=generator)` with `q` indexed by snapshot alone reduces
-        to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_fragment`
-        *projects*, so the fragment still carries one row per generator. Those rows
+        to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_piece`
+        *projects*, so the piece still carries one row per generator. Those rows
         all name one column, and `obj` must hold their sum: the LP file would
         quietly re-sum |generator| rows, while `cols` joined to `obj` in the HiGHS
         sink would hand the solver more columns than the model has.
@@ -1109,7 +1109,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         gens, load = dispatch_data
         base = dispatch_program()
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=None)})
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
             assert engine._model.handoff.cols['ub'].is_infinite().all()
             assert engine.solve().is_ok
@@ -1177,9 +1177,9 @@ FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve.relational.engines.polars import compiler as compiler_module
+    from specsolve.relational.engine import compiler as compiler_module
 
-    real = compiler_module.PolarsCompiler._aligned_bound
+    real = compiler_module.Compiler._aligned_bound
     seen = {}
 
     def spy(self, frame, param, v, alias):
@@ -1187,7 +1187,7 @@ def _aligned_for(spec, data, monkeypatch):
         seen[param] = out is not None
         return out
 
-    monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
+    monkeypatch.setattr(compiler_module.Compiler, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
     with contextlib.suppress(SpecsolveError):
         sps.build(spec, data).close()
@@ -1322,7 +1322,7 @@ class TestThePositionalHandoff:
         )
         load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
             tables = engine._model.handoff
             assert tables.matrix.height == n_g * n_s
@@ -1567,7 +1567,7 @@ class TestWhereTheLanesDifferByDesign:
         `LanguageError` here says the file is unsayable, which is false twice over:
         `check` passes with no data, and the linopy oracle builds the model and
         reaches *answer*. What is true is that this lane cannot represent a constant
-        fragment with no rows for the dim the operator acts along, so the refusal is
+        piece with no rows for the dim the operator acts along, so the refusal is
         a `SpecsolveError` that names the rewrite.
         """
         spec = _constant_beside_a_term(expression)
@@ -1586,7 +1586,7 @@ class TestWhereTheLanesDifferByDesign:
     def test_the_rewrite_the_lane_gap_names_reaches_the_answer(self, expression, answer):
         """The rewrite the refusal names reaches the linopy lane's answer.
 
-        Declaring the constant over the dim gives the fragment the rows this lane
+        Declaring the constant over the dim gives the piece the rows this lane
         needs, and the number it then reaches is the one the linopy lane reaches from
         the unrewritten file.
         """

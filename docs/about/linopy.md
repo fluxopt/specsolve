@@ -88,7 +88,7 @@ call.
 ### The same language, and the same data
 
 **The oracle accepts exactly the same language**, which is what makes it an
-oracle. The equality is structural: both builds run the same `lanes.lowered`
+oracle. The equality is structural: both builds run the same `inputs.lowered`
 gate. A construct one refuses, the other refuses in the same sentence.
 
 **Accepting is not building, and three constructs part the two builds, two on
@@ -120,7 +120,7 @@ every shape the language admits.
 a dimension that a constant part does not carry**, beside a term that does.
 Take `sum(x * k + d, over=t)` where `d` is a scalar. specsolve compiles a
 constant part as its own [table](../reference/glossary.md#the-data), and a
-fragment with no rows for `t` has no slots for the operator to act on. The
+piece with no rows for `t` has no slots for the operator to act on. The
 oracle has no such split: the operand is one masked expression, so the constant
 is dropped wherever the term is, and the oracle builds the file as written. All four operators that act along
 a dimension (`sum(over=)`, `sum(by=)`, `shift`, `sum_back`) reach the one wall
