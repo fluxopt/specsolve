@@ -43,7 +43,7 @@ print(sweep.record.select('scenario', 'termination_condition', 'objective'))
 ```
 
 `sweep.record` has one row per scenario. The readers of a
-[result](reference/api.md#specsolve.Result) read a sweep too, with the
+[result](reference/api.md#specsolve.types.Result) read a sweep too, with the
 scenario column in front:
 
 ```python exec="true" source="material-block" result="text" session="sweep"
@@ -84,7 +84,7 @@ is solved:
 ```python exec="true" source="material-block" result="text" session="sweep"
 try:
     sps.solve_over('examples/storage.yaml', hourly, sps.EachWindow('hour', steps=3, lookahead=3, into='snapshot'))
-except sps.SpecsolveError as exc:
+except sps.errors.SpecsolveError as exc:
     print(exc)
 ```
 

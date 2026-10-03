@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.errors import SpecsolveError
+from specsolve.messages import unknown_name_message
 from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions

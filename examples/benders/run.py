@@ -76,7 +76,7 @@ EMPTY = {
 }
 
 
-def slope_at(solution: sps.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """How the subproblem's value moves with capacity, and its value there.
 
     The capacity constraint's shadow price is that derivative, weighted by
@@ -94,7 +94,7 @@ def slope_at(solution: sps.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame
     return slope, here
 
 
-def cut_from_ray(solution: sps.Result) -> tuple[pl.DataFrame, float]:
+def cut_from_ray(solution: sps.types.Result) -> tuple[pl.DataFrame, float]:
     """The feasibility cut carried by a certificate that this capacity cannot be dispatched.
 
     ``dual_ray`` weights the subproblem's rows so that together they

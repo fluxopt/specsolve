@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from mathspec import program
 
-from specsolve.errors import DataError, sparse_divisor_message, uncovered_constant_message
+from specsolve.errors import DataError
+from specsolve.messages import sparse_divisor_message, uncovered_constant_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 

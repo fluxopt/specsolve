@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.axes import Stitch, bulleted
-from specsolve.errors import LayoutError, SpecsolveError, no_model_behind_this_answer_message
+from specsolve.errors import LayoutError, SpecsolveError
+from specsolve.messages import no_model_behind_this_answer_message
 from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,

@@ -77,7 +77,7 @@ print(f'integer objective {milp.objective:,.1f}, has_primal {milp.has_primal}')
 
 try:
     milp.dual('power_balance')
-except sps.SpecsolveError as exc:
+except sps.errors.SpecsolveError as exc:
     print(exc)
 
 relaxed = sps.solve(MODEL, sources)  # the same file, continuous as declared

@@ -72,7 +72,7 @@ def check(spec: Buildable) -> Program:
 
     Every other verb reads the spec through this, so what this refuses they
     refuse too. Whether a sink takes the model is a fact about the build, and
-    [`Model.check`][specsolve.Model.check] answers it with no solve.
+    [`Model.check`][specsolve.types.Model.check] answers it with no solve.
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
@@ -366,7 +366,7 @@ class Model:
         Raises:
             ValueError: A suffix nothing writes.
             SpecsolveError: A construct the format has no section for, as
-                [`check`][specsolve.Model.check] refuses it.
+                [`check`][specsolve.types.Model.check] refuses it.
         """
         self._engine.write(path)
 

@@ -208,7 +208,7 @@ def _solved(tables: Any, start: WarmStart | None) -> tuple[Any, int, float, Warm
     return answer, iterations, seconds, carried
 
 
-def _slope_at(solution: sps.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def _slope_at(solution: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """The subproblem's subgradient in capacity, and its value at *capacity*.
 
     The subgradient is the capacity row's dual, weighted by availability and

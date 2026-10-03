@@ -60,7 +60,7 @@ print(result.objective)
 
 ## 2. Tables out
 
-[`primal`](reference/api.md#specsolve.Result.primal) gives the value of a variable
+[`primal`](reference/api.md#specsolve.types.Result.primal) gives the value of a variable
 as a polars table: one row per coordinate, keyed by the dimension labels, with
 a `value` column. Solar has no capacity, so `p` has no rows for it:
 

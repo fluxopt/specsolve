@@ -150,7 +150,7 @@ loops: `update` for new numbers, a longer table for more rows, a patched `dict`
 for new math. The how-to [Fixing, relaxing and removing](../howto/fix-relax-remove.md)
 aims the same loops at `fix`, `relax` and `remove_constraints`. Neither replaces
 the *debugging*: an IIS. A built row is read with
-[`row`](../reference/api.md#specsolve.Model.row), in linopy's own form.
+[`row`](../reference/api.md#specsolve.types.Model.row), in linopy's own form.
 
 Where linopy is ahead, and why none of it is a ceiling question, is
 [the roadmap](roadmap.md#honest-snapshot). What is *owed* to linopy rather than

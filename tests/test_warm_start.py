@@ -203,7 +203,7 @@ def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
 def test_an_unknown_keep_names_the_three(solver_name):
     with (
         sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model,
-        pytest.raises(sps.SpecsolveError, match='unknown keep') as raised,
+        pytest.raises(sps.errors.SpecsolveError, match='unknown keep') as raised,
     ):
         model.solve(solver_name=solver_name, keep='warm')
     assert all(word in str(raised.value) for word in KEEPS), 'the refusal has to say what the three are'
@@ -300,7 +300,7 @@ def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, spe
     tables = _tables(other_spec, other_given)
     session = SOLVERS[solver_name](tables)
     try:
-        with pytest.raises(sps.SpecsolveError, match='warm start carries'):
+        with pytest.raises(sps.errors.SpecsolveError, match='warm start carries'):
             session.warm(ws)
     finally:
         session.close()
@@ -313,7 +313,7 @@ def test_a_warm_start_from_another_solver_is_refused(solver_name):
     tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     session = SOLVERS[solver_name](tables)
     try:
-        with pytest.raises(sps.SpecsolveError, match='read from'):
+        with pytest.raises(sps.errors.SpecsolveError, match='read from'):
             session.warm(replace(ws, solver='someone_else'))
     finally:
         session.close()
@@ -365,7 +365,7 @@ def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(spec, given, 
         ws = session.warm_start()
         assert ws is not None
         session._handle = _Refusing(session._handle, call)
-        with pytest.raises(sps.SpecsolveError, match='refused'):
+        with pytest.raises(sps.errors.SpecsolveError, match='refused'):
             session.warm(ws)
     finally:
         session.close()

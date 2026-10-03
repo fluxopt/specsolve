@@ -41,7 +41,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Model**
 : A spec with data attached, the language's own meaning of the word
   ([glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)).
-  These docs use it in no other sense. `specsolve.Model`, what
+  These docs use it in no other sense. `specsolve.types.Model`, what
   [`build`](api.md) returns, is one. One `Model` feeds any sink through
   `solve()` or `write(path)`; `row(...)` and `diagnostics()` read it without
   solving.
@@ -50,7 +50,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Result**
 : One answer read back from a solve: `objective`, `primal(name)`,
   `dual(name)`, `evaluate(expression)` and the rest of
-  [`Result`](api.md#specsolve.Result). It owns its tables, so it
+  [`Result`](api.md#specsolve.types.Result). It owns its tables, so it
   outlives its model.
 
 **Answer**
@@ -186,7 +186,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **keep**
 : How much of a session `model.solve` carries to the next solve: `solver`
   (default), `progress` (its work too) or `nothing`
-  ([`Model.solve`](api.md#specsolve.Model.solve)).
+  ([`Model.solve`](api.md#specsolve.types.Model.solve)).
 
 ## Sweeps
 
@@ -225,8 +225,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Record** · **Metrics**
 : The two saved rows, each a `NamedTuple` that names its own columns:
-  [`Record`](api.md#specsolve.relational.answer_layout.Record), how a solve
-  terminated, and [`Metrics`](api.md#specsolve.relational.answer_layout.Metrics),
+  [`Record`](api.md#specsolve.types.Record), how a solve
+  terminated, and [`Metrics`](api.md#specsolve.types.Metrics),
   what it took. A sweep writes one of each per slice, with the same columns
   as a single solve; `slice_axis` and `slice` say which slice.
 

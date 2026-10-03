@@ -12,6 +12,9 @@ Example::
     result.primal('p')  # tidy polars.DataFrame
     result.to_dataarray('p')  # labelled, for array post-processing
 
+What a call hands back is in ``specsolve.types``, and what it raises in
+``specsolve.errors``. Nothing else under ``specsolve.`` is public.
+
 ``__version__`` reads the installed metadata; a source tree with nothing
 installed reads ``0.0.0``.
 """
@@ -19,39 +22,17 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
-from specsolve.api import Model, build, check, evaluate, load_result, scan_result, solve, tidy, write
-from specsolve.archive import ResultArchive, SweepArchive, load_archive, scan_archive
+from specsolve import errors as errors
+from specsolve import types as types
+from specsolve.api import build, check, evaluate, load_result, scan_result, solve, tidy, write
+from specsolve.archive import load_archive, scan_archive
 from specsolve.axes import EachCoordinate, EachWindow
-from specsolve.errors import (
-    DataError,
-    DimensionError,
-    LanguageError,
-    LayoutError,
-    NoSolutionError,
-    SchemaError,
-    SpecsolveError,
-    SpecsolveWarning,
-)
-from specsolve.relational.result import Result
 from specsolve.strategy import solve_over
-from specsolve.sweep import Sweep, load_sweep, scan_sweep
+from specsolve.sweep import load_sweep, scan_sweep
 
 __all__ = [
-    'DataError',
-    'DimensionError',
     'EachCoordinate',
     'EachWindow',
-    'LanguageError',
-    'LayoutError',
-    'Model',
-    'NoSolutionError',
-    'Result',
-    'ResultArchive',
-    'SchemaError',
-    'SpecsolveError',
-    'SpecsolveWarning',
-    'Sweep',
-    'SweepArchive',
     'build',
     'check',
     'evaluate',

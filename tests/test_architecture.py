@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
 
+import pytest
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
@@ -181,7 +183,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge.
-ENGINE_MAY_IMPORT = {'specsolve.errors', 'mathspec.program'}
+ENGINE_MAY_IMPORT = {'specsolve.errors', 'specsolve.messages', 'mathspec.program'}
 
 
 def test_engine_is_isolated():
@@ -316,23 +318,29 @@ def test_every_repository_path_a_workflow_names_exists():
     )
 
 
-#: The whole Python surface, by role (hard rule 5).
+#: What a caller calls, by role (hard rule 5). Everything ``specsolve`` binds.
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'see what it reads': {'tidy'},
-    'carry it': {
+    'read it back': {'load_archive', 'load_result', 'load_sweep', 'scan_archive', 'scan_result', 'scan_sweep'},
+}
+
+#: The two public submodules, and every name each one binds.
+PUBLIC_MODULES = {
+    'types': {
+        'ConstraintRow',
+        'Diagnostics',
+        'Metrics',
+        'Model',
+        'Provenance',
+        'Record',
+        'Result',
         'ResultArchive',
+        'Sweep',
         'SweepArchive',
-        'load_archive',
-        'load_result',
-        'load_sweep',
-        'scan_archive',
-        'scan_result',
-        'scan_sweep',
     },
-    'name what came back': {'Model', 'Result', 'Sweep'},
-    'catch it': {
+    'errors': {
         'SpecsolveError',
         'LanguageError',
         'DataError',
@@ -345,39 +353,77 @@ PUBLIC_API = {
 }
 
 
+def _surface_problems(module: Any, declared: set[str]) -> list[str]:
+    """How *module*'s ``__all__`` and its public attributes depart from *declared*."""
+    import inspect
+
+    name = module.__name__
+    problems = []
+    unresolved = sorted(n for n in module.__all__ if not hasattr(module, n))
+    if unresolved:
+        problems.append(f'{name}.__all__ names what the module does not bind: {unresolved}')
+    if set(module.__all__) != declared:
+        problems.append(
+            f'{name}.__all__ and the declared table disagree: only in __all__ '
+            f'{sorted(set(module.__all__) - declared)}, only in the table {sorted(declared - set(module.__all__))}'
+        )
+    leaked = sorted(
+        n
+        for n in dir(module)
+        if not n.startswith('_') and n not in declared and not inspect.ismodule(getattr(module, n))
+    )
+    if leaked:
+        problems.append(f'{name} binds public names outside __all__: {leaked}')
+    return problems
+
+
 def test_the_public_surface_is_exactly_what_is_declared():
     """Hard rule 5, in names: the Python surface is narrow, and stays narrow.
 
-    Two directions: ``__all__`` matches the table, and no public non-module
-    attribute exists outside it.
+    Three modules, each in two directions: ``__all__`` matches its table, and
+    no public non-module attribute exists outside it.
     """
-    import inspect
-
     import specsolve
 
-    unresolved = sorted(name for name in specsolve.__all__ if not hasattr(specsolve, name))
-    assert not unresolved, (
-        f'__all__ names what the package does not bind: {unresolved} — `from specsolve import *` '
-        f'raises, and an annotation naming one is only silent because it is never evaluated'
+    problems = _surface_problems(specsolve, {name for names in PUBLIC_API.values() for name in names})
+    for module, names in PUBLIC_MODULES.items():
+        problems += _surface_problems(getattr(specsolve, module), names)
+    assert not problems, (
+        f'{problems} — declare a name in PUBLIC_API or PUBLIC_MODULES, with the role it plays, and in '
+        f'docs/about/architecture.md; or import it privately. A surface that grows by accident is not narrow.'
     )
 
-    declared = {name for names in PUBLIC_API.values() for name in names}
-    assert set(specsolve.__all__) == declared, (
-        f'specsolve.__all__ and PUBLIC_API disagree: only in __all__ '
-        f'{sorted(set(specsolve.__all__) - declared)}, only in the table '
-        f'{sorted(declared - set(specsolve.__all__))} — add the name to PUBLIC_API '
-        f'with the role it plays, and to docs/about/architecture.md'
-    )
 
-    leaked = sorted(
-        name
-        for name in dir(specsolve)
-        if not name.startswith('_') and name not in declared and not inspect.ismodule(getattr(specsolve, name))
-    )
-    assert not leaked, (
-        f'public names outside __all__: {leaked} — a surface that grows by '
-        f'accident is not narrow. Import it privately, or declare it.'
-    )
+@pytest.mark.parametrize(
+    ('module', 'belongs'),
+    [
+        pytest.param(
+            'types',
+            lambda held: isinstance(held, type) and not issubclass(held, BaseException | Warning),
+            id='types-holds-only-classes-that-are-not-errors',
+        ),
+        pytest.param(
+            'errors',
+            lambda held: isinstance(held, type) and issubclass(held, Exception | Warning),
+            id='errors-holds-only-errors-and-warnings',
+        ),
+    ],
+)
+def test_each_public_module_holds_one_kind_of_name(module, belongs):
+    """``specsolve.types`` holds what a call returns, and ``specsolve.errors`` what it raises."""
+    import specsolve
+
+    held = getattr(specsolve, module)
+    wrong = sorted(name for name in held.__all__ if not belongs(getattr(held, name)))
+    assert not wrong, f'specsolve.{module} exports {wrong}, which do not belong to it'
+
+
+def test_only_the_axes_are_classes_at_the_top_level():
+    """A caller builds an axis and passes it in. Every other class is a type, and lives in ``specsolve.types``."""
+    import specsolve
+
+    classes = sorted(n for n in specsolve.__all__ if isinstance(getattr(specsolve, n), type))
+    assert classes == ['EachCoordinate', 'EachWindow'], f'classes at the top level: {classes}, not only the two axes'
 
 
 #: The two sink families; the directory is the family.
@@ -556,10 +602,10 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'build': specsolve.build,
         'solve': specsolve.solve,
         'write': specsolve.write,
-        'ResultArchive': specsolve.ResultArchive.__init__,
-        'SweepArchive': specsolve.SweepArchive.__init__,
-        'Model': specsolve.Model.__init__,
-        'Model.update': specsolve.Model.update,
+        'ResultArchive': specsolve.types.ResultArchive.__init__,
+        'SweepArchive': specsolve.types.SweepArchive.__init__,
+        'Model': specsolve.types.Model.__init__,
+        'Model.update': specsolve.types.Model.update,
         'solve_over': solve_over,
         'EachCoordinate.slices': EachCoordinate.slices,
         'EachWindow.slices': EachWindow.slices,

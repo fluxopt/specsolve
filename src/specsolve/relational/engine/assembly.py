@@ -14,7 +14,8 @@ import numpy as np
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import DataError, null_bounds_message
+from specsolve.errors import DataError
+from specsolve.messages import null_bounds_message
 from specsolve.relational import sinks
 from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
