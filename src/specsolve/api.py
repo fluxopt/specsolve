@@ -43,6 +43,7 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
+    RUN,
     Record,
     check_format,
     digest_of,
@@ -93,7 +94,8 @@ def check(spec: Buildable) -> Program:
         LanguageError: A construct outside the streaming language, a
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:`` — ``mathspec.merge`` composes it.
-        SpecsolveError: Two declarations whose names differ only by case.
+        SpecsolveError: Two declarations whose names differ only by case, or a
+            name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
     Warns:
@@ -595,10 +597,14 @@ type Reading = Callable[[Path], pl.LazyFrame]
 
 
 def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
-    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist."""
+    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
+
+    An archive's ``specsolve_run`` column is left on disk, so a frame read
+    out of one equals the frame the solve returned.
+    """
     if not under.is_dir():
         return {}
-    return {file.stem: read(file) for file in sorted(under.glob('*.parquet'))}
+    return {file.stem: read(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))}
 
 
 def _absent(reason: str) -> Callable[[], pl.DataFrame]:
@@ -685,7 +691,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _spec_digest=record.spec_digest,
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
-            _run=record.run,
+            _run=record.specsolve_run,
         )
 
     no_duals, no_expressions = read_reasons(out)
@@ -705,7 +711,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _spec_digest=record.spec_digest,
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
-        _run=record.run,
+        _run=record.specsolve_run,
     )
 
 

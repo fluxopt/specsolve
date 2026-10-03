@@ -244,8 +244,8 @@ def builds(monkeypatch):
 
 
 def answer_of(runs: strategy.Sweep) -> pl.DataFrame:
-    """A sweep's record without `solved_at` and `run`, which belong to a *run* rather than an answer."""
-    return runs.record.drop('solved_at', 'run')
+    """A sweep's record without `solved_at` and `specsolve_run`, which belong to a *run* rather than an answer."""
+    return runs.record.drop('solved_at', 'specsolve_run')
 
 
 def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
@@ -262,7 +262,7 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'has_primal',
         'spec_digest',
         'solved_at',
-        'run',
+        'specsolve_run',
         'model_digest',
     ], 'the record, keyed'
     assert set(runs.primal('p').columns) == {'scenario', 'snapshot', 'generator', 'value'}
@@ -1477,6 +1477,13 @@ def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
 
     with pytest.raises(sps.SpecsolveError, match=r"key_name='generator' is a dimension the spec declares"):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name='generator')
+
+
+@pytest.mark.parametrize('key_name', ['specsolve_case', 'Specsolve_case', 'SPECSOLVE_CASE'], ids=str)
+def test_a_slice_key_with_the_reserved_prefix_is_refused_in_any_letter_case(key_name):
+    """A capital passed the reserved prefix, though a query engine reads `Specsolve_run` as `specsolve_run`."""
+    with pytest.raises(sps.SpecsolveError, match=rf"key_name='{key_name}' starts with 'specsolve_'"):
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name=key_name)
 
 
 def test_duals_come_back_keyed_by_slice_and_are_never_combined(sweep):

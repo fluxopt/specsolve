@@ -19,7 +19,7 @@ from mathspec import to_spec
 from specsolve.api import attach_readers, load_result, scan_result
 from specsolve.errors import SpecsolveError
 from specsolve.layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
-from specsolve.relational.parquet import METRICS_FILE, Metrics, digest_of, row_of
+from specsolve.relational.parquet import METRICS_FILE, RUN, Metrics, digest_of, row_of
 from specsolve.strategy import (
     EachCoordinate,
     EachWindow,
@@ -51,14 +51,16 @@ class SolveArchive:
         spec: The spec as written, read back as one ``Spec`` whatever went in.
         sources: What was attached, keyed as the file declares it, as
             [`tidy`][specsolve.api.tidy] returns it: a table from
-            [`load_archive`][], the path to one from [`scan_archive`][].
+            [`load_archive`][], the path to one from [`scan_archive`][],
+            which also holds the ``specsolve_run`` column.
         answer: What came back.
-        source_digests: ``(run, source, digest)``, one row per source, so two
-            archives of one spec over different numbers name the input that
-            moved. A digest is of the parquet bytes the archive holds, the
-            tidy table each source stands for, so two
-            polars versions can write one table to different digests, and
-            reading an archive does not verify them.
+        source_digests: ``(specsolve_run, source, digest)``, one row per
+            source, so two archives of one spec over different numbers name
+            the input that moved. A digest is of the tidy table's parquet
+            bytes, written before the run was stamped on, so two archives of
+            one table under different names digest it alike; two polars
+            versions can write one table to different digests, and reading
+            an archive does not verify them.
         metrics: What reaching the answer took, as one
             [`Metrics`][specsolve.relational.parquet.Metrics].
     """
@@ -143,7 +145,7 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
 def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
-        member.stem: pl.read_parquet(member) if whole else member
+        member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
     digests = pl.read_parquet(under / DIGESTS_MEMBER)

@@ -27,7 +27,7 @@ case/
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (run, source, digest) — what each of them is
+    sources.parquet               (specsolve_run, source, digest) — what each of them is
     answer/record.parquet      how it terminated, what it reached, when, and under what name
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
@@ -69,7 +69,8 @@ refuses an `into=`.
 ## Read one too big to hold
 
 **`scan_archive` reads nothing until asked.** The sources come back as paths,
-and each frame is read off disk at the call that asks for it:
+and each frame is read off disk at the call that asks for it. A source file
+also holds `specsolve_run`, which a build ignores:
 
 ```python
 archived = sps.scan_archive('sweep.zip', 'sweep/')
@@ -156,8 +157,8 @@ answers on that one.
 
 ## Read a directory of them
 
-A directory of archives is a table per glob, and every row carries `run`, the
-archive's own name:
+A directory of archives is a table per glob, and every row of every table
+carries `specsolve_run`, the archive's own name:
 
 ```python
 import polars as pl
