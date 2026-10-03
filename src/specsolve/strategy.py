@@ -1440,6 +1440,7 @@ def _archive_the_sweep(
         answer = _the_answer(spilled, scratch / ANSWER_DIR, keep_windows=keep_windows)
         write_archive(out, spec, tables, axis=manifest, answer=answer)
 
+
 def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*.
 

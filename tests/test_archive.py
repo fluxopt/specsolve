@@ -565,10 +565,9 @@ def test_a_dimension_position_is_its_place_in_the_declaration_whatever_order_the
     places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('dim', 'dim_position').rows()
 
     assert list(held) == ['generator', 'snapshot', 'value', RUN], (
-        'the archived file is the tidy table: the declared order rather than the caller\'s, the stray column gone'
+        "the archived file is the tidy table: the declared order rather than the caller's, the stray column gone"
     )
     assert places == [('generator', 0), ('snapshot', 1)], 'dim_position follows the order p_max declares its dimensions'
-
 
 
 def _held_files(archive: Path) -> set[str]:
