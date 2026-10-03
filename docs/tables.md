@@ -106,7 +106,8 @@ for file in sorted(case.rglob('*')):
 
 `spec.yaml` is the spec. `sources/` holds one parquet file per key, the table
 the solve read ([`sps.tidy`](reference/api.md#specsolve.tidy)), and
-`sources.parquet` a digest of each. `answer/` holds the record of the solve,
+`sources.parquet` a digest of each. `catalog.parquet` says what each file holds.
+`answer/` holds the record of the solve,
 its metrics, and one parquet file per variable and constraint. The record is a
 table too:
 

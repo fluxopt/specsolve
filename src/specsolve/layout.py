@@ -1,8 +1,9 @@
 """The archive's layout: a spec, its data and its answer as a directory, or that directory zipped.
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
-``sources.parquet`` digesting them, ``answer/`` in the layout both answers
-save, and ``axis.json`` where the sources are cut. A directory archive is read
+``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
+file holds, ``answer/`` in the layout both answers save, and ``axis.json``
+where the sources are cut. A directory archive is read
 where it lies; a zip is unpacked first.
 """
 
@@ -19,17 +20,20 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.errors import LayoutError
+from specsolve.lanes import lowered
 from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, RUN, consolidated, digest_of_file, write_whole
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from mathspec import Spec
+    from mathspec.program import Program
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
 DIGESTS_MEMBER = 'sources.parquet'
+CATALOG_MEMBER = 'catalog.parquet'
 SOURCES_DIR = 'sources'
 ANSWER_DIR = 'answer'
 
@@ -105,6 +109,7 @@ def write_archive(
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         _copy_the_answer(answer, tree / ANSWER_DIR, run)
+        _catalog(lowered(spec), tree, run).write_parquet(tree / CATALOG_MEMBER)
         if zipped:
             _pack(tree, part)
     except BaseException:
@@ -124,6 +129,75 @@ def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
         {RUN: [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},
         schema={RUN: pl.String, 'source': pl.String, 'digest': pl.String},
     )
+
+
+#: ``catalog.parquet``'s columns, in order.
+_CATALOG_SCHEMA = {
+    RUN: pl.String,
+    'path': pl.String,
+    'name': pl.String,
+    'kind': pl.String,
+    'description': pl.String,
+    'dtype': pl.String,
+    'column': pl.String,
+    'dim': pl.String,
+    'dim_position': pl.Int32,
+}
+
+
+#: The directories that hold one file per name of each kind.
+_HELD_UNDER = {
+    'dimension': [SOURCES_DIR],
+    'relation': [SOURCES_DIR],
+    'parameter': [SOURCES_DIR],
+    'variable': [f'{ANSWER_DIR}/primal'],
+    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/activity'],
+    'expression': [f'{ANSWER_DIR}/expression'],
+}
+
+
+def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
+    """What each file under ``sources/`` and ``answer/<kind>/`` of *tree* holds, one row per column of labels.
+
+    ``path`` and ``dim_position`` are the key, because a constraint may share
+    its name with a parameter. ``dim_position`` is the place in the name's
+    declaration, not in the file: a sweep's source holds the axis column
+    first. A name *tree* holds no file for has no row.
+    """
+    rows: list[tuple[object, ...]] = []
+    for name, kind, description, dtype, columns in _declared_files(program):
+        for directory in _HELD_UNDER[kind]:
+            if (path := _held(tree, directory, name)) is None:
+                continue
+            head = (run, path, name, kind, description, dtype)
+            rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
+            if not columns:
+                rows.append((*head, None, None, None))
+    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'dim_position')
+
+
+def _held(tree: Path, directory: str, name: str) -> str | None:
+    """*name*'s path under *directory* of *tree*: one file, a sweep's directory of slices, or ``None``."""
+    for held in (f'{name}.parquet', name):
+        if (tree / directory / held).exists():
+            return f'{directory}/{held}'
+    return None
+
+
+def _declared_files(
+    program: Program,
+) -> Iterator[tuple[str, str, str | None, str | None, Sequence[tuple[str, str]]]]:
+    """``(name, kind, description, dtype, (column, dim) pairs)`` per name, in the order the spec declares them."""
+    for name, dimension in program.dimensions.items():
+        yield name, 'dimension', dimension.description, dimension.dtype, [(name, name)]
+    for name, relation in program.relations.items():
+        yield name, 'relation', relation.description, None, relation.columns
+    for name, parameter in program.parameters.items():
+        yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
+    answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
+    for kind, declared in answered.items():
+        for name, declaration in declared.items():
+            yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
 def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
@@ -205,7 +279,7 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
     strays = [
         member
         for member in found
-        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER}
+        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER, CATALOG_MEMBER}
         and not member.startswith(f'{ANSWER_DIR}/')
         and not (member.startswith(f'{SOURCES_DIR}/') and member.endswith('.parquet') and member.count('/') == 1)
     ]
@@ -214,5 +288,6 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
         raise LayoutError(
             f'{named} is not an archive: it {what}. One that archive= writes holds exactly '
             f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, 'sources.parquet' digesting "
-            f"them, 'answer/' holding what the solve returned, and 'axis.json' where its sources are sliced."
+            f"them, 'catalog.parquet' saying what each file holds, 'answer/' holding what the solve returned, "
+            f"and 'axis.json' where its sources are sliced."
         )
