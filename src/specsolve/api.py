@@ -20,12 +20,14 @@ Example::
 from __future__ import annotations
 
 import json
+import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import polars as pl
 from mathspec import advice
 
@@ -703,6 +705,20 @@ def _answer_under(out: Path, read: Reading) -> Result:
     )
 
 
+def _json_value(value: object) -> object:
+    """*value* as strict JSON holds it, which is all a BI tool or polars' ``str.json_decode`` reads.
+
+    A numpy scalar becomes the Python number it holds. A non-finite float
+    becomes the string ``"inf"``, ``"-inf"`` or ``"nan"``, because JSON has no
+    such number and ``time_limit=inf`` is HiGHS's own default.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    return value
+
+
 def _provenance(solver_name: str, solver_options: Mapping[str, object] | None) -> Provenance:
     """What a solve on *solver_name* with *solver_options* records about itself.
 
@@ -713,13 +729,13 @@ def _provenance(solver_name: str, solver_options: Mapping[str, object] | None) -
     """
     served = solver(solver_name)
     options = {
-        name: value if name.casefold() in served.recorded_options else '<not recorded>'
+        name: _json_value(value) if name.casefold() in served.recorded_options else '<not recorded>'
         for name, value in (solver_options or {}).items()
     }
     return Provenance(
         solver_name,
         installed(served.requires[0]),
-        json.dumps(options, sort_keys=True, default=str),
+        json.dumps(options, sort_keys=True, default=str, allow_nan=False),
         installed('specsolve'),
         installed('mathspec'),
     )

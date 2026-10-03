@@ -7,6 +7,7 @@ frame for frame, over every ported instance.
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import zipfile
 from dataclasses import replace
@@ -14,6 +15,7 @@ from datetime import UTC, datetime
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -788,6 +790,29 @@ def test_a_record_names_the_solver_and_the_packages_that_produced_it(
 def test_a_solve_with_no_options_records_an_empty_object() -> None:
     """No options is a fact about the solve, so it is written, not left null."""
     assert _provenance('highs', None).solver_options == '{}', 'null is kept for a record no solve wrote'
+
+
+@pytest.mark.parametrize(
+    ('value', 'decoded'),
+    [
+        pytest.param(math.inf, 'inf', id='inf'),
+        pytest.param(-math.inf, '-inf', id='minus-inf'),
+        pytest.param(math.nan, 'nan', id='nan'),
+        pytest.param(np.int64(4), 4, id='numpy-int'),
+        pytest.param(np.float64(0.5), 0.5, id='numpy-float'),
+    ],
+)
+def test_the_recorded_options_are_json_every_reader_decodes(value: object, decoded: object) -> None:
+    """A recorded option is read back by tools that take strict JSON only.
+
+    Before, ``time_limit=math.inf``, which is HiGHS's own default, was written
+    as ``Infinity``, which is not JSON, so polars' ``str.json_decode`` raised.
+    A ``numpy.int64`` was written as the string ``"4"`` rather than the number.
+    """
+    written = _provenance('highs', {'time_limit': value}).solver_options
+    assert pl.Series([written]).str.json_decode().to_list() == [{'time_limit': decoded}], (
+        'a non-finite number is its name as a string, and a numpy scalar is the number it holds'
+    )
 
 
 @pytest.mark.parametrize(
