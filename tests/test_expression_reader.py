@@ -12,7 +12,7 @@ import pytest
 import specsolve as sps
 from specsolve import api
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
+from specsolve.relational.engine.compiler import Compiler
 from tests.fixtures import override
 
 SPEC = {
@@ -371,13 +371,13 @@ def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
 
 def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypatch):
     compiled = []
-    original = PolarsCompiler.expression
+    original = Compiler.expression
 
     def counting(self, expr, context, **kwargs):
         compiled.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(PolarsCompiler, 'expression', counting)
+    monkeypatch.setattr(Compiler, 'expression', counting)
     with sps.build(SPEC, sources()) as model:
         named = [c for c in compiled if c.startswith('named expression')]
         assert named == [], 'a build lowers no named expression — fifty declared and none read must cost none'

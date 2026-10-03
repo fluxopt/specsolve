@@ -3,9 +3,9 @@
 The public interface of the package is YAML (see ``specsolve.api``); constructing
 programs in Python is not supported API.
 
-``sinks/``, ``status.py`` and ``result.py`` are the contract: what an engine
-answers to and what a sink reads. ``engines/`` holds implementations of that
-contract, one per directory. A solver's own package is imported inside the
+``sinks/``, ``status.py`` and ``result.py`` are the contract: what the engine
+answers to and what a sink reads. ``engine/`` is the implementation of that
+contract. A solver's own package is imported inside the
 function that calls it, so one a caller has not installed never reaches their
 import path.
 

@@ -9,16 +9,16 @@ from mathspec import program
 
 from specsolve.errors import SpecsolveError, unknown_name_message
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars import coverage, labels
-from specsolve.relational.engines.polars.fragments import absence_restrictions
+from specsolve.relational.engine import coverage, labels
+from specsolve.relational.engine.fragments import absence_restrictions
 from specsolve.relational.result import ConstraintRow
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve.relational.engines.polars.assembly import BuiltModel
-    from specsolve.relational.engines.polars.attaching import AttachedSources
-    from specsolve.relational.engines.polars.compiler import PolarsCompiler
+    from specsolve.relational.engine.assembly import BuiltModel
+    from specsolve.relational.engine.attaching import AttachedSources
+    from specsolve.relational.engine.compiler import Compiler
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 SOLUTION = '__solution value__'
@@ -197,7 +197,7 @@ def _aligned(
 
 
 def readers(
-    compiler: PolarsCompiler,
+    compiler: Compiler,
     named: Mapping[str, program.ExpressionDeclaration],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
@@ -221,7 +221,7 @@ def readers(
     return declared, evaluate
 
 
-def expression_frame(name: str, expr: program.Expression, compiler: PolarsCompiler) -> pl.DataFrame:
+def expression_frame(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:
     """Named expression *expr* evaluated at the solve *compiler* holds — ``(dims…, value)``.
 
     It answers as a constraint over the same expression would: a coordinate a

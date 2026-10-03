@@ -60,7 +60,7 @@ that starts from nothing, and that trade goes either way by model. Splitting
 them is what lets a caller take the first without the second.
 
 A **genuine rebuild** gets no carry at all: the new session holds a fresh model
-and starts cold, and `PolarsEngine.solve(keep='nothing')` is how a caller asks
+and starts cold, and `Engine.solve(keep='nothing')` is how a caller asks
 for that on purpose — the held solver is discarded, so cold is structural
 rather than scrubbed.
 
@@ -97,7 +97,7 @@ the frames because a constant has no column to attach to.
 
 A sink never learns how the handoff was filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
-`lp_file.py`, not another method on `PolarsEngine`.
+`lp_file.py`, not another method on `Engine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a

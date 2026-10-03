@@ -27,7 +27,7 @@ import pytest
 import specsolve as sps
 from specsolve.errors import DataError
 from specsolve.lanes import lowered
-from specsolve.relational.engines.polars.engine import PolarsEngine
+from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file
 from tests.oracle import linopy, specsolve_linopy, xr
@@ -35,7 +35,7 @@ from tests.oracle import linopy, specsolve_linopy, xr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve.relational.engines.polars.engine import Result
+    from specsolve.relational.engine.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9
@@ -62,7 +62,7 @@ class Agreement:
     result: Result
     """The relational solution; live until the ``with`` block exits."""
 
-    engine: PolarsEngine
+    engine: Engine
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""
 
@@ -97,7 +97,7 @@ def differential(
             raise NoFiniteAnswerError('the linopy oracle is infeasible or unbounded — fix the data, not the tolerance')
 
         program = lowered(model)
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(program, tidy_sources(program, dict(sources)))
             result = engine.solve()
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'

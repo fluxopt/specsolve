@@ -52,7 +52,7 @@ from specsolve.relational.answer_layout import (
     saved_frames,
     write_whole,
 )
-from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
+from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
 from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
@@ -228,7 +228,7 @@ class Model:
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
-        self._engine = PolarsEngine()
+        self._engine = Engine()
         self._fill()
 
     def _lower(self, written: str | Mapping[str, object]) -> Expression:

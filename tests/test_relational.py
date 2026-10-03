@@ -38,9 +38,9 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.engine import PolarsEngine
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.engine import Engine
+from specsolve.relational.engine.scope import Scope
 from specsolve.relational.sinks import SOLVERS
 from specsolve.relational.sinks.handoff import ranges
 from specsolve.relational.sinks.solvers.highs import Highs
@@ -262,7 +262,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `PolarsEngine.build` takes a *program* and the frames
+    Below the front door: `Engine.build` takes a *program* and the frames
     a built model reads, which is the same shape `tidy_sources` hands over — an
     index of labels, and each map as its own two-column relation.
     """
@@ -294,7 +294,7 @@ class TestTwoModelsRoundTrip:
         gens, load = dispatch_data
         oracle = dispatch_linopy_objective(gens, load)
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
 
             result = engine.solve()
@@ -319,7 +319,7 @@ class TestTwoModelsRoundTrip:
         oracle = transport_linopy_objective(gens, lines, load)
         assert np.isfinite(oracle), 'oracle model must be feasible'
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(transport_program(), tidy_sources(transport_program(), transport_sources(gens, lines, load)))
 
             result = engine.solve()
@@ -629,7 +629,7 @@ class TestTheLabelSpace:
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
-            with PolarsEngine() as engine:
+            with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
@@ -833,7 +833,7 @@ class TestTheLabelSpace:
 
 def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
-    with PolarsEngine() as engine:
+    with Engine() as engine:
         engine.build(program, tidy_sources(program, sources))
         obj = engine._model.handoff.obj
         return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
@@ -1006,7 +1006,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             program = Spec(**spec).program
             built = model._engine._model
-            compiler = PolarsCompiler(Scope(built.program, built.attached, built.variables))
+            compiler = Compiler(Scope(built.program, built.attached, built.variables))
             terms = compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1109,7 +1109,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         gens, load = dispatch_data
         base = dispatch_program()
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=None)})
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
             assert engine._model.handoff.cols['ub'].is_infinite().all()
             assert engine.solve().is_ok
@@ -1177,9 +1177,9 @@ FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve.relational.engines.polars import compiler as compiler_module
+    from specsolve.relational.engine import compiler as compiler_module
 
-    real = compiler_module.PolarsCompiler._aligned_bound
+    real = compiler_module.Compiler._aligned_bound
     seen = {}
 
     def spy(self, frame, param, v, alias):
@@ -1187,7 +1187,7 @@ def _aligned_for(spec, data, monkeypatch):
         seen[param] = out is not None
         return out
 
-    monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
+    monkeypatch.setattr(compiler_module.Compiler, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
     with contextlib.suppress(SpecsolveError):
         sps.build(spec, data).close()
@@ -1322,7 +1322,7 @@ class TestThePositionalHandoff:
         )
         load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
             tables = engine._model.handoff
             assert tables.matrix.height == n_g * n_s

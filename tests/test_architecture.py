@@ -201,23 +201,23 @@ def test_engine_is_isolated():
 
 
 def test_no_contract_module_names_an_engine():
-    """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
+    """``relational/__init__.py``'s own split: contract above, ``engine/`` below.
 
-    A contract module naming a class out of ``engines/`` inverts the two.
+    A contract module naming a class out of ``engine/`` inverts the two.
     Type-only imports count here.
     """
     offenders = {}
     for path in (PKG / 'relational').rglob('*.py'):
         rel = path.relative_to(PKG / 'relational').as_posix()
-        if '__pycache__' in path.parts or rel.startswith('engines/'):
+        if '__pycache__' in path.parts or rel.startswith('engine/'):
             continue
         named = _imported(ast.parse(path.read_text()), relative=True)
-        engines = sorted({m for m in named if 'engines' in m.split('.')})
-        if engines:
-            offenders[rel] = engines
+        engine = sorted({m for m in named if 'engine' in m.split('.')})
+        if engine:
+            offenders[rel] = engine
     assert not offenders, (
         f'a contract module names an implementation: {offenders}. Either the fact belongs '
-        f'under engines/, or what crosses the seam should be a type the contract already owns'
+        f'under engine/, or what crosses the seam should be a type the contract already owns'
     )
 
 
@@ -496,7 +496,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     from mathspec import program
 
-    engine_dir = PKG / 'relational' / 'engines' / 'polars'
+    engine_dir = PKG / 'relational' / 'engine'
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
@@ -601,7 +601,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve.relational.engines.polars.fragments import fan_in
+    from specsolve.relational.engine.fragments import fan_in
 
     x = program.Variable('x')
     declared = {
@@ -707,7 +707,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
         return found
 
     lanes = {
-        'relational': dispatched_on(*(PKG / 'relational' / 'engines' / 'polars').glob('*.py')),
+        'relational': dispatched_on(*(PKG / 'relational' / 'engine').glob('*.py')),
         'linopy': dispatched_on(*ORACLE.glob('*.py')),
     }
     for lane, handled in lanes.items():
@@ -739,7 +739,7 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('relational/engines/polars/predicates.py', 'specsolve.relational.engines.polars.compiler'): (
+    ('relational/engine/predicates.py', 'specsolve.relational.engine.compiler'): (
         'the same comparison on the streaming lane, and the compiler reads this module for the mask '
         'walk and the carrier both of its walks join on'
     ),

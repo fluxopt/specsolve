@@ -14,16 +14,16 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars.predicates import masked
-from specsolve.relational.engines.polars.scope import UNIT, ordinal
+from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.scope import UNIT, ordinal
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from mathspec import program
 
-    from specsolve.relational.engines.polars.fragments import Presence
-    from specsolve.relational.engines.polars.scope import Scope
+    from specsolve.relational.engine.fragments import Presence
+    from specsolve.relational.engine.scope import Scope
 
 
 @dataclass(frozen=True)
