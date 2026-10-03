@@ -11,6 +11,7 @@ import shutil
 import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -21,7 +22,8 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve.api import attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.relational.parquet import METRICS_FILE, Metrics, digest_of_file
+from specsolve.api import _provenance
+from specsolve.relational.parquet import METRICS_FILE, Metrics, Provenance, Record, digest_of_file
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -716,8 +718,72 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': 1, 'specsolve': sps.__version__}, (
+    assert json.loads((out / 'format.json').read_text()) == {'layout': 2, 'specsolve': sps.__version__}, (
         'the layout this package writes, beside the version that wrote it'
+    )
+
+
+@pytest.mark.parametrize('scale', [pytest.param(1.0, id='with-values'), pytest.param(100.0, id='infeasible')])
+def test_a_record_names_the_solver_and_the_packages_that_produced_it(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, scale: float
+) -> None:
+    """An answer kept for months outlives the environment that solved it.
+
+    Before, the record named no solver, no solver option and no mathspec, so an
+    archive could not say what would have to be installed to solve it again.
+    An answer with no values is read back on a path of its own, so it is a case.
+    """
+    inputs = {**dispatch_frame_inputs, 'load': dispatch_frame_inputs['load'].with_columns(pl.col('value') * scale)}
+    with sps.solve(
+        dispatch_yaml, inputs, solver_options={'time_limit': 60.0, 'presolve': 'on'}, archive=tmp_path / 'case'
+    ) as solved:
+        provenance = solved.provenance
+        assert solved.has_primal == (scale == 1.0), 'the case is the one its id names'
+
+    row = pl.read_parquet(tmp_path / 'case' / 'answer' / 'record.parquet').row(0, named=True)
+    assert {name: row[name] for name in Provenance._fields} == {
+        'solver': 'highs',
+        'solver_version': version('highspy'),
+        'solver_options': '{"presolve": "on", "time_limit": 60.0}',
+        'specsolve_version': sps.__version__,
+        'mathspec_version': version('mathspec'),
+    }, 'the solver, its options as one JSON string with sorted keys, and the three installed versions'
+    assert sps.load_archive(tmp_path / 'case').answer.provenance == provenance, 'and it reads back as it was written'
+
+
+def test_a_solve_with_no_options_records_an_empty_object() -> None:
+    """No options is a fact about the solve, so it is written, not left null."""
+    assert _provenance('highs', None).solver_options == '{}', 'null is kept for a record no solve wrote'
+
+
+@pytest.mark.parametrize(
+    'credential',
+    [
+        pytest.param('WLSAccessID', id='wls-access-id'),
+        pytest.param('WLSSecret', id='wls-secret'),
+        pytest.param('LicenseID', id='license-id'),
+        pytest.param('CSAPIAccessID', id='compute-server-access-id'),
+        pytest.param('CSAPISecret', id='compute-server-secret'),
+        pytest.param('ServerPassword', id='server-password'),
+        pytest.param('CloudAccessID', id='cloud-access-id'),
+        pytest.param('CloudSecretKey', id='cloud-secret-key'),
+        pytest.param('wlssecret', id='any-letter-case'),
+    ],
+)
+def test_a_credential_option_is_written_redacted(credential: str) -> None:
+    """Gurobi takes its licence credentials as options, and an archive goes to shared storage.
+
+    The key stays, so the record still says a credential was set.
+    """
+    pytest.importorskip('gurobipy')
+    written = json.loads(_provenance('gurobi', {credential: 'hunter2', 'TimeLimit': 60}).solver_options or '')
+    assert written == {credential: '<redacted>', 'TimeLimit': 60}, 'the value is gone, the key and the rest stay'
+
+
+def test_the_record_ends_with_the_provenance_columns() -> None:
+    """`Record` repeats `Provenance`'s fields so that each is a column of its own."""
+    assert Record._fields[-len(Provenance._fields) :] == Provenance._fields, (
+        'Record spreads Provenance into its last columns, in the same order'
     )
 
 
@@ -731,7 +797,7 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
     with pytest.raises(sps.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
-    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 1' in str(refused.value), (
+    assert 'layout 0, written by specsolve 0.0.1a359, and this package reads layout 2' in str(refused.value), (
         'the refusal names the layout it found and the version that wrote it'
     )
 

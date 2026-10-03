@@ -24,7 +24,7 @@ case/
     sources/load.parquet
     …
     sources.parquet               (run, source, digest) — what each of them is
-    answer/record.parquet      how it terminated, what it reached, when, and under what name
+    answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
@@ -39,6 +39,14 @@ sps.solve('dispatch.yaml', sources, archive='case.zip')
 
 **`sps.solve`, `model.solve` and `sps.solve_over` take `archive=`.** Nothing
 else writes one.
+
+**The record says what produced the answer.** `answer/record.parquet` names
+the solver, its version and the options it ran with, and the specsolve and
+mathspec versions that built the model. So you can install the same
+environment again. The options are one JSON string with sorted keys. A
+Gurobi licence credential, such as `WLSSecret`, keeps its key and has the
+value `<redacted>`, because an archive often goes to shared storage.
+`result.provenance` gives the same five fields without an archive.
 
 ## Read it back
 

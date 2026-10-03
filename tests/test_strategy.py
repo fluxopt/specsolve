@@ -263,10 +263,16 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'solved_at',
         'run',
         'model_digest',
+        'solver',
+        'solver_version',
+        'solver_options',
+        'specsolve_version',
+        'mathspec_version',
     ], 'the record, keyed'
     assert set(runs.primal('p').columns) == {'scenario', 'snapshot', 'generator', 'value'}
     assert runs.primal('p').height == 3 * 4 * 2
 
+    assert runs.record['solver'].to_list() == ['highs'] * 3, 'every slice names the solver that answered it'
     by_key = dict(zip(runs.record['scenario'], runs.record['objective'], strict=True))
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
 

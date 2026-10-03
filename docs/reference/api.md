@@ -76,14 +76,18 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
     options:
       heading_level: 4
 
-The rows and frames those hand back: how a solve terminated, what the build
-and its solves took, and what a slice of a sweep took.
+The rows and frames those hand back: how a solve terminated, what produced
+it, what the build and its solves took, and what a slice of a sweep took.
 
 ::: specsolve.relational.result.Diagnostics
     options:
       heading_level: 4
 
 ::: specsolve.relational.parquet.Record
+    options:
+      heading_level: 4
+
+::: specsolve.relational.parquet.Provenance
     options:
       heading_level: 4
 

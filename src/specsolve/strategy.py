@@ -1458,6 +1458,7 @@ def _answers(result: Result, program: Program, metrics: SliceMetrics) -> _Answer
         has_primal=result.has_primal,
         spec_digest=result.spec_digest,
         solved_at=result.solved_at,
+        provenance=result.provenance,
     )
     if not result.has_primal:
         return _Answer(meta, metrics, {}, {}, {}, None, {})

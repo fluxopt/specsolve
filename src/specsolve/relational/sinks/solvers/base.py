@@ -113,6 +113,10 @@ class Solver(ABC):
     #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
 
+    #: Option names, casefolded, whose value is a licence credential: an
+    #: archive writes the name and not the value.
+    credentials: ClassVar[frozenset[str]] = frozenset()
+
     def structure(self) -> bytes:
         """The loaded model's digest, read off its frames once, after which the frames are let go."""
         if self._structure is None:

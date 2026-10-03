@@ -19,11 +19,12 @@ Example::
 
 from __future__ import annotations
 
+import json
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 from mathspec import advice
@@ -43,9 +44,11 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
+    Provenance,
     Record,
     check_format,
     digest_of,
+    installed,
     read_reasons,
     write_whole,
 )
@@ -279,7 +282,9 @@ class Model:
                 vocabulary, so a time limit is ``time_limit``, ``TimeLimit`` or
                 ``timelimit``. Gurobi's are applied when its environment is
                 created, so ``ComputeServer``, ``TokenServer`` and
-                ``WLSAccessID`` reach it too.
+                ``WLSAccessID`` reach it too. The result's
+                [`provenance`][specsolve.relational.result.Result.provenance]
+                records them, with a licence credential's value redacted.
             keep: How much of the session this solve may keep: ``solver``,
                 ``progress`` or ``nothing``. ``solver``, the
                 default, reuses the solver holding the model and discards the
@@ -322,6 +327,7 @@ class Model:
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
+            _provenance=_provenance(solver_name, solver_options),
         )
         if out is not None:
             self._archive(out, answered)
@@ -665,6 +671,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
             _run=record.run,
+            _provenance=record.provenance,
         )
 
     no_duals, no_expressions = read_reasons(out)
@@ -685,6 +692,28 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
         _run=record.run,
+        _provenance=record.provenance,
+    )
+
+
+def _provenance(solver_name: str, solver_options: Mapping[str, Any] | None) -> Provenance:
+    """What a solve on *solver_name* with *solver_options* records about itself.
+
+    The options are written as one JSON object, because a column of structs is
+    one that several BI tools cannot read. A credential's value never reaches
+    the archive, which is written to storage other people read.
+    """
+    served = solver(solver_name)
+    options = {
+        name: '<redacted>' if name.casefold() in served.credentials else value
+        for name, value in (solver_options or {}).items()
+    }
+    return Provenance(
+        solver_name,
+        installed(served.requires[0]),
+        json.dumps(options, sort_keys=True, default=str),
+        installed('specsolve'),
+        installed('mathspec'),
     )
 
 

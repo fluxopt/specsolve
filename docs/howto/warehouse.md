@@ -19,7 +19,7 @@ inputs = pl.read_parquet('runs/*/sources.parquet')
 
 | glob | one row per | says |
 |---|---|---|
-| `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name |
+| `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name, and on which solver and package versions |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
 | `sources.parquet` | source per archive | what each input's bytes digest to |
 

@@ -86,6 +86,16 @@ class Gurobi(Solver):
     _env: Any
 
     requires = ('gurobipy', 'scipy.sparse')
+    credentials = frozenset({
+        'wlsaccessid',
+        'wlssecret',
+        'licenseid',
+        'csapiaccessid',
+        'csapisecret',
+        'serverpassword',
+        'cloudaccessid',
+        'cloudsecretkey',
+    })
     unavailable_message = (
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
     )
