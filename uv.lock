@@ -1535,6 +1535,9 @@ gurobi = [
     { name = "gurobipy" },
     { name = "scipy" },
 ]
+pyomo = [
+    { name = "pyomo" },
+]
 xpress = [
     { name = "xpress" },
 ]
@@ -1580,10 +1583,11 @@ requires-dist = [
     { name = "mathspec", specifier = ">=0.2.1,<0.3" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.30" },
+    { name = "pyomo", marker = "extra == 'pyomo'", specifier = ">=6.8" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
     { name = "xpress", marker = "extra == 'xpress'", specifier = ">=9.5" },
 ]
-provides-extras = ["gurobi", "xpress"]
+provides-extras = ["gurobi", "pyomo", "xpress"]
 
 [package.metadata.requires-dev]
 bench = [{ name = "pytest-benchmem", specifier = ">=0.5.5" }]
@@ -1597,7 +1601,7 @@ dev = [
     { name = "pandas", specifier = ">=2.2" },
     { name = "pre-commit", specifier = "==4.6.2" },
     { name = "pyarrow", specifier = ">=16" },
-    { name = "pyomo", specifier = ">=6.7" },
+    { name = "pyomo", specifier = ">=6.8" },
     { name = "pyrefly", specifier = "==1.3.1" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },

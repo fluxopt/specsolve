@@ -25,7 +25,7 @@ import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars as pl
@@ -379,7 +379,7 @@ class Model:
         """
         self._engine.write(path, names=names)
 
-    def check(self, sink: str, *, names: bool = False) -> None:
+    def check(self, sink: str, *, names: bool = False, rename: Mapping[str, Mapping[str, str]] | None = None) -> None:
         """Refuse the built model where *sink* cannot take it; no solve, no file.
 
         ::
@@ -388,23 +388,59 @@ class Model:
 
         The answer is read off the built model, not the file: a square the
         data prices at zero, an integer variable with no built column or a set
-        with no members asks for nothing. [`solve`][] and [`write`][] refuse
-        exactly what this refuses, with the same message.
+        with no members asks for nothing. [`solve`][], [`write`][] and
+        [`to_pyomo`][] refuse exactly what this refuses, with the same message.
 
         Args:
-            sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
-                output suffix (``.lp``, ``.mps``).
+            sink: A solver name (``highs``, ``gurobi``, ``xpress``), an output
+                suffix (``.lp``, ``.mps``), or an export (``pyomo``).
             names: Also refuse what [`write`][]'s *names* refuses: two
                 coordinates of one declaration that write as one name. Read
                 by an output suffix only.
+            rename: The component names [`to_pyomo`][] would be given, so a
+                clash they resolve is not refused. Read by ``pyomo`` only.
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; a name belonging to no sink; *names* for a sink
-                that writes no file; or, with *names*, two coordinates of one
-                declaration that write as one name.
+                that writes no file, or *rename* for any sink but ``pyomo``;
+                with *names*, two coordinates of one declaration that write as
+                one name; or, for ``pyomo``, what [`to_pyomo`][] refuses.
         """
-        self._engine.check(sink, names=names)
+        self._engine.check(sink, names=names, rename=rename)
+
+    def to_pyomo(self, rename: Mapping[str, Mapping[str, str]] | None = None) -> Any:  # pyrefly: ignore[explicit-any] — pyomo publishes no types
+        """The built model as a ``pyomo.environ.ConcreteModel``, to extend or solve in pyomo.
+
+        Each variable is a ``Var``, each constraint a ``Constraint`` and each
+        ``sos:`` set an ``SOSConstraint``, named as declared and indexed by the
+        coordinates the build produced: ``m.p[0, 'wind']``, or ``m.p['wind']``
+        over one dim. A coordinate a ``where`` removed has no entry. The
+        objective is ``m.objective``. A row holds the build's numbers, a flat
+        sum of terms, so new data means a new export.
+
+        Args:
+            rename: Component names for declarations that cannot keep their
+                own, by section as the file names it:
+                ``{'constraints': {'start_up': 'start_up_rule'}}``. A pyomo
+                model has one namespace, so a variable and a constraint the
+                spec gives one name clash, as does a name pyomo's solvers load
+                results into (``dual``, ``rc``, ``slack``), an attribute every
+                ``ConcreteModel`` has (``write``, ``name``), or ``objective``.
+                Nothing is renamed that is not named here.
+
+        Returns:
+            A new ``ConcreteModel``; a second call builds another.
+
+        Raises:
+            SpecsolveError: What [`check`][specsolve.Model.check] refuses for
+                ``pyomo`` and *rename*: pyomo is not installed (the ``[pyomo]``
+                extra); *rename* names a section or a declaration the spec
+                does not have; or a name clashes, in which case the error lists
+                every clash and a ``rename`` that names them apart. Or the
+                model has been closed.
+        """
+        return self._engine.to_pyomo(rename)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.

@@ -14,6 +14,16 @@ takes the handoff and renders it to a file. Everything else follows.
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
+**Beside them, `pyomo.py`.** `Model.to_pyomo()` hands the model over as
+a pyomo `ConcreteModel`, one component per declaration. A component is indexed
+by coordinates, and the handoff has none, so this sink also reads `Declared`,
+defined beside `Handoff` in `handoff.py`: which declaration owns each column,
+row and set, at which coordinate. The engine's `readback.declared` supplies it. It needs the `[pyomo]` extra, which
+it imports when called. `EXPORTS` holds its capabilities under the name
+`pyomo`, so `Model.check('pyomo', rename=...)` asks the same table, and also
+refuses a component name that a pyomo model cannot hold, through the
+`component_names` that `to_pyomo` itself calls.
+
 ## Staying loaded
 
 `base.py` is what a solver **is**: a loaded model with a lifecycle, which is
