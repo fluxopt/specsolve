@@ -19,9 +19,18 @@ import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
+from specsolve import strategy
 from specsolve.api import attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.relational.parquet import LAYOUT, METRICS_FILE, RUN, Metrics, digest_of_file
+from specsolve.relational.parquet import (
+    LAYOUT,
+    METRICS_FILE,
+    RUN,
+    Metrics,
+    digest_of_file,
+    read_reasons,
+    write_reasons,
+)
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -36,6 +45,7 @@ from tests.conftest import (
     port_spec,
     raw_of,
 )
+from tests.test_strategy import SPENDING, WINDOW, horizon_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -786,20 +796,317 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     )
 
 
-def test_a_rolling_horizon_keeps_the_way_back_to_the_dimension_it_sliced(tmp_path: Path) -> None:
-    """A stitched read off the archive is the stitched read off the sweep."""
-    from tests.test_strategy import WINDOW, horizon_sources
+#: The overlapping rolling horizon every archive test below solves.
+ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
 
-    axis = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
+
+def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: object) -> sps.Sweep:
+    """The rolling horizon, archived to ``roll.zip`` with *archive*'s keywords."""
     sources = horizon_sources(12)
-    runs = sps.solve_over(WINDOW, sources, axis, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip')
-    stitched = runs.primal('soc', original_index=True)
-    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
-
-    assert loaded.axis == axis
-    assert loaded.answer.scan('soc', original_index=True).collect().equals(stitched), (
-        'the lookahead rows are dropped on the way out of the archive as they were in the process'
+    return sps.solve_over(
+        spec, sources, ROLLING, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip', **archive
     )
+
+
+@pytest.mark.parametrize('windowed', [False, True], ids=['a-coordinate-sweep', 'a-rolling-horizon'])
+def test_a_sweep_archive_holds_its_answer_where_a_single_solve_does(
+    windowed: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """One file per name at `answer/<kind>/<name>.parquet`, holding what the reader returns, and no windows."""
+    if windowed:
+        runs, name, out = _rolling(tmp_path), 'soc', tmp_path / 'roll.zip'
+    else:
+        sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+        out = tmp_path / 'study.zip'
+        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
+    with zipfile.ZipFile(out) as packed:
+        members = packed.namelist()
+        archived = pl.read_parquet(packed.read(f'answer/primal/{name}.parquet'))
+    assert archived[RUN].unique().to_list() == [out.stem], 'the archived file carries the run it came from'
+    assert archived.drop(RUN).equals(runs.primal(name)), 'and less the stamp, it is the answer the sweep reads'
+    assert not [member for member in members if member.startswith('answer/windows/')], 'no windows unless asked'
+    assert not [member for member in members if member.startswith(f'answer/primal/{name}/')], 'and no file per slice'
+
+
+def test_a_rolling_horizon_archive_reads_back_its_answer(tmp_path: Path) -> None:
+    """The answer off the archive is the answer off the sweep, read whole or off disk."""
+    runs = _rolling(tmp_path)
+    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+    scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
+
+    assert loaded.axis == ROLLING
+    assert loaded.answer.primal('soc').equals(runs.primal('soc')), 'the answer read whole'
+    assert scanned.answer.scan('soc').collect().equals(runs.primal('soc')), 'and read off disk'
+
+
+@pytest.fixture(scope='module')
+def unkept(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Where the rolling horizon is archived without its windows, solved once."""
+    under = tmp_path_factory.mktemp('unkept')
+    _rolling(under)
+    return under / 'roll.zip'
+
+
+@pytest.mark.parametrize(
+    ('read', 'refused'),
+    [
+        pytest.param(sps.load_archive, lambda sweep, out: sweep.primal('soc', per_window=True), id='primal-per-window'),
+        pytest.param(sps.scan_archive, lambda sweep, out: sweep.scan('soc', per_window=True), id='scan-per-window'),
+        pytest.param(
+            sps.load_archive, lambda sweep, out: sweep.evaluate('sum(p, over=generator)'), id='evaluate-undeclared'
+        ),
+        pytest.param(sps.load_archive, lambda sweep, out: sweep.save(out), id='save'),
+    ],
+)
+def test_a_rolling_horizon_archive_refuses_the_windows_it_did_not_keep(
+    read: Callable[..., sps.SweepArchive], refused: Callable[[sps.Sweep, Path], object], unkept: Path, tmp_path: Path
+) -> None:
+    """Every read that needs the windows is refused, naming the way back."""
+    sweep = read(unkept, tmp_path / 'opened').answer
+    with pytest.raises(sps.SpecsolveError, match=r'written without keep_windows=True.*sps\.solve_over'):
+        refused(sweep, tmp_path / 'resaved')
+
+
+def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: Path) -> None:
+    """`keep_windows=True` writes the per-window frames too, so `per_window=True` reads off the archive."""
+    runs = _rolling(tmp_path, keep_windows=True)
+    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+    scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
+
+    assert (tmp_path / 'scanned' / 'answer' / 'windows' / 'primal' / 'soc').is_dir()
+    assert loaded.answer.primal('soc').equals(runs.primal('soc')), 'the answer is read the same way'
+    assert loaded.answer.primal('soc', per_window=True).equals(runs.primal('soc', per_window=True))
+    assert scanned.answer.scan('soc', per_window=True).collect().equals(runs.primal('soc', per_window=True))
+    assert loaded.answer.dual('balance', per_window=True).equals(runs.dual('balance', per_window=True))
+
+
+@pytest.mark.parametrize('suffix', ['.zip', ''], ids=['a-zip', 'a-directory'])
+@pytest.mark.parametrize(
+    ('read', 'per_window'),
+    [
+        pytest.param(sps.load_archive, lambda sweep: sweep.primal('soc', per_window=True), id='load'),
+        pytest.param(sps.scan_archive, lambda sweep: sweep.scan('soc', per_window=True), id='scan'),
+    ],
+)
+def test_a_rolling_horizon_whose_windows_wrote_nothing_still_kept_them(
+    read: Callable[..., sps.SweepArchive], per_window: Callable[[sps.Sweep], object], suffix: str, tmp_path: Path
+) -> None:
+    """Every window infeasible, so none writes a frame, and `per_window=True` says so as the live sweep does.
+
+    The archive marked the windows kept by an empty `answer/windows/`, which a
+    zip, holding files only, dropped: the read said the archive was written
+    without keep_windows=True.
+    """
+    sources = horizon_sources(12)
+    sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
+    out = tmp_path / f'roll{suffix}'
+    runs = sps.solve_over(WINDOW, sources, ROLLING, archive=out, keep_windows=True)
+    with pytest.raises(sps.SpecsolveError) as live:
+        runs.primal('soc', per_window=True)
+    archived = read(out, tmp_path / 'opened' if suffix else None).answer
+
+    assert 'holds no variable frames at all' in str(live.value), 'no window solved, and the live sweep says so'
+    with pytest.raises(sps.SpecsolveError) as raised:
+        per_window(archived)
+    assert str(raised.value) == str(live.value), 'the archive says what the live sweep says'
+
+
+def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
+    """The answer, the windows and what each window owns all carry the run on disk, and no reader returns it."""
+    out = tmp_path / 'nightly-2026-09-10.zip'
+    runs = sps.solve_over(
+        WINDOW, horizon_sources(12), ROLLING, carry={'soc_initial': 'soc'}, archive=out, keep_windows=True
+    )
+    loaded = sps.load_archive(out, tmp_path / 'out').answer
+    scanned = sps.scan_archive(out, tmp_path / 'out').answer
+    tables = sorted((tmp_path / 'out').rglob('*.parquet'))
+    stamps = {
+        table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
+        for table in tables
+    }
+    kept = {'answer/owned.parquet', 'answer/primal/soc.parquet', 'answer/windows/primal/soc/000000.parquet'}
+
+    assert kept <= stamps.keys(), 'the answer, the windows and what each window owns are all archived'
+    assert stamps == {table: ['nightly-2026-09-10'] for table in stamps}, 'and every one of them carries the run'
+    assert loaded.primal('soc').equals(runs.primal('soc')), 'the answer read whole is the live one'
+    assert scanned.scan('soc').collect().equals(runs.primal('soc')), 'and read off disk'
+    assert loaded.primal('soc', per_window=True).equals(runs.primal('soc', per_window=True)), 'per window too'
+    assert scanned.scan('soc', per_window=True).collect().equals(runs.primal('soc', per_window=True))
+    assert loaded.evaluate('soc').equals(runs.primal('soc')), (
+        'an expression valued per window off the archive is stitched through what each window owns, stamp left out'
+    )
+
+
+#: The window model with a capacity that is not over the windowed dimension,
+#: so each window solves one and it has no answer over `snapshot`.
+CAPPED = override(
+    WINDOW,
+    **{
+        'variables.cap': {'dims': ['generator'], 'bounds': {'lower': 0}},
+        'constraints.capped': {'dims': ['t', 'generator'], 'expression': 'p <= cap'},
+        'constraints.cap_limit': {'dims': ['generator'], 'expression': 'cap <= 50'},
+    },
+)
+
+
+@pytest.mark.parametrize(
+    ('spec', 'kind', 'name', 'read'),
+    [
+        pytest.param(
+            SPENDING,
+            'expression',
+            'window_spend',
+            lambda sweep, per_window: sweep.evaluate('window_spend', per_window=per_window),
+            id='an-expression-reduced-over-the-window',
+        ),
+        pytest.param(
+            CAPPED,
+            'primal',
+            'cap',
+            lambda sweep, per_window: sweep.primal('cap', per_window=per_window),
+            id='a-variable-not-over-the-window',
+        ),
+        pytest.param(
+            CAPPED,
+            'dual',
+            'cap_limit',
+            lambda sweep, per_window: sweep.dual('cap_limit', per_window=per_window),
+            id='a-constraint-not-over-the-window',
+        ),
+    ],
+)
+def test_a_name_with_no_answer_is_left_out_of_the_archive_with_its_reason(
+    spec: Mapping[str, object], kind: str, name: str, read: Callable[..., pl.DataFrame], tmp_path: Path
+) -> None:
+    """A quantity a rolling horizon cannot stitch has no answer file; the archive says why, and keeps it per window."""
+    runs = _rolling(tmp_path, spec, keep_windows=True)
+    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+
+    with zipfile.ZipFile(tmp_path / 'roll.zip') as packed:
+        assert f'answer/{kind}/{name}.parquet' not in packed.namelist(), 'no answer, so no answer file'
+        reasons = pl.read_parquet(packed.read('answer/reasons.parquet'))
+    assert reasons.filter((pl.col('kind') == kind) & (pl.col('name') == name)).height == 1, 'one reason for it'
+    with pytest.raises(sps.SpecsolveError, match=r'not over the windowed dimension.*per_window=True'):
+        read(loaded.answer, False)
+    assert read(loaded.answer, True).equals(read(runs, True)), 'per window it is all there'
+
+
+@pytest.mark.parametrize(
+    ('kind', 'unstitchable'),
+    [pytest.param('primal', 'cap', id='primal'), pytest.param('dual', 'cap_limit', id='dual')],
+)
+def test_a_rolling_horizon_reads_the_same_names_live_and_off_its_archive(
+    kind: str, unstitchable: str, tmp_path: Path
+) -> None:
+    """`to_dataset()` with no names reads every name that has an answer, live and off the archive alike.
+
+    Live, it listed every name the windows held, so a name not over the
+    windowed dimension made it raise, where the archive had left that name
+    out and read the rest.
+    """
+    pytest.importorskip('xarray')
+    runs = _rolling(tmp_path, CAPPED)
+    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').answer.to_dataset(kind=kind)
+    live = runs.to_dataset(kind=kind)
+
+    assert live.equals(archived), 'the same answer, read live or off the archive'
+    assert unstitchable not in live.data_vars, 'the name with no answer over the window is left out of both'
+    assert unstitchable in runs.to_dataset(kind=kind, per_window=True).data_vars, 'and per window it is read'
+    with pytest.raises(sps.SpecsolveError, match='not over the windowed dimension'):
+        runs.to_dataset(unstitchable, kind=kind)
+
+
+#: The window model whose one named expression is reduced over the window, so
+#: no expression has an answer over `snapshot`.
+WINDOW_TOTAL = override(WINDOW, **{'expressions.window_spend': 'sum(sum(p * cost, over=generator), over=t)'})
+
+
+@pytest.mark.parametrize('archived', [False, True], ids=['live', 'archived'])
+def test_a_kind_with_no_answer_over_the_window_names_what_it_left_out(archived: bool, tmp_path: Path) -> None:
+    """Every slice solved, so `to_dataset()` names the expression it could not stitch.
+
+    Off the archive it said every slice terminated optimal and the models
+    did not solve.
+    """
+    runs = _rolling(tmp_path, WINDOW_TOTAL)
+    sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').answer if archived else runs
+    with pytest.raises(sps.SpecsolveError, match=r'window_spend.*not over the windowed dimension'):
+        sweep.to_dataset(kind='expression')
+
+
+@pytest.mark.parametrize('windowed', [False, True], ids=['a-coordinate-sweep', 'a-rolling-horizon'])
+def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
+    windowed: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """`save` on an archive's sweep writes the slices the live sweep holds.
+
+    The archive stamps `specsolve_run` on the metrics as on the record, and
+    `save` passed every metrics column to `SliceMetrics`, which declared no
+    `specsolve_run`, so it raised `TypeError`.
+    """
+    if windowed:
+        runs, name, out = _rolling(tmp_path, keep_windows=True), 'soc', tmp_path / 'roll.zip'
+    else:
+        sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+        out = tmp_path / 'study.zip'
+        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
+    resaved = sps.load_archive(out, tmp_path / 'loaded').answer.save(tmp_path / 'resaved')
+    saved = sps.load_sweep(resaved)
+    stamped = [
+        table.relative_to(resaved).as_posix()
+        for table in sorted(resaved.rglob('*.parquet'))
+        if table.parent.name not in {'record', 'metrics'} and RUN in pl.read_parquet_schema(table)
+    ]
+
+    assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
+    assert saved.metrics.drop(RUN).equals(runs.metrics.drop(RUN)), 'and the metrics are the slices own'
+    assert saved.metrics[RUN].equals(saved.record[RUN]), 'naming the run they came from as the record does'
+    assert stamped == [], 'no frame the save writes carries the run, what each window owns included'
+
+
+def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
+    """A dual left out by name reads back under its name, never as the reason the whole kind is absent."""
+    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}})
+    assert read_reasons(tmp_path) == (None, {'dual': {'cap_limit': 'not over the window'}}), (
+        'the whole kind keeps its duals, and the one name left out keeps its reason'
+    )
+
+
+@pytest.mark.parametrize(
+    ('axis', 'archived', 'says'),
+    [
+        pytest.param(sps.EachCoordinate('scenario'), True, 'does not cut windows', id='a-coordinate-sweep'),
+        pytest.param(
+            sps.EachWindow('snapshot', steps=4, lookahead=0, into='t'), False, 'there is no archive=', id='no-archive'
+        ),
+    ],
+)
+def test_keep_windows_is_refused_where_there_are_no_windows_to_keep(
+    axis: sps.EachCoordinate | sps.EachWindow, archived: bool, says: str, monkeypatch, tmp_path: Path
+) -> None:
+    """Refused when `solve_over` is called, before a slice is built."""
+
+    def no_build(*args: object, **kwargs: object) -> None:
+        raise AssertionError('a slice was built before the refusal')
+
+    monkeypatch.setattr(strategy, 'build', no_build)
+    out = tmp_path / 'never.zip' if archived else None
+    with pytest.raises(sps.SpecsolveError, match=says):
+        sps.solve_over(WINDOW, horizon_sources(12), axis, archive=out, keep_windows=True)
+
+
+def test_a_coordinate_sweep_archive_evaluates_an_undeclared_expression_per_slice(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """A coordinate sweep's answer is its slices, so the archive alone puts each slice back against its model."""
+    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    runs = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+    for read in (sps.load_archive, sps.scan_archive):
+        valued = read(tmp_path / 'study').answer.evaluate('sum(p, over=generator)')
+        by_hand = runs.primal('p').group_by('scenario', 'snapshot').agg(pl.col('value').sum())
+        assert valued.sort('scenario', 'snapshot').equals(by_hand.sort('scenario', 'snapshot')), (
+            f'{read.__name__}: each slice valued at its own solution, keyed by it'
+        )
 
 
 @pytest.mark.parametrize('table', ['record.parquet', METRICS_FILE], ids=str)
@@ -811,8 +1118,6 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     A sweep once wrote its key under the axis's own name and a slice's metrics
     in other columns than a solve's, and a strict glob refused the mix.
     """
-    from tests.test_strategy import WINDOW, horizon_sources
-
     runs = tmp_path / 'runs'
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=runs / 'single').close()
     sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
