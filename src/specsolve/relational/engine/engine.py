@@ -136,37 +136,16 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
-    def load(
-        self,
-        solver_name: str = 'highs',
-        *,
-        solver_options: Mapping[str, object] | None = None,
-        keep: Keep = 'solver',
+    def _hand_off(
+        self, solver_name: str, solver_options: Mapping[str, object] | None, keep: Keep
     ) -> tuple[sinks.Solver, Keep]:
-        """Hand the built model to a solver without solving it — what [`solve`][] does before the run.
+        """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
 
-        The solver stays loaded where
-        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
-        the solver cannot ingest is refused before the load, read off the built
-        model rather than the file. Counts toward no
-        [`solves`][specsolve.relational.result.Diagnostics.solves] or
-        [`loads`][specsolve.relational.result.Diagnostics.loads].
-
-        Args:
-            solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
-            solver_options: Forwarded to the solver verbatim, in its own
-                vocabulary.
-            keep: How much of the session may be kept — one of
-                [`KEEPS`][specsolve.relational.result.KEEPS].
-
-        Returns:
-            The solver now holding the model, and what it kept: ``nothing``
-            where it was loaded from scratch.
-
-        Raises:
-            SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS], or a construct
-                the solver cannot take.
+        The held solver keeps the model where
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows and is
+        loaded again where not; what comes back beside it is what it kept,
+        ``nothing`` after a load. Counts toward neither ``solves`` nor
+        ``loads``: [`solve`][] counts, so timing this alone leaves them true.
         """
         if keep not in KEEPS:
             raise SpecsolveError(unknown_keep_message(keep))
@@ -190,7 +169,12 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
     ) -> Result:
-        """[`load`][] the built model into a solver, and solve it.
+        """Hand the built model to a solver and solve it.
+
+        The solver stays loaded where
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
+        the solver cannot ingest is refused before the load, read off the built
+        model rather than the file.
 
         Args:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
@@ -211,7 +195,7 @@ class Engine:
             SpecsolveError: A *keep* outside
                 [`KEEPS`][specsolve.relational.result.KEEPS].
         """
-        solver, kept = self.load(solver_name, solver_options=solver_options, keep=keep)
+        solver, kept = self._hand_off(solver_name, solver_options, keep)
         handoff = self._model.handoff
         self._solves += 1
         if kept == 'nothing':

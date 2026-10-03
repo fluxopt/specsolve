@@ -108,21 +108,21 @@ def window_setup(
 
     spec, sources = prepared
     model = sps.build(spec, sources)
-    model._engine.load(sink)
+    model._engine._hand_off(sink, None, 'solver')
     return (model, sink, following[1]), {}
 
 
 def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds, and ``load`` is what ``solve`` does before the run: it
+    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
     one is kept.
     """
     model.update(sources)
-    _, kept = model._engine.load(sink)
+    _, kept = model._engine._hand_off(sink, None, 'solver')
     return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing'}
 
 

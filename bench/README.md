@@ -562,7 +562,7 @@ which the loaded solver takes by value, and `shape` attaches the rung one
 snapshot shorter (`cases.shortened`), which it cannot. Values are not varied,
 because a push sends whole vectors whatever they hold.
 
-The clock stops at `Engine.load`, the half of `Engine.solve` before the run, so
+The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the
