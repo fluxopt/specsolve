@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(data): a datetime label is held in microseconds whatever unit it arrives in ([#1839](https://github.com/fluxopt/specsolve/pull/1839))
+
 ## 0.5.0 (2026-10-03)
 
 The top level of `specsolve` now holds only what you call. What a call returns
