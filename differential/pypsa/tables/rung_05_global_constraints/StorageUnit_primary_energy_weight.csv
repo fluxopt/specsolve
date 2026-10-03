@@ -1,4 +1,4 @@
-global_constraint,storage_unit,value
-co2_cap,res5,0.4
-co2_exact,res5,0.4
-co2_floor,res5,0.4
+scenario,global_constraint,storage_unit,value
+base,co2_cap,res5,0.4
+base,co2_exact,res5,0.4
+base,co2_floor,res5,0.4

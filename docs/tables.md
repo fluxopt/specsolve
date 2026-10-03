@@ -104,13 +104,15 @@ for file in sorted(case.rglob('*')):
         print(file.relative_to(case))
 ```
 
-`spec.yaml` is the spec. `sources/` holds one parquet file per key, and
-`sources.parquet` a digest of each. `answer/` holds the record of the solve,
+`spec.yaml` is the spec. `sources/` holds one parquet file per key, the table
+the solve read ([`sps.tidy`](reference/api.md#specsolve.tidy)), and
+`sources.parquet` a digest of each. `catalog.parquet` says what each file holds.
+`answer/` holds the record of the solve,
 its metrics, and one parquet file per variable and constraint. The record is a
 table too:
 
 ```python exec="true" source="material-block" result="text" session="tables"
-print(pl.read_parquet(case / 'answer' / 'record.parquet').select('run', 'status', 'objective'))
+print(pl.read_parquet(case / 'answer' / 'record.parquet').select('specsolve_run', 'status', 'objective'))
 ```
 
 [`load_archive`](reference/api.md#specsolve.load_archive) reads the directory

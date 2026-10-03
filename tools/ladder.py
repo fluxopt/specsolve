@@ -29,8 +29,8 @@ CORPUS_SITE = 'https://mathspec.readthedocs.io/en/latest/examples/'
 CORPUS_PAGE = f'{CORPUS_SITE}pypsa/'
 
 #: Where each rung sits on mathspec's PyPSA pages. The anchors are that site's
-#: headings, which name a rung in mathspec's words rather than this ladder's,
-#: and five rungs have a page of their own there.
+#: headings, which name a rung in mathspec's words rather than this ladder's;
+#: a secant-loss rung sits under the heading of the tangent rung it follows.
 CORPUS_RUNGS = {
     1: 'pypsa/#rung-1--transport',
     2: 'pypsa/#rung-2--storage',
@@ -41,13 +41,55 @@ CORPUS_RUNGS = {
     7: 'pypsa/#rung-7--commitment',
     8: 'pypsa/#rung-8--modular-and-big-m',
     9: 'pypsa/#rung-9--multi-link',
-    10: 'pypsa_quadratic/#rung-10--quadratic-costs',
+    10: 'pypsa/#rung-10--quadratic-costs',
     11: 'pypsa/#rung-11--ac-dc-meshed',
     12: 'pypsa_linearized_uc/#rung-12--linearized-unit-commitment',
-    13: 'pypsa_losses/#rung-13--transmission-losses',
-    14: 'pypsa_stochastic/#rung-14--two-stage-stochastic-with-cvar',
-    15: 'pypsa_multi_period/#rung-15--investment-periods-with-a-growth-limit',
+    13: 'pypsa/#rung-13--transmission-losses',
+    14: 'pypsa/#rung-14--two-stage-stochastic',
+    15: 'pypsa/#rung-15--investment-periods',
     16: 'pypsa/#rung-16--link-delay',
+    17: 'pypsa/#rung-17--process',
+    18: 'pypsa/#rung-18--transformer',
+    19: 'pypsa/#rung-13--transmission-losses',
+    20: 'pypsa/#rung-20--phase-shifter',
+    21: 'pypsa/#rung-21--carrier-growth',
+    22: 'pypsa/#rung-22--transformer-losses',
+    23: 'pypsa/#rung-22--transformer-losses',
+    24: 'pypsa/#rung-24--must-stay-down',
+    25: 'pypsa/#rung-25--committable-links',
+    26: 'pypsa/#rung-26--committable-processes',
+    27: 'pypsa/#rung-27--modular-ramps',
+    28: 'pypsa/#rung-28--a-start-up-ramp-alone',
+    29: 'pypsa/#rung-29--storage-per-investment-period',
+    30: 'pypsa/#rung-30--security-constrained',
+    32: 'pypsa/#rung-32--storage-that-stands-in-one-period-only',
+    33: 'pypsa/#rung-33--maintenance',
+    34: 'pypsa/#rung-34--maintenance-of-committable-units',
+    35: 'pypsa/#rung-35--a-global-constraint-for-one-investment-period',
+    36: 'pypsa/#rung-36--quadratic-costs-on-a-process-and-on-storage',
+    37: 'pypsa/#rung-37--storage-dispatch-pinned-to-a-schedule',
+    38: 'pypsa/#rung-38--delays-per-investment-period',
+    39: 'pypsa/#rung-39--a-negative-relative-growth',
+    40: 'pypsa/#rung-40--a-global-constraint-per-scenario',
+    41: 'pypsa/#rung-41--operating-data-per-scenario',
+    42: 'pypsa/#rung-42--first-stage-data-per-scenario',
+    43: 'pypsa/#rung-43--a-components-sign',
+    44: 'pypsa_linearized_uc/#rung-44--the-integer-files-commitment-rows-relaxed',
+    45: 'pypsa/#rung-45--ramp-limits-per-snapshot',
+    46: 'pypsa/#rung-46--the-output-brought-in',
+    47: 'pypsa_linearized_uc/#rung-47--ramps-and-signs-as-the-integer-file-states-them',
+    48: 'pypsa/#rung-48--a-start-and-a-stop-unweighted',
+    49: 'pypsa/#rung-49--a-growth-limit-in-one-period',
+    50: 'pypsa/#rung-50--a-load-that-is-not-active',
+    51: 'pypsa/#rung-51--a-growth-limit-after-an-asset-retires',
+    52: 'pypsa/#rung-52--a-transmission-cost-limit-per-scenario',
+    53: 'pypsa/#rung-53--a-transmission-volume-limit-per-scenario-and-period',
+    54: 'pypsa/#rung-54--a-delay-per-scenario',
+    55: 'pypsa/#rung-55--a-transformer-cycle-per-scenario',
+    56: 'pypsa/#rung-56--a-security-constrained-run-per-scenario',
+    57: 'pypsa/#rung-57--a-fixed-build-per-scenario',
+    58: 'pypsa/#rung-58--a-committable-unit-per-scenario',
+    60: 'pypsa/#rung-60--efficiencies-per-snapshot',
 }
 
 
@@ -115,7 +157,12 @@ def specsolve_tab(stem: str, projection: dict, record: dict) -> str:
 
 def pypsa_tab(stem: str, record: dict) -> str:
     script = (RUNGS / f'{stem}.py').read_text().rstrip()
-    solve = f"n = build()\nn.optimize(solver_name='highs')\nn.objective  # {record['pypsa_objective']!r}"
+    said = (
+        f'wrong in pypsa 1.3.0, PyPSA/PyPSA#{record["parity"]["diverges"]}'
+        if 'diverges' in record['parity']
+        else repr(record['pypsa_objective'])
+    )
+    solve = f"n = build()\nn.optimize(solver_name='highs')\nn.objective  # {said}"
     return (
         '=== "PyPSA"\n\n'
         f'{_indent(f"The network, `{stem}.py` in the corpus — the spine plus what this rung adds:")}\n\n'
@@ -137,6 +184,12 @@ def _tables(stem: str) -> str:
 
 def _verdict(record: dict) -> str:
     parity, structural = record['parity'], record['structural']
+    if 'diverges' in parity:
+        return (
+            f'> {"✔" if parity["matches"] else "✘"} Verified against pypsa 1.3.0 — objective'
+            f' **{parity["specsolve_objective"]}**, held to the corpus oracle, because PyPSA 1.3.0 solves this network'
+            f' wrongly ({_issue(parity)}); no model is compared.'
+        )
     priced = _cell_duals(parity)
     proof = (
         f'**model for model**: {len(structural["equal"])} blocks equal, {len(structural["region"])} documented splits'
@@ -163,9 +216,9 @@ def _verdict(record: dict) -> str:
     )
 
 
-def _symbols(stem: str, projection: dict) -> SymbolTable | None:
+def _symbols(spec: str, projection: dict) -> SymbolTable | None:
     """The file's symbol table cut to what the projection declares — a table naming a dropped name is refused."""
-    path = RUNGS / f'{stem}.symbols.yaml'
+    path = RUNGS / f'{Path(spec).stem}.symbols.yaml'
     if not path.exists():
         return None
     raw = yaml.safe_load(path.read_text())
@@ -186,7 +239,7 @@ def _symbols(stem: str, projection: dict) -> SymbolTable | None:
 
 def page(stem: str, record: dict) -> str:
     projection = yaml.safe_load((RUNGS / f'{stem}.yaml').read_text())
-    math = to_markdown(str(RUNGS / f'{stem}.yaml'), symbols=_symbols(stem, projection), legend=True)
+    math = to_markdown(str(RUNGS / f'{stem}.yaml'), symbols=_symbols(record['parity']['spec'], projection), legend=True)
     number = int(stem[5:7])
     return (
         f'# {_title(stem)}\n\n'
@@ -207,12 +260,18 @@ def _short(stem: str) -> str:
     return f'{number} — {rest.split(" — ")[0]}'
 
 
+def _issue(parity: dict) -> str:
+    return f'[PyPSA/PyPSA#{parity["diverges"]}](https://github.com/PyPSA/PyPSA/issues/{parity["diverges"]})'
+
+
 def _cell_objective(parity: dict) -> str:
     return f'{"✔" if parity["matches"] else "✘"} `{parity["specsolve_objective"]}`'
 
 
 def _cell_duals(parity: dict) -> str:
     duals = parity['duals']
+    if 'diverges' in parity:
+        return '—'
     if not duals['compared']:
         return '— integer model, no duals'
     negated = f', {len(duals["negated"])} negated' if duals['negated'] else ''
@@ -230,6 +289,8 @@ def _counts(blocks: dict[str, int]) -> str:
 
 
 def _cell_size(parity: dict) -> str:
+    if 'diverges' in parity:
+        return '—'
     theirs, ours = parity['structure']['solver']['pypsa'], parity['structure']['solver']['specsolve']
     return ' · '.join(
         f'✔ {theirs[k]} {k}' if theirs[k] == ours[k] else f'≠ {theirs[k]} vs {ours[k]} {k}'
@@ -238,6 +299,8 @@ def _cell_size(parity: dict) -> str:
 
 
 def _cell_structure(parity: dict) -> str:
+    if 'diverges' in parity:
+        return f'— PyPSA 1.3.0 solves this network wrongly, {_issue(parity)}; the objective is held to the oracle'
     shape = parity['structure']
     names = {n: d for n, d in shape['differences'].items() if d.get('kind') != 'solver'}
     if not names:
@@ -316,7 +379,8 @@ def index(stamped: dict) -> str:
         '| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the"
-        ' file attached to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only'
+        " rung's own spec attached to the tables `prep.py` makes of it."
+        ' A difference in structure, duals or the linopy lane is allowed only'
         ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
         ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
@@ -327,10 +391,12 @@ def index(stamped: dict) -> str:
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"
-        ' partially true somewhere and every parameter is fed somewhere — the runner fails on a gap.\n\n'
-        "Each rung's own model is the file projected onto what the rung builds; the runner solves the projection"
-        " too and holds it to the full file's objective (relative 1e-9), so a cut that lost a term is a red run"
-        ' rather than a shorter page.\n'
+        ' partially true somewhere and every parameter is fed somewhere. The runner fails on a gap not listed in'
+        ' `differential/pypsa/untested.txt`, and on a listed one a rung now closes; the rungs that would close them'
+        ' are [mathspec#830](https://github.com/energy-models/mathspec/issues/830).\n\n'
+        "Each rung's own model is the file cut to what the rung builds. The runner builds the whole file on the"
+        " rung's network, cuts it to the rows and columns that build produced, and proves the cut builds the same"
+        ' model, coefficient for coefficient, before anything solves; every comparison above solves the cut.\n'
     )
 
 

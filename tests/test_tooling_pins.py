@@ -8,6 +8,9 @@ other one.
 The dependency floors: ``[project.dependencies]`` declares each as a lower
 bound, and the ``floors`` pixi environment pins the same package to that exact
 version.
+
+The mathspec ceiling: mathspec raises its minor version on a break, so the
+ceiling is the next minor above the floor, and a floor that moves takes it along.
 """
 
 from __future__ import annotations
@@ -44,16 +47,17 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
     )
 
 
-#: `polars>=1.30` -> ('polars', '1.30'). A runtime dependency declared as a bare
-#: lower bound is a claim the `floors` environment has to pin to prove.
-_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)$')
+#: `polars>=1.30` -> ('polars', '1.30', None), `mathspec>=0.2.1,<0.3` ->
+#: ('mathspec', '0.2.1', '0.3'). A lower bound is a claim the `floors`
+#: environment has to pin to prove; a ceiling, where there is one, is not.
+_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,<([0-9][0-9a-zA-Z.]*))?$')
 
 
 def _declared_floors() -> dict[str, str]:
     declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
     unparsed = [spec for spec in declared if not _FLOOR.match(spec)]
     assert not unparsed, (
-        f'{unparsed} is not a bare `name>=version` lower bound. A '
+        f'{unparsed} is not a `name>=version` lower bound, with or without a `,<version` ceiling. A '
         f'runtime dependency written any other way has no floor for the `floors` environment to '
         f'pin, so teach this pattern the new shape rather than leaving the dependency unchecked.'
     )
@@ -78,4 +82,25 @@ def test_the_floors_environment_pins_every_declared_lower_bound():
         f'{declared}. That environment exists to prove each declared lower bound is real, which it '
         f'only does while it installs exactly those versions and nothing the project does not '
         f'declare — both directions, so a dependency added without a pin fails here too.'
+    )
+
+
+def _declared_ceilings() -> dict[str, str]:
+    declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
+    return {match[1]: match[3] for spec in declared if (match := _FLOOR.match(spec)) and match[3]}
+
+
+def test_mathspec_is_capped_below_the_next_minor_of_its_floor():
+    """A specsolve release keeps installing with the mathspec it was released against.
+
+    `format.json` names the specsolve that wrote an archive, and reading one in an old
+    layout means installing that release. With a bare floor, that install takes the
+    newest mathspec, whose next minor may load no spec the release can build.
+    """
+    floor = _declared_floors()['mathspec']
+    major, minor = floor.split('.')[:2]
+    assert _declared_ceilings().get('mathspec') == f'{major}.{int(minor) + 1}', (
+        f'mathspec is declared from {floor}, so its ceiling is `<{major}.{int(minor) + 1}`: mathspec '
+        f'raises its minor version on a break, and an old specsolve has to install with the language '
+        f'it was released against.'
     )

@@ -20,9 +20,11 @@ from specsolve.errors import (
 )
 from specsolve.relational.collect import polars_engine
 from specsolve.relational.parquet import (
+    NO_PROVENANCE,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
+    Provenance,
     Record,
     clear_the_answer,
     reader_kind,
@@ -368,6 +370,8 @@ class Result:
     #: ``None`` for a live solve: the name is stamped when an archive is
     #: written, not when the solver returns.
     _run: str | None = None
+    #: What produced this answer. Empty for one built by hand.
+    _provenance: Provenance = NO_PROVENANCE
 
     def model_digest(self) -> str | None:
         """Which model this answered — the document and the data it was attached to.
@@ -424,6 +428,15 @@ class Result:
         return self._solved_at
 
     @property
+    def provenance(self) -> Provenance:
+        """The solver, its options and the package versions that produced this answer.
+
+        Read back as it was written, so an answer loaded from an archive names
+        the environment that solved it rather than the one reading it.
+        """
+        return self._provenance
+
+    @property
     def record(self) -> Record:
         """How this solve terminated, as the one row [`save`][] writes for it.
 
@@ -439,7 +452,8 @@ class Result:
             spec_digest=self._spec_digest,
             solved_at=self._solved_at,
             model_digest=self.model_digest(),
-        )._replace(run=self._run)
+            provenance=self._provenance,
+        )._replace(specsolve_run=self._run)
 
     @property
     def kept(self) -> Keep:
@@ -681,7 +695,7 @@ class Result:
         expression that failed, and one with an empty *name* for the duals.
 
         ``format.json`` stamps the directory with the layout it is written in
-        and the specsolve that wrote it: ``{"layout": 1, "specsolve": "…"}``.
+        and the specsolve that wrote it: ``{"layout": 2, "specsolve": "…"}``.
         Every reader refuses another layout with a
         [`LayoutError`][specsolve.errors.LayoutError] that says to solve the
         model again and save it.
@@ -704,7 +718,7 @@ class Result:
         out = Path(directory)
         clear_the_answer(out)
         write_format(out)
-        record = self.record._replace(run=None)
+        record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
@@ -722,7 +736,7 @@ class Result:
                 no_expressions[name] = str(absent)
                 continue
             write_whole(evaluated, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, no_expressions)
+        write_reasons(out, self._no_duals, {'expression': no_expressions})
         return out
 
     def close(self) -> None:

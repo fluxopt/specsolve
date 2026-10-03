@@ -13,7 +13,7 @@ admits.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import xarray as xr
@@ -37,14 +37,9 @@ def refuse_relations_the_lane_does_not_build(program: program.Program) -> None:
     """Refuse a relation shape this lane does not build, before any data is read.
 
     Raises:
-        OracleCannotBuildError: A bare relation, or a partition grouped by a map keyed on
-            more than the dimension it walks or by more than one column.
+        OracleCannotBuildError: A partition grouped by a map keyed on more than the
+            dimension it walks or by more than one column.
     """
-    for name, relation in program.relations.items():
-        if not relation.values:
-            raise OracleCannotBuildError(
-                _relation_shape_message(f"relation '{name}' is a bare relation, which maps nothing")
-            )
     for node in _partitioning(program):
         assert node.partition is not None, '_partitioning yields only the nodes that carry one'
         if node.partition.joined:
@@ -119,7 +114,7 @@ def dimension_coords(
         The master coordinates by dimension, and one array per value column,
         by the relation's name and the column's.
     """
-    master = {d: pd.Index(pd.unique(to_pandas(tidy[d].select(d).collect())[d]), name=d) for d in program.dimensions}
+    master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
     return master, _relation_arrays(program, tidy, master)
 
 
@@ -149,7 +144,23 @@ def _relation_arrays(
         for value in relation.values:
             padded = pd.Series(frame[value].to_numpy(), index=keyed).reindex(index)
             out[name, value] = xr.DataArray(padded.to_numpy().reshape(shape), dims=dims, coords=coords, name=name)
+        if not relation.values:
+            out[name, ''] = _membership(relation, frame, master)
     return out
+
+
+def _membership(relation: Any, frame: pd.DataFrame, master: Mapping[str, pd.Index]) -> xr.DataArray:
+    """A bare relation as one where its rows are and zero elsewhere, over its key's *roles*.
+
+    The roles name the axes because two of them may range over one dimension —
+    an event's ``start`` and the snapshot it ``covered`` are both snapshots.
+    """
+    roles = list(relation.key)
+    index = pd.MultiIndex.from_product([master[relation.dim(role)] for role in roles], names=roles)
+    held = pd.MultiIndex.from_arrays([frame[role].to_numpy() for role in roles], names=roles)
+    shape = tuple(len(master[relation.dim(role)]) for role in roles)
+    coords = {role: master[relation.dim(role)].rename(role) for role in roles}
+    return xr.DataArray(index.isin(held).astype(float).reshape(shape), dims=roles, coords=coords)
 
 
 def load_parameters(

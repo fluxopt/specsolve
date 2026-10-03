@@ -21,7 +21,7 @@ a different point of the day each time.
 
 Three properties are asserted rather than printed:
 
-- the stitched schedule covers every snapshot exactly once — no overlap
+- the schedule the sweep answers covers every snapshot exactly once — no overlap
   double-counted, no tail dropped
 - rolling never beats full foresight, which is what myopia means
 - the store is used in every schedule, so the gap is a quality difference and
@@ -96,31 +96,31 @@ def cost_of(sweep: sps.Sweep) -> float:
     """What the schedule cost, summed over the snapshots each window owns.
 
     A window objective covers its lookahead too, so summing them double-counts.
-    `spend` is the model's own per-snapshot definition, and the stitched read
+    `spend` is the model's own per-snapshot definition, and the sweep's answer
     keeps only the rows a window owns.
     """
-    return float(sweep.evaluate('spend', original_index=True)['value'].sum())
+    return float(sweep.evaluate('spend')['value'].sum())
 
 
 def main() -> None:
     reference = full_foresight()
     best = cost_of(reference)
-    peak = reference.primal('soc', original_index=True)['value'].max()
+    peak = reference.primal('soc')['value'].max()
     print(f'{DAYS} days of {DAY} hours: six of cheap wind, then six of none.')
     print(f'full foresight   one window                      cost {best:>9.2f}   peak soc {peak:>6.1f}')
     print()
 
     for lookahead in (0, 4, 8):
         sweep = rolling(STEP, lookahead)
-        stitched = sweep.primal('soc', original_index=True)
-        assert stitched['snapshot'].to_list() == list(range(PERIODS)), 'the stitch must cover the horizon'
+        schedule = sweep.primal('soc')
+        assert schedule['snapshot'].to_list() == list(range(PERIODS)), 'the answer must cover the horizon'
 
         cost = cost_of(sweep)
         assert cost >= best - 1e-6, 'rolling cannot beat full foresight'
-        assert stitched['value'].max() > 0, 'the store must be used in every schedule'
+        assert schedule['value'].max() > 0, 'the store must be used in every schedule'
         print(
             f'rolling  steps={STEP:<3} lookahead={lookahead:<3} '
-            f'windows {len(sweep):>2}   cost {cost:>9.2f}   peak soc {stitched["value"].max():>6.1f}'
+            f'windows {len(sweep):>2}   cost {cost:>9.2f}   peak soc {schedule["value"].max():>6.1f}'
             f'   +{100 * (cost - best) / best:>5.1f}%'
         )
 

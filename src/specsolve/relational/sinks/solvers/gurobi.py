@@ -86,6 +86,21 @@ class Gurobi(Solver):
     _env: Any
 
     requires = ('gurobipy', 'scipy.sparse')
+    recorded_options = frozenset(
+        {
+            'timelimit',
+            'mipgap',
+            'mipgapabs',
+            'seed',
+            'threads',
+            'method',
+            'presolve',
+            'feasibilitytol',
+            'optimalitytol',
+            'intfeastol',
+            'numericfocus',
+        }
+    )
     unavailable_message = (
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
     )

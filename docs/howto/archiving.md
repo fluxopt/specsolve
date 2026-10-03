@@ -15,7 +15,11 @@ sps.solve('dispatch.yaml', sources, archive='case/')
 ```
 
 That writes `spec.yaml`, one `sources/<key>.parquet` per key the file
-declares, and `answer/` holding everything the solve produced:
+declares, `catalog.parquet` saying what each file holds, and `answer/` holding
+everything the solve produced. Each source is held as the table the solve read,
+which [`sps.tidy`](../reference/api.md#specsolve.tidy) returns, with
+`specsolve_run` added: a dimension as its labels and `specsolve_position`, a
+parameter as its dims and `value`, a relation as its columns:
 
 ```text
 case/
@@ -23,8 +27,9 @@ case/
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (run, source, digest) — what each of them is
-    answer/record.parquet      how it terminated, what it reached, when, and under what name
+    sources.parquet               (specsolve_run, source, digest) — what each of them is
+    catalog.parquet               (specsolve_run, path, …) — what each file holds and over which dimensions
+    answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
@@ -39,6 +44,25 @@ sps.solve('dispatch.yaml', sources, archive='case.zip')
 
 **`sps.solve`, `model.solve` and `sps.solve_over` take `archive=`.** Nothing
 else writes one.
+
+**The record says what produced the answer.** `answer/record.parquet` names
+the solver, its version and the options it ran with, and the specsolve and
+mathspec versions that built the model. So you can install the same
+environment again. The options are one JSON string with sorted keys. An
+option that changes the answer, such as a time limit, a gap, a seed or a
+tolerance, keeps its value. A value that JSON has no number for, such as an
+infinite time limit, is the string `"inf"`, `"-inf"` or `"nan"`. Any other
+option keeps its name and has the value `<not recorded>`. An archive often
+goes to shared storage, and a Gurobi licence credential such as `WLSSecret` is
+passed as an option.
+`result.provenance` gives the same five fields without an archive.
+
+To keep the value of an option that is not on the solver's list, name it.
+Name no credential:
+
+```python
+sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, record_options=['mip_max_nodes'])
+```
 
 ## Read it back
 
@@ -65,7 +89,8 @@ refuses an `into=`.
 ## Read one too big to hold
 
 **`scan_archive` reads nothing until asked.** The sources come back as paths,
-and each frame is read off disk at the call that asks for it:
+and each frame is read off disk at the call that asks for it. A source file
+also holds `specsolve_run`, which a build ignores:
 
 ```python
 archived = sps.scan_archive('sweep.zip', 'sweep/')
@@ -121,34 +146,71 @@ with sps.build('dispatch.yaml', sources) as model:
     model.update({'p_max': doubled}).solve(archive='case/')
 ```
 
+## Archive a sweep
+
+`archive=` on `solve_over` writes the sweep's answer at the paths a single
+solve uses, one file per name. A rolling horizon's `answer/primal/soc.parquet`
+is over `snapshot`, as `sweep.primal('soc')` returns it. Each file carries
+`specsolve_run`, as a single solve's does, and the readers drop it:
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t')
+sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/')
+```
+
+The archive carries the axis and the carry, so the sweep runs again from the
+file alone:
+
+```python
+archived = sps.load_archive('roll/')
+
+archived.answer.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
+sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+```
+
+A source the axis cuts is held uncut, the axis column first. A parameter
+given as one number over a window's local index is held as a table over the
+axis, because a window of each length reads the number over labels of its own.
+Each slice cuts from the archive the tables it attached.
+
+**Keep the windows where you will read them per window.** `keep_windows=True`
+also writes each window's frames, lookahead rows included, under
+`answer/windows/`. Then `per_window=True` reads off the archive:
+
+```python
+sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)
+sps.load_archive('roll/').answer.primal('soc', per_window=True)  # (snapshot_start, t, value)
+```
+
+Without them, `per_window=True` and an expression the file never named are
+refused. Solve again from the archive to get them back.
+
 ## Archive a sweep too large to hold
 
 `spill_to=` writes each slice's frames as the fold goes, so the sweep holds
-one slice at a time. `archive=` packs the whole sweep. Pass both and the spill
-is what the archive packs, so the sweep is archived without ever being held:
+one slice at a time. `archive=` packs the whole sweep. Pass both and the
+archive reads its answer off the spill, so the sweep is archived without ever
+being held:
 
 ```python
 axis = sps.EachCoordinate('scenario')
 sps.solve_over('dispatch.yaml', sources, axis, spill_to='work/', archive='sweep/')
 ```
 
-The archive carries the axis, so the sweep runs again from the file alone:
-
 ```python
 archived = sps.scan_archive('sweep/')
 
 archived.answer.scan('p')  # keyed by scenario, read at the collect
-sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
-`scan_archive` reads a sweep back spilled, as `spill_to=` left it.
-`load_archive` reads it back held, where it fits, and `sweep.primal('p')`
-answers on that one.
+`scan_archive` leaves the answer on disk, and `scan` reads it. `load_archive`
+reads it into memory, where it fits, and `sweep.primal('p')` answers on that
+one.
 
 ## Read a directory of them
 
-A directory of archives is a table per glob, and every row carries `run`, the
-archive's own name:
+A directory of archives is a table per glob, and every row of every table
+carries `specsolve_run`, the archive's own name:
 
 ```python
 import polars as pl

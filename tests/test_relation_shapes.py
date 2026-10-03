@@ -265,6 +265,42 @@ def test_a_bare_where_tests_that_a_row_exists(tmp_path):
     assert objective == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
 
 
+#: A start covers its own snapshot and the next, and the last start covers itself alone.
+COVER = [(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)]
+
+
+def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range_over_one_dimension():
+    """`start` and `covered` are both snapshots, so the relation is keyed by one dimension twice.
+
+    One start is made, and the window it opens is priced at the snapshots it
+    covers: from 1 it covers 1 and 2 at a cost of 1 each, the cheapest window.
+    """
+    from tests.differential import differential
+    from tests.oracle import pd
+
+    spec = {
+        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'relations': {'cover': {'key': {'start': 'snapshot', 'covered': 'snapshot'}}},
+        'parameters': {'cost': {'dims': ['snapshot']}},
+        'variables': {
+            's': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}},
+            'm': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}},
+        },
+        'constraints': {
+            'window': {'dims': ['snapshot'], 'expression': 'm == sum(s, by=cover, over=start, into=covered)'},
+            'once': {'dims': [], 'expression': 'sum(s) == 1'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(m * cost)'},
+    }
+    sources = {
+        'snapshot': pd.RangeIndex(4, name='snapshot'),
+        'cover': pd.DataFrame(COVER, columns=['start', 'covered']),
+        'cost': pd.Series([5.0, 1.0, 1.0, 5.0], index=pd.RangeIndex(4, name='snapshot')),
+    }
+    with differential(spec, sources) as run:
+        assert float(run.result.objective) == pytest.approx(2.0, rel=RTOL), 'the window from 1 costs 1 + 1'
+
+
 def test_a_bare_relation_holding_a_pair_twice_is_refused():
     """A table has each coordinate at most once, and a bare relation's coordinate is the whole row."""
     sources = _bare_sources() | {'connection': pl.concat([CONNECTION, CONNECTION.head(1)])}

@@ -195,13 +195,6 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
     ('relations', 'expression', 'dims', 'match'),
     [
         pytest.param(
-            {'connection': {'key': ['generator', 'bus']}},
-            'sum(p, by=connection, over=generator, into=bus) >= load',
-            ['bus', 'period'],
-            r"relation 'connection' is a bare relation, which maps nothing",
-            id='a-bare-relation',
-        ),
-        pytest.param(
             {'season_of': {'key': ['generator', 'period'], 'values': 'bus'}},
             'shift(p, along=period, offset=1, edge=0, by=season_of, within=bus) >= load',
             ['generator', 'period'],

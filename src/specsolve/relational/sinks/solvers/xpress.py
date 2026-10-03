@@ -70,6 +70,20 @@ class Xpress(Solver):
 
     #: One package, and it carries its own solver library.
     requires = ('xpress',)
+    recorded_options = frozenset(
+        {
+            'timelimit',
+            'miprelstop',
+            'mipabsstop',
+            'randomseed',
+            'threads',
+            'defaultalg',
+            'presolve',
+            'feastol',
+            'optimalitytol',
+            'miptol',
+        }
+    )
     unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "specsolve[xpress]"'
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this

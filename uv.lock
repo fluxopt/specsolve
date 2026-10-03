@@ -550,16 +550,16 @@ wheels = [
 
 [[package]]
 name = "mathspec"
-version = "0.2.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0d/6d/abbb0a850f7196ecaeefb216763c1594b9d201b8cc0df3afb43ada9f696f/mathspec-0.2.0.tar.gz", hash = "sha256:38dd9a9ec0201f3ffef6640fa33fe1feb9ab581b0d933ccc1944094d9fac9377", size = 151220, upload-time = "2026-09-25T13:03:34.341Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/e7/ec27d31d40a19232393ca7f6ef0fe8f0aab0302c149ce9c1261346716cf1/mathspec-0.2.1.tar.gz", hash = "sha256:18bfeff047ebb675a62f1a98bf9623154aac7dd99b66dc38660685cf1da2b097", size = 171966, upload-time = "2026-10-01T12:52:14.891Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/a4/09f4842659eb0ed2f16ad9cdfb218bdab2615f8c62d30c3e7a0abb9b295e/mathspec-0.2.0-py3-none-any.whl", hash = "sha256:927f7ad2e7c9a2552bc32326f6e7748b195a2bbc5199285522816f317d07b86f", size = 157666, upload-time = "2026-09-25T13:03:32.786Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/d8/36bf56eb6aa5475a6c6b8f146fdf7b8d707fdbe79d3823b8e9307e16dd51/mathspec-0.2.1-py3-none-any.whl", hash = "sha256:0f05dace4d460e50589c17c35621aff769de764572b868f529c89a511131b279", size = 179991, upload-time = "2026-10-01T12:52:13.24Z" },
 ]
 
 [[package]]
@@ -1577,7 +1577,7 @@ docs = [
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
     { name = "highspy", specifier = ">=1.13" },
-    { name = "mathspec", specifier = ">=0.2.0" },
+    { name = "mathspec", specifier = ">=0.2.1,<0.3" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.30" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
