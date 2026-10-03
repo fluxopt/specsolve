@@ -861,7 +861,7 @@ def _known_to_xpress(name: str) -> bool:
 
     try:
         xpress.problem().getControl(name)
-    except xpress.InterfaceError:
+    except (xpress.InterfaceError, xpress.ModelError):
         return False
     return True
 
@@ -880,6 +880,18 @@ def test_every_recorded_option_is_one_the_solver_knows(name: str, package: str, 
     listed = SOLVERS[name].recorded_options
     assert [option for option in sorted(listed) if not known(option)] == [], (
         f'every option {name} records is one {name} takes'
+    )
+
+
+@pytest.mark.parametrize('name', sorted(SOLVERS))
+def test_every_recorded_option_is_written_casefolded(name: str) -> None:
+    """A caller's option is casefolded before the lookup, so a list entry with a capital never matches.
+
+    Xpress takes a control in all upper case too, so the check against the solver passes `TIMELIMIT`.
+    """
+    listed = SOLVERS[name].recorded_options
+    assert [option for option in sorted(listed) if option != option.casefold()] == [], (
+        f'every option {name} records is written casefolded'
     )
 
 
