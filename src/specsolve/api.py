@@ -19,12 +19,15 @@ Example::
 
 from __future__ import annotations
 
+import json
+import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 import polars as pl
 from mathspec import advice
 
@@ -44,25 +47,28 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
+    RUN,
+    Provenance,
     Record,
     check_format,
     digest_of,
+    installed,
     read_reasons,
     write_whole,
 )
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import attachable, tidy_sources, unknown_source_keys_message
+from specsolve.sources import attachable, numbered, tidy_sources, tidy_tables, unknown_source_keys_message
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     import linopy
     from mathspec.program import Expression, Program
 
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
 
-__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'write']
+__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
 
 def check(spec: Buildable) -> Program:
@@ -92,9 +98,11 @@ def check(spec: Buildable) -> Program:
         `mathspec`.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
-        SpecsolveError: Two declarations whose names differ only by case.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:`` — ``mathspec.merge`` composes it.
+        SpecsolveError: Two declarations whose names differ only by case, or a
+            name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
     Warns:
@@ -106,6 +114,31 @@ def check(spec: Buildable) -> Program:
     for note in advice(program):
         warnings.warn(str(note), SpecsolveWarning, stacklevel=2)
     return program
+
+
+def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
+    """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
+
+    What an archive holds under ``sources/``, less the ``specsolve_run``
+    column it stamps on, so a table that comes back from here goes back in
+    as a source unchanged. Every source is read and
+    checked as [`build`][] reads and checks it.
+
+    Args:
+        spec: As [`check`][] takes it.
+        sources: As [`build`][] takes them.
+
+    Returns:
+        Each dimension as ``(dim, specsolve_position)``: its labels once each,
+        and the ``Int64`` position from 0 that ``shift`` counts. Each
+        parameter as ``(dims…, value)``. Each relation as the columns it
+        declares.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        DataError: As [`build`][] refuses the sources.
+    """
+    return {name: table.collect() for name, table in tidy_tables(lowered(spec), sources).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -196,6 +229,8 @@ class Model:
         #: The document's digest; the data's is [`_model_digest`][].
         self._spec_digest = digest_of(self._spec.to_yaml())
         self._sources = dict(sources)
+        #: What the last build read, as [`tidy_sources`][] gave it.
+        self._tidied: dict[str, pl.LazyFrame] = {}
         self._engine = PolarsEngine()
         self._fill()
 
@@ -208,9 +243,15 @@ class Model:
         return expressions.lower(self._spec, written)
 
     def _fill(self) -> None:
-        """Build from what is attached now; a failure closes the model rather than leaving it stale."""
+        """Build from what is attached now; a failure closes the model rather than leaving it stale.
+
+        What the build read is kept, so an archive holds it rather than reading
+        the sources again: a one-shot iterator is spent by then, and a path may
+        have been rewritten.
+        """
         try:
-            self._engine.build(self._program, tidy_sources(self._program, self._sources))
+            self._tidied = tidy_sources(self._program, self._sources)
+            self._engine.build(self._program, self._tidied)
         except BaseException:
             self._engine.close()
             raise
@@ -260,6 +301,7 @@ class Model:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, object] | None = None,
+        record_options: Sequence[str] | None = None,
         keep: Keep = 'solver',
         archive: str | Path | None = None,
     ) -> Result:
@@ -280,7 +322,13 @@ class Model:
                 vocabulary, so a time limit is ``time_limit``, ``TimeLimit`` or
                 ``timelimit``. Gurobi's are applied when its environment is
                 created, so ``ComputeServer``, ``TokenServer`` and
-                ``WLSAccessID`` reach it too.
+                ``WLSAccessID`` reach it too. The result's
+                [`provenance`][specsolve.relational.result.Result.provenance]
+                records them: the value of an option that changes the answer,
+                such as a time limit or a gap, and the name alone of any other.
+            record_options: More option names whose value the result
+                records, beside the solver's own list, in any letter case. Name
+                no credential here: an archive goes to shared storage.
             keep: How much of the session this solve may keep: ``solver``,
                 ``progress`` or ``nothing``. ``solver``, the
                 default, reuses the solver holding the model and discards the
@@ -296,24 +344,28 @@ class Model:
                 the model solves again from the file alone. A ``.zip`` suffix
                 packs it into one file and anything else is a directory. What
                 the build and its solves have spent goes in beside the answer,
-                as [`Metrics`][specsolve.relational.parquet.Metrics]. The
-                sources go in through the door [`build`][] reads them through:
-                a parquet path is copied as its own bytes, anything else is
-                written as the table it stands for, and members are stored
-                uncompressed.
+                as [`Metrics`][specsolve.relational.parquet.Metrics]. Each
+                source goes in as the table [`tidy`][] returns for it, with
+                ``specsolve_run`` added, and members are stored uncompressed.
 
         Returns:
             The solution, holding this model.
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, or a *keep* other than those three.
+                cannot run, a *keep* other than those three, or a bare string
+                as *record_options*.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
         out = None if archive is None else Path(archive)
         if out is not None:
             check_the_target(out)
+        if isinstance(record_options, str):
+            raise SpecsolveError(
+                f'record_options={record_options!r} is one string, which would name each of its letters. '
+                f'Pass a list: record_options=[{record_options!r}].'
+            )
         answered = replace(
             self._engine.solve(
                 solver_name,
@@ -323,6 +375,7 @@ class Model:
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
+            _provenance=_provenance(solver_name, solver_options, record_options or ()),
         )
         if out is not None:
             self._archive(out, answered)
@@ -338,8 +391,7 @@ class Model:
             answer = answered.save(scratch)
             taken = self._engine.diagnostics().metrics()
             write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            tables = tidy_sources(self._program, self._sources)
-            write_archive(out, self._spec, self._sources, tables=tables, axis=None, answer=answer)
+            write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path, *, names: bool = False) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -579,6 +631,7 @@ def solve(
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, object] | None = None,
+    record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
@@ -596,6 +649,7 @@ def solve(
         sources: As [`build`][] takes them.
         solver_name: As [`Model.solve`][] takes it.
         solver_options: As [`Model.solve`][] takes them.
+        record_options: As [`Model.solve`][] takes them.
         archive: Where to write the spec, its data and this answer, as
             [`Model.solve`][] takes it — a ``.zip``, or a directory.
 
@@ -610,7 +664,7 @@ def solve(
     solver(solver_name)
     model = build(spec, sources)
     try:
-        return model.solve(solver_name, solver_options=solver_options, archive=archive)
+        return model.solve(solver_name, solver_options=solver_options, record_options=record_options, archive=archive)
     finally:
         model.close()
 
@@ -659,10 +713,14 @@ type Reading = Callable[[Path], pl.LazyFrame]
 
 
 def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
-    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist."""
+    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
+
+    An archive's ``specsolve_run`` column is left on disk, so a frame read
+    out of one equals the frame the solve returned.
+    """
     if not under.is_dir():
         return {}
-    return {file.stem: read(file) for file in sorted(under.glob('*.parquet'))}
+    return {file.stem: read(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))}
 
 
 def _absent(reason: str) -> Callable[[], pl.DataFrame]:
@@ -749,14 +807,15 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _spec_digest=record.spec_digest,
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
-            _run=record.run,
+            _run=record.specsolve_run,
+            _provenance=record.provenance,
         )
 
-    no_duals, no_expressions = read_reasons(out)
+    no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda frame=frame: frame.collect()) for name, frame in _saved_frames(out / 'expression', read).items()
     }
-    expressions.update({name: _absent(why) for name, why in no_expressions.items()})
+    expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
@@ -769,7 +828,47 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _spec_digest=record.spec_digest,
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
-        _run=record.run,
+        _run=record.specsolve_run,
+        _provenance=record.provenance,
+    )
+
+
+def _json_value(value: object) -> object:
+    """*value* as strict JSON holds it, which is all a BI tool or polars' ``str.json_decode`` reads.
+
+    A numpy scalar becomes the Python number it holds. A non-finite float
+    becomes the string ``"inf"``, ``"-inf"`` or ``"nan"``, because JSON has no
+    such number and ``time_limit=inf`` is HiGHS's own default.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    return value
+
+
+def _provenance(
+    solver_name: str, solver_options: Mapping[str, object] | None, record_options: Sequence[str] = ()
+) -> Provenance:
+    """What a solve on *solver_name* with *solver_options* records about itself.
+
+    The options are written as one JSON object, because a column of structs is
+    one that several BI tools cannot read. Only an option on the solver's
+    ``recorded_options`` keeps its value: an archive goes to storage other
+    people read, and a list of what to hide would leak whatever it missed.
+    """
+    served = solver(solver_name)
+    recorded = served.recorded_options | {name.casefold() for name in record_options}
+    options = {
+        name: _json_value(value) if name.casefold() in recorded else '<not recorded>'
+        for name, value in (solver_options or {}).items()
+    }
+    return Provenance(
+        solver_name,
+        installed(served.requires[0]),
+        json.dumps(options, sort_keys=True, default=str, allow_nan=False),
+        installed('specsolve'),
+        installed('mathspec'),
     )
 
 

@@ -32,17 +32,25 @@ if TYPE_CHECKING:
 KINDS = ('primal', 'dual', 'expression')
 LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
 
+#: The prefix reserved, in any letter case, for the columns specsolve adds, so
+#: that no name a spec declares can collide with one.
+RESERVED = 'specsolve_'
+
+#: The column an archive adds to every table it holds, naming the run the
+#: table came from. Read back, a frame comes without it.
+RUN = f'{RESERVED}run'
+
 
 #: The layout a result, a sweep and an archive write to disk. A change to
 #: any of them raises it. Compared, never branched on.
-LAYOUT = 1
+LAYOUT = 2
 FORMAT_FILE = 'format.json'
 
 
-def _writer() -> str | None:
-    """The specsolve version writing a stamp, or ``None`` from a source tree nothing installed."""
+def installed(distribution: str) -> str | None:
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed."""
     try:
-        return version('specsolve')
+        return version(distribution)
     except PackageNotFoundError:
         return None
 
@@ -50,7 +58,7 @@ def _writer() -> str | None:
 def write_format(directory: Path) -> None:
     """Stamp *directory* with the layout its contents are in, and the specsolve version that wrote them."""
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': _writer()}))
+    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': installed('specsolve')}))
 
 
 def check_format(directory: Path) -> None:
@@ -104,12 +112,38 @@ def digest_of(yaml: str) -> str:
     return digest_of_bytes(yaml.encode())
 
 
+class Provenance(NamedTuple):
+    """What produced an answer: the solver, the options it ran with, and the packages that built the model.
+
+    Enough to install the same environment again and ask the same question.
+    Every field is ``None`` for an answer no solve wrote, such as one built by
+    hand.
+    """
+
+    #: The solver's name, as ``solver_name`` takes it.
+    solver: str | None = None
+    #: The installed version of the solver's Python package.
+    solver_version: str | None = None
+    #: The options the solver ran with, as one JSON object with sorted keys:
+    #: ``{}`` where none were passed. An option that changes the answer, such
+    #: as a time limit or a gap, keeps its value, and an infinite or ``nan``
+    #: one is the string ``"inf"``, ``"-inf"`` or ``"nan"``; any other has the
+    #: value ``<not recorded>``, so a licence credential never reaches an archive.
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
+
+
+#: The provenance of an answer no solve wrote.
+NO_PROVENANCE = Provenance()
+
+
 class Record(NamedTuple):
     """How a solve terminated, what it reached, and which spec it answered.
 
     One row per solve, and the same columns whoever wrote them: a result
-    writes one, a sweep one per slice keyed by its own key. A run that left no
-    values writes this and nothing else.
+    writes one, a sweep one per slice, which [`slice_axis`][] and
+    [`slice`][] name. A run that left no values writes this and nothing else.
     """
 
     status: str
@@ -131,12 +165,25 @@ class Record(NamedTuple):
     #: What the archive holding this answer was called — its file name without
     #: a ``.zip``, so ``runs/nightly-2026-09-10.zip`` writes
     #: ``nightly-2026-09-10`` and a directory called ``case.v2`` keeps both
-    #: halves of its name. Null until the archive is written.
-    run: str | None = None
+    #: halves of its name. Null until the archive is written. Every other
+    #: table the archive holds carries the same column, ``specsolve_run``.
+    specsolve_run: str | None = None
     #: A digest of the model this answered — the spec *and* its data, where
     #: [`spec_digest`][] is the document alone. ``None`` for an answer that
     #: never held one.
     model_digest: str | None = None
+    #: What the sweep that solved this called its slices — ``scenario``,
+    #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
+    #: null for a single solve. Fixed names rather than a column named for the
+    #: axis, so every table written here has the same columns.
+    slice_axis: str | None = None
+    slice: str | None = None
+    #: [`Provenance`][]'s fields, one column each.
+    solver: str | None = None
+    solver_version: str | None = None
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
 
     @classmethod
     def of(
@@ -148,6 +195,7 @@ class Record(NamedTuple):
         spec_digest: str | None,
         solved_at: datetime | None,
         model_digest: str | None = None,
+        provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes.
 
@@ -164,6 +212,7 @@ class Record(NamedTuple):
                 solve carried no clock.
             model_digest: The built model's digest, or ``None`` where this
                 answer never held one.
+            provenance: What produced the answer.
         """
         return cls(
             status_of(termination_condition),
@@ -173,7 +222,13 @@ class Record(NamedTuple):
             spec_digest,
             solved_at,
             model_digest=model_digest,
+            **provenance._asdict(),
         )
+
+    @property
+    def provenance(self) -> Provenance:
+        """What produced the answer this row records."""
+        return Provenance(*(getattr(self, name) for name in Provenance._fields))
 
     @property
     def solve_status(self) -> SolveStatus:
@@ -220,9 +275,13 @@ class Metrics(NamedTuple):
     with the same columns whoever writes them, so rows written by runs that
     never met concatenate into one table.
 
-    **Cumulative over the model's life.** [`solves`][] says how many solves
-    the clocks cover; it reads ``1`` for the archive [`specsolve.solve`][]
-    writes.
+    **Cumulative over the solves it counts.** [`solves`][] says how many
+    solves the clocks cover. It reads ``1`` for the archive
+    [`specsolve.solve`][] writes, and ``1`` on each slice's row of a sweep,
+    whose clocks are that slice's own share. There [`loads`][] is ``1`` where
+    the solver took the slice from scratch and ``0`` where values were pushed
+    onto the model it held, and [`write_seconds`][] is zero, a sweep writing no
+    model file.
     """
 
     #: The shape the build produced, in the solver's own vocabulary.
@@ -245,45 +304,25 @@ class Metrics(NamedTuple):
     handoff_seconds: float
     solve_seconds: float
     write_seconds: float
-    #: What the archive holding this row was called, as [`Record.run`][]: its
-    #: file name without a ``.zip``. Null until one is written.
-    run: str | None = None
+    #: What the archive holding this row was called, as
+    #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
+    #: until one is written.
+    specsolve_run: str | None = None
+    #: Which sweep slice this row is, as [`Record.slice_axis`][] and
+    #: [`Record.slice`][] say it; null for a single solve.
+    slice_axis: str | None = None
+    slice: str | None = None
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)
 
 
-class SliceMetrics(NamedTuple):
-    """What one slice of a sweep took — [`Metrics`][] one dimension in.
-
-    A slice's clocks are its own share rather than a cumulative total, and
-    ``loaded`` says whether the solver took this slice from scratch. Written per
-    slice by the spill and read back as one table.
-    """
-
-    #: The shape this slice built, as [`Metrics`][] reports a whole model's.
-    columns: int
-    rows: int
-    nonzeros: int
-    #: Whether the solver took this slice's model from scratch instead of
-    #: having values pushed onto one it already held. Under a serial fold the
-    #: first slice does and the rest do not, so a later ``True`` is a slice
-    #: whose data moved a mask; under an executor every slice loads.
-    loaded: bool
-    #: This slice's own seconds per phase. A sweep writes no file per slice, so
-    #: there is no ``write``.
-    attach_seconds: float
-    build_seconds: float
-    handoff_seconds: float
-    solve_seconds: float
-
-
 def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: Path) -> R:
     """One row read off disk as the type that declares its columns.
 
     Args:
-        row_type: [`Record`][], [`Metrics`][] or [`SliceMetrics`][].
+        row_type: [`Record`][] or [`Metrics`][].
         columns: The row as read, ``name: value``.
         found: What to name in the message — the file or directory it came from.
 
@@ -341,25 +380,31 @@ def clear_the_answer(directory: Path) -> None:
         (directory / member).unlink(missing_ok=True)
 
 
-def write_reasons(directory: Path, no_duals: str | None, no_expressions: Mapping[str, str]) -> None:
+def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:
     """``(kind, name, reason)`` for what a solve could not produce, or no file at all.
 
     An empty *name* is the whole kind, which is how the duals are absent.
+    *absent* is ``{kind: {name: reason}}``, one reason per name left out.
     """
     rows = [] if no_duals is None else [{'kind': 'dual', 'name': '', 'reason': no_duals}]
-    rows += [{'kind': 'expression', 'name': name, 'reason': why} for name, why in no_expressions.items()]
+    rows += [
+        {'kind': kind, 'name': name, 'reason': why} for kind, names in absent.items() for name, why in names.items()
+    ]
     if rows:
         write_whole(pl.DataFrame(rows), directory / REASONS_FILE)
 
 
-def read_reasons(directory: Path) -> tuple[str | None, dict[str, str]]:
-    """What [`write_reasons`][] wrote: the duals' reason, and one per named expression."""
+def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]]:
+    """What [`write_reasons`][] wrote: the duals' reason, and ``{kind: {name: reason}}`` for each name left out."""
     file = directory / REASONS_FILE
-    rows: list[tuple[str, str, str]] = pl.read_parquet(file).rows() if file.is_file() else []
-    return (
-        next((why for kind, _, why in rows if kind == 'dual'), None),
-        {name: why for kind, name, why in rows if kind == 'expression'},
+    rows: list[tuple[str, str, str]] = (
+        pl.read_parquet(file, columns=['kind', 'name', 'reason']).rows() if file.is_file() else []
     )
+    absent: dict[str, dict[str, str]] = {}
+    for kind, name, why in rows:
+        if name:
+            absent.setdefault(kind, {})[name] = why
+    return next((why for kind, name, why in rows if kind == 'dual' and not name), None), absent
 
 
 def reader_kind(kind: str) -> str:

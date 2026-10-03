@@ -8,6 +8,7 @@ from mathspec import to_spec
 from mathspec.program import Program
 
 from specsolve.errors import LanguageError, SpecsolveError
+from specsolve.relational.parquet import RESERVED
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -103,6 +104,32 @@ def _case_collision(program: Program) -> str | None:
     return None
 
 
+def _reserved_name(program: Program) -> str | None:
+    """The first declaration whose name starts with ``specsolve_`` in any letter case, as the sentence refusing it."""
+    named = (
+        *((f"dimension '{name}'", name) for name in program.dimensions),
+        *((f"relation '{name}'", name) for name in program.relations),
+        *(
+            (f"column '{role}' of relation '{relation}'", role)
+            for relation, held in program.relations.items()
+            for role, _ in held.columns
+        ),
+        *((f"parameter '{name}'", name) for name in program.parameters),
+        *((f"variable '{name}'", name) for name in program.variables),
+        *((f"constraint '{name}'", name) for name in program.constraints),
+        *((f"named expression '{name}'", name) for name in program.expressions),
+        *((f"sos set '{name}'", name) for name in program.sos),
+        *((f"assumption '{name}'", name) for name in program.assumptions),
+    )
+    for which, name in named:
+        if name.casefold().startswith(RESERVED):
+            return (
+                f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
+                f'specsolve adds, so a declared name cannot collide with one. Rename it.'
+            )
+    return None
+
+
 def lowered(spec: Buildable) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
@@ -110,12 +137,21 @@ def lowered(spec: Buildable) -> Program:
     expanded.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case.
+            by case, or a name that starts with ``specsolve_`` in any letter case.
     """
     program = declared(spec).program
+    if program.given:
+        given = program.given
+        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions})
+        raise LanguageError(
+            f'this spec reads {", ".join(repr(name) for name in read)} under given:, which another file declares, '
+            f'so it is a fragment of a model rather than the whole of one. Compose it with the files that declare '
+            f'them first: mathspec.merge([...]) folds each given name into the file that introduces it.'
+        )
     if program.piecewise:
         named = ', '.join(f"'{name}'" for name in program.piecewise)
         raise LanguageError(
@@ -125,4 +161,6 @@ def lowered(spec: Buildable) -> Program:
         )
     if (refused := _case_collision(program)) is not None:
         raise SpecsolveError(refused)
+    if (reserved := _reserved_name(program)) is not None:
+        raise SpecsolveError(reserved)
     return program

@@ -380,6 +380,25 @@ def test_a_sparse_divisor_written_as_a_power_is_named_and_refused_on_both_lanes(
     both_lanes_refuse(spec, SPARSE_D, match="parameter 'd' is used as a divisor")
 
 
+def test_a_divisor_that_adds_is_added_up_before_it_divides():
+    """`x / (d - 1)` divides by one number per coordinate, on both lanes.
+
+    Taken term by term it would read `x / d - x / 1`, a different row.
+    """
+    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': 'x / (d - 1) <= 10'})
+    dense = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
+    with differential(spec, dense, lp=True) as run:
+        assert float(run.result.objective) == pytest.approx(50.0, rel=RTOL), (
+            'f=a: x <= 10 * 1; f=b: x <= 10 * 4, both under the bound of 100'
+        )
+
+
+def test_a_sparse_divisor_that_adds_is_named_and_refused_on_both_lanes():
+    """`1 + d` has no value where `d` has no row: the constant beside it does not fill the gap."""
+    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': 'x / (1 + d) <= 10'})
+    both_lanes_refuse(spec, SPARSE_D, match="parameter 'd' is used as a divisor")
+
+
 def test_a_sparse_divisor_in_the_objective_is_refused_too():
     """The refusal holds in the objective, the one declaration with no rows to mask."""
     spec = override(

@@ -111,8 +111,8 @@ def main() -> None:
     print(sweep.record.select('year', 'termination_condition', pl.col('objective').round(0)))
     print()
 
-    fleet = sweep.primal('total', original_index=True).pivot('generator', index='year', values='value')
-    built = sweep.primal('build', original_index=True).pivot('generator', index='year', values='value')
+    fleet = sweep.primal('total').pivot('generator', index='year', values='value')
+    built = sweep.primal('build').pivot('generator', index='year', values='value')
     print('fleet after each period (MW)')
     print(fleet.select('year', pl.col(GENERATORS).round(1)))
     print()

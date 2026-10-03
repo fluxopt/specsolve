@@ -202,11 +202,11 @@ what a sink takes, as against what the language may say — and its docstring is
 where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
-Three callers read it, and between them a construct a sink has no spelling for
-cannot reach that sink by any door: `check(spec, sink=...)` before any data is
-attached, and the engine's `solve` and `write` — which ask without being asked,
-a file written without the section being a different model that parses and
-solves.
+Three callers read it, each off the built model, and between them a construct
+a sink has no spelling for cannot reach that sink by any door: `Model.check`,
+which asks without a solve, and the engine's `solve` and `write` — which ask
+without being asked, a file written without the section being a different model
+that parses and solves.
 
 ## Stable output
 

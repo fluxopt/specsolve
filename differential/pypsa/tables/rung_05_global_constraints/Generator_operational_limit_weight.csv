@@ -1,4 +1,4 @@
-global_constraint,generator,value
-op_coal,coal5,1.0
-op_gas,gas5,1.0
-op_wind,wind5,1.0
+scenario,global_constraint,generator,value
+base,op_coal,coal5,1.0
+base,op_gas,gas5,1.0
+base,op_wind,wind5,1.0

@@ -203,10 +203,10 @@ class PolarsCompiler:
             return CompiledExpression(terms, consts, quads)
 
         def quotient(e: program.Divide) -> CompiledExpression:
-            """``a / b``, where *b* is one variable-free factor, added up first to one value per coordinate."""
-            a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor)
+            """``a / b``, where *b* carries no variable, added up first to one value per coordinate."""
+            a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
-            assert len(b.consts) == 1, 'a divisor that adds is refused at load'
+            assert len(b.consts) == 1, 'a variable-free divisor is added up to one fragment'
             inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
             quads = tuple(join_mul(q, inv, 'quad', divide=True) for q in a.quads)
@@ -215,11 +215,12 @@ class PolarsCompiler:
 
         def power(e: program.Power) -> CompiledExpression:
             """``a ** b``, where neither side carries a variable; each side is added up first."""
-            a, b = self._added_up(ev(e.base), e.base), self._added_up(ev(e.exponent), e.exponent)
+            a = self._added_up(ev(e.base), e.base, absent='zero')
+            b = self._added_up(ev(e.exponent), e.exponent, absent='zero')
             assert not (a.terms or a.quads or b.terms or b.quads), (
                 f'in {context}: a power over variables reached the compiler'
             )
-            assert len(a.consts) == 1 and len(b.consts) == 1, 'a base or exponent that adds is refused at load'
+            assert len(a.consts) == 1 and len(b.consts) == 1, 'a variable-free operand is added up to one fragment'
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
 
         def shaped(
@@ -279,8 +280,13 @@ class PolarsCompiler:
             return map_fragments(ev(r.value), kept)
 
         def cases(e: program.Cases) -> CompiledExpression:
-            """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted."""
-            built = [region(r) for r in e.regions]
+            """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted.
+
+            A region worth the literal zero adds nothing, so it builds no
+            piece: a piece would carry its region's claim, which a pullback
+            cannot follow, and be owed at every row it lands on.
+            """
+            built = [region(r) for r in e.regions if not _zero(r.value)]
             return CompiledExpression(
                 tuple(f for c in built for f in c.terms),
                 tuple(f for c in built for f in c.consts),
@@ -400,16 +406,22 @@ class PolarsCompiler:
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
 
-    def _added_up(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
+    def _added_up(
+        self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
+    ) -> CompiledExpression:
         """*compiled* as one const fragment with one value per coordinate — a divisor, or a power's base or exponent.
 
         A sum reaches ``/`` and ``**`` still holding one row per summand
         ([`_sum_fragment`][]), so an operand with a reduction under it is added
-        up first ([`_totalled`][]). Several pieces add up null where no piece
-        has a value, so a divisor's hole is reported rather than divided by a
-        zero the fill invented. The language refuses several at a build, so
-        there they pass through, as does an operand carrying a variable, for
-        the plan-boundary assert behind it.
+        up first ([`_totalled`][]). Several pieces are added up too: addition
+        does not distribute over ``/`` or ``**``. At a build, *absent* is what
+        a parameter with no row adds ([`added`][]): a divisor ``spreads``, so
+        the null coefficient is refused naming the parameter, and a power's
+        operand reads it as ``zero``, as a parameter reads anywhere else. At a
+        read, several pieces add up null where no piece has a value, so a
+        divisor's hole is reported rather than divided by a zero the fill
+        invented. An operand carrying a variable passes through, for the
+        plan-boundary assert behind it.
         """
         if compiled.terms or compiled.quads:
             return compiled
@@ -418,13 +430,11 @@ class PolarsCompiler:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return compiled
             return CompiledExpression((), (replace(fragments[0], frame=_totalled(fragments[0])),))
-        if self.solution is None:
-            return compiled
         dims, restrictions = self.scope.spanned(fragments), absence_restrictions(fragments)
         carrier = masked(self.scope, dims, None)
         for restriction in restrictions:
             carrier = restriction.restrict(carrier, restriction.keyed_by or ())
-        added = self.added(fragments, carrier, absent='hole')
+        added = self.added(fragments, carrier, absent='hole' if self.solution is not None else absent)
         parameters = frozenset[str]().union(*(p.parameters for p in fragments))
         return CompiledExpression(
             (), (TermFragment(dims, added, 'const', presences=tuple(restrictions), parameters=parameters),)
@@ -469,7 +479,9 @@ class PolarsCompiler:
         frame = p.frame.select(*keep, *p.carried)
         if scale != 1:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
-        return TermFragment(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters)
+        return self._empty_sums(
+            TermFragment(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters)
+        )
 
     def _group_fragment(self, p: TermFragment, g: program.GroupSum, context: str) -> TermFragment:
         """Relabel the dims the direction consumes to the ones it produces, through its relation.
@@ -482,29 +494,30 @@ class PolarsCompiler:
         missing = [d for d in over if d not in p.dims]
         if missing:
             refuse_a_fragment_without_the_dims(p, missing, context, f'sum(by=) over {list(over)}')
-        grouped = self._remap_fragment(p, g)
-        if p.kind != 'const':
-            return grouped
-        return replace(grouped, frame=pl.concat([grouped.frame, self._empty_groups(grouped, g)]))
+        return self._empty_sums(self._remap_fragment(p, g))
 
-    def _empty_groups(self, p: TermFragment, g: program.GroupSum) -> pl.LazyFrame:
-        """The produced combinations no member maps to, as constant rows worth zero.
+    def _empty_sums(self, p: TermFragment) -> TermFragment:
+        """Reduced *p* with a zero row at every coordinate of its dims that no member lands in.
 
-        An empty group is the empty sum, not a hole, and
-        [`coverage.constant_side`][] cannot tell the two apart, so the zero is
-        written here. Only for a constant part: a row with no terms is not built.
+        An empty sum is zero, not a hole, and [`coverage.constant_side`][]
+        cannot tell the two apart, so the zero is written here: a dimension
+        with no labels, a group its relation maps no member to, and a member a
+        ``cases:`` region leaves out all land nowhere. Asked of the fragment
+        rather than the relation for that last reason. A parameter short of a
+        member is [`coverage.refuse_short_constants`][]' question. Only for a
+        constant part: a row with no terms is not built.
         """
-        into = g.direction.produced_dims
-        universe = self.scope.data.dimensions[into[0]].select(pl.col('val').alias(into[0]))
-        for target in into[1:]:
-            labels = self.scope.data.dimensions[target].select(pl.col('val').alias(target))
-            universe = universe.join(labels, how='cross')
-        spanned = [d for d in p.dims if d not in into]
-        if spanned:
-            universe = p.frame.select(spanned).unique().join(universe, how='cross')
-        reached = landed(mapping(self.scope.data.relations, g.direction), g)
-        empty = universe.join(reached, on=[*g.direction.joined_dims, *into], how='anti')
-        return empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
+        if p.kind != 'const':
+            return p
+        if not p.dims:
+            zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
+            return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
+        universe = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
+        for dim in p.dims[1:]:
+            universe = universe.join(self.scope.data.dimensions[dim].select(pl.col('val').alias(dim)), how='cross')
+        empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
+        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
+        return replace(p, frame=pl.concat([p.frame, zeros]))
 
     def _at_fragment(self, p: TermFragment, a: program.Pullback, context: str) -> TermFragment:
         """Spread the consumed dims back out over the produced ones — the adjoint of a group.
@@ -550,6 +563,10 @@ class PolarsCompiler:
         """Trade the dims *node*'s direction consumes for the ones it produces, through its relation."""
         frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, node.direction), node, p.dims, p.carried)
         return TermFragment(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+
+
+def _zero(e: program.Expression) -> bool:
+    return isinstance(e, program.Constant) and float(e.value) == 0
 
 
 def _scattered(at: pl.Series, values: pl.Series, size: int) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:

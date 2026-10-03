@@ -1,0 +1,3 @@
+scenario,snapshot,process,value
+base,2015-01-01T00:00:00.000000,warm_conv,true
+base,2015-01-01T01:00:00.000000,warm_conv,true
