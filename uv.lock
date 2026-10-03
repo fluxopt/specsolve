@@ -1577,7 +1577,7 @@ docs = [
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
     { name = "highspy", specifier = ">=1.13" },
-    { name = "mathspec", specifier = ">=0.2.1" },
+    { name = "mathspec", specifier = ">=0.2.1,<0.3" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.30" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
