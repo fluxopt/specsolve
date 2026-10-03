@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): every archived table carries the run it came from as specsolve_run, and names starting with specsolve_ are reserved ([#1809](https://github.com/fluxopt/specsolve/pull/1809))
 - feat(archive): an archived answer names the solver, its options and the specsolve and mathspec versions that produced it ([#1817](https://github.com/fluxopt/specsolve/pull/1817))
 - feat(api): a caller can name more solver options whose value the record keeps ([#1818](https://github.com/fluxopt/specsolve/pull/1818))
 

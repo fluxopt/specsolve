@@ -20,12 +20,14 @@ Example::
 from __future__ import annotations
 
 import json
+import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import polars as pl
 from mathspec import advice
 
@@ -44,6 +46,7 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
+    RUN,
     Provenance,
     Record,
     check_format,
@@ -96,7 +99,8 @@ def check(spec: Buildable) -> Program:
         LanguageError: A construct outside the streaming language, a
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:`` — ``mathspec.merge`` composes it.
-        SpecsolveError: Two declarations whose names differ only by case.
+        SpecsolveError: Two declarations whose names differ only by case, or a
+            name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
     Warns:
@@ -593,10 +597,14 @@ type Reading = Callable[[Path], pl.LazyFrame]
 
 
 def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
-    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist."""
+    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
+
+    An archive's ``specsolve_run`` column is left on disk, so a frame read
+    out of one equals the frame the solve returned.
+    """
     if not under.is_dir():
         return {}
-    return {file.stem: read(file) for file in sorted(under.glob('*.parquet'))}
+    return {file.stem: read(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))}
 
 
 def _absent(reason: str) -> Callable[[], pl.DataFrame]:
@@ -683,7 +691,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _spec_digest=record.spec_digest,
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
-            _run=record.run,
+            _run=record.specsolve_run,
             _provenance=record.provenance,
         )
 
@@ -704,9 +712,23 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _spec_digest=record.spec_digest,
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
-        _run=record.run,
+        _run=record.specsolve_run,
         _provenance=record.provenance,
     )
+
+
+def _json_value(value: object) -> object:
+    """*value* as strict JSON holds it, which is all a BI tool or polars' ``str.json_decode`` reads.
+
+    A numpy scalar becomes the Python number it holds. A non-finite float
+    becomes the string ``"inf"``, ``"-inf"`` or ``"nan"``, because JSON has no
+    such number and ``time_limit=inf`` is HiGHS's own default.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    return value
 
 
 def _provenance(
@@ -722,13 +744,13 @@ def _provenance(
     served = solver(solver_name)
     recorded = served.recorded_options | {name.casefold() for name in record_options}
     options = {
-        name: value if name.casefold() in recorded else '<not recorded>'
+        name: _json_value(value) if name.casefold() in recorded else '<not recorded>'
         for name, value in (solver_options or {}).items()
     }
     return Provenance(
         solver_name,
         installed(served.requires[0]),
-        json.dumps(options, sort_keys=True, default=str),
+        json.dumps(options, sort_keys=True, default=str, allow_nan=False),
         installed('specsolve'),
         installed('mathspec'),
     )

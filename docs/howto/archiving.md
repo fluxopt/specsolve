@@ -23,7 +23,7 @@ case/
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (run, source, digest) — what each of them is
+    sources.parquet               (specsolve_run, source, digest) — what each of them is
     answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
@@ -45,9 +45,11 @@ the solver, its version and the options it ran with, and the specsolve and
 mathspec versions that built the model. So you can install the same
 environment again. The options are one JSON string with sorted keys. An
 option that changes the answer, such as a time limit, a gap, a seed or a
-tolerance, keeps its value. Any other option keeps its name and has the value
-`<not recorded>`. An archive often goes to shared storage, and a Gurobi
-licence credential such as `WLSSecret` is passed as an option.
+tolerance, keeps its value. A value that JSON has no number for, such as an
+infinite time limit, is the string `"inf"`, `"-inf"` or `"nan"`. Any other
+option keeps its name and has the value `<not recorded>`. An archive often
+goes to shared storage, and a Gurobi licence credential such as `WLSSecret` is
+passed as an option.
 `result.provenance` gives the same five fields without an archive.
 
 To keep the value of an option that is not on the solver's list, name it.
@@ -82,7 +84,8 @@ refuses an `into=`.
 ## Read one too big to hold
 
 **`scan_archive` reads nothing until asked.** The sources come back as paths,
-and each frame is read off disk at the call that asks for it:
+and each frame is read off disk at the call that asks for it. A source file
+also holds `specsolve_run`, which a build ignores:
 
 ```python
 archived = sps.scan_archive('sweep.zip', 'sweep/')
@@ -164,8 +167,8 @@ answers on that one.
 
 ## Read a directory of them
 
-A directory of archives is a table per glob, and every row carries `run`, the
-archive's own name:
+A directory of archives is a table per glob, and every row of every table
+carries `specsolve_run`, the archive's own name:
 
 ```python
 import polars as pl
