@@ -195,12 +195,13 @@ protects: a new consumer is free, a new primitive is taxed.
 
 ### The Python surface
 
-**Twenty-seven names, and the count is the feature.** The spec is the YAML file,
+**Twenty-eight names, and the count is the feature.** The spec is the YAML file,
 and Python is how you *run* it. So nothing on the surface constructs math or
 reaches the plan. The names, by role:
 
 - the five verbs `check`, `build`, `evaluate`, `solve` and `write`;
 - the fold `solve_over` with its two axes;
+- `tidy`, the tables a solve reads from the sources, as an archive holds them;
 - the two archives that carry a spec, its data and its answer, `SolveArchive`
   and `SweepArchive`, with `load_archive`, `load_result` and `load_sweep` to read
   one back whole and `scan_archive`, `scan_result` and `scan_sweep` to read it
@@ -327,7 +328,7 @@ the language's rulebook.
    `Spec` and the `Program` it lowers to. Whether that seam is ever blessed is
    open ([#381](https://github.com/fluxopt/specsolve/issues/381)). The Python
    surface is the runner (`api.py`) and the driver over it (`strategy.py`); the
-   plan is internal. The whole of it is [twenty-seven
+   plan is internal. The whole of it is [twenty-eight
    names](#the-python-surface), pinned by a test.
 
 ## The plan, node for node

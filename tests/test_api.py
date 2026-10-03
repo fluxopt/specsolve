@@ -411,6 +411,73 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
     assert 'P' in sps.check(spec).constraints, "a constraint named like a variable is the language's to allow"
 
 
+@pytest.mark.parametrize(
+    ('spec', 'named'),
+    [
+        pytest.param(_named(dimensions={'specsolve_t': {'dtype': 'int'}}), "dimension 'specsolve_t'", id='a dimension'),
+        pytest.param(
+            _named(dimensions={'specsolve_position': {'dtype': 'int'}}),
+            "dimension 'specsolve_position'",
+            id='a dimension named as the column that numbers its labels',
+        ),
+        pytest.param(
+            _named(parameters={'specsolve_load': {'dims': ['t']}}), "parameter 'specsolve_load'", id='a parameter'
+        ),
+        pytest.param(
+            _named(variables={'specsolve_p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}}),
+            "variable 'specsolve_p'",
+            id='a variable',
+        ),
+        pytest.param(
+            _named(constraints={'specsolve_meet': {'dims': ['t'], 'expression': 'p >= load'}}),
+            "constraint 'specsolve_meet'",
+            id='a constraint',
+        ),
+        pytest.param(
+            _named(expressions={'specsolve_spend': '3 * p'}),
+            "named expression 'specsolve_spend'",
+            id='a named expression',
+        ),
+        pytest.param(
+            {**_named(), 'relations': {'specsolve_next': {'key': {'here': 't'}, 'values': {'there': 't'}}}},
+            "relation 'specsolve_next'",
+            id='a relation',
+        ),
+        pytest.param(
+            {**_named(), 'relations': {'next': {'key': {'specsolve_here': 't'}, 'values': {'there': 't'}}}},
+            "column 'specsolve_here' of relation 'next'",
+            id='a column of a relation',
+        ),
+        pytest.param(
+            {**_named(), 'sos': {'specsolve_pick': {'variable': 'p', 'along': 't', 'type': 1}}},
+            "sos set 'specsolve_pick'",
+            id='an sos set',
+        ),
+        pytest.param(
+            {**_named(), 'assumptions': {'specsolve_positive': 'load >= 0'}},
+            "assumption 'specsolve_positive'",
+            id='an assumption',
+        ),
+    ],
+)
+def test_a_name_that_starts_with_the_reserved_prefix_is_refused(spec, named):
+    """Every column specsolve adds starts with `specsolve_`, so a declared name that does could collide with one."""
+    with pytest.raises(sps.SpecsolveError, match=rf"^{named} starts with 'specsolve_', which is reserved"):
+        sps.check(spec)
+
+
+@pytest.mark.parametrize('name', ['Specsolve_run', 'SPECSOLVE_RUN', 'specSolve_p'], ids=str)
+def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
+    """A capital passed the reserved prefix, but SQL, DuckDB and Power BI read column names without case.
+
+    So a variable `Specsolve_run` and the stamped `specsolve_run` were one
+    column to every query engine an archive is read with.
+    """
+    spec = _named(variables={name: {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}})
+    with pytest.raises(sps.SpecsolveError, match=rf"^variable '{name}' starts with 'specsolve_', which is reserved"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
@@ -459,9 +526,16 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'has_primal',
         'spec_digest',
         'solved_at',
-        'run',
+        'specsolve_run',
         'model_digest',
-    ], 'the columns a sweep keys and folds, minus the key'
+        'slice_axis',
+        'slice',
+        'solver',
+        'solver_version',
+        'solver_options',
+        'specsolve_version',
+        'mathspec_version',
+    ], 'the columns a sweep writes per slice, the slice null'
     assert record.height == 1, 'one solve, one row'
     assert record.row(0, named=True) == {
         'status': dispatch_solution.status,
@@ -470,8 +544,11 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'has_primal': dispatch_solution.has_primal,
         'spec_digest': dispatch_solution.spec_digest,
         'solved_at': dispatch_solution.solved_at,
-        'run': None,
+        'specsolve_run': None,
         'model_digest': dispatch_solution.model_digest(),
+        'slice_axis': None,
+        'slice': None,
+        **dispatch_solution.provenance._asdict(),
     }, 'the row carries what the result itself reports, not a second reading of the solve'
 
 
@@ -886,3 +963,37 @@ def test_check_catches_a_dim_error_with_no_sources_bound():
     )
     with pytest.raises(DimensionError):
         sps.check(raw)
+
+
+# ---------------------------------------------------------------------------
+# tidy
+# ---------------------------------------------------------------------------
+
+
+def test_tidy_returns_one_table_per_declared_name_in_its_canonical_columns(dispatch_yaml, dispatch_frame_inputs):
+    """A dimension is its labels and their positions, a parameter its dims and `value`."""
+    generators = ['gas', 'wind', 'solar']
+    sources = {
+        **dispatch_frame_inputs,
+        'generator': pl.DataFrame({'generator': generators, 'colour': ['a', 'b', 'c']}),
+        'p_max': dict(zip(generators, DISPATCH_P_MAX, strict=True)),
+        'cost': pl.DataFrame({'generator': generators, 'value': DISPATCH_COST, 'note': ['x', 'y', 'z']}),
+    }
+    tables = sps.tidy(dispatch_yaml, sources)
+
+    assert sorted(tables) == ['cost', 'generator', 'load', 'p_max', 'snapshot'], 'one table per declared name'
+    assert tables['generator'].columns == ['generator', 'specsolve_position'], 'the extra column is gone'
+    assert tables['generator']['generator'].to_list() == generators, 'the labels keep the order they arrived in'
+    assert tables['generator']['specsolve_position'].to_list() == [0, 1, 2], 'positions count from 0 in that order'
+    assert tables['generator'].schema['specsolve_position'] == pl.Int64, 'the position is an Int64'
+    assert tables['cost'].columns == ['generator', 'value'], 'a parameter is its dims and value, nothing else'
+    assert tables['p_max'].columns == ['generator', 'value'], 'a plain-Python shape comes back as the same table'
+
+
+def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_frame_inputs):
+    """The tidy tables are sources too, so an archive of them asks the same question."""
+    with (
+        sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
+        sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_frame_inputs)) as tidied,
+    ):
+        assert tidied.objective == pytest.approx(direct.objective, rel=1e-9), 'the tidy tables build the same model'

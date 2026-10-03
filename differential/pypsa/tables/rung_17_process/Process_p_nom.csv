@@ -1,0 +1,4 @@
+scenario,process,value
+base,conv_ext,0.0
+base,conv_fix,50.0
+base,conv_set,20.0

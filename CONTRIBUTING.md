@@ -257,8 +257,8 @@ specsolve. The corpus and the ledger of what a port could *not* say are in
 [docs/examples/index.md](docs/examples/index.md), where the reference table is
 generated from `examples/ports/references.json` — the same file the tests assert
 against. The PyPSA ladder is a different instrument and lives in
-[docs/examples/pypsa_ladder.md](docs/examples/pypsa_ladder.md): fifteen rungs
-generated from the parity runs, not ports. Each port's page there shows the model and a side-by-side
+[docs/examples/pypsa_ladder.md](docs/examples/pypsa_ladder.md): one page per
+rung of mathspec's PyPSA corpus, generated from the parity runs, not ports. Each port's page there shows the model and a side-by-side
 against its reference.
 
 **Check the claim against the shipped instance before writing a file.** A model

@@ -42,6 +42,10 @@ defines *model*, *result*, *sink* and the other house terms the entries use.
     options:
       heading_level: 4
 
+::: specsolve.tidy
+    options:
+      heading_level: 4
+
 ### Run it many times
 
 The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
@@ -76,8 +80,8 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
     options:
       heading_level: 4
 
-The rows and frames those hand back: how a solve terminated, what the build
-and its solves took, and what a slice of a sweep took.
+The rows and frames those hand back: how a solve terminated, what produced
+it, what the build and its solves took, and what a slice of a sweep took.
 
 ::: specsolve.relational.result.Diagnostics
     options:
@@ -87,11 +91,11 @@ and its solves took, and what a slice of a sweep took.
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Metrics
+::: specsolve.relational.parquet.Provenance
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.SliceMetrics
+::: specsolve.relational.parquet.Metrics
     options:
       heading_level: 4
 
@@ -193,6 +197,23 @@ relations, parameters, variables and named expressions, and constraints beside
 it. A constraint may carry a variable's name already, so a constraint `P`
 beside a variable `p` is accepted. The two are written under `dual/` and
 `primal/`, which nothing folds together.
+
+### Names that start with `specsolve_`
+
+**A declared name that starts with `specsolve_` is refused**, in any letter
+case, whichever verb lowers the spec. The prefix is reserved for the columns
+specsolve adds, such as `specsolve_run` on every table an archive holds, so a
+declared name cannot collide with one. Case does not tell two columns apart:
+SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
+covers dimensions, relations and their columns, parameters, variables,
+constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
+with the prefix is refused too.
+
+```
+variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
+letter case for the columns specsolve adds, so a declared name cannot collide
+with one. Rename it.
+```
 
 ### What each sink takes
 

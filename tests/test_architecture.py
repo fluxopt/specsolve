@@ -320,6 +320,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
+    'see what it reads': {'tidy'},
     'carry it': {
         'SolveArchive',
         'SweepArchive',

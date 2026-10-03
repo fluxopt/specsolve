@@ -1,3 +1,3 @@
-link,value
-cable,30.0
-wire,inf
+scenario,link,value
+base,cable,30.0
+base,wire,inf

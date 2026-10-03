@@ -1,2 +1,2 @@
-global_constraint,link,value
-vol_dc,cable,120.0
+scenario,global_constraint,link,value
+base,vol_dc,cable,120.0

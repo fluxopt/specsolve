@@ -1,0 +1,6 @@
+scenario,process,value
+base,cold_conv,2
+base,ext_conv,0
+base,mod_conv,0
+base,mod_fix,0
+base,warm_conv,3
