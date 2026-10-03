@@ -42,6 +42,10 @@ defines *model*, *result*, *sink* and the other house terms the entries use.
     options:
       heading_level: 4
 
+::: specsolve.tidy
+    options:
+      heading_level: 4
+
 ### Run it many times
 
 The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
@@ -88,10 +92,6 @@ and its solves took, and what a slice of a sweep took.
       heading_level: 4
 
 ::: specsolve.relational.parquet.Metrics
-    options:
-      heading_level: 4
-
-::: specsolve.relational.parquet.SliceMetrics
     options:
       heading_level: 4
 
@@ -194,11 +194,30 @@ it. A constraint may carry a variable's name already, so a constraint `P`
 beside a variable `p` is accepted. The two are written under `dual/` and
 `primal/`, which nothing folds together.
 
+### Names that start with `specsolve_`
+
+**A declared name that starts with `specsolve_` is refused**, in any letter
+case, whichever verb lowers the spec. The prefix is reserved for the columns
+specsolve adds, such as `specsolve_run` on every table an archive holds, so a
+declared name cannot collide with one. Case does not tell two columns apart:
+SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
+covers dimensions, relations and their columns, parameters, variables,
+constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
+with the prefix is refused too.
+
+```
+variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
+letter case for the columns specsolve adds, so a declared name cannot collide
+with one. Rename it.
+```
+
 ### What each sink takes
 
-`check(spec, sink=...)` asks whether a sink takes a spec, and `solve` and
-`write` read the same table, so a refusal comes whether or not it was asked
-for. Where a spec can land is
+`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+sinks that do, and `solve` and `write` refuse the same. The answer is read off
+the model the build produced, not the file: a square the data prices at zero,
+an integer variable no column is built for or a set with no members asks for
+nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
 from whether it is sayable. The four quadratic rows, and the two sections
 HiGHS writes but will not read back, are probed against the shipped solvers by

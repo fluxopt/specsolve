@@ -4,17 +4,18 @@ What to read when a model solves to the wrong number, or does not solve, in
 the order that finds the fault soonest. Each step needs the file, or the file
 and its data, and none needs a solver run you have not already paid for.
 
-## 1. Check the file against the sink
+## 1. Check the file
 
 ```python
 import specsolve as sps
 
-sps.check('dispatch.yaml', sink='highs')
+sps.check('dispatch.yaml')
 ```
 
-`check` raises on a construct outside the language, and with `sink=` on one
-the solver cannot take: an `sos:` set on `highs`, which has no such concept,
-until `Spec.expand()` writes it out as binaries
+`check` raises on a construct outside the language. Whether the solver takes
+the model is decided at the build: `model.check('highs')` refuses a built
+model the solver cannot take, such as an `sos:` set, which HiGHS has no
+concept of until `Spec.expand()` writes it out as binaries
 ([what each sink takes](../reference/api.md#what-each-sink-takes)).
 
 ## 2. Read the shape the build produced

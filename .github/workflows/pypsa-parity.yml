@@ -16,16 +16,18 @@ concurrency:
 jobs:
   parity:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: the corpus is mathspec at the release pyproject.toml floors
+      - name: the language is mathspec at the release pyproject.toml floors
         id: pin
-        run: echo "version=$(grep -o 'mathspec>=[^"]*' pyproject.toml | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(grep -o 'mathspec>=[^,"]*' pyproject.toml | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+      # The corpus is the release the committed rungs were certified from. A later corpus
+      # adds rungs and data prep, so moving this tag is its own change, with the rungs it adds.
       - uses: actions/checkout@v7
         with:
           repository: energy-models/mathspec
-          ref: v${{ steps.pin.outputs.version }}
+          ref: v0.2.1
           path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:

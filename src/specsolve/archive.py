@@ -19,15 +19,14 @@ from mathspec import to_spec
 from specsolve.api import attach_readers, load_result, scan_result
 from specsolve.errors import SpecsolveError
 from specsolve.layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
-from specsolve.relational.parquet import METRICS_FILE, Metrics, digest_of, row_of
+from specsolve.relational.parquet import METRICS_FILE, RUN, Metrics, digest_of, row_of
 from specsolve.strategy import (
     EachCoordinate,
     EachWindow,
     Sweep,
     attach_sweep_readers,
     axis_from,
-    load_sweep,
-    scan_sweep,
+    read_archived_sweep,
 )
 
 if TYPE_CHECKING:
@@ -49,14 +48,18 @@ class SolveArchive:
 
     Attributes:
         spec: The spec as written, read back as one ``Spec`` whatever went in.
-        sources: What was attached, keyed as the file declares it: a table
-            from [`load_archive`][], the path to one from [`scan_archive`][].
+        sources: What was attached, keyed as the file declares it, as
+            [`tidy`][specsolve.api.tidy] returns it: a table from
+            [`load_archive`][], the path to one from [`scan_archive`][],
+            which also holds the ``specsolve_run`` column.
         answer: What came back.
-        source_digests: ``(run, source, digest)``, one row per source, so two
-            archives of one spec over different numbers name the input that
-            moved. A digest is of the parquet bytes the archive holds, so two
-            polars versions can write one table to different digests, and
-            reading an archive does not verify them.
+        source_digests: ``(specsolve_run, source, digest)``, one row per
+            source, so two archives of one spec over different numbers name
+            the input that moved. A digest is of the tidy table's parquet
+            bytes, written before the run was stamped on, so two archives of
+            one table under different names digest it alike; two polars
+            versions can write one table to different digests, and reading
+            an archive does not verify them.
         metrics: What reaching the answer took, as one
             [`Metrics`][specsolve.relational.parquet.Metrics].
     """
@@ -78,12 +81,18 @@ class SweepArchive:
     Attributes:
         spec: The spec as written.
         sources: What the sweep was given, uncut. A table or a path, as
-            [`SolveArchive`][] holds them.
+            [`SolveArchive`][] holds them; a source the axis cuts holds the
+            axis column first, and a parameter given as one number over a
+            window's local index is held over the axis instead, so each
+            slice cuts from it what that slice attached.
         axis: What cut them.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.
-        answer: Every slice's answer, keyed by slice. Held from
-            [`load_archive`][], spilled from [`scan_archive`][].
+        answer: The sweep, whose readers return the answer the archive
+            holds. Held from [`load_archive`][], on disk from
+            [`scan_archive`][]. ``per_window=True`` reads an EachWindow
+            sweep's windows where ``keep_windows=True`` kept them, and is
+            refused otherwise.
         source_digests: As [`SolveArchive`][] holds it, of the uncut
             sources.
     """
@@ -138,7 +147,7 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> SolveArchi
 def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
-        member.stem: pl.read_parquet(member) if whole else member
+        member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
     digests = pl.read_parquet(under / DIGESTS_MEMBER)
@@ -151,7 +160,7 @@ def _read(under: Path, *, whole: bool) -> SolveArchive | SweepArchive:
         return SolveArchive(spec, sources, answer, digests, metrics)
     manifest = json.loads(axis_member.read_text())
     axis, carry = axis_from(manifest), manifest.get('carry', {})
-    answer = attach_sweep_readers((load_sweep if whole else scan_sweep)(saved), spec, sources, axis, carry)
+    answer = attach_sweep_readers(read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
     _check_the_pairing(spec, answer.record['spec_digest'].to_list())
     return SweepArchive(spec, sources, axis, carry, answer, digests)
 

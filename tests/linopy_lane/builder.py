@@ -20,10 +20,11 @@ import operator
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
+import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError, SpecsolveError, null_bounds_message
-from specsolve.relational.sinks.capabilities import Capabilities, required, spelled
+from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
@@ -40,7 +41,6 @@ from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_rel
 if TYPE_CHECKING:
     import linopy
     import pandas as pd
-    import xarray as xr
 
 _SIGN_MAP = {'==': '=', '<=': '<=', '>=': '>='}
 
@@ -153,9 +153,24 @@ CAPABILITIES = Capabilities(
 )
 
 
+def _declared(p: program.Program) -> frozenset[Capability]:
+    """What *p* declares, in the sinks' vocabulary — the file's upper bound, since this lane has no built model to read."""
+    footprint = p.footprint
+    needed: set[Capability] = set()
+    if footprint.domains - {'continuous'}:
+        needed.add('integrality')
+    if 'objective' in footprint.quadratic:
+        needed.add('quadratic_objective')
+    if 'constraint' in footprint.quadratic:
+        needed.add('quadratic_constraint')
+    if footprint.sos_types:
+        needed.add('sos')
+    return frozenset(needed)
+
+
 def _refuse_what_the_lane_cannot_build(p: program.Program) -> None:
     """Refuse a construct the language accepts and this lane cannot build, before linopy is asked."""
-    if missing := CAPABILITIES.missing(required(p)):
+    if missing := CAPABILITIES.missing(_declared(p)):
         raise OracleCannotBuildError(
             f'the linopy lane cannot build {spelled(missing)}, and no reformulation of it is exact. '
             f'The language accepts it and specsolve builds it, so this is a limit of the lane rather '
@@ -173,13 +188,44 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask)
             check_constant_side_covers(context, row, ctx, mask)
 
-            lhs = _eval(row.lhs, ctx)
-            rhs = _eval(row.rhs, ctx)
+            if mask is not None and not bool(np.asarray(mask).any()):
+                continue
+            lhs = _linear_where_squares_vanish(_eval(row.lhs, ctx), context)
+            rhs = _linear_where_squares_vanish(_eval(row.rhs, ctx), context)
             if _term_free(lhs) and _term_free(rhs):
                 continue
 
             term, other, sense = _sides(lhs, rhs, row.sense)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
+
+
+def _linear_where_squares_vanish(side: Any, context: str) -> Any:
+    """*side* as a linear expression where every square in it carries a zero coefficient.
+
+    A file can write a square into a row its data never prices — a cost the
+    assumptions hold at zero wherever the row stands — and linopy takes no
+    quadratic row at all.
+
+    Raises:
+        OracleCannotBuildError: A square with a coefficient that is not zero.
+    """
+    from linopy.constants import FACTOR_DIM
+    from linopy.expressions import LinearExpression, QuadraticExpression
+
+    if not isinstance(side, QuadraticExpression):
+        return side
+    data = side.data
+    squared = data.vars.isel({FACTOR_DIM: 1}) != -1
+    if bool(((data.coeffs != 0) & squared).any()):
+        raise OracleCannotBuildError(f'{context}: the linopy lane cannot build a quadratic constraint')
+    linear = xr.Dataset(
+        {
+            'coeffs': data.coeffs.where(~squared, 0.0),
+            'vars': data.vars.isel({FACTOR_DIM: 0}).where(~squared, -1),
+            'const': data.const,
+        }
+    )
+    return LinearExpression(linear, side.model)
 
 
 #: What reading a comparison from its other side does to it.
@@ -310,6 +356,9 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
             summed = operator_sum(summed, dimension)
         return summed
 
+    if isinstance(node, program.GroupSum) and not node.direction.relation.values:
+        return _member_sum(_eval(node.operand, ctx), node, ctx)
+
     if isinstance(node, program.GroupSum):
         return operator_grouped_sum(
             _eval(node.operand, ctx),
@@ -408,6 +457,23 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     nobody supplied is a step of nothing, which is what a zero offset means.
     """
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
+
+
+def _member_sum(operand: Any, node: program.GroupSum, ctx: EvaluationContext) -> Any:
+    """``sum(x, by=relation, over=a, into=b)`` over a bare relation: every row of it carries its ``a`` term to its ``b``.
+
+    The operand's dims become the relation's roles, so two roles over one
+    dimension stay apart; the membership array multiplies in, the consumed
+    roles sum out, and the produced roles take their dimensions back.
+    """
+    direction = node.direction
+    membership = bound_relation(direction.name, '', ctx.relations)
+    entering = {direction.dim(r): r for r in (*direction.consumed, *direction.joined) if direction.dim(r) != r}
+    leaving = {r: direction.dim(r) for r in (*direction.produced, *direction.joined) if direction.dim(r) != r}
+    summed = operand.rename(entering) * membership
+    for role in direction.consumed:
+        summed = operator_sum(summed, role)
+    return summed.rename(leaving)
 
 
 def _walked_arrays(

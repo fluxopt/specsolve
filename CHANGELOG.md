@@ -7,6 +7,40 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(deps): an installed specsolve release keeps the mathspec minor version it was released against ([#1816](https://github.com/fluxopt/specsolve/pull/1816))
+- feat(archive): every archived table carries the run it came from as specsolve_run, and names starting with specsolve_ are reserved ([#1809](https://github.com/fluxopt/specsolve/pull/1809))
+- feat(archive): an archive's record and metrics have the same columns for a solve and for every kind of sweep ([#1810](https://github.com/fluxopt/specsolve/pull/1810))
+- feat(archive): an archive lists every name it holds, its kind, description and dimensions in catalog.parquet ([#1812](https://github.com/fluxopt/specsolve/pull/1812))
+- feat(sweep): a sweep reads and archives its answer over the model's own coordinates by default, and keeps the per-window frames only on request ([#1811](https://github.com/fluxopt/specsolve/pull/1811))
+- feat(data): an archive holds each source as the tidy table the solve read, and tidy() returns those tables ([#1813](https://github.com/fluxopt/specsolve/pull/1813))
+
+## 0.3.0 (2026-10-02)
+
+specsolve now requires mathspec 0.2.1. This release breaks one import.
+
+- `check(spec, sink=...)` is removed. To ask a sink without a solve, call
+  `build(spec, sources).check(sink)`. A sink refuses only what the built model
+  asks of it.
+
+With mathspec 0.2.1:
+
+- A divisor, a power's base or an exponent may add over parameters, such as
+  `x / (1 - cost)` or `(1 + rate) ** years`.
+- A spec composed from several files with `mathspec.merge` builds. A fragment
+  is refused by name.
+
+Fixes:
+
+- A constant sum that no member reaches at a coordinate adds zero there.
+- A `cases:` region whose value is `0`, read through a relation, no longer
+  makes the build refuse its rows.
+
+The pull requests since 0.2.1:
+
+- feat(sinks): a built model checks whether a sink takes it without a solve, and check no longer takes a sink ([#1806](https://github.com/fluxopt/specsolve/pull/1806))
+- feat: specsolve requires mathspec 0.2.1, where a divisor or a power over parameters may add and a spec may be composed from several files ([#1800](https://github.com/fluxopt/specsolve/pull/1800))
+- fix(engine): a constant sum that no member reaches at a coordinate adds zero there rather than leaving a gap ([#1801](https://github.com/fluxopt/specsolve/pull/1801))
+- fix(engine): a cased quantity whose otherwise is zero no longer reads as short where it is read through a relation ([#1804](https://github.com/fluxopt/specsolve/pull/1804))
 - docs: the tutorials teach in the order a new user needs them, and warm-starting a re-solve has its own how-to guide ([#1788](https://github.com/fluxopt/specsolve/pull/1788))
 - docs: a how-to guide chooses a solver or writes the model to a file, and lists the solvers this build has ([#1790](https://github.com/fluxopt/specsolve/pull/1790))
 - docs: a how-to guide reads an answer into pandas or xarray ([#1789](https://github.com/fluxopt/specsolve/pull/1789))

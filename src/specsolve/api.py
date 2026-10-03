@@ -38,12 +38,12 @@ from specsolve.errors import (
 )
 from specsolve.lanes import Buildable, Label, Source, declared, lowered
 from specsolve.layout import beside, check_the_target, write_archive
-from specsolve.relational import sinks
 from specsolve.relational.engines.polars.engine import PolarsEngine, expression_readers
 from specsolve.relational.parquet import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
+    RUN,
     Record,
     check_format,
     digest_of,
@@ -52,7 +52,7 @@ from specsolve.relational.parquet import (
 )
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import attachable, tidy_sources, unknown_source_keys_message
+from specsolve.sources import attachable, numbered, tidy_sources, tidy_tables, unknown_source_keys_message
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -61,21 +61,19 @@ if TYPE_CHECKING:
 
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
 
-__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'write']
+__all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
 
-def check(spec: Buildable, sink: str | None = None) -> Program:
+def check(spec: Buildable) -> Program:
     """Parse, validate and lower a spec; attach no data.
 
     The CI verb: with no data and no solver, a spec repository validates every
     commit. Every other verb reads the spec through the same door, so what this
     refuses they refuse too.
 
-    With *sink*, also: **will that sink take it?** Bare ``check`` says nothing
-    about portability. The answer is read off a declared table with no data
-    attached, so it needs no solver installed, and [`solve`][] and
-    [`write`][] read the same table, so the refusal comes whether or not it was
-    asked for. The solver-independent advice is issued either way.
+    Whether a sink takes the model is not asked here: that is a fact about
+    the model a build produces, and [`Model.check`][specsolve.Model.check]
+    answers it with no solve.
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
@@ -85,9 +83,6 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
             first: ``to_spec(spec).expand('piecewise')`` keeps every ``sos:``
             set for a sink that takes one, and ``to_spec(spec).expand()``
             writes the sets out too, as binaries every sink takes.
-        sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an output
-            suffix (``.lp``, ``.mps``). ``None`` asks only whether the spec is
-            sayable.
 
     Returns:
         The lowered program: what a build reads rows off, for reading the plan.
@@ -96,11 +91,11 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
         `mathspec`.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a
-            ``piecewise:`` block still to be written out.
-        SpecsolveError: A *sink* that cannot take this spec, naming the
-            construct and the sinks that do; a name belonging to no sink; or
-            two declarations whose names differ only by case.
+        LanguageError: A construct outside the streaming language, a
+            ``piecewise:`` block still to be written out, or a fragment that
+            reads a name under ``given:`` — ``mathspec.merge`` composes it.
+        SpecsolveError: Two declarations whose names differ only by case, or a
+            name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
     Warns:
@@ -109,12 +104,34 @@ def check(spec: Buildable, sink: str | None = None) -> Program:
             nothing to stop it. Issued here and nowhere else.
     """
     program = lowered(spec)
-    refused = sinks.refusal(program, sink) if sink is not None else None
     for note in advice(program):
         warnings.warn(str(note), SpecsolveWarning, stacklevel=2)
-    if refused is not None:
-        raise SpecsolveError(refused)
     return program
+
+
+def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
+    """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
+
+    What an archive holds under ``sources/``, less the ``specsolve_run``
+    column it stamps on, so a table that comes back from here goes back in
+    as a source unchanged. Every source is read and
+    checked as [`build`][] reads and checks it.
+
+    Args:
+        spec: As [`check`][] takes it.
+        sources: As [`build`][] takes them.
+
+    Returns:
+        Each dimension as ``(dim, specsolve_position)``: its labels once each,
+        and the ``Int64`` position from 0 that ``shift`` counts. Each
+        parameter as ``(dims…, value)``. Each relation as the columns it
+        declares.
+
+    Raises:
+        LanguageError: A construct outside the streaming language.
+        DataError: As [`build`][] refuses the sources.
+    """
+    return {name: table.collect() for name, table in tidy_tables(lowered(spec), sources).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -205,6 +222,8 @@ class Model:
         #: The document's digest; the data's is [`_model_digest`][].
         self._spec_digest = digest_of(self._spec.to_yaml())
         self._sources = dict(sources)
+        #: What the last build read, as [`tidy_sources`][] gave it.
+        self._tidied: dict[str, pl.LazyFrame] = {}
         self._engine = PolarsEngine()
         self._fill()
 
@@ -217,9 +236,15 @@ class Model:
         return expressions.lower(self._spec, written)
 
     def _fill(self) -> None:
-        """Build from what is attached now; a failure closes the model rather than leaving it stale."""
+        """Build from what is attached now; a failure closes the model rather than leaving it stale.
+
+        What the build read is kept, so an archive holds it rather than reading
+        the sources again: a one-shot iterator is spent by then, and a path may
+        have been rewritten.
+        """
         try:
-            self._engine.build(self._program, tidy_sources(self._program, self._sources))
+            self._tidied = tidy_sources(self._program, self._sources)
+            self._engine.build(self._program, self._tidied)
         except BaseException:
             self._engine.close()
             raise
@@ -305,11 +330,9 @@ class Model:
                 the model solves again from the file alone. A ``.zip`` suffix
                 packs it into one file and anything else is a directory. What
                 the build and its solves have spent goes in beside the answer,
-                as [`Metrics`][specsolve.relational.parquet.Metrics]. The
-                sources go in through the door [`build`][] reads them through:
-                a parquet path is copied as its own bytes, anything else is
-                written as the table it stands for, and members are stored
-                uncompressed.
+                as [`Metrics`][specsolve.relational.parquet.Metrics]. Each
+                source goes in as the table [`tidy`][] returns for it, with
+                ``specsolve_run`` added, and members are stored uncompressed.
 
         Returns:
             The solution, holding this model.
@@ -347,18 +370,41 @@ class Model:
             answer = answered.save(scratch)
             taken = self._engine.diagnostics().metrics()
             write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            tables = tidy_sources(self._program, self._sources)
-            write_archive(out, self._spec, self._sources, tables=tables, axis=None, answer=answer)
+            write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct the format has no section for, the same as
-                [`check`][]'s ``sink=`` answer.
+            SpecsolveError: A construct the format has no section for, as
+                [`check`][specsolve.Model.check] refuses it.
         """
         self._engine.write(path)
+
+    def check(self, sink: str) -> None:
+        """Refuse the built model where *sink* cannot take it; no solve, no file.
+
+        ::
+
+            sps.build('dispatch.yaml', sources).check('highs')
+
+        The answer is read off the model this build produced, not off the
+        file: a square the data prices at zero, an integer variable no column
+        is built for or a set with no members asks for nothing. [`solve`][]
+        and [`write`][] refuse exactly what this refuses, with the same
+        message, so a CI job that builds every example and checks it pays for
+        no solve, and loads no solver to release.
+
+        Args:
+            sink: A solver name (``highs``, ``gurobi``, ``xpress``) or an
+                output suffix (``.lp``, ``.mps``).
+
+        Raises:
+            SpecsolveError: A construct the sink cannot take, naming it and the
+                sinks that do; or a name belonging to no sink.
+        """
+        self._engine.check(sink)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
@@ -539,8 +585,8 @@ def write(
 
     Raises:
         ValueError: A suffix nothing writes — checked before the build.
-        SpecsolveError: A construct the format has no section for, as
-            ``check(spec, sink=out.suffix)`` reports.
+        SpecsolveError: A construct the format has no section for, read off the
+            built model, naming the sinks that take it.
     """
     out = Path(out)
     writer(out.suffix.lower())
@@ -560,10 +606,14 @@ type Reading = Callable[[Path], pl.LazyFrame]
 
 
 def _saved_frames(under: Path, read: Reading) -> dict[str, pl.LazyFrame]:
-    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist."""
+    """Every ``<name>.parquet`` under *under*, keyed by name; empty where it does not exist.
+
+    An archive's ``specsolve_run`` column is left on disk, so a frame read
+    out of one equals the frame the solve returned.
+    """
     if not under.is_dir():
         return {}
-    return {file.stem: read(file) for file in sorted(under.glob('*.parquet'))}
+    return {file.stem: read(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))}
 
 
 def _absent(reason: str) -> Callable[[], pl.DataFrame]:
@@ -650,14 +700,14 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _spec_digest=record.spec_digest,
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
-            _run=record.run,
+            _run=record.specsolve_run,
         )
 
-    no_duals, no_expressions = read_reasons(out)
+    no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda frame=frame: frame.collect()) for name, frame in _saved_frames(out / 'expression', read).items()
     }
-    expressions.update({name: _absent(why) for name, why in no_expressions.items()})
+    expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
@@ -670,7 +720,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _spec_digest=record.spec_digest,
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
-        _run=record.run,
+        _run=record.specsolve_run,
     )
 
 

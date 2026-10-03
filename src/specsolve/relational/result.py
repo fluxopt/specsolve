@@ -439,7 +439,7 @@ class Result:
             spec_digest=self._spec_digest,
             solved_at=self._solved_at,
             model_digest=self.model_digest(),
-        )._replace(run=self._run)
+        )._replace(specsolve_run=self._run)
 
     @property
     def kept(self) -> Keep:
@@ -681,7 +681,7 @@ class Result:
         expression that failed, and one with an empty *name* for the duals.
 
         ``format.json`` stamps the directory with the layout it is written in
-        and the specsolve that wrote it: ``{"layout": 1, "specsolve": "…"}``.
+        and the specsolve that wrote it: ``{"layout": 2, "specsolve": "…"}``.
         Every reader refuses another layout with a
         [`LayoutError`][specsolve.errors.LayoutError] that says to solve the
         model again and save it.
@@ -704,7 +704,7 @@ class Result:
         out = Path(directory)
         clear_the_answer(out)
         write_format(out)
-        record = self.record._replace(run=None)
+        record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
@@ -722,7 +722,7 @@ class Result:
                 no_expressions[name] = str(absent)
                 continue
             write_whole(evaluated, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, no_expressions)
+        write_reasons(out, self._no_duals, {'expression': no_expressions})
         return out
 
     def close(self) -> None:

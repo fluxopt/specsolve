@@ -260,11 +260,11 @@ class Highs(Solver):
             raise SpecsolveError(
                 'the highs sink refused to run this quadratic objective, and a Hessian that is not '
                 'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
-                'property of the coefficients rather than of the model, so nothing could refuse it '
-                "before the data was attached — the sink's other quadratic refusal, a Hessian standing "
-                'beside integrality, is declared and caught before the build.\n'
-                'Solve with a sink whose capabilities list a nonconvex quadratic objective as native — '
-                'check(spec, sink=...) names them — or write the model to an .lp file for a solver that '
+                "property of the coefficients' signs, which no capability table records, so it is "
+                "found at the run — the sink's other quadratic refusal, a Hessian standing beside "
+                'integrality, is read off the built model and caught before the load.\n'
+                'Solve with a sink whose capabilities list a nonconvex quadratic objective as native, '
+                'or write the model to an .lp file for a solver that '
                 'takes one. A convex reformulation — the curve as a piecewise: block with '
                 'method: convex — keeps the LP, and with it the duals and the warm start a quadratic '
                 'objective gives up.'

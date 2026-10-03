@@ -27,6 +27,7 @@ nav:
       - Preparing the data: howto/data.md
       # The schema is the language's, so the editor recipe is documented with it.
       - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
+      - Checking a spec without data, in CI: https://mathspec.readthedocs.io/en/latest/howto/check/
       - Warm-starting a re-solve: howto/warm-start.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Choosing a solver: howto/solvers.md
@@ -111,6 +112,48 @@ nav:
           - Rung 14: examples/pypsa_ladder/rung_14_stochastic.md
           - Rung 15: examples/pypsa_ladder/rung_15_multi_period.md
           - Rung 16: examples/pypsa_ladder/rung_16_link_delay.md
+          - Rung 17: examples/pypsa_ladder/rung_17_process.md
+          - Rung 18: examples/pypsa_ladder/rung_18_transformer.md
+          - Rung 19: examples/pypsa_ladder/rung_19_losses_secants.md
+          - Rung 20: examples/pypsa_ladder/rung_20_phase_shifter.md
+          - Rung 21: examples/pypsa_ladder/rung_21_carrier_growth.md
+          - Rung 22: examples/pypsa_ladder/rung_22_transformer_losses.md
+          - Rung 23: examples/pypsa_ladder/rung_23_transformer_losses_secants.md
+          - Rung 24: examples/pypsa_ladder/rung_24_must_stay_down.md
+          - Rung 25: examples/pypsa_ladder/rung_25_committable_link.md
+          - Rung 26: examples/pypsa_ladder/rung_26_committable_process.md
+          - Rung 27: examples/pypsa_ladder/rung_27_modular_ramp.md
+          - Rung 28: examples/pypsa_ladder/rung_28_start_up_ramp.md
+          - Rung 29: examples/pypsa_ladder/rung_29_storage_per_period.md
+          - Rung 30: examples/pypsa_ladder/rung_30_security_constrained.md
+          - Rung 32: examples/pypsa_ladder/rung_32_storage_later_period.md
+          - Rung 33: examples/pypsa_ladder/rung_33_maintenance.md
+          - Rung 34: examples/pypsa_ladder/rung_34_committable_maintenance.md
+          - Rung 35: examples/pypsa_ladder/rung_35_period_global_constraints.md
+          - Rung 36: examples/pypsa_ladder/rung_36_quadratic_storage_process.md
+          - Rung 37: examples/pypsa_ladder/rung_37_fixed_storage_dispatch.md
+          - Rung 38: examples/pypsa_ladder/rung_38_delay_per_period.md
+          - Rung 39: examples/pypsa_ladder/rung_39_negative_relative_growth.md
+          - Rung 40: examples/pypsa_ladder/rung_40_scenario_global_constraints.md
+          - Rung 41: examples/pypsa_ladder/rung_41_scenario_operational_data.md
+          - Rung 42: examples/pypsa_ladder/rung_42_scenario_first_stage.md
+          - Rung 43: examples/pypsa_ladder/rung_43_sign.md
+          - Rung 44: examples/pypsa_ladder/rung_44_linearized_commitment.md
+          - Rung 45: examples/pypsa_ladder/rung_45_ramp_per_snapshot.md
+          - Rung 46: examples/pypsa_ladder/rung_46_initial_output.md
+          - Rung 47: examples/pypsa_ladder/rung_47_linearized_ramps.md
+          - Rung 48: examples/pypsa_ladder/rung_48_unweighted_start_up.md
+          - Rung 49: examples/pypsa_ladder/rung_49_single_period_growth.md
+          - Rung 50: examples/pypsa_ladder/rung_50_inactive_load.md
+          - Rung 51: examples/pypsa_ladder/rung_51_growth_retired_asset.md
+          - Rung 52: examples/pypsa_ladder/rung_52_scenario_cost_limit.md
+          - Rung 53: examples/pypsa_ladder/rung_53_scenario_period_volume_limit.md
+          - Rung 54: examples/pypsa_ladder/rung_54_scenario_delay.md
+          - Rung 55: examples/pypsa_ladder/rung_55_scenario_transformer_cycle.md
+          - Rung 56: examples/pypsa_ladder/rung_56_scenario_security_constrained.md
+          - Rung 57: examples/pypsa_ladder/rung_57_scenario_nom_set.md
+          - Rung 58: examples/pypsa_ladder/rung_58_scenario_committable.md
+          - Rung 60: examples/pypsa_ladder/rung_60_efficiency_per_snapshot.md
   - About:
       - about/index.md
       - Architecture: about/architecture.md
