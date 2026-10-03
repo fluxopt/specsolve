@@ -1645,3 +1645,53 @@ def test_an_answer_naming_no_model_is_taken_as_given(
     assert read.evaluate(_UNDECLARED)['value'].sum() == pytest.approx(want, rel=1e-9), (
         'an answer carrying no model digest reads against the data it is handed'
     )
+
+
+@pytest.mark.parametrize(
+    ('record_options', 'written'),
+    [
+        pytest.param(None, '<not recorded>', id='not-named'),
+        pytest.param(['mip_max_nodes'], 1000, id='named'),
+        pytest.param(['MIP_MAX_NODES'], 1000, id='named-in-another-letter-case'),
+    ],
+)
+def test_a_caller_names_an_option_to_record_beside_the_solvers_list(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, record_options: list[str] | None, written: object
+) -> None:
+    """`mip_max_nodes` is on no list, so only the caller's naming it keeps its value."""
+    sps.solve(
+        dispatch_yaml,
+        dispatch_frame_inputs,
+        solver_options={'time_limit': 60.0, 'mip_max_nodes': 1000},
+        record_options=record_options,
+        archive=tmp_path / 'case',
+    ).close()
+
+    row = pl.read_parquet(tmp_path / 'case' / 'answer' / 'record.parquet').row(0, named=True)
+    assert json.loads(row['solver_options']) == {'mip_max_nodes': written, 'time_limit': 60.0}, (
+        'a listed option keeps its value either way; the named one keeps it only when named'
+    )
+
+
+def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
+    dispatch_yaml: Path, dispatch_frame_inputs
+) -> None:
+    """The sweep forwards the names to each slice's solve, as it forwards the options."""
+    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    sweep = sps.solve_over(
+        dispatch_yaml,
+        sources,
+        sps.EachCoordinate('scenario'),
+        solver_options={'mip_max_nodes': 1000},
+        record_options=['mip_max_nodes'],
+    )
+
+    assert sweep.record['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
+        'both slices keep the value the caller named'
+    )
+
+
+def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
+    """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
+    with pytest.raises(sps.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
