@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): an archived answer names the solver, its options and the specsolve and mathspec versions that produced it ([#1817](https://github.com/fluxopt/specsolve/pull/1817))
+
 ## 0.3.0 (2026-10-02)
 
 specsolve now requires mathspec 0.2.1. This release breaks one import.
