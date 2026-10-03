@@ -182,6 +182,8 @@ def test_window(
         pytest.skip(f'{arm} has no rolling-horizon verb — nothing here says what its second window costs')
     if sink in WRITERS:
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
+    if change not in getattr(module, 'WINDOW_CHANGES', RELOADS):
+        pytest.skip(f'{arm} rebuilds every window, so a {change} window is its values window measured again')
 
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
     following = prepared

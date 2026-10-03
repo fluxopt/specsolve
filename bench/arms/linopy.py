@@ -74,6 +74,11 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
         return _counts(m)
 
 
+#: The window changes this arm tells apart. Every window is a rebuild here, so
+#: one parameter or a cold solver is the ``values`` window again.
+WINDOW_CHANGES = ('values', 'shape')
+
+
 def window_setup(
     sink: str, prepared: Prepared, following: Prepared, change: str
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
