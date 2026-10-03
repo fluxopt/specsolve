@@ -125,10 +125,11 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         assert beside_the_answer == {
             'spec.yaml',
             'sources.parquet',
+            'catalog.parquet',
             *(f'sources/{k}.parquet' for k in dispatch_frame_inputs),
         }, (
-            'the layout is spec.yaml, one parquet member per source key, the table digesting them, and the '
-            'answer under its own'
+            'the layout is spec.yaml, one parquet member per source key, the table digesting them, the catalog '
+            'saying what each file holds, and the answer under its own'
         )
         assert any(name.startswith('answer/') for name in members), 'every archive carries the answer that made it'
         assert set(members.values()) == {zipfile.ZIP_STORED}, 'members are stored — parquet is already compressed'
@@ -398,6 +399,152 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     )
     digests = dict(study.source_digests.select('source', 'digest').iter_rows())
     assert digests['load'] == digest_of_file(whole), 'the digest is of the whole source the sweep was cut from'
+
+
+#: A relation with a role, a named expression over no dimension, and a
+#: constraint sharing its name with a parameter, which names outside the flat
+#: namespace may do.
+_CATALOGED = {
+    'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str', 'description': 'nodes'}},
+    'relations': {'sited': {'key': 'generator', 'values': {'at': 'bus'}}},
+    'parameters': {
+        'p_max': {'dims': ['generator'], 'description': 'rating'},
+        'cost': {'dims': ['generator']},
+        'load': {'dims': ['bus']},
+    },
+    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'load': {'dims': ['bus'], 'expression': 'sum(p, by=sited, over=generator, into=at) == load'}},
+    'expressions': {'spend': {'expression': 'sum(p * cost)', 'description': 'what the dispatch costs'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
+}
+
+
+def _cataloged_sources(north: float) -> dict[str, object]:
+    """``_CATALOGED``'s data, *north* the load at the bus whose only generator is rated 100."""
+    generators = ['wind', 'gas']
+    return {
+        'generator': generators,
+        'bus': ['north', 'south'],
+        'sited': pl.DataFrame({'generator': generators, 'at': ['north', 'south']}),
+        'p_max': pl.DataFrame({'generator': generators, 'value': [100.0, 200.0]}),
+        'cost': pl.DataFrame({'generator': generators, 'value': [1.0, 50.0]}),
+        'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [north, 80.0]}),
+    }
+
+
+def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimension(tmp_path: Path) -> None:
+    """``name`` was the only key, and a constraint named as a parameter is a second ``load``.
+
+    A query on ``name = 'load'`` interleaved the two. The catalog had no path to
+    tell ``sources/load.parquet`` from ``answer/dual/load.parquet``, and no run
+    to tell one archive's catalog from another's.
+    """
+    _archived(to_spec(_CATALOGED), _cataloged_sources(50.0), tmp_path / 'base')
+
+    assert pl.read_parquet(tmp_path / 'base' / 'catalog.parquet').rows() == [
+        ('base', 'answer/activity/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus', 0),
+        ('base', 'answer/dual/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus', 0),
+        (
+            'base',
+            'answer/expression/spend.parquet',
+            'spend',
+            'expression',
+            'what the dispatch costs',
+            None,
+            None,
+            None,
+            None,
+        ),
+        ('base', 'answer/primal/p.parquet', 'p', 'variable', None, None, 'generator', 'generator', 0),
+        ('base', 'sources/bus.parquet', 'bus', 'dimension', 'nodes', 'str', 'bus', 'bus', 0),
+        ('base', 'sources/cost.parquet', 'cost', 'parameter', None, 'float', 'generator', 'generator', 0),
+        ('base', 'sources/generator.parquet', 'generator', 'dimension', None, 'str', 'generator', 'generator', 0),
+        ('base', 'sources/load.parquet', 'load', 'parameter', None, 'float', 'bus', 'bus', 0),
+        ('base', 'sources/p_max.parquet', 'p_max', 'parameter', 'rating', 'float', 'generator', 'generator', 0),
+        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'generator', 'generator', 0),
+        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'at', 'bus', 1),
+    ], (
+        'one row per column that holds labels of each file, in path order: the constraint load and the parameter '
+        'load are told apart by path, a relation names each role and its dimension, a name over no dimension has '
+        'one row with no column, and dtype is only what the spec declares'
+    )
+
+
+def test_a_dimension_position_is_its_place_in_the_declaration_not_in_the_file(tmp_path: Path) -> None:
+    """A parameter passed as a path keeps the caller's column order, so the file's order is not the spec's."""
+    spec = to_spec(
+        {
+            'dimensions': {'generator': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
+            'parameters': {'p_max': {'dims': ['generator', 'snapshot']}},
+            'variables': {'p': {'dims': ['generator', 'snapshot'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+            'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+        }
+    )
+    path = tmp_path / 'p_max.parquet'
+    pl.DataFrame(
+        {
+            'value': [100.0, 90.0],
+            'snapshot': [0, 0],
+            'note': ['a stray column'] * 2,
+            'generator': ['wind', 'gas'],
+        }
+    ).write_parquet(path)
+    _archived(spec, {'generator': ['wind', 'gas'], 'snapshot': [0], 'p_max': str(path)}, tmp_path / 'case')
+    held = pl.read_parquet_schema(tmp_path / 'case' / 'sources' / 'p_max.parquet')
+    catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet')
+    places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('dim', 'dim_position').rows()
+
+    assert [column for column in held if column in {'generator', 'snapshot'}] == ['snapshot', 'generator'], (
+        'the archived file keeps the order the caller wrote, snapshot before generator'
+    )
+    assert places == [('generator', 0), ('snapshot', 1)], (
+        'dim_position follows the order p_max declares its dimensions, not the order the file holds them'
+    )
+
+
+def _held_files(archive: Path) -> set[str]:
+    """Every source, and every frame of the answer, as its path inside *archive*: a file, or a sweep's directory."""
+    held = [*(archive / 'sources').glob('*.parquet'), *(archive / ANSWER_DIR).glob('*/*')]
+    return {entry.relative_to(archive).as_posix() for entry in held}
+
+
+def _columns_of(held: Path) -> set[str]:
+    """The columns of a frame's file, or of the first slice's where a sweep holds a directory of them."""
+    return set(pl.read_parquet_schema(min(held.glob('*.parquet')) if held.is_dir() else held))
+
+
+@pytest.mark.parametrize(
+    ('north', 'sweep', 'answered'),
+    [
+        pytest.param(50.0, False, True, id='solve'),
+        pytest.param(500.0, False, False, id='infeasible'),
+        pytest.param(50.0, True, True, id='sweep'),
+    ],
+)
+def test_every_archive_catalogs_the_files_it_holds_and_no_other(
+    north: float, sweep: bool, answered: bool, tmp_path: Path
+) -> None:
+    """The catalog listed what the spec declares, so an infeasible solve's catalog named frames it has no file for."""
+    out, sources = tmp_path / 'case', _cataloged_sources(north)
+    if sweep:
+        load = pl.concat([sources['load'].with_columns(scenario=pl.lit(name)) for name in ('low', 'high')])
+        sps.solve_over(to_spec(_CATALOGED), {**sources, 'load': load}, sps.EachCoordinate('scenario'), archive=out)
+    else:
+        _archived(to_spec(_CATALOGED), sources, out)
+    catalog = pl.read_parquet(out / 'catalog.parquet')
+    held = _held_files(out)
+
+    assert any(path.startswith(f'{ANSWER_DIR}/') for path in held) == answered, 'the case leaves the frames it says'
+    assert set(catalog['name']) == {path.split('/')[-1].removesuffix('.parquet') for path in held}, (
+        'the catalog names what the archive holds a file for, and nothing it does not'
+    )
+    assert set(catalog['path']) == held, 'every source and answer file is listed by its path, and every path is there'
+    assert catalog.select('path', 'dim_position').is_duplicated().sum() == 0, 'a path and a position name one row'
+    assert catalog[RUN].unique().to_list() == ['case'], 'every row carries the archive it came from'
+    for path, column in catalog.drop_nulls('column').select('path', 'column').iter_rows():
+        assert column in _columns_of(out / path), f'{path} holds the column {column!r} its row names'
+    assert all(RUN in _columns_of(out / path) for path in held), 'every file listed carries the run'
+    assert RUN not in set(catalog['column']), 'the run on every file holds no labels, so the catalog lists it nowhere'
 
 
 def test_an_archive_records_what_reaching_its_answer_cost(

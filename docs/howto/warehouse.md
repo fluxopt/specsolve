@@ -4,7 +4,7 @@ How to read many archives at once: which runs terminated how, what each cost,
 and which input changed between them. One archive is
 [archiving a solve](archiving.md); this is the directory they pile up in.
 
-## The three tables
+## The four tables
 
 An archive is a tree of parquet files, so a directory of them is a table per
 glob. Nothing is loaded and no schema is maintained. The same globs work in
@@ -17,6 +17,7 @@ import polars as pl
 answers = pl.read_parquet('runs/*/answer/record.parquet')
 metrics = pl.read_parquet('runs/*/answer/metrics.parquet')
 inputs = pl.read_parquet('runs/*/sources.parquet')
+catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
 | glob | one row per | says |
@@ -24,6 +25,7 @@ inputs = pl.read_parquet('runs/*/sources.parquet')
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
 | `sources.parquet` | source per archive | what each input's bytes digest to |
+| `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `specsolve_run` is the
 archive's own name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`.
@@ -86,6 +88,47 @@ that prefix, in any letter case, is refused. Both readers drop the column from
 the answer's frames, so a frame read back is the frame the solve returned.
 `load_archive` drops it from the sources too. The sources `scan_archive` gives
 back are the archive's own files, and reading one gives the column back.
+
+## What a file holds
+
+`catalog.parquet` says what each file in the archive holds, so a reader
+needs no `spec.yaml`. It has one row per dimension column of each file under
+`sources/` and `answer/`:
+
+| column | holds |
+|---|---|
+| `specsolve_run` | the archive's name, as on every other table it holds |
+| `path` | the file's path inside the archive, as `sources/load.parquet` or `answer/dual/load.parquet` |
+| `name` | the name the spec declares |
+| `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
+| `description` | the spec's `description:`, or null |
+| `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
+| `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
+| `dim` | the dimension, or null for a file over no dimension |
+| `dim_position` | the 0-based place of `column` in the order the spec declares the name's dimensions, which can differ from the order of the file's columns |
+
+**Join it on the path, not the name.** A constraint can have the name of a
+parameter, so `name = 'load'` can match the parameter's source and the
+constraint's dual. `path` and `dim_position` identify one row. In DuckDB:
+
+```sql
+select name, kind, description, column, dim
+from 'runs/base/catalog.parquet'
+where path = 'answer/primal/p.parquet'
+order by dim_position;
+```
+
+**The catalog lists the files the archive holds, and no other.** A name the
+spec declares has no row where it has no file: every answer of a solve that
+left no values, the duals of a model that has none, and a named expression the
+data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
+why.
+
+The catalog has no units, because the spec declares none. It has no row for
+`specsolve_run`, which every file carries and which holds no labels. In a sweep
+archive, an answer's `path` is a directory that holds one file per slice, and
+each frame also carries the column of the sweep key, which `axis.json` names
+and the catalog does not list.
 
 ## Compare cases solved apart
 
