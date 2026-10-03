@@ -185,7 +185,7 @@ under `sources/`, not the file you passed, and hashing the member does not give
 the row back, because the member also carries `specsolve_run`. Two archives of
 the same data written by different versions of polars can differ, and reading
 an archive does not verify the digests
-([the rule](../reference/api.md#specsolve.SolveArchive)).
+([the rule](../reference/api.md#specsolve.ResultArchive)).
 
 ## See what the runs cost
 

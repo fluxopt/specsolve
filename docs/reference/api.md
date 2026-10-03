@@ -101,7 +101,7 @@ it, what the build and its solves took, and what a slice of a sweep took.
 
 ### Carry an answer
 
-::: specsolve.SolveArchive
+::: specsolve.ResultArchive
     options:
       heading_level: 4
 

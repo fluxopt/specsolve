@@ -204,7 +204,7 @@ reaches the plan. The names, by role:
 - the five verbs `check`, `build`, `evaluate`, `solve` and `write`;
 - the fold `solve_over` with its two axes;
 - `tidy`, the tables a solve reads from the sources, as an archive holds them;
-- the two archives that carry a spec, its data and its answer, `SolveArchive`
+- the two archives that carry a spec, its data and its answer, `ResultArchive`
   and `SweepArchive`, with `load_archive`, `load_result` and `load_sweep` to read
   one back whole and `scan_archive`, `scan_result` and `scan_sweep` to read it
   off the directory it lies in;
@@ -547,7 +547,7 @@ is structure.
 | `mathspec` (a dependency) | the whole language, read, expanded, resolved, judged and lowered there; what crosses is a `Spec` and the `Program` it lowers to — [its own reference](https://mathspec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, and `load_result` / `scan_result` for an answer read back off disk; linopy-free |
 | `archive_layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/` in the answer's own layout, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together |
-| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `SolveArchive` and `SweepArchive`. It reads; it never writes |
+| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `ResultArchive` and `SweepArchive`. It reads; it never writes |
 | `inputs.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through; `lower`, an expression the file never named spliced into the spec as written and lowered with it |
 | `relational/collect.py` | which polars engine materialises a frame: the streaming one where this polars has it, asked once; a build without it, the browser's, gets the in-memory one |
 | `sources.py` | the one door: caller data (parquet paths, in-memory tables, plain-Python shapes) read into tidy tables and checked against the declarations |

@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
 - refactor(archive): Record, Metrics and Provenance are imported from specsolve.relational.answer_layout, which an archive's own layout nests ([#1823](https://github.com/fluxopt/specsolve/pull/1823))
 
 ## 0.4.0 (2026-10-03)

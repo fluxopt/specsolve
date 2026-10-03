@@ -322,7 +322,7 @@ PUBLIC_API = {
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'see what it reads': {'tidy'},
     'carry it': {
-        'SolveArchive',
+        'ResultArchive',
         'SweepArchive',
         'load_archive',
         'load_result',
@@ -559,7 +559,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'build': specsolve.build,
         'solve': specsolve.solve,
         'write': specsolve.write,
-        'SolveArchive': specsolve.SolveArchive.__init__,
+        'ResultArchive': specsolve.ResultArchive.__init__,
         'SweepArchive': specsolve.SweepArchive.__init__,
         'Model': specsolve.Model.__init__,
         'Model.update': specsolve.Model.update,

@@ -64,7 +64,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Archive**
 : A spec, the data it was solved with and what came back, written together as
   one zip or one directory by `archive=` ([archiving](../howto/archiving.md)).
-  It reads back as a `SolveArchive`, or a `SweepArchive` where the sources were
+  It reads back as a `ResultArchive`, or a `SweepArchive` where the sources were
   cut. Every table it holds carries `specsolve_run`, the archive's own name,
   stamped when it is written. Never "artifact".
 
