@@ -85,8 +85,6 @@ class Solver(ABC):
         solver = solvers.loaded(held, name, handoff, options)
         solver.run(handoff)  # …repeatedly
         solver.close()
-
-    A subclass owns the hand-off: loading, pushing values, running, releasing.
     """
 
     def __init__(
@@ -167,12 +165,10 @@ class Solver(ABC):
 
     @abstractmethod
     def warm_start(self) -> WarmStart | None:
-        """What the loaded model holds to warm a later session, if anything.
+        """What the loaded model holds to warm a later session.
 
-        Returns:
-            The basis after an LP solve, the incumbent after a mixed-integer
-            one, and ``None`` where the model holds neither, as before any
-            solve.
+        The basis after an LP solve, the incumbent after a mixed-integer one,
+        or ``None`` where it holds neither, as before any solve.
         """
 
     def warm(self, ws: WarmStart) -> None:
@@ -267,10 +263,9 @@ class Solver(ABC):
 
     @abstractmethod
     def forget(self) -> None:
-        """Discard the work the last solve did, keeping the model loaded.
+        """Make the next run begin as if the loaded model had never been solved.
 
-        The next run begins as if the model had never been solved. A member
-        with nothing to discard implements this as a no-op.
+        A member with nothing to discard implements this as a no-op.
         """
 
     @property
@@ -278,8 +273,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: the caller does not release it, [`close`][]
-        does.
+        Owned by this holder: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod

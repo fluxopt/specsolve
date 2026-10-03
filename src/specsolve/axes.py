@@ -31,8 +31,8 @@ class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and what it owns.
 
     ``owns`` counts the coordinates of the re-indexed dimension this slice
-    keeps, the rest being lookahead; a ``carry`` reads the seam off it. ``None``
-    where the axis re-indexed nothing.
+    keeps, the rest being lookahead, or is ``None`` where the axis re-indexed
+    nothing; a ``carry`` reads the seam off it.
     """
 
     key: Label
@@ -55,9 +55,7 @@ class Stitch:
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
 
-        A frame with no [`local`][] column is over no coordinate a window
-        owns, so no row of it belongs to one coordinate of the sliced
-        dimension.
+        A frame with no [`local`][] column is over no coordinate a window owns.
         """
         if self.local in frame.collect_schema().names():
             return None
@@ -92,14 +90,13 @@ def bulleted(entries: Mapping[str, str]) -> str:
 
 @dataclass(frozen=True)
 class EachCoordinate:
-    """One slice per coordinate of *dim* — a column the sources carry.
+    """One slice per coordinate of *dim*, a column the sources carry: scenarios, draws, investment periods.
 
-    Scenarios, draws, investment periods. Parameters and relations carrying
-    *dim* are filtered to one coordinate and the column dropped, so the model
-    never mentions it — a *dim* the spec declares is refused, and so is an
-    index that carries it; every other source passes through untouched. The
-    slices run in the coordinates' sorted order, which is the order a
-    ``carry`` chains them in.
+    Parameters and relations carrying *dim* are filtered to one coordinate and
+    the column dropped, so the model never mentions it; a *dim* the spec
+    declares is refused, and so is an index that carries it. Every other
+    source passes through untouched. Slices run in sorted coordinate order,
+    which is the order a ``carry`` chains them in.
     """
 
     dim: str
@@ -139,15 +136,13 @@ class EachCoordinate:
 class EachWindow:
     """One slice per window of consecutive coordinates of *dim*.
 
-    ``steps`` is what each window keeps and ``lookahead`` is what it sees beyond
-    that, so a window is ``steps + lookahead`` coordinates long and a
-    ``lookahead`` above zero is overlap. An ``int`` keeps the same number every
-    window; a sequence keeps those numbers in order, which is a telescoping
-    horizon or a month at a time. Both count coordinates rather than coordinate
-    values, so *dim* need only be orderable — datetimes, strings and gapped
-    integers all work. The dimension is re-indexed rather than dropped, into a
-    dense ``0..n-1`` column the model addresses by the name ``into`` gives it,
-    which the spec has to declare.
+    Each window keeps ``steps`` coordinates and sees ``lookahead`` beyond them,
+    so a ``lookahead`` above zero is overlap. An ``int`` keeps the same number
+    every window; a sequence keeps those numbers in order, for a telescoping
+    horizon or a month at a time. Both count coordinates, not values, so *dim*
+    need only be orderable — datetimes, strings and gapped integers all work.
+    *dim* is re-indexed into a dense ``0..n-1`` column named ``into``, which
+    the spec has to declare.
 
     Whether the model *can* be cut this way is asked before a slice is taken
     ([separability](https://mathspec.readthedocs.io/en/latest/reference/reading/#asking-whether-an-axis-can-be-cut)):
@@ -198,8 +193,7 @@ class EachWindow:
         """Refuse a window the program's rows cannot be whole inside, before one is taken.
 
         The program's `separability` answers; a reach the data decides is
-        resolved from the parameter's least value. What the rows read behind
-        is not refused: a window's first rows meet the edge policy there.
+        resolved from the parameter's least value.
         """
         if self.into not in program.dimensions:
             raise SpecsolveError(
@@ -239,11 +233,7 @@ class EachWindow:
             )
 
     def _slice(self, sources: Mapping[str, Source], key_name: str) -> tuple[list[Slice], Stitch]:
-        """One slice per window, keyed by its first coordinate.
-
-        A window owns the coordinates its block names, and the
-        [`Stitch`][] records which.
-        """
+        """One slice per window, keyed by its first coordinate; the [`Stitch`][] records what each owns."""
         carrying, coordinates = _coordinates(sources, self.dim, 'window')
         out: list[Slice] = []
         owned: list[dict[str, object]] = []
@@ -307,8 +297,7 @@ def check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis:
 
     An index says which labels the model has, and a sweep cuts the tables that
     carry the axis, so a carried index would make each slice a model over
-    other labels. The axis's own index carries the axis as its labels, and
-    the axis refuses that dimension in its own words.
+    other labels. The axis refuses its own index's dimension in its own words.
     """
     for dim in program.dimensions:
         table = as_frame(sources[dim]) if dim in sources and dim != axis.dim else None

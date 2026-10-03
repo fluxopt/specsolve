@@ -47,18 +47,14 @@ class SolveStatus:
 
     @property
     def is_ok(self) -> bool:
-        """The linopy rollup: the run is not an error, an abort or a refusal.
-
-        Not whether there are values to read — see [`is_readable`][].
-        """
+        """The linopy rollup: no error, abort or refusal — not whether values exist ([`is_readable`][])."""
         return self.status == 'ok'
 
     @property
     def is_readable(self) -> bool:
         """Whether there are primal values to read.
 
-        Narrower than ``is_ok``: a MIP stopped at a time limit before
-        finding any incumbent is ``ok``, and its zero-filled ``col_value`` would
-        be read as an answer.
+        A MIP stopped at a time limit before finding any incumbent is ``ok``,
+        and its zero-filled ``col_value`` would be read as an answer.
         """
         return self.is_ok and self.has_primal

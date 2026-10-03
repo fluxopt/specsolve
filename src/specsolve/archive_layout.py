@@ -5,8 +5,7 @@
 file holds, ``answer/`` in the answer's own layout
 ([`specsolve.relational.answer_layout`][]), and ``axis.json`` where the
 sources are cut. A directory archive is read where it lies; a zip is
-unpacked first. Writing one is here; reading one back is
-[`specsolve.archive`][].
+unpacked first. Reading one back is [`specsolve.archive`][].
 """
 
 from __future__ import annotations
@@ -88,18 +87,17 @@ def write_archive(
 
     Args:
         out: Where to write; its parent is made if it does not exist. Its
-            name without ``.zip`` is the run every table is stamped with.
+            name without ``.zip`` is the ``specsolve_run`` every table carries.
         spec: The spec as written, held as ``spec.yaml``.
         tables: The tidy table each source stands for, keyed as the file
-            declares, each written as ``sources/<key>.parquet``. The digest
-            is of those bytes, before the run is stamped on.
+            declares, each written as ``sources/<key>.parquet`` and digested
+            before the run is stamped on.
         axis: The axis manifest, or ``None`` where the sources are not cut.
-        answer: A directory holding the answer's own layout. Its record and
+        answer: A directory in the answer's own layout; its record and
             metrics land as one file each.
 
     Returns:
-        *out*, which lands whole or not at all. Every table in it carries
-        ``specsolve_run``.
+        *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
@@ -171,8 +169,8 @@ def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
 
     ``path`` and ``dim_position`` are the key, because a constraint may share
     its name with a parameter. ``dim_position`` is the place in the name's
-    declaration, not in the file: a sweep's source holds the axis column
-    first. A name *tree* holds no file for has no row.
+    declaration, not in the file, where a sweep's source holds the axis column
+    first. A name with no file has no row.
     """
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
@@ -225,11 +223,10 @@ def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
 
 
 def _stamped(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*.
+    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*; anything else copied.
 
     Streamed, so a spilled answer larger than memory is stamped too, and
-    landed through a part file, so *target* may be *source*. Anything that is
-    not parquet is copied as it is.
+    landed through a part file, so *target* may be *source*.
     """
     if source.suffix != '.parquet':
         shutil.copy2(source, target)

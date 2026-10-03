@@ -60,8 +60,7 @@ if TYPE_CHECKING:
 def _totalled(p: Piece) -> pl.LazyFrame:
     """Const piece *p* added up to one ``cval`` per coordinate, null where any of its rows is.
 
-    A null summand is a divisor's hole under the sum, so the total keeps it
-    for the refusal rather than adding up the rest.
+    A null summand is a divisor's hole, so the total keeps it for the refusal.
     """
     total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
@@ -138,9 +137,9 @@ class Compiler:
     ) -> pl.LazyFrame | None:
         """*frame* with *param* attached by position, or ``None`` to join.
 
-        Position lines up only where the parameter's dims are the variable's in
-        the same order, the variable has no ``where``, and the parameter is
-        dense. Height stands in for density because duplicates are refused at the door.
+        Position lines up only for a dense parameter over the variable's
+        unmasked dims, in order. Height stands in for density because
+        duplicates are refused at the door.
         """
         declaration = self.scope.program.parameters[param]
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
@@ -226,7 +225,7 @@ class Compiler:
             e: program.Sum | program.GroupSum | program.Pullback | program.Translate | program.WindowSum,
             rewrite: Callable[[Piece], Piece],
         ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand, absence pushed in by the node's own fan-in.
+            """One shape operator applied to its compiled operand.
 
             A node that is not one-to-one mixes input slots, so absence reaches
             the operand before the rewrite consumes it.
@@ -411,16 +410,15 @@ class Compiler:
         """*compiled* as one const piece with one value per coordinate — a divisor, or a power's base or exponent.
 
         A sum reaches ``/`` and ``**`` still holding one row per summand
-        ([`_sum_piece`][]), so an operand with a reduction under it is added
-        up first ([`_totalled`][]). Several pieces are added up too: addition
-        does not distribute over ``/`` or ``**``. At a build, *absent* is what
-        a parameter with no row adds ([`summed_onto`][]): a divisor ``spreads``, so
-        the null coefficient is refused naming the parameter, and a power's
-        operand reads it as ``zero``, as a parameter reads anywhere else. At a
-        read, several pieces add up null where no piece has a value, so a
-        divisor's hole is reported rather than divided by a zero the fill
-        invented. An operand carrying a variable passes through, for the
-        plan-boundary assert behind it.
+        ([`_sum_piece`][]), so an operand with a reduction under it is totalled
+        first ([`_totalled`][]). Several pieces are added up too: addition does
+        not distribute over ``/`` or ``**``. At a build, *absent* is what a
+        parameter with no row adds ([`summed_onto`][]): a divisor ``spreads``,
+        so the null coefficient is refused naming the parameter, and a power's
+        operand reads it as ``zero``. At a read, several pieces add up null
+        where no piece has a value, so a divisor's hole is reported rather than
+        divided by an invented zero. An operand carrying a variable passes
+        through, for the plan-boundary assert behind it.
         """
         if compiled.terms or compiled.quads:
             return compiled
@@ -528,11 +526,11 @@ class Compiler:
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
     def _pulled_back_presences(self, p: Piece, a: program.Pullback) -> tuple[Presence, ...]:
-        """Where a pullback's variables exist, keyed by the fine dims they now span.
+        """Where a pullback's variables exist, keyed by the fine dims they now span, as [`Presence`][] requires.
 
-        [`_remap_piece`][]'s inner join swallows both the operand's absence
-        and the relation's; unreported, the row survives to assert ``x <= 0``
-        where the model said nothing. Keyed explicitly as [`Presence`][] requires.
+        [`_remap_piece`][]'s inner join swallows both the operand's absence and
+        the relation's; unreported, the row survives to assert ``x <= 0`` where
+        the model said nothing.
         """
         joined = a.direction.joined_dims
         fine = (*joined, *a.direction.produced_dims)

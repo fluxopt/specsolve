@@ -1,4 +1,4 @@
-"""The writers' shared module: what every format writes the same way — numbers, indices, sort keys, and lines appended to the file. It renders no format of its own."""
+"""What every format writes the same way: numbers, indices, sort keys, and lines appended to the file."""
 
 from __future__ import annotations
 

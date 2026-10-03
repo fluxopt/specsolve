@@ -1,9 +1,9 @@
 """What every sink reads, and nothing more.
 
-Four frames plus the scalars a writer needs to size its batching, and the
+The frames, the scalars a writer needs to size its batching, and the
 projections more than one sink needs — the dense column and row vectors, the
-matrix a block at a time. Those belong to the contract rather than to either
-solver, so two sinks cannot disagree about the model they loaded.
+matrix a block at a time — so two sinks cannot disagree about the model they
+loaded.
 """
 
 from __future__ import annotations
@@ -31,11 +31,7 @@ type Bools = np.ndarray[tuple[int, ...], np.dtype[np.bool_]]
 
 @dataclass(frozen=True)
 class ColumnVectors:
-    """The per-column vectors a solver sink is handed.
-
-    Three float vectors and an integrality mask, each as long as the model
-    has columns.
-    """
+    """The per-column vectors a solver sink is handed, each as long as the model has columns."""
 
     lb: Floats
     ub: Floats
@@ -93,40 +89,33 @@ class Handoff:
     attach to.
 
     ``quad`` is the objective's quadratic part, in ``(col_l, col_r)`` order,
-    one row per **unordered pair** of columns: the objective contains ``coeff · x[col_l] · x[col_r]``, whole.
-    Three sinks spell that three ways — a Hessian is :math:`\frac12 x^\top Q x`,
-    the LP section is divided by two, Gurobi takes :math:`x^\top Q x` — so what
-    arrives here is the algebra and the conversion belongs to whoever loads it.
-    Empty for every affine model, which is nearly all of them.
+    one row per **unordered pair** of columns: the objective contains
+    ``coeff · x[col_l] · x[col_r]``, whole. Three sinks spell that three ways —
+    a Hessian is :math:`\frac12 x^\top Q x`, the LP section is divided by two,
+    Gurobi takes :math:`x^\top Q x` — so the conversion belongs to whoever
+    loads it. Empty for every affine model.
 
     ``qmatrix`` is the same form for the *rows* that carry one:
-    ``(row, col_l, col_r, coeff)`` in that order. The rows it names are a
-    **contiguous tail** of the label space — quadratic is a property of a
-    declaration, so the engine builds those last — which lets a sink holding
-    linear and quadratic rows in different objects read its answer back as two
-    runs rather than a scatter, beginning at [`linear_row_count`][].
+    ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
+    label space, beginning at [`linear_row_count`][] — the engine builds
+    quadratic declarations last — so a sink holding linear and quadratic rows
+    in different objects reads its answer back as two runs, not a scatter.
 
-    ``sos`` is the fifth stream and the one that lands unevenly: ``(set, type,
-    col, weight)`` in ``(set, weight)`` order, one row per member, empty for
-    the models that declare none. It is the only frame a sink may be unable to
-    ingest — SOS is a *sink capability*, not a property of the model — so a
-    solver without the concept states so and refuses a model carrying one.
+    ``sos`` is ``(set, type, col, weight)`` in ``(set, weight)`` order, one row
+    per member. It is the only frame a sink may be unable to ingest — SOS is a
+    *sink capability* — so a solver without the concept refuses a model
+    carrying one.
 
-    ``cols``, ``rows`` and ``matrix`` all arrive in the solver's own order —
-    ``cols`` by column, the other two by row — which is what lets every dense
-    vector be read positionally rather than keyed.
-
-    ``col`` and ``row`` are dense ``0..n-1``, so they *are* the solver's own
-    indices and no sink builds a mapping. **``cols`` carries no ``col`` and
-    ``matrix`` no ``row``**: a ``cols`` row's position is its index and a
-    matrix entry's row is where it sits between two starts, which is what a
-    solver's matrix API takes. [`matrix_block`][] spells them back out for the
-    one consumer that renders them. ``obj`` keeps its ``col``, being genuinely
-    sparse, and **carries no order contract at all**: its rows arrive in
-    whatever order collapsing them produced, which differs between two builds
-    of one model. Every consumer reads it scattered over the column index
-    ([`dense_columns`][]), so nothing downstream can tell — and anything new
-    that reads it must scatter too rather than read it in place.
+    ``cols``, ``rows`` and ``matrix`` arrive in the solver's own order —
+    ``cols`` by column, the other two by row — and ``col`` and ``row`` are
+    dense ``0..n-1``, so they *are* the solver's indices: every dense vector is
+    read positionally and no sink builds a mapping. **``cols`` carries no
+    ``col`` and ``matrix`` no ``row``**: a ``cols`` row's position is its
+    index, and a matrix entry's row is where it sits between two starts;
+    [`matrix_block`][] spells them back out. ``obj`` keeps its ``col``, being
+    sparse, and **carries no order contract**: its row order differs between
+    two builds of one model, so anything that reads it must scatter it over the
+    column index, as [`dense_columns`][] does.
     """
 
     cols: pl.DataFrame
@@ -147,12 +136,10 @@ class Handoff:
     objective_constant: float
 
     def _spans(self, budget: int | None) -> Iterator[tuple[int, int]]:
-        """The row ranges a block reader walks — one rule, for both of them.
+        """The row ranges both block readers walk; ``budget=None`` is one span.
 
         Width is the average row, since a reader pays in nonzeros: 100k rows is
         900k entries in one model and 10M in another.
-
-        ``budget=None`` is one span.
         """
         linear = self.linear_row_count
         if budget is None:
@@ -160,32 +147,25 @@ class Handoff:
         return ranges(linear, budget, self.matrix.height / max(1, self.row_count))
 
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
-        """The matrix entries rows ``[lo, hi)`` own — the CSR arithmetic, once.
+        """The matrix entries rows ``[lo, hi)`` own.
 
-        Both block readers slice through here, so how a span is located, and
-        the half-open ``hi`` bound, cannot drift between them.
+        Both block readers slice through here, so the CSR arithmetic and the
+        half-open ``hi`` bound cannot drift between them.
         """
         first = int(self.row_starts[lo])
         return self.matrix.slice(first, int(self.row_starts[hi]) - first)
 
     @cached_property
     def linear_row_count(self) -> int:
-        """How many rows a sink may load as ordinary linear constraints.
-
-        Where the quadratic tail starts, or the whole row count for a model
-        with none.
-        """
+        """How many rows a sink may load as linear constraints: where the quadratic tail starts, or every row."""
         return int(self.qmatrix['row'][0]) if self.qmatrix.height else self.row_count
 
     def dense_columns(self, infinity: float) -> ColumnVectors:
-        """The column vectors over the solver's index, ready to hand over.
+        """The column vectors over the solver's index, ready to hand over unedited.
 
-        *infinity* is the solver's own spelling of an absent bound, so the
-        vectors come back ready to hand over unedited. ``cols`` arrives one row
-        per column in ``col`` order, so its three vectors are the frame's own;
-        only ``cost`` is scattered, ``obj`` being sparse, and a variable in no
-        objective term costs zero. Every vector returned is freshly produced —
-        nothing aliases the built model.
+        *infinity* is the solver's own spelling of an absent bound. A variable
+        in no objective term costs zero. Every vector returned is freshly
+        produced — nothing aliases the built model.
         """
         prepared = self.cols.select(
             _finite(pl.col('lb'), infinity).alias('lb'),
@@ -204,18 +184,13 @@ class Handoff:
         return _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
 
     def dense_rows(self, infinity: float) -> RowVectors:
-        """The row vectors over the solver's row index, ready to hand over.
+        """The row half of [`dense_columns`][], so a chunk of rows is a slice rather than a search.
 
-        The row half of [`dense_columns`][], so a chunk of rows is a slice
-        rather than a search. It stops at the sense, a [`SENSE_CODES`][]
-        byte, because that is where the solvers part — HiGHS wants
-        ``lower``/``upper``, the others a comparison and right-hand side. A
-        row with no entry gets a comparison nothing can fail (``>=`` against
-        ``-infinity``) rather than the ``== 0`` that would be an equality the
-        model never stated.
-
-        ``rows`` leaves the build in row order, so a frame holding a row per
-        label is both vectors already; the scatter is for one that falls short.
+        It stops at the sense, a [`SENSE_CODES`][] byte, because that is where
+        the solvers part — HiGHS wants ``lower``/``upper``, the others a
+        comparison and right-hand side. A row with no entry gets a comparison
+        nothing can fail (``>=`` against ``-infinity``) rather than the
+        ``== 0`` that would be an equality the model never stated.
         """
         sided = self.rows.select(
             'row',
@@ -236,22 +211,14 @@ class Handoff:
 
         The question a loaded solver asks of a rebuilt model: may I keep what
         I hold and take the new numbers by value? Bounds, costs and right-hand
-        sides go in that way; the counts, the matrix, each row's comparison,
-        each column's type and every SOS member do not, so a model whose
-        digest moved has to be loaded again.
+        sides go in that way. The counts, the matrix, each row's comparison,
+        each column's type, every SOS member, the quadratic objective's
+        pattern and each quadratic *constraint* whole — coefficients and
+        right-hand side — do not, so a model whose digest moved is loaded
+        again. A quadratic objective coefficient that merely changed is pushed.
 
-        **A quadratic *constraint* is structure whole** — coefficients and
-        right-hand side — where the quadratic *objective* contributes only its
-        pattern. A model whose quadratic row moved at all is loaded again.
-
-        **The quadratic objective contributes its pattern and not its values.**
-        A pair that appeared or moved is a model to load again; a coefficient
-        that merely changed is pushed.
-
-        **A set is structure even though nothing about it is a coefficient.**
-
-        Every vector read has an order contract — the label-ordered columns,
-        the row-ordered matrix and rows — so two builds of one model agree.
+        Every vector read has an order contract, so two builds of one model
+        agree.
         """
         return _digest(
             f'{self.column_count} {self.row_count} {self.objective_sense}'.encode(),
@@ -274,23 +241,16 @@ class Handoff:
     def contents(self) -> str:
         """A digest of the built model **whole** — the numbers included.
 
-        [`structure`][]'s counterpart, and the one question a saved answer
-        asks of a model rebuilt later: is this the model I answered? So it
-        covers what ``structure`` leaves out on purpose — the bounds, the costs
-        and the right-hand sides a re-solve may push — because a pushed number
-        is a different answer even where it is the same matrix.
+        The question a saved answer asks of a model rebuilt later: is this the
+        model I answered? So it covers what [`structure`][] leaves out — the
+        bounds, costs and right-hand sides a re-solve may push — since a pushed
+        number is a different answer over the same matrix.
 
-        Over the built model rather than over the sources, so two source
-        mappings that a build cannot tell apart agree here, whatever shape or
-        encoding they arrived in. Order is the build's own: a source whose rows
-        moved builds a different label order and so digests differently.
-
-        **The objective is read through the dense cost vector**, not off
-        ``obj``: that frame is genuinely sparse and carries no order contract,
-        so two builds of one model lay its rows out differently and hashing
-        them in place would call one model two.
-
-        Read on first ask and kept, the frames being immutable.
+        Over the built model rather than the sources, so two source mappings a
+        build cannot tell apart agree here. A source whose rows moved builds a
+        different label order and so digests differently. The objective is
+        read through the dense cost vector, since ``obj`` carries no order
+        contract and hashed in place would call one model two.
         """
         return _digest(
             self.structure + f'{self.objective_constant}'.encode(),
@@ -303,23 +263,19 @@ class Handoff:
         ).hexdigest()
 
     def sets(self) -> Iterator[tuple[int, pl.Series, pl.Series]]:
-        """Each special-ordered set: its type, member columns, and weights.
+        """Each special-ordered set: its type, member columns, and weights, in ``(set, weight)`` order.
 
-        In declared ``(set, weight)`` order; the type is read off the first
-        member, every member of a set carrying the same one. Nothing here is
-        pushed on an update: a set is structure, so a model whose members moved
-        is one [`structure`][] has already sent back to be loaded again.
+        The type is read off the first member, every member carrying the same
+        one. Nothing here is pushed on an update: a set is [`structure`][].
         """
         for members in self.sos.partition_by('set', maintain_order=True):
             yield members.item(0, 'type'), members.get_column('col'), members.get_column('weight')
 
     def quadratic_blocks(self) -> Iterator[tuple[int, pl.DataFrame]]:
-        """Each quadratic row and the ``(col_l, col_r, coeff)`` entries it owns.
+        """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` entries it owns.
 
-        One row at a time, unlike the linear matrix: every API that takes a
-        quadratic constraint takes one per call. They are the contiguous tail
-        beginning at [`linear_row_count`][], so they arrive ascending and a
-        sink's read-back stays two runs.
+        One row at a time, since every API that takes a quadratic constraint
+        takes one per call.
         """
         for (row,), entries in self.qmatrix.group_by('row', maintain_order=True):
             yield int(row), entries.select('col_l', 'col_r', 'coeff')
@@ -327,21 +283,16 @@ class Handoff:
     def row_blocks(self, budget: int | None) -> Iterator[MatrixBlock]:
         """Each chunk of rows with the matrix entries it owns — every sink's reader.
 
-        A chunk is a ``slice``: ``row_starts`` already says where every row's
-        entries sit, so nothing is sorted and nothing is searched. A consumer
-        that needs the ``row`` labels spelled back out asks
-        [`matrix_block`][] with the chunk's own range, so its spans and
-        entries cannot disagree.
+        A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
+        searched. A consumer that needs the ``row`` labels asks
+        [`matrix_block`][] with the chunk's own range, so its spans and entries
+        cannot disagree.
         """
         for lo, hi in self._spans(budget):
             yield MatrixBlock(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
-        """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled out.
-
-        The adjoint of what CSR compressed — ``np.repeat`` walks the start
-        offsets back into one label per entry.
-        """
+        """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled back out of ``row_starts``."""
         import numpy as np
 
         labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
@@ -349,11 +300,7 @@ class Handoff:
 
 
 def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
-    """A 16-byte blake2b over *head* and then each of *vectors*' bytes, in the order given.
-
-    Each vector's order contract is its frame's, so two builds of one model
-    digest alike.
-    """
+    """A 16-byte blake2b over *head* and then each of *vectors*' bytes, in the order given."""
     import hashlib
 
     import numpy as np
@@ -367,8 +314,8 @@ def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
 def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
     """*value* with each infinity as the finite sentinel the asking solver reads as one.
 
-    Both substitutions in one expression. A ``NaN`` never arrives: the door
-    refuses one in a parameter and the schema refuses one written in the file.
+    A ``NaN`` never arrives: the door refuses one in a parameter and the schema
+    one written in the file.
     """
     return (
         pl.when(value == float('inf'))

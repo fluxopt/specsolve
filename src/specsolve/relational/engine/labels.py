@@ -28,11 +28,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Labelled:
-    """One declaration's labelled frame, and the contiguous run of labels it owns.
-
-    The run is contiguous, which makes the declaration's share of a solver
-    vector a slice.
-    """
+    """One declaration's labelled frame, and the contiguous run of labels it owns."""
 
     frame: pl.LazyFrame
     start: int
@@ -58,9 +54,7 @@ def frame(
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
     path. With no dims the query selects [`UNIT`][], since selecting nothing
-    drops the empty product's one row. With neither mask nor restriction,
-    ``start + position`` is the label and the columns are in order, so nothing
-    renumbers or projects.
+    drops the empty product's one row.
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next

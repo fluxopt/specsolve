@@ -1,8 +1,8 @@
 """What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
 
 An expression the file never named passes the same door: [`lower`][] splices
-it into the spec as a named one and lowers the whole spec again, so it passes
-every rule a declared one passes. This sits above both lanes because nothing
+it into the spec as a named one and lowers the whole spec again. This sits
+above both lanes because nothing
 under ``relational/`` may see the spec as written
 (docs/about/architecture.md, hard rule 2).
 """
@@ -136,8 +136,7 @@ def _refuse_reserved_names(program: Program) -> None:
 def lowered(spec: Buildable) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
-    Every verb lowers through here. A ``piecewise:`` block is refused, not
-    expanded.
+    Every verb lowers through here.
 
     Raises:
         LanguageError: A construct outside the streaming language, a
@@ -180,8 +179,7 @@ def lower(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
     of *spec* declares, so a section added later is covered too.
 
     Args:
-        spec: The spec the expression is written against. It supplies every
-            name the expression may use; one it does not declare is refused.
+        spec: The spec whose names the expression may use.
         expression: What one ``expressions:`` entry takes — a string, or the
             mapping carrying ``cases:`` with ``dims:`` and ``otherwise:``.
 
