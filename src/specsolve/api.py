@@ -112,8 +112,9 @@ def check(spec: Buildable) -> Program:
 def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
     """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
 
-    What an archive holds under ``sources/``, so a table that comes back
-    from here goes back in as a source unchanged. Every source is read and
+    What an archive holds under ``sources/``, less the ``specsolve_run``
+    column it stamps on, so a table that comes back from here goes back in
+    as a source unchanged. Every source is read and
     checked as [`build`][] reads and checks it.
 
     Args:
@@ -322,8 +323,8 @@ class Model:
                 packs it into one file and anything else is a directory. What
                 the build and its solves have spent goes in beside the answer,
                 as [`Metrics`][specsolve.relational.parquet.Metrics]. Each
-                source goes in as the table [`tidy`][] returns for it, and
-                members are stored uncompressed.
+                source goes in as the table [`tidy`][] returns for it, with
+                ``specsolve_run`` added, and members are stored uncompressed.
 
         Returns:
             The solution, holding this model.

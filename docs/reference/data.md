@@ -147,7 +147,8 @@ attaches**, one per name the spec declares, after every check above:
 | a relation | the columns it declares |
 
 An [archive](../howto/archiving.md) of one solve holds these tables under
-`sources/`, and each one goes back into `sources` as it is. An archive of a
+`sources/`, each with `specsolve_run` added. A build reads only the columns
+above, so each one goes back into `sources` as it is. An archive of a
 sweep holds what the axis cuts its slices from, so each slice attaches from it
 the tables it attached.
 

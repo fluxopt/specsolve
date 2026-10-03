@@ -17,9 +17,9 @@ sps.solve('dispatch.yaml', sources, archive='case/')
 That writes `spec.yaml`, one `sources/<key>.parquet` per key the file
 declares, and `answer/` holding everything the solve produced. Each source is
 held as the table the solve read, which
-[`sps.tidy`](../reference/api.md#specsolve.tidy) returns: a dimension as its
-labels and `specsolve_position`, a parameter as its dims and `value`, a
-relation as its columns:
+[`sps.tidy`](../reference/api.md#specsolve.tidy) returns, with
+`specsolve_run` added: a dimension as its labels and `specsolve_position`, a
+parameter as its dims and `value`, a relation as its columns:
 
 ```text
 case/
