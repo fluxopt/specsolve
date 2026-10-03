@@ -16,6 +16,7 @@ import re
 import shutil
 import sys
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from dataclasses import replace
 from unittest import mock
 
 import polars as pl
@@ -1542,21 +1543,20 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
 def test_a_loaded_sweep_is_held_and_a_scanned_one_is_spilled(tmp_path):
     """The two verbs give the same study and differ in where its frames are.
 
-    `scan_sweep` leaves the frames on disk: `scan` reads them, and the readers
-    that return a frame refuse. `load_sweep` reads them in, so every reader
-    answers and the directory is free afterwards.
+    `scan_sweep` leaves the frames on disk, so it owes the directory every
+    read. `load_sweep` reads them in, so the directory is free afterwards.
     """
     spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
     expected = spilled.scan('p').collect()
     loaded = sps.load_sweep(tmp_path / 'sweep')
     scanned = sps.scan_sweep(tmp_path / 'sweep')
 
-    assert scanned.scan('p').collect().equals(expected), 'both read the study the spill wrote'
-    with pytest.raises(sps.SpecsolveError, match=r'sweep\.scan'):
-        scanned.primal('p')
+    assert scanned.primal('p').equals(expected), 'both read the study the spill wrote'
     shutil.rmtree(tmp_path / 'sweep')
 
-    assert loaded.primal('p').equals(expected), 'the held sweep answers the frame readers, off no directory at all'
+    assert loaded.primal('p').equals(expected), 'the held sweep answers off no directory at all'
+    with pytest.raises(FileNotFoundError):
+        scanned.primal('p')
     assert loaded.keys == scanned.keys, 'and is keyed as the sweep was solved either way'
 
 
@@ -2029,14 +2029,16 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
     have returned — primal, dual and expression, the answer or per window —
     so the two ways of running a sweep cannot answer differently.
     """
-    runs = _spilled(tmp_path)
+    runs = _spilled(tmp_path / 'sweep')
     assert answer_of(runs).equals(answer_of(priced))
-    assert not runs._frames, 'a spilled sweep holds no frame'
     assert runs.scan('soc').collect().equals(priced.primal('soc'))
     assert runs.scan('balance', 'dual').collect().equals(priced.dual('balance'))
     assert runs.scan('spend', 'expression').collect().equals(priced.evaluate('spend'))
     assert runs.scan('soc', per_window=True).collect().equals(priced.primal('soc', per_window=True))
     assert not list(tmp_path.rglob('*.part')), 'every file landed under its final name'
+    shutil.rmtree(tmp_path / 'sweep')
+    with pytest.raises(FileNotFoundError):
+        runs.primal('soc')
 
 
 @pytest.mark.parametrize(
@@ -2045,16 +2047,19 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
         pytest.param(lambda runs: runs.primal('soc'), id='primal'),
         pytest.param(lambda runs: runs.dual('balance'), id='dual'),
         pytest.param(lambda runs: runs.evaluate('spend'), id='expression'),
-        pytest.param(lambda runs: runs.save('elsewhere'), id='save'),
         pytest.param(lambda runs: runs.to_dataset(), id='to_dataset'),
     ],
 )
-def test_the_frame_readers_refuse_a_spilled_sweep_and_name_scan(read, tmp_path):
-    """One meaning per name: `primal` returns a frame in memory or raises,
-    never a frame it would have to read off disk first. The message names `scan`."""
-    runs = _spilled(tmp_path)
-    with pytest.raises(sps.SpecsolveError, match=r'sweep\.scan'):
-        read(runs)
+def test_the_frame_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
+    """A spilled sweep's frames lie on disk, and a frame reader reads the one
+    name it is asked for, so it answers what the sweep held in memory answers."""
+    assert read(_spilled(tmp_path)).equals(read(priced))
+
+
+def test_a_spilled_sweep_saves_as_the_sweep_it_is(priced, tmp_path):
+    """`save` copies a spilled sweep's slices to another directory, as it writes a held one's."""
+    saved = _spilled(tmp_path / 'sweep').save(tmp_path / 'copy')
+    assert sps.load_sweep(saved).primal('soc').equals(priced.primal('soc'))
 
 
 def test_scan_reads_an_in_memory_sweep_too(sweep):
@@ -2174,16 +2179,18 @@ def test_scan_on_a_spilled_sweep_says_what_it_does_hold(tmp_path):
         runs.scan('nope')
 
 
-def test_an_export_reads_the_key_off_each_frame_and_skips_an_empty_one(sweep):
+def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep):
     """A name is held per slice that produced it, not per slice, so an export
-    cannot count positions: it reads the key off each frame, and a frame with
-    no rows — a variable every row of which a slice masked — carries none and
-    is left out, which is what the spill writes for it."""
-    frames = list(sweep._frames['primal']['p'])
-    empty = frames[0].clear()
-    by_key = sweep_module._by_key([empty, *frames], sweep.key_name)
-    assert list(by_key) == ['high', 'low', 'mid'], 'one entry per frame that has rows, keyed by its own key'
-    assert all(sweep.key_name not in frame.columns for frame in by_key.values()), 'the key column is dropped'
+    cannot count positions: it reads the key off the rows, and a slice with no
+    rows of a name — a variable every row of which the slice masked — has no
+    entry, which is what the spill writes for it."""
+    index = sweep_module.slice_index(sweep, 'primal')['p']
+    assert list(index) == ['high', 'low', 'mid'], 'one entry per slice, keyed by its own key'
+    assert all(sweep.key_name not in frame.columns for frame in index.values()), 'the key column is dropped'
+
+    held = sweep._slices['primal']['p'].filter(pl.col(sweep.key_name) != 'low')
+    short = replace(sweep, _slices={'primal': {'p': held}})
+    assert list(sweep_module.slice_index(short, 'primal')['p']) == ['high', 'mid'], 'a slice with no rows is left out'
 
 
 def test_a_sweep_archive_carries_its_carry(tmp_path):

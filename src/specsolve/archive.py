@@ -28,7 +28,6 @@ from specsolve.sweep import (
     WINDOWS_DIR,
     Spill,
     Sweep,
-    held_in_memory,
     opened_sweep,
     slice_index,
     with_key,
@@ -259,11 +258,8 @@ def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
     opened = opened_sweep(under)
     answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
     kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
-    opened = replace(opened, _answer=answer, _windows=kept)
-    spill = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype) if kept else None
-    if not whole:
-        return replace(opened, _spill=spill, _disk=under)
-    return opened if spill is None else held_in_memory(opened, spill)
+    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
+    return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
 
 
 def _attach_sweep_readers(

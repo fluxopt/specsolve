@@ -836,7 +836,7 @@ def test_a_loaded_archive_owes_the_members_nothing_and_a_scanned_one_owes_them_e
 def test_a_loaded_sweep_archive_answers_the_frame_readers(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """`load_archive` gives a held `Sweep`, `scan_archive` a spilled one."""
+    """`load_archive` gives a held `Sweep`, `scan_archive` one that reads off the unpacked files."""
     axis = sps.EachCoordinate('scenario')
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
@@ -844,9 +844,8 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
     loaded = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
     scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'study')
 
-    assert loaded.sweep.primal('p').equals(scanned.sweep.scan('p').collect()), 'the same study, read two ways'
-    with pytest.raises(sps.SpecsolveError, match=r'sweep\.scan'):
-        scanned.sweep.primal('p')
+    assert loaded.sweep.primal('p').equals(scanned.sweep.primal('p')), 'the same study, read two ways'
+    assert loaded.sweep.primal('p').equals(scanned.sweep.scan('p').collect()), 'and lazily'
 
 
 def _attached_differently(spec, sources, archived: sps.SweepArchive) -> list[tuple[int, str]]:

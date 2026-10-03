@@ -217,7 +217,8 @@ def solve_over(
             nothing, whatever was asked.
         spill_to: A directory to write each slice's frames to as the fold goes,
             so the sweep's memory stays at one slice however many there
-            are. Read back through [`Sweep.scan`][]. A directory holds
+            are. A reader reads the name it is asked for off the files, and
+            [`Sweep.scan`][] reads it lazily. A directory holds
             one sweep: run the same sweep at it again and the slices already
             there are not solved again, which is how an interrupted sweep
             resumes.
@@ -377,9 +378,7 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
-        for name in spill.names(kind):
-            frame = spill.scan(kind, name)
-            assert frame is not None, 'a name the spill lists has files'
+        for name, frame in sweep._slices.get(kind, {}).items():
             if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
