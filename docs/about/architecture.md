@@ -127,9 +127,10 @@ accept the same file, attach the same tables and refuse the same constructs.
 oracle stops at the `linopy.Model`, which the tests solve and read back with
 linopy.
 
-**Nine modules sit outside a fence, and each is legitimately both halves**:
-`sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `lanes.py`,
-`frames.py`, `archive_layout.py`, `archive.py` and `errors.py`. Size
+**Eleven modules sit outside a fence, and each is legitimately both halves**:
+`sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `axes.py`,
+`sweep.py`, `lanes.py`, `frames.py`, `archive_layout.py`, `archive.py` and
+`errors.py`. Size
 does not buy a place among them. A module only one lane reaches is that lane's, down to a
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
@@ -551,6 +552,8 @@ is structure.
 | `frames.py` | the boundary: caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the oracle |
 | `errors.py` | the run half, and the whole re-exported: what a caller catches off `sps.`; a wording lives here only where two modules raise it |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
+| `axes.py` | how a sweep cuts its sources: `EachCoordinate`, `EachWindow`, and the stitch that puts a window's frames back over the dimension it cut |
+| `sweep.py` | what a fold returns: `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
 | `relational/engines/polars/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
 | `relational/engines/polars/compiler.py` | plan → lazy queries; pure, reads nothing |
 | `relational/engines/polars/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
