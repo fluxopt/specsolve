@@ -1475,3 +1475,44 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
+
+
+class _CallsTwice:
+    """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
+
+    A plain call runs the target twice on the same arguments, a warm-up then the
+    measured one; the pedantic form runs `setup` before each.
+    """
+
+    def __call__(self, target: Any, *args: Any) -> Any:
+        target(*args)
+        return target(*args)
+
+    def pedantic(self, target: Any, args: tuple = (), kwargs: dict | None = None, setup: Any = None, **_: Any) -> Any:
+        out = None
+        for _ in range(2):
+            args, kwargs = setup() if setup is not None else (args, kwargs or {})
+            out = target(*args, **kwargs)
+        return out
+
+
+def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
+    """A `shape` window updates onto the shorter rung, so a second call on the same model has nothing left to reload.
+
+    `_rounds` handed CodSpeed one setup and the plain call, and its memory
+    instrument failed every `shape` window at `s`; its wall-time instrument
+    returned the first call and timed the later ones, so it measured the push
+    path in silence.
+    """
+    from bench.test_ladder import _rounds
+
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    shape = case.shape('xs')
+    prepared = module.prepare('dispatch', 'xs', case.data(shape), {})
+    shorter = module.prepare('dispatch', 'xs', case.data(shortened(shape)), {})
+    request = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace()))
+    counts = _rounds(
+        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter)
+    )
+    assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'
