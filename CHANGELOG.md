@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(deps): an installed specsolve release keeps the mathspec minor version it was released against ([#1816](https://github.com/fluxopt/specsolve/pull/1816))
 - feat(archive): every archived table carries the run it came from as specsolve_run, and names starting with specsolve_ are reserved ([#1809](https://github.com/fluxopt/specsolve/pull/1809))
 - feat(archive): an archive's record and metrics have the same columns for a solve and for every kind of sweep ([#1810](https://github.com/fluxopt/specsolve/pull/1810))
 - feat(archive): an archive lists every name it holds, its kind, description and dimensions in catalog.parquet ([#1812](https://github.com/fluxopt/specsolve/pull/1812))
