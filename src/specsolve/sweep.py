@@ -654,7 +654,7 @@ def load_sweep(directory: str | Path) -> Sweep:
             fold writes, or is in a layout that has moved since it was written.
     """
     under = Path(directory)
-    opened = opened_sweep(under)
+    opened = opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=True))
 
@@ -672,13 +672,18 @@ def scan_sweep(directory: str | Path) -> Sweep:
         LayoutError: As [`load_sweep`][] raises it.
     """
     under = Path(directory)
-    opened = opened_sweep(under)
+    opened = opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=False), _spill=spill)
 
 
-def opened_sweep(under: Path) -> Sweep:
-    """The sweep whose manifest is under *under*: its record and reasons, and none of its frames."""
+def opened_sweep(under: Path, owned: Path | None) -> Sweep:
+    """The sweep whose manifest is under *under*: its record and reasons, and none of its frames.
+
+    *owned* is where an EachWindow sweep keeps what each window owns, read
+    only by a stitch from the windows; ``None`` for an archive that kept no
+    windows to stitch.
+    """
     manifest = under / MANIFEST_FILE
     if not manifest.is_file():
         raise LayoutError(
@@ -699,7 +704,11 @@ def opened_sweep(under: Path) -> Sweep:
         _absent=absent,
         _stitch=None
         if stitch is None
-        else Stitch(stitch['local'], stitch['dim'], pl.read_parquet(under / OWNED_FILE).drop(RUN, strict=False)),
+        else Stitch(
+            stitch['local'],
+            stitch['dim'],
+            pl.DataFrame() if owned is None else pl.read_parquet(owned).drop(RUN, strict=False),
+        ),
     )
 
 

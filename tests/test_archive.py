@@ -522,8 +522,8 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
     _archived(to_spec(_CATALOGED), _cataloged_sources(50.0), tmp_path / 'base')
 
     assert pl.read_parquet(tmp_path / 'base' / 'catalog.parquet').rows() == [
-        ('base', 'answer/activity/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus', 0),
-        ('base', 'answer/dual/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus', 0),
+        ('base', 'answer/activity/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus'),
+        ('base', 'answer/dual/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus'),
         (
             'base',
             'answer/expression/spend.parquet',
@@ -533,24 +533,23 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
             None,
             None,
             None,
-            None,
         ),
-        ('base', 'answer/primal/p.parquet', 'p', 'variable', None, None, 'generator', 'generator', 0),
-        ('base', 'sources/bus.parquet', 'bus', 'dimension', 'nodes', 'str', 'bus', 'bus', 0),
-        ('base', 'sources/cost.parquet', 'cost', 'parameter', None, 'float', 'generator', 'generator', 0),
-        ('base', 'sources/generator.parquet', 'generator', 'dimension', None, 'str', 'generator', 'generator', 0),
-        ('base', 'sources/load.parquet', 'load', 'parameter', None, 'float', 'bus', 'bus', 0),
-        ('base', 'sources/p_max.parquet', 'p_max', 'parameter', 'rating', 'float', 'generator', 'generator', 0),
-        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'generator', 'generator', 0),
-        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'at', 'bus', 1),
+        ('base', 'answer/primal/p.parquet', 'p', 'variable', None, None, 'generator', 'generator'),
+        ('base', 'sources/bus.parquet', 'bus', 'dimension', 'nodes', 'str', 'bus', 'bus'),
+        ('base', 'sources/cost.parquet', 'cost', 'parameter', None, 'float', 'generator', 'generator'),
+        ('base', 'sources/generator.parquet', 'generator', 'dimension', None, 'str', 'generator', 'generator'),
+        ('base', 'sources/load.parquet', 'load', 'parameter', None, 'float', 'bus', 'bus'),
+        ('base', 'sources/p_max.parquet', 'p_max', 'parameter', 'rating', 'float', 'generator', 'generator'),
+        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'at', 'bus'),
+        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'generator', 'generator'),
     ], (
-        'one row per column that holds labels of each file, in path order: the constraint load and the parameter '
+        'one row per column that holds labels of each file, in path and column order: the constraint load and the parameter '
         'load are told apart by path, a relation names each role and its dimension, a name over no dimension has '
         'one row with no column, and dtype is only what the spec declares'
     )
 
 
-def test_a_dimension_position_is_its_place_in_the_declaration_whatever_order_the_caller_wrote(tmp_path: Path) -> None:
+def test_a_parameter_passed_in_another_column_order_is_catalogued_as_its_tidy_table(tmp_path: Path) -> None:
     """A parameter passed as a path in another column order is archived as its tidy table, in the spec's order."""
     spec = to_spec(
         {
@@ -572,12 +571,14 @@ def test_a_dimension_position_is_its_place_in_the_declaration_whatever_order_the
     _archived(spec, {'generator': ['wind', 'gas'], 'snapshot': [0], 'p_max': str(path)}, tmp_path / 'case')
     held = pl.read_parquet_schema(tmp_path / 'case' / 'sources' / 'p_max.parquet')
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet')
-    places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('dim', 'dim_position').rows()
+    places = catalog.filter(pl.col('path') == 'sources/p_max.parquet').select('column', 'dim').rows()
 
     assert list(held) == ['generator', 'snapshot', 'value', RUN], (
         "the archived file is the tidy table: the declared order rather than the caller's, the stray column gone"
     )
-    assert places == [('generator', 0), ('snapshot', 1)], 'dim_position follows the order p_max declares its dimensions'
+    assert places == [('generator', 'generator'), ('snapshot', 'snapshot')], (
+        'the catalog lists the columns of the archived file, and not the stray one the caller wrote'
+    )
 
 
 def _held_files(archive: Path) -> set[str]:
@@ -617,7 +618,7 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
         'the catalog names what the archive holds a file for, and nothing it does not'
     )
     assert set(catalog['path']) == held, 'every source and answer file is listed by its path, and every path is there'
-    assert catalog.select('path', 'dim_position').is_duplicated().sum() == 0, 'a path and a position name one row'
+    assert catalog.select('path', 'column').is_duplicated().sum() == 0, 'a path and a column name one row'
     assert catalog[RUN].unique().to_list() == ['case'], 'every row carries the archive it came from'
     for path, column in catalog.drop_nulls('column').select('path', 'column').iter_rows():
         assert column in _columns_of(out / path), f'{path} holds the column {column!r} its row names'
@@ -636,7 +637,6 @@ def _unpacked(packed: Path, into: Path) -> Path:
     return into
 
 
-@pytest.mark.xfail(strict=True, reason='the catalog describes the spec, not the files a sweep archive writes')
 @pytest.mark.parametrize(
     ('windowed', 'path', 'column', 'dim'),
     [
@@ -673,7 +673,6 @@ def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_writt
     )
 
 
-@pytest.mark.xfail(strict=True, reason='the catalog describes the spec, not the files a sweep archive writes')
 def test_a_rolling_horizon_lists_its_windows_in_their_own_catalog(tmp_path: Path) -> None:
     """The windows are listed apart, so the archive's catalog is the same whether they are kept or not."""
     _rolling(tmp_path / 'unkept')
@@ -1140,7 +1139,7 @@ def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the
         table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
         for table in tables
     }
-    kept = {'answer/owned.parquet', 'answer/primal/soc.parquet', 'answer/windows/primal/soc/000000.parquet'}
+    kept = {'answer/windows/owned.parquet', 'answer/primal/soc.parquet', 'answer/windows/primal/soc/000000.parquet'}
 
     assert kept <= stamps.keys(), 'the answer, the windows and what each window owns are all archived'
     assert stamps == {table: ['nightly-2026-09-10'] for table in stamps}, 'and every one of them carries the run'

@@ -25,6 +25,7 @@ from specsolve.inputs import lower
 from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
 from specsolve.sweep import (
     MANIFEST_FILE,
+    OWNED_FILE,
     WINDOWS_DIR,
     Spill,
     Sweep,
@@ -245,9 +246,9 @@ def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
         whole: Read every frame into memory, as [`load_sweep`][] does, rather
             than at the call that asks, as [`scan_sweep`][] does.
     """
-    opened = opened_sweep(under)
-    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
     kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
+    opened = opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
+    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
     windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
 
