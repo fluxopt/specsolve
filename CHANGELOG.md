@@ -14,6 +14,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(sweep): a sweep reads and archives its answer over the model's own coordinates by default, and keeps the per-window frames only on request ([#1811](https://github.com/fluxopt/specsolve/pull/1811))
 - feat(data): an archive holds each source as the tidy table the solve read, and tidy() returns those tables ([#1813](https://github.com/fluxopt/specsolve/pull/1813))
 - fix(sweep): a sweep key named like a metrics column is refused before a slice is solved ([#1820](https://github.com/fluxopt/specsolve/pull/1820))
+- feat(archive): an archived answer names the solver, its options and the specsolve and mathspec versions that produced it ([#1817](https://github.com/fluxopt/specsolve/pull/1817))
 
 ## 0.3.0 (2026-10-02)
 

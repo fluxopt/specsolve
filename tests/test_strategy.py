@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import importlib.metadata
 import json
+import math
 import multiprocessing
 import re
 import shutil
@@ -23,7 +25,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve.api import Model
-from specsolve.relational.parquet import Metrics, Record
+from specsolve.relational.parquet import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
@@ -266,12 +268,84 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'model_digest',
         'slice_axis',
         'slice',
+        'solver',
+        'solver_version',
+        'solver_options',
+        'specsolve_version',
+        'mathspec_version',
     ], 'the record, keyed'
     assert set(runs.primal('p').columns) == {'scenario', 'snapshot', 'generator', 'value'}
     assert runs.primal('p').height == 3 * 4 * 2
 
+    assert runs.record['solver'].to_list() == ['highs'] * 3, 'every slice names the solver that answered it'
     by_key = dict(zip(runs.record['scenario'], runs.record['objective'], strict=True))
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
+
+
+_OPTIONS = {'time_limit': math.inf, 'presolve': 'on'}
+
+
+def _serial(tmp_path) -> pl.DataFrame:
+    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), solver_options=_OPTIONS).record
+
+
+def _pooled(tmp_path) -> pl.DataFrame:
+    with ThreadPoolExecutor(2) as pool:
+        axis = sps.EachCoordinate('scenario')
+        return sps.solve_over(DISPATCH, scenario_sources(), axis, executor=pool, solver_options=_OPTIONS).record
+
+
+def _rolling(tmp_path) -> pl.DataFrame:
+    carry = {'soc_initial': 'soc'}
+    return sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry=carry, solver_options=_OPTIONS).record
+
+
+def _scanned(tmp_path) -> pl.DataFrame:
+    axis = sps.EachCoordinate('scenario')
+    sps.solve_over(DISPATCH, scenario_sources(), axis, spill_to=tmp_path / 'spill', solver_options=_OPTIONS)
+    return sps.scan_sweep(tmp_path / 'spill').record
+
+
+def _loaded(tmp_path) -> pl.DataFrame:
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), solver_options=_OPTIONS).save(
+        tmp_path / 'saved'
+    )
+    return sps.load_sweep(tmp_path / 'saved').record
+
+
+def _archived(tmp_path) -> pl.DataFrame:
+    axis = sps.EachCoordinate('scenario')
+    sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'case', solver_options=_OPTIONS)
+    return pl.read_parquet(tmp_path / 'case' / 'answer' / 'record.parquet')
+
+
+@pytest.mark.parametrize(
+    'swept',
+    [
+        pytest.param(_serial, id='serial'),
+        pytest.param(_pooled, id='pooled'),
+        pytest.param(_rolling, id='rolling'),
+        pytest.param(_scanned, id='scanned-spill'),
+        pytest.param(_loaded, id='loaded-save'),
+        pytest.param(_archived, id='archive-file'),
+    ],
+)
+def test_every_slice_of_every_kind_of_sweep_names_what_produced_it(swept, tmp_path) -> None:
+    """The provenance columns sit after the slice columns, and every path a sweep's record takes keeps them."""
+    record = swept(tmp_path)
+    produced = (
+        'highs',
+        importlib.metadata.version('highspy'),
+        '{"presolve": "on", "time_limit": "inf"}',
+        sps.__version__,
+        importlib.metadata.version('mathspec'),
+    )
+    assert record.columns[-7:] == ['slice_axis', 'slice', *Provenance._fields], (
+        'the slice columns, then the provenance columns'
+    )
+    assert set(record.select(Provenance._fields).rows()) == {produced}, (
+        'every slice names the solver, its options and the versions that answered it'
+    )
 
 
 def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):

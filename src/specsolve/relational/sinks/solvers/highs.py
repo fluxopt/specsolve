@@ -174,6 +174,20 @@ class Highs(Solver):
     _handle: Any
 
     requires = ('highspy',)
+    recorded_options = frozenset(
+        {
+            'time_limit',
+            'mip_rel_gap',
+            'mip_abs_gap',
+            'random_seed',
+            'threads',
+            'solver',
+            'presolve',
+            'primal_feasibility_tolerance',
+            'dual_feasibility_tolerance',
+            'mip_feasibility_tolerance',
+        }
+    )
     unavailable_message = 'highspy ships with specsolve, so a build without it is broken rather than missing an extra'
 
     #: No SOS concept, and a Hessian beside integrality is refused; the pair is

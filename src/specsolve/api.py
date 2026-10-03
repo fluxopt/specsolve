@@ -19,12 +19,15 @@ Example::
 
 from __future__ import annotations
 
+import json
+import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import polars as pl
 from mathspec import advice
 
@@ -44,9 +47,11 @@ from specsolve.relational.parquet import (
     METRICS_SCHEMA,
     RECORD_FILE,
     RUN,
+    Provenance,
     Record,
     check_format,
     digest_of,
+    installed,
     read_reasons,
     write_whole,
 )
@@ -314,7 +319,10 @@ class Model:
                 vocabulary, so a time limit is ``time_limit``, ``TimeLimit`` or
                 ``timelimit``. Gurobi's are applied when its environment is
                 created, so ``ComputeServer``, ``TokenServer`` and
-                ``WLSAccessID`` reach it too.
+                ``WLSAccessID`` reach it too. The result's
+                [`provenance`][specsolve.relational.result.Result.provenance]
+                records them: the value of an option that changes the answer,
+                such as a time limit or a gap, and the name alone of any other.
             keep: How much of the session this solve may keep: ``solver``,
                 ``progress`` or ``nothing``. ``solver``, the
                 default, reuses the solver holding the model and discards the
@@ -355,6 +363,7 @@ class Model:
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
+            _provenance=_provenance(solver_name, solver_options),
         )
         if out is not None:
             self._archive(out, answered)
@@ -701,6 +710,7 @@ def _answer_under(out: Path, read: Reading) -> Result:
             _solved_at=record.solved_at,
             _model_digest=record.model_digest,
             _run=record.specsolve_run,
+            _provenance=record.provenance,
         )
 
     no_duals, absent = read_reasons(out)
@@ -721,6 +731,43 @@ def _answer_under(out: Path, read: Reading) -> Result:
         _solved_at=record.solved_at,
         _model_digest=record.model_digest,
         _run=record.specsolve_run,
+        _provenance=record.provenance,
+    )
+
+
+def _json_value(value: object) -> object:
+    """*value* as strict JSON holds it, which is all a BI tool or polars' ``str.json_decode`` reads.
+
+    A numpy scalar becomes the Python number it holds. A non-finite float
+    becomes the string ``"inf"``, ``"-inf"`` or ``"nan"``, because JSON has no
+    such number and ``time_limit=inf`` is HiGHS's own default.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    return value
+
+
+def _provenance(solver_name: str, solver_options: Mapping[str, object] | None) -> Provenance:
+    """What a solve on *solver_name* with *solver_options* records about itself.
+
+    The options are written as one JSON object, because a column of structs is
+    one that several BI tools cannot read. Only an option on the solver's
+    ``recorded_options`` keeps its value: an archive goes to storage other
+    people read, and a list of what to hide would leak whatever it missed.
+    """
+    served = solver(solver_name)
+    options = {
+        name: _json_value(value) if name.casefold() in served.recorded_options else '<not recorded>'
+        for name, value in (solver_options or {}).items()
+    }
+    return Provenance(
+        solver_name,
+        installed(served.requires[0]),
+        json.dumps(options, sort_keys=True, default=str, allow_nan=False),
+        installed('specsolve'),
+        installed('mathspec'),
     )
 
 
