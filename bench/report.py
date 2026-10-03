@@ -263,13 +263,13 @@ _SEAM = {
     'lp': 'Each arm has written the LP file, through whichever writer it has.',
     'highs': (
         'Each arm ends holding a populated `highspy.Highs` with `run()` never '
-        'called — specsolve through `build_highs`. The simplex is the same work '
+        'called — specsolve through `Highs(handoff)`. The simplex is the same work '
         'whoever filled the model, so timing it would say nothing about the '
         'lane that filled it.'
     ),
     'gurobi': (
         'Each arm ends holding a populated `gurobipy.Model` with `optimize()` '
-        'never called — specsolve through `build_gurobi`, and gurobipy through '
+        'never called — specsolve through `Gurobi(handoff)`, and gurobipy through '
         '`update()`, which is where its own deferred writes land. Opt-in: it '
         'needs the `[gurobi]` extra.'
     ),

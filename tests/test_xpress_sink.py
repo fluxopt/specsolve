@@ -22,7 +22,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks.solvers.xpress import Xpress, build_xpress
+from specsolve.relational.sinks.solvers.xpress import Xpress
 from tests.conftest import (
     CASES,
     assert_agrees_with_highs,
@@ -77,7 +77,7 @@ def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
         reference = model.solve().objective
-    problem = build_xpress(tables, batch_rows=batch_rows).handle
+    problem = Xpress(tables, batch_rows=batch_rows).handle
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(reference), f'batch_rows={batch_rows} moved the answer'
 
@@ -138,18 +138,18 @@ def test_solver_options_reach_xpress() -> None:
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
-    problem = build_xpress(tables, solver_options={'timelimit': 42}).handle
+    problem = Xpress(tables, solver_options={'timelimit': 42}).handle
     assert int(problem.controls.timelimit) == 42, 'the option did not reach the problem'
 
 
-def test_build_xpress_loads_the_model_and_stops() -> None:
+def test_constructing_xpress_loads_the_model_and_stops() -> None:
     """The seam `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
-    problem = build_xpress(tables).handle
+    problem = Xpress(tables).handle
     assert (problem.attributes.rows, problem.attributes.cols) == (tables.row_count, tables.column_count)
-    assert int(problem.attributes.solvestatus) == 0, 'build_xpress loads the model and does not solve it'
+    assert int(problem.attributes.solvestatus) == 0, 'constructing Xpress loads the model and does not solve it'
 
 
 def test_a_set_reaches_the_solver_natively() -> None:
@@ -159,7 +159,7 @@ def test_a_set_reaches_the_solver_natively() -> None:
 
     with sps.build(spec(2), DATA) as model:
         tables = model._engine._model.handoff
-    problem = build_xpress(tables).handle
+    problem = Xpress(tables).handle
     assert int(problem.attributes.sets) == 2, 'both declared sets reached the solver as sets'
     problem.optimize()
     assert float(problem.attributes.objval) == pytest.approx(best(2))

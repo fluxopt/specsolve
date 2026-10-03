@@ -392,17 +392,15 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
     A solver is a module under ``solvers/`` named for it, a ``Solver``
-    subclass defined in that module, a ``build_<name>`` seam for `bench/`, and
-    the ``SOLVERS`` key holding the class. Writers are keyed by suffix.
+    subclass defined in that module, and the ``SOLVERS`` key holding the
+    class. Writers are keyed by suffix.
     """
-    import importlib
 
     from specsolve.relational.sinks import SOLVERS, WRITERS, Solver
 
     solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
-        module = importlib.import_module(f'specsolve.relational.sinks.solvers.{name}')
         held = SOLVERS[name]
         assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
         assert held.__module__.rsplit('.', 1)[-1] == name, (
@@ -415,7 +413,6 @@ def test_each_sink_family_is_its_directory_and_its_registry():
             f'{name}.is_available() must answer without importing the solver or raising'
         )
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
-        assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
     assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {
         FAMILY_SHARED['writers']

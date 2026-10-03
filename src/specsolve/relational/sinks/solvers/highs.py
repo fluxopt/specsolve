@@ -48,18 +48,6 @@ _CONDITION_OF_HIGHS_STATUS = {
 }
 
 
-def build_highs(
-    handoff: Handoff,
-    solver_options: Mapping[str, Any] | None = None,
-) -> Highs:
-    """Load the model into a `highspy.Highs` and stop there: the seam `bench/` measures.
-
-    Returns:
-        The [`Highs`][] holding the model, at ``.handle``.
-    """
-    return Highs(handoff, None, solver_options)
-
-
 def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated `highspy.Highs`.
 
@@ -74,7 +62,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
             'HiGHS has no quadratic-constraint concept at all — no entry point takes one — and '
             f'this model has {handoff.row_count - handoff.linear_row_count} such rows. Solving through '
             'sps.solve() '
-            'refuses this earlier and names the sinks that do take it; reaching build_highs '
+            'refuses this earlier and names the sinks that do take it; constructing Highs '
             'directly skips that, and loading the rows without their quadratic part would be a '
             'different model that solves.'
         )
@@ -164,10 +152,11 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 
 
 class Highs(Solver):
-    """HiGHS, holding one model.
+    """HiGHS, holding one model at ``.handle``, a `highspy.Highs`.
 
-    A re-solve changes bounds, costs and right-hand sides on the held model and
-    starts from the basis the last solve ended on.
+    Constructing one loads the model and stops there. A re-solve changes
+    bounds, costs and right-hand sides on the held model and starts from the
+    basis the last solve ended on.
     """
 
     #: The loaded model. ``close`` drops it.

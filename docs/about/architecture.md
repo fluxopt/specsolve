@@ -642,8 +642,8 @@ coordinates.
 **Add a macro or named expression:** edit YAML. Nothing else.
 
 **Add a sink:** a module in `relational/sinks/solvers/` named for the solver, or
-one in `writers/` keyed by suffix in `WRITERS`. A solver module defines
-`solve_<name>` and `build_<name>` and takes one line in `SOLVERS`. It keeps its
+one in `writers/` keyed by suffix in `WRITERS`. A solver module defines a
+`Solver` subclass named for it and takes one line in `SOLVERS`. It keeps its
 dependency behind an extra, imported inside the function. Either way the module
 declares what it can ingest, as a `Capabilities` descriptor beside the code that
 knows. A sink declaring nothing reads as taking nothing. Nothing above it

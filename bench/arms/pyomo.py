@@ -4,7 +4,7 @@ The model is a `ConcreteModel` with `Set`/`Var`/`Constraint` rules, one per
 case in `bench/models/<case>/pyomo.py`, read from parquet with pandas.
 
 The solver sinks go through appsi's persistent interfaces: `set_instance`
-populates the solver's own model, the seam `build_highs` and `build_gurobi`
+populates the solver's own model, the seam the `Highs` and `Gurobi` constructors
 reach. The LP writer is pyomo's own. `symbolic_solver_labels` stays at its
 default, off.
 """
