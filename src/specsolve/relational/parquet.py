@@ -47,10 +47,10 @@ LAYOUT = 2
 FORMAT_FILE = 'format.json'
 
 
-def _writer() -> str | None:
-    """The specsolve version writing a stamp, or ``None`` from a source tree nothing installed."""
+def installed(distribution: str) -> str | None:
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed."""
     try:
-        return version('specsolve')
+        return version(distribution)
     except PackageNotFoundError:
         return None
 
@@ -58,7 +58,7 @@ def _writer() -> str | None:
 def write_format(directory: Path) -> None:
     """Stamp *directory* with the layout its contents are in, and the specsolve version that wrote them."""
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': _writer()}))
+    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': installed('specsolve')}))
 
 
 def check_format(directory: Path) -> None:
@@ -112,6 +112,32 @@ def digest_of(yaml: str) -> str:
     return digest_of_bytes(yaml.encode())
 
 
+class Provenance(NamedTuple):
+    """What produced an answer: the solver, the options it ran with, and the packages that built the model.
+
+    Enough to install the same environment again and ask the same question.
+    Every field is ``None`` for an answer no solve wrote, such as one built by
+    hand.
+    """
+
+    #: The solver's name, as ``solver_name`` takes it.
+    solver: str | None = None
+    #: The installed version of the solver's Python package.
+    solver_version: str | None = None
+    #: The options the solver ran with, as one JSON object with sorted keys:
+    #: ``{}`` where none were passed. An option that changes the answer, such
+    #: as a time limit or a gap, keeps its value, and an infinite or ``nan``
+    #: one is the string ``"inf"``, ``"-inf"`` or ``"nan"``; any other has the
+    #: value ``<not recorded>``, so a licence credential never reaches an archive.
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
+
+
+#: The provenance of an answer no solve wrote.
+NO_PROVENANCE = Provenance()
+
+
 class Record(NamedTuple):
     """How a solve terminated, what it reached, and which spec it answered.
 
@@ -152,6 +178,12 @@ class Record(NamedTuple):
     #: axis, so every table written here has the same columns.
     slice_axis: str | None = None
     slice: str | None = None
+    #: [`Provenance`][]'s fields, one column each.
+    solver: str | None = None
+    solver_version: str | None = None
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
 
     @classmethod
     def of(
@@ -163,6 +195,7 @@ class Record(NamedTuple):
         spec_digest: str | None,
         solved_at: datetime | None,
         model_digest: str | None = None,
+        provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes.
 
@@ -179,6 +212,7 @@ class Record(NamedTuple):
                 solve carried no clock.
             model_digest: The built model's digest, or ``None`` where this
                 answer never held one.
+            provenance: What produced the answer.
         """
         return cls(
             status_of(termination_condition),
@@ -188,7 +222,13 @@ class Record(NamedTuple):
             spec_digest,
             solved_at,
             model_digest=model_digest,
+            **provenance._asdict(),
         )
+
+    @property
+    def provenance(self) -> Provenance:
+        """What produced the answer this row records."""
+        return Provenance(*(getattr(self, name) for name in Provenance._fields))
 
     @property
     def solve_status(self) -> SolveStatus:

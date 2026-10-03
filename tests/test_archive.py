@@ -7,12 +7,15 @@ frame for frame, over every ported instance.
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -20,17 +23,20 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import strategy
-from specsolve.api import attach_readers
+from specsolve.api import _provenance, attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
 from specsolve.relational.parquet import (
     LAYOUT,
     METRICS_FILE,
     RUN,
     Metrics,
+    Provenance,
+    Record,
     digest_of_file,
     read_reasons,
     write_reasons,
 )
+from specsolve.relational.sinks.solvers import SOLVERS
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -1369,6 +1375,149 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     )
 
 
+@pytest.mark.parametrize('scale', [pytest.param(1.0, id='with-values'), pytest.param(100.0, id='infeasible')])
+def test_a_record_names_the_solver_and_the_packages_that_produced_it(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, scale: float
+) -> None:
+    """An answer kept for months outlives the environment that solved it.
+
+    Before, the record named no solver, no solver option and no mathspec, so an
+    archive could not say what would have to be installed to solve it again.
+    An answer with no values is read back on a path of its own, so it is a case.
+    """
+    inputs = {**dispatch_frame_inputs, 'load': dispatch_frame_inputs['load'].with_columns(pl.col('value') * scale)}
+    with sps.solve(
+        dispatch_yaml, inputs, solver_options={'time_limit': 60.0, 'presolve': 'on'}, archive=tmp_path / 'case'
+    ) as solved:
+        provenance = solved.provenance
+        assert solved.has_primal == (scale == 1.0), 'the case is the one its id names'
+
+    row = pl.read_parquet(tmp_path / 'case' / 'answer' / 'record.parquet').row(0, named=True)
+    assert {name: row[name] for name in Provenance._fields} == {
+        'solver': 'highs',
+        'solver_version': version('highspy'),
+        'solver_options': '{"presolve": "on", "time_limit": 60.0}',
+        'specsolve_version': sps.__version__,
+        'mathspec_version': version('mathspec'),
+    }, 'the solver, its options as one JSON string with sorted keys, and the three installed versions'
+    assert sps.load_archive(tmp_path / 'case').answer.provenance == provenance, 'and it reads back as it was written'
+
+
+def test_a_solve_with_no_options_records_an_empty_object() -> None:
+    """No options is a fact about the solve, so it is written, not left null."""
+    assert _provenance('highs', None).solver_options == '{}', 'null is kept for a record no solve wrote'
+
+
+@pytest.mark.parametrize(
+    ('value', 'decoded'),
+    [
+        pytest.param(math.inf, 'inf', id='inf'),
+        pytest.param(-math.inf, '-inf', id='minus-inf'),
+        pytest.param(math.nan, 'nan', id='nan'),
+        pytest.param(np.int64(4), 4, id='numpy-int'),
+        pytest.param(np.float64(0.5), 0.5, id='numpy-float'),
+    ],
+)
+def test_the_recorded_options_are_json_every_reader_decodes(value: object, decoded: object) -> None:
+    """A recorded option is read back by tools that take strict JSON only.
+
+    Before, ``time_limit=math.inf``, which is HiGHS's own default, was written
+    as ``Infinity``, which is not JSON, so polars' ``str.json_decode`` raised.
+    A ``numpy.int64`` was written as the string ``"4"`` rather than the number.
+    """
+    written = _provenance('highs', {'time_limit': value}).solver_options
+    assert pl.Series([written]).str.json_decode().to_list() == [{'time_limit': decoded}], (
+        'a non-finite number is its name as a string, and a numpy scalar is the number it holds'
+    )
+
+
+@pytest.mark.parametrize(
+    'option',
+    [
+        pytest.param('WLSAccessID', id='wls-access-id'),
+        pytest.param('WLSSecret', id='wls-secret'),
+        pytest.param('LicenseID', id='license-id'),
+        pytest.param('CSAPIAccessID', id='compute-server-access-id'),
+        pytest.param('CSAPISecret', id='compute-server-secret'),
+        pytest.param('ServerPassword', id='server-password'),
+        pytest.param('CloudAccessID', id='cloud-access-id'),
+        pytest.param('CloudSecretKey', id='cloud-secret-key'),
+        pytest.param('SomeParameterAFutureGurobiAdds', id='unknown-to-specsolve'),
+    ],
+)
+def test_an_option_off_the_solvers_list_is_recorded_by_name_alone(option: str) -> None:
+    """Gurobi takes its licence credentials as options, and an archive goes to shared storage.
+
+    Only an option on the solver's list keeps its value, so a name nobody
+    listed cannot leak. The name stays, so the record still says it was set.
+    `TimeLimit` is on the list in another letter case, as Gurobi reads it.
+    """
+    pytest.importorskip('gurobipy')
+    written = json.loads(_provenance('gurobi', {option: 'hunter2', 'TimeLimit': 60}).solver_options or '')
+    assert written == {option: '<not recorded>', 'TimeLimit': 60}, (
+        'the value is gone, the key and the listed option stay'
+    )
+
+
+def _known_to_highs(name: str) -> bool:
+    import highspy
+
+    status, _ = highspy.Highs().getOptionValue(name)
+    return status == highspy.HighsStatus.kOk
+
+
+def _known_to_gurobi(name: str) -> bool:
+    import gurobipy
+
+    return name in {parameter.casefold() for parameter in dir(gurobipy.GRB.Param)}
+
+
+def _known_to_xpress(name: str) -> bool:
+    import xpress
+
+    try:
+        xpress.problem().getControl(name)
+    except (xpress.InterfaceError, xpress.ModelError):
+        return False
+    return True
+
+
+@pytest.mark.parametrize(
+    ('name', 'package', 'known'),
+    [
+        pytest.param('highs', 'highspy', _known_to_highs, id='highs'),
+        pytest.param('gurobi', 'gurobipy', _known_to_gurobi, id='gurobi'),
+        pytest.param('xpress', 'xpress', _known_to_xpress, id='xpress'),
+    ],
+)
+def test_every_recorded_option_is_one_the_solver_knows(name: str, package: str, known) -> None:
+    """A misspelt name on the list records nothing, and no test would see that otherwise."""
+    pytest.importorskip(package)
+    listed = SOLVERS[name].recorded_options
+    assert [option for option in sorted(listed) if not known(option)] == [], (
+        f'every option {name} records is one {name} takes'
+    )
+
+
+@pytest.mark.parametrize('name', sorted(SOLVERS))
+def test_every_recorded_option_is_written_casefolded(name: str) -> None:
+    """A caller's option is casefolded before the lookup, so a list entry with a capital never matches.
+
+    Xpress takes a control in all upper case too, so the check against the solver passes `TIMELIMIT`.
+    """
+    listed = SOLVERS[name].recorded_options
+    assert [option for option in sorted(listed) if option != option.casefold()] == [], (
+        f'every option {name} records is written casefolded'
+    )
+
+
+def test_the_record_ends_with_the_provenance_columns() -> None:
+    """`Record` repeats `Provenance`'s fields so that each is a column of its own."""
+    assert Record._fields[-len(Provenance._fields) :] == Provenance._fields, (
+        'Record spreads Provenance into its last columns, in the same order'
+    )
+
+
 def test_an_answer_in_another_layout_is_refused_by_name(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -1496,3 +1645,53 @@ def test_an_answer_naming_no_model_is_taken_as_given(
     assert read.evaluate(_UNDECLARED)['value'].sum() == pytest.approx(want, rel=1e-9), (
         'an answer carrying no model digest reads against the data it is handed'
     )
+
+
+@pytest.mark.parametrize(
+    ('record_options', 'written'),
+    [
+        pytest.param(None, '<not recorded>', id='not-named'),
+        pytest.param(['mip_max_nodes'], 1000, id='named'),
+        pytest.param(['MIP_MAX_NODES'], 1000, id='named-in-another-letter-case'),
+    ],
+)
+def test_a_caller_names_an_option_to_record_beside_the_solvers_list(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, record_options: list[str] | None, written: object
+) -> None:
+    """`mip_max_nodes` is on no list, so only the caller's naming it keeps its value."""
+    sps.solve(
+        dispatch_yaml,
+        dispatch_frame_inputs,
+        solver_options={'time_limit': 60.0, 'mip_max_nodes': 1000},
+        record_options=record_options,
+        archive=tmp_path / 'case',
+    ).close()
+
+    row = pl.read_parquet(tmp_path / 'case' / 'answer' / 'record.parquet').row(0, named=True)
+    assert json.loads(row['solver_options']) == {'mip_max_nodes': written, 'time_limit': 60.0}, (
+        'a listed option keeps its value either way; the named one keeps it only when named'
+    )
+
+
+def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
+    dispatch_yaml: Path, dispatch_frame_inputs
+) -> None:
+    """The sweep forwards the names to each slice's solve, as it forwards the options."""
+    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    sweep = sps.solve_over(
+        dispatch_yaml,
+        sources,
+        sps.EachCoordinate('scenario'),
+        solver_options={'mip_max_nodes': 1000},
+        record_options=['mip_max_nodes'],
+    )
+
+    assert sweep.record['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
+        'both slices keep the value the caller named'
+    )
+
+
+def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
+    """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
+    with pytest.raises(sps.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')

@@ -29,7 +29,7 @@ case/
     …
     sources.parquet               (specsolve_run, source, digest) — what each of them is
     catalog.parquet               (specsolve_run, path, …) — what each file holds and over which dimensions
-    answer/record.parquet      how it terminated, what it reached, when, and under what name
+    answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
@@ -44,6 +44,25 @@ sps.solve('dispatch.yaml', sources, archive='case.zip')
 
 **`sps.solve`, `model.solve` and `sps.solve_over` take `archive=`.** Nothing
 else writes one.
+
+**The record says what produced the answer.** `answer/record.parquet` names
+the solver, its version and the options it ran with, and the specsolve and
+mathspec versions that built the model. So you can install the same
+environment again. The options are one JSON string with sorted keys. An
+option that changes the answer, such as a time limit, a gap, a seed or a
+tolerance, keeps its value. A value that JSON has no number for, such as an
+infinite time limit, is the string `"inf"`, `"-inf"` or `"nan"`. Any other
+option keeps its name and has the value `<not recorded>`. An archive often
+goes to shared storage, and a Gurobi licence credential such as `WLSSecret` is
+passed as an option.
+`result.provenance` gives the same five fields without an archive.
+
+To keep the value of an option that is not on the solver's list, name it.
+Name no credential:
+
+```python
+sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, record_options=['mip_max_nodes'])
+```
 
 ## Read it back
 
