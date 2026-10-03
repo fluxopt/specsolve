@@ -64,8 +64,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : A spec, the data it was solved with and what came back, written together as
   one zip or one directory by `archive=` ([archiving](../howto/archiving.md)).
   It reads back as a `SolveArchive`, or a `SweepArchive` where the sources were
-  cut. Its `run` is the archive's own name, stamped into the answer when it is
-  written. Never "artifact".
+  cut. Every table it holds carries `specsolve_run`, the archive's own name,
+  stamped when it is written. Never "artifact".
 
 **Digest**
 : A hash that says whether two things are the same input. `spec_digest` names
