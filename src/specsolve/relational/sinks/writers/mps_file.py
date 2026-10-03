@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 #: What this writer emits. It writes no quadratic extension section, so a
 #: quadratic model is refused rather than written without its quadratic part.
-MPS_FILE_CAPABILITIES = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
+MPS_FILE_CAPABILITIES = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
 
 #: The MPS spelling of each [`SENSE_CODES`][] comparison; a new sense raises here at import.

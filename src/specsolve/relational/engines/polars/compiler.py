@@ -9,10 +9,9 @@ dimension table      ``val``, ``ord``
 relation table       its declared columns, each under its own name
 parameter table      ``dims…``, ``value``
 variable frame       ``dims…``, ``var_label``
-term fragment        ``dims…``, ``var_label``, ``coeff``
-quad fragment        ``dims…``, ``var_label``, ``var_label_2``, ``coeff``
-const fragment       ``dims…``, ``cval``
 ===================  ==========================================
+
+A fragment's columns are in ``fragments.py``.
 """
 
 from __future__ import annotations
@@ -512,9 +511,8 @@ class PolarsCompiler:
         if not p.dims:
             zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
             return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
-        universe = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
-        for dim in p.dims[1:]:
-            universe = universe.join(self.scope.data.dimensions[dim].select(pl.col('val').alias(dim)), how='cross')
+        first = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
+        universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
         return replace(p, frame=pl.concat([p.frame, zeros]))

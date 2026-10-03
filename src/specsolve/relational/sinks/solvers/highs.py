@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import SENSE_CODES, solver_vector
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.handoff import SENSE_CODES
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -193,10 +193,7 @@ class Highs(Solver):
     #: No SOS concept, and a Hessian beside integrality is refused; the pair is
     #: probed in ``test_sink_capability_probes.py``.
     capabilities = Capabilities(
-        supports={
-            'integrality': 'native',
-            'quadratic_objective': 'native',
-        },
+        supports=frozenset({'integrality', 'quadratic_objective'}),
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
     )
 
@@ -285,9 +282,7 @@ class Highs(Solver):
             )
         status = _status_of(self._handle)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
 
         objective = self._handle.getInfo().objective_function_value + handoff.objective_constant
         solution = self._handle.getSolution()

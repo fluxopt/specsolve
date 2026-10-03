@@ -12,8 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import solver_vector, spelled_senses
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -88,7 +87,7 @@ class Xpress(Solver):
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
     #: sink does not hand it one.
-    capabilities = Capabilities(supports={'integrality': 'native', 'sos': 'native'})
+    capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
         self._p = _built(handoff, batch_rows, self._options)
@@ -153,9 +152,7 @@ class Xpress(Solver):
         self._p.optimize()
         status = _status_of(self._p)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
         return SolveAnswer(
             status,
             float(self._p.attributes.objval),

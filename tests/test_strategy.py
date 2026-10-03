@@ -2030,7 +2030,7 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
     """
     runs = _spilled(tmp_path)
     assert answer_of(runs).equals(answer_of(priced))
-    assert not runs._primals and not runs._duals and not runs._expressions, 'a spilled sweep holds no frame'
+    assert not runs._frames, 'a spilled sweep holds no frame'
     assert runs.scan('soc').collect().equals(priced.primal('soc'))
     assert runs.scan('balance', 'dual').collect().equals(priced.dual('balance'))
     assert runs.scan('spend', 'expression').collect().equals(priced.evaluate('spend'))
@@ -2178,7 +2178,7 @@ def test_an_export_reads_the_key_off_each_frame_and_skips_an_empty_one(sweep):
     cannot count positions: it reads the key off each frame, and a frame with
     no rows — a variable every row of which a slice masked — carries none and
     is left out, which is what the spill writes for it."""
-    frames = list(sweep._primals['p'])
+    frames = list(sweep._frames['primal']['p'])
     empty = frames[0].clear()
     by_key = strategy._by_key([empty, *frames], sweep.key_name)
     assert list(by_key) == ['high', 'low', 'mid'], 'one entry per frame that has rows, keyed by its own key'

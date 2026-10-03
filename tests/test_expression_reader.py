@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import expressions
+from specsolve import api
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from specsolve.relational.engines.polars.compiler import PolarsCompiler
 from tests.fixtures import override
@@ -525,7 +525,7 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
 
 def test_a_declared_name_off_an_archive_is_served_from_disk_not_lowered(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
-    monkeypatch.setattr(expressions, 'lower', lambda *a, **k: pytest.fail('a declared name must not lower'))
+    monkeypatch.setattr(api, 'lower', lambda *a, **k: pytest.fail('a declared name must not lower'))
     frame = sps.load_archive(archived).answer.evaluate('total_gen')
     assert frame.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written frame'
 

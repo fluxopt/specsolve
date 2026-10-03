@@ -23,7 +23,8 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import strategy
-from specsolve.api import _provenance, attach_readers
+from specsolve.api import _provenance
+from specsolve.archive import _attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
 from specsolve.relational.parquet import (
     LAYOUT,
@@ -1641,7 +1642,7 @@ def test_an_answer_naming_no_model_is_taken_as_given(
         solved.save(tmp_path / 'answer')
 
     older = replace(sps.load_result(tmp_path / 'answer'), _model_digest=None)
-    read = attach_readers(older, dispatch_yaml, dispatch_frame_inputs)
+    read = _attach_readers(older, dispatch_yaml, dispatch_frame_inputs)
     assert read.evaluate(_UNDECLARED)['value'].sum() == pytest.approx(want, rel=1e-9), (
         'an answer carrying no model digest reads against the data it is handed'
     )

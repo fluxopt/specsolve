@@ -425,11 +425,7 @@ def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
     from specsolve.relational.sinks import SOLVERS, WRITERS
-    from specsolve.relational.sinks.capabilities import (
-        CAPABILITIES,
-        Capabilities,
-        Support,
-    )
+    from specsolve.relational.sinks.capabilities import CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
@@ -437,10 +433,8 @@ def test_every_sink_declares_what_it_can_ingest():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
         strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
         assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
-        answers = sorted(set(capabilities.supports.values()) - set(get_args(Support)))
-        assert not answers, f'{sink} answers {answers}, which no comparison in the family reads as support'
         for combination in capabilities.excludes:
-            unsupported = sorted(c for c in combination if capabilities.support(c) == 'absent')
+            unsupported = sorted(combination - capabilities.supports)
             assert not unsupported, (
                 f'{sink} excludes the combination {sorted(combination)} while lacking {unsupported} '
                 f'outright — an exclusion is about a *pair* it has both halves of, and a capability '

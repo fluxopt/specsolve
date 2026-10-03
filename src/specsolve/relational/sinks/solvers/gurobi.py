@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.handoff import solver_vector, spelled_senses
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart
+from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -108,13 +107,9 @@ class Gurobi(Solver):
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
     capabilities = Capabilities(
-        supports={
-            'integrality': 'native',
-            'sos': 'native',
-            'quadratic_objective': 'native',
-            'nonconvex_quadratic_objective': 'native',
-            'quadratic_constraint': 'native',
-        }
+        supports=frozenset(
+            {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+        )
     )
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
@@ -217,9 +212,7 @@ class Gurobi(Solver):
             ) from None
         status = _status_of(self._m)
         if not status.is_readable:
-            return SolveAnswer.unreadable(
-                status, self.dual_ray() if status.termination_condition == 'infeasible' else None
-            )
+            return self._unreadable(status)
         return SolveAnswer(
             status,
             self._m.ObjVal,

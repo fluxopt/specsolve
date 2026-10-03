@@ -124,8 +124,8 @@ at all. A sink **declares** whether it takes one, in the descriptor *what a
 sink can ingest* below gives it —
 
 ```python
-'sos': 'native'  # gurobi: addSOS, no binaries and no bound to have
-                 # highs: absent, and the refusal names the way past it
+supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound to have
+# highs: left out, and the refusal names the way past it
 ```
 
 — and `sinks.refusal(handoff, name)` answers before the load, off the model

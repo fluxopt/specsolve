@@ -153,7 +153,7 @@ def test_build_xpress_loads_the_model_and_stops() -> None:
 
 
 def test_a_set_reaches_the_solver_natively() -> None:
-    """``sos = 'native'``, so the family hands the sets over as sets — asserted
+    """``sos`` is listed, so the family hands the sets over as sets — asserted
     on the enumerated optimum, plus the count the solver itself reports."""
     from tests.test_sos import DATA, best, spec
 

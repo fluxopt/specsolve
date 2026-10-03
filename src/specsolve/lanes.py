@@ -1,4 +1,11 @@
-"""What a spec and its sources may arrive as, and the one door every verb lowers a spec through."""
+"""What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
+
+An expression the file never named passes the same door: [`lower`][] splices
+it into the spec as a named one and lowers the whole spec again, so it passes
+every rule a declared one passes. This sits above both lanes because nothing
+under ``relational/`` may see the spec as written
+(docs/about/architecture.md, hard rule 2).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +15,7 @@ from mathspec import to_spec
 from mathspec.program import Program
 
 from specsolve.errors import LanguageError, SpecsolveError
-from specsolve.relational.parquet import RESERVED
+from specsolve.relational.parquet import refuse_reserved
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -18,6 +25,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
     from mathspec import Spec
+    from mathspec.program import Expression
 
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
 #: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
@@ -104,8 +112,8 @@ def _case_collision(program: Program) -> str | None:
     return None
 
 
-def _reserved_name(program: Program) -> str | None:
-    """The first declaration whose name starts with ``specsolve_`` in any letter case, as the sentence refusing it."""
+def _refuse_reserved_names(program: Program) -> None:
+    """Refuse a declaration whose name starts with ``specsolve_`` in any letter case."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -122,12 +130,7 @@ def _reserved_name(program: Program) -> str | None:
         *((f"assumption '{name}'", name) for name in program.assumptions),
     )
     for which, name in named:
-        if name.casefold().startswith(RESERVED):
-            return (
-                f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
-                f'specsolve adds, so a declared name cannot collide with one. Rename it.'
-            )
-    return None
+        refuse_reserved(name, which)
 
 
 def lowered(spec: Buildable) -> Program:
@@ -161,6 +164,40 @@ def lowered(spec: Buildable) -> Program:
         )
     if (refused := _case_collision(program)) is not None:
         raise SpecsolveError(refused)
-    if (reserved := _reserved_name(program)) is not None:
-        raise SpecsolveError(reserved)
+    _refuse_reserved_names(program)
     return program
+
+
+#: The name an unnamed expression is spliced under, stepped over where the
+#: spec declares it.
+_EVALUATED = '_evaluated'
+
+
+def lower(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
+    """One unnamed expression as a plan node, read in *spec*'s namespace.
+
+    The expression is spliced under ``expressions:`` with a name no section
+    of *spec* declares, so a section added later is covered too.
+
+    Args:
+        spec: The spec the expression is written against. It supplies every
+            name the expression may use; one it does not declare is refused.
+        expression: What one ``expressions:`` entry takes — a string, or the
+            mapping carrying ``cases:`` with ``dims:`` and ``otherwise:``.
+
+    Returns:
+        The node a declared named expression of *spec* lowers to.
+
+    Raises:
+        LanguageError: A construct outside the language, or a name *spec* does
+            not declare.
+        SchemaError: Something that is not an expression.
+    """
+    written = spec.to_dict()
+    taken = {name for section in written.values() if isinstance(section, dict) for name in section}
+    name = _EVALUATED
+    while name in taken:
+        name += '_'
+    section = written.get('expressions')
+    written['expressions'] = {**section, name: expression} if isinstance(section, dict) else {name: expression}
+    return lowered(written).expressions[name].expression
