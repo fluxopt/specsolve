@@ -49,6 +49,8 @@ from specsolve.relational.parquet import (
     METRICS_FILE,
     RECORD_FILE,
     RECORD_SCHEMA,
+    RESERVED,
+    RUN,
     Record,
     SliceMetrics,
     check_format,
@@ -347,12 +349,12 @@ class _Spill:
     def scan(self, kind: str, name: str) -> pl.LazyFrame | None:
         """Every slice's frame of *name*, lazily and in slice order, or ``None`` where no slice wrote one."""
         under = self.directory / kind / name
-        return pl.scan_parquet(sorted(under.glob('*.parquet'))) if under.is_dir() else None
+        return pl.scan_parquet(sorted(under.glob('*.parquet'))).drop(RUN, strict=False) if under.is_dir() else None
 
     def whole(self, kind: str, name: str) -> list[pl.DataFrame]:
         """The same frames read into memory, one per slice that wrote one, each keeping its key column."""
         under = self.directory / kind / name
-        return [pl.read_parquet(file) for file in sorted(under.glob('*.parquet'))]
+        return [pl.read_parquet(file).drop(RUN, strict=False) for file in sorted(under.glob('*.parquet'))]
 
 
 def _listed(entries: Mapping[str, str]) -> str:
@@ -1127,7 +1129,7 @@ def _opened_sweep(under: Path) -> Sweep:
         _absent=absent,
         _stitch=None
         if stitch is None
-        else _Stitch(stitch['local'], stitch['dim'], pl.read_parquet(under / _OWNED_FILE)),
+        else _Stitch(stitch['local'], stitch['dim'], pl.read_parquet(under / _OWNED_FILE).drop(RUN, strict=False)),
     )
 
 
@@ -1136,6 +1138,8 @@ def read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
 
     The readers read the answer files; ``per_window=True`` reads the windows,
     and is refused naming ``keep_windows=True`` where the archive has none.
+    The ``specsolve_run`` column every archived frame carries is left on disk,
+    so a frame read out of one equals the frame the live sweep returns.
 
     Args:
         under: The archive's ``answer/``.
@@ -1145,7 +1149,7 @@ def read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
     opened = _opened_sweep(under)
     answer = {
         kind: {
-            file.stem: pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)
+            file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
             for file in sorted((under / kind).glob('*.parquet'))
         }
         for kind in KINDS
@@ -1700,6 +1704,11 @@ def _key_column(
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
         key_name = axis._key_name()
+    if key_name.casefold().startswith(RESERVED):
+        raise SpecsolveError(
+            f'key_name={key_name!r} starts with {RESERVED!r}, which is reserved in any letter case for the '
+            f'columns specsolve adds. Name the slice column something else.'
+        )
     if key_name in program.dimensions:
         raise SpecsolveError(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '

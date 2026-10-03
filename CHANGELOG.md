@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(archive): every archived table carries the run it came from as specsolve_run, and names starting with specsolve_ are reserved ([#1809](https://github.com/fluxopt/specsolve/pull/1809))
 - feat(sweep): a sweep reads and archives its answer over the model's own coordinates by default, and keeps the per-window frames only on request ([#1811](https://github.com/fluxopt/specsolve/pull/1811))
 
 ## 0.3.0 (2026-10-02)

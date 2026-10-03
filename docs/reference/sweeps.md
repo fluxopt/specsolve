@@ -156,8 +156,8 @@ with `per_window=True` for a windowed sweep.
 | **the lookahead is `t >= step`** | Per window, overlapping windows return every row they solved, lookahead included. What each window owns is `sweep.primal('soc', per_window=True).filter(pl.col('t') < step)`. |
 | **a slice that did not solve contributes no rows** | A `primal` table can be shorter than the sweep. `record` is always one row per slice and says which did not solve, holding null where a slice reached no objective. |
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`. Per window, the key column `snapshot_start` holds where each window began. |
-| **a hand-built axis names its own key** | A plain list cannot say what its keys are labels *of*, so it must pass `key_name='draw'`. `key_name` overrides the derived name on any axis. It is refused only when it collides with a column the tables already carry: a dimension the spec declares, or `value`, `status`, `termination_condition`, `objective`. |
-| **`sweep.metrics` says what each slice took** | One [`SliceMetrics`](api.md#specsolve.relational.parquet.SliceMetrics) per slice, whose entry names the columns, and [`Sweep.metrics`](api.md#specsolve.Sweep.metrics) says what `loaded` means under a serial fold and under `executor=`. In an **archive** the table carries `run` too, so a warehouse of them says which run a slice's cost belongs to. |
+| **a hand-built axis names its own key** | A plain list cannot say what its keys are labels *of*, so it must pass `key_name='draw'`. `key_name` overrides the derived name on any axis. It is refused when it collides with a column the tables already carry: a dimension the spec declares, or `value`, `status`, `termination_condition`, `objective`. A name that starts with `specsolve_`, in any letter case, is refused too, as that prefix is reserved. |
+| **`sweep.metrics` says what each slice took** | One [`SliceMetrics`](api.md#specsolve.relational.parquet.SliceMetrics) per slice, whose entry names the columns, and [`Sweep.metrics`](api.md#specsolve.Sweep.metrics) says what `loaded` means under a serial fold and under `executor=`. In an **archive** the table carries `specsolve_run` too, so a warehouse of them says which run a slice's cost belongs to. |
 | **a slice that fails says which slice** | The error is the engine's own, with a note on it: `in slice 'bad' (3 of 3)`. |
 | **a sweep's memory grows with its answer, unless it is spilled** | The models are released as the fold goes; the tables accumulate. `spill_to=` writes them out instead ([below](#spilling-a-sweep-to-disk)), and `save` writes a held sweep out the same way, after the fact. |
 
@@ -201,7 +201,7 @@ sweep = sps.solve_over(
 
 | Rule | |
 |---|---|
-| **an archive holds the answer** | One file per name at `answer/<kind>/<name>.parquet`, the path the archive of a single solve uses. Each holds what the reader returns. `sps.load_archive` and `sps.scan_archive` read the files back, and the readers return them. |
+| **an archive holds the answer** | One file per name at `answer/<kind>/<name>.parquet`, the path the archive of a single solve uses. Each holds what the reader returns, and `specsolve_run`, which every file of an archive carries, the windows included. `sps.load_archive` and `sps.scan_archive` read the files back, and the readers return them without `specsolve_run`. |
 | **a name with no answer is left out with its reason** | A quantity that is not over the windowed dimension has no file. `answer/reasons.parquet` holds the reason, and the reader raises it. |
 | **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, so `per_window=True` reads off the archive. |
 | **without the windows, a per-window read is refused** | So is an expression the file never named, which is valued at the solution of each window. The error names the way back. |

@@ -22,7 +22,15 @@ import specsolve as sps
 from specsolve import strategy
 from specsolve.api import attach_readers
 from specsolve.layout import ANSWER_DIR, _staging_for
-from specsolve.relational.parquet import LAYOUT, METRICS_FILE, Metrics, digest_of_file, read_reasons, write_reasons
+from specsolve.relational.parquet import (
+    LAYOUT,
+    METRICS_FILE,
+    RUN,
+    Metrics,
+    digest_of_file,
+    read_reasons,
+    write_reasons,
+)
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
@@ -103,9 +111,9 @@ def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_y
     cost = pl.read_parquet(unpacked['cost'])
     snapshot = pl.read_parquet(unpacked['snapshot'])
 
-    assert cost.columns == ['generator', 'value'], 'a positional sequence is spread over its labels'
+    assert cost.columns == ['generator', 'value', RUN], 'a positional sequence is spread over its labels'
     assert cost['value'].to_list() == list(DISPATCH_COST), 'in the order the index declares them'
-    assert snapshot.columns == ['snapshot'], 'a bare label range is written as an index table'
+    assert snapshot.columns == ['snapshot', RUN], 'a bare label range is written as an index table'
     assert snapshot.height == DISPATCH_SNAPSHOTS, 'one row per label'
 
 
@@ -129,16 +137,21 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         )
 
 
-def test_a_parquet_path_is_copied_as_its_own_bytes(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
-    """Decoding and re-encoding parquet is byte-identical output for the CPU of a full read (#459)."""
+def test_a_parquet_path_is_archived_as_its_table_and_digested_as_its_own_bytes(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The member gains the run column; the digest is of the file the caller passed."""
     load = dispatch_frame_inputs['load'].with_columns(pl.lit('a stray column').alias('note'))
     path = tmp_path / 'load.parquet'
     load.write_parquet(path)
-    archive = _archived(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}, tmp_path / 'dispatch.zip')
-    with zipfile.ZipFile(archive) as zipped:
-        assert zipped.read('sources/load.parquet') == path.read_bytes(), (
-            'the file travels untouched, stray column included — it is filtered where it attaches, as a path is'
-        )
+    sps.solve(dispatch_yaml, {**dispatch_frame_inputs, 'load': str(path)}, archive=tmp_path / 'case').close()
+    held = pl.read_parquet(tmp_path / 'case' / 'sources' / 'load.parquet')
+
+    assert held.equals(load.with_columns(pl.lit('case').alias(RUN))), (
+        'the table travels whole, stray column included — it is filtered where it attaches, as a path is'
+    )
+    digests = dict(pl.read_parquet(tmp_path / 'case' / 'sources.parquet').select('source', 'digest').iter_rows())
+    assert digests['load'] == digest_of_file(path), 'and the digest is of the bytes the caller passed, not the stamp'
 
 
 def test_unpack_lays_the_archive_out_in_the_directory(
@@ -330,19 +343,41 @@ def test_the_digest_table_names_every_source_the_archive_holds(
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case').close()
     case = sps.load_archive(tmp_path / 'case')
 
-    assert case.source_digests.columns == ['run', 'source', 'digest'], (
+    assert case.source_digests.columns == [RUN, 'source', 'digest'], (
         "the archive it came from, the key, and what that key's bytes digest to"
     )
     assert case.source_digests['source'].to_list() == sorted(case.sources), (
         'one row per archived source, in source order rather than the order the caller happened to pass them'
     )
-    assert case.source_digests['run'].unique().to_list() == ['case'], (
+    assert case.source_digests[RUN].unique().to_list() == ['case'], (
         "every row carries the archive's own name, so a table read across a directory of them needs no paths"
     )
-    held = tmp_path / 'case' / 'sources'
-    recomputed = {file.stem: digest_of_file(file) for file in held.glob('*.parquet')}
-    assert dict(case.source_digests.select('source', 'digest').iter_rows()) == recomputed, (
-        'and each digest is of the bytes the archive holds, so a reader can check it against the archive alone'
+    with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'again') as solved:
+        solved.close()
+    again = sps.load_archive(tmp_path / 'again')
+    assert again.source_digests.drop(RUN).equals(case.source_digests.drop(RUN)), (
+        'and a digest is of the source before the run is stamped on, so one table under two names digests alike'
+    )
+
+
+@pytest.mark.parametrize('read', [sps.load_archive, sps.scan_archive], ids=['loaded', 'scanned'])
+def test_the_sources_an_archive_gives_back_archive_again_to_the_same_digests(
+    read: Callable[[Path], sps.SolveArchive | sps.SweepArchive], dispatch_yaml: Path, dispatch_frame_inputs, tmp_path
+) -> None:
+    """A scanned source is the member itself, so it carries the first archive's `specsolve_run`.
+
+    That column was copied and digested with the bytes, so archiving what
+    `scan_archive` gave back moved every digest, though not one number had.
+    """
+    sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'first').close()
+    sps.solve(*_question(read(tmp_path / 'first')), archive=tmp_path / 'second').close()
+    first, second = sps.load_archive(tmp_path / 'first'), sps.load_archive(tmp_path / 'second')
+
+    assert second.source_digests.drop(RUN).equals(first.source_digests.drop(RUN)), (
+        'the same tables archived again digest alike, whichever reader gave them back'
+    )
+    assert pl.read_parquet(tmp_path / 'second' / 'sources' / 'load.parquet')[RUN].unique().to_list() == ['second'], (
+        'and the member is stamped with the run that wrote it, not the one it was read from'
     )
 
 
@@ -350,19 +385,19 @@ def test_a_sweep_archive_digests_the_sources_it_was_cut_from(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
     """A sweep archives its sources whole, so the digests are of the whole."""
-    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    whole = tmp_path / 'load.parquet'
+    _by_scenario(['low', 'high']).write_parquet(whole)
+    sources = {**dispatch_frame_inputs, 'load': whole}
     sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
     study = sps.load_archive(tmp_path / 'study')
 
     assert isinstance(study, sps.SweepArchive), 'the archive carries an axis, or this is testing the other type'
     assert study.source_digests['source'].to_list() == sorted(study.sources), 'one row per source, as for one solve'
-    assert study.source_digests['run'].unique().to_list() == ['study'], (
+    assert study.source_digests[RUN].unique().to_list() == ['study'], (
         'stamped with the archive name as a solve archive is, the sweep key belonging to the slices and not the data'
     )
-    held = tmp_path / 'study' / 'sources'
-    assert dict(study.source_digests.select('source', 'digest').iter_rows()) == {
-        file.stem: digest_of_file(file) for file in held.glob('*.parquet')
-    }, 'each of the whole sources the sweep was cut from'
+    digests = dict(study.source_digests.select('source', 'digest').iter_rows())
+    assert digests['load'] == digest_of_file(whole), 'the digest is of the whole source the sweep was cut from'
 
 
 def test_an_archive_records_what_reaching_its_answer_cost(
@@ -384,7 +419,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'handoff_seconds',
         'solve_seconds',
         'write_seconds',
-        'run',
+        RUN,
     ), 'the sizes, the counters, one clock per phase in the order the phases run, then the run that took them'
     written = pl.read_parquet(tmp_path / 'case' / ANSWER_DIR / METRICS_FILE)
     assert written.columns == list(Metrics._fields), "and the file carries the type's columns, in its order"
@@ -506,43 +541,50 @@ def test_an_archive_stamps_its_own_name_and_when_the_solve_returned(
     sps.load_archive(tmp_path / 'nightly-2026-09-10.zip', tmp_path / 'out')
     record = pl.read_parquet(tmp_path / 'out' / 'answer' / 'record.parquet')
 
-    assert record['run'].to_list() == ['nightly-2026-09-10'], "the archive's own name, suffix dropped"
+    assert record[RUN].to_list() == ['nightly-2026-09-10'], "the archive's own name, suffix dropped"
     answer = sps.load_archive(tmp_path / 'nightly-2026-09-10.zip').answer
-    assert answer.record.run == 'nightly-2026-09-10', (
+    assert answer.record.specsolve_run == 'nightly-2026-09-10', (
         'the answer read back carries the name its record was stamped with'
     )
     resaved = pl.read_parquet(answer.save(tmp_path / 'plain') / 'record.parquet')
-    assert resaved['run'].to_list() == [None], 'a plain save is not an archive, so it claims no run name'
+    assert resaved[RUN].to_list() == [None], 'a plain save is not an archive, so it claims no run name'
     assert record['solved_at'].item() == reached, 'and when the solver returned, as the result reports it'
     assert before <= record['solved_at'].item() <= datetime.now(UTC), 'which is a real clock, not a placeholder'
 
 
-def test_a_run_named_directory_stamps_the_name_and_not_the_segment(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+@pytest.mark.parametrize('sweep', [False, True], ids=['one solve', 'a sweep'])
+def test_every_table_an_archive_holds_says_which_run_it_came_from(
+    sweep: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A value frame carries no `run`, so a directory of archives can put it in the path instead.
+    """A reader that combines files and drops their paths still gets the run, and reading back drops it again."""
+    out = tmp_path / 'nightly-2026-09-10.zip'
+    if sweep:
+        sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+        live = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out).primal('p')
+    else:
+        with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out) as solved:
+            live = solved.primal('p')
+    case = sps.load_archive(out, tmp_path / 'out')
+    tables = sorted((tmp_path / 'out').rglob('*.parquet'))
 
-    Under `run=<name>` the record says `<name>`, as the hive path does.
-    """
-    out = tmp_path / 'runs' / 'run=nightly-2026-09-10'
-    with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out):
-        pass
-
-    record = pl.read_parquet(out / ANSWER_DIR / 'record.parquet')
-    values = pl.read_parquet(str(tmp_path / 'runs' / '*' / ANSWER_DIR / 'primal' / 'p.parquet'), hive_partitioning=True)
-
-    assert record['run'].to_list() == ['nightly-2026-09-10'], 'the name the directory holds, not the whole segment'
-    assert values['run'].unique().to_list() == ['nightly-2026-09-10'], 'which is the name the path hands a reader too'
+    assert {
+        table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
+        for table in tables
+    } == {table.relative_to(tmp_path / 'out').as_posix(): ['nightly-2026-09-10'] for table in tables}, (
+        'every table carries the archive name, sources and answer frames alike'
+    )
+    assert case.answer.primal('p').equals(live), 'a frame read back is the frame the solve returned'
+    assert all(RUN not in frame.columns for frame in case.sources.values()), 'and a source read back is the table given'
 
 
 def test_a_saved_answer_that_was_never_archived_names_no_run(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A bare `save` leaves `run` null, in a column of the same schema."""
+    """A bare `save` leaves `specsolve_run` null, in a column of the same schema."""
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         record = pl.read_parquet(solved.save(tmp_path / 'answer') / 'record.parquet')
-    assert record['run'].to_list() == [None], 'nothing published it, so nothing named it'
-    assert record.schema['run'] == pl.String, 'and the column is a string either way, never an all-null one'
+    assert record[RUN].to_list() == [None], 'nothing published it, so nothing named it'
+    assert record.schema[RUN] == pl.String, 'and the column is a string either way, never an all-null one'
 
 
 def test_a_loaded_archive_owes_the_members_nothing_and_a_scanned_one_owes_them_everything(
@@ -589,8 +631,8 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
 
     assert study.axis == axis, 'the axis comes back as the value it went in as'
-    assert study.answer.record.drop('run').equals(runs.record.drop('run'))
-    assert study.answer.record['run'].unique().to_list() == ['study'], (
+    assert study.answer.record.drop(RUN).equals(runs.record.drop(RUN))
+    assert study.answer.record[RUN].unique().to_list() == ['study'], (
         'and the archive stamped its own name on every slice, which the sweep in memory had none of'
     )
     assert study.sources['load'].equals(sources['load']), (
@@ -627,9 +669,9 @@ def test_a_sweep_archive_holds_its_answer_where_a_single_solve_does(
         runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
     with zipfile.ZipFile(out) as packed:
         members = packed.namelist()
-        assert pl.read_parquet(packed.read(f'answer/primal/{name}.parquet')).equals(runs.primal(name)), (
-            'the archived file is the answer the sweep reads'
-        )
+        archived = pl.read_parquet(packed.read(f'answer/primal/{name}.parquet'))
+    assert archived[RUN].unique().to_list() == [out.stem], 'the archived file carries the run it came from'
+    assert archived.drop(RUN).equals(runs.primal(name)), 'and less the stamp, it is the answer the sweep reads'
     assert not [member for member in members if member.startswith('answer/windows/')], 'no windows unless asked'
     assert not [member for member in members if member.startswith(f'answer/primal/{name}/')], 'and no file per slice'
 
@@ -684,6 +726,32 @@ def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: P
     assert loaded.answer.primal('soc', per_window=True).equals(runs.primal('soc', per_window=True))
     assert scanned.answer.scan('soc', per_window=True).collect().equals(runs.primal('soc', per_window=True))
     assert loaded.answer.dual('balance', per_window=True).equals(runs.dual('balance', per_window=True))
+
+
+def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
+    """The answer, the windows and what each window owns all carry the run on disk, and no reader returns it."""
+    out = tmp_path / 'nightly-2026-09-10.zip'
+    runs = sps.solve_over(
+        WINDOW, horizon_sources(12), ROLLING, carry={'soc_initial': 'soc'}, archive=out, keep_windows=True
+    )
+    loaded = sps.load_archive(out, tmp_path / 'out').answer
+    scanned = sps.scan_archive(out, tmp_path / 'out').answer
+    tables = sorted((tmp_path / 'out').rglob('*.parquet'))
+    stamps = {
+        table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
+        for table in tables
+    }
+    kept = {'answer/owned.parquet', 'answer/primal/soc.parquet', 'answer/windows/primal/soc/000000.parquet'}
+
+    assert kept <= stamps.keys(), 'the answer, the windows and what each window owns are all archived'
+    assert stamps == {table: ['nightly-2026-09-10'] for table in stamps}, 'and every one of them carries the run'
+    assert loaded.primal('soc').equals(runs.primal('soc')), 'the answer read whole is the live one'
+    assert scanned.scan('soc').collect().equals(runs.primal('soc')), 'and read off disk'
+    assert loaded.primal('soc', per_window=True).equals(runs.primal('soc', per_window=True)), 'per window too'
+    assert scanned.scan('soc', per_window=True).collect().equals(runs.primal('soc', per_window=True))
+    assert loaded.evaluate('soc').equals(runs.primal('soc')), (
+        'an expression valued per window off the archive is stitched through what each window owns, stamp left out'
+    )
 
 
 #: The window model with a capacity that is not over the windowed dimension,
@@ -789,9 +857,9 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
 ) -> None:
     """`save` on an archive's sweep writes the slices the live sweep holds.
 
-    The archive stamps `run` on the metrics as on the record, and `save` passed
-    every metrics column to `SliceMetrics`, which declares no `run`, so it
-    raised `TypeError`.
+    The archive stamps `specsolve_run` on the metrics as on the record, and
+    `save` passed every metrics column to `SliceMetrics`, which declares no
+    `specsolve_run`, so it raised `TypeError`.
     """
     if windowed:
         runs, name, out = _rolling(tmp_path, keep_windows=True), 'soc', tmp_path / 'roll.zip'
@@ -799,10 +867,17 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
         out = tmp_path / 'study.zip'
         runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
-    saved = sps.load_sweep(sps.load_archive(out, tmp_path / 'loaded').answer.save(tmp_path / 'resaved'))
+    resaved = sps.load_archive(out, tmp_path / 'loaded').answer.save(tmp_path / 'resaved')
+    saved = sps.load_sweep(resaved)
+    stamped = [
+        table.relative_to(resaved).as_posix()
+        for table in sorted(resaved.rglob('*.parquet'))
+        if table.parent.name != 'record' and RUN in pl.read_parquet_schema(table)
+    ]
 
     assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
     assert saved.metrics.equals(runs.metrics), 'and the metrics are the slices own, with no run stamped on'
+    assert stamped == [], 'no frame the save writes carries the run, what each window owns included'
 
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:

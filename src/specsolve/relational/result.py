@@ -439,7 +439,7 @@ class Result:
             spec_digest=self._spec_digest,
             solved_at=self._solved_at,
             model_digest=self.model_digest(),
-        )._replace(run=self._run)
+        )._replace(specsolve_run=self._run)
 
     @property
     def kept(self) -> Keep:
@@ -704,7 +704,7 @@ class Result:
         out = Path(directory)
         clear_the_answer(out)
         write_format(out)
-        record = self.record._replace(run=None)
+        record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
