@@ -545,7 +545,8 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve.strategy import EachCoordinate, EachWindow, solve_over
+    from specsolve.axes import EachCoordinate, EachWindow
+    from specsolve.strategy import solve_over
 
     doors = {
         'build': specsolve.build,

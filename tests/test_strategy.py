@@ -24,6 +24,7 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import strategy
+from specsolve import sweep as sweep_module
 from specsolve.api import Model
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
@@ -211,13 +212,13 @@ WINDOW_AXIS = sps.EachWindow('snapshot', steps=4, lookahead=0, into='t')
 
 
 @pytest.fixture(scope='module')
-def sweep() -> strategy.Sweep:
+def sweep() -> sweep_module.Sweep:
     """The scenario sweep, solved once for every test that only reads it."""
     return sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'))
 
 
 @pytest.fixture(scope='module')
-def overlapping() -> strategy.Sweep:
+def overlapping() -> sweep_module.Sweep:
     """The overlapping-window sweep, solved once for every test that only reads it."""
     return sps.solve_over(
         WINDOW,
@@ -245,7 +246,7 @@ def builds(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def answer_of(runs: strategy.Sweep) -> pl.DataFrame:
+def answer_of(runs: sweep_module.Sweep) -> pl.DataFrame:
     """A sweep's record without `solved_at` and `specsolve_run`, which belong to a *run* rather than an answer."""
     return runs.record.drop('solved_at', 'specsolve_run')
 
@@ -634,7 +635,7 @@ SPENDING = override(
 
 
 @pytest.fixture(scope='module')
-def priced() -> strategy.Sweep:
+def priced() -> sweep_module.Sweep:
     """The overlapping-window sweep of the expression-bearing model, solved once."""
     return sps.solve_over(
         SPENDING,
@@ -1416,7 +1417,7 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
     ``owned.parquet`` left a directory the next run took for a stamped one and
     resumed, and ``scan_sweep`` of it failed on the missing file.
     """
-    write_whole = strategy.write_whole
+    write_whole = sweep_module.write_whole
 
     def crashing(frame: pl.DataFrame, path) -> None:
         if path.name == lost:
@@ -1425,7 +1426,7 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
 
     out = tmp_path / 'sweep'
     with monkeypatch.context() as patched:
-        patched.setattr(strategy, 'write_whole', crashing)
+        patched.setattr(sweep_module, 'write_whole', crashing)
         with pytest.raises(_CrashError):
             sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
 
@@ -1990,7 +1991,7 @@ PRICED_AXIS = sps.EachWindow('snapshot', steps=3, lookahead=3, into='t')
 PRICED_CARRY = {'soc_initial': 'soc'}
 
 
-def _spilled(directory, **kwargs) -> strategy.Sweep:
+def _spilled(directory, **kwargs) -> sweep_module.Sweep:
     return sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, spill_to=directory, **kwargs)
 
 
@@ -2180,7 +2181,7 @@ def test_an_export_reads_the_key_off_each_frame_and_skips_an_empty_one(sweep):
     is left out, which is what the spill writes for it."""
     frames = list(sweep._frames['primal']['p'])
     empty = frames[0].clear()
-    by_key = strategy._by_key([empty, *frames], sweep.key_name)
+    by_key = sweep_module._by_key([empty, *frames], sweep.key_name)
     assert list(by_key) == ['high', 'low', 'mid'], 'one entry per frame that has rows, keyed by its own key'
     assert all(sweep.key_name not in frame.columns for frame in by_key.values()), 'the key column is dropped'
 

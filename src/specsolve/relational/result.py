@@ -442,7 +442,7 @@ class Result:
         """How this solve terminated, as the one row [`save`][] writes for it.
 
         The fields above in one value, and the same row a sweep keeps per slice
-        in [`record`][specsolve.strategy.Sweep.record]. ``objective`` is ``None``
+        in [`record`][specsolve.sweep.Sweep.record]. ``objective`` is ``None``
         rather than ``nan`` where there are no values. Asking computes
         [`model_digest`][] once, as a save does.
         """
