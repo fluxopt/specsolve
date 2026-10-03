@@ -218,8 +218,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   `sweep.primal(name)` and the exports — the **frame readers**, the ones that
   hand back a table — answer off them. A **spilled** sweep left them in a
   directory, which is what `spill_to=` writes and what `scan_sweep` reads: there
-  `sweep.scan(name)` is the reader and the frame readers refuse
-  ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+  a frame reader reads the one name it is asked for, and `sweep.scan(name)`
+  hands it back lazily ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
 
 ## Row types
 

@@ -181,7 +181,7 @@ sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, th
 
 | Rule | |
 |---|---|
-| **`scan` is the reader** | `sweep.scan(name, kind='primal')` returns `primal`, `dual` or `expression` as a `LazyFrame` over the files, `per_window=` included. The answer of a windowed sweep is stitched lazily, at the collect. On a held sweep it is the same reader made lazy. The frame readers and the exports refuse a spilled sweep and name `scan`. |
+| **`scan` reads lazily** | `sweep.scan(name, kind='primal')` returns `primal`, `dual` or `expression` as a `LazyFrame` over the files, `per_window=` included. The answer of a windowed sweep is stitched lazily, at the collect. The frame readers and the exports read the one name they are asked for into memory, as `scan(...).collect()` would. |
 | **one file per slice and name** | `<kind>/<name>/<position>.parquet`, per window, with the slice key a column of each, one type across every file a sweep writes. `record/` and `metrics/` hold the record, one row per slice, which names its slice in `slice_axis` and `slice`; `sweep.record` and `sweep.metrics` stay in memory. An **archive** holds those two as one file each, `record.parquet` and `metrics.parquet`. |
 | **every file lands whole** | A file is written beside its final name and renamed into place. The record file is written last and marks a slice done, so a slice interrupted part way is solved again rather than read back short. |
 | **an interrupted sweep resumes** | Run the same call at the same directory. A slice already there is read back, and under a `carry` its state is read off its file. Only the unfinished slices are built. |
