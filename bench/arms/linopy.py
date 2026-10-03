@@ -72,9 +72,10 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
         return _counts(m)
 
 
-def window_setup(sink: str, prepared: Prepared) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Nothing to hold between windows, so the whole rebuild lands inside the measurement."""
-    return (sink, prepared), {}
+def window_setup(sink: str, prepared: Prepared, following: Prepared) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Nothing to hold between windows, so the whole rebuild of *following* lands inside the measurement."""
+    del prepared
+    return (sink, following), {}
 
 
 def window(sink: str, prepared: Prepared) -> Counts:

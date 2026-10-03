@@ -12,12 +12,14 @@ Each arm module defines:
 
 and, where the library has a rolling-horizon answer, both or neither of:
 
-    window_setup(sink, prepared) -> (args, kwargs)
+    window_setup(sink, prepared, following) -> (args, kwargs)
     window(*args, **kwargs) -> Counts
 
 ``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked in
 the spawned child before each sample, and what it returns feeds ``window``, the
-one window that gets timed.
+one window that gets timed — the one *following* prepares. An arm whose
+``Counts`` carry ``reloaded`` says whether that window loaded its solver from
+scratch, and the harness holds it to the change the window made.
 
 ``Prepared`` is opaque to the harness. ``prepare`` runs before the clock, so
 work the harness rather than the library imposes is charged to nobody.

@@ -136,6 +136,52 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
+    def load(
+        self,
+        solver_name: str = 'highs',
+        *,
+        solver_options: Mapping[str, object] | None = None,
+        keep: Keep = 'solver',
+    ) -> tuple[sinks.Solver, Keep]:
+        """Hand the built model to a solver without solving it — what [`solve`][] does before the run.
+
+        The solver stays loaded where
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
+        the solver cannot ingest is refused before the load, read off the built
+        model rather than the file. Counts toward no
+        [`solves`][specsolve.relational.result.Diagnostics.solves] or
+        [`loads`][specsolve.relational.result.Diagnostics.loads].
+
+        Args:
+            solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
+            solver_options: Forwarded to the solver verbatim, in its own
+                vocabulary.
+            keep: How much of the session may be kept — one of
+                [`KEEPS`][specsolve.relational.result.KEEPS].
+
+        Returns:
+            The solver now holding the model, and what it kept: ``nothing``
+            where it was loaded from scratch.
+
+        Raises:
+            SpecsolveError: A *keep* outside
+                [`KEEPS`][specsolve.relational.result.KEEPS], or a construct
+                the solver cannot take.
+        """
+        if keep not in KEEPS:
+            raise SpecsolveError(unknown_keep_message(keep))
+        self.check(solver_name)
+        with _clocked(self._seconds, 'handoff'):
+            if keep == 'nothing' and self._solver is not None:
+                self._solver.close()
+                self._solver = None
+            held = self._solver
+            self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
+            kept: Keep = keep if self._solver is held else 'nothing'
+            if kept == 'solver':
+                self._solver.forget()
+        return self._solver, kept
+
     def solve(
         self,
         solver_name: str = 'highs',
@@ -144,12 +190,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
     ) -> Result:
-        """Hand the built model to a solver and solve it.
-
-        The solver stays loaded where
-        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows. A construct
-        the solver cannot ingest is refused before the load, read off the built
-        model rather than the file.
+        """[`load`][] the built model into a solver, and solve it.
 
         Args:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
@@ -170,24 +211,13 @@ class Engine:
             SpecsolveError: A *keep* outside
                 [`KEEPS`][specsolve.relational.result.KEEPS].
         """
-        if keep not in KEEPS:
-            raise SpecsolveError(unknown_keep_message(keep))
-        self.check(solver_name)
+        solver, kept = self.load(solver_name, solver_options=solver_options, keep=keep)
         handoff = self._model.handoff
-        with _clocked(self._seconds, 'handoff'):
-            if keep == 'nothing' and self._solver is not None:
-                self._solver.close()
-                self._solver = None
-            held = self._solver
-            self._solver = sinks.loaded(held, solver_name, handoff, solver_options)
-            kept: Keep = keep if self._solver is held else 'nothing'
-            if kept == 'solver':
-                self._solver.forget()
         self._solves += 1
-        if self._solver is not held:
+        if kept == 'nothing':
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = self._solver.run(handoff)
+            answer = solver.run(handoff)
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )

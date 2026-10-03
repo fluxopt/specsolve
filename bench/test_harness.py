@@ -30,7 +30,7 @@ from bench import floor, plot, profile_build, profile_phases, report, results, t
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import _handoff, checked_sources
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, shortened
 from bench.conftest import (
     MIN_ROUNDS,
     _holder_if_alive,
@@ -1321,7 +1321,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
     for name, module in sorted(ARMS.items()):
         if not hasattr(module, 'window'):
             continue
-        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared))
+        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared))
         mem_setup, tracked = plugin._pedantic_action(module.window, (), {}, setup)
         try:
             blob = pickle.dumps((tracked, mem_setup))
@@ -1334,22 +1334,57 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
-    """`test_emit` and `test_window` measure the same cell, so without a phase they are one key."""
+    """`test_emit` and both `test_window` changes measure the same cell, so without a phase they are one key."""
+    cell = {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'}
     doc = {
         'benchmarks': [
             {
                 'name': f'{rung}[dispatch-xs-specsolve-highs]',
-                'params': {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'},
+                'params': {**cell, **extra},
                 'stats': {'median': 1.0, 'min': 1.0},
                 'extra_info': {},
             }
-            for rung in ('test_emit', 'test_window')
+            for rung, extra in (
+                ('test_emit', {}),
+                ('test_window', {'change': 'values'}),
+                ('test_window', {'change': 'shape'}),
+                ('test_window', {}),
+            )
         ]
     }
     path = tmp_path / 'latest.json'
     path.write_text(json.dumps(doc))
     phases = [r.get('phase') for r in bench_results.records(path) if r.get('record') == 'timing']
-    assert phases == ['emit', 'window'], 'each rung names its own phase, in the order the file writes them'
+    assert phases == ['emit', 'window', 'window-reshaped', 'window'], (
+        'each rung names its own phase, in the order the file writes them, and a window from before '
+        'the change was a parameter is the values window it measured'
+    )
+
+
+@pytest.mark.parametrize('change', ['values', 'shape'])
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -> None:
+    """`test_window`'s two changes are there to measure the two paths an update can take.
+
+    The ladder checks which one ran, but only when it measures; this holds every
+    case's smallest rung to it on every pull request, and with it that the
+    shorter rung generates and builds at all.
+    """
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    shape = case.shape('xs')
+    prepared = module.prepare(case_name, 'xs', case.data(shape), {})
+    following = prepared
+    if change == 'shape':
+        following = module.prepare(case_name, 'xs', case.data(shortened(shape)), {})
+    args, kwargs = module.window_setup('highs', prepared, following)
+    counts = module.window(*args, **kwargs)
+    assert counts['reloaded'] == (change == 'shape'), (
+        f'{case_name}: a window whose {change} moved should '
+        f'{"load the solver from scratch" if change == "shape" else "push onto the loaded solver"}'
+    )
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:

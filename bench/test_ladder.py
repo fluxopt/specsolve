@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 
 from bench.arms import ARMS, unmeasurable
+from bench.cases import CASES, shortened
 from bench.conftest import shape_of
 
 
@@ -136,6 +137,7 @@ def test_emit(
 
 
 @pytest.mark.benchmem(isolate=True)
+@pytest.mark.parametrize('change', ('values', 'shape'))
 def test_window(
     benchmark: Any,
     request: pytest.FixtureRequest,
@@ -145,14 +147,17 @@ def test_window(
     size: str,
     arm: str,
     sink: str,
+    change: str,
 ) -> None:
-    """What the *second* window of a rolling horizon costs, and every one after.
+    """What the *second* window of a rolling horizon costs, up to the solve.
 
-    `test_emit` prices the first window. An arm carries between windows whatever
-    its library has a verb for: specsolve re-attaches and pushes onto the loaded
-    solver, linopy builds a new model. Each arm's `window_setup` runs untracked
-    in the spawned child before every sample (#1617). An arm with no `window`
-    verb is skipped.
+    `test_emit` prices the first window. *change* is what the second one moves:
+    ``values`` re-attaches the same data, which a loaded solver takes by value,
+    and ``shape`` attaches the rung one snapshot shorter, which it cannot. An
+    arm carries between windows whatever its library has a verb for: specsolve
+    updates and loads, linopy builds a new model. Each arm's `window_setup`
+    runs untracked in the spawned child before every sample (#1617). An arm
+    with no `window` verb is skipped.
     """
     missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, sink)
     if missing:
@@ -165,7 +170,16 @@ def test_window(
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
 
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
-    counts = _rounds(benchmark, request, module.window, setup=partial(module.window_setup, sink, prepared))
+    following = prepared
+    if change == 'shape':
+        case = CASES[case_name]
+        following = module.prepare(case_name, size, case.data(shortened(case.shape(size))), {})
+    counts = _rounds(benchmark, request, module.window, setup=partial(module.window_setup, sink, prepared, following))
+    if 'reloaded' in counts:
+        assert counts['reloaded'] == (change == 'shape'), (
+            f'a window whose {change} moved {"reloaded" if counts["reloaded"] else "pushed onto"} the solver, '
+            f'so this rung measured the other path'
+        )
     _record(benchmark, counts, case_name, size)
     ceiling.record(arm, case_name, size, sink, _measured(benchmark), _peak(benchmark))
 

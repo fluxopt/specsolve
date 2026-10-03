@@ -551,6 +551,24 @@ floor and through specsolve and compares objectives at the gate's tolerance;
 `bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
 and nonzero counts against specsolve's — on every bare `pytest bench`.
 
+## The second window
+
+`test_window` prices what `model.update(x).solve()` costs before the solver
+runs — the rebuild, the digest a loaded solver is checked against, and then
+either a push of bounds, costs and right-hand sides or a load from scratch.
+Which of those two an update takes is decided by the data, so the test is
+parametrized by what the window moves: `values` re-attaches the same sources,
+which the loaded solver takes by value, and `shape` attaches the rung one
+snapshot shorter (`cases.shortened`), which it cannot. Values are not varied,
+because a push sends whole vectors whatever they hold.
+
+The clock stops at `Engine.load`, the half of `Engine.solve` before the run, so
+nothing about the solver's own work lands in the wall time or the peak. The
+arm reports whether its window reloaded and the test holds that to the change,
+so a rung cannot quietly measure the other path; `test_harness.py` checks the
+same on every case's smallest rung on every pull request. The phases are
+`window` and `window-reshaped`, and only `bench.tidy` renders them.
+
 ## The warm-start payoff
 
 *Does carrying a basis across a genuine rebuild pay?* is the question #382 has
@@ -732,7 +750,7 @@ every consumer whichever of the two the case has.
 | `models/<case>/` | one directory per case: `spec.yaml`, and the same model in each hand-written dialect |
 | `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the machine interlock |
-| `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
+| `test_ladder.py` | the three benchmarks: build-and-emit, the second window up to its solve, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
