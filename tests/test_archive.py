@@ -728,6 +728,37 @@ def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: P
     assert loaded.answer.dual('balance', per_window=True).equals(runs.dual('balance', per_window=True))
 
 
+@pytest.mark.parametrize('suffix', ['.zip', ''], ids=['a-zip', 'a-directory'])
+@pytest.mark.parametrize(
+    ('read', 'per_window'),
+    [
+        pytest.param(sps.load_archive, lambda sweep: sweep.primal('soc', per_window=True), id='load'),
+        pytest.param(sps.scan_archive, lambda sweep: sweep.scan('soc', per_window=True), id='scan'),
+    ],
+)
+def test_a_rolling_horizon_whose_windows_wrote_nothing_still_kept_them(
+    read: Callable[..., sps.SweepArchive], per_window: Callable[[sps.Sweep], object], suffix: str, tmp_path: Path
+) -> None:
+    """Every window infeasible, so none writes a frame, and `per_window=True` says so as the live sweep does.
+
+    The archive marked the windows kept by an empty `answer/windows/`, which a
+    zip, holding files only, dropped: the read said the archive was written
+    without keep_windows=True.
+    """
+    sources = horizon_sources(12)
+    sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
+    out = tmp_path / f'roll{suffix}'
+    runs = sps.solve_over(WINDOW, sources, ROLLING, archive=out, keep_windows=True)
+    with pytest.raises(sps.SpecsolveError) as live:
+        runs.primal('soc', per_window=True)
+    archived = read(out, tmp_path / 'opened' if suffix else None).answer
+
+    assert 'holds no variable frames at all' in str(live.value), 'no window solved, and the live sweep says so'
+    with pytest.raises(sps.SpecsolveError) as raised:
+        per_window(archived)
+    assert str(raised.value) == str(live.value), 'the archive says what the live sweep says'
+
+
 def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
     """The answer, the windows and what each window owns all carry the run on disk, and no reader returns it."""
     out = tmp_path / 'nightly-2026-09-10.zip'

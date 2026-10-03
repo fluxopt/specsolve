@@ -1154,9 +1154,9 @@ def read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
         }
         for kind in KINDS
     }
-    windows = under / _WINDOWS_DIR
-    opened = replace(opened, _answer=answer, _windows=windows.is_dir())
-    spill = _Spill(windows, opened.key_name, opened.record[opened.key_name].dtype) if windows.is_dir() else None
+    kept = json.loads((under / _MANIFEST_FILE).read_text())['windows']
+    opened = replace(opened, _answer=answer, _windows=kept)
+    spill = _Spill(under / _WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype) if kept else None
     if not whole:
         return replace(opened, _spill=spill, _disk=under)
     return opened if spill is None else _holding(opened, spill)
@@ -1372,12 +1372,15 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     One file per kind and name, holding the answer as the readers return it
     and streamed from the spill. A name an EachWindow sweep cannot stitch
     has no file, and ``reasons.parquet`` says why. With *keep_windows*, the
-    spill's per-window files are copied under ``windows/``.
+    spill's per-window files are copied under ``windows/``, and ``sweep.json``
+    records that they were kept: a zip holds files only, so a ``windows/``
+    no window wrote a file to is not there to say so.
     """
     spill = sweep._spill
     assert spill is not None, 'the answer is read off a spill, so a sweep too large to hold is never held'
     write_format(under)
-    shutil.copyfile(spill.directory / _MANIFEST_FILE, under / _MANIFEST_FILE)
+    manifest = json.loads((spill.directory / _MANIFEST_FILE).read_text())
+    (under / _MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
     if sweep._stitch is not None:
         shutil.copyfile(spill.directory / _OWNED_FILE, under / _OWNED_FILE)
     write_whole(sweep.record, under / RECORD_FILE)
@@ -1393,8 +1396,6 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
             write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
         if keep_windows and (spill.directory / kind).is_dir():
             shutil.copytree(spill.directory / kind, under / _WINDOWS_DIR / kind)
-    if keep_windows:
-        (under / _WINDOWS_DIR).mkdir(exist_ok=True)
     write_reasons(under, sweep._no_duals, absent)
     return under
 

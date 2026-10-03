@@ -203,7 +203,7 @@ sweep = sps.solve_over(
 |---|---|
 | **an archive holds the answer** | One file per name at `answer/<kind>/<name>.parquet`, the path the archive of a single solve uses. Each holds what the reader returns, and `specsolve_run`, which every file of an archive carries, the windows included. `sps.load_archive` and `sps.scan_archive` read the files back, and the readers return them without `specsolve_run`. |
 | **a name with no answer is left out with its reason** | A quantity that is not over the windowed dimension has no file. `answer/reasons.parquet` holds the reason, and the reader raises it. |
-| **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, so `per_window=True` reads off the archive. |
+| **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, so `per_window=True` reads off the archive. `answer/sweep.json` records that the windows were kept, so a sweep in which no window wrote a frame reads as the live sweep does. |
 | **without the windows, a per-window read is refused** | So is an expression the file never named, which is valued at the solution of each window. The error names the way back. |
 | **`keep_windows=True` needs windows and an archive** | On another axis, or without `archive=`, it is refused before a slice is solved. |
 
