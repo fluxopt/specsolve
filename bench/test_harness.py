@@ -1440,3 +1440,44 @@ def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
     rows = {row['metric']: row['value'] for row in tidy.measurements([record], 'run')}
     assert (rows['attach_seconds'], rows['build_seconds']) == (0.1, 0.4), 'each phase is a row of its own'
     assert rows['wall_seconds'] == 1.0, 'beside the wall time, not instead of it'
+
+
+class _CallsTwice:
+    """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
+
+    A plain call runs the target twice on the same arguments, a warm-up then the
+    measured one; the pedantic form runs `setup` before each.
+    """
+
+    def __call__(self, target: Any, *args: Any) -> Any:
+        target(*args)
+        return target(*args)
+
+    def pedantic(self, target: Any, args: tuple = (), kwargs: dict | None = None, setup: Any = None, **_: Any) -> Any:
+        out = None
+        for _ in range(2):
+            args, kwargs = setup() if setup is not None else (args, kwargs or {})
+            out = target(*args, **kwargs)
+        return out
+
+
+def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
+    """A `shape` window updates onto the shorter rung, so a second call on the same model has nothing left to reload.
+
+    `_rounds` handed CodSpeed one setup and the plain call, and its memory
+    instrument failed every `shape` window at `s`; its wall-time instrument
+    returned the first call and timed the later ones, so it measured the push
+    path in silence.
+    """
+    from bench.test_ladder import _rounds
+
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    shape = case.shape('xs')
+    prepared = module.prepare('dispatch', 'xs', case.data(shape), {})
+    shorter = module.prepare('dispatch', 'xs', case.data(shortened(shape)), {})
+    request = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace()))
+    counts = _rounds(
+        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter)
+    )
+    assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'
