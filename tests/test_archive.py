@@ -625,6 +625,83 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     assert RUN not in set(catalog['column']), 'the run on every file holds no labels, so the catalog lists it nowhere'
 
 
+def _labels_of(held: Path) -> set[str]:
+    """The columns of a frame's file that hold labels: neither the value nor one specsolve adds."""
+    return {column for column in _columns_of(held) if column != 'value' and not column.startswith('specsolve_')}
+
+
+def _unpacked(packed: Path, into: Path) -> Path:
+    with zipfile.ZipFile(packed) as archive:
+        archive.extractall(into)
+    return into
+
+
+@pytest.mark.xfail(strict=True, reason='the catalog describes the spec, not the files a sweep archive writes')
+@pytest.mark.parametrize(
+    ('windowed', 'path', 'column', 'dim'),
+    [
+        pytest.param(True, 'answer/primal/soc.parquet', 'snapshot', 'snapshot', id='a-rolling-horizon-answer'),
+        pytest.param(True, 'sources/load.parquet', 'snapshot', 'snapshot', id='a-rolling-horizon-cut-source'),
+        pytest.param(False, 'answer/primal/p.parquet', 'scenario', 'scenario', id='a-coordinate-sweep-answer'),
+        pytest.param(False, 'sources/load.parquet', 'scenario', 'scenario', id='a-coordinate-sweep-cut-source'),
+    ],
+)
+def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_written(
+    windowed: bool, path: str, column: str, dim: str, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """The catalog was built from the spec, so a sweep archive's files did not hold what it listed.
+
+    A rolling horizon's answer and cut sources hold ``snapshot`` where the
+    catalog said ``t``, and a coordinate sweep's files hold a ``scenario``
+    column the catalog did not list.
+    """
+    if windowed:
+        _rolling(tmp_path)
+        out = _unpacked(tmp_path / 'roll.zip', tmp_path / 'roll')
+    else:
+        out = tmp_path / 'study'
+        sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+        sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out)
+    catalog = pl.read_parquet(out / 'catalog.parquet')
+
+    for (held,), rows in catalog.group_by('path'):
+        listed = set(rows['column'].drop_nulls())
+        assert listed == _labels_of(out / str(held)), f'{held} holds the label columns its rows name, and no other'
+        pl.scan_parquet(out / str(held)).select(*listed).collect()
+    assert catalog.filter(path=path, column=column)['dim'].to_list() == [dim], (
+        f'{path} holds {column!r} as written, over the dimension the sweep cut'
+    )
+
+
+@pytest.mark.xfail(strict=True, reason='the catalog describes the spec, not the files a sweep archive writes')
+def test_a_rolling_horizon_lists_its_windows_in_their_own_catalog(tmp_path: Path) -> None:
+    """The windows are listed apart, so the archive's catalog is the same whether they are kept or not."""
+    _rolling(tmp_path / 'unkept')
+    _rolling(tmp_path / 'kept', keep_windows=True)
+    unkept = _unpacked(tmp_path / 'unkept' / 'roll.zip', tmp_path / 'unkept' / 'roll')
+    kept = _unpacked(tmp_path / 'kept' / 'roll.zip', tmp_path / 'kept' / 'roll')
+    windows = pl.read_parquet(kept / 'answer' / 'windows' / 'catalog.parquet')
+    held = {
+        entry.relative_to(kept).as_posix()
+        for entry in [*(kept / 'answer' / 'windows').glob('*/*'), kept / 'answer' / 'windows' / 'owned.parquet']
+    }
+
+    assert pl.read_parquet(kept / 'catalog.parquet').equals(pl.read_parquet(unkept / 'catalog.parquet')), (
+        "the archive's catalog does not change when the windows are kept"
+    )
+    assert not (unkept / 'answer' / 'windows').exists(), 'no windows and no window catalog unless they are kept'
+    assert not (unkept / 'answer' / 'owned.parquet').exists(), 'what each window owns is kept with the windows'
+    assert set(windows['path']) == held, 'the window catalog lists every window frame and what each window owns'
+    for (path,), rows in windows.group_by('path'):
+        assert set(rows['column']) == _labels_of(kept / str(path)), f'{path} holds the label columns its rows name'
+    assert windows.filter(path='answer/windows/primal/soc', column='snapshot_start')['dim'].to_list() == ['snapshot'], (
+        'the key a window frame carries is where the window started, a coordinate of the dimension the axis cut'
+    )
+    assert windows.filter(path='answer/windows/primal/soc', column='t')['dim'].to_list() == ['t'], (
+        'inside a window the frame holds the local index the spec declares'
+    )
+
+
 def test_an_archive_records_what_reaching_its_answer_cost(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
