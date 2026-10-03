@@ -7,7 +7,9 @@ and which input changed between them. One archive is
 ## The three tables
 
 An archive is a tree of parquet files, so a directory of them is a table per
-glob. Nothing is loaded and no schema is maintained:
+glob. Nothing is loaded and no schema is maintained. The same globs work in
+any tool that reads a folder of parquet files, such as DuckDB, Spark or Power
+BI's "Combine files":
 
 ```python
 import polars as pl
@@ -27,27 +29,22 @@ inputs = pl.read_parquet('runs/*/sources.parquet')
 archive's own name: `runs/nightly-2026-09-10.zip` writes `nightly-2026-09-10`.
 Every table in an archive carries it, so nothing has to read the paths.
 
-**A directory holding both solves and sweeps does not glob.** A sweep's record
-carries the dimension its axis cut on, and its metrics carry different columns
-from a solve's. polars refuses the mismatch:
-
-```text
-SchemaError: extra column in file outside of expected schema: scenario
-```
-
-Union by name instead. The columns one side lacks come back null:
+**Every file has the same columns, whoever wrote it.** A single solve, an
+`EachCoordinate` sweep and an `EachWindow` sweep write one schema, so a
+directory that holds all three globs as one table. A sweep writes one row per
+slice and names it in two text columns. `slice_axis` is the key name, such as
+`scenario` or `snapshot_start`, and `slice` is the key as text. Both are null
+for a single solve:
 
 ```python
-from glob import glob
-
-answers = pl.concat(
-    [pl.read_parquet(file) for file in sorted(glob('runs/*/answer/record.parquet'))],
-    how='diagonal',
-)
+answers.select('specsolve_run', 'slice_axis', 'slice')
+# specsolve_run  slice_axis      slice
+# base           null            null
+# scenarios      scenario        high
+# scenarios      scenario        low
+# rolling        snapshot_start  0
+# rolling        snapshot_start  4
 ```
-
-`sources.parquet` has the same three columns whoever wrote it, so it globs
-either way.
 
 **Use `load_archive` and `scan_archive` for one archive, not for many.** They
 give back a spec, its sources and an answer, which is what re-running a case
@@ -141,19 +138,19 @@ metrics.select('specsolve_run', 'rows', 'nonzeros', 'build_seconds', 'solve_seco
 ```
 
 The columns are [the metrics](../reference/api.md#specsolve.relational.parquet.Metrics). A sweep
-records a `SliceMetrics` per slice instead, keyed by the axis and stamped
-with `specsolve_run` like any other row
+writes one row per slice, with the slice's own share of the clocks and
+`solves` of `1`
 ([reading a sweep](../reference/sweeps.md#reading-a-sweep)).
 
 ## Query it from a database
 
 A directory archive is parquet where it lies, so a query engine reads it
-without polars in the way. In DuckDB, `union_by_name` takes the two kinds of
-archive together:
+without polars in the way. In DuckDB, the glob reads solves and sweeps
+together:
 
 ```sql
-select specsolve_run, rows, nonzeros, build_seconds, solve_seconds
-from read_parquet('runs/*/answer/metrics.parquet', union_by_name = true)
+select specsolve_run, slice, rows, nonzeros, build_seconds, solve_seconds
+from read_parquet('runs/*/answer/metrics.parquet')
 order by build_seconds + solve_seconds desc;
 ```
 

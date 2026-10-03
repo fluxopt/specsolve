@@ -22,7 +22,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve.api import Model
-from specsolve.relational.parquet import SliceMetrics
+from specsolve.relational.parquet import Metrics, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
@@ -263,6 +263,8 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'solved_at',
         'specsolve_run',
         'model_digest',
+        'slice_axis',
+        'slice',
         'solver',
         'solver_version',
         'solver_options',
@@ -1271,12 +1273,13 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
         'dual',
         'expression',
         'format.json',
+        'keys.parquet',
         'metrics',
         'owned.parquet',
         'primal',
         'record',
         'sweep.json',
-    ], 'the three kinds, the record, the manifest, the layout it is in, and the way back'
+    ], 'the three kinds, the record, the manifest, the keys, the layout it is in, and the way back'
     assert sorted(p.name for p in (out / 'expression').iterdir()) == ['spend', 'window_spend'], (
         'every declared expression the slices evaluated'
     )
@@ -1320,11 +1323,70 @@ def test_a_resume_checks_the_layout_it_is_extending_rather_than_restamping_it(tm
     )
 
 
+class _CrashError(Exception):
+    """The process dying while the spill directory is being stamped."""
+
+
+@pytest.mark.parametrize('lost', ['keys.parquet', 'owned.parquet'])
+def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatch, tmp_path, lost) -> None:
+    """``sweep.json`` lands after the files a scan reads beside it.
+
+    It was written first, so a crash before ``keys.parquet`` or
+    ``owned.parquet`` left a directory the next run took for a stamped one and
+    resumed, and ``scan_sweep`` of it failed on the missing file.
+    """
+    write_whole = strategy.write_whole
+
+    def crashing(frame: pl.DataFrame, path) -> None:
+        if path.name == lost:
+            raise _CrashError
+        write_whole(frame, path)
+
+    out = tmp_path / 'sweep'
+    with monkeypatch.context() as patched:
+        patched.setattr(strategy, 'write_whole', crashing)
+        with pytest.raises(_CrashError):
+            sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+
+    ran = sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+    assert sps.scan_sweep(out).record.equals(ran.record)
+
+
 def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
     """Refused rather than widened: the caller's own labels are not ours to change."""
     sources = scenario_sources()
     with pytest.raises(sps.SpecsolveError, match='more than one type'):
         sps.solve_over(DISPATCH, sources, [(1, sources), (2.5, sources)], key_name='draw')
+
+
+@pytest.mark.parametrize(
+    ('keys', 'match'),
+    [
+        pytest.param(['a', 'a'], "'a' names more than one slice", id='a repeated key'),
+        pytest.param(
+            [float('nan'), float('nan')], "'nan' names more than one slice", id='two nan, unequal yet one text'
+        ),
+        pytest.param([1, True], "'True' is written as '1'", id='a bool among ints'),
+        pytest.param(
+            [datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC), datetime.datetime(2021, 1, 1)],
+            "'2021-01-01 00:00:00' is written as '2021-01-01 00:00:00\\+00:00'",
+            id='a naive datetime among aware ones',
+        ),
+    ],
+)
+def test_a_key_that_cannot_name_one_slice_by_its_text_is_refused_before_a_slice_is_taken(tmp_path, keys, match):
+    """The record and metrics name a slice by its key's text, and are typed back by matching that text.
+
+    A hand-built list with two keys of one text, or a key the sweep's one type
+    rewrote, failed in polars' ``replace_strict`` when the fold ended — after
+    every slice had solved — and again on every ``scan_sweep`` of the spill.
+    """
+    base = scenario_sources()
+    sources = {**base, 'load': _draw(base, 'low')}
+    out = tmp_path / 'spill'
+    with pytest.raises(sps.SpecsolveError, match=match):
+        sps.solve_over(DISPATCH, sources, [(key, sources) for key in keys], key_name='draw', spill_to=out)
+    assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
 
 
 def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
@@ -1812,25 +1874,19 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
     with _entered(make_executor() if make_executor else None) as executor:
         runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=executor)
     frame = runs.metrics
-    assert frame.columns == [
-        'scenario',
-        'columns',
-        'rows',
-        'nonzeros',
-        'loaded',
-        'attach_seconds',
-        'build_seconds',
-        'handoff_seconds',
-        'solve_seconds',
-    ], 'the key, then the size, then the one flag, then the clocks in the order the phases run'
+    assert frame.columns == ['scenario', *Metrics._fields], 'the key, then the columns a single solve writes'
     assert frame['scenario'].to_list() == runs.keys
+    assert frame['slice'].to_list() == ['high', 'low', 'mid'], 'the key again, as text, in slice order'
+    assert frame['slice_axis'].unique().to_list() == ['scenario'], 'every row names the axis it is a slice of'
     assert frame['columns'].unique().to_list() == [8], 'every slice is the same model over different numbers'
     assert (frame.select(pl.col('attach_seconds', 'build_seconds', 'solve_seconds') >= 0).to_numpy()).all(), (
         'a clock is never negative'
     )
-    assert frame['loaded'].to_list() == ([True, False, False] if executor is None else [True] * 3), (
+    assert frame['solves'].to_list() == [1, 1, 1], "each row is one slice's solve, not the model's running total"
+    assert frame['loads'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
         'a serial sweep loads the solver once and pushes values after; a pooled one builds every slice cold'
     )
+    assert frame['write_seconds'].to_list() == [0.0] * 3, 'a sweep writes no model file'
 
 
 # ---------------------------------------------------------------------------
@@ -1845,24 +1901,30 @@ def _spilled(directory, **kwargs) -> strategy.Sweep:
     return sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, spill_to=directory, **kwargs)
 
 
-def test_a_slices_metrics_are_written_in_the_columns_its_type_declares(tmp_path):
-    """The fold and the spill both write a slice's metrics as `SliceMetrics` declares them."""
+@pytest.mark.parametrize(
+    ('table', 'row_type'), [pytest.param('record', Record, id='record'), pytest.param('metrics', Metrics, id='metrics')]
+)
+def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path, table, row_type):
+    """The spill writes a slice's rows as `Record` and `Metrics` declare them, the slice named in
+    `slice_axis` and `slice` rather than in a column of the key's own name, so a glob over sweeps
+    and single solves reads one schema."""
     runs = _spilled(tmp_path / 'sweep')
-    written = pl.read_parquet(sorted((tmp_path / 'sweep' / 'metrics').glob('*.parquet')))
+    written = pl.read_parquet(sorted((tmp_path / 'sweep' / table).glob('*.parquet')))
 
-    assert written.columns == [runs.key_name, *SliceMetrics._fields], (
-        'the key the sweep is cut on, then the metrics in the order the type declares them'
-    )
-    assert runs.metrics.columns == written.columns, 'the held table is the spilled one, column for column'
+    assert written.columns == list(row_type._fields), 'the columns the type declares, in its order, and no key column'
+    assert written['slice_axis'].unique().to_list() == [runs.key_name], 'the axis the sweep is cut on'
+    assert written['slice'].to_list() == [str(key) for key in runs.keys], 'each slice key as text'
+    held = getattr(runs, table)
+    assert held.columns == [runs.key_name, *written.columns], 'the held table is the written one, keyed'
 
 
 def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
     """A resume reads a slice's record back as values, so a file short of a column is refused by name."""
     _spilled(tmp_path / 'sweep')
     first = min((tmp_path / 'sweep' / 'metrics').glob('*.parquet'))
-    pl.read_parquet(first).drop('loaded').write_parquet(first)
+    pl.read_parquet(first).drop('loads').write_parquet(first)
 
-    with pytest.raises(sps.LayoutError, match=r"SliceMetrics row that is short of \['loaded'\]"):
+    with pytest.raises(sps.LayoutError, match=r"Metrics row that is short of \['loads'\]"):
         _spilled(tmp_path / 'sweep')
 
 
@@ -1949,13 +2011,14 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_p
     with pytest.raises(RuntimeError, match='went away'):
         _spilled(tmp_path)
     monkeypatch.setattr(strategy, '_answers', answered)
+    assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
     resumed = _spilled(tmp_path)
     assert answer_of(resumed).equals(answer_of(priced))
     assert resumed.scan('soc', original_index=True).collect().equals(priced.primal('soc', original_index=True))
-    loaded = priced.metrics['loaded'].to_list()
-    loaded[2] = True
-    assert resumed.metrics['loaded'].to_list() == loaded, (
+    loads = priced.metrics['loads'].to_list()
+    loads[2] = 1
+    assert resumed.metrics['loads'].to_list() == loads, (
         'the two read back are the record they left, and the third loads where the uninterrupted run updated'
     )
 

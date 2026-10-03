@@ -523,12 +523,14 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'solved_at',
         'specsolve_run',
         'model_digest',
+        'slice_axis',
+        'slice',
         'solver',
         'solver_version',
         'solver_options',
         'specsolve_version',
         'mathspec_version',
-    ], 'the columns a sweep keys and folds, minus the key'
+    ], 'the columns a sweep writes per slice, the slice null'
     assert record.height == 1, 'one solve, one row'
     assert record.row(0, named=True) == {
         'status': dispatch_solution.status,
@@ -539,6 +541,8 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'solved_at': dispatch_solution.solved_at,
         'specsolve_run': None,
         'model_digest': dispatch_solution.model_digest(),
+        'slice_axis': None,
+        'slice': None,
         **dispatch_solution.provenance._asdict(),
     }, 'the row carries what the result itself reports, not a second reading of the solve'
 

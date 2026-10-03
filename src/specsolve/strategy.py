@@ -18,7 +18,7 @@ from __future__ import annotations
 import io
 import json
 import warnings
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field, replace
@@ -46,12 +46,13 @@ from specsolve.relational.parquet import (
     KINDS,
     LABELS,
     METRICS_FILE,
+    METRICS_SCHEMA,
     RECORD_FILE,
     RECORD_SCHEMA,
     RESERVED,
     RUN,
+    Metrics,
     Record,
-    SliceMetrics,
     check_format,
     consolidated,
     read_reasons,
@@ -96,29 +97,28 @@ class _Slice(NamedTuple):
     owns: int | None = None
 
 
-#: A spilled sweep's manifest, and the coordinates each window owns.
+#: A spilled sweep's manifest, its keys as their own type, and the coordinates
+#: each window owns.
 _MANIFEST_FILE = 'sweep.json'
+_KEYS_FILE = 'keys.parquet'
 _OWNED_FILE = 'owned.parquet'
 
-#: The engine's phase keys, which the metrics columns suffix with ``_seconds``.
-_PHASES = ('attach', 'build', 'handoff', 'solve')
+#: The [`Metrics`][specsolve.relational.parquet.Metrics] columns a model sums
+#: over its solves, which a slice's row holds its own share of.
+_SUMMED = ('solves', 'loads', 'attach_seconds', 'build_seconds', 'handoff_seconds', 'solve_seconds', 'write_seconds')
 
 
-def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> SliceMetrics:
+def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
     """One slice's row of [`Sweep.metrics`][], off the model's cumulative counters.
 
     A serial fold's model keeps summing across slices, so this slice's share is
     *after* minus *before*; a model built for one slice has no *before*.
     """
-    earlier = before.seconds if before is not None else {}
-    spent = {f'{phase}_seconds': after.seconds.get(phase, 0.0) - earlier.get(phase, 0.0) for phase in _PHASES}
-    return SliceMetrics(
-        columns=after.columns,
-        rows=after.rows,
-        nonzeros=after.nonzeros,
-        loaded=after.loads > (before.loads if before is not None else 0),
-        **spent,
-    )
+    now = after.metrics()
+    if before is None:
+        return now
+    was = before.metrics()
+    return now._replace(**{name: getattr(now, name) - getattr(was, name) for name in _SUMMED})
 
 
 @dataclass(frozen=True)
@@ -186,7 +186,7 @@ class _Answer:
 
     meta: Record
     #: This slice's row of [`Sweep.metrics`][].
-    metrics: SliceMetrics
+    metrics: Metrics
     primals: dict[str, pl.DataFrame]
     duals: dict[str, pl.DataFrame]
     #: Every declared named expression, evaluated at this slice's solution.
@@ -195,6 +195,15 @@ class _Answer:
     no_duals: str | None
     #: Per expression, why this slice could not evaluate it.
     no_expressions: dict[str, str]
+
+    def sliced(self, key_name: str, key: Label) -> _Answer:
+        """This answer with its record and metrics rows naming the slice they are."""
+        text = str(key)
+        return replace(
+            self,
+            meta=self.meta._replace(slice_axis=key_name, slice=text),
+            metrics=self.metrics._replace(slice_axis=key_name, slice=text),
+        )
 
 
 @dataclass(frozen=True)
@@ -233,7 +242,7 @@ class _OriginalIndex:
 def _one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
     """The type every file writes *key_name* as; keys of mixed types are refused, never coerced."""
     try:
-        return pl.Series(keys).dtype
+        typed = pl.Series(keys)
     except TypeError as mixed:
         kinds = sorted({type(key).__name__ for key in keys})
         raise SpecsolveError(
@@ -241,6 +250,31 @@ def _one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
             f'all write {key_name!r} as one. Every file carries the key, and a column that changes type '
             f'between them cannot be concatenated or loaded into one table. Key the slices consistently.'
         ) from mixed
+    _one_slice_per_text(keys, typed.to_list())
+    return typed.dtype
+
+
+def _one_slice_per_text(keys: Sequence[Label], typed: Sequence[Label]) -> None:
+    """Refuse keys whose text, which the record and metrics name a slice by, does not find one slice.
+
+    ``_rekeyed`` matches each row's ``slice`` text against the text of the
+    keys as the sweep's one type holds them, when the fold ends and when a
+    spill is scanned. A key that type rewrites, or two keys of one text, would
+    fail there, after every slice has solved.
+    """
+    for given, held in zip(keys, typed, strict=True):
+        if str(given) != str(held):
+            raise SpecsolveError(
+                f'the key {str(given)!r} is written as {str(held)!r} once every key of this sweep shares one '
+                f'type, and the record names a slice by its key as text. Key the slices consistently.'
+            )
+    texts = Counter(str(key) for key in keys)
+    repeated = [text for text, count in texts.items() if count > 1]
+    if repeated:
+        raise SpecsolveError(
+            f'the key {repeated[0]!r} names more than one slice of this sweep, and the record names a slice '
+            f'by its key as text, so those slices could not be told apart. Give each slice its own key.'
+        )
 
 
 def _keyed(frame: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -> pl.DataFrame:
@@ -252,10 +286,14 @@ def _keyed(frame: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -
 class _Spill:
     """A sweep's answers on disk instead of in memory, one file per slice and name.
 
-    ``<kind>/<name>/<position>.parquet`` holds the frames, ``record/`` and
-    ``metrics/`` the record. Every file lands whole, and the record file is
-    written last: it marks a slice done. ``sweep.json`` names the key and the
-    keys, so a directory answers for one sweep.
+    ``<kind>/<name>/<position>.parquet`` holds the frames, keyed, and
+    ``record/`` and ``metrics/`` the rows, which name their slice in
+    ``slice_axis`` and ``slice`` rather than in a column of the key's own
+    name and type. Every file lands whole, and the record file is written
+    last: it marks a slice done. ``sweep.json`` names the key and the keys, so
+    a directory answers for one sweep, and ``keys.parquet`` holds the keys as
+    their own type, which the rows do not. ``sweep.json`` lands after the
+    files a scan reads beside it: it marks the directory stamped.
     """
 
     directory: Path
@@ -293,9 +331,10 @@ class _Spill:
                 )
         else:
             write_format(directory)
-            record.write_text(json.dumps(manifest))
+            write_whole(pl.DataFrame([pl.Series(key_name, keys, dtype=key_dtype)]), directory / _KEYS_FILE)
             if original is not None:
                 write_whole(original.owned, directory / _OWNED_FILE)
+            record.write_text(json.dumps(manifest))
         return cls(directory, key_name, key_dtype)
 
     def _file(self, kind: str, position: int, name: str | None = None) -> Path:
@@ -307,23 +346,19 @@ class _Spill:
 
     def write(self, position: int, key: Label, answer: _Answer) -> _Answer:
         """*answer*'s frames and record on disk, and the answer with the frames released."""
+        answer = answer.sliced(self.key_name, key)
         for kind, produced in zip(KINDS, (answer.primals, answer.duals, answer.expressions), strict=True):
             for name, frame in produced.items():
                 write_whole(_keyed(frame, self.key_name, key, self.key_dtype), self._file(kind, position, name))
-        write_whole(pl.DataFrame([{self.key_name: key, **answer.metrics._asdict()}]), self._file('metrics', position))
-        write_whole(
-            pl.DataFrame([{self.key_name: key, **answer.meta._asdict()}], schema_overrides=RECORD_SCHEMA),
-            self._file('record', position),
-        )
+        write_whole(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
+        write_whole(pl.DataFrame([answer.meta._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
         return replace(answer, primals={}, duals={}, expressions={})
 
     def read_back(self, position: int) -> _Answer:
         """A done slice's record, with no frames."""
-        row = pl.read_parquet(self._file('record', position)).drop(self.key_name).row(0, named=True)
-        held = pl.read_parquet(self._file('metrics', position)).drop(self.key_name).row(0, named=True)
-        return _Answer(
-            row_of(Record, row, self.directory), row_of(SliceMetrics, held, self.directory), {}, {}, {}, None, {}
-        )
+        row = pl.read_parquet(self._file('record', position)).row(0, named=True)
+        held = pl.read_parquet(self._file('metrics', position)).row(0, named=True)
+        return _Answer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory), {}, {}, {}, None, {})
 
     def primals(self, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
         """The named primals a done slice wrote; a name it did not write is absent."""
@@ -586,20 +621,22 @@ class Sweep:
     """
 
     key_name: str
-    #: One [`Record`][specsolve.relational.parquet.Record] per slice, the key
-    #: column first, in slice order — how every slice terminated, whether or
-    #: not it produced an answer. A slice that reached no objective holds null
-    #: there rather than ``nan``, so the column aggregates over the slices that
-    #: solved.
+    #: One [`Record`][specsolve.relational.parquet.Record] per slice, in slice
+    #: order — how every slice terminated, whether or not it produced an
+    #: answer. The key column comes first, as its own type, so the table joins
+    #: to the frames; ``slice_axis`` and ``slice`` name the slice again as
+    #: text, and are what a saved sweep or an archive writes in its place. A
+    #: slice that reached no objective holds null there rather than ``nan``,
+    #: so the column aggregates over the slices that solved.
     record: pl.DataFrame
-    #: One [`SliceMetrics`][specsolve.relational.parquet.SliceMetrics] per slice, keyed
-    #: and in slice order — [`diagnostics`][specsolve.api.Model.diagnostics] one dimension
-    #: wider, its counts and clocks only. ``loaded`` says the solver took the
-    #: model from scratch: under a serial fold the first slice does and the
-    #: rest are pushed values, so a later ``True`` is a slice whose data moved
-    #: a mask; under an executor every slice builds alone and every one loads.
-    #: The ``_seconds`` columns are this slice's own share, so a slow sweep
-    #: says which slice, and which phase of it.
+    #: One [`Metrics`][specsolve.relational.parquet.Metrics] per slice, keyed as
+    #: [`record`][] is and in slice order — [`diagnostics`][specsolve.api.Model.diagnostics]
+    #: one dimension wider, its counts and clocks only. Each row is the slice's
+    #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
+    #: took the model from scratch. Under a serial fold the first slice does
+    #: and the rest are pushed values, so a later ``1`` is a slice whose data
+    #: moved a mask; under an executor every slice builds alone and every one
+    #: loads. So a slow sweep says which slice, and which phase of it.
     metrics: pl.DataFrame
     #: Per slice, not concatenated.
     _primals: dict[str, list[pl.DataFrame]] = field(repr=False, default_factory=dict)
@@ -633,8 +670,9 @@ class Sweep:
         abandoned. A reason a slice lacks something is kept from the first
         slice that gave one.
         """
-        rows: list[dict[str, object]] = []
-        taken: list[dict[str, object]] = []
+        keys: list[Label] = []
+        rows: list[Record] = []
+        taken: list[Metrics] = []
         primals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
         duals: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
         expressions: defaultdict[str, list[pl.DataFrame]] = defaultdict(list)
@@ -645,8 +683,10 @@ class Sweep:
                 no_duals = no_duals or answer.no_duals
                 for name, reason in answer.no_expressions.items():
                     no_expressions.setdefault(name, reason)
-                rows.append({key_name: key, **answer.meta._asdict()})
-                taken.append({key_name: key, **answer.metrics._asdict()})
+                named = answer.sliced(key_name, key)
+                keys.append(key)
+                rows.append(named.meta)
+                taken.append(named.metrics)
                 for into, produced in (
                     (primals, answer.primals),
                     (duals, answer.duals),
@@ -654,10 +694,11 @@ class Sweep:
                 ):
                     for name, frame in produced.items():
                         into[name].append(_keyed(frame, key_name, key, key_dtype))
+        keyed = pl.Series(key_name, keys, dtype=key_dtype)
         return cls(
             key_name=key_name,
-            record=pl.DataFrame(rows, schema_overrides=RECORD_SCHEMA),
-            metrics=pl.DataFrame(taken),
+            record=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
+            metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed),
             _primals=dict(primals),
             _duals=dict(duals),
             _expressions=dict(expressions),
@@ -919,7 +960,7 @@ class Sweep:
         }
         for position, key in enumerate(self.keys):
             meta = Record(**self.record.drop(self.key_name).row(position, named=True))
-            taken = SliceMetrics(**self.metrics.drop(self.key_name).row(position, named=True))
+            taken = Metrics(**self.metrics.drop(self.key_name).row(position, named=True))
             frames = {
                 kind: {name: keyed[key] for name, keyed in names.items() if key in keyed}
                 for kind, names in by_key.items()
@@ -1022,20 +1063,29 @@ def scan_sweep(directory: str | Path) -> Sweep:
     original = found['original']
     no_duals, no_expressions = read_reasons(under)
     key_name = found['key_name']
-    record = consolidated(under, RECORD_FILE)
-    metrics = consolidated(under, METRICS_FILE)
+    keys = pl.read_parquet(under / _KEYS_FILE, columns=[key_name]).to_series()
     return Sweep(
         key_name=key_name,
-        record=record,
-        metrics=metrics,
+        record=_rekeyed(consolidated(under, RECORD_FILE), keys),
+        metrics=_rekeyed(consolidated(under, METRICS_FILE), keys),
         _no_duals=no_duals,
         _no_expressions=no_expressions,
         _original=None
         if original is None
         else _OriginalIndex(original['local'], original['dim'], pl.read_parquet(under / _OWNED_FILE)),
         _hand_built=found['hand_built'],
-        _spill=_Spill(under, key_name, record[key_name].dtype),
+        _spill=_Spill(under, key_name, keys.dtype),
     )
+
+
+def _rekeyed(table: pl.DataFrame, keys: pl.Series) -> pl.DataFrame:
+    """*table* with the typed key prepended, matched on the text each row's ``slice`` holds.
+
+    Matched rather than placed by position, so a spill an interrupted fold
+    left reads back the slices it finished.
+    """
+    texts = [str(key) for key in keys.to_list()]
+    return table.select(pl.col('slice').replace_strict(texts, keys, return_dtype=keys.dtype).alias(keys.name), pl.all())
 
 
 def axis_manifest(axis: EachCoordinate | EachWindow) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — the archive's own JSON
@@ -1144,6 +1194,8 @@ def solve_over(
             an axis the program does not allow; a *spill_to* directory holding
             another sweep. All refused before a slice is taken, and every
             one answerable from the declarations before a source is read.
+            Keys of more than one type, or two keys of one text, are refused
+            before a slice is taken too.
         DataError: No source carries the axis, or the axis produced no
             slices.
 
@@ -1448,7 +1500,7 @@ def _pooled(
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
-def _answers(result: Result, program: Program, metrics: SliceMetrics) -> _Answer:
+def _answers(result: Result, program: Program, metrics: Metrics) -> _Answer:
     """One slice's answer, read out of *result*, every declared expression evaluated now.
 
     A slice with no primal, or with undefined duals, is not a failure: the
