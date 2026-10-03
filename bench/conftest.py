@@ -30,6 +30,10 @@ if TYPE_CHECKING:
     from bench.cases import Shape
 
 
+#: Every destination `--sinks` can name.
+SINKS = ('lp', 'mps', 'highs', 'gurobi', 'xpress')
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     g = parser.getgroup('ladder', 'the specsolve benchmark ladder')
     g.addoption('--cases', nargs='+', default=sorted(CASES), choices=sorted(CASES))
@@ -39,11 +43,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         '--sinks',
         nargs='+',
         default=['lp', 'highs'],
-        choices=('lp', 'highs', 'gurobi'),
+        choices=SINKS,
         help='where each built model goes. `lp` and `highs` by default: the LP file is the '
         "artifact fewest callers want, and it is not the same comparison — HiGHS's own model "
         'is resident in both arms and narrows the gap. `gurobi` is opt-in because it needs the '
-        '[gurobi] extra, and it is measured against linopy the same way, through `to_gurobipy()`.',
+        '[gurobi] extra, and it is measured against linopy the same way, through `to_gurobipy()`. '
+        '`mps` is the other file format, and `xpress` the third solver, which only specsolve '
+        'reaches; its bundled Community licence limits the solve, and nothing here solves.',
     )
     g.addoption('--builds', type=int, default=5, help='rebuilds per process in the first-vs-steady pass; 0 skips it')
     g.addoption(

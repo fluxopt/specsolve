@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from bench.arms import Counts
 
 #: Every sink linopy can hand a model to — the same three as ours.
-SINKS = ('lp', 'highs', 'gurobi')
+SINKS = ('lp', 'mps', 'highs', 'gurobi')
 
 #: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('linopy',)
@@ -65,6 +65,8 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
         m = _built(prepared)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api='lp-polars', progress=False)
+        elif sink == 'mps':
+            m.to_file(Path(tmp) / 'model.mps', progress=False)
         elif sink == 'gurobi':
             _handle = m.to_gurobipy(set_names=False)
         else:

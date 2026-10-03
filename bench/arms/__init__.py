@@ -68,6 +68,13 @@ ARMS: dict[str, ModuleType] = {
 }
 
 
+#: The sinks that write a file, which no window or sweep can be held in.
+WRITERS = ('lp', 'mps')
+
+#: What a solver sink needs installed, whichever arm reaches it.
+SINK_REQUIRES = {'highs': ('highspy',), 'gurobi': ('gurobipy',), 'xpress': ('xpress',)}
+
+
 def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     """Why this cell is not measured, or None when it is.
 
@@ -77,7 +84,8 @@ def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     import importlib.util
 
     module = ARMS[arm]
-    absent = [r for r in getattr(module, 'REQUIRES', ()) if importlib.util.find_spec(r) is None]
+    needed = (*getattr(module, 'REQUIRES', ()), *SINK_REQUIRES.get(sink, ()))
+    absent = [r for r in needed if importlib.util.find_spec(r) is None]
     if absent:
         return f'{arm} needs {", ".join(absent)}, which this environment does not have'
     if sink not in module.SINKS:

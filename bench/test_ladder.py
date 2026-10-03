@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from bench.arms import ARMS, unmeasurable
+from bench.arms import ARMS, WRITERS, unmeasurable
 from bench.cases import CASES, shortened
 from bench.conftest import shape_of
 
@@ -180,7 +180,7 @@ def test_window(
     module = ARMS[arm]
     if not hasattr(module, 'window'):
         pytest.skip(f'{arm} has no rolling-horizon verb — nothing here says what its second window costs')
-    if sink == 'lp':
+    if sink in WRITERS:
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
 
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
@@ -219,7 +219,7 @@ def test_sweep(
     module = ARMS[arm]
     if not hasattr(module, 'sweep'):
         pytest.skip(f'{arm} has no sweep verb — nothing here says what its loop over slices costs')
-    if sink == 'lp':
+    if sink in WRITERS:
         pytest.skip('a sweep solves every slice, and a file is not a solver')
     if size not in SWEPT_SIZES:
         pytest.skip(f'a sweep is measured at {", ".join(SWEPT_SIZES)}; above them it measures the solver')
