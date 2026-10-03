@@ -95,10 +95,6 @@ and its solves took, and what a slice of a sweep took.
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.SliceMetrics
-    options:
-      heading_level: 4
-
 ### Carry an answer
 
 ::: specsolve.SolveArchive

@@ -17,7 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import NoSolutionError
-from specsolve.relational.parquet import Metrics, Record, SliceMetrics, _column_types
+from specsolve.relational.parquet import Metrics, Record, _column_types
 from specsolve.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from specsolve.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
 from specsolve.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
@@ -209,7 +209,7 @@ def test_a_record_column_that_names_no_written_type_is_refused_at_import():
     with pytest.raises(sps.SpecsolveError, match='_WRITTEN_AS'):
         _column_types(Unwritable)
 
-    for row_type in (Record, Metrics, SliceMetrics):
+    for row_type in (Record, Metrics):
         assert tuple(_column_types(row_type)) == row_type._fields, (
             f'and {row_type.__name__} derives all of its own, so a field nothing writes fails at import'
         )

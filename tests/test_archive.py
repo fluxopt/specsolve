@@ -480,7 +480,12 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'solve_seconds',
         'write_seconds',
         RUN,
-    ), 'the sizes, the counters, one clock per phase in the order the phases run, then the run that took them'
+        'slice_axis',
+        'slice',
+    ), (
+        'the sizes, the counters, one clock per phase in the order the phases run, the run that took them, '
+        'then the sweep slice, null here'
+    )
     written = pl.read_parquet(tmp_path / 'case' / ANSWER_DIR / METRICS_FILE)
     assert written.columns == list(Metrics._fields), "and the file carries the type's columns, in its order"
     assert written.height == 1, 'one solve writes one row'
@@ -773,6 +778,40 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, window for window'
     )
+
+
+@pytest.mark.parametrize('table', ['record.parquet', METRICS_FILE], ids=str)
+def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
+    table: str, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """A warehouse tool reads a glob with the schema of one file, so every archive writes the same columns.
+
+    A sweep once wrote its key under the axis's own name and a slice's metrics
+    in other columns than a solve's, and a strict glob refused the mix.
+    """
+    from tests.test_strategy import WINDOW, horizon_sources
+
+    runs = tmp_path / 'runs'
+    sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=runs / 'single').close()
+    sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
+    sps.solve_over(dispatch_yaml, sweep_sources, sps.EachCoordinate('scenario'), archive=runs / 'scenarios')
+    window = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
+    sps.solve_over(WINDOW, horizon_sources(12), window, carry={'soc_initial': 'soc'}, archive=runs / 'rolling')
+
+    files = sorted(runs.glob(f'*/{ANSWER_DIR}/{table}'))
+    schemas = {file.parts[-3]: pl.read_parquet_schema(file) for file in files}
+    assert len({tuple(schema.items()) for schema in schemas.values()}) == 1, (
+        f'one schema across a solve and two kinds of sweep: {schemas}'
+    )
+    globbed = pl.read_parquet(str(runs / '*' / ANSWER_DIR / table)).sort(RUN, 'slice')
+    assert globbed.select(RUN, 'slice_axis', 'slice').rows() == [
+        ('rolling', 'snapshot_start', '0'),
+        ('rolling', 'snapshot_start', '4'),
+        ('rolling', 'snapshot_start', '8'),
+        ('scenarios', 'scenario', 'high'),
+        ('scenarios', 'scenario', 'low'),
+        ('single', None, None),
+    ], 'a plain glob reads every row, the slice named as text and null for the single solve'
 
 
 def test_an_archive_whose_answer_names_another_spec_is_refused(
