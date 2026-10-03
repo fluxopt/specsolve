@@ -17,9 +17,9 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from specsolve.relational.engines.polars.attaching import AttachedSources
-    from specsolve.relational.engines.polars.fragments import TermFragment
-    from specsolve.relational.engines.polars.labels import Labelled
+    from specsolve.relational.engine.attaching import AttachedSources
+    from specsolve.relational.engine.fragments import TermFragment
+    from specsolve.relational.engine.labels import Labelled
 
 
 def join_on(

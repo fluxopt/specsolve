@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 from mathspec.program import assumption_message
 
 from specsolve.errors import DataError
-from specsolve.relational.engines.polars.attaching import attach
-from specsolve.relational.engines.polars.predicates import masked
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.attaching import attach
+from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.scope import Scope
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -29,11 +29,11 @@ import pytest
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.relational.engines.polars.attaching import AttachedSources
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.labels import Labelled
-from specsolve.relational.engines.polars.predicates import masked
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.attaching import AttachedSources
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.labels import Labelled
+from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.scope import Scope
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -98,8 +98,8 @@ def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Progra
     )
 
 
-def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> PolarsCompiler:
-    return PolarsCompiler(Scope(declared(dtypes), attached(), VARIABLES))
+def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> Compiler:
+    return Compiler(Scope(declared(dtypes), attached(), VARIABLES))
 
 
 def columns(frame: pl.LazyFrame) -> list[str]:
@@ -177,7 +177,7 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     assert 'AGGREGATE' not in query(fragment.frame)
 
 
-def masked_compiler() -> PolarsCompiler:
+def masked_compiler() -> Compiler:
     """A compiler over two masked variables, since a restriction only crosses between fragments."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
@@ -192,7 +192,7 @@ def masked_compiler() -> PolarsCompiler:
         dimensions=PROGRAM.dimensions,
     )
     frames = dict(VARIABLES, q=VARIABLES['p'])
-    return PolarsCompiler(Scope(masked, attached(), frames))
+    return Compiler(Scope(masked, attached(), frames))
 
 
 def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_came_from():
@@ -406,7 +406,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         cardinality={'snapshot': 3},
         parameter_rows={'load': 3},
     )
-    q = PolarsCompiler(Scope(PROGRAM, sources, VARIABLES))
+    q = Compiler(Scope(PROGRAM, sources, VARIABLES))
     shifted = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
 
     rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')

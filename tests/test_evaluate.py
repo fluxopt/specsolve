@@ -12,7 +12,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import LanguageError, SpecsolveError
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
+from specsolve.relational.engine.compiler import Compiler
 
 SPEC = {
     'dimensions': {
@@ -141,13 +141,13 @@ def test_a_spec_that_declares_a_decision_is_refused_and_names_solve(decision, na
 
 def test_only_the_expression_asked_for_is_compiled(monkeypatch):
     compiled = []
-    original = PolarsCompiler.expression
+    original = Compiler.expression
 
     def counting(self, expr, context, **kwargs):
         compiled.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(PolarsCompiler, 'expression', counting)
+    monkeypatch.setattr(Compiler, 'expression', counting)
     evaluate('served')
     assert compiled == ["named expression 'served'"], (
         'four expressions are declared and one is asked for, so exactly that one compiles'

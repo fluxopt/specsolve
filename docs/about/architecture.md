@@ -79,7 +79,7 @@ flowchart TB
 
     subgraph REL["relational/ — the streaming lane"]
         direction TB
-        subgraph ENG["engines/polars/ — the only part a second engine replaces"]
+        subgraph ENG["engine/ — what the contract around it is written against"]
             direction TB
             COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
@@ -295,10 +295,11 @@ the language's rulebook.
    plan → engine → a solver sink → solver. It matches linopy's semantics as a
    spec rather than sharing its code. It never sees the schema, the AST, or the
    oracle's builder. **The engine is a directory, not a convention.**
-   `engines/polars/` is one implementation. Everything above it is what any
-   implementation answers to: `sinks/`, `status.py`, and the plan vocabulary,
-   which is `mathspec.program`'s. An engine package is named for its engine;
-   nothing *inside* one is. The engine imports nothing from the package bar one
+   `engine/` is the implementation. Everything above it is what it answers
+   to: `sinks/`, `status.py`, and the plan vocabulary, which is
+   `mathspec.program`'s. No contract module names a module inside it. There
+   is one engine, so there is no `Engine` protocol and no directory per
+   engine; a second one adds them. The engine imports nothing from the package bar one
    declared leaf (`errors.py`, in `ENGINE_MAY_IMPORT`), which keeps the
    subpackage extractable. **`errors.py` is a leaf by name and not by cost**: it
    re-exports the language's half of the hierarchy, so importing it loads the
@@ -409,7 +410,7 @@ compiler holds beside the walk it adds. `fragments.py`, `predicates.py`,
 all three consumers read it. The [module map](#module-map) says what each does.
 
 That split makes the ceiling's admissibility test something you can *perform*:
-build a `PolarsCompiler` over a `Scope`, hand it a node, read `.explain()`.
+build a `Compiler` over a `Scope`, hand it a node, read `.explain()`.
 `tests/test_compiler.py` does that over empty tables, since a schema is all it
 takes to compile a query.
 
@@ -505,7 +506,7 @@ the tables and returns an answer, chosen by **name** at the call
 (`solver_name='gurobi'`). A **writer** renders them to a file, chosen by the
 output's **suffix**. Both sets are closed dict literals (`SOLVERS`, `WRITERS`):
 no YAML key names a solver, and nothing installed may change what either
-resolves to. The split is a directory for the reason `engines/` is. **How many
+resolves to. The split is a directory for the reason `engine/` is. **How many
 solvers there are will change; what a solver has to answer will not.** A new
 solver is a module named for it and a line in `SOLVERS`, and nothing above it
 changes. Members share the projection of `cols` and `obj` onto the solver's
@@ -554,19 +555,19 @@ is structure.
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `axes.py` | how a sweep cuts its sources: `EachCoordinate`, `EachWindow`, and the stitch that puts a window's frames back over the dimension it cut |
 | `sweep.py` | what a fold returns: `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
-| `relational/engines/polars/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
-| `relational/engines/polars/compiler.py` | plan → lazy queries; pure, reads nothing |
-| `relational/engines/polars/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
-| `relational/engines/polars/reindex.py` | `shift` and `sum_back`: a fragment's rows moved along one dimension's own order, and the edge |
-| `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes and nothing else |
-| `relational/engines/polars/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
+| `relational/engine/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
+| `relational/engine/compiler.py` | plan → lazy queries; pure, reads nothing |
+| `relational/engine/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
+| `relational/engine/reindex.py` | `shift` and `sum_back`: a fragment's rows moved along one dimension's own order, and the edge |
+| `relational/engine/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes and nothing else |
+| `relational/engine/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
-| `relational/engines/polars/attaching.py` | the door's tables → `AttachedSources`, the frozen, `Enum`-encoded tables every query is written against |
-| `relational/engines/polars/assembly.py` | one build: every declaration into rows of the model tables, quadratic constraints last |
-| `relational/engines/polars/coverage.py` | is the data there where a declaration reads it: a divisor, and a constant piece, each refused at the last moment the gap is still visible |
-| `relational/engines/polars/readback.py` | a built row, a solve's tables and a named expression, spelled back out in the model's own labels |
-| `relational/engines/polars/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
+| `relational/engine/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
+| `relational/engine/attaching.py` | the door's tables → `AttachedSources`, the frozen, `Enum`-encoded tables every query is written against |
+| `relational/engine/assembly.py` | one build: every declaration into rows of the model tables, quadratic constraints last |
+| `relational/engine/coverage.py` | is the data there where a declaration reads it: a divisor, and a constant piece, each refused at the last moment the gap is still visible |
+| `relational/engine/readback.py` | a built row, a solve's tables and a named expression, spelled back out in the model's own labels |
+| `relational/engine/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
 | `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
 | `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
@@ -575,8 +576,8 @@ is structure.
 
 **One subpackage, and the directory *is* the rule.** Everything
 under `relational/` is the relational lane, and it imports nothing else from
-the package. Inside it, `engines/` holds implementations and the rest is what
-they implement. No module of the package imports linopy, and none imports
+the package. Inside it, `engine/` is the implementation and the rest is what
+it implements. No module of the package imports linopy, and none imports
 xarray at module level. `tests/test_architecture.py` holds both rules.
 
 **A fence whose allowlist is empty is a package waiting to happen.** What
@@ -665,7 +666,7 @@ pinned language does not parse.
 says the two halves have not drifted since.
 
 The dim rule, the degree verdict and the dense-label assignment
-(`relational/engines/polars/labels.py`, shared by variables and constraint
+(`relational/engine/labels.py`, shared by variables and constraint
 rows) are not per-operator work: each has
 [one implementation](#what-counts-as-language). What a consumer still owns is
 what is about *building*: the fragment rewrite the relational compiler

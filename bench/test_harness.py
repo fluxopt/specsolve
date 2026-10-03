@@ -39,7 +39,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from specsolve.relational.engines.polars.labels import Labelled
+from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
 # ---------------------------------------------------------------------------
@@ -685,7 +685,7 @@ def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
     can retire them without touching `bench/` (#1245)."""
     import importlib
 
-    from specsolve.relational.engines.polars.assembly import Assembly
+    from specsolve.relational.engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)

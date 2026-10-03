@@ -34,9 +34,9 @@ def main(argv: list[str] | None = None) -> int:
 
     from mathspec import to_spec
 
-    from specsolve.relational.engines.polars import engine as executor_module
-    from specsolve.relational.engines.polars.assembly import Assembly
-    from specsolve.relational.engines.polars.engine import PolarsEngine
+    from specsolve.relational.engine import engine as executor_module
+    from specsolve.relational.engine.assembly import Assembly
+    from specsolve.relational.engine.engine import Engine
     from specsolve.sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def one() -> float:
         """One build, timed. Called once untimed to fill the attach cache."""
-        engine = PolarsEngine()
+        engine = Engine()
         started = time.perf_counter()
         engine.build(program, sources)
         elapsed = time.perf_counter() - started

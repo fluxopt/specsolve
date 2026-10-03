@@ -2,7 +2,7 @@
 
 Three-way differential on examples/transport.yaml:
   1. specsolve_linopy.build + solve (sum via linopy groupby)
-  2. lowered Program -> PolarsEngine -> the `highs` solver, plus the LP file
+  2. lowered Program -> Engine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
 
@@ -30,7 +30,7 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError
-from specsolve.relational.engines.polars.engine import PolarsEngine
+from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
@@ -111,7 +111,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
 def _relationally(data):
     schema = schema_of(TRANSPORT_YAML)
     program = schema.program
-    with PolarsEngine() as engine:
+    with Engine() as engine:
         engine.build(program, tidy_sources(program, data))
 
 

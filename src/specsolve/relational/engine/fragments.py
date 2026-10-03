@@ -20,14 +20,14 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.relational.engines.polars.scope import join_on
+from specsolve.relational.engine.scope import join_on
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from polars._typing import JoinStrategy
 
-    from specsolve.relational.engines.polars.scope import Scope
+    from specsolve.relational.engine.scope import Scope
 
 
 #: The right-hand operand's value while a join holds both. The spaces make it
@@ -350,7 +350,7 @@ def join_quad(a: TermFragment, b: TermFragment) -> TermFragment:
     The second label is renamed on the way in: a suffix collision would pair a
     variable with itself, which ``p * p`` makes a legal fragment. Pairs are
     canonicalised later, once column labels exist
-    ([`Assembly._build_objective`][specsolve.relational.engines.polars.assembly.Assembly._build_objective]).
+    ([`Assembly._build_objective`][specsolve.relational.engine.assembly.Assembly._build_objective]).
     """
     joined, out_dims = _paired(a, b, b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS}), 'inner')
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(

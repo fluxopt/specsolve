@@ -17,17 +17,17 @@ from mathspec import program
 from specsolve.errors import DataError, null_bounds_message
 from specsolve.relational import sinks
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars import coverage, labels
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.fragments import TermFragment, absence_restrictions
-from specsolve.relational.engines.polars.scope import Scope, join_on
+from specsolve.relational.engine import coverage, labels
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.fragments import TermFragment, absence_restrictions
+from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
 if TYPE_CHECKING:
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
-    from specsolve.relational.engines.polars.attaching import AttachedSources
+    from specsolve.relational.engine.attaching import AttachedSources
 
 
 #: The frames a sink reads, as schemas.
@@ -84,7 +84,7 @@ class BuiltModel:
 
     program: program.Program
     attached: AttachedSources
-    #: One [`Labelled`][specsolve.relational.engines.polars.labels.Labelled] per
+    #: One [`Labelled`][specsolve.relational.engine.labels.Labelled] per
     #: declaration, one map per label space: a variable and a constraint may share a name.
     variables: dict[str, labels.Labelled]
     constraints: dict[str, labels.Labelled]
@@ -101,7 +101,7 @@ class Assembly:
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.compiler = PolarsCompiler(self.scope)
+        self.compiler = Compiler(self.scope)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.

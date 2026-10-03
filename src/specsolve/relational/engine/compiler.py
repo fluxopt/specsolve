@@ -26,7 +26,7 @@ from mathspec import program
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars.fragments import (
+from specsolve.relational.engine.fragments import (
     PRESENT,
     CompiledExpression,
     Presence,
@@ -46,15 +46,15 @@ from specsolve.relational.engines.polars.fragments import (
     refuse_a_fragment_without_the_dims,
     region_over,
 )
-from specsolve.relational.engines.polars.predicates import Carrier, compile_predicate, falsy_if_null, masked
-from specsolve.relational.engines.polars.reindex import translate_fragment, window_fragment
-from specsolve.relational.engines.polars.relations import landed, mapping, walk_join
-from specsolve.relational.engines.polars.scope import UNIT, Scope
+from specsolve.relational.engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
+from specsolve.relational.engine.reindex import translate_fragment, window_fragment
+from specsolve.relational.engine.relations import landed, mapping, walk_join
+from specsolve.relational.engine.scope import UNIT, Scope
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve.relational.engines.polars.labels import Labelled
+    from specsolve.relational.engine.labels import Labelled
 
 
 def _totalled(p: TermFragment) -> pl.LazyFrame:
@@ -93,7 +93,7 @@ class Solution:
 
 
 @dataclass(frozen=True)
-class PolarsCompiler:
+class Compiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
     ``solution`` is set on the compiler a read builds and on no other: with it
@@ -445,7 +445,7 @@ class PolarsCompiler:
         """Const *fragments* added per coordinate onto *carrier* — its columns, then ``cval``.
 
         *carrier* holds one row per coordinate of
-        [`spanned`][specsolve.relational.engines.polars.scope.Scope.spanned], restricted by
+        [`spanned`][specsolve.relational.engine.scope.Scope.spanned], restricted by
         the caller to where every variable under the fragments exists. *absent*
         is what a piece with no value adds: ``zero``; ``hole``, null where no
         piece has a value; ``spreads``, null where any piece has none.
