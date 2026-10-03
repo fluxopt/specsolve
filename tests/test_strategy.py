@@ -2047,13 +2047,18 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
         pytest.param(lambda runs: runs.primal('soc'), id='primal'),
         pytest.param(lambda runs: runs.dual('balance'), id='dual'),
         pytest.param(lambda runs: runs.evaluate('spend'), id='expression'),
-        pytest.param(lambda runs: runs.to_dataset(), id='to_dataset'),
     ],
 )
 def test_the_frame_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
     """A spilled sweep's frames lie on disk, and a frame reader reads the one
     name it is asked for, so it answers what the sweep held in memory answers."""
     assert read(_spilled(tmp_path)).equals(read(priced))
+
+
+def test_an_export_reads_a_spilled_sweep_as_a_held_one(priced, tmp_path):
+    """`to_dataset` reads each name off the files, as the frame readers do."""
+    pytest.importorskip('xarray')
+    assert _spilled(tmp_path).to_dataset().equals(priced.to_dataset())
 
 
 def test_a_spilled_sweep_saves_as_the_sweep_it_is(priced, tmp_path):
