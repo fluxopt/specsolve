@@ -91,8 +91,8 @@ import yaml  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
-from specsolve.relational.engines.polars.predicates import masked  # noqa: E402
-from specsolve.relational.engines.polars.scope import Scope  # noqa: E402
+from specsolve.relational.engine.predicates import masked  # noqa: E402
+from specsolve.relational.engine.scope import Scope  # noqa: E402
 from specsolve.sources import tidy_sources  # noqa: E402
 
 

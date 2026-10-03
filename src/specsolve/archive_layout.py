@@ -2,9 +2,10 @@
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
 ``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
-file holds, ``answer/`` in the layout both answers save, and ``axis.json``
-where the sources are cut. A directory archive is read
-where it lies; a zip is unpacked first.
+file holds, ``answer/`` in the answer's own layout
+([`specsolve.relational.answer_layout`][]), and ``axis.json`` where the
+sources are cut. A directory archive is read where it lies; a zip is
+unpacked first. Reading one back is [`specsolve.archive`][].
 """
 
 from __future__ import annotations
@@ -20,8 +21,16 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.errors import LayoutError
-from specsolve.lanes import lowered
-from specsolve.relational.parquet import METRICS_FILE, RECORD_FILE, RUN, consolidated, digest_of_file, write_whole
+from specsolve.inputs import lowered
+from specsolve.relational.answer_layout import (
+    ACTIVITY,
+    METRICS_FILE,
+    RECORD_FILE,
+    RUN,
+    consolidated,
+    digest_of_file,
+    write_whole,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -78,18 +87,17 @@ def write_archive(
 
     Args:
         out: Where to write; its parent is made if it does not exist. Its
-            name without ``.zip`` is the run every table is stamped with.
+            name without ``.zip`` is the ``specsolve_run`` every table carries.
         spec: The spec as written, held as ``spec.yaml``.
         tables: The tidy table each source stands for, keyed as the file
-            declares, each written as ``sources/<key>.parquet``. The digest
-            is of those bytes, before the run is stamped on.
+            declares, each written as ``sources/<key>.parquet`` and digested
+            before the run is stamped on.
         axis: The axis manifest, or ``None`` where the sources are not cut.
-        answer: A directory holding the answer's own layout. Its record and
+        answer: A directory in the answer's own layout; its record and
             metrics land as one file each.
 
     Returns:
-        *out*, which lands whole or not at all. Every table in it carries
-        ``specsolve_run``.
+        *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
@@ -151,7 +159,7 @@ _HELD_UNDER = {
     'relation': [SOURCES_DIR],
     'parameter': [SOURCES_DIR],
     'variable': [f'{ANSWER_DIR}/primal'],
-    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/activity'],
+    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/{ACTIVITY}'],
     'expression': [f'{ANSWER_DIR}/expression'],
 }
 
@@ -161,8 +169,8 @@ def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
 
     ``path`` and ``dim_position`` are the key, because a constraint may share
     its name with a parameter. ``dim_position`` is the place in the name's
-    declaration, not in the file: a sweep's source holds the axis column
-    first. A name *tree* holds no file for has no row.
+    declaration, not in the file, where a sweep's source holds the axis column
+    first. A name with no file has no row.
     """
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
@@ -211,21 +219,24 @@ def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
         copy_function=lambda source, target: _stamped(Path(source), Path(target), run),
     )
     for file in consolidating:
-        stamped = consolidated(answer, file).with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
-        stamped.write_parquet(into / file, compression='zstd')
+        _with_run(consolidated(answer, file), run).write_parquet(into / file, compression='zstd')
 
 
 def _stamped(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*.
+    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*; anything else copied.
 
     Streamed, so a spilled answer larger than memory is stamped too, and
-    landed through a part file, so *target* may be *source*. Anything that is
-    not parquet is copied as it is.
+    landed through a part file, so *target* may be *source*.
     """
     if source.suffix != '.parquet':
         shutil.copy2(source, target)
         return
-    write_whole(pl.scan_parquet(source).with_columns(pl.lit(run, dtype=pl.String).alias(RUN)), target)
+    write_whole(_with_run(pl.scan_parquet(source), run), target)
+
+
+def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
+    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
 
 
 def _pack(tree: Path, into: Path) -> None:

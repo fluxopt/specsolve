@@ -1,6 +1,6 @@
 """The LP sink renders doubles exactly, and writes the same bytes twice.
 
-The renderer is ``writers.base``'s, shared with the MPS sink. ``lp_file`` writes
+The renderer is ``writers.text``'s, shared with the MPS sink. ``lp_file`` writes
 numbers by casting them to string, which is only correct if the cast is
 shortest-*round-trip*; a golden file proves the bytes did not move, not that
 they are correct. Reproducibility (#109) is pinned here too: a golden file
@@ -19,8 +19,8 @@ import pytest
 
 import specsolve as sps
 from specsolve.relational.sinks.writers import lp_file
-from specsolve.relational.sinks.writers.base import number
 from specsolve.relational.sinks.writers.lp_file import _signed
+from specsolve.relational.sinks.writers.text import number
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:

@@ -13,26 +13,22 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.relational.collect import polars_engine
-from specsolve.relational.engines.polars.predicates import masked
-from specsolve.relational.engines.polars.scope import UNIT, ordinal
+from specsolve.relational.collect import collect_engine
+from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.scope import UNIT, ordinal
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from mathspec import program
 
-    from specsolve.relational.engines.polars.fragments import Presence
-    from specsolve.relational.engines.polars.scope import Scope
+    from specsolve.relational.engine.pieces import Presence
+    from specsolve.relational.engine.scope import Scope
 
 
 @dataclass(frozen=True)
 class Labelled:
-    """One declaration's labelled frame, and the contiguous run of labels it owns.
-
-    The run is contiguous, which makes the declaration's share of a solver
-    vector a slice.
-    """
+    """One declaration's labelled frame, and the contiguous run of labels it owns."""
 
     frame: pl.LazyFrame
     start: int
@@ -58,9 +54,7 @@ def frame(
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
     path. With no dims the query selects [`UNIT`][], since selecting nothing
-    drops the empty product's one row. With neither mask nor restriction,
-    ``start + position`` is the label and the columns are in order, so nothing
-    renumbers or projects.
+    drops the empty product's one row.
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next
@@ -83,7 +77,7 @@ def frame(
         numbering = pl.lit(start, dtype=pl.Int64) + numbering
     position = '#position' if dropped else label
     materialised = in_position_order(
-        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine=polars_engine()),
+        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine=collect_engine()),
         position,
     )
     if not dropped and dims:
@@ -102,7 +96,7 @@ def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | N
     """
     if where is None:
         return math.prod(scope.data.cardinality[d] for d in dims)
-    return int(masked(scope, dims, where).select(pl.len()).collect(engine=polars_engine()).item())
+    return int(masked(scope, dims, where).select(pl.len()).collect(engine=collect_engine()).item())
 
 
 def _factored(
@@ -128,7 +122,7 @@ def _factored(
         .sort([ordinal(d) for d in kept])
         .select(*kept)
         .with_row_index(rank)
-        .collect(engine=polars_engine())
+        .collect(engine=collect_engine())
     )
     width = survivors.height
     if width == 0:
@@ -142,7 +136,7 @@ def _factored(
             *dims,
             (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
         )
-        .collect(engine=polars_engine())
+        .collect(engine=collect_engine())
     )
     return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 

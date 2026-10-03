@@ -90,7 +90,7 @@ print(result.primal('p'))  # (3)!
 print(result.dual('power_balance'))
 
 base = sps.scan_archive('runs/base/')  # (4)!
-print(base.answer.primal('p').group_by('generator').agg(pl.col('value').sum()))
+print(base.result.primal('p').group_by('generator').agg(pl.col('value').sum()))
 ```
 
 1. A source is any table: polars, pandas, pyarrow or DuckDB. It can also be a

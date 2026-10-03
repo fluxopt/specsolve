@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from specsolve.relational.sinks.capabilities import Capabilities
     from specsolve.relational.sinks.handoff import Handoff
-    from specsolve.relational.sinks.writers.base import Names
+    from specsolve.relational.sinks.writers.text import Names
 
     Write = Callable[[Handoff, Path, Names], None]
 

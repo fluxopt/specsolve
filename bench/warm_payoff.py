@@ -38,7 +38,7 @@ from specsolve.relational.sinks.solvers.base import WarmStart
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from specsolve.relational.engines.polars.engine import PolarsEngine
+    from specsolve.relational.engine.engine import Engine
 
 MODELS = Path(__file__).resolve().parent / 'expansion'
 
@@ -248,7 +248,7 @@ def _empty_cuts() -> dict[str, pl.DataFrame]:
     }
 
 
-def _blocks(engine: PolarsEngine) -> tuple[dict[str, Any], list[str]]:
+def _blocks(engine: Engine) -> tuple[dict[str, Any], list[str]]:
     """The engine's row blocks and the order they were numbered in."""
     return dict(engine._model.constraints), list(engine._model.program.constraints)
 

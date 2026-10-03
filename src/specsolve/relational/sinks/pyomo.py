@@ -24,13 +24,9 @@ __all__ = ['PYOMO_CAPABILITIES', 'component_names', 'to_pyomo']
 
 #: A pyomo model holds every construct the language has; what it refuses is a name.
 PYOMO_CAPABILITIES = Capabilities(
-    supports={
-        'integrality': 'native',
-        'sos': 'native',
-        'quadratic_objective': 'native',
-        'nonconvex_quadratic_objective': 'native',
-        'quadratic_constraint': 'native',
-    }
+    supports=frozenset(
+        {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+    )
 )
 
 #: What calling the export or its check without the extra says.
