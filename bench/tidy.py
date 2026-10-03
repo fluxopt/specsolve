@@ -12,7 +12,9 @@ A missing number is an absent row, never a null, so every value column is
 complete. ``phase`` is ``emit`` for build-and-emit, ``window`` for a later
 window of a rolling horizon whose values moved, ``window-reshaped`` for one
 whose shape moved, and ``first`` and ``steady`` for the two halves of the
-rebuild loop; only here are the windows rendered.
+rebuild loop; only here are the windows rendered. A timing carries the
+engine's own clocks beside its wall time — ``attach_seconds``,
+``build_seconds`` and the like, from the last round.
 
 The fingerprint (`--runs`) is long too: one row per fact.
 """
@@ -83,6 +85,10 @@ def measurements(records: Iterable[dict[str, Any]], run: str) -> Iterator[dict[s
                 if row is not None:
                     yield row
             yield from _counts(record, run, phase)
+            for name, seconds in (record.get('phase_seconds') or {}).items():
+                row = _row(record, run, phase, f'{name}_seconds', seconds)
+                if row is not None:
+                    yield row
         elif kind == 'loop':
             for field, phase in (('first_build_seconds', 'first'), ('steady_build_seconds', 'steady')):
                 row = _row(record, run, phase, 'wall_seconds', record.get(field))

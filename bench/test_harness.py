@@ -1409,3 +1409,34 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
     assert sorted({row['phase'] for row in rows}) == ['emit', 'window'], (
         'the long CSV carries both, under phases that tell them apart'
     )
+
+
+def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
+    """Every verb reports the engine's phases, and a window only its own share of them.
+
+    The engine's clock sums over the model's life, so a window that reported it
+    whole would carry the setup's build too.
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {})
+
+    emitted = module.build_and_emit('lp', prepared)['phases']
+    assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
+    assert {'attach', 'build'} <= module.build_only(prepared)['phases'].keys(), 'a build is attached and built'
+
+    args, kwargs = module.window_setup('highs', prepared, prepared)
+    model = args[0]
+    window = module.window(*args, **kwargs)['phases']
+    assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
+    whole = model._engine._seconds
+    assert all(0 <= window[phase] < whole[phase] for phase in ('attach', 'build')), (
+        "a window's phases are its own, not the setup's build summed in"
+    )
+
+
+def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
+    record = _timing('specsolve', phase='emit', phase_seconds={'attach': 0.1, 'build': 0.4})
+    rows = {row['metric']: row['value'] for row in tidy.measurements([record], 'run')}
+    assert (rows['attach_seconds'], rows['build_seconds']) == (0.1, 0.4), 'each phase is a row of its own'
+    assert rows['wall_seconds'] == 1.0, 'beside the wall time, not instead of it'

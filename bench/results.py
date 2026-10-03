@@ -5,7 +5,7 @@ The record shape `bench/report.py` and `bench/plot.py` read:
     {'record': 'timing', 'case', 'size', 'arm', 'sink', 'phase',
      'wall_seconds', 'fastest_seconds', 'q1_seconds', 'q3_seconds', 'iqr', 'median', 'rounds',
      'peak_rss_bytes', 'peak_bytes', 'allocations',
-     'counts': {...}, 'live_fraction'}
+     'counts': {...}, 'live_fraction', 'phase_seconds': {...}}
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
     {'record': 'run',    'platform', 'machine', 'cpu', 'cores', 'python', 'versions', 'commits'}
@@ -141,6 +141,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'allocations': _benchmem(extra, 'allocations'),
             'counts': _counts(extra),
             'live_fraction': extra.get('live_fraction'),
+            'phase_seconds': extra.get('phase_seconds'),
         }
 
 
