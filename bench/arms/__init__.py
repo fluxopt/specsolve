@@ -24,6 +24,8 @@ and, where the library has a rolling-horizon answer, both or neither of:
     window_setup(sink, prepared, following, change) -> (args, kwargs)
     window(*args, **kwargs) -> Counts
 
+with ``WINDOW_CHANGES`` naming the changes it tells apart, where not all of them.
+
 ``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked in
 the spawned child before each sample, and what it returns feeds ``window``, the
 one window that gets timed — the one *following* prepares. An arm whose
