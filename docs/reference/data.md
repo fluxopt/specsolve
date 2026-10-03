@@ -62,6 +62,19 @@ reads positionally. A label that is on two rows is refused:
 each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
+**A datetime label is held in microseconds.** Attach casts every datetime
+column that holds labels to microseconds: an index, a parameter's dimension
+column and a relation's column. An index in nanoseconds, the pandas default,
+or in milliseconds is accepted. A label with a part below one microsecond is
+refused, because the cast would drop that part. Decide what the part means
+first: polars `.dt.cast_time_unit('us')` truncates it, and `.dt.round('1us')`
+rounds it. **The time zone is kept as it arrives.** A parameter or relation
+column over a datetime dimension carries the time zone of that dimension's
+index, or none where the index has none. A column in another time zone is
+refused: polars `.dt.convert_time_zone` moves an aware column to the index's
+time zone, and `.dt.replace_time_zone` sets or removes the time zone of a
+column.
+
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
 [the language's](https://mathspec.readthedocs.io/en/latest/reference/language/dimensions/).
@@ -98,6 +111,8 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a relation table mapping one key twice, or relating one tuple twice | a keyed relation holds one row per key, a bare one each row once |
 | a map with both authors, or neither | names them, and says which way out |
 | an index carrying a column named after a relation with a column over it | names the key it belongs under |
+| a datetime label with a part below one microsecond | names what carried it, the dimension and the labels, and the casts that drop the part |
+| a datetime column in another time zone than its dimension's index | names both time zones, and the casts that put the column on the index's |
 | an index holding a label twice | names the dimension and the labels, and the rewrite that keeps the first of each, for a table or a bare sequence |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a `value` column carrying a null or a NaN | names the parameter and the coordinates |
@@ -121,6 +136,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | What arrives | What happens |
 |---|---|
 | an undeclared column in a table | ignored |
+| a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a coordinate with no row | sparse variables; what a missing row means where it is read is [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` names the parameters that arrived short of their dims ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
 | a value that is readable and wrong | bound as given |
 

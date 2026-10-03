@@ -441,7 +441,6 @@ def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_p
     """A relation's values are labels of the dimension it targets, canonicalised as those are.
 
     Both members map to the same day, so that day's cap binds them together.
-    `datetime[ns]` is not settled here (#1076).
     """
     import datetime
 
@@ -600,24 +599,30 @@ def _instants(unit: str, time_zone: str | None = None, *, nanoseconds: int = 0) 
     import datetime
 
     midnight = pl.Series([datetime.datetime(2030, 1, 1), datetime.datetime(2030, 1, 2)]).cast(pl.Datetime('ns'))
-    return (midnight + pl.Series([nanoseconds, 0]).cast(pl.Duration('ns'))).cast(pl.Datetime(unit, time_zone))
+    instants = midnight + pl.Series([nanoseconds, 0]).cast(pl.Duration('ns'))
+    return instants.dt.replace_time_zone(time_zone).dt.cast_time_unit(unit)
 
 
-@pytest.mark.xfail(reason='a datetime index in another unit than microseconds crashes the build', strict=True)
 @pytest.mark.parametrize(
-    ('index', 'column'),
+    ('index', 'column', 'zone'),
     [
-        pytest.param('ns', 'ns', id='nanoseconds-both'),
-        pytest.param('ms', 'ms', id='milliseconds-both'),
-        pytest.param('ns', 'us', id='nanosecond-index-microsecond-column'),
-        pytest.param('us', 'ns', id='microsecond-index-nanosecond-column'),
+        pytest.param('ns', 'ns', None, id='nanoseconds-both'),
+        pytest.param('ms', 'ms', None, id='milliseconds-both'),
+        pytest.param('ns', 'us', None, id='nanosecond-index-microsecond-column'),
+        pytest.param('us', 'ns', None, id='microsecond-index-nanosecond-column'),
+        pytest.param('ns', 'ms', 'Europe/Berlin', id='zone-aware-both'),
     ],
 )
-def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column):
+def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column, zone):
+    """A datetime label is held in microseconds whatever unit it arrived in, and keeps its time zone.
+
+    An index in nanoseconds, pandas' default, crashed the bound attach: the
+    labels it was matched against were microseconds.
+    """
     path = _written(tmp_path, TEMPORAL_BOUND_SPEC)
     sources = {
-        't': pl.DataFrame({'t': _instants(index)}),
-        'cap': pl.DataFrame({'t': _instants(column), 'value': [3.0, 4.0]}),
+        't': pl.DataFrame({'t': _instants(index, zone)}),
+        'cap': pl.DataFrame({'t': _instants(column, zone), 'value': [3.0, 4.0]}),
     }
 
     with sps.solve(path, sources) as run:
@@ -628,6 +633,7 @@ def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, 
 
 
 def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_path):
+    """A relation's datetime column is held in the unit its index is, so the two still match."""
     path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
     days = _instants('ns')
     sources = {
@@ -643,3 +649,58 @@ def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_pat
     built = specsolve_linopy.build(path, sources)
     built.solve(solver_name='highs', output_flag=False)
     assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
+
+
+def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
+    """The temporal relation model's sources, its three datetime columns given."""
+    return {
+        **_P_MAX,
+        'cap': pl.DataFrame({'d': cap, 'value': [3.0, 7.0]}),
+        'd': pl.DataFrame({'d': index}),
+        'g': ['w', 's'],
+        'day_of': pl.DataFrame({'g': ['w', 's'], 'd': day_of}),
+    }
+
+
+_FINE = _instants('ns', nanoseconds=1)
+_EVEN = _instants('ns')
+
+
+@pytest.mark.parametrize(
+    ('sources', 'owner'),
+    [
+        pytest.param(_temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE), "index for dimension 'd'", id='index'),
+        pytest.param(_temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", id='parameter'),
+        pytest.param(_temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", id='relation'),
+    ],
+)
+def test_a_datetime_label_finer_than_a_microsecond_is_refused_on_both_lanes(tmp_path, sources, owner):
+    """The cast to microseconds would drop the nanosecond, so it is refused rather than made."""
+    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
+
+    sentence = both_lanes_refuse(path, sources, match=r"'d' label\(s\) finer than a microsecond")
+    assert sentence.startswith(owner), 'the refusal names what carried the label'
+    assert '2030-01-01 00:00:00.000000001' in sentence, 'and prints the label to the nanosecond the cast would drop'
+
+
+@pytest.mark.parametrize(
+    ('sources', 'owner'),
+    [
+        pytest.param(
+            _temporal_sources(index=_instants('us', 'UTC'), cap=_EVEN, day_of=_instants('us', 'UTC')),
+            "parameter 'cap'",
+            id='parameter',
+        ),
+        pytest.param(
+            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_instants('ns', 'UTC')),
+            "relation 'day_of'",
+            id='relation',
+        ),
+    ],
+)
+def test_a_datetime_column_in_another_time_zone_than_its_index_is_refused_on_both_lanes(tmp_path, sources, owner):
+    """A time zone is kept as it arrived, so a column on another clock than its index is refused, not compared."""
+    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
+
+    sentence = both_lanes_refuse(path, sources, match=r'without a time zone')
+    assert sentence.startswith(owner), 'the refusal names what carried the column'
