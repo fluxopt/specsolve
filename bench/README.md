@@ -569,6 +569,19 @@ so a rung cannot quietly measure the other path; `test_harness.py` checks the
 same on every case's smallest rung on every pull request. The phases are
 `window` and `window-reshaped`, and only `bench.tidy` renders them.
 
+## Reading an answer back
+
+`test_read` prices what a solve costs after the solver returns: the answer laid
+out against the build as a `Result`, then every value read back — `frames`
+collects each variable's primal and each constraint's dual and activity,
+`parquet` is `Result.save`. The answer is built before the clock rather than
+solved for (`read_setup`): every column and row zero, reported optimal, and no
+duals for a model with an integer variable, which is what a real solve leaves.
+The cost is set by how many values are laid out, not what they are, so no
+solver runs and every rung is affordable. It is sink-free and specsolve-only —
+the other libraries read their answer back inside their solve — and its phases
+are `read-frames` and `read-parquet`, rendered by `bench.tidy` alone.
+
 ## The warm-start payoff
 
 *Does carrying a basis across a genuine rebuild pay?* is the question #382 has
@@ -750,7 +763,7 @@ every consumer whichever of the two the case has.
 | `models/<case>/` | one directory per case: `spec.yaml`, and the same model in each hand-written dialect |
 | `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the machine interlock |
-| `test_ladder.py` | the three benchmarks: build-and-emit, the second window up to its solve, and rebuild-in-one-process |
+| `test_ladder.py` | the benchmarks: build-and-emit, the second window up to its solve, reading an answer back, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |

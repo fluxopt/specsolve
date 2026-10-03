@@ -1284,7 +1284,16 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
     """`benchmem(isolate=True)` ships the action to a spawned child, so a verb
     that is not picklable raises before anything is timed (#1617)."""
     module = ARMS[named_arm]
-    for verb in ('prepare', 'build_and_emit', 'build_only', 'objective', 'window_setup', 'window'):
+    for verb in (
+        'prepare',
+        'build_and_emit',
+        'build_only',
+        'objective',
+        'window_setup',
+        'window',
+        'read_setup',
+        'read',
+    ):
         target = getattr(module, verb, None)
         if target is None:
             continue
@@ -1301,6 +1310,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
         assert hasattr(module, 'window') == hasattr(module, 'window_setup'), (
             f'the {name} arm offers one half of the window pair — `window_setup` builds and loads '
             f'outside the clock, `window` is what is timed, and neither means anything alone'
+        )
+        assert hasattr(module, 'read') == hasattr(module, 'read_setup'), (
+            f'the {name} arm offers one half of the read pair — `read_setup` builds and answers '
+            f'outside the clock, `read` is what is timed, and neither means anything alone'
         )
 
 
@@ -1440,6 +1453,28 @@ def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
     rows = {row['metric']: row['value'] for row in tidy.measurements([record], 'run')}
     assert (rows['attach_seconds'], rows['build_seconds']) == (0.1, 0.4), 'each phase is a row of its own'
     assert rows['wall_seconds'] == 1.0, 'beside the wall time, not instead of it'
+
+
+@pytest.mark.parametrize('into', ['frames', 'parquet'])
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None:
+    """`test_read`'s synthetic answer is one the engine lays out, every case's smallest rung, both ways.
+
+    A mixed-integer case is answered without duals, and a reader that asked for
+    them would raise.
+    """
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    prepared = module.prepare(case_name, 'xs', case.data(case.shape('xs')), {})
+    args, kwargs = module.read_setup(prepared, into)
+    model, answer, _ = args
+    assert answer.primal.len() == _handoff(model).column_count, 'the answer spans every built column'
+    assert (answer.dual is None) == bool(model._engine._discrete()), (
+        'duals exactly where a real solve leaves them: none for a model with an integer variable'
+    )
+    assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
 
 
 class _CallsTwice:
