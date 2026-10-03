@@ -16,6 +16,7 @@ from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError, did_you_mean
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.relational.collect import polars_engine
+from specsolve.relational.parquet import RESERVED
 
 if TYPE_CHECKING:
     from mathspec.program import DimensionDeclaration, ParameterDeclaration, Program, RelationDeclaration
@@ -85,7 +86,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
 
 #: The column a dimension's table numbers its labels in, from 0 in index order.
-POSITION = 'specsolve_position'
+POSITION = f'{RESERVED}position'
 
 
 def tidy_tables(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
