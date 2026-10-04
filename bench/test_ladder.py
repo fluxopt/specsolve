@@ -30,9 +30,7 @@ from bench.arms import ARMS, WRITERS, unmeasurable
 from bench.cases import CASES, shortened
 from bench.conftest import shape_of
 
-#: The rungs a sweep is measured at. Above them the solver is the sweep's cost,
-#: and CodSpeed, which runs `m` and `l` with no budget, would solve a large MILP
-#: four times over.
+#: The rungs a sweep is measured at. Above them the solver is the sweep's cost.
 SWEPT_SIZES = ('xs', 's')
 
 #: Each window change, and whether it should load the solver from scratch.
