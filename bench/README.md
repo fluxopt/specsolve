@@ -730,9 +730,8 @@ nothing, and `simulation` — CodSpeed's default — runs the workload under an
 emulator, which suits neither multi-threaded native code nor these rungs. The
 `l` rung is there because #520 measured the instrument's overhead at -5..-10%
 at `m` and ±4% at `l`. Every benchmark in `test_ladder.py` runs under both
-jobs except `test_rebuild`, which pedantic rounds make meaningless there; a
-cell that is expensive above `s` says so itself (`test_sweep`'s
-`SWEPT_SIZES`), because CodSpeed applies no budget.
+jobs except the two `NOT_UNDER_CODSPEED` in `conftest.py` names: `test_rebuild`,
+which pedantic rounds make meaningless there, and `test_sweep`, which solves.
 
 **It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
 them; `bench.yml` remains the check that fails a pull request.
