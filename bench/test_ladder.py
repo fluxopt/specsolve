@@ -215,6 +215,8 @@ def test_read(
     module = ARMS[arm]
     if not hasattr(module, 'read'):
         pytest.skip(f'{arm} reads its answer back inside its solve — nothing here can time the read alone')
+    if reason := getattr(module, 'unsupported', lambda verb: None)('read'):
+        pytest.skip(reason)
     missing = unmeasurable(arm, case_name, module.SINKS[0]) or ceiling.reached(arm, case_name, size, 'read')
     if missing:
         pytest.skip(missing)

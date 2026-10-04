@@ -106,7 +106,7 @@ def _loaded(sink: str, model: Any) -> Any:
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': '_hand_off'}
+TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
