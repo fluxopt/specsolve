@@ -51,11 +51,11 @@ the rest until a run completes. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
-selects `test_emit` and `test_rebuild`. The windows, the read-back, the
-sweep and the fresh process are measured where their history is kept — CodSpeed, below — and by
-anyone who runs `pytest bench` without the `-k`; spending the box's hours on
-cells no table renders would lengthen a run that took 2 h 23 min the last
-time (34818523523).
+selects `test_emit` and `test_rebuild`. The windows and the read-back are
+measured where their history is kept — CodSpeed, below. The sweep and the fresh
+process, which CodSpeed does not run, are measured by anyone who runs
+`pytest bench` without the `-k`. Spending the box's hours on cells no table
+renders would lengthen a run that took 2 h 23 min the last time (34818523523).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
