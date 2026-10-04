@@ -105,6 +105,25 @@ def _loaded(sink: str, model: Any) -> Any:
     return load(_handoff(model))
 
 
+#: The private engine method each verb is timed through, which a checkout older than the verb lacks.
+TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
+
+
+def unsupported(verb: str) -> str | None:
+    """Why the checkout under test cannot take *verb*, or None when it can.
+
+    `bench.yml` measures the base branch's `src/` under this harness, and a base
+    older than the method a verb is timed through has none of it. Its cells are
+    skipped there, and the gate compares only what both runs measured.
+    """
+    from specsolve.relational.engine.engine import Engine
+
+    method = TIMED_THROUGH.get(verb)
+    if method is None or hasattr(Engine, method):
+        return None
+    return f'this checkout has no Engine.{method}, which the {verb} is timed through'
+
+
 def window_setup(
     sink: str, prepared: tuple[Path, dict[str, str]], following: tuple[Path, dict[str, str]], change: str
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
