@@ -587,11 +587,13 @@ asserts. A sweep cannot be timed short of its solves, so the solver runs on
 every slice, and the sweep's own per-slice clocks are summed into the result's
 phases — `solve_seconds` is what the wall time owes the solver, and the rest is
 the sweep's. Its phase is `sweep`. It is taken at `xs` and `s` only
-(`SWEPT_SIZES`), where the solver is not yet the whole cost, and never under
+(`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
 CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
 the solver's own allocations, and `commitment` swept at `s` ran that job's 20
-minutes out on its own. So a sweep keeps no history: it is measured where
-someone runs `pytest bench -k test_sweep`.
+minutes out on its own. `bench.yml` leaves it out for the same reason
+(`UNGATED`): its gate is a memray peak, which would hold a pull request to the
+solver's allocations. So a sweep keeps no history: it is measured where someone
+runs `pytest bench -k test_sweep`.
 
 ## Reading an answer back
 

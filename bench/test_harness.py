@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
@@ -245,6 +246,18 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
+    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
+    solves would hold it to the solver's own allocations. Both passes leave the
+    sweep out, or the gate would compare two different selections.
+    """
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
+    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
+    assert len(passes) == 2, 'a base pass and a head pass'
+    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
+    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
