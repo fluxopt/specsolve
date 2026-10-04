@@ -10,6 +10,10 @@ Each arm module defines:
     build_only(prepared) -> Counts
     objective(prepared) -> float
 
+and, where the library has a sweep verb:
+
+    sweep(sink, prepared) -> Counts
+
 and, where the library reads an answer back apart from its solve, both or neither of:
 
     read_setup(prepared, into) -> (args, kwargs)
@@ -17,8 +21,10 @@ and, where the library reads an answer back apart from its solve, both or neithe
 
 and, where the library has a rolling-horizon answer, both or neither of:
 
-    window_setup(sink, prepared, following) -> (args, kwargs)
+    window_setup(sink, prepared, following, change) -> (args, kwargs)
     window(*args, **kwargs) -> Counts
+
+with ``WINDOW_CHANGES`` naming the changes it tells apart, where not all of them.
 
 ``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked in
 the spawned child before each sample, and what it returns feeds ``window``, the

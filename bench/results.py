@@ -59,13 +59,20 @@ def _commit(info: dict[str, Any]) -> str | None:
     return f'{head}-dirty' if info.get('dirty') else head
 
 
+#: Each `test_window` change, and the phase it is recorded under. A file from
+#: before the change was a parameter measured ``values``.
+WINDOWS = {'values': 'window', 'shape': 'window-reshaped', 'one': 'window-one', 'cold': 'window-cold'}
+
+
 def _phase(name: str, params: dict[str, Any]) -> str:
     """Which rung a timing record came off: `test_emit`, `test_window` and `test_read` measure the same cell (#1617)."""
     if name.startswith('test_read'):
         return f'read-{params.get("into")}'
+    if name.startswith('test_sweep'):
+        return 'sweep'
     if not name.startswith('test_window'):
         return 'emit'
-    return 'window-reshaped' if params.get('change') == 'shape' else 'window'
+    return WINDOWS[params.get('change', 'values')]
 
 
 def _benchmem(extra: dict[str, Any], field: str) -> float | None:
