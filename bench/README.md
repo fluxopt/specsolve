@@ -51,11 +51,11 @@ the rest until a run completes. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
-selects `test_emit` and `test_rebuild`. The windows, the read-back and the
-sweep are measured where their history is kept — CodSpeed, below — and by
-anyone who runs `pytest bench` without the `-k`; spending the box's hours on
-cells no table renders would lengthen a run that took 2 h 23 min the last
-time (34818523523).
+selects `test_emit` and `test_rebuild`. The windows and the read-back are
+measured where their history is kept — CodSpeed, below. The sweep, which
+CodSpeed does not run, is measured by anyone who runs `pytest bench` without
+the `-k`. Spending the box's hours on cells no table renders would lengthen a
+run that took 2 h 23 min the last time (34818523523).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -669,8 +669,8 @@ compare to another library*, and it wants a different metric — but it does not
 want a different harness. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m --benchmark-memory --benchmark-autosave   # base
-pixi run -e bench pytest bench --sizes s m --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
 pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
     --columns peak --fail-on peak:20%
 ```
@@ -678,7 +678,7 @@ pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_
 That is what `.github/workflows/bench.yml` runs on a pull request labelled
 `trigger:bench` — the base's `src/` and then the head's, under one harness —
 and the memray peak at 20% is what it gates on. Wall time and `rss` are
-reported beside it and never gated.
+reported beside it and never gated. The sweep is left out, because it solves.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
