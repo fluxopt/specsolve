@@ -39,12 +39,23 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/*.jsonl` are the provenance of the tables
-`docs/about/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
-readers still parse them — `results.records` takes both shapes — and a full
-ladder run adds its `.json` beside them rather than replacing them. Until
-someone takes one on an idle machine the published numbers stand on those
-files.
+The committed `results/latest-<sink>-<case>.json` are the provenance of the
+tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+34818523523, on `8d27e88b`, which finished one case of eight. Every failure
+whose log survives is one of two: a `test_window` cell whose verb was still a
+closure `isolate=True` could not ship to its child (fixed since, #1617), or
+`storage`/`gurobi` killed by the watchdog with `gurobipy-matrix` at `w1000`
+reaching 26 GB. What it left committed is `highs` for `dispatch` and `fleet`,
+and `gurobi` for `dispatch`, `fleet` and `transport`; the page has no table for
+the rest until a run completes. `results.records` still reads the pre-pytest
+`.jsonl` shape, though no such file is committed any more.
+
+**The published ladder measures what the page publishes**: `pixi run ladder`
+selects `test_emit` and `test_rebuild`. The windows, the read-back and the
+sweep are measured where their history is kept — CodSpeed, below — and by
+anyone who runs `pytest bench` without the `-k`; spending the box's hours on
+cells no table renders would lengthen a run that took 2 h 23 min the last
+time (34818523523).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -656,13 +667,16 @@ compare to another library*, and it wants a different metric — but it does not
 want a different harness. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m --benchmark-memory
-pixi run -e bench pytest bench --sizes s m --benchmark-memory \
-    --benchmark-memory-compare=0001 --benchmark-memory-compare-fail=mean:10%
+pixi run -e bench pytest bench --sizes s m --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench --sizes s m --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
+    --columns peak --fail-on peak:20%
 ```
 
-That is what `.github/workflows/bench.yml` runs, twice — once against the pull
-request's base and once against its head — and what it gates on.
+That is what `.github/workflows/bench.yml` runs on a pull request labelled
+`trigger:bench` — the base's `src/` and then the head's, under one harness —
+and the memray peak at 20% is what it gates on. Wall time and `rss` are
+reported beside it and never gated.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
@@ -699,22 +713,28 @@ pixi run -e codspeed pytest bench --codspeed           # what CI measures
 tests, same workloads, same rungs — a different instrument. The workloads
 cannot drift between them, because there is one of them.
 
-[CodSpeed](https://codspeed.io) runs on every pull request
-(`.github/workflows/codspeed.yml`): one ~3-minute job, free runner, no secret.
+[CodSpeed](https://codspeed.io) (`.github/workflows/codspeed.yml`) is where
+the history is kept: it stores a number per benchmark for every commit on
+`main`, which is what a regression found months later is bisected against.
 What it adds over `bench.yml` is not the metric but **the baseline** —
 `bench.yml` can only compare against a base it checks out and measures itself,
-which costs two passes and is why it waits for a `trigger:bench` label. CodSpeed
-stores the number for every commit on `main`.
+which costs two passes and is why it waits for a label. Two jobs:
 
-Only the `memory` instrument runs. `walltime` needs CodSpeed's metered
-bare-metal runners to say anything a shared runner's clock cannot, and
-`simulation` — their default — runs the workload under an emulator, which suits
-neither multi-threaded native code nor these rungs.
+| job | instrument | runner | rungs | runs on |
+|---|---|---|---|---|
+| Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
 
-**It gates nothing.** The job is `continue-on-error` and no ruleset names it;
-`bench.yml` remains the check that fails a pull request. It also needs a
-maintainer to connect the repository to the CodSpeed GitHub app — until then the
-workflow runs and uploads nothing.
+`walltime` runs only on the metered runner because a shared runner's clock says
+nothing, and `simulation` — CodSpeed's default — runs the workload under an
+emulator, which suits neither multi-threaded native code nor these rungs. The
+`l` rung is there because #520 measured the instrument's overhead at -5..-10%
+at `m` and ±4% at `l`. Every benchmark in `test_ladder.py` runs under both
+jobs except the two `NOT_UNDER_CODSPEED` in `conftest.py` names: `test_rebuild`,
+which pedantic rounds make meaningless there, and `test_sweep`, which solves.
+
+**It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
+them; `bench.yml` remains the check that fails a pull request.
 
 ## Two ladders
 
