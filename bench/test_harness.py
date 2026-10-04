@@ -24,12 +24,13 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import _handoff, checked_sources
+from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, shortened
 from bench.conftest import (
     MIN_ROUNDS,
@@ -40,6 +41,7 @@ from bench.conftest import (
     take_lock,
 )
 from bench.test_ladder import RELOADS
+from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
@@ -244,6 +246,18 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
+    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
+    solves would hold it to the solver's own allocations. Both passes leave the
+    sweep out, or the gate would compare two different selections.
+    """
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
+    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
+    assert len(passes) == 2, 'a base pass and a head pass'
+    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
+    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
@@ -1413,6 +1427,20 @@ def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -
         f'{case_name}: a {change} window should '
         f'{"load the solver from scratch" if RELOADS[change] else "push onto the loaded solver"}'
     )
+
+
+@pytest.mark.parametrize(('verb', 'method'), sorted(TIMED_THROUGH.items()))
+def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
+    verb: str, method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`bench.yml` runs this harness against the base branch's `src/`.
+
+    A base with no `Engine._hand_off` raised in every window cell, which failed
+    the base pass, so the gate never compared anything.
+    """
+    assert unsupported(verb) is None, f'this checkout has Engine.{method}'
+    monkeypatch.delattr(Engine, method)
+    assert unsupported(verb) == f'this checkout has no Engine.{method}, which the {verb} is timed through'
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:

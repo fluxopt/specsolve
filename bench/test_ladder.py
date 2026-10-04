@@ -181,6 +181,8 @@ def test_window(
     module = ARMS[arm]
     if not hasattr(module, 'window'):
         pytest.skip(f'{arm} has no rolling-horizon verb — nothing here says what its second window costs')
+    if reason := getattr(module, 'unsupported', lambda verb: None)('window'):
+        pytest.skip(reason)
     if sink in WRITERS:
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
     if change not in getattr(module, 'WINDOW_CHANGES', RELOADS):
@@ -259,6 +261,8 @@ def test_read(
     module = ARMS[arm]
     if not hasattr(module, 'read'):
         pytest.skip(f'{arm} reads its answer back inside its solve — nothing here can time the read alone')
+    if reason := getattr(module, 'unsupported', lambda verb: None)('read'):
+        pytest.skip(reason)
     missing = unmeasurable(arm, case_name, module.SINKS[0]) or ceiling.reached(arm, case_name, size, 'read')
     if missing:
         pytest.skip(missing)
