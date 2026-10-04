@@ -61,7 +61,13 @@ def _commit(info: dict[str, Any]) -> str | None:
 
 #: Each `test_window` change, and the phase it is recorded under. A file from
 #: before the change was a parameter measured ``values``.
-WINDOWS = {'values': 'window', 'shape': 'window-reshaped', 'one': 'window-one', 'cold': 'window-cold'}
+WINDOWS = {
+    'values': 'window',
+    'shape': 'window-reshaped',
+    'one': 'window-one',
+    'coefficient': 'window-coefficient',
+    'cold': 'window-cold',
+}
 
 
 def _phase(name: str, params: dict[str, Any]) -> str:
@@ -70,6 +76,8 @@ def _phase(name: str, params: dict[str, Any]) -> str:
         return f'read-{params.get("into")}'
     if name.startswith('test_sweep'):
         return 'sweep'
+    if name.startswith('test_fresh'):
+        return 'fresh'
     if not name.startswith('test_window'):
         return 'emit'
     return WINDOWS[params.get('change', 'values')]
@@ -145,7 +153,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'iqr': stats.get('iqr'),
             'median': stats.get('median'),
             'rounds': stats.get('rounds'),
-            'peak_rss_bytes': _benchmem(extra, 'rss_bytes'),
+            'peak_rss_bytes': _benchmem(extra, 'rss_bytes') or extra.get('process_rss_bytes'),
             'peak_bytes': _benchmem(extra, 'peak_bytes'),
             'allocations': _benchmem(extra, 'allocations'),
             'counts': _counts(extra),

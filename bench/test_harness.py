@@ -15,6 +15,7 @@ import os
 import pickle
 import subprocess
 import sys
+import tempfile
 import tomllib
 from functools import partial
 from pathlib import Path
@@ -30,7 +31,7 @@ from bench import floor, plot, profile_build, profile_phases, report, results, t
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import _handoff, checked_sources
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, shortened
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
 from bench.conftest import (
     MIN_ROUNDS,
     _holder_if_alive,
@@ -39,7 +40,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
-from bench.test_ladder import RELOADS
+from bench.test_ladder import RELOADS, _fresh
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
@@ -643,19 +644,20 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
     """Every arm but `specsolve` is a model somebody typed twice.
 
     A transposed index builds a different model that benchmarks perfectly, so
-    the smallest rung of each case is solved both ways and the objectives
-    compared. `unmeasurable` decides which cells there are.
+    the `xs` rung of each case is solved both ways and the objectives compared.
+    Not `2xs`: over two snapshots a wrapped shift forward is the shift back, so
+    a reversed time index would solve to the same objective. `unmeasurable`
+    decides which cells there are.
     """
     reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
     if reason:
         pytest.skip(reason)
     case = CASES[case_name]
-    smallest = case.ladder[0].label
-    paths = case.data(case.shape(smallest))
-    ours = solved('specsolve', case_name, smallest, paths, {})
-    theirs = solved(dialect, case_name, smallest, paths, {})
+    paths = case.data(case.shape('xs'))
+    ours = solved('specsolve', case_name, 'xs', paths, {})
+    theirs = solved(dialect, case_name, 'xs', paths, {})
     assert theirs == pytest.approx(ours, rel=1e-9), (
-        f'{dialect} solves {case_name}/{smallest} to {theirs}, specsolve to {ours} — not the same model'
+        f'{dialect} solves {case_name}/xs to {theirs}, specsolve to {ours} — not the same model'
     )
 
 
@@ -1364,10 +1366,12 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
                 ('test_window', {'change': 'values'}),
                 ('test_window', {'change': 'shape'}),
                 ('test_window', {'change': 'one'}),
+                ('test_window', {'change': 'coefficient'}),
                 ('test_window', {'change': 'cold'}),
                 ('test_window', {}),
                 ('test_sweep', {}),
                 ('test_read', {'into': 'frames'}),
+                ('test_fresh', {}),
             )
         ]
     }
@@ -1379,10 +1383,12 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
         'window',
         'window-reshaped',
         'window-one',
+        'window-coefficient',
         'window-cold',
         'window',
         'sweep',
         'read-frames',
+        'fresh',
     ], (
         'each rung names its own phase, in the order the file writes them, and a window from before '
         'the change was a parameter is the values window it measured'
@@ -1391,28 +1397,68 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize('change', sorted(RELOADS))
 @pytest.mark.parametrize(
-    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+    ('case_name', 'rung'),
+    [
+        pytest.param(n, rung, id=f'{n}-{rung}')
+        for n in sorted(CASES)
+        for rung in ('2xs', 'xs')
+        if any(s.label == rung for s in CASES[n].ladder)
+    ],
 )
-def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -> None:
+def test_a_window_takes_the_path_its_change_names(case_name: str, rung: str, change: str) -> None:
     """`test_window`'s changes are there to measure the paths an update can take.
 
     The ladder checks which one ran, but only when it measures; this holds every
-    case's smallest rung to it on every pull request, and with it that the
-    shorter rung generates and builds at all.
+    case's two smallest rungs to it on every pull request, and with them that
+    each rung and the one a snapshot shorter generate and build at all.
     """
     module = ARMS['specsolve']
     case = CASES[case_name]
-    shape = case.shape('xs')
-    prepared = module.prepare(case_name, 'xs', case.data(shape), {})
+    if change == 'coefficient' and case.coefficient is None:
+        pytest.skip(f'{case_name} has no parameter inside the matrix')
+    shape = case.shape(rung)
+    prepared = module.prepare(case_name, rung, case.data(shape), {})
     following = prepared
     if change == 'shape':
-        following = module.prepare(case_name, 'xs', case.data(shortened(shape)), {})
+        following = module.prepare(case_name, rung, case.data(shortened(shape)), {})
+    if change == 'coefficient':
+        following = (prepared[0], {case.coefficient: rescaled(prepared[1][case.coefficient])})
     args, kwargs = module.window_setup('highs', prepared, following, change)
     counts = module.window(*args, **kwargs)
     assert counts['reloaded'] == RELOADS[change], (
         f'{case_name}: a {change} window should '
         f'{"load the solver from scratch" if RELOADS[change] else "push onto the loaded solver"}'
     )
+
+
+@pytest.mark.parametrize('name', sorted(ARMS))
+def test_a_fresh_process_has_imported_no_library_when_its_clock_starts(name: str) -> None:
+    """`test_fresh` charges the import to the arm, so nothing the harness loads may have imported it first.
+
+    Before `bench.arms.specsolve` imported `bench.cases` inside `prepare`, its
+    module scope brought numpy, pandas and polars into every fresh process
+    before the clock.
+    """
+    module = f'bench.arms.{name.replace("-", "_")}'
+    libraries = ('specsolve', 'polars', 'pandas', 'numpy', 'linopy', 'pyomo', 'highspy', 'gurobipy')
+    probe = f'import sys, bench.fresh, {module}; print(" ".join(m for m in {libraries!r} if m in sys.modules))'
+    child = subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True, check=True)
+    assert child.stdout.split() == [], (
+        f'{name}: {child.stdout.strip()} imported before the clock starts, so charged to nobody'
+    )
+
+
+def test_a_fresh_process_reports_its_window_and_its_peak() -> None:
+    """`bench.fresh` is a child the ladder only reads as JSON, so a break in it shows as a missing key."""
+    case = CASES['dispatch']
+    prepared = ARMS['specsolve'].prepare('dispatch', '2xs', case.data(case.shape('2xs')), {})
+    with tempfile.TemporaryDirectory() as tmp:
+        payload = Path(tmp) / 'payload.pickle'
+        payload.write_bytes(pickle.dumps(('specsolve', 'highs', prepared)))
+        counts = _fresh(payload)
+    assert counts['columns'] == case.shape('2xs').nominal_variables, 'the child built the rung it was handed'
+    assert counts['phases']['first_window'] > 0, 'the arm is timed inside the child'
+    assert counts['peak_rss_bytes'] > 0, 'the child reports its own peak, which benchmem cannot see'
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:
