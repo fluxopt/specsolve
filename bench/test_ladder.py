@@ -173,6 +173,8 @@ def test_window(
     module = ARMS[arm]
     if not hasattr(module, 'window'):
         pytest.skip(f'{arm} has no rolling-horizon verb — nothing here says what its second window costs')
+    if reason := getattr(module, 'unsupported', lambda verb: None)('window'):
+        pytest.skip(reason)
     if sink == 'lp':
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
 
