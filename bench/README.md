@@ -249,16 +249,16 @@ against each other. Publish a whole ladder or none of it.
 
 ## What it measures
 
-**Peak RSS and wall time**, per phase, for one model into three destinations:
+**Peak RSS and wall time**, per phase, for one model into five destinations:
 
-| | `lp` | `highs` | `gurobi` |
-|---|---|---|---|
-| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` |
-| `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
-| `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` |
-| `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
-| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` |
-| `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — |
+| | `lp` / `mps` | `highs` | `gurobi` | `xpress` |
+|---|---|---|---|---|
+| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` | `sps.build(...)` then `Xpress(handoff)` |
+| `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
+| `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
+| `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
+| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` | — |
+| `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
@@ -267,7 +267,11 @@ solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
-other two need nothing a contributor does not already have. It is also the only
+other two need nothing a contributor does not already have. So are `mps`, the
+other file format every arm with a writer reaches, and `xpress`, which only
+specsolve reaches — its wheel's Community licence refuses a solve over 5,000 rows
+plus columns but not a load, so the hand-off measures at every rung. A cell
+whose solver package is not installed is skipped with the package's name. It is also the only
 sink two of the three arms can reach, and a cell an arm cannot reach is skipped
 with the reason rather than left to look like a measurement that failed.
 

@@ -261,6 +261,7 @@ _CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling
 #: What every arm in a sink's table has ended up holding.
 _SEAM = {
     'lp': 'Each arm has written the LP file, through whichever writer it has.',
+    'mps': 'Each arm has written the MPS file, through whichever writer it has.',
     'highs': (
         'Each arm ends holding a populated `highspy.Highs` with `run()` never '
         'called — specsolve through `Highs(handoff)`. The simplex is the same work '
@@ -272,6 +273,12 @@ _SEAM = {
         'never called — specsolve through `Gurobi(handoff)`, and gurobipy through '
         '`update()`, which is where its own deferred writes land. Opt-in: it '
         'needs the `[gurobi]` extra.'
+    ),
+    'xpress': (
+        'specsolve ends holding a populated `xpress.problem` with `optimize()` '
+        'never called, through `Xpress(handoff)`; no other arm reaches it. '
+        'Opt-in: it needs the `[xpress]` extra. The Community licence that ships '
+        'with it suffices, because it limits the solve and nothing here solves.'
     ),
 }
 
