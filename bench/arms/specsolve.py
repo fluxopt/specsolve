@@ -75,8 +75,17 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
     }
 
 
+def _clocks(model: Any) -> dict[str, float]:
+    """The engine's own seconds per phase, summed over the model's life; empty on a checkout that kept none."""
+    return dict(getattr(getattr(model, '_engine', None), '_seconds', None) or {})
+
+
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
-    """Build relationally and hand the model over — an LP file, or a solver; the solver never runs."""
+    """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
+
+    A solver is constructed straight off the frames, so its load is in no
+    phase: it is the wall time less the phases.
+    """
     import specsolve as sps
 
     spec, sources = prepared
@@ -86,7 +95,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         else:
             _loaded(sink, model).close()
 
-        return _counts(_handoff(model), nonzeros=True)
+        return _counts(_handoff(model), nonzeros=True) | {'phases': _clocks(model)}
 
 
 def _loaded(sink: str, model: Any) -> Any:
@@ -140,9 +149,11 @@ def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
     the digest moved. A later window pays one digest fewer, because the held
     one is kept.
     """
+    before = _clocks(model)
     model.update(sources)
     _, kept = model._engine._hand_off(sink, None, 'solver')
-    return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing'}
+    phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
+    return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing', 'phases': phases}
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
@@ -151,7 +162,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with sps.build(spec, sources) as model:
-        return _counts(_handoff(model), nonzeros=False)
+        return _counts(_handoff(model), nonzeros=False) | {'phases': _clocks(model)}
 
 
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:
