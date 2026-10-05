@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(sweep): a sweep over a datetime axis in nanoseconds or milliseconds solves rather than crashing in its first slice ([#1848](https://github.com/fluxopt/specsolve/pull/1848))
 - feat(archive): an archive writes every column as a type that parquet readers agree on ([#1835](https://github.com/fluxopt/specsolve/pull/1835))
 - fix(archive): an archive's catalog describes each file as it is written, and kept windows have a catalog of their own ([#1838](https://github.com/fluxopt/specsolve/pull/1838))
 - fix(data): a datetime label is held in microseconds whatever unit it arrives in ([#1839](https://github.com/fluxopt/specsolve/pull/1839))

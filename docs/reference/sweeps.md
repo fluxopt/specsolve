@@ -37,6 +37,10 @@ sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 
 `into` has no default, and a seam's `where: "t == 0"` matches on it.
 
+**A datetime axis is held in microseconds**, as
+[a label is](data.md#where-coordinates-come-from), and a key finer than a
+microsecond is refused.
+
 **`steps` as a sequence is one block per window**, which is a telescoping
 horizon, or a month at a time with a few days of overlap:
 

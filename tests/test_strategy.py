@@ -764,6 +764,64 @@ def test_stitch_recovers_coordinates_no_arithmetic_could(coordinates):
     assert runs.primal('soc')['snapshot'].to_list() == coordinates
 
 
+HOURS = [datetime.datetime(2030, 1, 1, h) for h in range(6)]
+
+
+def _in_unit(unit: str, *, nanoseconds: int = 0) -> pl.Series:
+    """``HOURS`` held in *unit*, the first *nanoseconds* past the hour."""
+    return (
+        pl.Series(HOURS).cast(pl.Datetime('ns')) + pl.Series([nanoseconds, *[0] * 5]).cast(pl.Duration('ns'))
+    ).dt.cast_time_unit(unit)
+
+
+def _keyed_by_datetime(keys: pl.Series) -> dict[str, object]:
+    """``scenario_sources`` with its first three keys keyed by *keys* rather than by name."""
+    sources = scenario_sources()
+    named = pl.DataFrame({'scenario': ['low', 'mid', 'high'], 'key': keys[:3]})
+    load = pl.DataFrame(sources['load']).join(named, on='scenario').drop('scenario').rename({'key': 'scenario'})
+    return {**sources, 'load': load}
+
+
+@pytest.mark.parametrize(
+    ('unit', 'kind'),
+    [
+        pytest.param('ns', 'window', id='window-ns'),
+        pytest.param('ms', 'window', id='window-ms'),
+        pytest.param('ns', 'coordinate', id='coordinate-ns'),
+        pytest.param('ms', 'coordinate', id='coordinate-ms'),
+    ],
+)
+def test_a_sweep_over_a_datetime_axis_in_any_unit_solves(unit, kind):
+    """A window over a nanosecond or millisecond axis crashed in its first slice.
+
+    The coordinates were read out as python datetimes, which are microseconds,
+    and met a column in another unit.
+    """
+    keys = _in_unit(unit)
+    if kind == 'window':
+        runs = sps.solve_over(
+            WINDOW, coordinate_sources(keys), sps.EachWindow('snapshot', steps=2, lookahead=0, into='t')
+        )
+        assert runs.primal('soc')['snapshot'].to_list() == HOURS, 'the stitch gives back every hour'
+    else:
+        runs = sps.solve_over(DISPATCH, _keyed_by_datetime(keys), sps.EachCoordinate('scenario'))
+        assert runs.keys == HOURS[:3], 'one slice per key, keyed by the instant'
+
+
+@pytest.mark.parametrize('kind', ['window', 'coordinate'])
+def test_a_sweep_over_a_datetime_axis_finer_than_a_microsecond_is_refused(kind):
+    """A key read out as a python datetime dropped its nanoseconds and no longer matched its own rows.
+
+    A window crashed, and a coordinate sweep built that slice empty.
+    """
+    keys = _in_unit('ns', nanoseconds=1)
+    with pytest.raises(sps.errors.DataError, match='finer than a microsecond'):
+        if kind == 'window':
+            sps.solve_over(WINDOW, coordinate_sources(keys), sps.EachWindow('snapshot', steps=2, lookahead=0, into='t'))
+        else:
+            sps.solve_over(DISPATCH, _keyed_by_datetime(keys), sps.EachCoordinate('scenario'))
+
+
 def test_a_window_key_column_never_shadows_the_dimension_it_replaced(sweep):
     """`snapshot_start` holds window starts, and there are no snapshots left.
 

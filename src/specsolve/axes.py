@@ -13,11 +13,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import polars as pl
+import polars.selectors as cs
 from mathspec import did_you_mean
 
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
-from specsolve.sources import least_value
+from specsolve.sources import in_microseconds, least_value
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -334,14 +335,23 @@ def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl
 
 
 def _coordinates(sources: Mapping[str, Source], dim: str, verb: str) -> tuple[dict[str, pl.LazyFrame], list[Label]]:
-    """The sources a slice has to filter, by name, and the coordinates to slice, sorted by value."""
+    """The sources a slice has to filter, by name, and the coordinates to slice, sorted by value.
+
+    A datetime axis is held in microseconds, as attach holds a label, so a
+    coordinate read out as a python datetime matches its rows.
+    """
     carrying = sources_with_column(sources, dim)
     if not carrying:
         raise DataError(
             f"no source carries a '{dim}' column, so there is nothing to {verb} over. "
             f'EachCoordinate names a column the data has; a span of consecutive coordinates is EachWindow.'
         )
-    held = {name: set(table.select(pl.col(dim).unique()).collect()[dim]) for name, table in carrying.items()}
+    unique = {name: table.select(pl.col(dim).unique()).collect() for name, table in carrying.items()}
+    held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
+    carrying = {
+        name: table.with_columns((cs.by_name(dim) & cs.datetime()).dt.cast_time_unit('us'))
+        for name, table in carrying.items()
+    }
     coordinates = sorted(set().union(*held.values()))
     for name, mine in held.items():
         if missing := sorted(set(coordinates) - mine):
