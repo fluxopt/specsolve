@@ -632,25 +632,6 @@ def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, 
     assert float(built.objective.value) == pytest.approx(7.0), 'and the linopy lane reads the same two instants'
 
 
-def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_path):
-    """A relation's datetime column is held in the unit its index is, so the two still match."""
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-    days = _instants('ns')
-    sources = {
-        **_P_MAX,
-        'cap': pl.DataFrame({'d': days, 'value': [3.0, 7.0]}),
-        'd': pl.DataFrame({'d': days}),
-        'g': ['w', 's'],
-        'day_of': pl.DataFrame({'g': ['w', 's'], 'd': days.gather([0, 0])}),
-    }
-
-    with sps.solve(path, sources) as run:
-        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
-    built = specsolve_linopy.build(path, sources)
-    built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
-
-
 def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
     """The temporal relation model's sources, its three datetime columns given."""
     return {
@@ -660,6 +641,19 @@ def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) ->
         'g': ['w', 's'],
         'day_of': pl.DataFrame({'g': ['w', 's'], 'd': day_of}),
     }
+
+
+def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_path):
+    """A relation's datetime column is held in the unit its index is, so the two still match."""
+    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
+    days = _instants('ns')
+    sources = _temporal_sources(index=days, cap=days, day_of=days.gather([0, 0]))
+
+    with sps.solve(path, sources) as run:
+        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
+    built = specsolve_linopy.build(path, sources)
+    built.solve(solver_name='highs', output_flag=False)
+    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
 
 
 _FINE = _instants('ns', nanoseconds=1)
