@@ -7,10 +7,55 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- fix(sweep): a sweep over a datetime axis in nanoseconds or milliseconds solves rather than crashing in its first slice ([#1848](https://github.com/fluxopt/specsolve/pull/1848))
+## 0.6.0 (2026-10-05)
+
+An archive is now a folder that a warehouse reads as it is. Every column has
+a type that parquet readers agree on, and the catalog describes each file as
+it is written, for a sweep too. A datetime label is held in microseconds,
+whatever unit it arrives in. This release breaks what 0.5.0 wrote to disk and
+the catalog's columns. No import changed.
+
+Breaks:
+
+- The on-disk layout is now 3. An archive, a spill or a saved result written
+  by 0.5.0 is refused with a `LayoutError`. Solve the model again and save it.
+  An archive that `archive=` wrote still holds the model and the data to do
+  that with.
+- `catalog.parquet` has no `dim_position` column. It has one row per column of
+  labels that the file holds, sorted by `path` and `column`, and `path` and
+  `column` identify one row.
+- An `EachWindow` archive keeps `owned.parquet` at `answer/windows/`, and only
+  with `keep_windows=True`.
+- A frame read back from an archive has the archived type. `UInt8`, `UInt16`
+  and `UInt32` are `Int64`, and a timestamp in a time zone is the same instant
+  in UTC.
+- Attach refuses a datetime label finer than a microsecond, and a datetime
+  column in another time zone than its index. Each refusal names the polars
+  call that fixes the data.
+
+Fixed:
+
+- A datetime index in nanoseconds, the pandas default, or in milliseconds no
+  longer crashes the build where a parameter bounds a variable over it.
+- An `EachWindow` over a datetime axis in nanoseconds or milliseconds solves.
+  An `EachCoordinate` key finer than a microsecond is refused rather than
+  building its slice empty.
+- A sweep archive's catalog lists the columns its files hold: the swept
+  dimension of a rolling horizon, and the key of a coordinate sweep.
+
+New:
+
+- Kept windows have their own catalog, `answer/windows/catalog.parquet`.
+- [Reading a directory of runs](https://specsolve.readthedocs.io/en/latest/howto/warehouse/)
+  is tested against a folder of every kind of run: its globs, its joins and
+  its relation patterns.
+
+The pull requests since 0.5.0:
+
+- fix(data): a datetime label is held in microseconds whatever unit it arrives in ([#1839](https://github.com/fluxopt/specsolve/pull/1839))
 - feat(archive): an archive writes every column as a type that parquet readers agree on ([#1835](https://github.com/fluxopt/specsolve/pull/1835))
 - fix(archive): an archive's catalog describes each file as it is written, and kept windows have a catalog of their own ([#1838](https://github.com/fluxopt/specsolve/pull/1838))
-- fix(data): a datetime label is held in microseconds whatever unit it arrives in ([#1839](https://github.com/fluxopt/specsolve/pull/1839))
+- fix(sweep): a sweep over a datetime axis in nanoseconds or milliseconds solves rather than crashing in its first slice ([#1848](https://github.com/fluxopt/specsolve/pull/1848))
 
 ## 0.5.0 (2026-10-03)
 
