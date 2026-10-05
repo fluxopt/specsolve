@@ -69,6 +69,15 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
     options:
       heading_level: 4
 
+### Run it from a file
+
+A [manifest](../howto/manifest.md) holds the arguments of `solve` and
+`solve_over` for several runs.
+
+::: specsolve.load_manifest
+    options:
+      heading_level: 4
+
 ### What comes back
 
 ::: specsolve.types.Model
@@ -92,6 +101,14 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
       heading_level: 4
 
 ::: specsolve.types.SweepArchive
+    options:
+      heading_level: 4
+
+::: specsolve.types.Manifest
+    options:
+      heading_level: 4
+
+::: specsolve.types.Run
     options:
       heading_level: 4
 

@@ -129,10 +129,10 @@ accept the same file, attach the same tables and refuse the same constructs.
 oracle stops at the `linopy.Model`, which the tests solve and read back with
 linopy.
 
-**Thirteen modules sit outside a fence, and each is legitimately both halves**:
+**Fifteen modules sit outside a fence, and each is legitimately both halves**:
 `sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `axes.py`,
 `sweep.py`, `inputs.py`, `frames.py`, `archive_layout.py`, `archive.py`,
-`types.py`, `errors.py` and `messages.py`. Size
+`manifest.py`, `cli.py`, `types.py`, `errors.py` and `messages.py`. Size
 does not buy a place among them. A module only one lane reaches is that lane's, down to a
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
@@ -203,7 +203,7 @@ returns, and `specsolve.errors` holds what a call raises or warns. Every other
 module under `specsolve.` is internal, whatever its name, and any release can
 change it.
 
-**Fifteen names to call, and the count is the feature.** The spec is the YAML
+**Sixteen names to call, and the count is the feature.** The spec is the YAML
 file, and Python is how you *run* it. So nothing on the surface constructs math
 or reaches the plan. The names, by role:
 
@@ -212,11 +212,14 @@ or reaches the plan. The names, by role:
 - `tidy`, the tables a solve reads from the sources, as an archive holds them;
 - `load_archive`, `load_result` and `load_sweep` to read an answer back whole,
   and `scan_archive`, `scan_result` and `scan_sweep` to read it off the
-  directory it lies in.
+  directory it lies in;
+- `load_manifest`, the arguments of `solve` and `solve_over` for several runs,
+  read from one file.
 
 `specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
 `Sweep`, and the two archives that carry a spec, its data and its answer,
-`ResultArchive` and `SweepArchive`. It also holds the rows they hand back:
+`ResultArchive` and `SweepArchive`, and the `Manifest` that `load_manifest`
+returns with its `Run`s. It also holds the rows they hand back:
 `ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`.
 `specsolve.errors` holds the error tree under `SpecsolveError`,
 `NoSolutionError` and `SpecsolveWarning`.
@@ -570,6 +573,8 @@ is structure.
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
 | `axes.py` | how a sweep cuts its sources: `EachCoordinate`, `EachWindow`, and the stitch that puts a window's frames back over the dimension it cut |
 | `sweep.py` | what a fold returns: `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
+| `manifest.py` | above the runner and the fold: `load_manifest`, a YAML file of `solve` and `solve_over` arguments read into one `Run` per call, and the source locations read into tables. It reads no data until a run asks |
+| `cli.py` | the `specsolve` command over a manifest: `check`, `solve` and `list`. The only module that imports typer, which the `cli` extra installs |
 | `relational/engine/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
 | `relational/engine/compiler.py` | plan → lazy queries; pure, reads nothing |
 | `relational/engine/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
