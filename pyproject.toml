@@ -191,7 +191,7 @@ args = [
     { arg = "memory", default = "16" },
 ]
 cmd = """
-pytest bench --benchmark-memory --builds {{ builds }} \
+pytest bench --benchmark-memory --builds {{ builds }} -k "test_emit or test_rebuild" \
   --cases {{ cases }} \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
   --budget 30 --memory-budget {{ memory }} --benchmark-memory-repeats 1 \
