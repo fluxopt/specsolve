@@ -287,14 +287,21 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize('sink', metafunc.config.getoption('--sinks'))
 
 
+#: What CodSpeed does not run. `test_rebuild`, because its instruments ignore
+#: rounds in pedantic mode; `test_sweep`, because it solves, and the memory
+#: instrument tracks the solver's own allocations — `commitment` swept at `s` ran
+#: that 20-minute job out on its own.
+NOT_UNDER_CODSPEED = ('test_rebuild', 'test_sweep')
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Deselect `test_rebuild` under CodSpeed, whose instruments ignore rounds in pedantic mode."""
+    """Deselect `NOT_UNDER_CODSPEED` under CodSpeed."""
     if not getattr(config.option, 'codspeed', False):
         return
-    dropped = [i for i in items if i.name.startswith('test_rebuild')]
+    dropped = [i for i in items if i.name.startswith(NOT_UNDER_CODSPEED)]
     if dropped:
         config.hook.pytest_deselected(items=dropped)
-        items[:] = [i for i in items if not i.name.startswith('test_rebuild')]
+        items[:] = [i for i in items if not i.name.startswith(NOT_UNDER_CODSPEED)]
 
 
 @pytest.fixture(scope='session')

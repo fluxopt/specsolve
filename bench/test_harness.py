@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
@@ -39,6 +40,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
+from bench.test_ladder import RELOADS
 from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
@@ -244,6 +246,18 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
+    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
+    solves would hold it to the solver's own allocations. Both passes leave the
+    sweep out, or the gate would compare two different selections.
+    """
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
+    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
+    assert len(passes) == 2, 'a base pass and a head pass'
+    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
+    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
@@ -1291,6 +1305,7 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
         'build_only',
         'objective',
         'window_setup',
+        'sweep',
         'window',
         'read_setup',
         'read',
@@ -1335,7 +1350,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
     for name, module in sorted(ARMS.items()):
         if not hasattr(module, 'window'):
             continue
-        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared))
+        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared, 'values'))
         mem_setup, tracked = plugin._pedantic_action(module.window, (), {}, setup)
         try:
             blob = pickle.dumps((tracked, mem_setup))
@@ -1362,25 +1377,38 @@ def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
                 ('test_emit', {}),
                 ('test_window', {'change': 'values'}),
                 ('test_window', {'change': 'shape'}),
+                ('test_window', {'change': 'one'}),
+                ('test_window', {'change': 'cold'}),
                 ('test_window', {}),
+                ('test_sweep', {}),
+                ('test_read', {'into': 'frames'}),
             )
         ]
     }
     path = tmp_path / 'latest.json'
     path.write_text(json.dumps(doc))
     phases = [r.get('phase') for r in bench_results.records(path) if r.get('record') == 'timing']
-    assert phases == ['emit', 'window', 'window-reshaped', 'window'], (
+    assert phases == [
+        'emit',
+        'window',
+        'window-reshaped',
+        'window-one',
+        'window-cold',
+        'window',
+        'sweep',
+        'read-frames',
+    ], (
         'each rung names its own phase, in the order the file writes them, and a window from before '
         'the change was a parameter is the values window it measured'
     )
 
 
-@pytest.mark.parametrize('change', ['values', 'shape'])
+@pytest.mark.parametrize('change', sorted(RELOADS))
 @pytest.mark.parametrize(
     'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
 )
 def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -> None:
-    """`test_window`'s two changes are there to measure the two paths an update can take.
+    """`test_window`'s changes are there to measure the paths an update can take.
 
     The ladder checks which one ran, but only when it measures; this holds every
     case's smallest rung to it on every pull request, and with it that the
@@ -1393,11 +1421,11 @@ def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -
     following = prepared
     if change == 'shape':
         following = module.prepare(case_name, 'xs', case.data(shortened(shape)), {})
-    args, kwargs = module.window_setup('highs', prepared, following)
+    args, kwargs = module.window_setup('highs', prepared, following, change)
     counts = module.window(*args, **kwargs)
-    assert counts['reloaded'] == (change == 'shape'), (
-        f'{case_name}: a window whose {change} moved should '
-        f'{"load the solver from scratch" if change == "shape" else "push onto the loaded solver"}'
+    assert counts['reloaded'] == RELOADS[change], (
+        f'{case_name}: a {change} window should '
+        f'{"load the solver from scratch" if RELOADS[change] else "push onto the loaded solver"}'
     )
 
 
@@ -1453,7 +1481,7 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
     assert {'attach', 'build'} <= module.build_only(prepared)['phases'].keys(), 'a build is attached and built'
 
-    args, kwargs = module.window_setup('highs', prepared, prepared)
+    args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
     model = args[0]
     window = module.window(*args, **kwargs)['phases']
     assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
@@ -1492,6 +1520,18 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
 
 
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_a_sweep_loads_once_and_says_what_the_solver_took(case_name: str) -> None:
+    """`test_sweep` asserts one load and attributes the solve, on every case's smallest rung."""
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    counts = module.sweep('highs', module.prepare(case_name, 'xs', case.data(case.shape('xs')), {}))
+    assert counts['loads'] == 1, 'the first slice loads and every later one, its values unchanged, pushes'
+    assert counts['phases']['solve'] > 0, "the solver's share is attributed, not left inside the wall time"
+
+
 class _CallsTwice:
     """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
 
@@ -1528,6 +1568,6 @@ def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
     shorter = module.prepare('dispatch', 'xs', case.data(shortened(shape)), {})
     request = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace()))
     counts = _rounds(
-        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter)
+        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter, 'shape')
     )
     assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'

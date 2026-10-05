@@ -125,22 +125,28 @@ def unsupported(verb: str) -> str | None:
 
 
 def window_setup(
-    sink: str, prepared: tuple[Path, dict[str, str]], following: tuple[Path, dict[str, str]]
+    sink: str, prepared: tuple[Path, dict[str, str]], following: tuple[Path, dict[str, str]], change: str
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Window one, built and loaded before the clock, and held for the one that is timed.
 
     Nothing is released: the model and its solver stay resident, so the
-    measured peak includes them.
+    measured peak includes them. A ``one`` window updates the first declared
+    parameter alone, as ``update`` is usually called; a ``cold`` window asks
+    for ``keep='nothing'``.
     """
     import specsolve as sps
 
     spec, sources = prepared
     model = sps.build(spec, sources)
     model._engine._hand_off(sink, None, 'solver')
-    return (model, sink, following[1]), {}
+    updated = following[1]
+    if change == 'one':
+        first = next(name for name in model._program.parameters if name in updated)
+        updated = {first: updated[first]}
+    return (model, sink, updated, 'nothing' if change == 'cold' else 'solver'), {}
 
 
-def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
+def window(model: Any, sink: str, sources: dict[str, str], keep: str) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
     ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
@@ -151,9 +157,41 @@ def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
     """
     before = _clocks(model)
     model.update(sources)
-    _, kept = model._engine._hand_off(sink, None, 'solver')
+    _, kept = model._engine._hand_off(sink, None, keep)
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
     return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing', 'phases': phases}
+
+
+#: Slices in the measured sweep — enough that every one after the first is the push path.
+SWEEP_SLICES = 4
+
+
+def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
+    """``solve_over`` across hand-built slices of the rung's own data, folded in order on one model.
+
+    Every slice carries the same values, so the first loads the solver and the
+    rest push. The solver runs on every slice, and ``phases`` sums the sweep's
+    own per-slice clocks, so its ``solve`` is what the wall time owes the
+    solver and the rest is the sweep's.
+    """
+    import specsolve as sps
+
+    spec, sources = prepared
+    swept = sps.solve_over(
+        spec, sources, [(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario', solver_name=sink
+    )
+    metrics = swept.metrics
+    return {
+        'columns': metrics['columns'][0],
+        'rows': metrics['rows'][0],
+        'nonzeros': metrics['nonzeros'][0],
+        'loads': int(metrics['loads'].sum()),
+        'phases': {
+            column.removesuffix('_seconds'): float(metrics[column].sum())
+            for column in metrics.columns
+            if column.endswith('_seconds')
+        },
+    }
 
 
 def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[Any, ...], dict[str, Any]]:

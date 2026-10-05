@@ -30,6 +30,12 @@ from bench.arms import ARMS, unmeasurable
 from bench.cases import CASES, shortened
 from bench.conftest import shape_of
 
+#: The rungs a sweep is measured at. Above them the solver is the sweep's cost.
+SWEPT_SIZES = ('xs', 's')
+
+#: Each window change, and whether it should load the solver from scratch.
+RELOADS = {'values': False, 'shape': True, 'one': False, 'cold': True}
+
 
 def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any, setup: Any = None) -> Any:
     """*fn* once per round, with a full garbage collection before each clock starts.
@@ -144,7 +150,7 @@ def test_emit(
 
 
 @pytest.mark.benchmem(isolate=True)
-@pytest.mark.parametrize('change', ('values', 'shape'))
+@pytest.mark.parametrize('change', tuple(RELOADS))
 def test_window(
     benchmark: Any,
     request: pytest.FixtureRequest,
@@ -159,10 +165,12 @@ def test_window(
     """What the *second* window of a rolling horizon costs, up to the solve.
 
     `test_emit` prices the first window. *change* is what the second one moves:
-    ``values`` re-attaches the same data, which a loaded solver takes by value,
-    and ``shape`` attaches the rung one snapshot shorter, which it cannot. An
-    arm carries between windows whatever its library has a verb for: specsolve
-    updates and loads, linopy builds a new model. Each arm's `window_setup`
+    ``values`` re-attaches the same data, which a loaded solver takes by value;
+    ``shape`` attaches the rung one snapshot shorter, which it cannot; ``one``
+    updates one parameter alone, which costs a whole rebuild all the same; and
+    ``cold`` re-attaches the same data under ``keep='nothing'``. An arm carries
+    between windows whatever its library has a verb for: specsolve updates and
+    loads, linopy builds a new model. Each arm's `window_setup`
     runs untracked in the spawned child before every sample (#1617). An arm
     with no `window` verb is skipped.
     """
@@ -177,20 +185,58 @@ def test_window(
         pytest.skip(reason)
     if sink == 'lp':
         pytest.skip('a file is written whole every window — there is no loaded artifact to re-attach to')
+    if change not in getattr(module, 'WINDOW_CHANGES', RELOADS):
+        pytest.skip(f'{arm} rebuilds every window, so a {change} window is its values window measured again')
 
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
     following = prepared
     if change == 'shape':
         case = CASES[case_name]
         following = module.prepare(case_name, size, case.data(shortened(case.shape(size))), {})
-    counts = _rounds(benchmark, request, module.window, setup=partial(module.window_setup, sink, prepared, following))
+    setup = partial(module.window_setup, sink, prepared, following, change)
+    counts = _rounds(benchmark, request, module.window, setup=setup)
     if 'reloaded' in counts:
-        assert counts['reloaded'] == (change == 'shape'), (
-            f'a window whose {change} moved {"reloaded" if counts["reloaded"] else "pushed onto"} the solver, '
+        assert counts['reloaded'] == RELOADS[change], (
+            f'a {change} window {"reloaded" if counts["reloaded"] else "pushed onto"} the solver, '
             f'so this rung measured the other path'
         )
     _record(benchmark, counts, case_name, size)
     ceiling.record(arm, case_name, size, sink, _measured(benchmark), _peak(benchmark))
+
+
+@pytest.mark.benchmem(isolate=True)
+def test_sweep(
+    benchmark: Any,
+    request: pytest.FixtureRequest,
+    paths: Any,
+    ceiling: Any,
+    case_name: str,
+    size: str,
+    arm: str,
+    sink: str,
+) -> None:
+    """What ``solve_over`` costs across a few slices of one rung, solves included.
+
+    The solver runs on every slice, so the wall time is not the sweep's alone;
+    its own clocks say what the solver took. An arm with no `sweep` verb is
+    skipped.
+    """
+    module = ARMS[arm]
+    if not hasattr(module, 'sweep'):
+        pytest.skip(f'{arm} has no sweep verb — nothing here says what its loop over slices costs')
+    if sink == 'lp':
+        pytest.skip('a sweep solves every slice, and a file is not a solver')
+    if size not in SWEPT_SIZES:
+        pytest.skip(f'a sweep is measured at {", ".join(SWEPT_SIZES)}; above them it measures the solver')
+    missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, f'sweep-{sink}')
+    if missing:
+        pytest.skip(missing)
+
+    prepared = module.prepare(case_name, size, paths(case_name, size), {})
+    counts = _rounds(benchmark, request, module.sweep, sink, prepared)
+    assert counts['loads'] == 1, 'a sweep of unchanged values loads its solver once and pushes onto it after'
+    _record(benchmark, counts, case_name, size)
+    ceiling.record(arm, case_name, size, f'sweep-{sink}', _measured(benchmark), _peak(benchmark))
 
 
 @pytest.mark.benchmem(isolate=True)
