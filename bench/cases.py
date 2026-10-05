@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -76,6 +77,8 @@ class Case:
     write: Callable[[Shape, Path], dict[str, str]]
     spec: Path | None = None
     generate_spec: Callable[[Shape], str] | None = None
+    #: A parameter that multiplies a variable inside a constraint, so new values of it move the matrix.
+    coefficient: str | None = None
 
     def spec_path(self, shape: Shape, cache: Path = DEFAULT_CACHE) -> Path:
         """The YAML *shape* builds — ``spec``, unless the case generates one per rung.
@@ -123,6 +126,14 @@ def shortened(shape: Shape) -> Shape:
         sizes={**shape.sizes, 'snapshot': snapshots - 1},
         nominal_variables=shape.nominal_variables // snapshots * (snapshots - 1),
     )
+
+
+def rescaled(path: str) -> pl.DataFrame:
+    """The parameter at *path* with every value one percent larger: new coefficients on the same pattern.
+
+    A zero stays zero, so no entry enters or leaves the matrix; only its numbers move.
+    """
+    return pl.read_parquet(path).with_columns(pl.col('value') * 1.01)
 
 
 def _seed(shape: Shape) -> np.random.Generator:
@@ -575,17 +586,24 @@ def _ladder(
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    """A case's rungs, one per entry of *snapshots*.
+    """A case's rungs, one per entry of *snapshots*, below them a tenth of the first.
 
     ``xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
     ``docs/about/benchmarks.md`` that a model whose dense build cannot fit on
-    the machine still streams out under the budget.
+    the machine still streams out under the budget. ``2xs`` is the size of one
+    slice of a sweep or one solve of a model predictive controller, where a
+    build's fixed cost per query outweighs its rows. It keeps two snapshots at
+    least, so a window one snapshot shorter still has one.
     """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
-    return tuple(
-        Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
-        for i, n in enumerate(snapshots)
-        if i < len(labels)
+    smallest = max(2, snapshots[0] // 10)
+    return (
+        Shape('2xs', {**sizes, 'snapshot': smallest}, smallest * per_snapshot, density),
+        *(
+            Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
+            for i, n in enumerate(snapshots)
+            if i < len(labels)
+        ),
     )
 
 
@@ -651,6 +669,7 @@ CASES: dict[str, Case] = {
         spec=MODELS / 'commitment' / 'spec.yaml',
         ladder=_ladder({'generator': 50}, (10, 100, 1_000, 10_000, 40_000, 120_000), per_snapshot=100),
         write=_commitment_data,
+        coefficient='p_max',
     ),
     'fleet': Case(
         name='fleet',
@@ -685,6 +704,7 @@ CASES: dict[str, Case] = {
             density=0.083,
         ),
         write=_sector_data,
+        coefficient='produces',
     ),
     'profiled': Case(
         name='profiled',
@@ -713,5 +733,6 @@ CASES: dict[str, Case] = {
             *_width_ladder({'generator': 40, 'store': 20}, snapshots=100, per_snapshot=100),
         ),
         write=_storage_data,
+        coefficient='eta',
     ),
 }

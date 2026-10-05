@@ -52,10 +52,10 @@ the rest until a run completes. `results.records` still reads the pre-pytest
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
 selects `test_emit` and `test_rebuild`. The windows and the read-back are
-measured where their history is kept — CodSpeed, below. The sweep, which
-CodSpeed does not run, is measured by anyone who runs `pytest bench` without
-the `-k`. Spending the box's hours on cells no table renders would lengthen a
-run that took 2 h 23 min the last time (34818523523).
+measured where their history is kept — CodSpeed, below. The sweep and the fresh
+process, which CodSpeed does not run, are measured by anyone who runs
+`pytest bench` without the `-k`. Spending the box's hours on cells no table
+renders would lengthen a run that took 2 h 23 min the last time (34818523523).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -311,7 +311,7 @@ not measured.
 
 **A hand-written arm is a model somebody typed twice**, and nothing structural
 stops it being a *different* model that benchmarks beautifully. The linopy arm
-never had that risk — it read the same YAML. So each dialect's smallest rung is
+never had that risk — it read the same YAML. So each dialect's `xs` rung is
 solved against `specsolve`'s and the objectives compared, in
 `test_the_hand_written_arm...` under `bench/test_harness.py`, which CI runs on
 every pull request.
@@ -419,9 +419,10 @@ written against this table:
 
 Two of those are deliberate calls rather than defaults:
 
-- **Import is excluded from `wall_seconds`** but recorded. It is fixed, paid
-  once per process, and a modelling library's import can exceed specsolve's entire
-  build at the `xs` rung — including it would make the small end meaningless.
+- **Import is excluded from `wall_seconds`**, and `test_fresh` measures it
+  apart. It is fixed, paid once per process, and a modelling library's import
+  can exceed specsolve's entire build at the `xs` rung — including it would make
+  the small end meaningless.
 - **Teardown is included, and it is now near-free.** It was there to charge the
   arm holding a scratch database for releasing it. There is no scratch database
   any more — `close()` drops frames this process owns — so the phase is kept as
@@ -533,12 +534,12 @@ RNG — `hash()` is salted per process and would give the two arms different
 numbers), cached under `bench/.cache/`, and feasible by construction.
 
 **`commitment` is a MILP, and the gate still costs one cheap solve.** The gate
-solves only the *smallest* rung of a case, once per arm, and the measured pass
+solves only the `xs` rung of a case, once per arm, and the measured pass
 never solves at all — so the `l`/`xl` rungs of a MILP ladder cost the gate
-nothing. What the case has to guarantee is that its bottom rung solves to
+nothing. What the case has to guarantee is that its `xs` rung solves to
 proven optimality: `GATE_RTOL` is 1e-9 and HiGHS's default `mip_rel_gap` is
 1e-4, so a rung where branch and bound stops at a gap could hand the two arms
-different incumbents. The bottom rung is therefore deliberately tiny, with
+different incumbents. The `xs` rung is therefore deliberately tiny, with
 every cost a distinct float — there is no MIP-aware tolerance, and that is a
 decision rather than an omission.
 
@@ -561,7 +562,7 @@ pixi run -e bench python -m bench.floor xs --check   # one solve each way, objec
 
 It is **not a fourth arm**: it hardcodes one model, so it has no place in the
 `case x size x sink x arm` product, and its numbers are quoted beside the
-ladder's rather than inside it. `--check` solves the smallest rung through the
+ladder's rather than inside it. `--check` solves the `xs` rung through the
 floor and through specsolve and compares objectives at the gate's tolerance;
 `bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
 and nonzero counts against specsolve's — on every bare `pytest bench`.
@@ -579,11 +580,16 @@ parametrized by what the window moves:
 | `values` | re-attaches the same sources | push |
 | `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
 | `one` | updates the first declared parameter alone, as `update` is usually called | push |
+| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
 | `cold` | re-attaches the same sources under `keep='nothing'` | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
 `one` costs a whole rebuild all the same — `update` re-reads every source — so
-it is the baseline an incremental build would have to beat. `keep='progress'`
+it is the baseline an incremental build would have to beat. `coefficient` is
+the case a model predictive controller meets when an efficiency or a COP
+multiplies a variable: the matrix moves, so every such update loads the solver
+again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
+name one; the other cases skip it. `keep='progress'`
 differs from the default only in what the solver remembers, which moves the
 solve and not anything timed here; `bench/warm_payoff.py` is where a carried
 basis is weighed.
@@ -592,16 +598,16 @@ The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the
-same on every case's smallest rung on every pull request. The phases are
-`window`, `window-reshaped`, `window-one` and `window-cold`, and only
-`bench.tidy` renders them.
+same on every case's `2xs` and `xs` rungs on every pull request. The phases are
+`window`, `window-reshaped`, `window-one`, `window-coefficient` and
+`window-cold`, and only `bench.tidy` renders them.
 
 `test_sweep` is `solve_over` across four hand-built slices of one rung, folded
 in order on one model: the first slice loads and the rest push, which the test
 asserts. A sweep cannot be timed short of its solves, so the solver runs on
 every slice, and the sweep's own per-slice clocks are summed into the result's
 phases — `solve_seconds` is what the wall time owes the solver, and the rest is
-the sweep's. Its phase is `sweep`. It is taken at `xs` and `s` only
+the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
 CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
 the solver's own allocations, and `commitment` swept at `s` ran that job's 20
@@ -622,6 +628,22 @@ The cost is set by how many values are laid out, not what they are, so no
 solver runs and every rung is affordable. It is sink-free and specsolve-only —
 the other libraries read their answer back inside their solve — and its phases
 are `read-frames` and `read-parquet`, rendered by `bench.tidy` alone.
+
+## A fresh process
+
+`test_fresh` prices the first window of a process started for one solve, from
+launch to exit: the interpreter, the library's import, the build and the
+hand-off. Every other test runs in a process that has imported its library
+already. The test pickles what `prepare` returns and runs `python -m
+bench.fresh` on it; the child times the arm's own `build_and_emit` as the phase
+`first_window`, so `wall_seconds` less `first_window` is the interpreter and the
+harness, and `first_window` less `test_emit`'s wall time is the import. Nothing
+the child loads before its clock imports a modelling library, which
+`test_harness.py` checks for every arm. The peak is the child's own high-water
+mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
+`2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
+worth knowing, and never under CodSpeed, whose instruments do not follow a
+child process. Its phase is `fresh`.
 
 ## The warm-start payoff
 
@@ -725,15 +747,18 @@ which costs two passes and is why it waits for a label. Two jobs:
 | job | instrument | runner | rungs | runs on |
 |---|---|---|---|---|
 | Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
-| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
 
 `walltime` runs only on the metered runner because a shared runner's clock says
 nothing, and `simulation` — CodSpeed's default — runs the workload under an
 emulator, which suits neither multi-threaded native code nor these rungs. The
 `l` rung is there because #520 measured the instrument's overhead at -5..-10%
-at `m` and ±4% at `l`. Every benchmark in `test_ladder.py` runs under both
-jobs except the two `NOT_UNDER_CODSPEED` in `conftest.py` names: `test_rebuild`,
-which pedantic rounds make meaningless there, and `test_sweep`, which solves.
+at `m` and ±4% at `l`. The `2xs` rung is there for the opposite end: a build of
+a thousand variables, where the fixed cost of each query is most of the wall
+time and a regression in it shows first. Every benchmark in `test_ladder.py`
+runs under both jobs except the three `NOT_UNDER_CODSPEED` in `conftest.py`
+names: `test_rebuild`, which pedantic rounds make meaningless there,
+`test_sweep`, which solves, and `test_fresh`, whose work is in a child process.
 
 **It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
 them; `bench.yml` remains the check that fails a pull request.

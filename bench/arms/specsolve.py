@@ -7,8 +7,6 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bench.cases import CASES
-
 #: Every sink the relational lane can hand a model to.
 SINKS = ('lp', 'mps', 'highs', 'gurobi', 'xpress')
 
@@ -46,6 +44,8 @@ def prepare(
     case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]
 ) -> tuple[Path, dict[str, str]]:
     """The spec to build and the sources to build it from, both already checked."""
+    from bench.cases import CASES
+
     del options
     case = CASES[case_name]
     return case.spec_path(case.shape(size)), checked_sources(case, size, paths)
@@ -131,8 +131,9 @@ def window_setup(
 
     Nothing is released: the model and its solver stay resident, so the
     measured peak includes them. A ``one`` window updates the first declared
-    parameter alone, as ``update`` is usually called; a ``cold`` window asks
-    for ``keep='nothing'``.
+    parameter alone, as ``update`` is usually called; a ``coefficient`` window
+    updates whatever *following* carries, which is one parameter inside the
+    matrix; a ``cold`` window asks for ``keep='nothing'``.
     """
     import specsolve as sps
 

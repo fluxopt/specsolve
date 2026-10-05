@@ -296,8 +296,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 #: What CodSpeed does not run. `test_rebuild`, because its instruments ignore
 #: rounds in pedantic mode; `test_sweep`, because it solves, and the memory
 #: instrument tracks the solver's own allocations — `commitment` swept at `s` ran
-#: that 20-minute job out on its own.
-NOT_UNDER_CODSPEED = ('test_rebuild', 'test_sweep')
+#: that 20-minute job out on its own; `test_fresh`, because its work happens in a
+#: child process that no instrument follows.
+NOT_UNDER_CODSPEED = ('test_rebuild', 'test_sweep', 'test_fresh')
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
