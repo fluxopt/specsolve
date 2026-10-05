@@ -39,12 +39,23 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/*.jsonl` are the provenance of the tables
-`docs/about/benchmarks.md` publishes *today*, written by the pre-pytest harness. The
-readers still parse them — `results.records` takes both shapes — and a full
-ladder run adds its `.json` beside them rather than replacing them. Until
-someone takes one on an idle machine the published numbers stand on those
-files.
+The committed `results/latest-<sink>-<case>.json` are the provenance of the
+tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+34818523523, on `8d27e88b`, which finished one case of eight. Every failure
+whose log survives is one of two: a `test_window` cell whose verb was still a
+closure `isolate=True` could not ship to its child (fixed since, #1617), or
+`storage`/`gurobi` killed by the watchdog with `gurobipy-matrix` at `w1000`
+reaching 26 GB. What it left committed is `highs` for `dispatch` and `fleet`,
+and `gurobi` for `dispatch`, `fleet` and `transport`; the page has no table for
+the rest until a run completes. `results.records` still reads the pre-pytest
+`.jsonl` shape, though no such file is committed any more.
+
+**The published ladder measures what the page publishes**: `pixi run ladder`
+selects `test_emit` and `test_rebuild`. The windows and the read-back are
+measured where their history is kept — CodSpeed, below. The sweep and the fresh
+process, which CodSpeed does not run, are measured by anyone who runs
+`pytest bench` without the `-k`. Spending the box's hours on cells no table
+renders would lengthen a run that took 2 h 23 min the last time (34818523523).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -249,16 +260,16 @@ against each other. Publish a whole ladder or none of it.
 
 ## What it measures
 
-**Peak RSS and wall time**, per phase, for one model into three destinations:
+**Peak RSS and wall time**, per phase, for one model into five destinations:
 
-| | `lp` | `highs` | `gurobi` |
-|---|---|---|---|
-| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` |
-| `linopy` | `Model.to_file(io_api='lp-polars')` | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` |
-| `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` |
-| `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` |
-| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` |
-| `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — |
+| | `lp` / `mps` | `highs` | `gurobi` | `xpress` |
+|---|---|---|---|---|
+| `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` | `sps.build(...)` then `Xpress(handoff)` |
+| `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
+| `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
+| `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
+| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` | — |
+| `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
@@ -267,7 +278,11 @@ solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
-other two need nothing a contributor does not already have. It is also the only
+other two need nothing a contributor does not already have. So are `mps`, the
+other file format every arm with a writer reaches, and `xpress`, which only
+specsolve reaches — its wheel's Community licence refuses a solve over 5,000 rows
+plus columns but not a load, so the hand-off measures at every rung. A cell
+whose solver package is not installed is skipped with the package's name. It is also the only
 sink two of the three arms can reach, and a cell an arm cannot reach is skipped
 with the reason rather than left to look like a measurement that failed.
 
@@ -296,7 +311,7 @@ not measured.
 
 **A hand-written arm is a model somebody typed twice**, and nothing structural
 stops it being a *different* model that benchmarks beautifully. The linopy arm
-never had that risk — it read the same YAML. So each dialect's smallest rung is
+never had that risk — it read the same YAML. So each dialect's `xs` rung is
 solved against `specsolve`'s and the objectives compared, in
 `test_the_hand_written_arm...` under `bench/test_harness.py`, which CI runs on
 every pull request.
@@ -404,9 +419,10 @@ written against this table:
 
 Two of those are deliberate calls rather than defaults:
 
-- **Import is excluded from `wall_seconds`** but recorded. It is fixed, paid
-  once per process, and a modelling library's import can exceed specsolve's entire
-  build at the `xs` rung — including it would make the small end meaningless.
+- **Import is excluded from `wall_seconds`**, and `test_fresh` measures it
+  apart. It is fixed, paid once per process, and a modelling library's import
+  can exceed specsolve's entire build at the `xs` rung — including it would make
+  the small end meaningless.
 - **Teardown is included, and it is now near-free.** It was there to charge the
   arm holding a scratch database for releasing it. There is no scratch database
   any more — `close()` drops frames this process owns — so the phase is kept as
@@ -518,12 +534,12 @@ RNG — `hash()` is salted per process and would give the two arms different
 numbers), cached under `bench/.cache/`, and feasible by construction.
 
 **`commitment` is a MILP, and the gate still costs one cheap solve.** The gate
-solves only the *smallest* rung of a case, once per arm, and the measured pass
+solves only the `xs` rung of a case, once per arm, and the measured pass
 never solves at all — so the `l`/`xl` rungs of a MILP ladder cost the gate
-nothing. What the case has to guarantee is that its bottom rung solves to
+nothing. What the case has to guarantee is that its `xs` rung solves to
 proven optimality: `GATE_RTOL` is 1e-9 and HiGHS's default `mip_rel_gap` is
 1e-4, so a rung where branch and bound stops at a gap could hand the two arms
-different incumbents. The bottom rung is therefore deliberately tiny, with
+different incumbents. The `xs` rung is therefore deliberately tiny, with
 every cost a distinct float — there is no MIP-aware tolerance, and that is a
 decision rather than an omission.
 
@@ -546,10 +562,88 @@ pixi run -e bench python -m bench.floor xs --check   # one solve each way, objec
 
 It is **not a fourth arm**: it hardcodes one model, so it has no place in the
 `case x size x sink x arm` product, and its numbers are quoted beside the
-ladder's rather than inside it. `--check` solves the smallest rung through the
+ladder's rather than inside it. `--check` solves the `xs` rung through the
 floor and through specsolve and compares objectives at the gate's tolerance;
 `bench/test_harness.py` pins the cheaper fingerprint — the floor's column, row
 and nonzero counts against specsolve's — on every bare `pytest bench`.
+
+## The second window
+
+`test_window` prices what `model.update(x).solve()` costs before the solver
+runs — the rebuild, the digest a loaded solver is checked against, and then
+either a push of bounds, costs and right-hand sides or a load from scratch.
+Which of those two an update takes is decided by the data, so the test is
+parametrized by what the window moves:
+
+| change | the window | path |
+|---|---|---|
+| `values` | re-attaches the same sources | push |
+| `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
+| `one` | updates the first declared parameter alone, as `update` is usually called | push |
+| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
+| `cold` | re-attaches the same sources under `keep='nothing'` | load |
+
+Values are not varied, because a push sends whole vectors whatever they hold.
+`one` costs a whole rebuild all the same — `update` re-reads every source — so
+it is the baseline an incremental build would have to beat. `coefficient` is
+the case a model predictive controller meets when an efficiency or a COP
+multiplies a variable: the matrix moves, so every such update loads the solver
+again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
+name one; the other cases skip it. `keep='progress'`
+differs from the default only in what the solver remembers, which moves the
+solve and not anything timed here; `bench/warm_payoff.py` is where a carried
+basis is weighed.
+
+The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
+nothing about the solver's own work lands in the wall time or the peak. The
+arm reports whether its window reloaded and the test holds that to the change,
+so a rung cannot quietly measure the other path; `test_harness.py` checks the
+same on every case's `2xs` and `xs` rungs on every pull request. The phases are
+`window`, `window-reshaped`, `window-one`, `window-coefficient` and
+`window-cold`, and only `bench.tidy` renders them.
+
+`test_sweep` is `solve_over` across four hand-built slices of one rung, folded
+in order on one model: the first slice loads and the rest push, which the test
+asserts. A sweep cannot be timed short of its solves, so the solver runs on
+every slice, and the sweep's own per-slice clocks are summed into the result's
+phases — `solve_seconds` is what the wall time owes the solver, and the rest is
+the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
+(`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
+CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
+the solver's own allocations, and `commitment` swept at `s` ran that job's 20
+minutes out on its own. `bench.yml` leaves it out for the same reason
+(`UNGATED`): its gate is a memray peak, which would hold a pull request to the
+solver's allocations. So a sweep keeps no history: it is measured where someone
+runs `pytest bench -k test_sweep`.
+
+## Reading an answer back
+
+`test_read` prices what a solve costs after the solver returns: the answer laid
+out against the build as a `Result`, then every value read back — `frames`
+collects each variable's primal and each constraint's dual and activity,
+`parquet` is `Result.save`. The answer is built before the clock rather than
+solved for (`read_setup`): every column and row zero, reported optimal, and no
+duals for a model with an integer variable, which is what a real solve leaves.
+The cost is set by how many values are laid out, not what they are, so no
+solver runs and every rung is affordable. It is sink-free and specsolve-only —
+the other libraries read their answer back inside their solve — and its phases
+are `read-frames` and `read-parquet`, rendered by `bench.tidy` alone.
+
+## A fresh process
+
+`test_fresh` prices the first window of a process started for one solve, from
+launch to exit: the interpreter, the library's import, the build and the
+hand-off. Every other test runs in a process that has imported its library
+already. The test pickles what `prepare` returns and runs `python -m
+bench.fresh` on it; the child times the arm's own `build_and_emit` as the phase
+`first_window`, so `wall_seconds` less `first_window` is the interpreter and the
+harness, and `first_window` less `test_emit`'s wall time is the import. Nothing
+the child loads before its clock imports a modelling library, which
+`test_harness.py` checks for every arm. The peak is the child's own high-water
+mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
+`2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
+worth knowing, and never under CodSpeed, whose instruments do not follow a
+child process. Its phase is `fresh`.
 
 ## The warm-start payoff
 
@@ -597,13 +691,16 @@ compare to another library*, and it wants a different metric — but it does not
 want a different harness. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m --benchmark-memory
-pixi run -e bench pytest bench --sizes s m --benchmark-memory \
-    --benchmark-memory-compare=0001 --benchmark-memory-compare-fail=mean:10%
+pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
+    --columns peak --fail-on peak:20%
 ```
 
-That is what `.github/workflows/bench.yml` runs, twice — once against the pull
-request's base and once against its head — and what it gates on.
+That is what `.github/workflows/bench.yml` runs on a pull request labelled
+`trigger:bench` — the base's `src/` and then the head's, under one harness —
+and the memray peak at 20% is what it gates on. Wall time and `rss` are
+reported beside it and never gated. The sweep is left out, because it solves.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
@@ -640,22 +737,31 @@ pixi run -e codspeed pytest bench --codspeed           # what CI measures
 tests, same workloads, same rungs — a different instrument. The workloads
 cannot drift between them, because there is one of them.
 
-[CodSpeed](https://codspeed.io) runs on every pull request
-(`.github/workflows/codspeed.yml`): one ~3-minute job, free runner, no secret.
+[CodSpeed](https://codspeed.io) (`.github/workflows/codspeed.yml`) is where
+the history is kept: it stores a number per benchmark for every commit on
+`main`, which is what a regression found months later is bisected against.
 What it adds over `bench.yml` is not the metric but **the baseline** —
 `bench.yml` can only compare against a base it checks out and measures itself,
-which costs two passes and is why it waits for a `trigger:bench` label. CodSpeed
-stores the number for every commit on `main`.
+which costs two passes and is why it waits for a label. Two jobs:
 
-Only the `memory` instrument runs. `walltime` needs CodSpeed's metered
-bare-metal runners to say anything a shared runner's clock cannot, and
-`simulation` — their default — runs the workload under an emulator, which suits
-neither multi-threaded native code nor these rungs.
+| job | instrument | runner | rungs | runs on |
+|---|---|---|---|---|
+| Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
 
-**It gates nothing.** The job is `continue-on-error` and no ruleset names it;
-`bench.yml` remains the check that fails a pull request. It also needs a
-maintainer to connect the repository to the CodSpeed GitHub app — until then the
-workflow runs and uploads nothing.
+`walltime` runs only on the metered runner because a shared runner's clock says
+nothing, and `simulation` — CodSpeed's default — runs the workload under an
+emulator, which suits neither multi-threaded native code nor these rungs. The
+`l` rung is there because #520 measured the instrument's overhead at -5..-10%
+at `m` and ±4% at `l`. The `2xs` rung is there for the opposite end: a build of
+a thousand variables, where the fixed cost of each query is most of the wall
+time and a regression in it shows first. Every benchmark in `test_ladder.py`
+runs under both jobs except the three `NOT_UNDER_CODSPEED` in `conftest.py`
+names: `test_rebuild`, which pedantic rounds make meaningless there,
+`test_sweep`, which solves, and `test_fresh`, whose work is in a child process.
+
+**It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
+them; `bench.yml` remains the check that fails a pull request.
 
 ## Two ladders
 
@@ -732,7 +838,7 @@ every consumer whichever of the two the case has.
 | `models/<case>/` | one directory per case: `spec.yaml`, and the same model in each hand-written dialect |
 | `arms/` | one module per arm — `prepare` before the clock, then build-and-emit, build-only, objective. Picklable, and the library imported inside the verb |
 | `conftest.py` | selection flags, the ragged parametrization, the data fixture, the machine interlock |
-| `test_ladder.py` | the two benchmarks: build-and-emit, and rebuild-in-one-process |
+| `test_ladder.py` | the benchmarks: build-and-emit, the second window up to its solve, reading an answer back, and rebuild-in-one-process |
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |

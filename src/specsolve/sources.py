@@ -166,7 +166,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = _in_microseconds(table.select(dim).collect(), f"index for dimension '{dim}'")
+    labels = in_microseconds(table.select(dim).collect(), f"index for dimension '{dim}'")
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -244,7 +244,7 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
                 )
 
 
-def _in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
+def in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
     """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
 
     Raises:
@@ -356,7 +356,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = _in_microseconds(table.select(*roles).collect(), f"relation '{name}'")
+    rows = in_microseconds(table.select(*roles).collect(), f"relation '{name}'")
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -531,7 +531,7 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = _in_microseconds(table.select(wanted).collect(engine=collect_engine()), f"parameter '{name}'")
+    frame = in_microseconds(table.select(wanted).collect(engine=collect_engine()), f"parameter '{name}'")
     _check_one_row_per_coordinate(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)

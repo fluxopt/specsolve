@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
 
@@ -136,6 +137,31 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
+    def _hand_off(
+        self, solver_name: str, solver_options: Mapping[str, object] | None, keep: Keep
+    ) -> tuple[sinks.Solver, Keep]:
+        """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
+
+        The held solver keeps the model where
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows and is
+        loaded again where not; what comes back beside it is what it kept,
+        ``nothing`` after a load. Counts toward neither ``solves`` nor
+        ``loads``: [`solve`][] counts, so timing this alone leaves them true.
+        """
+        if keep not in KEEPS:
+            raise SpecsolveError(unknown_keep_message(keep))
+        self.check(solver_name)
+        with _clocked(self._seconds, 'handoff'):
+            if keep == 'nothing' and self._solver is not None:
+                self._solver.close()
+                self._solver = None
+            held = self._solver
+            self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
+            kept: Keep = keep if self._solver is held else 'nothing'
+            if kept == 'solver':
+                self._solver.forget()
+        return self._solver, kept
+
     def solve(
         self,
         solver_name: str = 'highs',
@@ -170,24 +196,28 @@ class Engine:
             SpecsolveError: A *keep* outside
                 [`KEEPS`][specsolve.relational.result.KEEPS].
         """
-        if keep not in KEEPS:
-            raise SpecsolveError(unknown_keep_message(keep))
-        self.check(solver_name)
+        solver, kept = self._hand_off(solver_name, solver_options, keep)
         handoff = self._model.handoff
-        with _clocked(self._seconds, 'handoff'):
-            if keep == 'nothing' and self._solver is not None:
-                self._solver.close()
-                self._solver = None
-            held = self._solver
-            self._solver = sinks.loaded(held, solver_name, handoff, solver_options)
-            kept: Keep = keep if self._solver is held else 'nothing'
-            if kept == 'solver':
-                self._solver.forget()
         self._solves += 1
-        if self._solver is not held:
+        if kept == 'nothing':
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = self._solver.run(handoff)
+            answer = solver.run(handoff)
+        return self._answered(answer, solver_name, kept, lower)
+
+    def _answered(
+        self,
+        answer: SolveAnswer,
+        solver_name: str,
+        kept: Keep,
+        lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
+    ) -> Result:
+        """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
+
+        Takes the answer rather than the solver, so that a benchmark can time
+        reading one back without a solve; every vector must span this build.
+        """
+        handoff = self._model.handoff
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
@@ -26,11 +27,13 @@ from specsolve.relational.answer_layout import (
     ACTIVITY,
     METRICS_FILE,
     RECORD_FILE,
+    RESERVED,
     RUN,
     consolidated,
     digest_of_file,
     write_whole,
 )
+from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -117,7 +120,7 @@ def write_archive(
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         _copy_the_answer(answer, tree / ANSWER_DIR, run)
-        _catalog(lowered(spec), tree, run).write_parquet(tree / CATALOG_MEMBER)
+        _write_catalogs(lowered(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
     except BaseException:
@@ -149,8 +152,11 @@ _CATALOG_SCHEMA = {
     'dtype': pl.String,
     'column': pl.String,
     'dim': pl.String,
-    'dim_position': pl.Int32,
 }
+
+
+#: Where an archive keeps an EachWindow sweep's per-window frames, and their own catalog.
+_WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
 
 
 #: The directories that hold one file per name of each kind.
@@ -164,24 +170,78 @@ _HELD_UNDER = {
 }
 
 
-def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
-    """What each file under ``sources/`` and ``answer/<kind>/`` of *tree* holds, one row per column of labels.
+#: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
+_HELD_IN_WINDOWS = {
+    'variable': [f'{_WINDOWS}/primal'],
+    'constraint': [f'{_WINDOWS}/dual'],
+    'expression': [f'{_WINDOWS}/expression'],
+}
 
-    ``path`` and ``dim_position`` are the key, because a constraint may share
-    its name with a parameter. ``dim_position`` is the place in the name's
-    declaration, not in the file, where a sweep's source holds the axis column
-    first. A name with no file has no row.
+
+#: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.
+_OWNED = 'the coordinate of the sliced dimension that each window owns, by window and index inside the window'
+
+
+def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
+    """``catalog.parquet`` for what *tree* holds, and ``answer/windows/catalog.parquet`` where the windows were kept."""
+    dims = _axis_dims(tree, axis)
+    _catalog(program, tree, run, _HELD_UNDER, dims).write_parquet(tree / CATALOG_MEMBER)
+    if (tree / _WINDOWS).is_dir():
+        owned = f'{_WINDOWS}/{OWNED_FILE}'
+        windows = _catalog(program, tree, run, _HELD_IN_WINDOWS, dims, extra=[(owned, 'owned', 'window', _OWNED)])
+        windows.write_parquet(tree / _WINDOWS / CATALOG_MEMBER)
+
+
+def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
+    """The dimension of each column a sweep adds to its files: the axis column, and the key naming each slice.
+
+    A window's answer and cut sources hold the axis column where the spec
+    declares the local index. Empty for a single solve.
     """
+    if axis is None:
+        return {}
+    dim = str(axis['dim'])
+    key = json.loads((tree / ANSWER_DIR / MANIFEST_FILE).read_text())['key_name']
+    return {dim: dim, key: dim}
+
+
+def _catalog(
+    program: Program,
+    tree: Path,
+    run: str,
+    held_under: Mapping[str, Sequence[str]],
+    axis_dims: Mapping[str, str],
+    extra: Sequence[tuple[str, str, str, str]] = (),
+) -> pl.DataFrame:
+    """What each file of *tree* under *held_under* holds, one row per column of labels as the file is written.
+
+    ``path`` and ``column`` are the key, because a constraint may share its
+    name with a parameter. A column's dimension is the one the spec declares
+    for it, else the one *axis_dims* gives, else the dimension of its own
+    name. A name with no file has no row. *extra* is ``(path, name, kind,
+    description)`` for a file the spec declares nothing for.
+    """
+    named = {name: name for name in program.dimensions}
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
-        for directory in _HELD_UNDER[kind]:
-            if (path := _held(tree, directory, name)) is None:
-                continue
-            head = (run, path, name, kind, description, dtype)
-            rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
-            if not columns:
-                rows.append((*head, None, None, None))
-    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'dim_position')
+        for directory in held_under.get(kind, []):
+            if (path := _held(tree, directory, name)) is not None:
+                head = (run, path, name, kind, description, dtype)
+                rows.extend(_rows(head, tree / path, {**named, **axis_dims, **dict(columns)}))
+    for path, name, kind, description in extra:
+        rows.extend(_rows((run, path, name, kind, description, None), tree / path, {**named, **axis_dims}))
+    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'column')
+
+
+def _rows(head: tuple[object, ...], held: Path, dims: Mapping[str, str]) -> list[tuple[object, ...]]:
+    """*head* once per column of labels *held* is written with, and once with no column where it has none."""
+    labels = [column for column in _columns(held) if column != 'value' and not column.startswith(RESERVED)]
+    return [(*head, column, dims.get(column)) for column in labels] or [(*head, None, None)]
+
+
+def _columns(held: Path) -> list[str]:
+    """The columns of *held*, or of its first slice where it is a directory of them."""
+    return list(pl.read_parquet_schema(min(held.glob('*.parquet')) if held.is_dir() else held))
 
 
 def _held(tree: Path, directory: str, name: str) -> str | None:
@@ -235,8 +295,16 @@ def _stamped(source: Path, target: Path, run: str) -> None:
 
 
 def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
-    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][specsolve.relational.answer_layout.RUN] set to *run*.
+
+    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
+    timestamp in a time zone becomes the same instant in UTC.
+    """
+    return frame.with_columns(
+        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
+        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
+        pl.lit(run, dtype=pl.String).alias(RUN),
+    )
 
 
 def _pack(tree: Path, into: Path) -> None:

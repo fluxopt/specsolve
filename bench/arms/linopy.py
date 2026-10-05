@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from bench.arms import Counts
 
 #: Every sink linopy can hand a model to — the same three as ours.
-SINKS = ('lp', 'highs', 'gurobi')
+SINKS = ('lp', 'mps', 'highs', 'gurobi')
 
 #: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('linopy',)
@@ -65,6 +65,8 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
         m = _built(prepared)
         if sink == 'lp':
             m.to_file(Path(tmp) / 'model.lp', io_api='lp-polars', progress=False)
+        elif sink == 'mps':
+            m.to_file(Path(tmp) / 'model.mps', progress=False)
         elif sink == 'gurobi':
             _handle = m.to_gurobipy(set_names=False)
         else:
@@ -72,9 +74,17 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
         return _counts(m)
 
 
-def window_setup(sink: str, prepared: Prepared) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Nothing to hold between windows, so the whole rebuild lands inside the measurement."""
-    return (sink, prepared), {}
+#: The window changes this arm tells apart. Every window is a rebuild here, so
+#: one parameter or a cold solver is the ``values`` window again.
+WINDOW_CHANGES = ('values', 'shape')
+
+
+def window_setup(
+    sink: str, prepared: Prepared, following: Prepared, change: str
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Nothing to hold between windows, so the whole rebuild of *following* lands inside the measurement, whatever *change* is."""
+    del prepared, change
+    return (sink, following), {}
 
 
 def window(sink: str, prepared: Prepared) -> Counts:

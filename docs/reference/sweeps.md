@@ -37,6 +37,10 @@ sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 
 `into` has no default, and a seam's `where: "t == 0"` matches on it.
 
+**A datetime axis is held in microseconds**, as
+[a label is](data.md#where-coordinates-come-from), and a key finer than a
+microsecond is refused.
+
 **`steps` as a sequence is one block per window**, which is a telescoping
 horizon, or a month at a time with a few days of overlap:
 
@@ -208,7 +212,7 @@ sweep = sps.solve_over(
 |---|---|
 | **an archive holds the answer** | One file per name at `answer/<kind>/<name>.parquet`, the path the archive of a single solve uses. Each holds what the reader returns, and `specsolve_run`, which every file of an archive carries, the windows included. `sps.load_archive` and `sps.scan_archive` read the files back, and the readers return them without `specsolve_run`. |
 | **a name with no answer is left out with its reason** | A quantity that is not over the windowed dimension has no file. `answer/reasons.parquet` holds the reason, and the reader raises it. |
-| **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, so `per_window=True` reads off the archive. `answer/sweep.json` records that the windows were kept, so a sweep in which no window wrote a frame reads as the live sweep does. |
+| **`keep_windows=True` keeps the windows too** | An `EachWindow` sweep also writes `answer/windows/<kind>/<name>/<position>.parquet`, with `owned.parquet` and a `catalog.parquet` of their own beside them, so `per_window=True` reads off the archive. `answer/sweep.json` records that the windows were kept, so a sweep in which no window wrote a frame reads as the live sweep does. |
 | **without the windows, a per-window read is refused** | So is an expression the file never named, which is valued at the solution of each window. The error names the way back. |
 | **`keep_windows=True` needs windows and an archive** | On another axis, or without `archive=`, it is refused before a slice is solved. |
 

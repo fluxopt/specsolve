@@ -10,14 +10,30 @@ Each arm module defines:
     build_only(prepared) -> Counts
     objective(prepared) -> float
 
+and, where the library has a sweep verb:
+
+    sweep(sink, prepared) -> Counts
+
+and, where the library reads an answer back apart from its solve, both or neither of:
+
+    read_setup(prepared, into) -> (args, kwargs)
+    read(*args, **kwargs) -> Counts
+
 and, where the library has a rolling-horizon answer, both or neither of:
 
-    window_setup(sink, prepared) -> (args, kwargs)
+    window_setup(sink, prepared, following, change) -> (args, kwargs)
     window(*args, **kwargs) -> Counts
+
+with ``WINDOW_CHANGES`` naming the changes it tells apart, where not all of them.
 
 ``window_setup`` is pytest-benchmark's pedantic ``setup``: it runs untracked in
 the spawned child before each sample, and what it returns feeds ``window``, the
-one window that gets timed.
+one window that gets timed — the one *following* prepares. An arm whose
+``Counts`` carry ``reloaded`` says whether that window loaded its solver from
+scratch, and the harness holds it to the change the window made.
+
+``Counts`` may carry ``phases``, the library's own seconds per phase of the
+call, which the harness records beside the wall time.
 
 ``Prepared`` is opaque to the harness. ``prepare`` runs before the clock, so
 work the harness rather than the library imposes is charged to nobody.
@@ -54,6 +70,13 @@ ARMS: dict[str, ModuleType] = {
 }
 
 
+#: The sinks that write a file, which no window or sweep can be held in.
+WRITERS = ('lp', 'mps')
+
+#: What a solver sink needs installed, whichever arm reaches it.
+SINK_REQUIRES = {'highs': ('highspy',), 'gurobi': ('gurobipy',), 'xpress': ('xpress',)}
+
+
 def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     """Why this cell is not measured, or None when it is.
 
@@ -63,7 +86,8 @@ def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
     import importlib.util
 
     module = ARMS[arm]
-    absent = [r for r in getattr(module, 'REQUIRES', ()) if importlib.util.find_spec(r) is None]
+    needed = (*getattr(module, 'REQUIRES', ()), *SINK_REQUIRES.get(sink, ()))
+    absent = [r for r in needed if importlib.util.find_spec(r) is None]
     if absent:
         return f'{arm} needs {", ".join(absent)}, which this environment does not have'
     if sink not in module.SINKS:

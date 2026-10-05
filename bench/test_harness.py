@@ -15,6 +15,7 @@ import os
 import pickle
 import subprocess
 import sys
+import tempfile
 import tomllib
 from functools import partial
 from pathlib import Path
@@ -24,13 +25,14 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 
 from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import _handoff, checked_sources
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec
+from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
 from bench.conftest import (
     MIN_ROUNDS,
     _holder_if_alive,
@@ -39,6 +41,8 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
+from bench.test_ladder import RELOADS, _fresh
+from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
@@ -243,6 +247,18 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
+
+
+def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
+    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
+    solves would hold it to the solver's own allocations. Both passes leave the
+    sweep out, or the gate would compare two different selections.
+    """
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
+    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
+    assert len(passes) == 2, 'a base pass and a head pass'
+    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
+    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
@@ -642,19 +658,20 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
     """Every arm but `specsolve` is a model somebody typed twice.
 
     A transposed index builds a different model that benchmarks perfectly, so
-    the smallest rung of each case is solved both ways and the objectives
-    compared. `unmeasurable` decides which cells there are.
+    the `xs` rung of each case is solved both ways and the objectives compared.
+    Not `2xs`: over two snapshots a wrapped shift forward is the shift back, so
+    a reversed time index would solve to the same objective. `unmeasurable`
+    decides which cells there are.
     """
     reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
     if reason:
         pytest.skip(reason)
     case = CASES[case_name]
-    smallest = case.ladder[0].label
-    paths = case.data(case.shape(smallest))
-    ours = solved('specsolve', case_name, smallest, paths, {})
-    theirs = solved(dialect, case_name, smallest, paths, {})
+    paths = case.data(case.shape('xs'))
+    ours = solved('specsolve', case_name, 'xs', paths, {})
+    theirs = solved(dialect, case_name, 'xs', paths, {})
     assert theirs == pytest.approx(ours, rel=1e-9), (
-        f'{dialect} solves {case_name}/{smallest} to {theirs}, specsolve to {ours} — not the same model'
+        f'{dialect} solves {case_name}/xs to {theirs}, specsolve to {ours} — not the same model'
     )
 
 
@@ -1284,7 +1301,17 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
     """`benchmem(isolate=True)` ships the action to a spawned child, so a verb
     that is not picklable raises before anything is timed (#1617)."""
     module = ARMS[named_arm]
-    for verb in ('prepare', 'build_and_emit', 'build_only', 'objective', 'window_setup', 'window'):
+    for verb in (
+        'prepare',
+        'build_and_emit',
+        'build_only',
+        'objective',
+        'window_setup',
+        'sweep',
+        'window',
+        'read_setup',
+        'read',
+    ):
         target = getattr(module, verb, None)
         if target is None:
             continue
@@ -1301,6 +1328,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
         assert hasattr(module, 'window') == hasattr(module, 'window_setup'), (
             f'the {name} arm offers one half of the window pair — `window_setup` builds and loads '
             f'outside the clock, `window` is what is timed, and neither means anything alone'
+        )
+        assert hasattr(module, 'read') == hasattr(module, 'read_setup'), (
+            f'the {name} arm offers one half of the read pair — `read_setup` builds and answers '
+            f'outside the clock, `read` is what is timed, and neither means anything alone'
         )
 
 
@@ -1321,7 +1352,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
     for name, module in sorted(ARMS.items()):
         if not hasattr(module, 'window'):
             continue
-        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared))
+        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared, 'values'))
         mem_setup, tracked = plugin._pedantic_action(module.window, (), {}, setup)
         try:
             blob = pickle.dumps((tracked, mem_setup))
@@ -1334,22 +1365,128 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
-    """`test_emit` and `test_window` measure the same cell, so without a phase they are one key."""
+    """`test_emit` and both `test_window` changes measure the same cell, so without a phase they are one key."""
+    cell = {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'}
     doc = {
         'benchmarks': [
             {
                 'name': f'{rung}[dispatch-xs-specsolve-highs]',
-                'params': {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'},
+                'params': {**cell, **extra},
                 'stats': {'median': 1.0, 'min': 1.0},
                 'extra_info': {},
             }
-            for rung in ('test_emit', 'test_window')
+            for rung, extra in (
+                ('test_emit', {}),
+                ('test_window', {'change': 'values'}),
+                ('test_window', {'change': 'shape'}),
+                ('test_window', {'change': 'one'}),
+                ('test_window', {'change': 'coefficient'}),
+                ('test_window', {'change': 'cold'}),
+                ('test_window', {}),
+                ('test_sweep', {}),
+                ('test_read', {'into': 'frames'}),
+                ('test_fresh', {}),
+            )
         ]
     }
     path = tmp_path / 'latest.json'
     path.write_text(json.dumps(doc))
     phases = [r.get('phase') for r in bench_results.records(path) if r.get('record') == 'timing']
-    assert phases == ['emit', 'window'], 'each rung names its own phase, in the order the file writes them'
+    assert phases == [
+        'emit',
+        'window',
+        'window-reshaped',
+        'window-one',
+        'window-coefficient',
+        'window-cold',
+        'window',
+        'sweep',
+        'read-frames',
+        'fresh',
+    ], (
+        'each rung names its own phase, in the order the file writes them, and a window from before '
+        'the change was a parameter is the values window it measured'
+    )
+
+
+@pytest.mark.parametrize('change', sorted(RELOADS))
+@pytest.mark.parametrize(
+    ('case_name', 'rung'),
+    [
+        pytest.param(n, rung, id=f'{n}-{rung}')
+        for n in sorted(CASES)
+        for rung in ('2xs', 'xs')
+        if any(s.label == rung for s in CASES[n].ladder)
+    ],
+)
+def test_a_window_takes_the_path_its_change_names(case_name: str, rung: str, change: str) -> None:
+    """`test_window`'s changes are there to measure the paths an update can take.
+
+    The ladder checks which one ran, but only when it measures; this holds every
+    case's two smallest rungs to it on every pull request, and with them that
+    each rung and the one a snapshot shorter generate and build at all.
+    """
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    if change == 'coefficient' and case.coefficient is None:
+        pytest.skip(f'{case_name} has no parameter inside the matrix')
+    shape = case.shape(rung)
+    prepared = module.prepare(case_name, rung, case.data(shape), {})
+    following = prepared
+    if change == 'shape':
+        following = module.prepare(case_name, rung, case.data(shortened(shape)), {})
+    if change == 'coefficient':
+        following = (prepared[0], {case.coefficient: rescaled(prepared[1][case.coefficient])})
+    args, kwargs = module.window_setup('highs', prepared, following, change)
+    counts = module.window(*args, **kwargs)
+    assert counts['reloaded'] == RELOADS[change], (
+        f'{case_name}: a {change} window should '
+        f'{"load the solver from scratch" if RELOADS[change] else "push onto the loaded solver"}'
+    )
+
+
+@pytest.mark.parametrize('name', sorted(ARMS))
+def test_a_fresh_process_has_imported_no_library_when_its_clock_starts(name: str) -> None:
+    """`test_fresh` charges the import to the arm, so nothing the harness loads may have imported it first.
+
+    Before `bench.arms.specsolve` imported `bench.cases` inside `prepare`, its
+    module scope brought numpy, pandas and polars into every fresh process
+    before the clock.
+    """
+    module = f'bench.arms.{name.replace("-", "_")}'
+    libraries = ('specsolve', 'polars', 'pandas', 'numpy', 'linopy', 'pyomo', 'highspy', 'gurobipy')
+    probe = f'import sys, bench.fresh, {module}; print(" ".join(m for m in {libraries!r} if m in sys.modules))'
+    child = subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True, check=True)
+    assert child.stdout.split() == [], (
+        f'{name}: {child.stdout.strip()} imported before the clock starts, so charged to nobody'
+    )
+
+
+def test_a_fresh_process_reports_its_window_and_its_peak() -> None:
+    """`bench.fresh` is a child the ladder only reads as JSON, so a break in it shows as a missing key."""
+    case = CASES['dispatch']
+    prepared = ARMS['specsolve'].prepare('dispatch', '2xs', case.data(case.shape('2xs')), {})
+    with tempfile.TemporaryDirectory() as tmp:
+        payload = Path(tmp) / 'payload.pickle'
+        payload.write_bytes(pickle.dumps(('specsolve', 'highs', prepared)))
+        counts = _fresh(payload)
+    assert counts['columns'] == case.shape('2xs').nominal_variables, 'the child built the rung it was handed'
+    assert counts['phases']['first_window'] > 0, 'the arm is timed inside the child'
+    assert counts['peak_rss_bytes'] > 0, 'the child reports its own peak, which benchmem cannot see'
+
+
+@pytest.mark.parametrize(('verb', 'method'), sorted(TIMED_THROUGH.items()))
+def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
+    verb: str, method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`bench.yml` runs this harness against the base branch's `src/`.
+
+    A base with no `Engine._hand_off` raised in every window cell, which failed
+    the base pass, so the gate never compared anything.
+    """
+    assert unsupported(verb) is None, f'this checkout has Engine.{method}'
+    monkeypatch.delattr(Engine, method)
+    assert unsupported(verb) == f'this checkout has no Engine.{method}, which the {verb} is timed through'
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:
@@ -1374,3 +1511,129 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
     assert sorted({row['phase'] for row in rows}) == ['emit', 'window'], (
         'the long CSV carries both, under phases that tell them apart'
     )
+
+
+def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
+    """Every verb reports the engine's phases, and a window only its own share of them.
+
+    The engine's clock sums over the model's life, so a window that reported it
+    whole would carry the setup's build too.
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {})
+
+    emitted = module.build_and_emit('lp', prepared)['phases']
+    assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
+    assert {'attach', 'build'} <= module.build_only(prepared)['phases'].keys(), 'a build is attached and built'
+
+    args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
+    model = args[0]
+    window = module.window(*args, **kwargs)['phases']
+    assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
+    whole = model._engine._seconds
+    assert all(0 <= window[phase] < whole[phase] for phase in ('attach', 'build')), (
+        "a window's phases are its own, not the setup's build summed in"
+    )
+
+
+def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
+    record = _timing('specsolve', phase='emit', phase_seconds={'attach': 0.1, 'build': 0.4})
+    rows = {row['metric']: row['value'] for row in tidy.measurements([record], 'run')}
+    assert (rows['attach_seconds'], rows['build_seconds']) == (0.1, 0.4), 'each phase is a row of its own'
+    assert rows['wall_seconds'] == 1.0, 'beside the wall time, not instead of it'
+
+
+@pytest.mark.parametrize('into', ['frames', 'parquet'])
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None:
+    """`test_read`'s synthetic answer is one the engine lays out, every case's smallest rung, both ways.
+
+    A mixed-integer case is answered without duals, and a reader that asked for
+    them would raise.
+    """
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    prepared = module.prepare(case_name, 'xs', case.data(case.shape('xs')), {})
+    args, kwargs = module.read_setup(prepared, into)
+    model, answer, _ = args
+    assert answer.primal.len() == _handoff(model).column_count, 'the answer spans every built column'
+    assert (answer.dual is None) == bool(model._engine._discrete()), (
+        'duals exactly where a real solve leaves them: none for a model with an integer variable'
+    )
+    assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
+
+
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_a_sweep_loads_once_and_says_what_the_solver_took(case_name: str) -> None:
+    """`test_sweep` asserts one load and attributes the solve, on every case's smallest rung."""
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    counts = module.sweep('highs', module.prepare(case_name, 'xs', case.data(case.shape('xs')), {}))
+    assert counts['loads'] == 1, 'the first slice loads and every later one, its values unchanged, pushes'
+    assert counts['phases']['solve'] > 0, "the solver's share is attributed, not left inside the wall time"
+
+
+def test_a_sink_whose_solver_is_not_installed_is_skipped_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every arm reaching a solver sink skips, naming the package, rather than failing inside the clock."""
+    import importlib.util
+
+    from bench import arms
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, 'find_spec', lambda name, *a: None if name == 'xpress' else real(name, *a))
+    reason = arms.unmeasurable('specsolve', 'dispatch', 'xpress')
+    assert reason is not None and 'xpress' in reason, 'a missing solver package names itself as the reason'
+
+
+@pytest.mark.parametrize('named_sink', harness.SINKS)
+def test_every_sink_has_a_caption_the_report_prints(named_sink: str) -> None:
+    """A table for a sink the report has no sentence for would raise when the page is written."""
+    assert report._SEAM.get(named_sink), (
+        f'{named_sink} reaches the report with nothing saying what each arm ended up holding'
+    )
+
+
+class _CallsTwice:
+    """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
+
+    A plain call runs the target twice on the same arguments, a warm-up then the
+    measured one; the pedantic form runs `setup` before each.
+    """
+
+    def __call__(self, target: Any, *args: Any) -> Any:
+        target(*args)
+        return target(*args)
+
+    def pedantic(self, target: Any, args: tuple = (), kwargs: dict | None = None, setup: Any = None, **_: Any) -> Any:
+        out = None
+        for _ in range(2):
+            args, kwargs = setup() if setup is not None else (args, kwargs or {})
+            out = target(*args, **kwargs)
+        return out
+
+
+def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
+    """A `shape` window updates onto the shorter rung, so a second call on the same model has nothing left to reload.
+
+    `_rounds` handed CodSpeed one setup and the plain call, and its memory
+    instrument failed every `shape` window at `s`; its wall-time instrument
+    returned the first call and timed the later ones, so it measured the push
+    path in silence.
+    """
+    from bench.test_ladder import _rounds
+
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    shape = case.shape('xs')
+    prepared = module.prepare('dispatch', 'xs', case.data(shape), {})
+    shorter = module.prepare('dispatch', 'xs', case.data(shortened(shape)), {})
+    request = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace()))
+    counts = _rounds(
+        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter, 'shape')
+    )
+    assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'

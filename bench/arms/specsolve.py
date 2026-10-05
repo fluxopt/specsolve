@@ -7,10 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bench.cases import CASES
-
 #: Every sink the relational lane can hand a model to.
-SINKS = ('lp', 'highs', 'gurobi')
+SINKS = ('lp', 'mps', 'highs', 'gurobi', 'xpress')
 
 #: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ()
@@ -46,6 +44,8 @@ def prepare(
     case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]
 ) -> tuple[Path, dict[str, str]]:
     """The spec to build and the sources to build it from, both already checked."""
+    from bench.cases import CASES
+
     del options
     case = CASES[case_name]
     return case.spec_path(case.shape(size)), checked_sources(case, size, paths)
@@ -75,18 +75,27 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
     }
 
 
+def _clocks(model: Any) -> dict[str, float]:
+    """The engine's own seconds per phase, summed over the model's life; empty on a checkout that kept none."""
+    return dict(getattr(getattr(model, '_engine', None), '_seconds', None) or {})
+
+
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
-    """Build relationally and hand the model over — an LP file, or a solver; the solver never runs."""
+    """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
+
+    A solver is constructed straight off the frames, so its load is in no
+    phase: it is the wall time less the phases.
+    """
     import specsolve as sps
 
     spec, sources = prepared
     with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp, sps.build(spec, sources) as model:
-        if sink == 'lp':
-            model.write(Path(tmp) / 'model.lp')
+        if sink in ('lp', 'mps'):
+            model.write(Path(tmp) / f'model.{sink}')
         else:
             _loaded(sink, model).close()
 
-        return _counts(_handoff(model), nonzeros=True)
+        return _counts(_handoff(model), nonzeros=True) | {'phases': _clocks(model)}
 
 
 def _loaded(sink: str, model: Any) -> Any:
@@ -96,29 +105,141 @@ def _loaded(sink: str, model: Any) -> Any:
     return load(_handoff(model))
 
 
-def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+#: The private engine method each verb is timed through, which a checkout older than the verb lacks.
+TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
+
+
+def unsupported(verb: str) -> str | None:
+    """Why the checkout under test cannot take *verb*, or None when it can.
+
+    `bench.yml` measures the base branch's `src/` under this harness, and a base
+    older than the method a verb is timed through has none of it. Its cells are
+    skipped there, and the gate compares only what both runs measured.
+    """
+    from specsolve.relational.engine.engine import Engine
+
+    method = TIMED_THROUGH.get(verb)
+    if method is None or hasattr(Engine, method):
+        return None
+    return f'this checkout has no Engine.{method}, which the {verb} is timed through'
+
+
+def window_setup(
+    sink: str, prepared: tuple[Path, dict[str, str]], following: tuple[Path, dict[str, str]], change: str
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Window one, built and loaded before the clock, and held for the one that is timed.
 
     Nothing is released: the model and its solver stay resident, so the
-    measured peak includes them.
+    measured peak includes them. A ``one`` window updates the first declared
+    parameter alone, as ``update`` is usually called; a ``coefficient`` window
+    updates whatever *following* carries, which is one parameter inside the
+    matrix; a ``cold`` window asks for ``keep='nothing'``.
     """
     import specsolve as sps
 
     spec, sources = prepared
     model = sps.build(spec, sources)
-    return (model, _loaded(sink, model), sources), {}
+    model._engine._hand_off(sink, None, 'solver')
+    updated = following[1]
+    if change == 'one':
+        first = next(name for name in model._program.parameters if name in updated)
+        updated = {first: updated[first]}
+    return (model, sink, updated, 'nothing' if change == 'cold' else 'solver'), {}
 
 
-def window(model: Any, solver: Any, sources: dict[str, str]) -> Counts:
-    """What the second window of a rolling horizon costs, and every one after.
+def window(model: Any, sink: str, sources: dict[str, str], keep: str) -> Counts:
+    """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds the tables and ``push`` replaces the bounds, costs and
-    right-hand sides on the loaded solver. The same sources are re-attached,
-    because the cost depends on the shape of the data, not its values.
+    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
+    digests the new build against the one the solver holds, then pushes the
+    bounds, costs and right-hand sides onto it, or loads it from scratch where
+    the digest moved. A later window pays one digest fewer, because the held
+    one is kept.
     """
+    before = _clocks(model)
     model.update(sources)
-    solver.push(_handoff(model))
-    return _counts(_handoff(model), nonzeros=True)
+    _, kept = model._engine._hand_off(sink, None, keep)
+    phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
+    return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing', 'phases': phases}
+
+
+#: Slices in the measured sweep — enough that every one after the first is the push path.
+SWEEP_SLICES = 4
+
+
+def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
+    """``solve_over`` across hand-built slices of the rung's own data, folded in order on one model.
+
+    Every slice carries the same values, so the first loads the solver and the
+    rest push. The solver runs on every slice, and ``phases`` sums the sweep's
+    own per-slice clocks, so its ``solve`` is what the wall time owes the
+    solver and the rest is the sweep's.
+    """
+    import specsolve as sps
+
+    spec, sources = prepared
+    swept = sps.solve_over(
+        spec, sources, [(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario', solver_name=sink
+    )
+    metrics = swept.metrics
+    return {
+        'columns': metrics['columns'][0],
+        'rows': metrics['rows'][0],
+        'nonzeros': metrics['nonzeros'][0],
+        'loads': int(metrics['loads'].sum()),
+        'phases': {
+            column.removesuffix('_seconds'): float(metrics[column].sum())
+            for column in metrics.columns
+            if column.endswith('_seconds')
+        },
+    }
+
+
+def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """A build and an answer to it, before the clock — every column and row zero, reported optimal.
+
+    What reading an answer back costs is set by how many values it lays out,
+    not by what they are, so no solver runs. A model with an integer variable
+    gets no duals, as a real solve leaves it.
+    """
+    import polars as pl
+
+    import specsolve as sps
+    from specsolve.relational.sinks.solvers.base import SolveAnswer
+    from specsolve.relational.status import SolveStatus
+
+    spec, sources = prepared
+    model = sps.build(spec, sources)
+    handoff = _handoff(model)
+    rows = pl.zeros(handoff.row_count, dtype=pl.Float64, eager=True)
+    answer = SolveAnswer(
+        SolveStatus('optimal'),
+        0.0,
+        primal=pl.zeros(handoff.column_count, dtype=pl.Float64, eager=True),
+        dual=None if model._engine._discrete() else rows,
+        activity=rows,
+    )
+    return (model, answer, into), {}
+
+
+def read(model: Any, answer: Any, into: str) -> Counts:
+    """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
+
+    ``frames`` collects every variable's primal and every constraint's dual
+    and activity; ``parquet`` is ``Result.save``.
+    """
+    result = model._engine._answered(answer, 'highs', 'nothing', None)
+    if into == 'frames':
+        for name in model._program.variables:
+            result.primal(name)
+        for name in model._program.constraints:
+            if answer.dual is not None:
+                result.dual(name)
+            result.activity(name)
+    else:
+        with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
+            result.save(Path(tmp) / 'answer')
+    return _counts(_handoff(model), nonzeros=False)
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
@@ -127,7 +248,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with sps.build(spec, sources) as model:
-        return _counts(_handoff(model), nonzeros=False)
+        return _counts(_handoff(model), nonzeros=False) | {'phases': _clocks(model)}
 
 
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:

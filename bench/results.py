@@ -5,7 +5,7 @@ The record shape `bench/report.py` and `bench/plot.py` read:
     {'record': 'timing', 'case', 'size', 'arm', 'sink', 'phase',
      'wall_seconds', 'fastest_seconds', 'q1_seconds', 'q3_seconds', 'iqr', 'median', 'rounds',
      'peak_rss_bytes', 'peak_bytes', 'allocations',
-     'counts': {...}, 'live_fraction'}
+     'counts': {...}, 'live_fraction', 'phase_seconds': {...}}
     {'record': 'loop',   'case', 'size', 'arm',
      'first_build_seconds', 'steady_build_seconds'}
     {'record': 'run',    'platform', 'machine', 'cpu', 'cores', 'python', 'versions', 'commits'}
@@ -59,9 +59,28 @@ def _commit(info: dict[str, Any]) -> str | None:
     return f'{head}-dirty' if info.get('dirty') else head
 
 
-def _phase(name: str) -> str:
-    """Which rung a timing record came off: `test_emit` and `test_window` measure the same cell (#1617)."""
-    return 'window' if name.startswith('test_window') else 'emit'
+#: Each `test_window` change, and the phase it is recorded under. A file from
+#: before the change was a parameter measured ``values``.
+WINDOWS = {
+    'values': 'window',
+    'shape': 'window-reshaped',
+    'one': 'window-one',
+    'coefficient': 'window-coefficient',
+    'cold': 'window-cold',
+}
+
+
+def _phase(name: str, params: dict[str, Any]) -> str:
+    """Which rung a timing record came off: `test_emit`, `test_window` and `test_read` measure the same cell (#1617)."""
+    if name.startswith('test_read'):
+        return f'read-{params.get("into")}'
+    if name.startswith('test_sweep'):
+        return 'sweep'
+    if name.startswith('test_fresh'):
+        return 'fresh'
+    if not name.startswith('test_window'):
+        return 'emit'
+    return WINDOWS[params.get('change', 'values')]
 
 
 def _benchmem(extra: dict[str, Any], field: str) -> float | None:
@@ -125,7 +144,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         yield {
             **common,
             'record': 'timing',
-            'phase': _phase(b['name']),
+            'phase': _phase(b['name'], params),
             'sink': params.get('sink'),
             'wall_seconds': stats.get('median'),
             'fastest_seconds': stats.get('min'),
@@ -134,11 +153,12 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'iqr': stats.get('iqr'),
             'median': stats.get('median'),
             'rounds': stats.get('rounds'),
-            'peak_rss_bytes': _benchmem(extra, 'rss_bytes'),
+            'peak_rss_bytes': _benchmem(extra, 'rss_bytes') or extra.get('process_rss_bytes'),
             'peak_bytes': _benchmem(extra, 'peak_bytes'),
             'allocations': _benchmem(extra, 'allocations'),
             'counts': _counts(extra),
             'live_fraction': extra.get('live_fraction'),
+            'phase_seconds': extra.get('phase_seconds'),
         }
 
 
