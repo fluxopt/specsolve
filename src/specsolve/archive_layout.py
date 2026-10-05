@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
@@ -235,8 +236,16 @@ def _stamped(source: Path, target: Path, run: str) -> None:
 
 
 def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
-    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][specsolve.relational.answer_layout.RUN] set to *run*.
+
+    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
+    timestamp in a time zone becomes the same instant in UTC.
+    """
+    return frame.with_columns(
+        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
+        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
+        pl.lit(run, dtype=pl.String).alias(RUN),
+    )
 
 
 def _pack(tree: Path, into: Path) -> None:
