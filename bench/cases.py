@@ -31,7 +31,7 @@ reads the same parquet files. Every generator is feasible by construction.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -109,6 +109,20 @@ class Case:
             stamp.write_text('\n'.join(sorted(paths)))
             return paths
         return {p.stem: str(p) for p in sorted(out.glob('*.parquet'))}
+
+
+def shortened(shape: Shape) -> Shape:
+    """*shape* one snapshot shorter: the next window of a horizon whose length moved.
+
+    Every rung carries ``snapshot``, and a build one snapshot shorter has
+    other counts, so no loaded solver can take it by value.
+    """
+    snapshots = shape.sizes['snapshot']
+    return replace(
+        shape,
+        sizes={**shape.sizes, 'snapshot': snapshots - 1},
+        nominal_variables=shape.nominal_variables // snapshots * (snapshots - 1),
+    )
 
 
 def _seed(shape: Shape) -> np.random.Generator:

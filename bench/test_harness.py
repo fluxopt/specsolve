@@ -29,8 +29,8 @@ from bench import conftest as harness
 from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import _handoff, checked_sources
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec
+from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, shortened
 from bench.conftest import (
     MIN_ROUNDS,
     _holder_if_alive,
@@ -39,6 +39,7 @@ from bench.conftest import (
     refuse_unless_idle,
     take_lock,
 )
+from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.labels import Labelled
 from specsolve.relational.sinks.solvers.base import WarmStart
 
@@ -1321,7 +1322,7 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
     for name, module in sorted(ARMS.items()):
         if not hasattr(module, 'window'):
             continue
-        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared))
+        setup = _CollectedSetup(partial(module.window_setup, 'highs', prepared, prepared))
         mem_setup, tracked = plugin._pedantic_action(module.window, (), {}, setup)
         try:
             blob = pickle.dumps((tracked, mem_setup))
@@ -1334,22 +1335,71 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
-    """`test_emit` and `test_window` measure the same cell, so without a phase they are one key."""
+    """`test_emit` and both `test_window` changes measure the same cell, so without a phase they are one key."""
+    cell = {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'}
     doc = {
         'benchmarks': [
             {
                 'name': f'{rung}[dispatch-xs-specsolve-highs]',
-                'params': {'case_name': 'dispatch', 'size': 'xs', 'arm': 'specsolve', 'sink': 'highs'},
+                'params': {**cell, **extra},
                 'stats': {'median': 1.0, 'min': 1.0},
                 'extra_info': {},
             }
-            for rung in ('test_emit', 'test_window')
+            for rung, extra in (
+                ('test_emit', {}),
+                ('test_window', {'change': 'values'}),
+                ('test_window', {'change': 'shape'}),
+                ('test_window', {}),
+            )
         ]
     }
     path = tmp_path / 'latest.json'
     path.write_text(json.dumps(doc))
     phases = [r.get('phase') for r in bench_results.records(path) if r.get('record') == 'timing']
-    assert phases == ['emit', 'window'], 'each rung names its own phase, in the order the file writes them'
+    assert phases == ['emit', 'window', 'window-reshaped', 'window'], (
+        'each rung names its own phase, in the order the file writes them, and a window from before '
+        'the change was a parameter is the values window it measured'
+    )
+
+
+@pytest.mark.parametrize('change', ['values', 'shape'])
+@pytest.mark.parametrize(
+    'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
+)
+def test_a_window_takes_the_path_its_change_names(case_name: str, change: str) -> None:
+    """`test_window`'s two changes are there to measure the two paths an update can take.
+
+    The ladder checks which one ran, but only when it measures; this holds every
+    case's smallest rung to it on every pull request, and with it that the
+    shorter rung generates and builds at all.
+    """
+    module = ARMS['specsolve']
+    case = CASES[case_name]
+    shape = case.shape('xs')
+    prepared = module.prepare(case_name, 'xs', case.data(shape), {})
+    following = prepared
+    if change == 'shape':
+        following = module.prepare(case_name, 'xs', case.data(shortened(shape)), {})
+    args, kwargs = module.window_setup('highs', prepared, following)
+    counts = module.window(*args, **kwargs)
+    assert counts['reloaded'] == (change == 'shape'), (
+        f'{case_name}: a window whose {change} moved should '
+        f'{"load the solver from scratch" if change == "shape" else "push onto the loaded solver"}'
+    )
+
+
+@pytest.mark.parametrize(('verb', 'method'), sorted(TIMED_THROUGH.items()))
+def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
+    verb: str, method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`bench.yml` runs this harness against the base branch's `src/`.
+
+    A base with no `Engine._hand_off` raised in every window cell, which failed
+    the base pass, so the gate never compared anything.
+    """
+    assert unsupported(verb) is None, f'this checkout has Engine.{method}'
+    monkeypatch.delattr(Engine, method)
+    assert unsupported(verb) == f'this checkout has no Engine.{method}, which the {verb} is timed through'
 
 
 def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> None:
@@ -1374,3 +1424,44 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
     assert sorted({row['phase'] for row in rows}) == ['emit', 'window'], (
         'the long CSV carries both, under phases that tell them apart'
     )
+
+
+class _CallsTwice:
+    """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
+
+    A plain call runs the target twice on the same arguments, a warm-up then the
+    measured one; the pedantic form runs `setup` before each.
+    """
+
+    def __call__(self, target: Any, *args: Any) -> Any:
+        target(*args)
+        return target(*args)
+
+    def pedantic(self, target: Any, args: tuple = (), kwargs: dict | None = None, setup: Any = None, **_: Any) -> Any:
+        out = None
+        for _ in range(2):
+            args, kwargs = setup() if setup is not None else (args, kwargs or {})
+            out = target(*args, **kwargs)
+        return out
+
+
+def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
+    """A `shape` window updates onto the shorter rung, so a second call on the same model has nothing left to reload.
+
+    `_rounds` handed CodSpeed one setup and the plain call, and its memory
+    instrument failed every `shape` window at `s`; its wall-time instrument
+    returned the first call and timed the later ones, so it measured the push
+    path in silence.
+    """
+    from bench.test_ladder import _rounds
+
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    shape = case.shape('xs')
+    prepared = module.prepare('dispatch', 'xs', case.data(shape), {})
+    shorter = module.prepare('dispatch', 'xs', case.data(shortened(shape)), {})
+    request = SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace()))
+    counts = _rounds(
+        _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter)
+    )
+    assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'

@@ -96,7 +96,28 @@ def _loaded(sink: str, model: Any) -> Any:
     return load(_handoff(model))
 
 
-def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+#: The private engine method each verb is timed through, which a checkout older than the verb lacks.
+TIMED_THROUGH = {'window': '_hand_off'}
+
+
+def unsupported(verb: str) -> str | None:
+    """Why the checkout under test cannot take *verb*, or None when it can.
+
+    `bench.yml` measures the base branch's `src/` under this harness, and a base
+    older than the method a verb is timed through has none of it. Its cells are
+    skipped there, and the gate compares only what both runs measured.
+    """
+    from specsolve.relational.engine.engine import Engine
+
+    method = TIMED_THROUGH.get(verb)
+    if method is None or hasattr(Engine, method):
+        return None
+    return f'this checkout has no Engine.{method}, which the {verb} is timed through'
+
+
+def window_setup(
+    sink: str, prepared: tuple[Path, dict[str, str]], following: tuple[Path, dict[str, str]]
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Window one, built and loaded before the clock, and held for the one that is timed.
 
     Nothing is released: the model and its solver stay resident, so the
@@ -106,19 +127,22 @@ def window_setup(sink: str, prepared: tuple[Path, dict[str, str]]) -> tuple[tupl
 
     spec, sources = prepared
     model = sps.build(spec, sources)
-    return (model, _loaded(sink, model), sources), {}
+    model._engine._hand_off(sink, None, 'solver')
+    return (model, sink, following[1]), {}
 
 
-def window(model: Any, solver: Any, sources: dict[str, str]) -> Counts:
-    """What the second window of a rolling horizon costs, and every one after.
+def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
+    """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds the tables and ``push`` replaces the bounds, costs and
-    right-hand sides on the loaded solver. The same sources are re-attached,
-    because the cost depends on the shape of the data, not its values.
+    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
+    digests the new build against the one the solver holds, then pushes the
+    bounds, costs and right-hand sides onto it, or loads it from scratch where
+    the digest moved. A later window pays one digest fewer, because the held
+    one is kept.
     """
     model.update(sources)
-    solver.push(_handoff(model))
-    return _counts(_handoff(model), nonzeros=True)
+    _, kept = model._engine._hand_off(sink, None, 'solver')
+    return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing'}
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
