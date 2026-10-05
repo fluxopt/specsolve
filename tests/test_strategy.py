@@ -777,25 +777,26 @@ def _in_unit(unit: str, *, nanoseconds: int = 0) -> pl.Series:
 def _keyed_by_datetime(keys: pl.Series) -> dict[str, object]:
     """``scenario_sources`` with its first three keys keyed by *keys* rather than by name."""
     sources = scenario_sources()
-    named = dict(zip(['low', 'mid', 'high'], keys[:3], strict=True))
-    load = pl.DataFrame(sources['load']).with_columns(pl.col('scenario').replace_strict(named, return_dtype=keys.dtype))
+    named = pl.DataFrame({'scenario': ['low', 'mid', 'high'], 'key': keys[:3]})
+    load = pl.DataFrame(sources['load']).join(named, on='scenario').drop('scenario').rename({'key': 'scenario'})
     return {**sources, 'load': load}
-
-
-_CRASHES = pytest.mark.xfail(reason='a window over a nanosecond or millisecond axis crashes', strict=True)
 
 
 @pytest.mark.parametrize(
     ('unit', 'kind'),
     [
-        pytest.param('ns', 'window', id='window-ns', marks=_CRASHES),
-        pytest.param('ms', 'window', id='window-ms', marks=_CRASHES),
+        pytest.param('ns', 'window', id='window-ns'),
+        pytest.param('ms', 'window', id='window-ms'),
         pytest.param('ns', 'coordinate', id='coordinate-ns'),
         pytest.param('ms', 'coordinate', id='coordinate-ms'),
     ],
 )
 def test_a_sweep_over_a_datetime_axis_in_any_unit_solves(unit, kind):
-    """The coordinates are read out as python datetimes, microseconds, and met a column in another unit."""
+    """A window over a nanosecond or millisecond axis crashed in its first slice.
+
+    The coordinates were read out as python datetimes, which are microseconds,
+    and met a column in another unit.
+    """
     keys = _in_unit(unit)
     if kind == 'window':
         runs = sps.solve_over(
@@ -807,10 +808,12 @@ def test_a_sweep_over_a_datetime_axis_in_any_unit_solves(unit, kind):
         assert runs.keys == HOURS[:3], 'one slice per key, keyed by the instant'
 
 
-@pytest.mark.xfail(reason='a window crashes, and a coordinate sweep builds the slice empty', strict=True)
 @pytest.mark.parametrize('kind', ['window', 'coordinate'])
 def test_a_sweep_over_a_datetime_axis_finer_than_a_microsecond_is_refused(kind):
-    """A key read out as a python datetime drops its nanoseconds, so it no longer matches its own rows."""
+    """A key read out as a python datetime dropped its nanoseconds and no longer matched its own rows.
+
+    A window crashed, and a coordinate sweep built that slice empty.
+    """
     keys = _in_unit('ns', nanoseconds=1)
     with pytest.raises(sps.errors.DataError, match='finer than a microsecond'):
         if kind == 'window':
