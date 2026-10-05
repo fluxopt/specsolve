@@ -678,23 +678,52 @@ def test_a_datetime_label_finer_than_a_microsecond_is_refused_on_both_lanes(tmp_
 
 
 @pytest.mark.parametrize(
-    ('sources', 'owner'),
+    ('sources', 'owner', 'clock'),
     [
         pytest.param(
             _temporal_sources(index=_instants('us', 'UTC'), cap=_EVEN, day_of=_instants('us', 'UTC')),
             "parameter 'cap'",
+            'without a time zone',
             id='parameter',
         ),
         pytest.param(
             _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_instants('ns', 'UTC')),
             "relation 'day_of'",
+            "in time zone 'UTC'",
             id='relation',
+        ),
+        pytest.param(
+            _temporal_sources(
+                index=_instants('us', 'Europe/Berlin'),
+                cap=_instants('us', 'UTC'),
+                day_of=_instants('us', 'Europe/Berlin'),
+            ),
+            "parameter 'cap'",
+            "in time zone 'UTC'",
+            id='parameter-in-another-zone',
+        ),
+        pytest.param(
+            _temporal_sources(
+                index=_instants('us', 'Europe/Berlin'),
+                cap=_instants('us', 'Europe/Berlin'),
+                day_of=_instants('us', 'UTC'),
+            ),
+            "relation 'day_of'",
+            "in time zone 'UTC'",
+            id='relation-in-another-zone',
         ),
     ],
 )
-def test_a_datetime_column_in_another_time_zone_than_its_index_is_refused_on_both_lanes(tmp_path, sources, owner):
-    """A time zone is kept as it arrived, so a column on another clock than its index is refused, not compared."""
+def test_a_datetime_column_in_another_time_zone_than_its_index_is_refused_on_both_lanes(
+    tmp_path, sources, owner, clock
+):
+    """A time zone is kept as it arrived, so a column on another clock than its index is refused, not compared.
+
+    Two zones are refused too, although converting between them is exact: the
+    rule is one clock, not one instant.
+    """
     path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
 
-    sentence = both_lanes_refuse(path, sources, match=r'without a time zone')
+    sentence = both_lanes_refuse(path, sources, match=r'on one clock')
     assert sentence.startswith(owner), 'the refusal names what carried the column'
+    assert clock in sentence, "and the column's own clock"
