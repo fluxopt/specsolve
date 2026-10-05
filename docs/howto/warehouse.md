@@ -53,7 +53,7 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name, and on which solver and package versions |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
 | `sources.parquet` | source per archive | what each input's table digests to |
-| `catalog.parquet` | dimension column of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
+| `catalog.parquet` | column of labels of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `specsolve_run` is the
 archive's own name: `runs/base` writes `base`, and `runs/base.zip` writes the
@@ -143,8 +143,7 @@ generators.with_columns(key=pl.concat_str('specsolve_run', 'generator', separato
 ```
 
 A rolling horizon holds no table for `t`, because each window numbers its own
-`t` from 0. Its answer is over `snapshot`, which the spec does not declare and
-no table lists.
+`t` from 0. Its answer is over `snapshot`, which the spec does not declare.
 
 ## Relations
 
@@ -194,9 +193,9 @@ order by bus;
 
 ## What a file holds
 
-`catalog.parquet` says what each file in the archive holds, so a reader needs
-no `spec.yaml`. It has one row per dimension column of each file under
-`sources/` and `answer/`:
+`catalog.parquet` says what each file in the archive holds, so a reader
+needs no `spec.yaml`. It describes each file as it is written. It has one row
+per column of labels of each file under `sources/` and `answer/`:
 
 | column | holds |
 |---|---|
@@ -206,19 +205,18 @@ no `spec.yaml`. It has one row per dimension column of each file under
 | `kind` | `dimension`, `relation`, `parameter`, `variable`, `constraint` or `expression` |
 | `description` | the spec's `description:`, or null |
 | `dtype` | the declared type of a dimension's labels or a parameter's `value`, else null |
-| `column` | the column that holds `dim`'s labels: a relation's role, else the dimension itself |
-| `dim` | the dimension, or null for a file over no dimension |
-| `dim_position` | the 0-based place of `column` in the order the spec declares the name's dimensions, which can differ from the order of the file's columns |
+| `column` | a column of the file that holds labels |
+| `dim` | the dimension of those labels, or null for a file over no dimension |
 
 **Join it on the path, not the name.** A constraint can have the name of a
 parameter, so `name = 'load'` can match the parameter's source and the
-constraint's dual. `path` and `dim_position` identify one row:
+constraint's dual. `path` and `column` identify one row. In DuckDB:
 
 ```sql
 select name, kind, description, "column", dim
 from read_parquet('runs/base/catalog.parquet')
 where path = 'answer/primal/p.parquet'
-order by dim_position;
+order by "column";
 ```
 
 **The catalog lists the files the archive holds, and no other.** A name the
@@ -227,10 +225,22 @@ left no values, the duals of a model that has none, and a named expression the
 data cannot evaluate. `answer/record.parquet` and `answer/reasons.parquet` say
 why.
 
+**A sweep archive lists the columns the sweep wrote.** An `EachCoordinate`
+sweep adds its key column, such as `scenario`, to the answer and to each
+source it cuts. An `EachWindow` sweep holds its answer and the sources it cuts
+over the dimension it slices, such as `snapshot`, where the spec declares the
+local index `t`. Each of these columns has a row, with the dimension the axis
+slices as its `dim`.
+
+**Kept windows have a catalog of their own.** With `keep_windows=True`,
+`answer/windows/catalog.parquet` lists the per-window frames and
+`answer/windows/owned.parquet`, which says what coordinate each window owns.
+It has the same columns. `catalog.parquet` never lists them, so it is the same
+whether the windows are kept or not.
+
 The catalog has no units, because the spec declares none. It has no row for
 `specsolve_run`, which every file carries, or for a dimension's
-`specsolve_position`. Neither holds labels. A sweep's frames also carry the
-column of the sweep key, which `axis.json` names and the catalog does not list.
+`specsolve_position`. Neither holds labels.
 
 ## Compare cases solved apart
 

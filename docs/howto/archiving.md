@@ -28,7 +28,7 @@ case/
     sources/load.parquet
     …
     sources.parquet               (specsolve_run, source, digest) — what each of them is
-    catalog.parquet               (specsolve_run, path, …) — what each file holds and over which dimensions
+    catalog.parquet               (specsolve_run, path, …, column, dim) — what each file holds and over which dimensions
     answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
     answer/primal/p.parquet       one file per variable
@@ -175,7 +175,9 @@ Each slice cuts from the archive the tables it attached.
 
 **Keep the windows where you will read them per window.** `keep_windows=True`
 also writes each window's frames, lookahead rows included, under
-`answer/windows/`. Then `per_window=True` reads off the archive:
+`answer/windows/`, with `owned.parquet` for what each window owns and
+`catalog.parquet` for what each of these files holds. Then `per_window=True`
+reads off the archive:
 
 ```python
 sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)

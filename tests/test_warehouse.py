@@ -241,7 +241,6 @@ STRICT = {
         'dtype': pl.String,
         'column': pl.String,
         'dim': pl.String,
-        'dim_position': pl.Int32,
     },
     'sources/generator.parquet': {'generator': pl.String, 'specsolve_position': pl.Int64, 'specsolve_run': pl.String},
     'sources/p_max.parquet': {'generator': pl.String, 'value': pl.Float64, 'specsolve_run': pl.String},
