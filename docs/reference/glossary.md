@@ -221,6 +221,19 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   a frame reader reads the one name it is asked for, and `sweep.scan(name)`
   hands it back lazily ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
 
+## Manifests
+
+**Manifest**
+: A YAML file of the arguments of `solve` and `solve_over`, for one or more
+  runs, which the `specsolve` command and
+  [`load_manifest`](api.md#specsolve.load_manifest) read. Its keys are the
+  arguments' own names ([the manifest](manifest.md)).
+
+**Run**
+: One entry under a manifest's `runs:`: one call to `solve`, or to
+  `solve_over` where it has an `axis`. A run is never a "case" or a
+  "scenario"; a scenario is a label a sweep slices.
+
 ## Row types
 
 **Record** · **Metrics**

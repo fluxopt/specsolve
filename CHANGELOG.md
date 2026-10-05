@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(cli): a manifest file runs several solves of a model with one command ([#1845](https://github.com/fluxopt/specsolve/pull/1845))
+
 ## 0.6.0 (2026-10-05)
 
 Breaks:

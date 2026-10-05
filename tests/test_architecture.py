@@ -322,6 +322,7 @@ def test_every_repository_path_a_workflow_names_exists():
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
+    'run it from a file': {'load_manifest'},
     'see what it reads': {'tidy'},
     'read it back': {'load_archive', 'load_result', 'load_sweep', 'scan_archive', 'scan_result', 'scan_sweep'},
 }
@@ -331,12 +332,14 @@ PUBLIC_MODULES = {
     'types': {
         'ConstraintRow',
         'Diagnostics',
+        'Manifest',
         'Metrics',
         'Model',
         'Provenance',
         'Record',
         'Result',
         'ResultArchive',
+        'Run',
         'Sweep',
         'SweepArchive',
     },
@@ -827,3 +830,23 @@ def test_lazy_intra_package_imports_are_all_declared():
     )
     stale = set(DELIBERATE_LAZY_IMPORTS) - set(found)
     assert not stale, f'DELIBERATE_LAZY_IMPORTS lists imports that no longer exist: {stale}'
+
+
+@pytest.mark.parametrize(
+    ('package', 'allowed'),
+    [
+        pytest.param('typer', {'cli.py'}, id='typer-only-in-the-command'),
+        pytest.param('fastexcel', set(), id='fastexcel-never-polars-reads-it'),
+    ],
+)
+def test_the_cli_extra_is_reached_only_where_it_is_declared(package: str, allowed: set[str]) -> None:
+    """The ``cli`` extra is optional, so a plain install imports neither of its packages.
+
+    Lazy imports count, and type-only ones do not.
+    """
+    reaching = {
+        str(path.relative_to(PKG))
+        for path in _all_modules()
+        if any(name.split('.')[0] == package for name in _imported(ast.parse(path.read_text()), nodes=_runtime_nodes))
+    }
+    assert reaching <= allowed, f'{sorted(reaching - allowed)} import {package}, which only the cli extra installs'

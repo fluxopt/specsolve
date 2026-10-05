@@ -39,6 +39,14 @@ xpress = [
     # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
     "xpress>=9.5",
 ]
+cli = [
+    "typer>=0.12",
+    # What polars reads a workbook through; never imported here.
+    "fastexcel>=0.9",
+]
+
+[project.scripts]
+specsolve = "specsolve.cli:main"
 
 [project.urls]
 Documentation = "https://specsolve.readthedocs.io"
@@ -113,7 +121,11 @@ python = "3.12.*"
 specsolve = { path = ".", editable = true }
 
 [tool.pixi.feature.dev.pypi-dependencies]
-specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress"] }
+specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress", "cli"] }
+
+# The manifest page runs the command, and reads a workbook.
+[tool.pixi.feature.docs.pypi-dependencies]
+specsolve = { path = ".", editable = true, extras = ["cli"] }
 
 [tool.pixi.feature.floors]
 # pyyaml has no win-64 wheel. linux-aarch64 lets `pixi install` solve on the CodSpeed runner.
