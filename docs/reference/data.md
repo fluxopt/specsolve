@@ -158,6 +158,21 @@ above, so each one goes back into `sources` as it is. An archive of a
 sweep holds what the axis cuts its slices from, so each slice attaches from it
 the tables it attached.
 
+### Column types in an archive
+
+**An archive writes each column as a type that parquet readers agree on**, in
+`sources/` and in `answer/`. Power BI and Spark, among others, read these
+three differently:
+
+| A column that arrives as | is written as |
+|---|---|
+| `UInt8`, `UInt16` or `UInt32` | `Int64` (a `UInt64` stays, as `Int64` cannot hold it) |
+| a timestamp in nanoseconds or milliseconds | microseconds |
+| a timestamp in a time zone other than UTC | the same instant in UTC |
+
+A table read back from an archive has the written type, and it attaches as the
+original did.
+
 ## Growing or replacing the data
 
 **A built model takes new numbers with
