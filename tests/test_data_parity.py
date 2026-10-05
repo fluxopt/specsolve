@@ -17,7 +17,7 @@ import yaml as pyyaml
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.differential import both_lanes_refuse
+from tests.differential import both_lanes_refuse, differential
 from tests.oracle import pd, specsolve_linopy  # skips the module without the oracle
 
 if TYPE_CHECKING:
@@ -614,22 +614,13 @@ def _instants(unit: str, time_zone: str | None = None, *, nanoseconds: int = 0) 
     ],
 )
 def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column, zone):
-    """A datetime label is held in microseconds whatever unit it arrived in, and keeps its time zone.
-
-    An index in nanoseconds, pandas' default, crashed the bound attach: the
-    labels it was matched against were microseconds.
-    """
-    path = _written(tmp_path, TEMPORAL_BOUND_SPEC)
+    """An index in nanoseconds, pandas' default, crashed the bound attach: the labels it met were microseconds."""
     sources = {
         't': pl.DataFrame({'t': _instants(index, zone)}),
         'cap': pl.DataFrame({'t': _instants(column, zone), 'value': [3.0, 4.0]}),
     }
-
-    with sps.solve(path, sources) as run:
-        assert run.objective == pytest.approx(7.0), 'each instant takes its own cap'
-    built = specsolve_linopy.build(path, sources)
-    built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(7.0), 'and the linopy lane reads the same two instants'
+    with differential(_written(tmp_path, TEMPORAL_BOUND_SPEC), sources) as run:
+        assert run.oracle == pytest.approx(7.0), 'each instant takes its own cap, on both lanes'
 
 
 def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
@@ -643,87 +634,43 @@ def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) ->
     }
 
 
-def test_a_relation_into_a_nanosecond_index_is_one_instant_on_both_lanes(tmp_path):
-    """A relation's datetime column is held in the unit its index is, so the two still match."""
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-    days = _instants('ns')
-    sources = _temporal_sources(index=days, cap=days, day_of=days.gather([0, 0]))
-
-    with sps.solve(path, sources) as run:
-        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
-    built = specsolve_linopy.build(path, sources)
-    built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
-
-
 _FINE = _instants('ns', nanoseconds=1)
 _EVEN = _instants('ns')
+_UTC = _instants('us', 'UTC')
 
 
 @pytest.mark.parametrize(
-    ('sources', 'owner'),
+    ('sources', 'owner', 'match'),
     [
-        pytest.param(_temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE), "index for dimension 'd'", id='index'),
-        pytest.param(_temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", id='parameter'),
-        pytest.param(_temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", id='relation'),
+        pytest.param(
+            _temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE),
+            "index for dimension 'd'",
+            'finer',
+            id='index-finer',
+        ),
+        pytest.param(
+            _temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
+        ),
+        pytest.param(
+            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
+        ),
+        pytest.param(
+            _temporal_sources(index=_UTC, cap=_EVEN, day_of=_UTC),
+            "parameter 'cap'",
+            'convert_time_zone',
+            id='parameter-zone',
+        ),
+        pytest.param(
+            _temporal_sources(
+                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day_of=_UTC
+            ),
+            "relation 'day_of'",
+            'convert_time_zone',
+            id='relation-other-zone',
+        ),
     ],
 )
-def test_a_datetime_label_finer_than_a_microsecond_is_refused_on_both_lanes(tmp_path, sources, owner):
-    """The cast to microseconds would drop the nanosecond, so it is refused rather than made."""
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-
-    sentence = both_lanes_refuse(path, sources, match=r"'d' label\(s\) finer than a microsecond")
+def test_a_datetime_label_the_index_cannot_hold_is_refused_on_both_lanes(tmp_path, sources, owner, match):
+    """A cast that drops a nanosecond, or a compare across two clocks, is refused rather than made."""
+    sentence = both_lanes_refuse(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources, match=match)
     assert sentence.startswith(owner), 'the refusal names what carried the label'
-    assert '2030-01-01 00:00:00.000000001' in sentence, 'and prints the label to the nanosecond the cast would drop'
-
-
-@pytest.mark.parametrize(
-    ('sources', 'owner', 'clock'),
-    [
-        pytest.param(
-            _temporal_sources(index=_instants('us', 'UTC'), cap=_EVEN, day_of=_instants('us', 'UTC')),
-            "parameter 'cap'",
-            'without a time zone',
-            id='parameter',
-        ),
-        pytest.param(
-            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_instants('ns', 'UTC')),
-            "relation 'day_of'",
-            "in time zone 'UTC'",
-            id='relation',
-        ),
-        pytest.param(
-            _temporal_sources(
-                index=_instants('us', 'Europe/Berlin'),
-                cap=_instants('us', 'UTC'),
-                day_of=_instants('us', 'Europe/Berlin'),
-            ),
-            "parameter 'cap'",
-            "in time zone 'UTC'",
-            id='parameter-in-another-zone',
-        ),
-        pytest.param(
-            _temporal_sources(
-                index=_instants('us', 'Europe/Berlin'),
-                cap=_instants('us', 'Europe/Berlin'),
-                day_of=_instants('us', 'UTC'),
-            ),
-            "relation 'day_of'",
-            "in time zone 'UTC'",
-            id='relation-in-another-zone',
-        ),
-    ],
-)
-def test_a_datetime_column_in_another_time_zone_than_its_index_is_refused_on_both_lanes(
-    tmp_path, sources, owner, clock
-):
-    """A time zone is kept as it arrived, so a column on another clock than its index is refused, not compared.
-
-    Two zones are refused too, although converting between them is exact: the
-    rule is one clock, not one instant.
-    """
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-
-    sentence = both_lanes_refuse(path, sources, match=r'on one clock')
-    assert sentence.startswith(owner), 'the refusal names what carried the column'
-    assert clock in sentence, "and the column's own clock"

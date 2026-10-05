@@ -11,6 +11,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 from mathspec import did_you_mean
 
 from specsolve.assumptions import validate_assumptions
@@ -47,8 +48,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's index as one column of labels
     under its own name in the order they arrived, a relation as one column
-    per declared column. A datetime label is held in microseconds, in the
-    time zone it arrived in.
+    per declared column. A datetime label is held in microseconds.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -58,8 +58,8 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
             row twice, or a label its column's dimension lacks; a datetime
-            label with a part below one microsecond, or a datetime column in
-            another time zone than its dimension's index; or an
+            label finer than a microsecond, or in another time zone than its
+            index; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
@@ -166,7 +166,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = _in_microseconds(table.select(dim).collect(), [(dim, dim)], f"index for dimension '{dim}'")
+    labels = _in_microseconds(table.select(dim).collect(), f"index for dimension '{dim}'")
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -244,47 +244,31 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
                 )
 
 
-def _in_microseconds(frame: pl.DataFrame, columns: Iterable[tuple[str, str]], owner: str) -> pl.DataFrame:
-    """*frame* with each datetime column of *columns*, ``(column, dimension)`` pairs, held in microseconds.
-
-    A datetime label is held in one unit, so a join or a membership test never
-    meets two. The time zone is kept as it arrived.
+def _in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
+    """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
 
     Raises:
-        DataError: A label with a part below one microsecond, which the cast
-            would drop.
+        DataError: A label with a part below one microsecond, which the cast would drop.
     """
-    for column, dim in columns:
-        dtype = frame.schema[column]
-        if not isinstance(dtype, pl.Datetime) or dtype.time_unit == 'us':
-            continue
-        if dtype.time_unit == 'ns' and (finer := frame.filter(pl.col(column).to_physical() % 1000 != 0)[column]).len():
-            shown = ', '.join(finer.unique(maintain_order=True).head(5).cast(pl.String).to_list())
-            raise DataError(
-                f"{owner} holds {finer.len()} '{dim}' label(s) finer than a microsecond: {shown}. A datetime "
-                f'label is held in microseconds, and the cast would drop the part below one, so two labels '
-                f'could become one. Decide what that part means and drop it before attaching: polars '
-                f".dt.cast_time_unit('us') truncates it, .dt.round('1us') rounds it; pandas .dt.floor('us')."
-            )
-        frame = frame.with_columns(pl.col(column).dt.cast_time_unit('us'))
-    return frame
+    for column, dtype in frame.schema.items():
+        if isinstance(dtype, pl.Datetime) and dtype.time_unit == 'ns':
+            finer = frame[column].filter(frame[column].to_physical() % 1000 != 0)
+            if finer.len():
+                raise DataError(
+                    f"{owner} holds '{column}' label(s) finer than a microsecond, such as {finer.cast(pl.String)[0]}. "
+                    f"Round them before attaching: polars .dt.round('1us'), pandas .dt.round('us')."
+                )
+    return frame.with_columns(cs.datetime().dt.cast_time_unit('us'))
 
 
 def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, index: pl.DataType) -> None:
-    """Refuse a datetime column whose time zone is not its index's: the two compare on one clock only."""
-    if not (isinstance(given, pl.Datetime) and isinstance(index, pl.Datetime)) or given.time_zone == index.time_zone:
-        return
-    raise DataError(
-        f"{owner} carries '{column}' {_clock(given)}, and the index for dimension '{dim}' is "
-        f'{_clock(index)}. A datetime label is compared with its index on one clock, so put the '
-        f"column on the index's: polars .dt.convert_time_zone moves a column that has a zone, and "
-        f'.dt.replace_time_zone gives one to a column that has none, or takes it away.'
-    )
-
-
-def _clock(dtype: pl.Datetime) -> str:
-    """A datetime column's time zone, as a refusal names it."""
-    return f'in time zone {dtype.time_zone!r}' if dtype.time_zone else 'without a time zone'
+    """Refuse a datetime column in another time zone than its index: the two compare on one clock only."""
+    if isinstance(given, pl.Datetime) and isinstance(index, pl.Datetime) and given.time_zone != index.time_zone:
+        raise DataError(
+            f"{owner} holds '{column}' in {given.time_zone or 'no time zone'}, and the index for dimension "
+            f"'{dim}' in {index.time_zone or 'no time zone'}. Put it on the index's first: polars "
+            f'.dt.convert_time_zone, or .dt.replace_time_zone for a column without one.'
+        )
 
 
 def _relations_over(program: Program, dim: str) -> tuple[str, ...]:
@@ -372,7 +356,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = _in_microseconds(table.select(*roles).collect(), relation.columns, f"relation '{name}'")
+    rows = _in_microseconds(table.select(*roles).collect(), f"relation '{name}'")
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -547,9 +531,7 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = _in_microseconds(
-        table.select(wanted).collect(engine=collect_engine()), [(d, d) for d in p.dims], f"parameter '{name}'"
-    )
+    frame = _in_microseconds(table.select(wanted).collect(engine=collect_engine()), f"parameter '{name}'")
     _check_one_row_per_coordinate(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)
