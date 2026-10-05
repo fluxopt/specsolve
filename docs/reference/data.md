@@ -62,6 +62,9 @@ reads positionally. A label that is on two rows is refused:
 each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
+**A datetime label is held in microseconds**, in the time zone it arrives in.
+A column must be in its index's time zone.
+
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
 [the language's](https://mathspec.readthedocs.io/en/latest/reference/language/dimensions/).
@@ -98,6 +101,8 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a relation table mapping one key twice, or relating one tuple twice | a keyed relation holds one row per key, a bare one each row once |
 | a map with both authors, or neither | names them, and says which way out |
 | an index carrying a column named after a relation with a column over it | names the key it belongs under |
+| a datetime label finer than a microsecond | names a label, and the rounding |
+| a datetime column in another time zone than its index | names both, and the conversion |
 | an index holding a label twice | names the dimension and the labels, and the rewrite that keeps the first of each, for a table or a bare sequence |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a `value` column carrying a null or a NaN | names the parameter and the coordinates |
@@ -121,6 +126,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | What arrives | What happens |
 |---|---|
 | an undeclared column in a table | ignored |
+| a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a coordinate with no row | sparse variables; what a missing row means where it is read is [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` names the parameters that arrived short of their dims ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
 | a value that is readable and wrong | bound as given |
 
