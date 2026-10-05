@@ -11,6 +11,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 from mathspec import did_you_mean
 
 from specsolve.assumptions import validate_assumptions
@@ -47,7 +48,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's index as one column of labels
     under its own name in the order they arrived, a relation as one column
-    per declared column.
+    per declared column. A datetime label is held in microseconds.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -56,7 +57,9 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             holding a label twice; a parameter with two rows for one
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
-            row twice, or a label its column's dimension lacks; or an
+            row twice, or a label its column's dimension lacks; a datetime
+            label finer than a microsecond, or in another time zone than its
+            index; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
@@ -163,7 +166,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = table.select(dim).collect()
+    labels = _in_microseconds(table.select(dim).collect(), f"index for dimension '{dim}'")
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -241,6 +244,33 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
                 )
 
 
+def _in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
+    """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
+
+    Raises:
+        DataError: A label with a part below one microsecond, which the cast would drop.
+    """
+    for column, dtype in frame.schema.items():
+        if isinstance(dtype, pl.Datetime) and dtype.time_unit == 'ns':
+            finer = frame[column].filter(frame[column].to_physical() % 1000 != 0)
+            if finer.len():
+                raise DataError(
+                    f"{owner} holds '{column}' label(s) finer than a microsecond, such as {finer.cast(pl.String)[0]}. "
+                    f"Round them before attaching: polars .dt.round('1us'), pandas .dt.round('us')."
+                )
+    return frame.with_columns(cs.datetime().dt.cast_time_unit('us'))
+
+
+def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, index: pl.DataType) -> None:
+    """Refuse a datetime column in another time zone than its index: the two compare on one clock only."""
+    if isinstance(given, pl.Datetime) and isinstance(index, pl.Datetime) and given.time_zone != index.time_zone:
+        raise DataError(
+            f"{owner} holds '{column}' in {given.time_zone or 'no time zone'}, and the index for dimension "
+            f"'{dim}' in {index.time_zone or 'no time zone'}. Put it on the index's first: polars "
+            f'.dt.convert_time_zone, or .dt.replace_time_zone for a column without one.'
+        )
+
+
 def _relations_over(program: Program, dim: str) -> tuple[str, ...]:
     """The relations with a column over *dim*, in declaration order."""
     return tuple(name for name, lk in program.relations.items() if any(over == dim for _, over in lk.columns))
@@ -280,6 +310,7 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
     Offenders keep their own type — a python native off polars, never a numpy
     scalar — because the message reprs them.
     """
+    _check_same_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
     known = set(labels.to_list())
     strays: dict[object, None] = {v: None for v in rows.select(role).collect()[role].to_list() if v not in known}
     if not strays:
@@ -325,7 +356,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = table.select(*roles).collect()
+    rows = _in_microseconds(table.select(*roles).collect(), f"relation '{name}'")
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -500,7 +531,7 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = table.select(wanted).collect(engine=collect_engine())
+    frame = _in_microseconds(table.select(wanted).collect(engine=collect_engine()), f"parameter '{name}'")
     _check_one_row_per_coordinate(name, p, frame, sources)
     _check_values_are_present(name, p, frame)
     _check_value_dtype(name, p, frame)
@@ -525,6 +556,8 @@ def _check_one_row_per_coordinate(
         return
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
+    for d, labels in known.items():
+        _check_same_clock(f"parameter '{name}'", d, d, frame.schema[d], labels.dtype)
     answers = frame.select(
         pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
         *(pl.col(d).is_in(labels.implode()).all().alias(f'#known {d}') for d, labels in known.items()),
