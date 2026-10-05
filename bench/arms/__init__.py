@@ -10,6 +10,11 @@ Each arm module defines:
     build_only(prepared) -> Counts
     objective(prepared) -> float
 
+and, where the library reads an answer back apart from its solve, both or neither of:
+
+    read_setup(prepared, into) -> (args, kwargs)
+    read(*args, **kwargs) -> Counts
+
 and, where the library has a rolling-horizon answer, both or neither of:
 
     window_setup(sink, prepared, following) -> (args, kwargs)

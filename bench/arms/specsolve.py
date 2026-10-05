@@ -106,7 +106,7 @@ def _loaded(sink: str, model: Any) -> Any:
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': '_hand_off'}
+TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
@@ -154,6 +154,53 @@ def window(model: Any, sink: str, sources: dict[str, str]) -> Counts:
     _, kept = model._engine._hand_off(sink, None, 'solver')
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
     return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing', 'phases': phases}
+
+
+def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """A build and an answer to it, before the clock — every column and row zero, reported optimal.
+
+    What reading an answer back costs is set by how many values it lays out,
+    not by what they are, so no solver runs. A model with an integer variable
+    gets no duals, as a real solve leaves it.
+    """
+    import polars as pl
+
+    import specsolve as sps
+    from specsolve.relational.sinks.solvers.base import SolveAnswer
+    from specsolve.relational.status import SolveStatus
+
+    spec, sources = prepared
+    model = sps.build(spec, sources)
+    handoff = _handoff(model)
+    rows = pl.zeros(handoff.row_count, dtype=pl.Float64, eager=True)
+    answer = SolveAnswer(
+        SolveStatus('optimal'),
+        0.0,
+        primal=pl.zeros(handoff.column_count, dtype=pl.Float64, eager=True),
+        dual=None if model._engine._discrete() else rows,
+        activity=rows,
+    )
+    return (model, answer, into), {}
+
+
+def read(model: Any, answer: Any, into: str) -> Counts:
+    """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
+
+    ``frames`` collects every variable's primal and every constraint's dual
+    and activity; ``parquet`` is ``Result.save``.
+    """
+    result = model._engine._answered(answer, 'highs', 'nothing', None)
+    if into == 'frames':
+        for name in model._program.variables:
+            result.primal(name)
+        for name in model._program.constraints:
+            if answer.dual is not None:
+                result.dual(name)
+            result.activity(name)
+    else:
+        with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
+            result.save(Path(tmp) / 'answer')
+    return _counts(_handoff(model), nonzeros=False)
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:

@@ -193,6 +193,40 @@ def test_window(
     ceiling.record(arm, case_name, size, sink, _measured(benchmark), _peak(benchmark))
 
 
+@pytest.mark.benchmem(isolate=True)
+@pytest.mark.parametrize('into', ('frames', 'parquet'))
+def test_read(
+    benchmark: Any,
+    request: pytest.FixtureRequest,
+    paths: Any,
+    ceiling: Any,
+    case_name: str,
+    size: str,
+    arm: str,
+    into: str,
+) -> None:
+    """What reading a solve's answer back costs: every value laid out against the build, *into* frames or onto disk.
+
+    The answer is a full-length one built in `read_setup`, so no solver runs and
+    the cost is the rung's rather than the solve's, at every rung. Sink-free,
+    because the vectors are the same whoever produced them. An arm with no
+    `read` verb is skipped.
+    """
+    module = ARMS[arm]
+    if not hasattr(module, 'read'):
+        pytest.skip(f'{arm} reads its answer back inside its solve — nothing here can time the read alone')
+    if reason := getattr(module, 'unsupported', lambda verb: None)('read'):
+        pytest.skip(reason)
+    missing = unmeasurable(arm, case_name, module.SINKS[0]) or ceiling.reached(arm, case_name, size, 'read')
+    if missing:
+        pytest.skip(missing)
+
+    prepared = module.prepare(case_name, size, paths(case_name, size), {})
+    counts = _rounds(benchmark, request, module.read, setup=partial(module.read_setup, prepared, into))
+    _record(benchmark, counts, case_name, size)
+    ceiling.record(arm, case_name, size, 'read', _measured(benchmark), _peak(benchmark))
+
+
 def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_name: str, size: str, arm: str) -> None:
     """First build against every later one, in one process.
 

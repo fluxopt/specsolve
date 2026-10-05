@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
 
@@ -202,6 +203,21 @@ class Engine:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff)
+        return self._answered(answer, solver_name, kept, lower)
+
+    def _answered(
+        self,
+        answer: SolveAnswer,
+        solver_name: str,
+        kept: Keep,
+        lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
+    ) -> Result:
+        """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
+
+        Takes the answer rather than the solver, so that a benchmark can time
+        reading one back without a solve; every vector must span this build.
+        """
+        handoff = self._model.handoff
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )
