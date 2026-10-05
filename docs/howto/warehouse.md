@@ -121,8 +121,7 @@ the solve returned. `load_archive` drops it from the sources too. The sources
 the column back.
 
 **Every column has a type that parquet readers agree on.** An archive writes
-an unsigned integer as `Int64`, a nanosecond timestamp in microseconds, and a
-zoned timestamp in UTC ([the rule](../reference/data.md#column-types-in-an-archive)).
+an unsigned integer as `Int64` and a zoned timestamp in UTC ([the rule](../reference/data.md#column-types-in-an-archive)).
 
 ## Keys across runs
 

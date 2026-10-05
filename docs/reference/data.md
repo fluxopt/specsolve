@@ -162,12 +162,11 @@ the tables it attached.
 
 **An archive writes each column as a type that parquet readers agree on**, in
 `sources/` and in `answer/`. Power BI and Spark, among others, read these
-three differently:
+differently:
 
 | A column that arrives as | is written as |
 |---|---|
 | `UInt8`, `UInt16` or `UInt32` | `Int64` (a `UInt64` stays, as `Int64` cannot hold it) |
-| a timestamp in nanoseconds or milliseconds | microseconds |
 | a timestamp in a time zone other than UTC | the same instant in UTC |
 
 A table read back from an archive has the written type, and it attaches as the
