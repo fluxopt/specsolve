@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(cli): a manifest file runs several solves of a model with one command ([#1845](https://github.com/fluxopt/specsolve/pull/1845))
+
 ## 0.5.0 (2026-10-03)
 
 The top level of `specsolve` now holds only what you call. What a call returns
