@@ -82,6 +82,17 @@ def test_a_failed_run_is_reported_and_the_next_still_solves(study: Path) -> None
     assert output.splitlines()[1].startswith('base: optimal'), output
 
 
+def test_a_solve_that_ends_other_than_optimal_exits_1(study: Path) -> None:
+    short = study / 'data' / 'short'
+    short.mkdir()
+    (short / 'load.csv').write_text('snapshot,value\n0,60.0\n1,110.0\n2,1000.0\n3,90.0\n')
+    manifest = study / 'specsolve.yaml'
+    manifest.write_text(manifest.read_text() + '  short:\n    sources: [data/short/]\n')
+    code, output = _invoked('solve', 'short')
+    assert code == 1, output
+    assert output.startswith('short: infeasible'), output
+
+
 def test_main_without_typer_exits_with_the_install_hint(monkeypatch: pytest.MonkeyPatch) -> None:
     real = cli.importlib.util.find_spec
     monkeypatch.setattr(cli.importlib.util, 'find_spec', lambda name: None if name == 'typer' else real(name))

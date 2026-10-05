@@ -12,8 +12,7 @@ import time
 import warnings
 from typing import TYPE_CHECKING
 
-from specsolve.api import check, tidy
-from specsolve.axes import check_no_index_is_cut
+from specsolve.api import tidy
 from specsolve.manifest import INSTALL_HINT, Manifest, Run, load_manifest, read_sources
 from specsolve.relational.result import Result
 
@@ -119,23 +118,18 @@ def _selected(arguments: list[str]) -> tuple[Manifest, list[Run]]:
 
 
 def _problem(run: Run) -> str | None:
-    """What stops *run* before a solve, or ``None``: the spec, the data, and for a sweep every slice of it.
+    """What stops *run* attaching its data, or ``None``; a sweep attaches every slice.
 
-    A sweep is asked what [`solve_over`][specsolve.strategy.solve_over] asks
-    before it slices, then each slice is attached. Advice the spec draws is
-    not a problem, and is not reported.
+    Advice the spec draws is not a problem, and is not reported. What a sweep
+    refuses of the model as a whole, such as a window its rows cannot be cut
+    into, is the solve's to report.
     """
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            program = check(run.spec)
             sources = read_sources(run.sources)
-            if run.axis is None:
-                tidy(run.spec, sources)
-                return None
-            check_no_index_is_cut(program, sources, run.axis)
-            run.axis._check_the_program(program, sources)
-            for _, part in run.axis.slices(sources):
+            parts = [sources] if run.axis is None else [part for _, part in run.axis.slices(sources)]
+            for part in parts:
                 tidy(run.spec, part)
     except Exception as error:  # every problem of every run is reported, not the first raised
         return f'{type(error).__name__}: {error}'
