@@ -1532,6 +1532,26 @@ def test_a_sweep_loads_once_and_says_what_the_solver_took(case_name: str) -> Non
     assert counts['phases']['solve'] > 0, "the solver's share is attributed, not left inside the wall time"
 
 
+def test_a_sink_whose_solver_is_not_installed_is_skipped_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every arm reaching a solver sink skips, naming the package, rather than failing inside the clock."""
+    import importlib.util
+
+    from bench import arms
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, 'find_spec', lambda name, *a: None if name == 'xpress' else real(name, *a))
+    reason = arms.unmeasurable('specsolve', 'dispatch', 'xpress')
+    assert reason is not None and 'xpress' in reason, 'a missing solver package names itself as the reason'
+
+
+@pytest.mark.parametrize('named_sink', harness.SINKS)
+def test_every_sink_has_a_caption_the_report_prints(named_sink: str) -> None:
+    """A table for a sink the report has no sentence for would raise when the page is written."""
+    assert report._SEAM.get(named_sink), (
+        f'{named_sink} reaches the report with nothing saying what each arm ended up holding'
+    )
+
+
 class _CallsTwice:
     """A benchmark fixture that calls its target as CodSpeed's instruments do on Python 3.12.
 

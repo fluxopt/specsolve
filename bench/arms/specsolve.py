@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from bench.cases import CASES
 
 #: Every sink the relational lane can hand a model to.
-SINKS = ('lp', 'highs', 'gurobi')
+SINKS = ('lp', 'mps', 'highs', 'gurobi', 'xpress')
 
 #: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ()
@@ -90,8 +90,8 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp, sps.build(spec, sources) as model:
-        if sink == 'lp':
-            model.write(Path(tmp) / 'model.lp')
+        if sink in ('lp', 'mps'):
+            model.write(Path(tmp) / f'model.{sink}')
         else:
             _loaded(sink, model).close()
 
