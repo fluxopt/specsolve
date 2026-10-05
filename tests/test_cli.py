@@ -87,7 +87,9 @@ def test_a_solve_that_ends_other_than_optimal_exits_1(study: Path) -> None:
     short.mkdir()
     (short / 'load.csv').write_text('snapshot,value\n0,60.0\n1,110.0\n2,1000.0\n3,90.0\n')
     manifest = study / 'specsolve.yaml'
-    manifest.write_text(manifest.read_text() + '  short:\n    sources: [data/short/]\n')
+    manifest.write_text(
+        manifest.read_text() + '  short:\n    sources: [data/base.xlsx, data/timeseries/snapshot.csv, data/short/]\n'
+    )
     code, output = _invoked('solve', 'short')
     assert code == 1, output
     assert output.startswith('short: infeasible'), output

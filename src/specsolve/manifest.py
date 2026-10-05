@@ -219,8 +219,7 @@ def load_manifest(path: str | Path) -> Manifest:
                     f'{file}: runs.{name}: from: {parent!r} names no run. '
                     f'{did_you_mean(str(parent), document.runs, label="Runs")}'
                 )
-            sources = [*_strings(base.get('sources')), *_strings(own.get('sources'))]
-            resolved[name] = {**base, **own, 'sources': sources}
+            resolved[name] = {**base, **own}
         return resolved[name]
 
     runs = {name: _run(file, name, dict(resolve(name, ()))) for name in document.runs}

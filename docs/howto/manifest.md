@@ -62,11 +62,14 @@ lists three runs under `runs:`:
 
 - **A top-level key is the default of every run.** All three runs solve
   `../dispatch.yaml` with HiGHS and a ten-minute limit.
-- **A run's own `sources` are read after the defaults.** `high_gas` reads
-  `cost` from its own workbook, and that table replaces the `cost` sheet of
-  `base.xlsx`.
+- **A run's own `sources` replace the defaults.** A run reads exactly the
+  locations its `sources` list, so `high_gas` lists the default locations
+  again, then its own workbook. Its `cost` table replaces the `cost` sheet of
+  `base.xlsx`, because a later location in one list wins.
 - **`from` starts a run from another run.** `scenarios` takes everything
-  `high_gas` resolved to, and adds a `load` table with a `scenario` column.
+  `high_gas` resolved to except `sources`, which it sets itself: the
+  `snapshot` table, and a `load` table with a `scenario` column in place of
+  the hourly one.
 - **A run with an `axis` is a sweep.** `scenarios` solves once per
   scenario, two at a time in separate processes.
 - **`archive` is a directory of runs.** Each run archives to

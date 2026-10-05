@@ -69,11 +69,10 @@ solves are several runs.
 ## Defaults and `from`
 
 - **A run's own key replaces the default.** A run that sets `solver_options`
-  replaces the whole mapping at the top level, not one option of it.
+  replaces the whole mapping at the top level, not one option of it. A run
+  that sets `sources` reads those locations and no others.
 - **`from` starts a run from another run's resolved keys**, its defaults
   included. The run's own keys then replace those.
-- **`sources` adds rather than replaces.** A run reads the default
-  locations, then those of the run it starts `from`, then its own.
 
 ## Source locations
 
@@ -86,8 +85,9 @@ The table's name is the source key it fills:
 | `data/timeseries/` | one per `.parquet` or `.csv` file in it | the file name without its suffix |
 | `data/load.parquet`, `data/load.csv` | one | the file name without its suffix |
 
-- **A later location replaces an earlier table of the same name.** This is
-  how a run changes one table of the defaults.
+- **A later location in one list replaces an earlier table of the same
+  name.** This is how a run changes one table: it lists the defaults' locations,
+  then its own.
 - **Paths are relative to the manifest**, not to the working directory.
 - **A directory reads only its `.parquet` and `.csv` files.** It holds one
   file per table: `load.csv` beside `load.parquet` is refused.

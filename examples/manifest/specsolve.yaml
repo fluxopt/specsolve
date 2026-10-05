@@ -8,9 +8,9 @@ archive: runs/
 runs:
   base: {}
   high_gas:
-    sources: [data/high_gas.xlsx]
+    sources: [data/base.xlsx, data/high_gas.xlsx, data/timeseries/]
   scenarios:
     from: high_gas
-    sources: [data/scenarios/load.parquet]
+    sources: [data/base.xlsx, data/high_gas.xlsx, data/timeseries/snapshot.csv, data/scenarios/load.parquet]
     axis: {EachCoordinate: {dim: scenario}}
     workers: 2

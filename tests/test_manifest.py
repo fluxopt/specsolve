@@ -71,7 +71,7 @@ def test_top_level_keys_are_every_runs_defaults_and_a_runs_own_key_replaces_one(
     assert loaded.runs['base'].spec == data / 'model.yaml'
 
 
-def test_from_inherits_another_runs_resolved_settings(data: Path) -> None:
+def test_from_inherits_another_runs_resolved_settings_and_a_runs_sources_replace_them(data: Path) -> None:
     loaded = sps.load_manifest(
         _written(
             data,
@@ -81,18 +81,23 @@ def test_from_inherits_another_runs_resolved_settings(data: Path) -> None:
             sources: [data/]
             runs:
               dear:
-                sources: [dear/cost.parquet]
+                sources: [data/, dear/cost.parquet]
                 record_options: [duals]
               scenarios:
                 from: dear
-                sources: [load.parquet]
+                sources: [data/, load.parquet]
                 axis: {EachCoordinate: {dim: scenario}}
+              inherits:
+                from: dear
             """,
         )
     )
     scenarios = loaded.runs['scenarios']
-    assert scenarios.sources == (data / 'data', data / 'dear' / 'cost.parquet', data / 'load.parquet'), (
-        "the defaults' locations, then the parent's, then the run's own"
+    assert scenarios.sources == (data / 'data', data / 'load.parquet'), (
+        "the run's own locations, and none of its parent's or the defaults'"
+    )
+    assert loaded.runs['inherits'].sources == (data / 'data', data / 'dear' / 'cost.parquet'), (
+        "a run that sets no sources reads its parent's"
     )
     assert scenarios.options == {'record_options': ['duals']}, 'what the parent set reaches the run'
     assert scenarios.axis == sps.EachCoordinate('scenario')
@@ -137,11 +142,10 @@ def test_arguments_are_exactly_the_call_written_by_hand(data: Path) -> None:
         """
         manifest: 1
         spec: model.yaml
-        sources: [data/p_max.parquet, data/cost.parquet, data/generator.parquet]
         archive: runs/
         runs:
           scenarios:
-            sources: [data/snapshot.csv, load.parquet]
+            sources: [data/p_max.parquet, data/cost.parquet, data/generator.parquet, data/snapshot.csv, load.parquet]
             axis: {EachCoordinate: {dim: scenario}}
             keep: nothing
         """,
