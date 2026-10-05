@@ -31,10 +31,8 @@ single solve of the same spec writes `t`. So `answer/primal/p.parquet` has
 three shapes in this directory. To compare a base run with a sweep, solve the
 base as a sweep of one slice, or declare the dimension in the spec.
 
-**Write a directory, not a `.zip`.** A query engine reads a directory archive
-where it lies, and no query engine reads inside a zip. A zip is for moving one
-run as one file. Give `load_archive` or `scan_archive` an `into=` to unpack
-one, and query what lands there.
+**Write a directory, not a `.zip`.** No query engine reads inside a zip. Unpack
+one with the `into=` of `load_archive` or `scan_archive`.
 
 ## The four tables
 
@@ -139,16 +137,10 @@ p.join(generators, on=['specsolve_run', 'generator'])
 ```
 
 **A tool that relates tables on one column needs the pair as one column.**
-Build it when you read the tables, the same way on both sides. Nothing on disk
-holds it:
+Build it the same way on both sides when you read the tables:
 
 ```python
 generators.with_columns(key=pl.concat_str('specsolve_run', 'generator', separator='|'))
-```
-
-```sql
-select specsolve_run || '|' || generator as generator_key, generator, specsolve_position
-from read_parquet('runs/*/sources/generator.parquet');
 ```
 
 A rolling horizon holds no table for `t`, because each window numbers its own
@@ -167,20 +159,16 @@ sited = pl.read_parquet('runs/*/sources/sited.parquet')
 p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 'bus').agg(pl.col('value').sum())
 ```
 
-Each kind of relation takes one join pattern. A BI tool such as Power BI
-relates tables on one column, so its form needs the run-and-label key above:
+Each kind of relation takes one join pattern:
 
-| relation | example | in a query | in a BI tool |
-|---|---|---|---|
-| keyed by one dimension | `sited: {key: generator, values: bus}` | join on the key | merge the value into the dimension table, or a table related to both dimensions |
-| keyed by a pair | `zone_of: {key: [generator, t], values: zone}` | join on both key columns | merge into the value table on both columns, or one concatenated key |
-| bare | `connection: {key: [generator, bus]}` | join on the columns the value table shares | a bridge table |
-| roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | join once per role, on the role's column | a copy of the dimension per role, or an inactive relationship that a measure turns on |
-| onto itself | `{key: snapshot, values: {rep: snapshot}}` | as roles | as roles |
-| a partition | `shift`, `sum_back` or `position` with `within=` | none | none |
-
-The first four kinds are joined in this project's tests. The BI forms are not
-tested here.
+| relation | example | join |
+|---|---|---|
+| keyed by one dimension | `sited: {key: generator, values: bus}` | on the key |
+| keyed by a pair | `zone_of: {key: [generator, t], values: zone}` | on both key columns |
+| bare | `connection: {key: [generator, bus]}` | on the columns the value table shares |
+| roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
+| onto itself | `{key: snapshot, values: {rep: snapshot}}` | as roles |
+| a partition | `shift`, `sum_back` or `position` with `within=` | none |
 
 ## Totals over a bare relation
 
@@ -194,14 +182,9 @@ reach = pl.read_parquet('runs/base/answer/expression/reach.parquet')
 reach['value'].sum() - p.filter(specsolve_run='base')['value'].sum()  # the output of wind, counted again
 ```
 
-A BI tool that relates `p` to buses through a bridge table shows the same
-value on each bus row. Its grand total counts each generator once, so it
-disagrees with the sum of the rows.
-
 **Declare a total that must keep the model's meaning as a named expression
-in the spec.** The archive holds it under `answer/expression/`. Filter it in
-the BI tool, and do not compute it there again. The same holds for a quantity
-that the spec defines through `within=`.
+in the spec**, and read it from `answer/expression/` rather than computing it
+again. The same holds for a quantity the spec defines through `within=`.
 
 ```sql
 select bus, sum(value) as reached
@@ -353,41 +336,13 @@ from read_parquet('runs/base/answer/primal/p.parquet') p
 join read_parquet('runs/base/sources/sited.parquet') s using (generator, specsolve_run);
 ```
 
-## Power BI
+## Delta Lake
 
-**Load the folder with the parquet connector one table at a time, or with the
-folder connector and "Combine files".** Each glob above is one table there.
-
-**"Combine files" takes its schema from one sample file.** Power Query builds
-the combine step from the sample, by default the first file, and applies that
-step to every other file. A column the sample does not have is dropped from
-every file, and no error occurs. So combine only files of one shape: the four
-tables above, or one value table over runs of one kind. This is Power Query's
-documented behaviour, and this project's tests do not run Power BI.
-
-Build the [run-and-label key](#keys-across-runs) in Power Query on both sides
-of each relationship. The relationship patterns are in
-[the table under relations](#relations).
-
-## Delta Lake and Iceberg
-
-Fabric Direct Lake, Unity Catalog and Snowflake read Delta Lake or Iceberg
-tables rather than a folder of parquet. Write one table per glob from the
-directory. specsolve adds no dependency for this, so install `deltalake` for
-the polars writer. These recipes are not tested against Fabric:
+Fabric Direct Lake and Unity Catalog read Delta Lake tables rather than a
+folder of parquet. Write one table per glob, with `deltalake` installed:
 
 <!-- warehouse: not run, deltalake is not a dependency here -->
 ```python
 for table in ('answer/record', 'answer/metrics', 'sources', 'catalog'):
     pl.read_parquet(f'runs/*/{table}.parquet').write_delta(f'lake/{table.replace("/", "_")}', mode='overwrite')
-```
-
-DuckDB writes Iceberg through its `iceberg` extension, into a catalog you
-attach first:
-
-<!-- warehouse: not run, it needs an Iceberg catalog -->
-```sql
-install iceberg;
-load iceberg;
-create table lake.record as select * from read_parquet('runs/*/answer/record.parquet');
 ```

@@ -160,21 +160,18 @@ the tables it attached.
 
 ### Column types in an archive
 
-**An archive writes each column as a type that parquet readers agree on.**
-Three types arrive from polars and pandas, and readers such as Power BI and
-Spark read them differently. The archive casts each one, in `sources/` and in
-`answer/`:
+**An archive writes each column as a type that parquet readers agree on**, in
+`sources/` and in `answer/`. Power BI and Spark, among others, read these
+three differently:
 
 | A column that arrives as | is written as |
 |---|---|
-| an unsigned integer, such as `UInt32` | `Int64` |
-| a timestamp in nanoseconds, such as a pandas `datetime64[ns]` | the same timestamp in microseconds |
-| a timestamp in a time zone other than UTC | the same instant in UTC, in microseconds |
+| `UInt8`, `UInt16` or `UInt32` | `Int64` (a `UInt64` stays, as `Int64` cannot hold it) |
+| a timestamp in nanoseconds or milliseconds | microseconds |
+| a timestamp in a time zone other than UTC | the same instant in UTC |
 
 A table read back from an archive has the written type, and it attaches as the
-original did. A nanosecond timestamp loses what is below a microsecond. Every
-other column is written as it arrived. The record's own `solved_at` is in UTC
-already.
+original did.
 
 ## Growing or replacing the data
 

@@ -19,6 +19,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.archive_layout import _with_run
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -183,7 +184,7 @@ def test_the_page_writes_one_folder_of_every_kind_of_run(runs: Path) -> None:
 
 def test_every_block_on_the_page_runs_but_the_ones_it_says_do_not(page: tuple[Path, dict[str, Any]]) -> None:
     unrun = [code.splitlines()[0] for _, code, runs in _blocks() if not runs]
-    assert len(unrun) == 3, f'only the DuckDB-only and lakehouse blocks are shown and not run: {unrun}'
+    assert len(unrun) == 2, f'only the DuckDB-only and Delta Lake blocks are shown and not run: {unrun}'
 
 
 def test_the_page_names_the_input_that_moved_between_two_runs(page: tuple[Path, dict[str, Any]]) -> None:
@@ -196,8 +197,6 @@ def test_the_page_names_the_input_that_moved_between_two_runs(page: tuple[Path, 
 # one glob, one schema
 # ---------------------------------------------------------------------------
 
-RUN = pl.String
-
 #: Every table a warehouse globs that has one schema across every kind of run.
 STRICT = {
     'answer/record.parquet': {
@@ -207,7 +206,7 @@ STRICT = {
         'has_primal': pl.Boolean,
         'spec_digest': pl.String,
         'solved_at': pl.Datetime('us', 'UTC'),
-        'specsolve_run': RUN,
+        'specsolve_run': pl.String,
         'model_digest': pl.String,
         'slice_axis': pl.String,
         'slice': pl.String,
@@ -228,13 +227,13 @@ STRICT = {
         'handoff_seconds': pl.Float64,
         'solve_seconds': pl.Float64,
         'write_seconds': pl.Float64,
-        'specsolve_run': RUN,
+        'specsolve_run': pl.String,
         'slice_axis': pl.String,
         'slice': pl.String,
     },
-    'sources.parquet': {'specsolve_run': RUN, 'source': pl.String, 'digest': pl.String},
+    'sources.parquet': {'specsolve_run': pl.String, 'source': pl.String, 'digest': pl.String},
     'catalog.parquet': {
-        'specsolve_run': RUN,
+        'specsolve_run': pl.String,
         'path': pl.String,
         'name': pl.String,
         'kind': pl.String,
@@ -244,11 +243,11 @@ STRICT = {
         'dim': pl.String,
         'dim_position': pl.Int32,
     },
-    'sources/generator.parquet': {'generator': pl.String, 'specsolve_position': pl.Int64, 'specsolve_run': RUN},
-    'sources/p_max.parquet': {'generator': pl.String, 'value': pl.Float64, 'specsolve_run': RUN},
-    'sources/sited.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': RUN},
-    'sources/connection.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': RUN},
-    'sources/ends.parquet': {'line': pl.String, 'bus0': pl.String, 'bus1': pl.String, 'specsolve_run': RUN},
+    'sources/generator.parquet': {'generator': pl.String, 'specsolve_position': pl.Int64, 'specsolve_run': pl.String},
+    'sources/p_max.parquet': {'generator': pl.String, 'value': pl.Float64, 'specsolve_run': pl.String},
+    'sources/sited.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': pl.String},
+    'sources/connection.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': pl.String},
+    'sources/ends.parquet': {'line': pl.String, 'bus0': pl.String, 'bus1': pl.String, 'specsolve_run': pl.String},
 }
 
 
@@ -268,7 +267,7 @@ P_UNION = {
     'snapshot': pl.Int64,
     'generator': pl.String,
     'value': pl.Float64,
-    'specsolve_run': RUN,
+    'specsolve_run': pl.String,
 }
 
 
@@ -411,11 +410,7 @@ HOURS = [datetime(2026, 1, 1, hour) for hour in range(3)]
 def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_agree_on(
     labels: pl.Series, weight: pl.DataType, written: pl.DataType, tmp_path: Path
 ) -> None:
-    """A source of a type readers disagree on was archived with that type, in the source and in the answer over it.
-
-    ``UInt32`` labels, an ``UInt8`` value, ``Datetime('ns')`` labels and labels in
-    ``Europe/Berlin`` each reached ``sources/`` and ``answer/`` as they arrived.
-    """
+    """Each of these reached ``sources/`` and ``answer/`` as it arrived."""
     dtype = 'datetime' if labels.dtype.is_temporal() else 'int'
     spec = {**REPRO, 'dimensions': {'t': {'dtype': dtype}}}
     steps = labels.alias('t')
@@ -430,3 +425,8 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
     archived = pl.read_parquet(tmp_path / 'run' / 'answer' / 'primal' / 'p.parquet')
     assert archived['t'].dtype == written
     assert archived['t'].to_list() == live['t'].cast(written).to_list(), 'the same labels, as the same instants'
+
+
+def test_an_unsigned_integer_int64_cannot_hold_is_archived_as_it_arrived() -> None:
+    frame = _with_run(pl.DataFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run')
+    assert frame['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'

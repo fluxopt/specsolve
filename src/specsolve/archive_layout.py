@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
@@ -235,25 +236,15 @@ def _stamped(source: Path, target: Path, run: str) -> None:
 
 
 def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* as an archive holds it: the [`RUN`][specsolve.relational.answer_layout.RUN] column set to *run*, and every column of a type parquet readers agree on."""
-    return frame.with_columns(*_agreed(frame.collect_schema()), pl.lit(run, dtype=pl.String).alias(RUN))
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][specsolve.relational.answer_layout.RUN] set to *run*.
 
-
-def _agreed(schema: pl.Schema) -> list[pl.Expr]:
-    """A cast for each column of *schema* that parquet readers disagree on, to the type they agree on.
-
-    An unsigned integer becomes ``Int64``, and a timestamp in nanoseconds or
-    in a zone other than UTC becomes microseconds in UTC, or naive where it was
-    naive. The instant is kept: parquet stores a zoned timestamp as UTC already.
+    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
+    timestamp becomes microseconds, in UTC where it has a zone.
     """
-    casts: list[pl.Expr] = []
-    for name, dtype in schema.items():
-        if dtype.is_unsigned_integer():
-            casts.append(pl.col(name).cast(pl.Int64))
-        elif isinstance(dtype, pl.Datetime) and (dtype.time_unit == 'ns' or dtype.time_zone not in (None, 'UTC')):
-            column = pl.col(name) if dtype.time_zone is None else pl.col(name).dt.convert_time_zone('UTC')
-            casts.append(column.dt.cast_time_unit('us'))
-    return casts
+    return frame.with_columns(
+        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
+        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
+    ).with_columns(cs.datetime().dt.cast_time_unit('us'), pl.lit(run, dtype=pl.String).alias(RUN))
 
 
 def _pack(tree: Path, into: Path) -> None:
