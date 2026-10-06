@@ -139,9 +139,9 @@ async function mount(root) {
     const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
     const enc = { x: X, z: SERIES, color: SERIES };
     const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth });
-    const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface-1)', strokeWidth: 2 });
+    const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface)', strokeWidth: 2 });
     const hollow = [...Map.groupBy(ahead.filter(r => r.projected), r => r[SERIES])].map(([name, data]) =>
-      dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface-1)',
+      dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface)',
         stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
     const label = ours.length ? [text([ours.at(-1)], { x: X, y: 'value', text: () => HERO, anchor: 'end', dx: -8, dy: -10,
       fill: ink(HERO), fontSize: 12, fontWeight: 650 })] : [];
