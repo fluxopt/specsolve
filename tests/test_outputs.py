@@ -173,6 +173,12 @@ def test_a_result_carries_the_activity_it_was_asked_for(answered, tmp_path: Path
     """``balance`` is an equality, so its activity is the load it meets."""
     answer = answered(ACTIVITY, tmp_path)
     assert answer.activity('balance')['value'].to_list() == pytest.approx(LOAD), 'one row per snapshot, in label order'
+
+
+@pytest.mark.parametrize('answered', RESULTS)
+def test_the_bridges_read_an_output_through_its_reader(answered, tmp_path: Path) -> None:
+    pytest.importorskip('pandas', reason='specsolve does not install pandas, and the floors environment has none')
+    answer = answered(ACTIVITY, tmp_path)
     assert answer.to_pandas('balance', kind='activity')['value'].tolist() == pytest.approx(LOAD), (
         'the bridges read an output through the same reader'
     )
