@@ -249,7 +249,7 @@ async function mount(root) {
       names.forEach(n => (show ? state.hidden.delete(n) : state.hidden.add(n)));
       return draw();
     }
-    const b = ev.target.closest('.seg button');
+    const b = ev.target.closest('.bench-seg button');
     if (!b) return;
     const key = b.parentElement.dataset.key;
     if (key === 'metric' || key === 'scale') state[key] = b.dataset.value;
