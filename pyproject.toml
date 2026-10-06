@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "mathspec>=0.2.1,<0.3",
-    "polars>=1.30",
+    "polars>=1.30,<2",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.
     "highspy>=1.13",
