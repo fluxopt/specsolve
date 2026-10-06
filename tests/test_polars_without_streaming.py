@@ -7,6 +7,8 @@ in-memory engine.
 
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 
@@ -29,13 +31,16 @@ def polars_without_streaming(monkeypatch):
         return original(self, *args, engine=engine, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', refuse)
-    collect.collect_engine.cache_clear()
+    collect.streaming_available.cache_clear()
     yield
-    collect.collect_engine.cache_clear()
+    collect.streaming_available.cache_clear()
 
 
 def test_the_probe_sees_the_refusal(polars_without_streaming):
-    assert collect.collect_engine() == 'in-memory'
+    assert not collect.streaming_available(), 'a refused probe means no streaming engine'
+    assert collect.engine_for(math.inf) == 'in-memory', (
+        'without a streaming engine, a model of any size collects in memory'
+    )
 
 
 def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
@@ -50,5 +55,5 @@ def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
 
 
 def test_the_streaming_engine_is_used_where_polars_has_one():
-    collect.collect_engine.cache_clear()
-    assert collect.collect_engine() == 'streaming', 'the polars this suite runs on has the streaming engine'
+    collect.streaming_available.cache_clear()
+    assert collect.streaming_available(), 'the polars this suite runs on has the streaming engine'

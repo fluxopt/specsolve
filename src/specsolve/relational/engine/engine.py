@@ -20,7 +20,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
-from specsolve.relational.collect import engine_for, on
+from specsolve.relational.collect import collecting_on, engine_for
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -96,9 +96,8 @@ class Engine:
         with _clocked(self._seconds, 'attach'):
             attached = attach(program, sources)
         self._measured.sparse = short_parameters(program, attached)
-        engine = engine_for(_largest(program, attached.cardinality))
-        assembly = Assembly(program, attached, self._measured, engine)
-        with _clocked(self._seconds, 'build'), on(engine):
+        assembly = Assembly(program, attached, self._measured)
+        with _clocked(self._seconds, 'build'), collecting_on(engine_for(_largest(program, attached.cardinality))):
             self._built = assembly.run()
 
     # ------------------------------------------------------------------

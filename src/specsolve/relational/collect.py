@@ -12,6 +12,7 @@ runs first can be keyed on a part of them, which multiplies the rows it holds.
 
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import cache
@@ -22,52 +23,52 @@ import polars as pl
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-__all__ = ['CollectEngine', 'collect_engine', 'collected', 'collected_all', 'engine_for', 'on']
-
-type CollectEngine = Literal['streaming', 'in-memory']
+__all__ = ['collected', 'collected_all', 'collecting_on', 'engine_for', 'streaming_available']
 
 _AS_WRITTEN = pl.QueryOptFlags(join_order=False)
 
 #: A build whose largest declaration has fewer coordinates than this collects in memory.
 IN_MEMORY_BELOW = 250_000
 
-_ON: ContextVar[CollectEngine | None] = ContextVar('_ON', default=None)
+_COLLECTING_ON: ContextVar[Literal['streaming', 'in-memory'] | None] = ContextVar('_COLLECTING_ON', default=None)
 
 
 @cache
-def collect_engine() -> CollectEngine:
-    """The engine every collect names: streaming where this polars has it, in-memory otherwise."""
+def streaming_available() -> bool:
+    """Whether this polars has the streaming engine, asked once."""
     try:
         pl.LazyFrame({'probe': [0]}).collect(engine='streaming')
     except BaseException:  # a refusal is a pyo3 panic, which is not an Exception
-        return 'in-memory'
-    return 'streaming'
+        return False
+    return True
 
 
-def engine_for(coordinates: int) -> CollectEngine:
+def engine_for(coordinates: float) -> Literal['streaming', 'in-memory']:
     """The engine a build collects on, given its largest declaration's coordinate count.
 
-    In memory below [`IN_MEMORY_BELOW`][], else [`collect_engine`][].
+    In memory below [`IN_MEMORY_BELOW`][], or where this polars has no
+    streaming engine; streaming otherwise.
     """
-    return 'in-memory' if coordinates < IN_MEMORY_BELOW else collect_engine()
+    return 'streaming' if coordinates >= IN_MEMORY_BELOW and streaming_available() else 'in-memory'
 
 
 @contextmanager
-def on(engine: CollectEngine) -> Iterator[None]:
-    """Every [`collected`][] inside runs on *engine*."""
-    token = _ON.set(engine)
+def collecting_on(engine: Literal['streaming', 'in-memory']) -> Iterator[None]:
+    """Every [`collected`][] and [`collected_all`][] inside runs on *engine*."""
+    token = _COLLECTING_ON.set(engine)
     try:
         yield
     finally:
-        _ON.reset(token)
+        _COLLECTING_ON.reset(token)
 
 
-def _engine() -> CollectEngine:
-    return _ON.get() or collect_engine()
+def _engine() -> Literal['streaming', 'in-memory']:
+    """The engine [`collecting_on`][] set, else the one a frame of unknown size gets."""
+    return _COLLECTING_ON.get() or engine_for(math.inf)
 
 
 def collected(frame: pl.LazyFrame) -> pl.DataFrame:
-    """*frame* materialised on the engine [`on`][] names, else [`collect_engine`][], its joins as written."""
+    """*frame* materialised on the current engine, its joins in the order they were written."""
     return frame.collect(engine=_engine(), optimizations=_AS_WRITTEN)
 
 

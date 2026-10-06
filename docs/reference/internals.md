@@ -88,14 +88,13 @@ Each entry says what the thing is, then the module it lives in.
   (`relational/engine/coverage.py`).
 
 **Collect engine**
-: Which polars engine materialises a frame: the streaming one where this
-  polars has it, the in-memory one otherwise, and the in-memory one inside a
-  build whose largest declaration has fewer coordinates than
-  `IN_MEMORY_BELOW` (`engine_for()`). A build decides once, keeps the choice
-  as `BuiltModel.engine`, and collects inside `on()` of it. `collected()` is
-  the one way a frame is collected, on that engine and with polars' join
-  reordering off.
-  `collect_engine()` is not the `Engine` (`relational/collect.py`).
+: Which polars engine materialises a frame. `engine_for()` decides it: the
+  in-memory engine for a build whose largest declaration has fewer
+  coordinates than `IN_MEMORY_BELOW`, or where this polars has no streaming
+  engine (`streaming_available()`); the streaming one otherwise. A build
+  collects inside `collecting_on()` of its decision. `collected()` is the one
+  way a frame is collected, on that engine and with polars' join reordering
+  off. Not the `Engine` (`relational/collect.py`).
 
 ## Sinks
 

@@ -124,7 +124,7 @@ def test_a_named_engine_holds_inside_its_block_only(monkeypatch):
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
-    with collect.on('in-memory'):
+    with collect.collecting_on('in-memory'):
         collected(pl.LazyFrame({'a': [1]}))
     collected(pl.LazyFrame({'a': [1]}))
     assert ran == ['in-memory', 'streaming'], 'the named engine inside the block, the default after it'
@@ -162,6 +162,6 @@ def test_a_build_collects_on_the_engine_its_largest_declaration_sizes(threshold,
         'variables': {'x': {'dims': ['a', 'b']}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
     }
-    with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
-        assert model._engine._model.engine == engine, 'the build keeps the engine its size chose'
+    with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}):
+        pass
     assert ran == {engine}, 'every collect of the build ran on that engine'

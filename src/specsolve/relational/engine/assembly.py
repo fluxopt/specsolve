@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
-    from specsolve.relational.collect import CollectEngine
     from specsolve.relational.engine.attaching import AttachedSources
 
 
@@ -91,20 +90,15 @@ class BuiltModel:
     variables: dict[str, labels.Labelled]
     constraints: dict[str, labels.Labelled]
     handoff: sinks.Handoff
-    #: The polars engine this build collected on, chosen once for it.
-    engine: CollectEngine
 
 
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
-    def __init__(
-        self, program: program.Program, attached: AttachedSources, measured: Measured, engine: CollectEngine
-    ) -> None:
+    def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
         self.program = program
         self.attached = attached
         self.measured = measured
-        self.engine = engine
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
         self.scope = Scope(program, attached, self.variables)
@@ -152,7 +146,7 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff, self.engine)
+        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _matrix_share(
         self, pieces: list[pl.LazyFrame], name: str, *expressions: program.Expression
