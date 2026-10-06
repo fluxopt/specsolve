@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - docs(benchmarks): the benchmark charts read a published JSON table of measurements and label our engine specsolve ([#1851](https://github.com/fluxopt/specsolve/pull/1851))
+- docs(benchmarks): the benchmark page highlights specsolve, projects the sizes a budget refused, and compares every library with it in one table ([#1855](https://github.com/fluxopt/specsolve/pull/1855))
 
 ## 0.6.1 (2026-10-06)
 
