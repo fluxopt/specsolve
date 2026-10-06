@@ -23,6 +23,7 @@ from specsolve.axes import axis_from
 from specsolve.errors import SpecsolveError
 from specsolve.inputs import lower
 from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
+from specsolve.relational.collect import collected
 from specsolve.sweep import (
     MANIFEST_FILE,
     OWNED_FILE,
@@ -219,9 +220,9 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         if not built:
-            primals = {name: frame.collect() for name, frame in frames.items()}
+            primals = {name: frame.pipe(collected) for name, frame in frames.items()}
             duals = (
-                {name: frame.collect() for name, frame in dual_frames.items()}
+                {name: frame.pipe(collected) for name, frame in dual_frames.items()}
                 if no_duals is None and dual_frames
                 else None
             )

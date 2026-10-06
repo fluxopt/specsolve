@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve.relational.collect import collected
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
@@ -56,18 +58,20 @@ class Scope:
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
 
-        Folded in reverse because polars' streaming engine walks a cross join
-        right-major, so the product arrives in label order; [`labels.frame`][]
-        verifies it. The empty product is one real row carrying only [`UNIT`][],
-        so a ``where`` on a scalar declaration has a row to filter.
+        Each cross join keeps its left side's order, then its right's, so the
+        product arrives row-major, which is label order, on either engine; the
+        streaming engine otherwise picks which side it buffers from the
+        tables' sizes, and the order with it. [`labels.frame`][] verifies it.
+        The empty product is one real row carrying only [`UNIT`][], so a
+        ``where`` on a scalar declaration has a row to filter.
         """
         out: pl.LazyFrame | None = None
-        for d in reversed(dims):
+        for d in dims:
             table = self.data.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
-            out = table if out is None else out.join(table, how='cross')
+            out = table if out is None else out.join(table, how='cross', maintain_order='left_right')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
-        return out.select(*(c for d in dims for c in (d, ordinal(d))))
+        return out
 
     def parameter_join(
         self,
@@ -112,7 +116,7 @@ class Scope:
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
-        labels = self.data.dimensions[dim].select('val').collect()['val']
+        labels = self.data.dimensions[dim].select('val').pipe(collected)['val']
         return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:

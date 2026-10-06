@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
 from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
 from specsolve.relational.engine.scope import join_on
@@ -106,7 +107,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
 
     width_name = s.width if isinstance(s.width, str) else None
     if width_name is not None:
-        widest = int(scope.data.parameters[width_name].select(pl.col('value').max()).collect().item() or 0)
+        widest = int(scope.data.parameters[width_name].select(pl.col('value').max()).pipe(collected).item() or 0)
     else:
         assert not isinstance(s.width, str)
         widest = s.width

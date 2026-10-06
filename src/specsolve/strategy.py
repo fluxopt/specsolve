@@ -42,6 +42,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
+from specsolve.relational.collect import collected
 from specsolve.sources import numbered, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
@@ -694,7 +695,7 @@ def _encode(
             out[name] = obj
         else:
             buffer = io.BytesIO()
-            table.collect().write_parquet(buffer, compression=_COMPRESSION)
+            table.pipe(collected).write_parquet(buffer, compression=_COMPRESSION)
             out[name] = buffer.getvalue()
         memo[name] = (obj, out[name])
     return out

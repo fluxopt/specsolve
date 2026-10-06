@@ -17,7 +17,7 @@ from mathspec import program
 from specsolve.errors import DataError
 from specsolve.messages import null_bounds_message
 from specsolve.relational import sinks
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
 from specsolve.relational.engine.pieces import Piece, absence_restrictions
@@ -157,7 +157,7 @@ class Assembly:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
@@ -180,7 +180,7 @@ class Assembly:
         bounded = labels.in_position_order(
             self.compiler.bounds(labelled.lazy(), name, v)
             .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
-            .collect(engine=collect_engine()),
+            .pipe(collected),
             'var_label',
         )
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
@@ -216,7 +216,7 @@ class Assembly:
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES['col']).alias('col'),
-        ).collect(engine=collect_engine())
+        ).pipe(collected)
 
         position = pl.col('#set position')
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
@@ -318,7 +318,7 @@ class Assembly:
             )
             for p, sign in quads
         ]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
         return share
@@ -364,7 +364,7 @@ class Assembly:
                 f'objective constant part has dims {list(p.dims)} — the language refuses a '
                 f'variable-free part of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
+            self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
@@ -372,7 +372,7 @@ class Assembly:
         pieces = [
             p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
         ]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
@@ -388,7 +388,7 @@ class Assembly:
         if not quads:
             return None
         pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
@@ -474,9 +474,9 @@ def _collapsed(
     aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
     if ordered:
         aggregated = aggregated.sort(*keys)
-    collected = aggregated.collect(engine=collect_engine())
-    share = _pruned(collected)
-    return share, dropped or share.height != collected.height
+    summed = aggregated.pipe(collected)
+    share = _pruned(summed)
+    return share, dropped or share.height != summed.height
 
 
 def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
