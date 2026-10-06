@@ -10,6 +10,7 @@ The lane is described in docs/about/architecture.md.
 
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
@@ -19,6 +20,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
+from specsolve.relational.collect import sized
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -95,7 +97,7 @@ class Engine:
             attached = attach(program, sources)
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
-        with _clocked(self._seconds, 'build'):
+        with _clocked(self._seconds, 'build'), sized(_largest(program, attached.cardinality)):
             self._built = assembly.run()
 
     # ------------------------------------------------------------------
@@ -495,3 +497,9 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         yield
     finally:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
+
+
+def _largest(program: program.Program, cardinality: Mapping[str, int]) -> int:
+    """The coordinate count of the largest variable or constraint, unmasked."""
+    declarations = (*program.variables.values(), *program.constraints.values())
+    return max((math.prod(cardinality[d] for d in declared.dims) for declared in declarations), default=1)

@@ -89,8 +89,10 @@ Each entry says what the thing is, then the module it lives in.
 
 **Collect engine**
 : Which polars engine materialises a frame: the streaming one where this
-  polars has it, the in-memory one otherwise. `collected()` is the one way a
-  frame is collected, on that engine and with polars' join reordering off.
+  polars has it, the in-memory one otherwise, and the in-memory one inside a
+  build whose largest declaration has fewer coordinates than
+  `IN_MEMORY_BELOW` (`sized()`). `collected()` is the one way a frame is
+  collected, on that engine and with polars' join reordering off.
   `collect_engine()` is not the `Engine` (`relational/collect.py`).
 
 ## Sinks
