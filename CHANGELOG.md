@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - fix(deps): specsolve installs a polars older than 2.0, on which a row's dual can come back empty and a model can take nine times the memory ([#1852](https://github.com/fluxopt/specsolve/pull/1852))
+- docs: the published benchmarks are re-measured on specsolve 0.6.0 ([#1850](https://github.com/fluxopt/specsolve/pull/1850))
 
 ## 0.6.0 (2026-10-05)
 

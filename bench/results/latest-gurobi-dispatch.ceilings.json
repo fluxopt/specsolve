@@ -9,6 +9,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 2.14 GB on dispatch/m, so the next rung projects to 42.9 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 2.17 GB on dispatch/m, so the next rung projects to 43.3 GB \u2014 over the 16 GB budget"
  }
 ]
