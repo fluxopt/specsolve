@@ -111,22 +111,35 @@ async function mount(root) {
     return out;
   }
 
-  /* One row per library at the hovered size, slowest first as the lines stack in the panel, the
-     highlighted library emphasised and every other library's value followed by its ratio to it, as
-     in the table. A projection stands in for a library only where the library has no measurement
-     at that size. */
-  function grouped(fmt) {
+  /* A tooltip's number columns. Each row lays out on its own, value right-aligned in tabular
+     digits, so a column lines up only if every entry has one shape: one unit for the column (the
+     smallest value's), fixed decimals, and figure spaces, a digit wide, padding the left. */
+  const UNITS = { seconds: [['ms', 1e-3], ['s', 1]], gigabytes: [['MB', 1e-3], ['GB', 1]] };
+  const padded = texts => texts.map(t => t.padStart(Math.max(...texts.map(x => x.length)), '\u2007'));
+  function amounts(values, format) {
+    const [unit, scale] = UNITS[format][Math.min(...values) < 1 ? 0 : 1];
+    const low = Math.min(...values) / scale;
+    const digits = low < 1 ? 2 : low < 10 ? 1 : 0;
+    return padded(values.map(v => `${(v / scale).toFixed(digits)} ${unit}`));
+  }
+
+  /* One row per library at the hovered size, slowest first as the lines stack in the panel: its
+     value, then its ratio to the highlighted library, whose row is emphasised. A projection stands
+     in for a library only where the library has no measurement at that size. */
+  function grouped(format) {
     return {
       use: tooltip,
       content: points => {
         const at = [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
           .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => b.value - a.value);
         const ours = at.find(isHero);
+        const values = amounts(at.map(d => d.value), format);
+        const ratios = padded(at.map(d => (ours ? `${(d.value / ours.value).toFixed(1)}×` : '–')));
         return {
           title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
-          rows: at.map(d => ({
+          rows: at.map((d, i) => ({
             label: d.projected ? `${d[SERIES]} (projected)` : d[SERIES],
-            value: `${d.projected ? '≈ ' : ''}${fmt(d.value)}${ours && d !== ours ? ` · ${FORMAT.ratio(d.value / ours.value)}` : ''}`,
+            value: `${values[i]} · ${ratios[i]}`,
             color: ink(d[SERIES]), active: d === ours,
           })),
         };
@@ -182,7 +195,7 @@ async function mount(root) {
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 }, controls: heroLabel([...ours, ...oursAhead]),
       focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
-      tooltip: grouped(fmt),
+      tooltip: grouped(metric.format),
     });
   }
 

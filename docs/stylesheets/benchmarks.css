@@ -17,6 +17,7 @@
   --ts-chart-tooltip-border: 1px solid var(--hairline);
   --ts-chart-tooltip-font: 500 .64rem/1.35 var(--md-text-font-family);
   --ts-chart-tooltip-padding: .35rem .5rem;
+  --ts-chart-tooltip-max-width: 24rem;
 }
 [data-md-color-scheme="slate"] .bench {
   --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
@@ -73,3 +74,4 @@
 .md-typeset .bench .bench-heat td.none { color: var(--muted); }
 .md-typeset .bench .bench-heat td.floor { background: var(--surface-2); color: var(--fg2); }
 .md-typeset .bench .bench-heat th.floor { color: var(--muted); }
+.bench .ts-chart-tooltip__row > span:nth-child(2) { white-space: nowrap; }
