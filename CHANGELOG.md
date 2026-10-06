@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the published benchmarks are re-measured on specsolve 0.6.0 ([#1850](https://github.com/fluxopt/specsolve/pull/1850))
+
 ## 0.6.0 (2026-10-05)
 
 Breaks:
