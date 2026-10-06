@@ -1045,6 +1045,19 @@ def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
     )
 
 
+def test_a_rung_measured_past_a_ceiling_is_a_measurement_not_a_refusal() -> None:
+    """Two result files can disagree: one stopped at `s`, a later one reached `m`.
+
+    The cell is one row, and the number wins over the budget.
+    """
+    records = [
+        *_measured('specsolve', 'xs', 's', 'm', 'l'),
+        *_measured('linopy', 'xs', 's', 'm'),
+        _ceiling_record('size', 's'),
+    ]
+    assert _refused(records, 'linopy') == {'l': '>30 s'}, 'only the rung nothing measured is refused'
+
+
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
     """`rows` drops a measurement taken without a peak, so a ceiling can name
     a rung the axis does not hold."""
