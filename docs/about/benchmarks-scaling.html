@@ -256,10 +256,12 @@ table.heat { border-collapse: separate; border-spacing: 2px; width: 100%; paddin
 <script type="module">
 import { areaY } from '@tanstack/charts/area.js';
 import { crosshair } from '@tanstack/charts/crosshair.js';
+import { dot } from '@tanstack/charts/dot.js';
 import { mountChart } from '@tanstack/charts/dom.js';
 import { lineY } from '@tanstack/charts/line.js';
 import { scaleLinear } from '@tanstack/charts/scales/linear.js';
 import { defineChart } from '@tanstack/charts/scene.js';
+import { text } from '@tanstack/charts/text.js';
 import { tooltip } from '@tanstack/charts/tooltip.js';
 import { scaleLog } from 'd3-scale';
 
@@ -356,7 +358,9 @@ function grouped(fmt) {
 }
 
 /* One panel: a line per library over size, the band under it, the projections dashed. The
-   highlighted library is drawn last and thick, so it stays on top where the lines cross. */
+   highlighted library is drawn last and thick, so it stays on top where the lines cross, and is
+   named above its last measured point. Each measured point is a dot ringed in the surface colour,
+   so crossing points stay apart; each projected size is a hollow ring in the library's colour. */
 function definition(rows, metric) {
   const fmt = FORMAT[metric.format];
   const measured = rows.filter(r => r.value != null);
@@ -364,7 +368,13 @@ function definition(rows, metric) {
   const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
   const [theirs, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
   const enc = { x: X, z: SERIES, color: SERIES };
-  const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', points: true, strokeWidth });
+  const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth });
+  const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface-1)', strokeWidth: 2 });
+  const hollow = [...Map.groupBy(ahead.filter(r => r.projected), r => r[SERIES])].map(([name, data]) =>
+    dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface-1)',
+      stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
+  const label = ours.length ? [text([ours.at(-1)], { x: X, y: 'value', text: () => HERO, anchor: 'end', dx: -8, dy: -10,
+    fill: SPEC.series.ink[LIBRARIES.indexOf(HERO)], fontSize: 12, fontWeight: 650 })] : [];
   const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
   const area = (data, fillOpacity) => areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity });
   const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
@@ -373,6 +383,9 @@ function definition(rows, metric) {
       ...(metric.band ? [area(theirs, 0.35), area(ours, 0.22)] : []),
       dashed(theirsAhead, 1.5), dashed(oursAhead, 3),
       line(theirs, 1.5), line(ours, 3.5),
+      ...hollow,
+      points(theirs, 3.5), points(ours, 5),
+      ...label,
       crosshair({ y: false }),
     ],
     scales: {
