@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
+
 ## 0.6.1 (2026-10-06)
 
 specsolve now requires polars below 2.0. On polars 2.0.0, a row's dual can come
