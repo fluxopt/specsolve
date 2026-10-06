@@ -70,6 +70,30 @@ def test_a_request_that_names_no_output_is_refused(verb: Callable[[object], obje
         verb(outputs)
 
 
+@pytest.mark.parametrize(
+    ('module', 'verb'),
+    [
+        pytest.param(
+            'specsolve.api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
+        ),
+        pytest.param(
+            'specsolve.strategy',
+            lambda: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs={'activty'}),
+            id='sweep-before-a-slice',
+        ),
+    ],
+)
+def test_a_misspelled_output_is_refused_before_anything_is_built(monkeypatch, module: str, verb) -> None:
+    """A typo costs nothing: the refusal comes before the first model, not after the solve."""
+
+    def built(*args: object, **kwargs: object) -> None:
+        raise AssertionError('a model was built for a request that names no output')
+
+    monkeypatch.setattr(f'{module}.build', built)
+    with pytest.raises(sps.errors.SpecsolveError, match="'activty'"):
+        verb()
+
+
 # ---------------------------------------------------------------------------
 # every shape an answer takes
 # ---------------------------------------------------------------------------
