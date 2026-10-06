@@ -13,6 +13,7 @@ from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
+from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -170,6 +171,24 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
         reduced += summed(frame['col_l'], weights * x[index(frame['col_r'])])
         reduced += summed(frame['col_r'], weights * x[index(frame['col_l'])])
     return pl.Series('value', reduced, dtype=pl.Float64)
+
+
+def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
+    """Each row's distance to binding at *activity*: non-negative wherever the row holds.
+
+    ``rhs - lhs`` for ``<=`` and ``lhs - rhs`` for ``>=``, so the value does
+    not depend on which side a term is written on, and ``-|rhs - lhs|`` for
+    ``==``, which holds only at zero.
+    """
+    import numpy as np
+
+    rows = handoff.dense_rows(np.inf)
+    lhs = activity.to_numpy()
+    gap = rows.rhs - lhs
+    slack = np.where(
+        rows.sense == SENSE_CODES['<='], gap, np.where(rows.sense == SENSE_CODES['>='], -gap, -np.abs(gap))
+    )
+    return pl.Series('value', slack, dtype=pl.Float64)
 
 
 def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:

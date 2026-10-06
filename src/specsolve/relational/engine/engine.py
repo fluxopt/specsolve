@@ -304,16 +304,9 @@ class Engine:
         replaces rather than mutates. A ``None`` vector yields no frames rather
         than empty ones.
         """
-        model = self._model
-        program = model.program
 
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
-            if values is None:
-                return {}
-            return {
-                name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
-                for name, c in program.constraints.items()
-            }
+            return {} if values is None else self._per_constraint(values)
 
         return (
             self._per_variable(primal) if primal is not None else {},
@@ -327,8 +320,9 @@ class Engine:
     ) -> dict[Output, Mapping[str, pl.LazyFrame]]:
         """The frames of each output asked for, computed only then.
 
-        Reduced costs exist where the primal and the duals both do; elsewhere
-        the output maps to nothing, and the reader gives the duals' reason.
+        Reduced costs exist where the primal and the duals both do, slacks
+        wherever the activity does; elsewhere the output maps to nothing, and
+        the reader gives the reason.
         """
         carried: dict[Output, Mapping[str, pl.LazyFrame]] = {}
         if 'activity' in outputs:
@@ -338,7 +332,20 @@ class Engine:
             if answer.primal is not None and answer.dual is not None:
                 reduced = self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
             carried['reduced_cost'] = reduced
+        if 'slack' in outputs:
+            slack: dict[str, pl.LazyFrame] = {}
+            if answer.activity is not None:
+                slack = self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
+            carried['slack'] = slack
         return carried
+
+    def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
+            for name, c in model.program.constraints.items()
+        }
 
     def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
