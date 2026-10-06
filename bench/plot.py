@@ -2,7 +2,7 @@
 
     pixi run -e bench python -m bench.plot
 
-Writes ``docs/about/benchmarks-scaling.json``: one row per model, sink, ladder,
+Writes ``docs/about/benchmarks.json``: one row per model, sink, ladder,
 rung and library, which the page's marks read by field name. The page itself is
 hand-edited and this never touches it.
 """
@@ -16,7 +16,7 @@ from typing import Any
 from bench import results as bench_results
 
 #: Where the page fetches its rows from.
-PAGE_DATA = Path('docs/about/benchmarks-scaling.json')
+PAGE_DATA = Path('docs/about/benchmarks.json')
 
 #: The rungs the page plots, per ladder and in order. The two ladders are never
 #: one curve: `w10` and `s` are the same size through different shapes.
