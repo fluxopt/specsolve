@@ -7,6 +7,7 @@ laid out over the build's coordinates.
 from __future__ import annotations
 
 import importlib.util
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
 from pathlib import Path
@@ -28,10 +29,11 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected, sized
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from contextlib import AbstractContextManager
 
     import pandas as pd
     import polars as pl
@@ -353,6 +355,10 @@ class Result:
     #: ask. ``None`` for an answer written before the column, or built by hand.
     #: Read through [`model_digest`][].
     _model_digest: str | Callable[[], str] | None = None
+    #: The coordinate count of the largest declaration in the build this
+    #: answered, which [`sized`][specsolve.relational.collect.sized] picks a
+    #: read's engine by. ``None`` for an answer read off disk.
+    _coordinates: int | None = None
     #: The archive this answer was read back out of, as its record names it.
     #: ``None`` for a live solve: the name is stamped when an archive is
     #: written, not when the solver returns.
@@ -489,7 +495,7 @@ class Result:
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
-        return _named(frames, name, 'variable').pipe(collected)
+        return _named(frames, name, 'variable').pipe(self._collected)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -515,7 +521,7 @@ class Result:
         frames = self._readable(self._duals, f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'constraint').pipe(collected)
+        return _named(frames, name, 'constraint').pipe(self._collected)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -546,7 +552,7 @@ class Result:
         if self._no_dual_ray is not None:
             raise SpecsolveError(self._no_dual_ray)
         assert self._dual_rays is not None, 'a ray is released with the primals, which _unclosed just checked'
-        return _named(self._dual_rays, name, 'constraint').pipe(collected)
+        return _named(self._dual_rays, name, 'constraint').pipe(self._collected)
 
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -560,7 +566,7 @@ class Result:
             KeyError: No constraint is called *name*.
         """
         frames = self._readable(self._activities, f"the activity of '{name}'")
-        return _named(frames, name, 'constraint').pipe(collected)
+        return _named(frames, name, 'constraint').pipe(self._collected)
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -586,7 +592,16 @@ class Result:
                 read.
         """
         self._readable(self._primals, 'an expression')
-        return evaluated(self._expressions or {}, self._evaluate, expression)
+        with self._sized():
+            return evaluated(self._expressions or {}, self._evaluate, expression)
+
+    def _sized(self) -> AbstractContextManager[None]:
+        """The engine the build this answered was sized for, or the default for an answer off disk."""
+        return nullcontext() if self._coordinates is None else sized(self._coordinates)
+
+    def _collected(self, frame: pl.LazyFrame) -> pl.DataFrame:
+        with self._sized():
+            return frame.pipe(collected)
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""

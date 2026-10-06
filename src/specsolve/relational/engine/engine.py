@@ -250,6 +250,7 @@ class Engine:
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
             _model_digest=lambda: handoff.contents,
+            _coordinates=_largest(self._model.program, self._model.attached.cardinality),
         )
 
     def contents(self) -> str:
