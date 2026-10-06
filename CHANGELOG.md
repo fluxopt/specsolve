@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs(benchmarks): the benchmark page highlights specsolve, projects the sizes a budget refused, and compares every library with it in one table ([#1855](https://github.com/fluxopt/specsolve/pull/1855))
 - feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
 - feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
+- feat(api): a solve or a sweep asked for outputs={'slack'} reads how far each constraint is from binding ([#1868](https://github.com/fluxopt/specsolve/pull/1868))
 
 ## 0.6.1 (2026-10-06)
 
