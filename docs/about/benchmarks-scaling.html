@@ -131,7 +131,7 @@
   --text-primary: #1a1a19; --text-secondary: #55534a; --text-muted: #8a887c;
   --hairline: #dedcd3;
   --s1: #d42f2a; --s2: #2a78d6; --s3: #a9800c; --s4: #8a5cd6; --s5: #1baf7a; --s6: #eb6834;
-  --mix: 50%;
+  --mix: 70%;
   --d-mid: #f0efec; --d-b1: #dce8f7; --d-b2: #aecbef; --d-b3: #76a7e4; --d-b4: #2a6fc4;
   --d-g1: #dcf0e5; --d-g2: #a6dcbf; --d-g3: #5fbf8f; --d-g4: #13945e; --d-ink4: #ffffff;
   color-scheme: light;
@@ -149,7 +149,7 @@
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
     --hairline: #3a3934;
     --s1: #e5483f; --s2: #3987e5; --s3: #b88d18; --s4: #9b74ea; --s5: #199e70; --s6: #d95926;
-    --mix: 72%;
+    --mix: 85%;
     --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
     --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
   }
@@ -160,7 +160,7 @@
   --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
   --hairline: #3a3934;
   --s1: #e5483f; --s2: #3987e5; --s3: #b88d18; --s4: #9b74ea; --s5: #199e70; --s6: #d95926;
-  --mix: 72%;
+  --mix: 85%;
   --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
   --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
 }
@@ -381,8 +381,8 @@ function definition(rows, metric) {
   return defineChart({
     marks: [
       ...(metric.band ? [area(theirs, 0.35), area(ours, 0.22)] : []),
-      dashed(theirsAhead, 1.5), dashed(oursAhead, 3),
-      line(theirs, 1.5), line(ours, 3.5),
+      dashed(theirsAhead, 2), dashed(oursAhead, 3),
+      line(theirs, 2), line(ours, 3.5),
       ...hollow,
       points(theirs, 3.5), points(ours, 5),
       ...label,
