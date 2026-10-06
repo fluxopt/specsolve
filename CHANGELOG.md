@@ -7,8 +7,12 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- perf(engine): a small model builds faster, on the in-memory engine ([#1863](https://github.com/fluxopt/specsolve/pull/1863))
+- docs(benchmarks): the benchmark charts read a published JSON table of measurements and label our engine specsolve ([#1851](https://github.com/fluxopt/specsolve/pull/1851))
+- docs(benchmarks): the benchmark page highlights specsolve, projects the sizes a budget refused, and compares every library with it in one table ([#1855](https://github.com/fluxopt/specsolve/pull/1855))
+- docs(benchmarks): the benchmark charts and their method are one page of the docs, in the site's theme ([#1860](https://github.com/fluxopt/specsolve/pull/1860))
+- docs(benchmarks): the benchmark tooltip ranks the libraries against specsolve, and the specsolve label sits clear of the other lines ([#1862](https://github.com/fluxopt/specsolve/pull/1862))
 - feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
+- perf(engine): a small model builds faster, on the in-memory engine ([#1863](https://github.com/fluxopt/specsolve/pull/1863))
 
 ## 0.6.1 (2026-10-06)
 
