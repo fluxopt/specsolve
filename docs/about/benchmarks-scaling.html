@@ -25,9 +25,9 @@
     Each model is built and handed to a solver — <code>run()</code> and
     <code>optimize()</code> are never called. Every rival model is hand-written in
     <code>bench/models/</code> beside ours and is solved against ours in CI, so
-    nothing here is fast because it built a different model. The legend carries
-    six lines for the five: <code>gurobipy</code> appears twice, the same
-    library written as a loop and as a matrix.
+    nothing here is fast because it built a different model. <code>gurobipy</code>
+    appears twice, the same library written as a loop and as a matrix; the matrix,
+    with <code>highspy-matrix</code>, is drawn as the matrix floor.
   </p>
   <p class="lede">
     <b>Every number here is the median of a measurement's rounds, and every band
@@ -41,33 +41,49 @@
   </dl>
 </header>
 
-<section>
+<div class="bar" role="group" aria-label="Controls for the charts and the table">
   <div class="controls">
     <span class="ctl-label">Show</span>
-    <button class="ctl on" data-metric="wall">wall time</button>
-    <button class="ctl" data-metric="peak">peak RSS</button>
-  </div>
-  <!-- The same models at the same sizes, reached two ways: more snapshots over
-       fixed entities, or more entities over fixed snapshots. The x axis is
-       variables under both, so switching holds the size fixed and changes only
-       the shape that got there — which is the whole question `transport` asks,
-       its bus x generator join being the thing that never grows lengthwise. -->
-  <div class="controls">
+    <span class="seg" data-key="metric"><button data-value="wall" aria-pressed="true">wall time</button><button data-value="peak" aria-pressed="false">peak RSS</button></span>
+    <!-- The same models at the same sizes, reached two ways: more snapshots over
+         fixed entities, or more entities over fixed snapshots. The x axis is
+         variables under both, so switching holds the size fixed and changes only
+         the shape that got there — which is the whole question `transport` asks,
+         its bus x generator join being the thing that never grows lengthwise. -->
     <span class="ctl-label">Grown by</span>
-    <button class="ctl on" data-filter="ladder" data-value="length">length &mdash; more snapshots</button>
-    <button class="ctl" data-filter="ladder" data-value="width">width &mdash; more entities</button>
+    <span class="seg" data-key="ladder"><button data-value="length" aria-pressed="true">length — more snapshots</button><button data-value="width" aria-pressed="false">width — more entities</button></span>
+    <span class="ctl-label">Axes</span>
+    <span class="seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
   </div>
   <div class="controls">
     <span class="ctl-label">Libraries</span>
     <div class="legend" id="legend"></div>
     <span class="hint">click to hide</span>
   </div>
+</div>
+
+<section>
+  <h2>Cost against size</h2>
   <div id="facets" class="grid"></div>
   <p class="note">
-    Log on both axes: the slope is the claim. <b>The line is the median of the
-    rounds — the number in the table — and the band is the middle half of them,
-    first quartile to third.</b> Its height is what the machine did to the same
-    work, not a confidence interval: two lines whose bands overlap are two
+    <b>specsolve is the thick violet line.</b> Log–log gives every size equal room,
+    and the slope is the scaling order: a line rising one decade per decade grows
+    in step with the model. Linear–linear draws the gap at the largest size at its
+    real size, and puts the small sizes at the origin. Both axes switch together,
+    because a linear axis over a logarithmic one would draw linear growth as a
+    curve.
+  </p>
+  <p class="note">
+    <b>The grey line is the matrix floor:</b> a hand-written matrix handed
+    straight to the solver's bulk API — <code>gurobipy-matrix</code> on Gurobi,
+    <code>highspy-matrix</code> on HiGHS. Nobody writes a model this way; it is the
+    limit a modelling library can approach, and the distance from it is what
+    specsolve's modelling layer costs.
+  </p>
+  <p class="note">
+    <b>The line is the median of the rounds and the band is the middle half of
+    them, first quartile to third.</b> Its height is what the machine did to the
+    same work, not a confidence interval: two lines whose bands overlap are two
     numbers this run cannot tell apart, and a band you cannot see is a
     measurement that barely moved. Median rather than the fastest round, because
     the fastest is a best-of-n and n is not equal — a quick cell here took 84
@@ -76,9 +92,30 @@
     published number.
   </p>
   <p class="note">
-    <code>&gt;30 s</code> is a measurement the harness refused — projected past
-    its time budget and skipped. An em dash is a cell with no number for another
-    reason: <code>gurobipy</code> has no HiGHS.
+    <b>A dashed line is a projection, not a measurement.</b> It continues a
+    library past the size its budget refused, at the growth rate of its last
+    measured step and never slower than linear. The axes are scaled to the
+    measurements, so a steep projection leaves the top of the panel; the tooltip
+    gives its value.
+  </p>
+</section>
+
+<section>
+  <h2>Against specsolve</h2>
+  <p class="note">
+    The specsolve column is its own cost. Every other cell is that library's cost
+    divided by specsolve's at the same size: green where specsolve is faster, blue
+    where the other library is, grey within ten per cent. The matrix floor's column
+    is not shaded: being faster than specsolve there is the point of a floor. Hover
+    a cell for the library's own number.
+  </p>
+  <div class="scale" id="scale"></div>
+  <div class="scroller"><table class="heat" id="heat"></table></div>
+  <p class="note">
+    <code>&gt;30 s</code> and <code>&gt;16 GB</code> are measurements the harness
+    refused — projected past its time or memory budget and skipped; hover one for
+    the projection. An em dash is a cell with no number for another reason:
+    <code>gurobipy</code> has no HiGHS.
   </p>
 </section>
 
@@ -101,7 +138,10 @@
   --surface-1: #fcfcfb; --surface-2: #f4f3ef;
   --text-primary: #1a1a19; --text-secondary: #55534a; --text-muted: #8a887c;
   --hairline: #dedcd3;
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #8a5cd6; --s5: #a9800c; --s6: #c2185b;
+  --s1: #6d28d9; --s2: #a9800c; --s3: #2a78d6; --s4: #d42f2a; --floor: #6b6a61;
+  --mix: 70%;
+  --d-mid: #f0efec; --d-b1: #dce8f7; --d-b2: #aecbef; --d-b3: #76a7e4; --d-b4: #2a6fc4;
+  --d-g1: #dcf0e5; --d-g2: #a6dcbf; --d-g3: #5fbf8f; --d-g4: #13945e; --d-ink4: #ffffff;
   color-scheme: light;
   background: var(--surface-1); color: var(--text-primary);
   font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -116,7 +156,10 @@
     --surface-1: #1a1a19; --surface-2: #232320;
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
     --hairline: #3a3934;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9b74ea; --s5: #c99a1c; --s6: #e34b85;
+    --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
+    --mix: 85%;
+    --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
+    --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
   }
 }
 :root[data-theme="dark"] .viz-root {
@@ -124,10 +167,20 @@
   --surface-1: #1a1a19; --surface-2: #232320;
   --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
   --hairline: #3a3934;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9b74ea; --s5: #c99a1c; --s6: #e34b85;
+  --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
+  --mix: 85%;
+  --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
+  --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
+}
+/* The context libraries: each hue mixed into the surface, so they recede in either theme. */
+.viz-root {
+  --p2: color-mix(in oklab, var(--s2) var(--mix), var(--surface-1));
+  --p3: color-mix(in oklab, var(--s3) var(--mix), var(--surface-1));
+  --p4: color-mix(in oklab, var(--s4) var(--mix), var(--surface-1));
 }
 .viz-root h1 { font-size: 1.7rem; font-weight: 620; letter-spacing: -.02em; margin: 0 0 .5rem; }
-.viz-root section { margin-top: 3rem; }
+.viz-root h2 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.01em; margin: 0 0 .2rem; }
+.viz-root section { margin-top: 2.4rem; }
 .viz-root .lede { color: var(--text-secondary); max-width: 64ch; margin: 0; }
 .viz-root .note { color: var(--text-secondary); font-size: .875rem; max-width: 76ch; margin: .9rem 0 0; }
 .viz-root code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em;
@@ -136,43 +189,57 @@
   margin: .9rem 0 0; font-size: .95rem; }
 .models dt { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .models dd { margin: 0; color: var(--text-secondary); }
-/* `minmax(0, 1fr)` rather than `1fr`: the zero is what lets a track be
-   narrower than its content, so a wide table scrolls inside its panel instead
-   of widening it. */
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.4rem 1.8rem; margin-top: 1rem; }
-@media (max-width: 800px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-.grid figure { margin: 0; min-width: 0; color: var(--text-secondary); }
-.grid figcaption { font-size: .8rem; font-weight: 600; margin: 0 0 .3rem; }
-.grid .scroller { overflow-x: auto; margin-top: .5rem; }
-.controls { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin: .2rem 0; }
-.ctl-label, .hint { font-size: .78rem; color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: .06em; margin-right: .3rem; }
-.hint { font-size: .72rem; }
-.viz-root button { font: inherit; font-size: .82rem; color: var(--text-secondary);
-  background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 6px;
-  padding: .28rem .68rem; cursor: pointer; }
-.viz-root button.on { background: var(--text-primary); color: var(--surface-1);
-  border-color: var(--text-primary); }
-.legend { display: flex; gap: .4rem; flex-wrap: wrap; font-size: .8rem; }
-.viz-root .legend button { display: inline-flex; align-items: center; gap: .35rem; border: 0;
-  padding: .1rem .2rem; }
+.bar { position: sticky; top: 0; z-index: 5; background: var(--surface-1); margin: 1.6rem -1.2rem 0;
+  padding: .6rem 1.2rem; border-bottom: 1px solid var(--hairline); display: grid; gap: .4rem; }
+.controls { display: flex; align-items: center; gap: .4rem .5rem; flex-wrap: wrap; }
+.ctl-label, .hint { font-size: .75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.ctl-label:not(:first-child) { margin-left: .6rem; }
+.hint { font-size: .7rem; }
+.seg { display: inline-flex; border: 1px solid var(--hairline); border-radius: 6px; overflow: hidden; }
+.viz-root .seg button { font: inherit; font-size: .82rem; color: var(--text-secondary); background: var(--surface-1);
+  border: 0; padding: .28rem .68rem; cursor: pointer; }
+.viz-root .seg button + button { border-left: 1px solid var(--hairline); }
+.viz-root .seg button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+.viz-root button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.legend { display: flex; gap: .2rem .4rem; flex-wrap: wrap; font-size: .82rem; }
+.viz-root .legend button { font: inherit; color: var(--text-secondary); background: none; border: 0; border-radius: 5px;
+  display: inline-flex; align-items: center; gap: .4rem; padding: .1rem .3rem; cursor: pointer; }
 .viz-root .legend button[aria-pressed="false"] { opacity: .38; }
-.swatch { width: 15px; height: 3px; border-radius: 2px; display: inline-block; }
-.viz-root table { border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums;
-  width: 100%; table-layout: fixed; }
-.viz-root th, .viz-root td { text-align: right; padding: .18rem .3rem;
-  border-bottom: 1px solid var(--hairline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Headers wrap rather than clip: `gurobipy-loop` and `gurobipy-matrix` both
-   truncate to `GUROBIPY-…` in a narrow column. */
-.viz-root th { white-space: normal; line-height: 1.15; font-weight: 600; }
-.viz-root th:first-child, .viz-root td:first-child { text-align: left; }
-.viz-root td.best { font-weight: 700; color: var(--text-primary); }
+.viz-root .legend button[disabled] { cursor: default; }
+.swatch { width: 16px; height: 2px; border-radius: 2px; display: inline-block; }
+.swatch.hero { width: 20px; height: 4px; }
+/* `minmax(0, 1fr)` rather than `1fr`: the zero is what lets a track be
+   narrower than its content. */
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem 1.4rem; margin-top: .8rem; }
+@media (max-width: 980px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.grid figure { margin: 0; min-width: 0; color: var(--text-secondary); border: 1px solid var(--hairline);
+  border-radius: 8px; padding: .6rem .7rem .3rem; }
+.grid figcaption { font-size: .8rem; font-weight: 600; color: var(--text-primary); margin: 0 0 .2rem; }
+.scroller { overflow-x: auto; margin-top: .6rem; border: 1px solid var(--hairline); border-radius: 8px; }
+table.heat { border-collapse: separate; border-spacing: 2px; width: 100%; padding: .3rem;
+  font-size: .8rem; font-variant-numeric: tabular-nums; }
+.heat th { font-weight: 600; color: var(--text-secondary); text-align: right; padding: .3rem .5rem; white-space: nowrap; font-size: .76rem; }
+.heat td { text-align: right; padding: .28rem .5rem; white-space: nowrap; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+.heat th:first-child, .heat td:first-child { text-align: left; }
+.heat td.panel { font-family: inherit; font-size: .8rem; color: var(--text-secondary); }
+.heat tr.first td { border-top: 1px solid var(--hairline); }
+.heat td.own { background: var(--surface-2); }
+.heat td.none { color: var(--text-muted); }
+.heat td.floor { background: var(--surface-2); color: var(--text-secondary); }
+.heat th.floor { color: var(--text-muted); }
+.scale { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-top: .7rem; font-size: .74rem; color: var(--text-muted); }
+.scale i { display: inline-block; width: 24px; height: 12px; border-radius: 3px; }
+.scale span { margin: 0 .4rem; }
 .viz-root footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--hairline); }
 </style>
 
 <!-- What is drawn, as data: each panel is the rows of one `facet` value, the
-     line and band read their fields by name, and a control swaps a `metric` or
-     sets a `filter`. The script below only turns this into chart definitions. -->
+     line and band read their fields by name, a control swaps a `metric`, sets a
+     `filter` or switches the axes, and `highlight` is the library every other
+     one is drawn and divided against. The script below only turns this into
+     chart definitions and the table. -->
 <script type="application/json" id="spec">
 {
   "data": "benchmarks-scaling.json",
@@ -180,14 +247,17 @@
   "filter": { "ladder": "length" },
   "x": { "field": "variables", "label": "variables", "format": "count" },
   "metrics": {
-    "wall": { "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
-    "peak": { "y": "peak_gb", "format": "gigabytes" }
+    "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
+    "peak": { "label": "peak RSS", "y": "peak_gb", "format": "gigabytes" }
   },
   "series": {
     "field": "library",
     "refused": "refused",
-    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-matrix", "gurobipy-loop", "highspy-matrix"],
-    "range": ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)"]
+    "highlight": "specsolve",
+    "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
+    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p2)", "var(--p3)", "var(--p4)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -195,141 +265,237 @@
 <script type="module">
 import { areaY } from '@tanstack/charts/area.js';
 import { crosshair } from '@tanstack/charts/crosshair.js';
+import { dot } from '@tanstack/charts/dot.js';
 import { mountChart } from '@tanstack/charts/dom.js';
 import { lineY } from '@tanstack/charts/line.js';
+import { scaleLinear } from '@tanstack/charts/scales/linear.js';
 import { defineChart } from '@tanstack/charts/scene.js';
+import { text } from '@tanstack/charts/text.js';
 import { tooltip } from '@tanstack/charts/tooltip.js';
 import { scaleLog } from 'd3-scale';
 
 const SPEC = JSON.parse(document.getElementById('spec').textContent);
 const ROWS = await (await fetch(SPEC.data)).json();
+const { field: SERIES, refused: REFUSED, highlight: HERO, domain: LIBRARIES, floor: FLOOR } = SPEC.series;
+const X = SPEC.x.field;
 
+const trim = (v, d) => `${+v.toFixed(d)}`;
 const FORMAT = {
-  seconds: v => v < 1 ? `${(v * 1000).toFixed(0)} ms` : `${+v.toFixed(2)} s`,
-  gigabytes: v => `${+v.toFixed(2)} GB`,
-  count: v => v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${+(v / 1e3).toFixed(1)}k` : `${v}`,
+  seconds: v => v < 1 ? `${trim(v * 1000, v < 0.01 ? 1 : 0)} ms` : `${trim(v, 2)} s`,
+  gigabytes: v => v < 1 ? `${trim(v * 1000, 0)} MB` : `${trim(v, 2)} GB`,
+  count: v => v >= 1e6 ? `${trim(v / 1e6, 1)}M` : v >= 1e3 ? `${trim(v / 1e3, 1)}k` : `${v}`,
+  ratio: v => v >= 10 ? `${v.toFixed(0)}×` : v >= 1 ? `${trim(v, 1)}×` : `${trim(v, 2)}×`,
 };
 
-const state = { metric: 'wall', filter: { ...SPEC.filter }, hidden: new Set() };
+const state = { metric: 'wall', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set() };
 let hosts = [];
 
-/* Log ticks on the 1–2–5 sequence rather than decades, and a domain snapped to
-   them. Whole decades would put a peak-RSS panel, which lives inside half a
-   decade, on a two-decade axis and flatten the one comparison it makes. */
+const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
+const isHero = r => r[SERIES] === HERO;
+const isFloor = r => FLOOR.members.includes(r[SERIES]);
+const ink = name => SPEC.series.ink[LIBRARIES.indexOf(name)];
+
+/* The rows both views read: the current filter and visible libraries, each with the chosen
+   metric as `value`, its band as `lo`/`hi`, and its ratio to the highlighted library at the
+   same panel and size. */
+function rowsNow() {
+  const m = SPEC.metrics[state.metric];
+  const cell = r => `${panelOf(r)}|${r[X]}`;
+  const base = new Map(ROWS.filter(r => isHero(r) && r[m.y] != null).map(r => [cell(r), r[m.y]]));
+  return ROWS
+    .filter(r => Object.entries(state.filter).every(([k, v]) => r[k] === v) && !state.hidden.has(r[SERIES]))
+    .map(r => {
+      const value = r[m.y] ?? null;
+      if (value == null) return { ...r, value };
+      const ours = base.get(cell(r));
+      return { ...r, value, lo: m.band ? r[m.band[0]] : value, hi: m.band ? r[m.band[1]] : value,
+        ratio: ours ? value / ours : null };
+    });
+}
+
+/* Log ticks on 1–2–5 and a domain snapped to them, so a panel inside half a decade is not drawn
+   on a two-decade axis. */
 function logTicks(values) {
   const lo = Math.min(...values), hi = Math.max(...values), all = [];
   for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)); e++)
-    for (const m of [1, 2, 5]) all.push(+(m * 10 ** e).toPrecision(12));
+    for (const k of [1, 2, 5]) all.push(+(k * 10 ** e).toPrecision(12));
   const full = all.slice(all.findLastIndex(v => v <= lo), all.findIndex(v => v >= hi) + 1);
   const step = Math.ceil(full.length / 6);
   return full.filter((_, i) => i % step === 0 || i === full.length - 1);
 }
 
-/* One panel's chart. The band and the line are drawn from the same rows, and
-   either can hold the focus, so the tooltip reads each library's row off
-   whichever it gets. */
+/* One axis under the shared switch. Linear starts at zero. Log ticks on the given sizes when
+   there are some, else on 1–2–5. */
+function axis(values, fmt, label, sizes = null) {
+  if (state.scale === 'linear') {
+    return { scale: scaleLinear().domain([0, Math.max(...values)]).nice(5), grid: true,
+      axis: { label, ticks: { count: 5, format: fmt } } };
+  }
+  if (sizes) return { scale: scaleLog, axis: { label, ticks: { values: sizes, format: fmt } } };
+  const ticks = logTicks(values);
+  return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { label, ticks: { values: ticks, format: fmt } } };
+}
+
+/* Where each refused size would land: the last measured point carried forward at the log–log
+   slope of the last measured step, floored at 1 (linear), the rule the harness refuses by. Each
+   library's run starts at that last point, so the dashed line joins its solid one. */
+function projections(rows) {
+  const out = [];
+  for (const own of Map.groupBy(rows, r => r[SERIES]).values()) {
+    const measured = own.filter(r => r.value != null).sort((a, b) => a[X] - b[X]);
+    const last = measured.at(-1), prev = measured.at(-2);
+    const ahead = own.filter(r => r[REFUSED] && last && r[X] > last[X]).sort((a, b) => a[X] - b[X]);
+    if (!ahead.length) continue;
+    const slope = prev ? Math.log(last.value / prev.value) / Math.log(last[X] / prev[X]) : 1;
+    const k = Math.max(slope, 1);
+    out.push({ ...last, projected: false });
+    for (const r of ahead) out.push({ ...r, value: last.value * (r[X] / last[X]) ** k, projected: true });
+  }
+  return out;
+}
+
+function grouped(fmt) {
+  return {
+    use: tooltip, sort: 'color-domain',
+    content: points => ({
+      title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
+      rows: [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
+        .map(p => [p.datum[SERIES], p])).values()]
+        .map(p => ({ label: p.datum.projected ? `${p.datum[SERIES]} (projected)` : p.datum[SERIES],
+          value: p.datum.projected ? `≈ ${fmt(p.datum.value)}` : fmt(p.datum.value), color: ink(p.datum[SERIES]) })),
+    }),
+  };
+}
+
+/* One panel: a line per library over size, the band under it, the projections dashed. The
+   highlighted library is drawn last and thick, so it stays on top where the lines cross, and is
+   named above its last measured point. The matrix floor is a thin neutral line without a band.
+   Each measured point is a dot ringed in the surface colour, so
+   crossing points stay apart; each projected size is a hollow ring in the library's colour. */
 function definition(rows, metric) {
-  const { field } = SPEC.series;
-  const x = SPEC.x.field, fmt = FORMAT[metric.format];
-  const measured = rows.filter(r => r[metric.y] != null);
-  const yTicks = logTicks(measured.flatMap(r => [metric.y, ...(metric.band ?? [])].map(k => r[k])));
-  const band = metric.band
-    ? [areaY(measured, { x, y1: metric.band[0], y2: metric.band[1], z: field, color: field, fillOpacity: 0.3 })]
-    : [];
+  const fmt = FORMAT[metric.format];
+  const measured = rows.filter(r => r.value != null);
+  const ahead = projections(rows);
+  const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
+  const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
+  const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
+  const enc = { x: X, z: SERIES, color: SERIES };
+  const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth });
+  const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface-1)', strokeWidth: 2 });
+  const hollow = [...Map.groupBy(ahead.filter(r => r.projected), r => r[SERIES])].map(([name, data]) =>
+    dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface-1)',
+      stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
+  const label = ours.length ? [text([ours.at(-1)], { x: X, y: 'value', text: () => HERO, anchor: 'end', dx: -8, dy: -10,
+    fill: ink(HERO), fontSize: 12, fontWeight: 650 })] : [];
+  const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
+  const area = (data, fillOpacity) => areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity });
+  const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
   return defineChart({
     marks: [
-      ...band,
-      lineY(measured, { x, y: metric.y, z: field, color: field, points: true }),
+      ...(metric.band ? [area(theirs, 0.35), area(ours, 0.22)] : []),
+      dashed(theirsAhead, 2), dashed(oursAhead, 3),
+      line(floor, 1.5), line(theirs, 2), line(ours, 3.5),
+      ...hollow,
+      points(floor, 2.5), points(theirs, 3.5), points(ours, 5),
+      ...label,
       crosshair({ y: false }),
     ],
     scales: {
-      x: { scale: scaleLog, axis: { label: SPEC.x.label,
-        ticks: { values: [...new Set(measured.map(r => r[x]))], format: FORMAT[SPEC.x.format] } } },
-      y: { scale: scaleLog().domain([yTicks[0], yTicks.at(-1)]), grid: true,
-        axis: { ticks: { values: yTicks, format: fmt } } },
+      x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes),
+      y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
     },
-    color: { domain: SPEC.series.domain, range: SPEC.series.range },
-    focus: 'group-x',
-    maxFocusDistance: Number.POSITIVE_INFINITY,
-    tooltip: {
-      use: tooltip,
-      sort: 'color-domain',
-      content: points => ({
-        title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
-        rows: [...new Map(points.map(p => [p.datum[field], p])).values()].map(p => ({
-          label: p.datum[field], color: p.color,
-          value: metric.band
-            ? `${fmt(p.datum[metric.y])}  (${fmt(p.datum[metric.band[0]])}–${fmt(p.datum[metric.band[1]])})`
-            : fmt(p.datum[metric.y]),
-        })),
-      }),
-    },
+    color: { domain: LIBRARIES, range: SPEC.series.paint },
+    clip: true,
+    focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
+    tooltip: grouped(fmt),
   });
 }
 
-/* The numbers under their own chart, one row per size. A cell is a
-   measurement, the budget that refused it, or an em dash for a library with no
-   row at that size. */
+/* Diverging bins on the ratio to the highlighted library: green where it is faster, blue where
+   the other library is, grey within ten per cent. Every cell also prints its ratio, which carries
+   the reading where blue and green merge (tritanopia). */
+const BINS = [[1 / 4, 'b4'], [1 / 2, 'b3'], [1 / 1.25, 'b2'], [1 / 1.1, 'b1'], [1.1, 'mid'], [1.25, 'g1'], [2, 'g2'], [4, 'g3'], [Infinity, 'g4']];
+const shade = v => {
+  const b = BINS.find(([edge]) => v < edge)[1];
+  return `background:var(--d-${b});${b.endsWith('4') ? 'color:var(--d-ink4)' : ''}`;
+};
+
 function table(rows, metric) {
-  const { field, refused } = SPEC.series, x = SPEC.x.field;
-  const libraries = SPEC.series.domain.filter(n => rows.some(r => r[field] === n));
-  const sizes = [...new Set(rows.filter(r => r[metric.y] != null).map(r => r[x]))].sort((a, b) => a - b);
-  const head = `<tr><th>${SPEC.x.label}</th>${libraries.map(n => `<th>${n}</th>`).join('')}</tr>`;
-  const body = sizes.map(size => {
-    const at = new Map(rows.filter(r => r[x] === size).map(r => [r[field], r]));
-    const fastest = Math.min(...[...at.values()].map(r => r[metric.y] ?? Infinity));
-    const cells = libraries.map(n => {
-      const r = at.get(n);
-      if (r?.[metric.y] == null) return `<td>${r?.[refused] ?? '—'}</td>`;
-      return `<td class="${r[metric.y] === fastest ? 'best' : ''}">${FORMAT[metric.format](r[metric.y])}</td>`;
+  const fmt = FORMAT[metric.format];
+  const others = LIBRARIES.filter(n => n !== HERO && !FLOOR.members.includes(n) && rows.some(r => r[SERIES] === n));
+  const floorShown = rows.some(isFloor);
+  const body = [];
+  for (const [title, panel] of Map.groupBy(rows, panelOf)) {
+    const guess = new Map(projections(panel).filter(r => r.projected).map(r => [`${r[SERIES]}|${r[X]}`, r.value]));
+    const cell = (r, kind = '') => {
+      if (!r) return '<td class="none">—</td>';
+      if (r.value == null) {
+        if (!r[REFUSED]) return '<td class="none">—</td>';
+        const g = guess.get(`${r[SERIES]}|${r[X]}`);
+        const why = `refused by the ${r[REFUSED].slice(1)} budget`;
+        return `<td class="none" title="${g ? `${why} · projected ≈ ${fmt(g)}` : why}">${r[REFUSED]}</td>`;
+      }
+      if (kind === 'own') return `<td class="own">${fmt(r.value)}</td>`;
+      if (r.ratio == null) return `<td class="none">${fmt(r.value)}</td>`;
+      const look = kind === 'floor' ? 'class="floor"' : `style="${shade(r.ratio)}"`;
+      return `<td ${look} title="${r[SERIES]}: ${fmt(r.value)}">${FORMAT.ratio(r.ratio)}</td>`;
+    };
+    const sizes = [...new Set(panel.filter(isHero).map(r => r[X]))].sort((a, b) => a - b);
+    sizes.forEach((size, i) => {
+      const at = new Map(panel.filter(r => r[X] === size).map(r => [r[SERIES], r]));
+      body.push(`<tr class="${i ? '' : 'first'}"><td class="panel">${i ? '' : title}</td>` +
+        `<td>${FORMAT[SPEC.x.format](size)}</td>${cell(at.get(HERO), 'own')}${others.map(n => cell(at.get(n))).join('')}` +
+        `${floorShown ? cell(FLOOR.members.map(n => at.get(n)).find(Boolean), 'floor') : ''}</tr>`);
     });
-    return `<tr><td>${FORMAT[SPEC.x.format](size)}</td>${cells.join('')}</tr>`;
-  });
-  const el = document.createElement('table');
-  el.innerHTML = `<thead>${head}</thead><tbody>${body.join('')}</tbody>`;
-  return el;
+  }
+  document.getElementById('heat').innerHTML =
+    `<thead><tr><th>panel</th><th>${SPEC.x.label}</th><th>${HERO}</th>${others.map(n => `<th>${n}</th>`).join('')}` +
+    `${floorShown ? `<th class="floor">${FLOOR.label}</th>` : ''}</tr></thead>` +
+    `<tbody>${body.join('')}</tbody>`;
 }
+
+document.getElementById('scale').innerHTML = `<span>other library faster</span>` +
+  ['b4', 'b3', 'b2', 'b1', 'mid', 'g1', 'g2', 'g3', 'g4'].map(b => `<i style="background:var(--d-${b})"></i>`).join('') +
+  `<span>${HERO} faster</span><span>4× · 2× · 1.25× · 1.1× · even · 1.1× · 1.25× · 2× · 4×</span>`;
 
 function draw() {
   hosts.forEach(h => h.destroy());
   hosts = [];
   const metric = SPEC.metrics[state.metric];
-  const rows = ROWS.filter(r => Object.entries(state.filter).every(([k, v]) => r[k] === v)
-    && !state.hidden.has(r[SPEC.series.field]));
-  const panels = Map.groupBy(rows, r => SPEC.facet.map(k => r[k]).join(' — '));
+  const rows = rowsNow();
   const grid = document.getElementById('facets');
   grid.replaceChildren();
-  for (const [title, panel] of panels) {
+  for (const [title, panel] of Map.groupBy(rows, panelOf)) {
+    if (!panel.some(r => r.value != null)) continue;
     const fig = document.createElement('figure');
-    fig.innerHTML = `<figcaption>${title}</figcaption><div class="plot"></div><div class="scroller"></div>`;
+    fig.innerHTML = `<figcaption>${title}</figcaption><div></div>`;
     grid.appendChild(fig);
-    hosts.push(mountChart(fig.querySelector('.plot'), {
-      definition: definition(panel, metric), height: 250,
-      ariaLabel: `${title}: ${state.metric} against model size, one line per ${SPEC.series.field}`,
-    }));
-    fig.querySelector('.scroller').appendChild(table(panel, metric));
+    hosts.push(mountChart(fig.lastElementChild, { definition: definition(panel, metric), height: 240,
+      ariaLabel: `${title}: ${metric.label} against model size, one line per ${SERIES}` }));
   }
-  const present = new Set(ROWS.map(r => r[SPEC.series.field]));
-  document.getElementById('legend').innerHTML = SPEC.series.domain.filter(n => present.has(n)).map(n =>
-    `<button data-series="${n}" aria-pressed="${!state.hidden.has(n)}">` +
-    `<i class="swatch" style="background:${SPEC.series.range[SPEC.series.domain.indexOf(n)]}"></i>${n}</button>`).join('');
+  table(rows, metric);
+  const present = new Set(ROWS.map(r => r[SERIES]));
+  const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
+  document.getElementById('legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
+    `<button data-series="${n}" aria-pressed="${!state.hidden.has(n)}"${n === HERO ? ` disabled title="Every other line and cell is read against ${HERO}"` : ''}>` +
+    `<i class="swatch${n === HERO ? ' hero' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('') +
+    `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
 }
 
-document.getElementById('legend').addEventListener('click', ev => {
-  const name = ev.target.closest('button')?.dataset.series;
-  if (!name) return;
-  /* The last visible line stays: an empty panel reads as a broken chart
-     rather than as a choice. */
-  const visible = SPEC.series.domain.filter(n => !state.hidden.has(n) && ROWS.some(r => r[SPEC.series.field] === n));
-  if (!state.hidden.has(name) && visible.length === 1) return;
-  state.hidden.has(name) ? state.hidden.delete(name) : state.hidden.add(name);
-  draw();
-});
-
-for (const b of document.querySelectorAll('.ctl')) b.addEventListener('click', () => {
-  b.parentElement.querySelectorAll('.ctl').forEach(x => x.classList.toggle('on', x === b));
-  if (b.dataset.metric) state.metric = b.dataset.metric;
-  else state.filter[b.dataset.filter] = b.dataset.value;
+document.addEventListener('click', ev => {
+  const lib = ev.target.closest('#legend button');
+  if (lib && !lib.disabled) {
+    const names = 'floor' in lib.dataset ? FLOOR.members : [lib.dataset.series];
+    const show = names.every(n => state.hidden.has(n));
+    names.forEach(n => (show ? state.hidden.delete(n) : state.hidden.add(n)));
+    return draw();
+  }
+  const b = ev.target.closest('.seg button');
+  if (!b) return;
+  const key = b.parentElement.dataset.key;
+  if (key === 'metric' || key === 'scale') state[key] = b.dataset.value;
+  else state.filter[key] = b.dataset.value;
+  b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
   draw();
 });
 
