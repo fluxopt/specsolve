@@ -35,6 +35,7 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     OUTPUTS,
+    PRICED,
     RECORD_FILE,
     Metrics,
     Record,
@@ -608,6 +609,8 @@ def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
         'expression': {},
     }
     for output in result._outputs or {}:
+        if output in PRICED and result._no_duals is not None:
+            continue
         declared = program.variables if OUTPUTS[output] == 'variable' else program.constraints
         frames[output] = {name: result._frame(name, output) for name in declared}
     no_expressions: dict[str, str] = {}

@@ -505,7 +505,7 @@ class Result:
         the sign.
 
         Duals exist only where a solver ran here, not for a model written to a
-        file and solved elsewhere. Reduced costs and slacks are not read.
+        file and solved elsewhere. Slacks are not read.
 
         Raises:
             NoSolutionError: The solve left no values at all.
@@ -520,6 +520,31 @@ class Result:
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
         return _named(frames, name, 'constraint').collect(engine=collect_engine())
+
+    def reduced_cost(self, name: str) -> pl.DataFrame:
+        """Reduced costs of variable *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
+
+        Each is the rate at which the optimal objective rises as the
+        variable's binding bound rises, in the sign convention of [`dual`][]
+        for every sense and sink: of ``x >= l``, the rate in ``d`` of
+        ``x >= l + d``. A variable strictly between its bounds has zero.
+
+        It is computed from the duals as the objective's gradient less each
+        row's gradient times that row's dual, so it exists wherever
+        [`dual`][] does and nowhere else. Carried only where the solve was
+        asked for it with ``outputs={'reduced_cost'}``.
+
+        Raises:
+            NoSolutionError: The solve left no values at all.
+            SpecsolveError: This result was closed; the solve was not asked
+                for reduced costs; or it left primals but no duals, as
+                [`dual`][] raises.
+            KeyError: No variable is called *name*.
+        """
+        frames = self._carried('reduced_cost', name)
+        if self._no_duals is not None:
+            raise SpecsolveError(self._no_duals)
+        return _named(frames, name, 'variable').collect(engine=collect_engine())
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -604,7 +629,13 @@ class Result:
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
-        readers = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate, 'activity': self.activity}
+        readers = {
+            'primal': self.primal,
+            'dual': self.dual,
+            'expression': self.evaluate,
+            'activity': self.activity,
+            'reduced_cost': self.reduced_cost,
+        }
         return readers[checked_kind(kind)](name)
 
     def _names(self, kind: str) -> tuple[str, ...]:

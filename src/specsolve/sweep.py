@@ -24,6 +24,7 @@ from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
     OUTPUTS,
+    PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
     RUN,
@@ -387,7 +388,7 @@ class Sweep:
         held = answer[kind] if answer is not None else self._slices.get(kind, {})
         frame = held.get(name)
         if frame is None:
-            absent = self._absent.get(kind, {}).get(name) or (self._no_duals if kind == 'dual' else None)
+            absent = self._absent.get(kind, {}).get(name) or (self._no_duals if kind in PRICED else None)
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.record))
         return frame if answer is not None else self._answered(frame, per_window=per_window)
 
@@ -485,6 +486,22 @@ class Sweep:
         """
         return self._named('activity', name, per_window=per_window).collect()
 
+    def reduced_cost(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One variable's reduced costs at every slice's solution.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.reduced_cost`][specsolve.relational.result.Result.reduced_cost]'s
+        sign. Carried only where the sweep was asked for it with
+        ``outputs={'reduced_cost'}``. A slice whose model had an integer
+        variable contributes none, as it contributes no duals.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for reduced costs, no
+                slice produced them — the message says why — or as
+                [`primal`][] raises.
+        """
+        return self._named('reduced_cost', name, per_window=per_window).collect()
+
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
 
@@ -544,7 +561,13 @@ class Sweep:
 
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
-        readers = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate, 'activity': self.activity}
+        readers = {
+            'primal': self.primal,
+            'dual': self.dual,
+            'expression': self.evaluate,
+            'activity': self.activity,
+            'reduced_cost': self.reduced_cost,
+        }
         return readers[checked_kind(kind)](name, per_window=per_window)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
@@ -640,7 +663,7 @@ class Sweep:
                 else:
                     held[name] = frame
         if not held:
-            absent = (self._no_duals if kind == 'dual' else None) or _none_answered(_LABELS[kind], left_out)
+            absent = (self._no_duals if kind in PRICED else None) or _none_answered(_LABELS[kind], left_out)
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
 

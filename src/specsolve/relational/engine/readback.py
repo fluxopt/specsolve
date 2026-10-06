@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engine.assembly import BuiltModel
     from specsolve.relational.engine.attaching import AttachedSources
     from specsolve.relational.engine.compiler import Compiler
+    from specsolve.relational.sinks.handoff import Handoff
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -136,6 +137,39 @@ def laid_out(
     ([`_as_strings`][]).
     """
     return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
+
+
+def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Series:
+    """Each column's reduced cost: the objective's gradient less the rows' gradients weighted by *dual*.
+
+    Computed here rather than asked of each solver, so it carries
+    [`dual`][specsolve.relational.result.Result.dual]'s one sign convention on
+    every sink. The gradients are taken at *primal*, which only a quadratic
+    term reads.
+    """
+    import numpy as np
+
+    x = primal.to_numpy()
+    y = dual.to_numpy()
+
+    def summed(cols: pl.Series, weights: np.ndarray) -> np.ndarray:
+        return np.bincount(cols.to_numpy(), weights=weights, minlength=handoff.column_count)
+
+    def index(column: pl.Series) -> np.ndarray:
+        return column.to_numpy().astype(np.int64)
+
+    obj, quad, matrix, qmatrix = handoff.obj, handoff.quad, handoff.matrix, handoff.qmatrix
+    entry_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
+    reduced = np.zeros(handoff.column_count, dtype=np.float64)
+    reduced += summed(obj['col'], obj['coeff'].to_numpy())
+    reduced -= summed(matrix['col'], matrix['coeff'].to_numpy() * y[entry_rows])
+    for frame, weights in (
+        (quad, quad['coeff'].to_numpy()),
+        (qmatrix, -qmatrix['coeff'].to_numpy() * y[index(qmatrix['row'])]),
+    ):
+        reduced += summed(frame['col_l'], weights * x[index(frame['col_r'])])
+        reduced += summed(frame['col_r'], weights * x[index(frame['col_l'])])
+    return pl.Series('value', reduced, dtype=pl.Float64)
 
 
 def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:

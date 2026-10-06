@@ -247,7 +247,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _outputs={'activity': activities} if 'activity' in outputs else {},
+            _outputs=self._carried(answer, outputs, activities),
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -316,16 +316,38 @@ class Engine:
             }
 
         return (
-            {
-                name: readback.laid_out(model.attached, model.variables[name], v.dims, primal)
-                for name, v in program.variables.items()
-            }
-            if primal is not None
-            else {},
+            self._per_variable(primal) if primal is not None else {},
             rows(dual),
             rows(activity),
             rows(dual_ray),
         )
+
+    def _carried(
+        self, answer: SolveAnswer, outputs: frozenset[Output], activities: dict[str, pl.LazyFrame]
+    ) -> dict[Output, Mapping[str, pl.LazyFrame]]:
+        """The frames of each output asked for, computed only then.
+
+        Reduced costs exist where the primal and the duals both do; elsewhere
+        the output maps to nothing, and the reader gives the duals' reason.
+        """
+        carried: dict[Output, Mapping[str, pl.LazyFrame]] = {}
+        if 'activity' in outputs:
+            carried['activity'] = activities
+        if 'reduced_cost' in outputs:
+            carried['reduced_cost'] = (
+                self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+                if answer.primal is not None and answer.dual is not None
+                else {}
+            )
+        return carried
+
+    def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.variables[name], v.dims, values)
+            for name, v in model.program.variables.items()
+        }
 
     def _readers(
         self,
