@@ -18,7 +18,7 @@ document$.subscribe(() => {
 async function mount(root) {
   const [
     { areaY }, { crosshair }, { dot }, { mountChart }, { lineY },
-    { scaleLinear }, { defineChart }, { text }, { tooltip }, { scaleLog },
+    { scaleLinear }, { defineChart }, { tooltip }, { scaleLog },
   ] = await Promise.all([
     import('@tanstack/charts/area.js'),
     import('@tanstack/charts/crosshair.js'),
@@ -27,7 +27,6 @@ async function mount(root) {
     import('@tanstack/charts/line.js'),
     import('@tanstack/charts/scales/linear.js'),
     import('@tanstack/charts/scene.js'),
-    import('@tanstack/charts/text.js'),
     import('@tanstack/charts/tooltip.js'),
     import('d3-scale'),
   ]);
@@ -112,24 +111,58 @@ async function mount(root) {
     return out;
   }
 
-  function grouped(fmt) {
+  /* A tooltip's number columns. Each row lays out on its own, value right-aligned in tabular
+     digits, so a column lines up only if every entry has one shape: one unit for the column (the
+     smallest value's), fixed decimals, and figure spaces, a digit wide, padding the left. */
+  const UNITS = { seconds: [['ms', 1e-3], ['s', 1]], gigabytes: [['MB', 1e-3], ['GB', 1]] };
+  const padded = texts => texts.map(t => t.padStart(Math.max(...texts.map(x => x.length)), '\u2007'));
+  function amounts(values, format) {
+    const [unit, scale] = UNITS[format][Math.min(...values) < 1 ? 0 : 1];
+    const low = Math.min(...values) / scale;
+    const digits = low < 1 ? 2 : low < 10 ? 1 : 0;
+    return padded(values.map(v => `${(v / scale).toFixed(digits)} ${unit}`));
+  }
+
+  /* One row per library at the hovered size, slowest first as the lines stack in the panel: its
+     value, then its ratio to the highlighted library, whose row is emphasised. A projection stands
+     in for a library only where the library has no measurement at that size. */
+  function grouped(format) {
     return {
-      use: tooltip, sort: 'color-domain',
-      content: points => ({
-        title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
-        rows: [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
-          .map(p => [p.datum[SERIES], p])).values()]
-          .map(p => ({ label: p.datum.projected ? `${p.datum[SERIES]} (projected)` : p.datum[SERIES],
-            value: p.datum.projected ? `≈ ${fmt(p.datum.value)}` : fmt(p.datum.value), color: ink(p.datum[SERIES]) })),
-      }),
+      use: tooltip,
+      content: points => {
+        const at = [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
+          .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => b.value - a.value);
+        const ours = at.find(isHero);
+        const values = amounts(at.map(d => d.value), format);
+        const ratios = padded(at.map(d => (ours ? `${(d.value / ours.value).toFixed(1)}×` : '–')));
+        return {
+          title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
+          rows: at.map((d, i) => ({
+            label: d.projected ? `${d[SERIES]} (projected)` : d[SERIES],
+            value: `${values[i]} · ${ratios[i]}`,
+            color: ink(d[SERIES]), active: d === ours,
+          })),
+        };
+      },
     };
   }
 
   /* One panel: a line per library over size, the band under it, the projections dashed. The
      highlighted library is drawn last and thick, so it stays on top where the lines cross, and is
-     named above its last measured point. The matrix floor is a thin neutral line without a band.
+     named right of its last point. The matrix floor is a thin neutral line without a band.
      Each measured point is a dot ringed in the surface colour, so
      crossing points stay apart; each projected size is a hollow ring in the library's colour. */
+  /* The highlighted library's name, right of its last point. A control rather than a text mark:
+     the marks share one clip, which would cut the name off in the right margin it sits in. */
+  function heroLabel(ours) {
+    const end = ours.toSorted((a, b) => a[X] - b[X]).at(-1);
+    if (!end) return [];
+    return [{ id: 'hero-label', resolve: ({ scales }) => ({ nodes: [{
+      kind: 'label', key: 'hero-label', x: scales.x.map(end[X]) + 9, y: scales.y.map(end.value), text: HERO,
+      anchor: 'start', baseline: 'middle', fontSize: 12, fontWeight: 650, style: { fill: ink(HERO) },
+    }] }) }];
+  }
+
   function definition(rows, metric) {
     const fmt = FORMAT[metric.format];
     const measured = rows.filter(r => r.value != null);
@@ -143,8 +176,6 @@ async function mount(root) {
     const hollow = [...Map.groupBy(ahead.filter(r => r.projected), r => r[SERIES])].map(([name, data]) =>
       dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface)',
         stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
-    const label = ours.length ? [text([ours.at(-1)], { x: X, y: 'value', text: () => HERO, anchor: 'end', dx: -8, dy: -10,
-      fill: ink(HERO), fontSize: 12, fontWeight: 650 })] : [];
     const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
     const area = (data, fillOpacity) => areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity });
     const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
@@ -155,7 +186,6 @@ async function mount(root) {
         line(floor, 1.5), line(theirs, 2), line(ours, 3.5),
         ...hollow,
         points(floor, 2.5), points(theirs, 3.5), points(ours, 5),
-        ...label,
         crosshair({ y: false }),
       ],
       scales: {
@@ -163,9 +193,9 @@ async function mount(root) {
         y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
-      clip: true,
+      clip: true, margin: { right: 76 }, controls: heroLabel([...ours, ...oursAhead]),
       focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
-      tooltip: grouped(fmt),
+      tooltip: grouped(metric.format),
     });
   }
 
