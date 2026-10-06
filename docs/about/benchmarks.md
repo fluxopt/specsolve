@@ -1,14 +1,110 @@
-# How the benchmarks were taken
+# Benchmarks
 
-This page is the method behind the numbers on the
-[benchmark page](benchmarks-scaling.html), for anyone deciding how far to
-trust a cell there. That page holds the results: five libraries over three
-models, with the numbers under each chart.
+This page shows what specsolve costs to build a model and hand it to a solver,
+beside four other ways of writing the same model, and how far to trust each
+number.
 
-**Every published number is the median of a measurement's rounds, and every
-band is the first to the third quartile of the same rounds.** Every measurement
-gets the same nine rounds, pinned rather than calibrated by duration, so no
-cell is a best-of-nine beside a neighbour's best-of-forty. The median beats
+Each model is built and handed to a solver. `run()` and `optimize()` are never
+called, so no number includes solve time. Every rival model is hand-written in
+[`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models)
+beside ours, and CI solves each against ours, so nothing here is fast because it
+built a different model.
+
+dispatch
+:   Meets a demand from a fleet of units: bounds and one balance. It is the floor.
+
+transport
+:   A network of buses and lines: mapping tables, three joins per row.
+
+fleet
+:   Twelve declarations rather than one large one: cost per declaration, not per row.
+
+<div id="benchmark-charts" class="bench">
+<div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
+<div class="bench-row">
+<span class="bench-label">Show</span>
+<span class="bench-seg" data-key="metric"><button data-value="wall" aria-pressed="true">wall time</button><button data-value="peak" aria-pressed="false">peak RSS</button></span>
+<span class="bench-label">Grown by</span>
+<span class="bench-seg" data-key="ladder"><button data-value="length" aria-pressed="true">length — more snapshots</button><button data-value="width" aria-pressed="false">width — more entities</button></span>
+<span class="bench-label">Axes</span>
+<span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
+</div>
+<div class="bench-row">
+<span class="bench-label">Libraries</span>
+<div id="bench-legend"></div>
+<span class="bench-hint">click to hide</span>
+</div>
+</div>
+<div id="bench-facets"></div>
+<div id="bench-scale" class="bench-scale"></div>
+<div class="bench-table"><table id="bench-heat" class="bench-heat"></table></div>
+<script type="application/json" id="bench-spec">
+{
+  "data": "../benchmarks.json",
+  "facet": ["model", "sink"],
+  "filter": { "ladder": "length" },
+  "x": { "field": "variables", "label": "variables", "format": "count" },
+  "metrics": {
+    "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
+    "peak": { "label": "peak RSS", "y": "peak_gb", "format": "gigabytes" }
+  },
+  "series": {
+    "field": "library",
+    "refused": "refused",
+    "highlight": "specsolve",
+    "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
+    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p2)", "var(--p3)", "var(--p4)", "var(--floor)", "var(--floor)"]
+  }
+}
+</script>
+</div>
+
+## Reading the charts
+
+Each panel is one model through one solver, and each line is one library's cost
+against the size of the model.
+
+- **specsolve is the thick violet line.** The other libraries are thinner, and
+  the legend hides any of them.
+- **The grey line is the matrix floor.** It is a hand-written matrix handed
+  straight to the solver's bulk API: `gurobipy-matrix` on Gurobi,
+  `highspy-matrix` on HiGHS. Nobody writes a model this way. It is the limit a
+  modelling library can approach, so its distance from specsolve is what
+  specsolve's modelling layer costs.
+- **The line is the median of the rounds, and the band is the middle half of
+  them.** The band runs from the first quartile to the third. Two lines whose
+  bands overlap are two numbers this run cannot tell apart.
+- **Grown by length adds snapshots; grown by width adds entities.** Both reach
+  the same sizes, so switching holds the size and changes only the shape that
+  got there. `transport` is the model where this matters: its bus-by-generator
+  join grows with width and never with length.
+- **Log–log gives every size equal room, and the slope is the scaling order.**
+  A line that rises one decade per decade grows in step with the model.
+  Linear–linear draws the gap at the largest size at its real size and puts the
+  small sizes at the origin. Both axes switch together, because a linear axis
+  over a logarithmic one draws linear growth as a curve.
+- **A dashed line is a projection, not a measurement.** It continues a library
+  past the size its budget refused, at the growth rate of its last measured
+  step and never slower than linear. The axes are scaled to the measurements,
+  so a steep projection leaves the top of the panel, and the tooltip gives its
+  value.
+- **The table divides by specsolve.** The specsolve column is its own cost.
+  Every other cell is that library's cost divided by specsolve's at the same
+  size: green where specsolve is faster, blue where the other library is, grey
+  within ten per cent. The matrix floor's column is not shaded, because a floor
+  is meant to be faster. Hover a cell for the library's own number.
+- **`>30 s` and `>16 GB` are sizes the harness refused.** It projected the
+  measurement past its time or memory budget and skipped it. Hover one for the
+  projection. An em dash is a cell with no number for another reason:
+  `gurobipy` has no HiGHS.
+
+## Why the median
+
+Every published number is the median of nine rounds. Every measurement gets
+the same nine, pinned rather than calibrated by duration, so no cell is a
+best-of-nine beside a neighbour's best-of-forty. The median beats
 the fastest round because a cell whose nine rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
@@ -41,8 +137,8 @@ one file per sink and case. Each carries the machine, the versions, the commit
 and every round of every measurement. A case the box could not finish leaves
 no file behind. `pixi run table` prints the directory as one long CSV and
 commits nothing; the JSON stays the archive because it keeps the rounds.
-`pixi run refresh` re-takes the numbers and writes the tables into their fences
-and the chart's data literal into its own.
+`pixi run refresh` re-takes the numbers, writes the tables into their fences
+and the chart rows into `benchmarks.json`.
 
 ## First model against every model after it
 
@@ -72,7 +168,7 @@ Build only, repeated in one process. **first** is the first recorded round and *
 This table renders from `highs` rungs of `storage` and `transport`, and no run
 has published it: both cases are killed on that sink before they write a file,
 for the reason [below](#not-measured-yet). The committed results hold
-`transport` through `gurobi` only, on [the chart page](benchmarks-scaling.html),
+`transport` through `gurobi` only, in [the charts](#benchmark-charts),
 and `storage` through neither sink. `bench.report` drops a fragment it cannot
 render rather than blanking the fence, so the fence stays empty until
 `pixi run ladder` brings those rungs back.

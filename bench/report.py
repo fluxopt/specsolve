@@ -254,10 +254,6 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     return sorted(seen, key=lambda s: (seen[s], s))
 
 
-#: Where a reader goes to trace a curve.
-_CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
-
-
 #: What every arm in a sink's table has ended up holding.
 _SEAM = {
     'lp': 'Each arm has written the LP file, through whichever writer it has.',
@@ -565,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print('Parity gate: enforced at measurement time — every arm below built the same model.')
-    results = [_CHART_PAGE]
+    results = []
     for case in sorted({c for c, _, _, _ in rows}):
         sinks = [k for k in sorted({k for c, _, k, _ in rows if c == case}) if sizes_of(case, rows, k)]
         if not sinks:
