@@ -24,7 +24,7 @@ reference table in [examples/index.md](examples/index.md)
 (`tools/constructs.py`), the *"the same model, as math"* block on each model
 page (`tools/gallery_math.py`), and the tables in
 [benchmarks.md](about/benchmarks.md) (`bench.report`) and the rows in
-`about/benchmarks-scaling.json` (`bench.plot`). The
+`about/benchmarks.json` (`bench.plot`). The
 catalogue is read off the nav, so a model joins the gallery by joining the
 sidebar. The YAML and Python on the model pages, and the model `README.md`
 lends [index.md](index.md), are asserted against the files that run.
