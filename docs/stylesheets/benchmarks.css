@@ -15,6 +15,8 @@
   --ts-chart-tooltip-background: var(--surface);
   --ts-chart-tooltip-color: var(--fg);
   --ts-chart-tooltip-border: 1px solid var(--hairline);
+  --ts-chart-tooltip-font: 500 .64rem/1.35 var(--md-text-font-family);
+  --ts-chart-tooltip-padding: .35rem .5rem;
 }
 [data-md-color-scheme="slate"] .bench {
   --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
