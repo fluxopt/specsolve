@@ -1,0 +1,73 @@
+/* The benchmark charts on about/benchmarks.md. Surfaces and text come from the
+ * theme, so the block follows the site's light and dark toggle. The series and
+ * table colours are the block's own, picked per scheme. */
+.bench {
+  --surface: var(--md-default-bg-color);
+  --surface-2: var(--md-code-bg-color);
+  --fg: var(--md-default-fg-color);
+  --fg2: var(--md-default-fg-color--light);
+  --muted: var(--md-default-fg-color--lighter);
+  --hairline: var(--md-default-fg-color--lightest);
+  --s1: #6d28d9; --s2: #a9800c; --s3: #2a78d6; --s4: #d42f2a; --floor: #6b6a61;
+  --mix: 70%;
+  --d-mid: #f0efec; --d-b1: #dce8f7; --d-b2: #aecbef; --d-b3: #76a7e4; --d-b4: #2a6fc4;
+  --d-g1: #dcf0e5; --d-g2: #a6dcbf; --d-g3: #5fbf8f; --d-g4: #13945e; --d-ink4: #ffffff;
+  --ts-chart-tooltip-background: var(--surface);
+  --ts-chart-tooltip-color: var(--fg);
+  --ts-chart-tooltip-border: 1px solid var(--hairline);
+}
+[data-md-color-scheme="slate"] .bench {
+  --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
+  --mix: 85%;
+  --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
+  --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
+}
+/* The context libraries: each hue mixed into the surface, so they recede in either scheme. */
+.bench {
+  --p2: color-mix(in oklab, var(--s2) var(--mix), var(--surface));
+  --p3: color-mix(in oklab, var(--s3) var(--mix), var(--surface));
+  --p4: color-mix(in oklab, var(--s4) var(--mix), var(--surface));
+}
+
+.bench { margin: 1.2em 0; }
+.bench .bench-controls { display: grid; gap: .4rem; padding-bottom: .6rem; border-bottom: 1px solid var(--hairline); }
+.bench .bench-row { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .5rem; }
+.bench .bench-label, .bench .bench-hint { font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.bench .bench-label:not(:first-child) { margin-left: .5rem; }
+.bench .bench-seg { display: inline-flex; border: 1px solid var(--hairline); border-radius: 6px; overflow: hidden; }
+.bench .bench-seg button { font: inherit; font-size: .66rem; color: var(--fg2); background: var(--surface);
+  border: 0; padding: .25rem .6rem; cursor: pointer; }
+.bench .bench-seg button + button { border-left: 1px solid var(--hairline); }
+.bench .bench-seg button[aria-pressed="true"] { background: var(--fg); color: var(--surface); }
+.bench button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.bench #bench-legend { display: flex; gap: .2rem .4rem; flex-wrap: wrap; font-size: .68rem; }
+.bench #bench-legend button { font: inherit; color: var(--fg2); background: none; border: 0; border-radius: 5px;
+  display: inline-flex; align-items: center; gap: .4rem; padding: .1rem .3rem; cursor: pointer; }
+.bench #bench-legend button[aria-pressed="false"] { opacity: .38; }
+.bench #bench-legend button[disabled] { cursor: default; }
+.bench .swatch { width: 16px; height: 2px; border-radius: 2px; display: inline-block; }
+.bench .swatch.hero { width: 20px; height: 4px; }
+
+/* `minmax(0, 1fr)` rather than `1fr`: the zero lets a track be narrower than its content. */
+.bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .8rem; }
+@media (max-width: 44.9375em) { .bench #bench-facets { grid-template-columns: minmax(0, 1fr); } }
+.bench .bench-panel { min-width: 0; color: var(--fg2); border: 1px solid var(--hairline); border-radius: 8px; padding: .5rem .6rem .2rem; }
+.bench .bench-caption { font-size: .7rem; font-weight: 700; color: var(--fg); margin-bottom: .2rem; }
+
+.bench .bench-scale { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-top: 1rem; font-size: .62rem; color: var(--muted); }
+.bench .bench-scale i { display: inline-block; width: 22px; height: 11px; border-radius: 3px; }
+.bench .bench-scale span { margin: 0 .4rem; }
+.bench .bench-table { overflow-x: auto; margin-top: .5rem; border: 1px solid var(--hairline); border-radius: 8px; }
+.md-typeset .bench table.bench-heat { display: table; border-collapse: separate; border-spacing: 2px; width: 100%;
+  padding: .25rem; margin: 0; font-size: .64rem; font-variant-numeric: tabular-nums; border: 0; }
+.md-typeset .bench .bench-heat th { font-weight: 700; color: var(--fg2); text-align: right; padding: .25rem .45rem;
+  white-space: nowrap; background: none; border: 0; }
+.md-typeset .bench .bench-heat td { text-align: right; padding: .22rem .45rem; white-space: nowrap; border-radius: 4px;
+  border: 0; font-family: var(--md-code-font-family); color: var(--fg); }
+.md-typeset .bench .bench-heat th:first-child, .md-typeset .bench .bench-heat td:first-child { text-align: left; }
+.md-typeset .bench .bench-heat td.panel { font-family: inherit; color: var(--fg2); }
+.md-typeset .bench .bench-heat tr.first td { border-top: 1px solid var(--hairline); }
+.md-typeset .bench .bench-heat td.own { background: var(--surface-2); }
+.md-typeset .bench .bench-heat td.none { color: var(--muted); }
+.md-typeset .bench .bench-heat td.floor { background: var(--surface-2); color: var(--fg2); }
+.md-typeset .bench .bench-heat th.floor { color: var(--muted); }

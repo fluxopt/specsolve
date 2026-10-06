@@ -35,7 +35,7 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
   model's topology does not change its cost. The solver stays loaded:
   `update()` puts new numbers on it, and `keep='progress'` warm-starts from the
   last run. The API is a handful of verbs, with nothing to tune.
-  [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks-scaling.html)
+  [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All
   16 rungs match PyPSA's objective, and 12 match its duals row for row.
