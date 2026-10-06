@@ -1,7 +1,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "lpspec[gurobi,linopy] @ git+https://github.com/fluxopt/lpspec@8d27e88b79",
+#   "specsolve[gurobi] @ git+https://github.com/fluxopt/specsolve@aa90239393",
+#   "linopy @ git+https://github.com/PyPSA/linopy@master",
 #   "pyomo>=6.7",
 #   "pytest==9.1.1",
 #   "pytest-benchmem>=0.5",
@@ -17,9 +18,6 @@
 `--locked` refuses to run if the resolution has drifted. The selection is read
 from the `pixi run ladder` task in `pyproject.toml`, and the harness in `bench/`
 runs it, so this needs the repository checked out.
-
-The published numbers predate this file: they were taken against
-`lpspec 0.0.1a61.dev3+gf319cd10f` and a linopy built from a branch.
 """
 
 from __future__ import annotations
