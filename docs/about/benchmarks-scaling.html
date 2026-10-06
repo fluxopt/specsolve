@@ -25,9 +25,9 @@
     Each model is built and handed to a solver — <code>run()</code> and
     <code>optimize()</code> are never called. Every rival model is hand-written in
     <code>bench/models/</code> beside ours and is solved against ours in CI, so
-    nothing here is fast because it built a different model. The legend carries
-    six lines for the five: <code>gurobipy</code> appears twice, the same
-    library written as a loop and as a matrix.
+    nothing here is fast because it built a different model. <code>gurobipy</code>
+    appears twice, the same library written as a loop and as a matrix; the matrix,
+    with <code>highspy-matrix</code>, is drawn as the matrix floor.
   </p>
   <p class="lede">
     <b>Every number here is the median of a measurement's rounds, and every band
@@ -74,6 +74,13 @@
     curve.
   </p>
   <p class="note">
+    <b>The grey line is the matrix floor:</b> a hand-written matrix handed
+    straight to the solver's bulk API — <code>gurobipy-matrix</code> on Gurobi,
+    <code>highspy-matrix</code> on HiGHS. Nobody writes a model this way; it is the
+    limit a modelling library can approach, and the distance from it is what
+    specsolve's modelling layer costs.
+  </p>
+  <p class="note">
     <b>The line is the median of the rounds and the band is the middle half of
     them, first quartile to third.</b> Its height is what the machine did to the
     same work, not a confidence interval: two lines whose bands overlap are two
@@ -98,8 +105,9 @@
   <p class="note">
     The specsolve column is its own cost. Every other cell is that library's cost
     divided by specsolve's at the same size: green where specsolve is faster, blue
-    where the other library is, grey within ten per cent. Hover a cell for the
-    library's own number.
+    where the other library is, grey within ten per cent. The matrix floor's column
+    is not shaded: being faster than specsolve there is the point of a floor. Hover
+    a cell for the library's own number.
   </p>
   <div class="scale" id="scale"></div>
   <div class="scroller"><table class="heat" id="heat"></table></div>
@@ -130,7 +138,7 @@
   --surface-1: #fcfcfb; --surface-2: #f4f3ef;
   --text-primary: #1a1a19; --text-secondary: #55534a; --text-muted: #8a887c;
   --hairline: #dedcd3;
-  --s1: #6d28d9; --s2: #a9800c; --s3: #2a78d6; --s4: #d42f2a; --s5: #1baf7a; --s6: #eb6834;
+  --s1: #6d28d9; --s2: #a9800c; --s3: #2a78d6; --s4: #d42f2a; --floor: #6b6a61;
   --mix: 70%;
   --d-mid: #f0efec; --d-b1: #dce8f7; --d-b2: #aecbef; --d-b3: #76a7e4; --d-b4: #2a6fc4;
   --d-g1: #dcf0e5; --d-g2: #a6dcbf; --d-g3: #5fbf8f; --d-g4: #13945e; --d-ink4: #ffffff;
@@ -148,7 +156,7 @@
     --surface-1: #1a1a19; --surface-2: #232320;
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
     --hairline: #3a3934;
-    --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --s5: #199e70; --s6: #d95926;
+    --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
     --mix: 85%;
     --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
     --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
@@ -159,7 +167,7 @@
   --surface-1: #1a1a19; --surface-2: #232320;
   --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a887c;
   --hairline: #3a3934;
-  --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --s5: #199e70; --s6: #d95926;
+  --s1: #9670e8; --s2: #b88d18; --s3: #3987e5; --s4: #e5483f; --floor: #a3a196;
   --mix: 85%;
   --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
   --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
@@ -169,8 +177,6 @@
   --p2: color-mix(in oklab, var(--s2) var(--mix), var(--surface-1));
   --p3: color-mix(in oklab, var(--s3) var(--mix), var(--surface-1));
   --p4: color-mix(in oklab, var(--s4) var(--mix), var(--surface-1));
-  --p5: color-mix(in oklab, var(--s5) var(--mix), var(--surface-1));
-  --p6: color-mix(in oklab, var(--s6) var(--mix), var(--surface-1));
 }
 .viz-root h1 { font-size: 1.7rem; font-weight: 620; letter-spacing: -.02em; margin: 0 0 .5rem; }
 .viz-root h2 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.01em; margin: 0 0 .2rem; }
@@ -221,6 +227,8 @@ table.heat { border-collapse: separate; border-spacing: 2px; width: 100%; paddin
 .heat tr.first td { border-top: 1px solid var(--hairline); }
 .heat td.own { background: var(--surface-2); }
 .heat td.none { color: var(--text-muted); }
+.heat td.floor { background: var(--surface-2); color: var(--text-secondary); }
+.heat th.floor { color: var(--text-muted); }
 .scale { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-top: .7rem; font-size: .74rem; color: var(--text-muted); }
 .scale i { display: inline-block; width: 24px; height: 12px; border-radius: 3px; }
 .scale span { margin: 0 .4rem; }
@@ -246,9 +254,10 @@ table.heat { border-collapse: separate; border-spacing: 2px; width: 100%; paddin
     "field": "library",
     "refused": "refused",
     "highlight": "specsolve",
-    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-matrix", "gurobipy-loop", "highspy-matrix"],
-    "ink": ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)"],
-    "paint": ["var(--s1)", "var(--p2)", "var(--p3)", "var(--p4)", "var(--p5)", "var(--p6)"]
+    "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
+    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p2)", "var(--p3)", "var(--p4)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -267,7 +276,7 @@ import { scaleLog } from 'd3-scale';
 
 const SPEC = JSON.parse(document.getElementById('spec').textContent);
 const ROWS = await (await fetch(SPEC.data)).json();
-const { field: SERIES, refused: REFUSED, highlight: HERO, domain: LIBRARIES } = SPEC.series;
+const { field: SERIES, refused: REFUSED, highlight: HERO, domain: LIBRARIES, floor: FLOOR } = SPEC.series;
 const X = SPEC.x.field;
 
 const trim = (v, d) => `${+v.toFixed(d)}`;
@@ -283,6 +292,7 @@ let hosts = [];
 
 const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
 const isHero = r => r[SERIES] === HERO;
+const isFloor = r => FLOOR.members.includes(r[SERIES]);
 const ink = name => SPEC.series.ink[LIBRARIES.indexOf(name)];
 
 /* The rows both views read: the current filter and visible libraries, each with the chosen
@@ -359,14 +369,16 @@ function grouped(fmt) {
 
 /* One panel: a line per library over size, the band under it, the projections dashed. The
    highlighted library is drawn last and thick, so it stays on top where the lines cross, and is
-   named above its last measured point. Each measured point is a dot ringed in the surface colour,
-   so crossing points stay apart; each projected size is a hollow ring in the library's colour. */
+   named above its last measured point. The matrix floor is a thin neutral line without a band.
+   Each measured point is a dot ringed in the surface colour, so
+   crossing points stay apart; each projected size is a hollow ring in the library's colour. */
 function definition(rows, metric) {
   const fmt = FORMAT[metric.format];
   const measured = rows.filter(r => r.value != null);
   const ahead = projections(rows);
   const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
-  const [theirs, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
+  const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
+  const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
   const enc = { x: X, z: SERIES, color: SERIES };
   const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth });
   const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface-1)', strokeWidth: 2 });
@@ -374,7 +386,7 @@ function definition(rows, metric) {
     dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface-1)',
       stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
   const label = ours.length ? [text([ours.at(-1)], { x: X, y: 'value', text: () => HERO, anchor: 'end', dx: -8, dy: -10,
-    fill: SPEC.series.ink[LIBRARIES.indexOf(HERO)], fontSize: 12, fontWeight: 650 })] : [];
+    fill: ink(HERO), fontSize: 12, fontWeight: 650 })] : [];
   const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
   const area = (data, fillOpacity) => areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity });
   const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
@@ -382,9 +394,9 @@ function definition(rows, metric) {
     marks: [
       ...(metric.band ? [area(theirs, 0.35), area(ours, 0.22)] : []),
       dashed(theirsAhead, 2), dashed(oursAhead, 3),
-      line(theirs, 2), line(ours, 3.5),
+      line(floor, 1.5), line(theirs, 2), line(ours, 3.5),
       ...hollow,
-      points(theirs, 3.5), points(ours, 5),
+      points(floor, 2.5), points(theirs, 3.5), points(ours, 5),
       ...label,
       crosshair({ y: false }),
     ],
@@ -410,11 +422,12 @@ const shade = v => {
 
 function table(rows, metric) {
   const fmt = FORMAT[metric.format];
-  const others = LIBRARIES.filter(n => n !== HERO && rows.some(r => r[SERIES] === n));
+  const others = LIBRARIES.filter(n => n !== HERO && !FLOOR.members.includes(n) && rows.some(r => r[SERIES] === n));
+  const floorShown = rows.some(isFloor);
   const body = [];
   for (const [title, panel] of Map.groupBy(rows, panelOf)) {
     const guess = new Map(projections(panel).filter(r => r.projected).map(r => [`${r[SERIES]}|${r[X]}`, r.value]));
-    const cell = (r, own = false) => {
+    const cell = (r, kind = '') => {
       if (!r) return '<td class="none">—</td>';
       if (r.value == null) {
         if (!r[REFUSED]) return '<td class="none">—</td>';
@@ -422,19 +435,22 @@ function table(rows, metric) {
         const why = `refused by the ${r[REFUSED].slice(1)} budget`;
         return `<td class="none" title="${g ? `${why} · projected ≈ ${fmt(g)}` : why}">${r[REFUSED]}</td>`;
       }
-      if (own) return `<td class="own">${fmt(r.value)}</td>`;
+      if (kind === 'own') return `<td class="own">${fmt(r.value)}</td>`;
       if (r.ratio == null) return `<td class="none">${fmt(r.value)}</td>`;
-      return `<td style="${shade(r.ratio)}" title="${r[SERIES]}: ${fmt(r.value)}">${FORMAT.ratio(r.ratio)}</td>`;
+      const look = kind === 'floor' ? 'class="floor"' : `style="${shade(r.ratio)}"`;
+      return `<td ${look} title="${r[SERIES]}: ${fmt(r.value)}">${FORMAT.ratio(r.ratio)}</td>`;
     };
     const sizes = [...new Set(panel.filter(isHero).map(r => r[X]))].sort((a, b) => a - b);
     sizes.forEach((size, i) => {
       const at = new Map(panel.filter(r => r[X] === size).map(r => [r[SERIES], r]));
       body.push(`<tr class="${i ? '' : 'first'}"><td class="panel">${i ? '' : title}</td>` +
-        `<td>${FORMAT[SPEC.x.format](size)}</td>${cell(at.get(HERO), true)}${others.map(n => cell(at.get(n))).join('')}</tr>`);
+        `<td>${FORMAT[SPEC.x.format](size)}</td>${cell(at.get(HERO), 'own')}${others.map(n => cell(at.get(n))).join('')}` +
+        `${floorShown ? cell(FLOOR.members.map(n => at.get(n)).find(Boolean), 'floor') : ''}</tr>`);
     });
   }
   document.getElementById('heat').innerHTML =
-    `<thead><tr><th>panel</th><th>${SPEC.x.label}</th><th>${HERO}</th>${others.map(n => `<th>${n}</th>`).join('')}</tr></thead>` +
+    `<thead><tr><th>panel</th><th>${SPEC.x.label}</th><th>${HERO}</th>${others.map(n => `<th>${n}</th>`).join('')}` +
+    `${floorShown ? `<th class="floor">${FLOOR.label}</th>` : ''}</tr></thead>` +
     `<tbody>${body.join('')}</tbody>`;
 }
 
@@ -459,16 +475,19 @@ function draw() {
   }
   table(rows, metric);
   const present = new Set(ROWS.map(r => r[SERIES]));
-  document.getElementById('legend').innerHTML = LIBRARIES.filter(n => present.has(n)).map(n =>
+  const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
+  document.getElementById('legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
     `<button data-series="${n}" aria-pressed="${!state.hidden.has(n)}"${n === HERO ? ` disabled title="Every other line and cell is read against ${HERO}"` : ''}>` +
-    `<i class="swatch${n === HERO ? ' hero' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('');
+    `<i class="swatch${n === HERO ? ' hero' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('') +
+    `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
 }
 
 document.addEventListener('click', ev => {
   const lib = ev.target.closest('#legend button');
   if (lib && !lib.disabled) {
-    const name = lib.dataset.series;
-    state.hidden.has(name) ? state.hidden.delete(name) : state.hidden.add(name);
+    const names = 'floor' in lib.dataset ? FLOOR.members : [lib.dataset.series];
+    const show = names.every(n => state.hidden.has(n));
+    names.forEach(n => (show ? state.hidden.delete(n) : state.hidden.add(n)));
     return draw();
   }
   const b = ev.target.closest('.seg button');
