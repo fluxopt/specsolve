@@ -111,7 +111,11 @@ def test_every_port_builds_the_same_model_on_either_engine(port: dict[str, Any],
         pytest.param(collect.IN_MEMORY_BELOW, 'streaming', id='at'),
     ],
 )
-def test_the_engine_is_sized_to_the_model(coordinates, engine, monkeypatch):
+def test_the_engine_is_sized_to_the_model(coordinates, engine):
+    assert collect.engine_for(coordinates) == engine
+
+
+def test_a_named_engine_holds_inside_its_block_only(monkeypatch):
     ran = []
     original = pl.LazyFrame.collect
 
@@ -120,10 +124,10 @@ def test_the_engine_is_sized_to_the_model(coordinates, engine, monkeypatch):
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
-    with collect.sized(coordinates):
+    with collect.on('in-memory'):
         collected(pl.LazyFrame({'a': [1]}))
     collected(pl.LazyFrame({'a': [1]}))
-    assert ran == [engine, 'streaming'], 'sized chooses inside its block, and the default returns after it'
+    assert ran == ['in-memory', 'streaming'], 'the named engine inside the block, the default after it'
 
 
 @pytest.mark.parametrize(
@@ -135,20 +139,29 @@ def test_the_engine_is_sized_to_the_model(coordinates, engine, monkeypatch):
 )
 def test_a_build_collects_on_the_engine_its_largest_declaration_sizes(threshold, engine, monkeypatch):
     """The largest declaration here is ``x`` over ``a`` and ``b``: one hundred coordinates."""
-    seen = []
-    original = Assembly.run
+    building, ran = [], set()
+    original_run, original_collect = Assembly.run, pl.LazyFrame.collect
 
     def run(self):
-        seen.append(collect._engine())
-        return original(self)
+        building.append(True)
+        try:
+            return original_run(self)
+        finally:
+            building.pop()
+
+    def recording(self, *args, **kwargs):
+        if building:
+            ran.add(kwargs['engine'])
+        return original_collect(self, *args, **kwargs)
 
     monkeypatch.setattr(Assembly, 'run', run)
+    monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
     monkeypatch.setattr(collect, 'IN_MEMORY_BELOW', threshold)
     spec = {
         'dimensions': {'a': {'dtype': 'int'}, 'b': {'dtype': 'int'}},
         'variables': {'x': {'dims': ['a', 'b']}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
     }
-    with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}):
-        pass
-    assert seen == [engine], 'one build, on the engine its size chose'
+    with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
+        assert model._engine._model.engine == engine, 'the build keeps the engine its size chose'
+    assert ran == {engine}, 'every collect of the build ran on that engine'

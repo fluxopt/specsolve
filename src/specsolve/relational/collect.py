@@ -22,18 +22,20 @@ import polars as pl
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-__all__ = ['collect_engine', 'collected', 'collected_all', 'sized']
+__all__ = ['CollectEngine', 'collect_engine', 'collected', 'collected_all', 'engine_for', 'on']
+
+type CollectEngine = Literal['streaming', 'in-memory']
 
 _AS_WRITTEN = pl.QueryOptFlags(join_order=False)
 
 #: A build whose largest declaration has fewer coordinates than this collects in memory.
 IN_MEMORY_BELOW = 250_000
 
-_IN_MEMORY: ContextVar[bool] = ContextVar('_IN_MEMORY', default=False)
+_ON: ContextVar[CollectEngine | None] = ContextVar('_ON', default=None)
 
 
 @cache
-def collect_engine() -> Literal['streaming', 'in-memory']:
+def collect_engine() -> CollectEngine:
     """The engine every collect names: streaming where this polars has it, in-memory otherwise."""
     try:
         pl.LazyFrame({'probe': [0]}).collect(engine='streaming')
@@ -42,22 +44,30 @@ def collect_engine() -> Literal['streaming', 'in-memory']:
     return 'streaming'
 
 
+def engine_for(coordinates: int) -> CollectEngine:
+    """The engine a build collects on, given its largest declaration's coordinate count.
+
+    In memory below [`IN_MEMORY_BELOW`][], else [`collect_engine`][].
+    """
+    return 'in-memory' if coordinates < IN_MEMORY_BELOW else collect_engine()
+
+
 @contextmanager
-def sized(coordinates: int) -> Iterator[None]:
-    """Collect on the in-memory engine inside, where *coordinates* is below [`IN_MEMORY_BELOW`][]."""
-    token = _IN_MEMORY.set(coordinates < IN_MEMORY_BELOW)
+def on(engine: CollectEngine) -> Iterator[None]:
+    """Every [`collected`][] inside runs on *engine*."""
+    token = _ON.set(engine)
     try:
         yield
     finally:
-        _IN_MEMORY.reset(token)
+        _ON.reset(token)
 
 
-def _engine() -> Literal['streaming', 'in-memory']:
-    return 'in-memory' if _IN_MEMORY.get() else collect_engine()
+def _engine() -> CollectEngine:
+    return _ON.get() or collect_engine()
 
 
 def collected(frame: pl.LazyFrame) -> pl.DataFrame:
-    """*frame* materialised on the engine [`sized`][] chose, its joins in the order they were written."""
+    """*frame* materialised on the engine [`on`][] names, else [`collect_engine`][], its joins as written."""
     return frame.collect(engine=_engine(), optimizations=_AS_WRITTEN)
 
 
