@@ -34,9 +34,11 @@ from specsolve.inputs import declared
 from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
+    OUTPUTS,
     RECORD_FILE,
     Metrics,
     Record,
+    checked_outputs,
     refuse_reserved,
     write_format,
     write_reasons,
@@ -56,13 +58,14 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping, Sequence
+    from collections.abc import Generator, Iterable, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
 
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.result import Diagnostics, Keep, Result
 
 
@@ -182,6 +185,7 @@ def solve_over(
     spill_to: str | Path | None = None,
     archive: str | Path | None = None,
     keep_windows: bool = False,
+    outputs: Iterable[Output] = (),
 ) -> Sweep:
     """Solve *spec* once per slice of *axis* and fold the answers together.
 
@@ -238,6 +242,10 @@ def solve_over(
             window, lookahead rows included, under ``answer/windows/``, so
             that ``per_window=True`` reads off the archive. Refused for any
             other axis, and without *archive*.
+        outputs: As [`solve`][specsolve.api.Model.solve] takes them, reaching
+            every slice. The sweep, its spill and its archive carry these and
+            nothing else; a *spill_to* directory solved with others is
+            refused rather than resumed.
 
     Returns:
         The sweep, which reads its answer.
@@ -249,7 +257,8 @@ def solve_over(
             with a column the frames carry; an axis the program does not
             allow; a *spill_to* directory holding another sweep;
             *keep_windows* without *archive* or on an axis that does not cut
-            windows — each answerable from the declarations alone; keys of
+            windows; *outputs* that [`solve`][specsolve.api.Model.solve]
+            refuses — each answerable from the declarations alone; keys of
             more than one type, or two keys of one text.
         DataError: No source carries the axis, an index of another
             dimension carries it, or the axis produced no slices.
@@ -267,6 +276,7 @@ def solve_over(
     document = declared(spec)
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
+    asked = checked_outputs(outputs)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
     key_name = _key_column(axis, key_name, program)
@@ -286,16 +296,17 @@ def solve_over(
         'solver_name': solver_name,
         'solver_options': dict(solver_options or {}) or None,
         'record_options': record_options,
+        'outputs': asked,
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch)
+    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
     answered = (
         _serially(program, document, slices, solving, plan, keep, spill)
         if executor is None
         else _pooled(executor, workers_share_fs, program, document, slices, solving, spill)
     )
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype)
+    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
     if archiving is not None:
@@ -359,7 +370,7 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     """
     spill = sweep._spill
     assert spill is not None, 'the answer is read off a spill, so a sweep too large to hold is never held'
-    write_format(under)
+    write_format(under, sweep._outputs)
     manifest = json.loads((spill.directory / MANIFEST_FILE).read_text())
     (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
     shutil.copyfile(spill.directory / KEYS_FILE, under / KEYS_FILE)
@@ -592,7 +603,13 @@ def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
     )
     if not result.has_primal:
         return SliceAnswer(meta, metrics)
-    frames = {'primal': {name: result.primal(name) for name in program.variables}, 'expression': {}}
+    frames: dict[str, dict[str, pl.DataFrame]] = {
+        'primal': {name: result.primal(name) for name in program.variables},
+        'expression': {},
+    }
+    for output in result._outputs or {}:
+        declared = program.variables if OUTPUTS[output] == 'variable' else program.constraints
+        frames[output] = {name: result._frame(name, output) for name in declared}
     no_expressions: dict[str, str] = {}
     for name in program.expressions:
         try:

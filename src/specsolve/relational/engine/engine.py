@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
@@ -169,6 +170,7 @@ class Engine:
         solver_options: Mapping[str, object] | None = None,
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
+        outputs: frozenset[Output] = frozenset(),
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -188,6 +190,9 @@ class Engine:
             lower: How an expression the caller writes becomes a plan node,
                 for [`evaluate`][specsolve.relational.result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
+            outputs: Which of
+                [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
+                result carries, already checked.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -203,7 +208,7 @@ class Engine:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff)
-        return self._answered(answer, solver_name, kept, lower)
+        return self._answered(answer, solver_name, kept, lower, outputs)
 
     def _answered(
         self,
@@ -211,6 +216,7 @@ class Engine:
         solver_name: str,
         kept: Keep,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
+        outputs: frozenset[Output] = frozenset(),
     ) -> Result:
         """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
 
@@ -224,7 +230,8 @@ class Engine:
         assert (answer.activity is None) == (answer.primal is None), (
             'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
         )
-        primals, duals, activities, rays = self._read_back(answer.primal, answer.dual, answer.activity, answer.dual_ray)
+        activity = answer.activity if 'activity' in outputs else None
+        primals, duals, activities, rays = self._read_back(answer.primal, answer.dual, activity, answer.dual_ray)
         no_duals = (
             None
             if answer.dual is not None
@@ -240,7 +247,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _activities=activities,
+            _outputs={'activity': activities} if 'activity' in outputs else {},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,

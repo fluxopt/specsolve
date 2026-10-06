@@ -75,6 +75,9 @@ what coverage moved where. A release that breaks a model file or an import
 raises the minor version, and its notes name the break. A change to what a
 result, a sweep or an archive writes to disk also raises `LAYOUT` in
 `relational/answer_layout.py`, so an answer in the old layout is refused by name.
+A new output in `OUTPUTS` is the exception: `format.json` names the outputs an
+answer holds, so an older answer reads the new one as not asked for, and the
+layout stays. Changing what an existing file or output holds still raises it.
 
 ## A claim carries its evidence
 

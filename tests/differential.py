@@ -35,6 +35,7 @@ from tests.oracle import linopy, specsolve_linopy, xr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.engine.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
@@ -73,6 +74,7 @@ def differential(
     sources: Mapping[str, Any],
     *,
     lp: bool = False,
+    outputs: frozenset[Output] = frozenset(),
 ) -> Iterator[Agreement]:
     """Build ``spec`` on both lanes with the same inputs; assert they agree.
 
@@ -83,7 +85,8 @@ def differential(
     Duals are not compared: an LP with alternative optima has many optimal
     duals, and the two lanes hand HiGHS the same rows in a different order.
 
-    Set ``lp=True`` to also write and re-solve the LP file, the third opinion.
+    Set ``lp=True`` to also write and re-solve the LP file, the third opinion,
+    and ``outputs`` for what the relational result carries beyond its core.
     """
     model = schema_of(spec).expand()
 
@@ -99,7 +102,7 @@ def differential(
         program = lowered(model)
         with Engine() as engine:
             engine.build(program, tidy_sources(program, dict(sources)))
-            result = engine.solve()
+            result = engine.solve(outputs=outputs)
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'
             assert result.objective == pytest.approx(oracle, rel=RTOL), (
                 f'the lanes disagree on the objective — relational {result.objective}, linopy {oracle}'

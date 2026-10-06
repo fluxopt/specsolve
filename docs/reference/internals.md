@@ -125,10 +125,18 @@ Each entry says what the thing is, then the module it lives in.
 ## Answers on disk
 
 **Kind**
-: One of the three frames a solve answers with, `primal`, `dual` and
-  `expression`, named after the reader each comes back through. Each kind is
-  also the directory its frames are saved under. A saved result also holds
-  `activity/` (`relational/answer_layout.py`).
+: One of the frames an answer holds, named after the reader it comes back
+  through: `primal`, `dual` and `expression` always, and each output the solve
+  asked for with `outputs=`, such as `activity`. Each kind is also the
+  directory its frames are saved under (`relational/answer_layout.py`).
+
+**Output**
+: A kind an answer holds only on request. `OUTPUTS` is its one table: the
+  name, and whether it holds a frame per variable or per constraint. The
+  readers, `kind=`, the fold, the spill, the archive and its catalog all read
+  it. `format.json` names the outputs an answer holds, so a reader tells "not
+  asked for" from "not defined", and a new output adds no `LAYOUT` bump
+  (`relational/answer_layout.py`).
 
 **Answer layout**
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and

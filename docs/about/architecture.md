@@ -217,8 +217,9 @@ or reaches the plan. The names, by role:
 `specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
 `Sweep`, and the two archives that carry a spec, its data and its answer,
 `ResultArchive` and `SweepArchive`. It also holds the rows they hand back:
-`ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`.
-`specsolve.errors` holds the error tree under `SpecsolveError`,
+`ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`. And it
+holds `Output`, the `Literal` of the names `outputs=` takes, so a caller that
+builds that set can type it. `specsolve.errors` holds the error tree under `SpecsolveError`,
 `NoSolutionError` and `SpecsolveWarning`.
 
 What each one takes and returns is its docstring, which
@@ -268,7 +269,8 @@ dims share a label space.
 exist outside it. The first direction catches a name documented and never
 exported, the second a helper that leaked into the namespace from an import.
 The same file holds each module to its kind: no class but the two axes at the
-top level, only classes in `types`, and only errors and warnings in `errors`.
+top level, only classes and `Literal` vocabularies in `types`, and only errors
+and warnings in `errors`.
 `tests/test_docs_site.py` holds the API page to the same names, so the page
 cannot document a name at an internal path.
 

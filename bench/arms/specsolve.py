@@ -228,7 +228,7 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     ``frames`` collects every variable's primal and every constraint's dual
     and activity; ``parquet`` is ``Result.save``.
     """
-    result = model._engine._answered(answer, 'highs', 'nothing', None)
+    result = model._engine._answered(answer, 'highs', 'nothing', None, frozenset({'activity'}))
     if into == 'frames':
         for name in model._program.variables:
             result.primal(name)

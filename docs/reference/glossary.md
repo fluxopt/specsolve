@@ -57,7 +57,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : What came back, whichever verb asked: a `Result` for one solve, a
   [`Sweep`](#sweeps) for a sweep. `Result.save` writes one as a directory —
   `record.parquet` for how it terminated, then `primal/`, `dual/`,
-  `activity/` and `expression/` — and an archive holds that directory as
+  `expression/` and a directory for each output the solve asked for with
+  `outputs=`, such as `activity/` — and an archive holds that directory as
   `answer/`. The archive of a sweep holds its answer at the same paths, one
   file per name.
 
