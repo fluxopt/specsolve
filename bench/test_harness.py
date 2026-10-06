@@ -141,9 +141,14 @@ def _timing(arm: str, **over: Any) -> dict[str, Any]:
     } | over
 
 
-def _plotted() -> dict[str, Any]:
-    """One rung of a panel line, in the shape `plot.series` emits."""
-    return {'wall': 1.0, 'lo': 0.9, 'hi': 1.1, 'peak': 0.5, 'vars': 1000}
+def _measured(arm: str, *sizes: str) -> list[dict[str, Any]]:
+    """One `transport` measurement on HiGHS per rung, the panel the ceiling tests plot."""
+    return [_timing(arm, case='transport', sink='highs', size=size) for size in sizes]
+
+
+def _refused(records: list[dict[str, Any]], library: str) -> dict[str, str]:
+    """The chart page's refusals for *library*, by rung."""
+    return {r['rung']: r['refused'] for r in plot.rows(records) if r['library'] == library and 'refused' in r}
 
 
 def _ceiling_record(ladder: str, size: str, **over: Any) -> dict[str, Any]:
@@ -620,15 +625,11 @@ def test_both_renderers_read_the_same_bound() -> None:
     """The table and the chart print the same cell through one function."""
     ceiling = _ceiling_record('size', 'm', stopped_by='memory')
     report.CEILINGS[:] = [ceiling]
-    taken = {
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')},
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
-    }
+    records = [*_measured('linopy', 'xs', 's'), *_measured('specsolve', 'xs', 's', 'm', 'l'), ceiling]
 
-    charted = plot.panels(taken, [ceiling])['transport — highs — length']['series']['linopy']['bound']
     tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
     assert tabled == '>6 GB', 'the table names the budget that fired'
-    assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
+    assert _refused(records, 'linopy') == {'l': tabled}, 'and the chart says the same thing at the same rung'
 
 
 def test_a_ceiling_is_per_sink() -> None:
@@ -997,17 +998,18 @@ def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     assert '\u00f7' not in table, 'nothing to divide against, so no ratio column at all'
 
 
-def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: Path) -> None:
+def test_a_measurement_without_a_peak_is_skipped_rather_than_divided() -> None:
     """`peak_rss_bytes` is `None` for a run taken without `benchmem(isolate=True)`."""
-    path = tmp_path / 'results.jsonl'
-    records = [_timing('specsolve'), _timing('linopy', size='l', peak_rss_bytes=None)]
-    path.write_text('\n'.join(json.dumps(r) for r in records))
-
-    taken = plot.series(path)
-    assert 'l' not in taken.get(('dispatch', 'lp', 'linopy'), {}), (
-        'a record with no peak cannot be plotted, so it is dropped'
+    rows = plot.rows([_timing('specsolve'), _timing('linopy', size='l', peak_rss_bytes=None)])
+    assert [(r['library'], r['rung']) for r in rows] == [('specsolve', 'm')], (
+        'a record with no peak cannot be plotted, so it is dropped and the records around it are not'
     )
-    assert 'm' in taken[('dispatch', 'lp', 'specsolve')], 'and the records around it still are'
+
+
+def test_a_rung_neither_ladder_plots_is_left_out() -> None:
+    """The chart page draws two ladders; a rung outside both has no axis to sit on."""
+    rows = plot.rows([_timing('specsolve'), _timing('specsolve', size='xl')])
+    assert [r['rung'] for r in rows] == ['m'], 'only the rung a ladder carries becomes a row'
 
 
 def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None:
@@ -1016,39 +1018,51 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     The width record is second, so a key without the ladder in it would also
     lose the size ceiling.
     """
-    taken = {
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's', 'm')},
-    }
-    ceilings = [_ceiling_record('size', 'm'), _ceiling_record('width', 'w100')]
-
-    panel = plot.panels(taken, ceilings)['transport — highs — length']
-    assert panel['series']['linopy']['bound'] == [None, None, None, '>30 s'], (
+    records = [
+        *_measured('specsolve', 'xs', 's', 'm', 'l'),
+        *_measured('linopy', 'xs', 's', 'm'),
+        _ceiling_record('size', 'm'),
+        _ceiling_record('width', 'w100'),
+    ]
+    assert _refused(records, 'linopy') == {'l': '>30 s'}, (
         'the size ceiling still bounds the rung above it, and the width one says nothing here'
     )
 
 
 def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
     """The other half of the pair above: a width ceiling bounds the width panel and nothing else."""
-    taken = {
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('w1', 'w10', 'w100', 'w1000')},
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('w1', 'w10')},
-    }
-    panels = plot.panels(taken, [_ceiling_record('width', 'w10')])
+    records = [
+        *_measured('specsolve', 'w1', 'w10', 'w100', 'w1000'),
+        *_measured('linopy', 'w1', 'w10'),
+        _ceiling_record('width', 'w10'),
+    ]
 
-    assert list(panels) == ['transport — highs — width'], 'no size panel, nothing having been measured on that ladder'
-    bound = panels['transport — highs — width']['series']['linopy']['bound']
-    assert bound == [None, None, '>30 s', '>30 s'], 'the rungs past the ceiling say what stopped the climb'
+    assert {r['ladder'] for r in plot.rows(records)} == {'width'}, (
+        'no length row, nothing having been measured on that ladder'
+    )
+    assert _refused(records, 'linopy') == {'w100': '>30 s', 'w1000': '>30 s'}, (
+        'the rungs past the ceiling say what stopped the climb'
+    )
+
+
+def test_a_rung_measured_past_a_ceiling_is_a_measurement_not_a_refusal() -> None:
+    """Two result files can disagree: one stopped at `s`, a later one reached `m`.
+
+    The cell is one row, and the number wins over the budget.
+    """
+    records = [
+        *_measured('specsolve', 'xs', 's', 'm', 'l'),
+        *_measured('linopy', 'xs', 's', 'm'),
+        _ceiling_record('size', 's'),
+    ]
+    assert _refused(records, 'linopy') == {'l': '>30 s'}, 'only the rung nothing measured is refused'
 
 
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
-    """`series` drops a measurement taken without a peak, so a ceiling can name
+    """`rows` drops a measurement taken without a peak, so a ceiling can name
     a rung the axis does not hold."""
-    taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
-    ceilings = [_ceiling_record('size', 'm')]
-
-    panel = plot.panels(taken, ceilings)['transport — highs — length']
-    assert panel['series']['linopy']['bound'] == [None, None], 'no rung is above one the axis does not carry'
+    records = [*_measured('linopy', 'xs', 's'), _ceiling_record('size', 'm')]
+    assert _refused(records, 'linopy') == {}, 'no rung is above one the axis does not carry'
 
 
 @pytest.mark.parametrize(
@@ -1504,8 +1518,8 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
     assert published[('dispatch', 'm', 'lp', 'specsolve')]['wall_seconds'] == 1.0, (
         'the table publishes the build, not the faster window measured against it'
     )
-    plotted = plot.series(path)[('dispatch', 'lp', 'specsolve')]['m']
-    assert plotted['wall'] == 1.0, 'and the chart page plots the build, not the window that shares its key'
+    (plotted,) = plot.rows([build, window])
+    assert plotted['wall_s'] == 1.0, 'and the chart page plots the build, not the window that shares its key'
 
     rows = list(tidy.measurements([build, window], 'run'))
     assert sorted({row['phase'] for row in rows}) == ['emit', 'window'], (

@@ -68,10 +68,12 @@ A bare `pytest bench` is **not** the committed ladder: `--sizes` defaults to
 Narrowing the run and then committing the file leaves the published tables with
 no provenance, and nothing about the file looks wrong afterwards.
 
-**`bench.plot` rewrites one line of `docs/about/benchmarks-scaling.html`** — the
-`const DATA = {...};` literal — and nothing else. The page is a tracked source
-file, so its markup and prose are reviewed in the diff like any other code and
-only the measurements inside it are mechanical.
+**`bench.plot` writes `docs/about/benchmarks.json`** — one row per
+model, sink, ladder, rung and library — and nothing else. The page that draws
+them, `docs/about/benchmarks.md`, is a tracked source file: its prose, and the
+JSON spec that says which field each chart draws, are reviewed in the diff like
+any other code, and so is `docs/javascripts/benchmarks.js`, which draws them.
+Only the rows are mechanical.
 
 **A short run pointed at the committed results is refused**, not merely
 discouraged — `refuse_to_overwrite_the_provenance` in `conftest.py` compares the
@@ -228,7 +230,7 @@ results-<sink>-<case>-<run id>/     uploaded as each case finishes
 published-benchmark-<run id>/       only if the run reaches the end
   bench/results/…
   docs/about/benchmarks.md           tables already rewritten
-  docs/about/benchmarks-scaling.html chart data already rewritten
+  docs/about/benchmarks.json chart rows already rewritten
 ```
 
 **The per-case artifacts exist because a dying runner skips every step it has

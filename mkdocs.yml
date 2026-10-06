@@ -159,14 +159,14 @@ nav:
       - about/index.md
       - Architecture: about/architecture.md
       - Decomposition: about/decomposition.md
-      - Benchmarks: about/benchmarks-scaling.html
-      - Benchmarks — method: about/benchmarks.md
+      - Benchmarks: about/benchmarks.md
       - Relationship to linopy: about/linopy.md
       - Prior art and credit: about/prior-art.md
       - Roadmap: about/roadmap.md
       - Changelog: about/changelog.md
 
 theme:
+  custom_dir: overrides
   palette:
     - media: "(prefers-color-scheme)"
       primary: custom
@@ -284,6 +284,7 @@ plugins:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/benchmarks.css
 
 extra:
   social:
@@ -296,6 +297,8 @@ extra:
 
 extra_javascript:
   - javascripts/mathjax.js
+  - path: javascripts/benchmarks.js
+    type: module
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 watch:
