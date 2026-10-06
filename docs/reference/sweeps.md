@@ -92,8 +92,8 @@ how a model masks, so the gap is reported rather than refused.
 ## Reading a sweep
 
 **Every reader returns the answer.** `primal`, `dual`, `evaluate`, `activity`,
-`scan`, `to_pandas`, `to_dataarray` and `to_dataset` keep the names and shapes
-of [`Result`](api.md#specsolve.types.Result). For `EachWindow` the answer is over the
+`reduced_cost`, `scan`, `to_pandas`, `to_dataarray` and `to_dataset` keep the
+names and shapes of [`Result`](api.md#specsolve.types.Result). For `EachWindow` the answer is over the
 real labels of the sliced dimension. Each label comes from the window that owns
 it, and the final window gives all of its rows. For `EachCoordinate` and a
 hand-built axis, each slice is a whole answer, so the table is keyed by slice.
@@ -105,10 +105,12 @@ sweep.evaluate('spend')  # the model's own quantity, over the real labels
 ```
 
 **A sweep holds the outputs you ask for, as a solve does.**
-`sps.solve_over(..., outputs={'activity'})` gives every slice its activity, in
-memory, in the spill and in the archive. A sweep that did not ask refuses the
-reader. A `spill_to=` directory solved with other outputs is refused rather
-than resumed, because its slices hold only what they were solved with.
+`sps.solve_over(..., outputs={'activity', 'reduced_cost'})` gives every slice
+its activity and its reduced costs, in memory, in the spill and in the
+archive. A slice with no duals has no reduced costs, and the reader says why.
+A sweep that did not ask refuses the reader. A `spill_to=` directory solved
+with other outputs is refused rather than resumed, because its slices hold only
+what they were solved with.
 
 **You name the extra dimension, not the library.** `EachCoordinate('scenario')`
 keys on `scenario`, so `sweep.to_dataarray('p')` is

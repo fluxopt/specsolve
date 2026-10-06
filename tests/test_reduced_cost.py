@@ -5,11 +5,14 @@ solver's convention in the loop: raise the binding bound, re-solve, and the
 objective moves by the reduced cost. Each sink's own reduced costs, read off
 the loaded solver, agree with the computed ones, which catches a sink whose
 duals are signed or scaled differently. And one optimum is done by hand.
+
+Every answer here asks for ``outputs={'reduced_cost'}``; ``test_outputs`` holds
+the rule for one that does not.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -19,7 +22,14 @@ import specsolve as sps
 from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.relational.sinks import SOLVERS
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from specsolve.types import Output, Sweep
+
 RTOL = 1e-6
+
+RC: frozenset[Output] = frozenset({'reduced_cost'})
 
 #: A bound moved by this much stays binding on every generator in *SOURCES*,
 #: and the price it is moved against does not change.
@@ -74,7 +84,7 @@ def native(solver_name: str, handle: Any) -> list[float]:
 
 
 def objective(model_spec: dict, sources: dict, solver_name: str) -> float:
-    with sps.solve(model_spec, sources, solver_name=solver_name) as answer:
+    with sps.solve(model_spec, sources, solver_name=solver_name, outputs=RC) as answer:
         return answer.objective
 
 
@@ -84,7 +94,7 @@ def test_the_reduced_cost_is_what_the_objective_pays_per_unit_of_binding_bound(
 ) -> None:
     """Raise each generator's binding bound by a step, and the objective rises by the reduced cost times it."""
     model_spec = spec(sense, balance)
-    with sps.solve(model_spec, SOURCES, solver_name=solver_name) as answer:
+    with sps.solve(model_spec, SOURCES, solver_name=solver_name, outputs=RC) as answer:
         base = answer.objective
         primal = answer.primal('p')['value'].to_list()
         reduced = answer.reduced_cost('p')['value'].to_list()
@@ -107,7 +117,7 @@ def test_the_reduced_cost_is_what_the_objective_pays_per_unit_of_binding_bound(
 @pytest.mark.parametrize(('sense', 'balance'), CASES)
 def test_the_reduced_cost_agrees_with_the_solvers_own(solver_name: str, sense: str, balance: str) -> None:
     """Every sink's native reduced costs carry the same convention, so a sink whose duals drifted shows here."""
-    with sps.build(spec(sense, balance), SOURCES) as model, model.solve(solver_name) as answer:
+    with sps.build(spec(sense, balance), SOURCES) as model, model.solve(solver_name, outputs=RC) as answer:
         computed = answer.reduced_cost('p')['value'].to_list()
         own = native(solver_name, model._engine._solver.handle)
     assert computed == pytest.approx(own, abs=RTOL), f"{solver_name}'s own reduced costs agree with the computed ones"
@@ -121,7 +131,7 @@ def test_the_reduced_cost_does_not_depend_on_how_the_balance_is_written(sense: s
     reverse. The reduced costs come out the same either way, because each is
     the rate in the bound that binds.
     """
-    with sps.solve(spec(sense, balance), SOURCES) as answer:
+    with sps.solve(spec(sense, balance), SOURCES, outputs=RC) as answer:
         assert answer.reduced_cost('p')['value'].to_list() == pytest.approx([-1.0, 0.0, 1.0], abs=RTOL), (
             'one reduced cost per generator, in label order'
         )
@@ -141,7 +151,7 @@ def test_a_quadratic_objective_contributes_its_gradient_at_the_solution(
     if 'quadratic_objective' not in SOLVERS[solver_name].capabilities.supports:
         pytest.skip(f'{solver_name} takes no quadratic objective')
     model_spec = spec(sense, 'sum(p, over=g) == total', objective_written)
-    with sps.build(model_spec, SOURCES) as model, model.solve(solver_name) as answer:
+    with sps.build(model_spec, SOURCES) as model, model.solve(solver_name, outputs=RC) as answer:
         computed = answer.reduced_cost('p')['value'].to_list()
         own = native(solver_name, model._engine._solver.handle)
     assert computed == pytest.approx(own, abs=RTOL), f"{solver_name}'s own reduced costs agree with the computed ones"
@@ -157,7 +167,9 @@ def test_a_quadratic_row_contributes_its_gradient_weighted_by_its_dual() -> None
     from tests.test_quadratic_constraint import SOURCES as QUADRATIC_SOURCES
     from tests.test_quadratic_constraint import SPEC as QUADRATIC
 
-    with sps.solve(QUADRATIC, QUADRATIC_SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}) as answer:
+    with sps.solve(
+        QUADRATIC, QUADRATIC_SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}, outputs=RC
+    ) as answer:
         for name in ('p', 'q'):
             assert answer.reduced_cost(name)['value'].to_list() == pytest.approx([0.0, 0.0], abs=1e-3), (
                 f'{name} is interior on both generators; 1e-3 is the barrier the QCP stops at'
@@ -167,41 +179,100 @@ def test_a_quadratic_row_contributes_its_gradient_weighted_by_its_dual() -> None
 def test_an_integer_variable_leaves_no_reduced_cost_and_says_why() -> None:
     """A reduced cost is computed from the duals, so it is refused where they are, with their message."""
     integer = spec('minimize', 'sum(p, over=g) >= total', domain='integer')
-    with sps.solve(integer, SOURCES) as answer, pytest.raises(SpecsolveError, match='mixed-integer'):
+    with sps.solve(integer, SOURCES, outputs=RC) as answer, pytest.raises(SpecsolveError, match='mixed-integer'):
         answer.reduced_cost('p')
 
 
-def test_an_answer_read_back_off_disk_has_no_reduced_cost(tmp_path) -> None:
-    """save() writes none, so the refusal says to read them off the live result."""
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES) as answer:
+def test_a_saved_answer_reads_back_the_reduced_costs_it_was_asked_for(tmp_path: Path) -> None:
+    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
+        live = answer.reduced_cost('p')
         answer.save(tmp_path)
-    loaded = sps.load_result(tmp_path)
-    with pytest.raises(SpecsolveError, match='read back off disk'):
-        loaded.reduced_cost('p')
+    assert sps.load_result(tmp_path).reduced_cost('p').equals(live)
+
+
+def test_a_saved_integer_answer_gives_the_duals_reason(tmp_path: Path) -> None:
+    """The reason a mixed-integer solve has no duals is saved once, and the reduced costs read it back."""
+    with sps.solve(spec('minimize', 'sum(p, over=g) >= total', domain='integer'), SOURCES, outputs=RC) as answer:
+        answer.save(tmp_path)
+    assert not (tmp_path / 'reduced_cost').exists(), 'nothing to write where there are no duals'
+    with pytest.raises(SpecsolveError, match='mixed-integer'):
+        sps.load_result(tmp_path).reduced_cost('p')
+
+
+def test_a_solve_not_asked_for_reduced_costs_names_the_output() -> None:
+    with (
+        sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES) as answer,
+        pytest.raises(SpecsolveError, match=r"outputs=\{'reduced_cost'\}"),
+    ):
+        answer.reduced_cost('p')
 
 
 def test_an_infeasible_solve_has_no_values_to_read() -> None:
     """The refusal ``primal`` gives, ahead of the one about the duals."""
     short = {**SOURCES, 'total': pl.DataFrame({'value': [100.0]})}
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), short) as answer, pytest.raises(NoSolutionError):
+    with (
+        sps.solve(spec('minimize', 'sum(p, over=g) >= total'), short, outputs=RC) as answer,
+        pytest.raises(NoSolutionError),
+    ):
         answer.reduced_cost('p')
 
 
 def test_a_closed_result_says_so() -> None:
-    answer = sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES)
+    answer = sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC)
     answer.close()
     with pytest.raises(SpecsolveError, match='closed'):
         answer.reduced_cost('p')
 
 
 def test_a_variable_nothing_declares_is_a_key_error() -> None:
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES) as answer, pytest.raises(KeyError):
+    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer, pytest.raises(KeyError):
         answer.reduced_cost('balance')
 
 
 def test_the_frame_is_tidy_over_the_variable_dims() -> None:
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES) as answer:
+    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
         frame = answer.reduced_cost('p')
     assert frame.columns == ['g', 'value'], 'the primal frame shape: the dims, then the value'
     assert frame['g'].to_list() == G, 'rows come back in label order'
     assert np.isfinite(frame['value'].to_numpy()).all()
+
+
+# ---------------------------------------------------------------------------
+# sweeps
+# ---------------------------------------------------------------------------
+
+#: Two scenarios. At a total of 5 ``b`` is marginal at a price of 2; at 9 ``b``
+#: is capped and ``c`` is marginal at 3, so every generator's reduced cost moves.
+SCENARIOS = {**SOURCES, 'total': pl.DataFrame({'scenario': ['low', 'high'], 'value': [5.0, 9.0]})}
+BY_HAND = {'low': [-1.0, 0.0, 1.0], 'high': [-2.0, -1.0, 0.0]}
+
+
+def _swept(tmp_path: Path, model_spec: dict, how: str) -> Sweep:
+    axis = sps.EachCoordinate('scenario')
+    if how == 'archived':
+        sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, archive=tmp_path / 'run.zip')
+        archive = sps.load_archive(tmp_path / 'run.zip')
+        assert isinstance(archive, sps.archive.SweepArchive)
+        return archive.sweep
+    spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
+    return sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, **spill)
+
+
+SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
+
+
+@pytest.mark.parametrize('how', SHAPES)
+def test_a_sweep_reads_each_slices_reduced_costs(tmp_path: Path, how: str) -> None:
+    """Each slice's reduced costs, keyed by slice, as that slice solved alone reads them."""
+    sweep = _swept(tmp_path, spec('minimize', 'sum(p, over=g) >= total'), how)
+    for (scenario,), frame in sweep.reduced_cost('p').partition_by('scenario', as_dict=True).items():
+        assert frame['value'].to_list() == pytest.approx(BY_HAND[scenario], abs=RTOL), (
+            f'slice {scenario!r} is priced at its own marginal generator'
+        )
+
+
+@pytest.mark.parametrize('how', SHAPES)
+def test_an_integer_sweep_gives_the_duals_reason(tmp_path: Path, how: str) -> None:
+    sweep = _swept(tmp_path, spec('minimize', 'sum(p, over=g) >= total', domain='integer'), how)
+    with pytest.raises(SpecsolveError, match='mixed-integer'):
+        sweep.reduced_cost('p')

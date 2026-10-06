@@ -334,11 +334,10 @@ class Engine:
         if 'activity' in outputs:
             carried['activity'] = activities
         if 'reduced_cost' in outputs:
-            carried['reduced_cost'] = (
-                self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
-                if answer.primal is not None and answer.dual is not None
-                else {}
-            )
+            reduced: dict[str, pl.LazyFrame] = {}
+            if answer.primal is not None and answer.dual is not None:
+                reduced = self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+            carried['reduced_cost'] = reduced
         return carried
 
     def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:

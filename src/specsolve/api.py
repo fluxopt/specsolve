@@ -319,8 +319,8 @@ class Model:
                 ``specsolve_run`` added, and members are stored uncompressed.
             outputs: Each [`Output`][specsolve.types.Output] the answer
                 carries beside the primal, the duals and the declared
-                expressions: ``{'activity'}`` for each constraint's left-hand
-                side. The result, its save and its archive carry these and
+                expressions: ``activity`` for each constraint's left-hand side,
+                ``reduced_cost`` for each variable's reduced cost. The result, its save and its archive carry these and
                 nothing else, and the reader of one not asked for refuses.
 
         Returns:
