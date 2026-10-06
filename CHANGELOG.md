@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a small model builds faster, on the in-memory engine ([#1863](https://github.com/fluxopt/specsolve/pull/1863))
 - feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
 
 ## 0.6.1 (2026-10-06)
