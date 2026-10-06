@@ -18,9 +18,6 @@ from bench import results as bench_results
 #: Where the page fetches its rows from.
 PAGE_DATA = Path('docs/about/benchmarks-scaling.json')
 
-#: Arm names in ``bench/results`` that the page publishes under another name.
-NAME = {'lpspec': 'specsolve'}
-
 #: The rungs the page plots, per ladder and in order. The two ladders are never
 #: one curve: `w10` and `s` are the same size through different shapes.
 LADDERS = {'length': ('xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
@@ -45,7 +42,7 @@ def _cell(record: dict[str, Any], rung: str) -> dict[str, Any]:
         'ladder': LADDER_OF[rung],
         'rung': rung,
         'variables': bench_results.nominal(record['case'], rung),
-        'library': NAME.get(record['arm'], record['arm']),
+        'library': record['arm'],
     }
 
 
