@@ -1,10 +1,12 @@
-"""How a frame is materialised: every plan runs its joins in the order specsolve wrote them."""
+"""How a frame is materialised: joins in the order specsolve wrote them, a coordinate product in label order."""
 
 from __future__ import annotations
 
 import polars as pl
 
+import specsolve as sps
 from specsolve.relational.collect import collected
+from specsolve.relational.engine.scope import Scope, ordinal
 
 
 def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
@@ -48,3 +50,21 @@ def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
     assert keyed[0] == 'LEFT PLAN ON: [col("snapshot"), col("store")]', (
         f'the outermost join is the one written last, on both keys; polars ran {keyed}'
     )
+
+
+def test_a_coordinate_product_arrives_in_label_order():
+    """The streaming engine picks which side of a cross join it buffers, and the product's order with it.
+
+    A label is row-major over the declared ordinals, so a product out of that
+    order has to be sorted before it is numbered.
+    """
+    spec = {
+        'dimensions': {'a': {'dtype': 'int'}, 'b': {'dtype': 'int'}},
+        'variables': {'x': {'dims': ['a', 'b']}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+    }
+    with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
+        built = model._engine._model
+        product = Scope(built.program, built.attached, built.variables).product(('a', 'b')).pipe(collected)
+    ordinals = product.select(ordinal('a'), ordinal('b')).rows()
+    assert ordinals == sorted(ordinals), 'row-major: `a` varies slowest'
