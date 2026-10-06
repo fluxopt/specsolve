@@ -70,7 +70,6 @@ def rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for r in records
         if r.get('record') == 'timing'
         and r.get('phase', 'emit') == 'emit'
-        and 'error' not in r
         and r.get('peak_rss_bytes') is not None
         and r['size'] in LADDER_OF
     ]

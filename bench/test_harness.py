@@ -1006,6 +1006,12 @@ def test_a_measurement_without_a_peak_is_skipped_rather_than_divided() -> None:
     )
 
 
+def test_a_rung_neither_ladder_plots_is_left_out() -> None:
+    """The chart page draws two ladders; a rung outside both has no axis to sit on."""
+    rows = plot.rows([_timing('specsolve'), _timing('specsolve', size='xl')])
+    assert [r['rung'] for r in rows] == ['m'], 'only the rung a ladder carries becomes a row'
+
+
 def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None:
     """A case carries two ladders and a panel plots one of them.
 
