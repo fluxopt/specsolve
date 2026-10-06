@@ -1,31 +1,32 @@
-"""Refresh the chart page's numbers.
+"""Refresh the chart page's data.
 
     pixi run -e bench python -m bench.plot
 
-The page is hand-edited; this rewrites only its ``const DATA = {...};`` line.
-One panel per model and sink, one line per library, log on both axes. The band
-around each line is that measurement's own rounds.
+Writes ``docs/about/benchmarks-scaling.json``: one row per model, sink, ladder,
+rung and library, which the page's marks read by field name. The page itself is
+hand-edited and this never touches it.
 """
 
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from bench import results as bench_results
 
-#: What the page calls each library; anything unlisted keeps its harness name.
-NAME = {'specsolve': 'polars'}
+#: Where the page fetches its rows from.
+PAGE_DATA = Path('docs/about/benchmarks-scaling.json')
+
+#: Arm names in ``bench/results`` that the page publishes under another name.
+NAME = {'lpspec': 'specsolve'}
 
 #: The rungs the page plots, per ladder and in order. The two ladders are never
 #: one curve: `w10` and `s` are the same size through different shapes.
 LADDERS = {'length': ('xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
 
-#: Which ladder a rung belongs to, for the filters below.
+#: Which ladder a rung belongs to.
 LADDER_OF = {rung: name for name, rungs in LADDERS.items() for rung in rungs}
-_DATA = re.compile(r'^const DATA = .*;$', re.MULTILINE)
 
 
 def measurements() -> list[Path]:
@@ -36,88 +37,66 @@ def measurements() -> list[Path]:
     return found
 
 
-def series(*paths: Path) -> dict[tuple[str, str, str], dict[str, Any]]:
-    """``(case, sink, arm) -> rung -> what one panel line needs at that rung``.
+def _cell(record: dict[str, Any], rung: str) -> dict[str, Any]:
+    """The columns that say which cell a row is, shared by a measurement and a refusal."""
+    return {
+        'model': record['case'],
+        'sink': record.get('sink', 'lp'),
+        'ladder': LADDER_OF[rung],
+        'rung': rung,
+        'variables': bench_results.nominal(record['case'], rung),
+        'library': NAME.get(record['arm'], record['arm']),
+    }
 
-    ``wall`` is the median the tables publish, and the band is the first to the
-    third quartile. A measurement taken without `isolate=True` has no peak and
-    is dropped.
+
+def rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per plotted cell: a measurement, or the budget that refused it.
+
+    A measurement carries ``wall_s`` (the median the tables publish),
+    ``wall_q1_s`` and ``wall_q3_s`` (the band) and ``peak_gb``; one taken
+    without `isolate=True` has no peak and is dropped. A refusal carries
+    ``refused``, the budget label, at every rung of its ladder past the one the
+    library stopped at, and no numbers. A refusal at a size no library in its
+    panel measured is left out, since the axis does not carry it.
     """
-    out: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for record in (r for p in paths for r in bench_results.records(p)):
-        if record.get('record') != 'timing' or record.get('phase', 'emit') != 'emit' or 'error' in record:
-            continue
-        if record.get('peak_rss_bytes') is None or record['size'] not in LADDER_OF:
-            continue
-        key = (record['case'], record.get('sink', 'lp'), record['arm'])
-        out.setdefault(key, {})[record['size']] = {
-            'wall': record['wall_seconds'],
-            'lo': record.get('q1_seconds') or record['wall_seconds'],
-            'hi': record.get('q3_seconds') or record['wall_seconds'],
-            'peak': record['peak_rss_bytes'] / 1e9,
-            'vars': (record.get('counts') or {}).get('columns') or record.get('nominal_variables'),
+    measured = [
+        {
+            **_cell(r, r['size']),
+            'wall_s': round(r['wall_seconds'], 4),
+            'wall_q1_s': round(r.get('q1_seconds') or r['wall_seconds'], 4),
+            'wall_q3_s': round(r.get('q3_seconds') or r['wall_seconds'], 4),
+            'peak_gb': round(r['peak_rss_bytes'] / 1e9, 4),
         }
-    return out
-
-
-def panels(taken: dict[tuple[str, str, str], dict[str, Any]], ceilings: list[dict[str, Any]]) -> dict[str, Any]:
-    """One panel per (case, sink): a shared rung axis, and a line per library.
-
-    ``null`` marks a rung with no measurement; ``bound`` carries the time-budget
-    label where a ceiling stopped the library. A library that cannot reach a
-    sink is absent from the panel. A ceiling applies only to the panels of its
-    own ladder.
-    """
-    out: dict[str, Any] = {}
-    for (case, sink, arm), rungs in sorted(taken.items()):
-        for ladder, order in LADDERS.items():
-            reached = {r: v for r, v in rungs.items() if r in order}
-            if not reached:
-                continue
-            panel = out.setdefault(
-                f'{case} — {sink} — {ladder}',
-                {'case': case, 'sink': sink, 'ladder': ladder, 'series': {}, 'rungs': []},
-            )
-            for rung in order:
-                if rung in reached and rung not in panel['rungs']:
-                    panel['rungs'].append(rung)
-            panel['series'][NAME.get(arm, arm)] = {'arm': arm, 'at': reached}
-
-    stopped = {(c['case'], c['sink'], c['arm'], LADDER_OF[c['size']]): c for c in ceilings if c['size'] in LADDER_OF}
-    for panel in out.values():
-        order = [r for r in LADDERS[panel['ladder']] if r in panel['rungs']]
-        panel['rungs'] = order
-        panel['vars'] = [next(s['at'][r]['vars'] for s in panel['series'].values() if r in s['at']) for r in order]
-        for line in panel['series'].values():
-            at = line.pop('at')
-            ceiling = stopped.get((panel['case'], panel['sink'], line.pop('arm'), panel['ladder']))
-            for key in ('wall', 'lo', 'hi', 'peak'):
-                line[key] = [round(at[r][key], 4) if r in at else None for r in order]
-            stops_after = order.index(ceiling['size']) if ceiling and ceiling['size'] in order else None
-            over_budget = bench_results.bound_label(ceiling) if ceiling else None
-            line['bound'] = [
-                over_budget if stops_after is not None and i > stops_after and r not in at else None
-                for i, r in enumerate(order)
-            ]
-    return out
+        for r in records
+        if r.get('record') == 'timing'
+        and r.get('phase', 'emit') == 'emit'
+        and 'error' not in r
+        and r.get('peak_rss_bytes') is not None
+        and r['size'] in LADDER_OF
+    ]
+    taken = {(m['model'], m['sink'], m['library'], m['rung']) for m in measured}
+    sizes = {(m['model'], m['sink'], m['rung']) for m in measured}
+    refused = []
+    for c in (r for r in records if r.get('record') == 'ceiling' and r['size'] in LADDER_OF):
+        ladder = LADDERS[LADDER_OF[c['size']]]
+        for rung in ladder[ladder.index(c['size']) + 1 :]:
+            row = {**_cell(c, rung), 'refused': bench_results.bound_label(c)}
+            panel = (row['model'], row['sink'])
+            if (*panel, rung) in sizes and (*panel, row['library'], rung) not in taken:
+                refused.append(row)
+    order = {rung: i for rungs in LADDERS.values() for i, rung in enumerate(rungs)}
+    return sorted(
+        measured + refused, key=lambda r: (r['model'], r['sink'], r['ladder'], r['library'], order[r['rung']])
+    )
 
 
 def main() -> int:
-    paths = measurements()
-    taken = series(*paths)
-    ceilings = [r for p in paths for r in bench_results.records(p) if r.get('record') == 'ceiling']
-    if not taken:
-        raise SystemExit(
-            f'{[str(p) for p in paths]} has no plottable measurement — was it run with --benchmark-memory?'
-        )
-    data = {'panels': panels(taken, ceilings), 'ladders': {k: list(v) for k, v in LADDERS.items()}}
-
-    page = Path('docs/about/benchmarks-scaling.html')
-    text = page.read_text()
-    if not _DATA.search(text):
-        raise SystemExit(f'{page} has no `const DATA = ...;` line — keep the literal on one line of its own')
-    page.write_text(_DATA.sub(lambda _: 'const DATA = ' + json.dumps(data) + ';', text, count=1))
-    print(f'{page} refreshed: {len(data["panels"])} panels')
+    records = [r for p in measurements() for r in bench_results.records(p)]
+    out = rows(records)
+    if not any('wall_s' in r for r in out):
+        raise SystemExit('bench/results has no plottable measurement — was it run with --benchmark-memory?')
+    PAGE_DATA.write_text('[\n' + ',\n'.join(json.dumps(r) for r in out) + '\n]\n')
+    print(f'{PAGE_DATA} refreshed: {len(out)} rows')
     return 0
 
 

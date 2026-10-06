@@ -176,7 +176,7 @@ docs-test = { cmd = "pytest tests/test_docs_math.py tests/test_docstring_links.p
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep, dense and masked" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
-plot = { cmd = "python -m bench.plot", description = "The figures, and the chart page's numbers" }
+plot = { cmd = "python -m bench.plot", description = "The chart page's rows" }
 table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
 
 [tool.pixi.feature.bench.tasks.ladder]

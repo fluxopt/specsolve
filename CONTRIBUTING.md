@@ -359,5 +359,5 @@ Three things that have each cost us a wrong published number:
   ladder goes to `--benchmark-json=/tmp/something.json`, or the tables keep
   their old numbers with a fingerprint that no longer describes them.
 - **Never retype a number.** `bench.report` prints the markdown and
-  `bench.plot` rewrites the chart page's data, both from the results file. A
+  `bench.plot` writes the chart page's rows, both from the results file. A
   figure typed by hand outlives the run that produced it.
