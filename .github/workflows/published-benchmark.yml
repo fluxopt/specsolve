@@ -132,7 +132,7 @@ jobs:
           path: |
             bench/results
             docs/about/benchmarks.md
-            docs/about/benchmarks-scaling.html
+            docs/about/benchmarks-scaling.json
           retention-days: 90
 
   teardown:
