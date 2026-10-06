@@ -111,15 +111,16 @@ async function mount(root) {
     return out;
   }
 
-  /* One row per library at the hovered size, fastest first, the highlighted library emphasised and
-     every other library's value followed by its ratio to it, as in the table. A projection stands
-     in for a library only where the library has no measurement at that size. */
+  /* One row per library at the hovered size, slowest first as the lines stack in the panel, the
+     highlighted library emphasised and every other library's value followed by its ratio to it, as
+     in the table. A projection stands in for a library only where the library has no measurement
+     at that size. */
   function grouped(fmt) {
     return {
       use: tooltip,
       content: points => {
         const at = [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
-          .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => a.value - b.value);
+          .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => b.value - a.value);
         const ours = at.find(isHero);
         return {
           title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
