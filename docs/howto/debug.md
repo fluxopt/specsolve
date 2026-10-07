@@ -53,7 +53,7 @@ Ask the solver which rows and bounds conflict:
 ```python
 result = model.solve()
 result.status, result.termination_condition  # 'warning', 'infeasible'
-print(result.iis())
+print(model.iis())
 # power_balance[snapshot=2] == 180
 # p[snapshot=2, generator=gas] <= 100 (upper bound)
 # p[snapshot=2, generator=wind] <= 50 (upper bound)
@@ -61,10 +61,10 @@ print(result.iis())
 
 The lines are an IIS (irreducible infeasible subsystem): rows and bounds that
 cannot all hold, and that can all hold once you drop any one of them. Read the
-terms of a row in it with `model.row`, as in step 3. Ask before you solve,
-update or close the model again, because the solver that answered must still
-hold it. `sps.solve()` closes the model before it returns, so build it first
-([`Result.iis`](../reference/api.md#specsolve.types.Result.iis)).
+terms of a row in it with `model.row`, as in step 3. `iis` explains the last
+solve, so ask before you update or close the model. A solver's IIS settings
+and its time limit go in `solver_options` on that solve
+([`Model.iis`](../reference/api.md#specsolve.types.Model.iis)).
 
 HiGHS searches without integrality, so it finds no IIS where integer
 variables cause the conflict. Solve that model with `gurobi` or `xpress`, or

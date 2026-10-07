@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
+    from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Keep
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -421,6 +421,37 @@ class Model:
             balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] >= 60
         """
         return self._engine.row(name, coordinate)
+
+    def iis(self) -> InfeasibleSubsystem:
+        """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
+
+        The verb for *this model has no solution and I do not know why*. It
+        asks the solver that ran the last solve for an irreducible infeasible
+        subsystem (IIS): drop any one member and the rest can hold. The search
+        runs only on this call, since it can cost more than the solve, and
+        under the solve's ``solver_options``, so a solver's IIS settings and
+        time limit go there. Read a member row's terms with [`row`][].
+
+        Every sink finds one for a linear model. For a discrete model,
+        ``gurobi`` and ``xpress`` leave out the integrality that makes the rows
+        and bounds conflict. ``highs`` searches without integrality, so it
+        finds none where integrality causes the conflict.
+
+        Raises:
+            SpecsolveError: The model has not been solved since it was built,
+                updated or closed; the last solve was not infeasible; or the
+                solver found no subsystem, or stopped at a limit before it was
+                irreducible.
+
+        Example:
+            >>> model.solve().termination_condition  # doctest: +SKIP
+            'infeasible'
+            >>> print(model.iis())  # doctest: +SKIP
+            balance[snapshot=1] == 200
+            p[snapshot=1, tech=gas] <= 100 (upper bound)
+            p[snapshot=1, tech=wind] <= 50 (upper bound)
+        """
+        return self._engine.iis()
 
     def _evaluator(
         self,
