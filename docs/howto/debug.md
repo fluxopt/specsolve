@@ -2,7 +2,7 @@
 
 What to read when a model solves to the wrong number, or does not solve, in
 the order that finds the fault soonest. Each step needs the file, or the file
-and its data. Only step 4 asks the solver for more work than the solve.
+and its data.
 
 ## 1. Check the file
 
@@ -48,31 +48,26 @@ mask; a coefficient you did not expect is the data
 
 ## 4. When the solve is infeasible
 
-Ask the solver which rows and bounds conflict:
+Ask for the IIS (irreducible infeasible subsystem): the rows and bounds that
+cannot all hold.
 
 ```python
-result = model.solve()
-result.status, result.termination_condition  # 'warning', 'infeasible'
+model.solve().termination_condition  # 'infeasible'
 print(model.iis())
 # power_balance[snapshot=2] == 180
 # p[snapshot=2, generator=gas] <= 100 (upper bound)
 # p[snapshot=2, generator=wind] <= 50 (upper bound)
 ```
 
-The lines are an IIS (irreducible infeasible subsystem): rows and bounds that
-cannot all hold, and that can all hold once you drop any one of them. Read the
-terms of a row in it with `model.row`, as in step 3. `iis` explains the last
-solve, so ask before you update or close the model. A solver's IIS settings
-and its time limit go in `solver_options` on that solve
+Drop any one line and the rest can hold. Read the terms of a row with
+`model.row`, as in step 3
 ([`Model.iis`](../reference/api.md#specsolve.types.Model.iis)).
 
-HiGHS searches without integrality, so it finds no IIS where integer
-variables cause the conflict. Solve that model with `gurobi` or `xpress`, or
-locate the fault with a slack: add a variable to the balance row, minimise it,
-and read where it is nonzero. The
+HiGHS finds no IIS where integer variables cause the conflict. Solve with
+`gurobi` or `xpress`, or add a slack to the row, minimise it, and read where
+it is nonzero, as the
 [feasibility model](../about/decomposition.md#when-the-subproblem-is-infeasible)
-is that file for a dispatch. A slack also says by how much each row fails,
-which an IIS does not.
+does.
 
 ## 5. When the number is wrong and the rows look right
 
