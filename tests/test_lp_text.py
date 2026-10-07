@@ -124,6 +124,62 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
     assert coefficients == sorted(cost)
 
 
+#: One row over three columns whose every number a naive formatter rounds:
+#: repeating binary fractions, a sum that is not its own literal, a negative
+#: coefficient, and magnitudes far from one that HiGHS still keeps as written.
+ROUND_TRIP_SPEC = {
+    'dimensions': {'g': {}},
+    'parameters': {'eff': {'dims': ['g']}, 'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}, 'need': {'dims': []}},
+    'variables': {'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'dims': [], 'expression': 'sum(p * eff, over=g) >= need'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=g)'},
+}
+
+ROUND_TRIP_NUMBERS = {
+    'eff': [0.1, -1 / 3, 123456789.12345679],
+    'cap': [7 / 3, 0.1 + 0.2, 9.87654321e12],
+    'cost': [2 / 3, 0.3, 1e-7],
+    'need': [0.7],
+}
+
+
+@pytest.mark.parametrize('suffix', ['.lp', '.mps'])
+def test_a_solver_reads_back_every_number_the_file_holds(suffix: str, tmp_path: Path) -> None:
+    """End to end through a solver's own reader: costs, bounds, coefficients and the right-hand side.
+
+    The bounds test above parses the text itself; this one asks HiGHS, which is
+    what a published file is for, and covers the rows and the MPS sink too.
+    """
+    import highspy
+
+    g = ['a', 'b', 'c']
+    data = {
+        'g': g,
+        **{
+            name: pl.DataFrame({'g': g, 'value': values})
+            for name, values in ROUND_TRIP_NUMBERS.items()
+            if name != 'need'
+        },
+        'need': pl.DataFrame({'value': ROUND_TRIP_NUMBERS['need']}),
+    }
+    path = sps.write(ROUND_TRIP_SPEC, data, tmp_path / f'model{suffix}')
+    h = highspy.Highs()
+    h.setOptionValue('output_flag', False)
+    h.readModel(str(path))
+    lp = h.getLp()
+
+    read = {
+        'cost': list(lp.col_cost_),
+        'cap': list(lp.col_upper_),
+        'eff': list(lp.a_matrix_.value_),
+        'need': list(lp.row_lower_),
+    }
+    for name, expected in ROUND_TRIP_NUMBERS.items():
+        assert [_bits(x) for x in read[name]] == [_bits(x) for x in expected], (
+            f'{name} must read back bit for bit, in label order: {read[name]} != {expected}'
+        )
+
+
 def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
     """``DISPATCH_SPEC`` widened to the given size, with data to match."""
     generators = [f'g{i}' for i in range(n_generators)]

@@ -53,10 +53,18 @@ ANSWER_DIR = 'answer'
 
 @contextmanager
 def beside(out: Path) -> Iterator[Path]:
-    """A scratch directory beside *out*, gone when the block ends, where an answer is laid out before it is packed."""
+    """A scratch directory beside *out*, gone when the block ends, where an answer is laid out before it is packed.
+
+    It is one level down in a directory of its own, as a staged archive is in
+    ``_staging_for``'s: a directory of archives is read as
+    ``<parent>/*/<member>`` while one of them is written, and a scratch
+    ``answer/`` directly under the parent matches that glob.
+    """
     out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=out.parent) as scratch:
-        yield Path(scratch)
+    with tempfile.TemporaryDirectory(dir=out.parent, prefix=out.name + '.') as holder:
+        scratch = Path(holder) / 'scratch'
+        scratch.mkdir()
+        yield scratch
 
 
 def check_the_target(out: Path) -> None:
@@ -73,7 +81,8 @@ def _staging_for(out: Path) -> Path:
     """A staging directory of this writer's own, beside *out*.
 
     One per writer, so two writers to one path do not clear each other's
-    members; beside *out*, so landing it is a rename.
+    members; beside *out*, so landing it is a rename. The archive is staged
+    one level down in it, so no ``<parent>/*/<member>`` glob reads it early.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(dir=out.parent, prefix=out.name + '.'))
