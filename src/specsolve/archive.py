@@ -22,7 +22,16 @@ from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SO
 from specsolve.axes import axis_from
 from specsolve.errors import SpecsolveError
 from specsolve.inputs import lower
-from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
+from specsolve.relational.answer_layout import (
+    KINDS,
+    METRICS_FILE,
+    RUN,
+    Metrics,
+    digest_of,
+    directory_of,
+    row_of,
+    saved_frames,
+)
 from specsolve.sweep import (
     MANIFEST_FILE,
     OWNED_FILE,
@@ -248,7 +257,7 @@ def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
     """
     kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
     opened = opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
-    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
+    answer = {kind: saved_frames(under / directory_of(kind), whole=whole) for kind in KINDS}
     windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
 

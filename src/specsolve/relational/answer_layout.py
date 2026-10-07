@@ -1,7 +1,7 @@
 """The answer's layout on disk: what a result and a sweep write, the rows they record, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the [`KINDS`][] the answer
-carries: one file per name from a result, one per slice from a sweep, read
+carries, the basis under ``basis/variable/`` and ``basis/constraint/``: one file per name from a result, one per slice from a sweep, read
 back as one. Beside them, the [`Record`][] says how the solve terminated and
 the [`Metrics`][] what it took, one row of each per result or per slice, and
 ``reasons.parquet`` says why a kind or a name is deliberately not there. An
@@ -33,23 +33,40 @@ if TYPE_CHECKING:
 #: beside the primal, the duals and the declared expressions it always
 #: carries. ``activity`` is each constraint's left-hand side at the solution,
 #: ``reduced_cost`` each variable's reduced cost, ``slack`` each
-#: constraint's distance to binding, and ``variable_basis`` and
-#: ``constraint_basis`` the basis status the solve ended on.
-#: Each is named after its reader on a result and a sweep, and the directory
-#: its frames are saved under.
-Output = Literal['activity', 'reduced_cost', 'slack', 'variable_basis', 'constraint_basis']
+#: constraint's distance to binding, and ``basis`` the basis status the solve
+#: ended on, of each variable and each constraint.
+Output = Literal['activity', 'reduced_cost', 'slack', 'basis']
 
-#: What an [`Output`][] holds one frame per.
+#: Every [`Output`][], in the order a message lists them.
+OUTPUTS: tuple[Output, ...] = get_args(Output)
+
+#: What a kind of frame holds one frame per.
 Per = Literal['variable', 'constraint']
 
-#: Every [`Output`][], and what it holds one frame per.
-OUTPUTS: Mapping[Output, Per] = MappingProxyType(
+
+class OutputKind(NamedTuple):
+    """What one kind of frame an [`Output`][] carries is."""
+
+    #: The output that asks for it.
+    output: Output
+    #: What it holds one frame per.
+    per: Per
+    #: Where its frames are saved, under an answer's directory. The two
+    #: halves of a basis share ``basis/``, nested, since a constraint may
+    #: share a variable's name.
+    directory: str
+
+
+#: Each kind of frame the [`OUTPUTS`][] carry, named after the reader it comes
+#: back through: ``basis`` carries two, ``variable_basis`` and
+#: ``constraint_basis``, and every other output one, of its own name.
+OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
     {
-        'activity': 'constraint',
-        'reduced_cost': 'variable',
-        'slack': 'constraint',
-        'variable_basis': 'variable',
-        'constraint_basis': 'constraint',
+        'activity': OutputKind('activity', 'constraint', 'activity'),
+        'reduced_cost': OutputKind('reduced_cost', 'variable', 'reduced_cost'),
+        'slack': OutputKind('slack', 'constraint', 'slack'),
+        'variable_basis': OutputKind('basis', 'variable', 'basis/variable'),
+        'constraint_basis': OutputKind('basis', 'constraint', 'basis/constraint'),
     }
 )
 
@@ -57,9 +74,9 @@ OUTPUTS: Mapping[Output, Per] = MappingProxyType(
 #: each carries the duals' reason.
 PRICED = frozenset({'dual', 'reduced_cost'})
 
-#: The [`OUTPUTS`][] that exist only where the solve ended on a basis. Where it
-#: did not, each carries [`NO_BASIS`][].
-BASES: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+#: The kinds ``basis`` carries, which exist only where the solve ended on a
+#: basis. Where it did not, each carries [`NO_BASIS`][].
+BASES = frozenset(kind for kind, carried in OUTPUT_KINDS.items() if carried.output == 'basis')
 
 NO_BASIS = (
     'the solve ended on no basis, so there is no basis status to read. Only an LP solved by simplex, or by '
@@ -68,10 +85,21 @@ NO_BASIS = (
     "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
 )
 
+#: A basis status in the one vocabulary every solver's is read into, each at
+#: the index that is its code. A row's bound is its right-hand side, so a
+#: binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``, and
+#: a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
+#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
+BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
+BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
+
+#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
+BASIS = pl.Enum(BASIS_STATUSES)
+
 #: Every kind of frame an answer can hold: the three every solve answers with,
-#: then the [`OUTPUTS`][]. Each is named after the reader it comes back
-#: through and the directory its frames are saved under.
-KINDS = ('primal', 'dual', 'expression', *OUTPUTS)
+#: then the [`OUTPUT_KINDS`][]. Each is named after the reader it comes back
+#: through.
+KINDS = ('primal', 'dual', 'expression', *OUTPUT_KINDS)
 
 
 def is_output(name: str) -> TypeGuard[Output]:
@@ -101,12 +129,28 @@ def checked_outputs(outputs: Iterable[str]) -> frozenset[Output]:
     return frozenset(filter(is_output, asked))
 
 
-def not_requested_message(output: Output, name: str) -> str:
-    """Why an answer refuses *output* of *name*: the solve that produced it did not ask for it."""
+def kinds_of(outputs: Iterable[Output]) -> tuple[str, ...]:
+    """Each of the [`OUTPUT_KINDS`][] *outputs* carry."""
+    return tuple(kind for kind, carried in OUTPUT_KINDS.items() if carried.output in outputs)
+
+
+def asked_for(kinds: Iterable[str]) -> frozenset[Output]:
+    """The [`OUTPUTS`][] that carry *kinds*, each one of the [`OUTPUT_KINDS`][]."""
+    return frozenset(OUTPUT_KINDS[kind].output for kind in kinds)
+
+
+def directory_of(kind: str) -> str:
+    """Where *kind*'s frames are saved under an answer's directory: [`OutputKind.directory`][], else its own name."""
+    carried = OUTPUT_KINDS.get(kind)
+    return kind if carried is None else carried.directory
+
+
+def not_requested_message(kind: str, name: str) -> str:
+    """Why an answer refuses *kind*, one of the [`OUTPUT_KINDS`][], of *name*: the solve did not ask for it."""
     return (
-        f"cannot read the {output.replace('_', ' ')} of '{name}': the solve was not asked for it, so this "
+        f"cannot read the {kind.replace('_', ' ')} of '{name}': the solve was not asked for it, so this "
         f'answer does not carry it. An answer carries the primal, the duals and the declared expressions, '
-        f"and anything else only on request. Solve again with outputs={{'{output}'}}."
+        f"and anything else only on request. Solve again with outputs={{'{OUTPUT_KINDS[kind].output}'}}."
     )
 
 
@@ -476,8 +520,8 @@ def clear_the_answer(directory: Path) -> None:
     """Remove what a saved answer holds, leaving anything else in *directory* alone."""
     import shutil
 
-    for kind in KINDS:
-        shutil.rmtree(directory / kind, ignore_errors=True)
+    for held in {directory_of(kind).partition('/')[0] for kind in KINDS}:
+        shutil.rmtree(directory / held, ignore_errors=True)
     for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
         (directory / member).unlink(missing_ok=True)
 

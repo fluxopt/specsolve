@@ -25,7 +25,7 @@ from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
     NO_BASIS,
-    OUTPUTS,
+    OUTPUT_KINDS,
     PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
@@ -35,7 +35,7 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_kind,
     consolidated,
-    is_output,
+    directory_of,
     not_requested_message,
     read_outputs,
     read_reasons,
@@ -58,7 +58,12 @@ if TYPE_CHECKING:
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
 _LABELS: Mapping[str, str] = MappingProxyType(
-    {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
+    {
+        'primal': 'variable',
+        'dual': 'constraint',
+        'expression': 'named expression',
+        **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
+    }
 )
 
 
@@ -179,18 +184,18 @@ class Spill:
         if record.exists():
             check_format(directory)
             found = json.loads(record.read_text())
-            if found != manifest and {**found, 'outputs': manifest['outputs']} == manifest:
+            if {**found, 'outputs': None} != {**manifest, 'outputs': None}:
+                raise SpecsolveError(
+                    f'{str(directory)!r} holds a sweep keyed by {found["key_name"]!r} over {found["keys"]}, and '
+                    f'this one is keyed by {key_name!r} over {manifest["keys"]}. A directory holds one sweep: '
+                    f'point spill_to= at an empty one, or delete this one to solve it again.'
+                )
+            if found['outputs'] != manifest['outputs']:
                 raise SpecsolveError(
                     f'{str(directory)!r} holds this sweep solved with outputs={found["outputs"]}, and this '
                     f'run asks for outputs={manifest["outputs"]}. A slice on disk carries only what it was '
                     f'solved with, so the two could not be read as one sweep: ask for the same outputs to '
                     f'resume it, or point spill_to= at an empty directory.'
-                )
-            if found != manifest:
-                raise SpecsolveError(
-                    f'{str(directory)!r} holds a sweep keyed by {found["key_name"]!r} over {found["keys"]}, and '
-                    f'this one is keyed by {key_name!r} over {manifest["keys"]}. A directory holds one sweep: '
-                    f'point spill_to= at an empty one, or delete this one to solve it again.'
                 )
         else:
             write_format(directory, outputs)
@@ -201,7 +206,9 @@ class Spill:
         return cls(directory, key_name, key_dtype)
 
     def _file(self, kind: str, position: int, name: str | None = None) -> Path:
-        under = self.directory / kind if name is None else self.directory / kind / name
+        under = self.directory / directory_of(kind)
+        if name is not None:
+            under /= name
         return under / f'{position:06d}.parquet'
 
     def done(self, position: int) -> bool:
@@ -237,7 +244,7 @@ class Spill:
         """
         out: dict[str, dict[str, pl.LazyFrame]] = {}
         for kind in KINDS:
-            under = self.directory / kind
+            under = self.directory / directory_of(kind)
             for named in sorted(under.iterdir()) if under.is_dir() else []:
                 files = sorted(named.glob('*.parquet'))
                 frame = pl.read_parquet(files).lazy() if whole else pl.scan_parquet(files)
@@ -373,8 +380,8 @@ class Sweep:
             raise SpecsolveError(NO_WINDOWS)
 
     def _check_requested(self, kind: str, name: str) -> None:
-        """Refuse an output the sweep was not asked for."""
-        if is_output(kind) and kind not in self._outputs:
+        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS] the sweep was not asked for."""
+        if kind in OUTPUT_KINDS and OUTPUT_KINDS[kind].output not in self._outputs:
             raise SpecsolveError(not_requested_message(kind, name))
 
     def _named(self, kind: str, name: str, *, per_window: bool) -> pl.LazyFrame:
@@ -524,12 +531,12 @@ class Sweep:
         [`primal`][]'s shape and arguments, and
         [`Result.variable_basis`][specsolve.relational.result.Result.variable_basis]'s
         words. Carried only where the sweep was asked for it with
-        ``outputs={'variable_basis'}``. A slice that ended on no basis
-        contributes none.
+        ``outputs={'basis'}``. A slice that ended on no basis contributes
+        none.
 
         Raises:
-            SpecsolveError: The sweep was not asked for its variable basis, no
-                slice ended on a basis, or as [`primal`][] raises.
+            SpecsolveError: The sweep was not asked for its basis, no slice
+                ended on one, or as [`primal`][] raises.
         """
         return self._named('variable_basis', name, per_window=per_window).collect()
 
@@ -539,12 +546,12 @@ class Sweep:
         [`primal`][]'s shape and arguments, and
         [`Result.constraint_basis`][specsolve.relational.result.Result.constraint_basis]'s
         words. Carried only where the sweep was asked for it with
-        ``outputs={'constraint_basis'}``. A slice that ended on no basis
-        contributes none.
+        ``outputs={'basis'}``. A slice that ended on no basis contributes
+        none.
 
         Raises:
-            SpecsolveError: The sweep was not asked for its constraint basis,
-                no slice ended on a basis, or as [`primal`][] raises.
+            SpecsolveError: The sweep was not asked for its basis, no slice
+                ended on one, or as [`primal`][] raises.
         """
         return self._named('constraint_basis', name, per_window=per_window).collect()
 
@@ -608,7 +615,9 @@ class Sweep:
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
         kind = checked_kind(kind)
-        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name, per_window=per_window)
+        if kind == 'expression':
+            return self.evaluate(name, per_window=per_window)
+        return self._named(kind, name, per_window=per_window).collect()
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
         """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.

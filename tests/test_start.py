@@ -17,18 +17,10 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import SpecsolveError
-from specsolve.relational.answer_layout import NO_BASIS
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, NO_BASIS, SUPERBASIC
 from specsolve.relational.engine.readback import _counted
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    BASIS_STATUSES,
-    FIXED,
-    SUPERBASIC,
-    settled,
-)
+from specsolve.relational.sinks.solvers.base import settled
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
 
@@ -37,7 +29,7 @@ if TYPE_CHECKING:
 
     from specsolve.types import Output, Result
 
-BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+BASIS: frozenset[Output] = frozenset({'basis'})
 
 #: One set of numbers over 44 snapshots, so a build over fewer is a subset of it.
 FULL = dispatch_sources(list(range(44))) | {'snapshot': list(range(44))}
@@ -135,9 +127,9 @@ def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
 def test_an_answer_solved_without_its_basis_is_refused_before_the_solver_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     from specsolve.relational import sinks
 
-    with sps.solve(DISPATCH, snapshots(40), outputs={'variable_basis'}) as before:
+    with sps.solve(DISPATCH, snapshots(40), outputs={'activity'}) as before:
         monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
-        with pytest.raises(SpecsolveError, match=r"without 'constraint_basis'.*outputs=\{'variable_basis', "):
+        with pytest.raises(SpecsolveError, match=r"solved without it.*outputs=\{'basis'\}"):
             sps.solve(DISPATCH, snapshots(40), start=before)
 
 

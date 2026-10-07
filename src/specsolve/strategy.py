@@ -38,6 +38,7 @@ from specsolve.relational.answer_layout import (
     Metrics,
     Record,
     checked_outputs,
+    directory_of,
     refuse_reserved,
     write_format,
     write_reasons,
@@ -385,9 +386,9 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
             if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
-            write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
-        if keep_windows and (spill.directory / kind).is_dir():
-            shutil.copytree(spill.directory / kind, under / WINDOWS_DIR / kind)
+            write_whole(sweep._answered(frame, per_window=False), under / directory_of(kind) / f'{name}.parquet')
+        if keep_windows and (spill.directory / directory_of(kind)).is_dir():
+            shutil.copytree(spill.directory / directory_of(kind), under / WINDOWS_DIR / directory_of(kind))
     write_reasons(under, sweep._no_duals, absent)
     return under
 

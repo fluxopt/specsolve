@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from specsolve.types import Output, Sweep
 
-BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+BASIS: frozenset[Output] = frozenset({'basis'})
 
 SPEC = {
     'variables': {
@@ -73,13 +73,35 @@ def test_a_saved_answer_reads_back_its_basis(tmp_path: Path) -> None:
     assert loaded.constraint_basis('cap').equals(live[1])
 
 
-@pytest.mark.parametrize('output', sorted(BASIS))
-def test_a_solve_not_asked_for_its_basis_names_the_output(output: Output) -> None:
+def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) -> None:
+    """A constraint may share a variable's name, so the two halves of a basis lie under ``basis/`` apart.
+
+    ``loose`` is renamed ``x`` here: one directory for both halves would hold
+    one ``x.parquet``, and one of the two statuses would be lost.
+    """
+    constraints = {('x' if name == 'loose' else name): row for name, row in SPEC['constraints'].items()}
+    spec = {**SPEC, 'constraints': constraints}
+    sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case').save(tmp_path / 'saved')
+    loaded = sps.load_result(tmp_path / 'saved')
+    archived = sps.load_archive(tmp_path / 'case')
+    assert isinstance(archived, sps.archive.ResultArchive)
+    catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet').filter(pl.col('name') == 'x')
+
+    for answer in (loaded, archived.result):
+        assert answer.variable_basis('x')['value'].item() == 'basic', 'the variable x is inside its bounds'
+        assert answer.constraint_basis('x')['value'].item() == 'basic', 'the constraint x is not binding'
+    assert {'answer/basis/variable/x.parquet', 'answer/basis/constraint/x.parquet'} <= set(catalog['path']), (
+        'the catalog names each half of the basis at its own path'
+    )
+
+
+@pytest.mark.parametrize(('reader', 'name'), [('variable_basis', 'x'), ('constraint_basis', 'cap')])
+def test_a_solve_not_asked_for_its_basis_names_the_output(reader: str, name: str) -> None:
     with (
         sps.solve(SPEC, {}) as answer,
-        pytest.raises(SpecsolveError, match=rf"outputs=\{{'{output}'\}}"),
+        pytest.raises(SpecsolveError, match=r"outputs=\{'basis'\}"),
     ):
-        getattr(answer, output)('cap' if output == 'constraint_basis' else 'x')
+        getattr(answer, reader)(name)
 
 
 INTEGER = {

@@ -130,13 +130,17 @@ Each entry says what the thing is, then the module it lives in.
 : One of the frames an answer holds, named after the reader it comes back
   through: `primal`, `dual` and `expression` always, and each output the solve
   asked for with `outputs=`, such as `activity`. Each kind is also the
-  directory its frames are saved under (`relational/answer_layout.py`).
+  directory its frames are saved under, except the two halves of the basis,
+  which lie under `basis/variable/` and `basis/constraint/`
+  (`relational/answer_layout.py`).
 
 **Output**
-: A kind an answer holds only on request. `OUTPUTS` is its one table: the
-  name, and whether it holds a frame per variable or per constraint. The
-  readers, `kind=`, the fold, the spill, the archive and its catalog all read
-  it. `format.json` names the outputs an answer holds, so a reader tells "not
+: What an answer holds only on request, named in `outputs=`. Each carries
+  one kind, of its own name, except `basis`, which carries `variable_basis`
+  and `constraint_basis`. `OUTPUT_KINDS` is the one table: each kind, the
+  output that asks for it, whether it holds a frame per variable or per
+  constraint, and its directory. The readers, `kind=`, the fold, the spill,
+  the archive and its catalog all read it. `format.json` names the outputs an answer holds, so a reader tells "not
   asked for" from "not defined", and a new output adds no `LAYOUT` bump
   (`relational/answer_layout.py`).
 

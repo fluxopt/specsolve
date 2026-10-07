@@ -47,7 +47,9 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_outputs,
     digest_of,
+    directory_of,
     installed,
+    kinds_of,
     read_outputs,
     read_reasons,
     saved_frames,
@@ -322,20 +324,20 @@ class Model:
                 carries beside the primal, the duals and the declared
                 expressions: ``activity`` for each constraint's left-hand side,
                 ``reduced_cost`` for each variable's reduced cost, ``slack``
-                for each constraint's distance to binding, and
-                ``variable_basis`` and ``constraint_basis`` for the basis
-                status the solve ended on. The result, its save and its archive
+                for each constraint's distance to binding, and ``basis`` for
+                the basis status each variable and constraint ended on, read
+                with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
             start: What to start the solve from, matched by coordinate, so
                 one from another build of the spec, with rows or columns gained
                 or lost, starts it too. It changes how the solver gets to the
-                optimum, never which one. An LP starts from an earlier answer's
-                basis: a coordinate only this build holds starts at a bound if
-                it is a variable's, and not binding if it is a constraint's,
-                and the answer must have been solved with
-                ``outputs={'variable_basis', 'constraint_basis'}``. A
-                mixed-integer model starts from values, as an incumbent the
+                optimum, never which one. An LP starts only from an earlier
+                answer solved with ``outputs={'basis'}``, so ask for it on the
+                solve you mean to start from: its basis is laid onto this
+                build, and a coordinate only this build holds starts at a
+                bound if it is a variable's, and not binding if it is a
+                constraint's. A mixed-integer model starts from values, as an incumbent the
                 solver completes and repairs: an earlier answer's primal, or a
                 ``(dims…, value)`` table per variable, ``primal()``'s shape,
                 naming any of them and any of their coordinates. An answer can
@@ -686,7 +688,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         objective,
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
-        {output: saved_frames(out / output, whole=whole) for output in read_outputs(out)},
+        {kind: saved_frames(out / directory_of(kind), whole=whole) for kind in kinds_of(read_outputs(out))},
         'nothing',
         expressions,
         _no_duals=no_duals,

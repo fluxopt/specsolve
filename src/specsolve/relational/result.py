@@ -18,15 +18,17 @@ from specsolve.relational.answer_layout import (
     BASES,
     NO_BASIS,
     NO_PROVENANCE,
+    OUTPUT_KINDS,
     PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
     Provenance,
     Record,
+    asked_for,
     checked_kind,
     clear_the_answer,
-    is_output,
+    directory_of,
     not_requested_message,
     write_format,
     write_reasons,
@@ -41,7 +43,6 @@ if TYPE_CHECKING:
     import polars as pl
     import xarray as xr
 
-    from specsolve.relational.answer_layout import Output
     from specsolve.relational.status import SolveStatus
 
 
@@ -329,11 +330,12 @@ class Result:
     #: mapping is a solve that left nothing.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
-    #: ``{output: {name: frame}}`` for each
-    #: [`Output`][specsolve.relational.answer_layout.Output] the solve was asked for, laid out as [`_primals`][] or [`_duals`][]. Its
-    #: keys are what this answer carries; an output asked for by a solve that
-    #: left no values maps to nothing.
-    _outputs: Mapping[Output, Mapping[str, pl.LazyFrame]] | None
+    #: ``{kind: {name: frame}}`` for each of the
+    #: [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS] the
+    #: solve asked for, laid out as [`_primals`][] or [`_duals`][]. Its keys
+    #: are what this answer carries; a kind asked for by a solve that left no
+    #: values maps to nothing.
+    _outputs: Mapping[str, Mapping[str, pl.LazyFrame]] | None
     #: How much of the session this solve kept, read off what actually ran.
     _kept: Keep
     #: One deferred reader per declared named expression, and the ad-hoc
@@ -508,7 +510,7 @@ class Result:
         the sign.
 
         Duals exist only where a solver ran here, not for a model written to a
-        file and solved elsewhere. Slacks are not read.
+        file and solved elsewhere.
 
         Raises:
             NoSolutionError: The solve left no values at all.
@@ -544,7 +546,7 @@ class Result:
                 [`dual`][] raises.
             KeyError: No variable is called *name*.
         """
-        return _named(self._carried('reduced_cost', name), name, 'variable').collect(engine=collect_engine())
+        return self._output('reduced_cost', name)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -590,7 +592,7 @@ class Result:
                 for its activity.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('activity', name), name, 'constraint').collect(engine=collect_engine())
+        return self._output('activity', name)
 
     def slack(self, name: str) -> pl.DataFrame:
         """How far constraint *name* is from binding at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -609,7 +611,7 @@ class Result:
                 for its slack.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('slack', name), name, 'constraint').collect(engine=collect_engine())
+        return self._output('slack', name)
 
     def variable_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each column of variable *name* where the solve ended — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -618,16 +620,15 @@ class Result:
         (nonbasic at bounds that are equal) and ``superbasic`` (nonbasic
         between its bounds), in that order as an ``Enum``, the same words for
         every sink. Carried only where the solve was asked for it with
-        ``outputs={'variable_basis'}``, and only an LP that ended on a basis
-        has one.
+        ``outputs={'basis'}``, and only an LP that ended on a basis has one.
 
         Raises:
             NoSolutionError: The solve left no values to read.
             SpecsolveError: This result was closed, the solve was not asked for
-                its variable basis, or it ended on no basis.
+                its basis, or it ended on none.
             KeyError: No variable is called *name*.
         """
-        return _named(self._carried('variable_basis', name), name, 'variable').collect(engine=collect_engine())
+        return self._output('variable_basis', name)
 
     def constraint_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each row of constraint *name* where the solve ended — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -636,52 +637,63 @@ class Result:
         row's bound: a binding ``<=`` row is ``at_upper``, a binding ``>=``
         row ``at_lower``, a binding ``==`` row ``fixed``, and a row that is
         not binding ``basic``. Carried only where the solve was asked for it
-        with ``outputs={'constraint_basis'}``, and only an LP that ended on a
-        basis has one.
+        with ``outputs={'basis'}``, and only an LP that ended on a basis has
+        one.
 
         Raises:
             NoSolutionError: The solve left no values to read.
             SpecsolveError: This result was closed, the solve was not asked for
-                its constraint basis, or it ended on no basis.
+                its basis, or it ended on none.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('constraint_basis', name), name, 'constraint').collect(engine=collect_engine())
+        return self._output('constraint_basis', name)
 
     def _basis(self) -> tuple[Mapping[str, pl.LazyFrame], Mapping[str, pl.LazyFrame]]:
         """The variable and the constraint basis per declaration, for a solve to start from, or why there is none.
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed, was not solved with both
-                basis outputs, or ended on no basis.
+            SpecsolveError: This result was closed, was not solved with
+                ``outputs={'basis'}``, or ended on no basis.
         """
         self._unclosed('the basis to start from')
-        missing = sorted(BASES - set(self._outputs or {}))
-        if missing:
+        if not (self._outputs or {}).keys() >= BASES:
             raise SpecsolveError(
-                f'start= takes an answer carrying its basis, and this one was solved without '
-                f'{" and ".join(map(repr, missing))}. Solve the answer to start from with '
-                f"outputs={{'variable_basis', 'constraint_basis'}}."
+                'start= takes an answer carrying its basis, and this one was solved without it. Solve the '
+                "answer to start from with outputs={'basis'}."
             )
         return self._carried('variable_basis', 'any variable'), self._carried('constraint_basis', 'any constraint')
 
-    def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
-        """*output*'s frames, or why they cannot be read.
+    def _values(self) -> Mapping[str, pl.LazyFrame]:
+        """The primal per declaration, for a solve to start from.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed.
+        """
+        return self._readable(self._primals, 'the values to start from')
+
+    def _output(self, kind: str, name: str) -> pl.DataFrame:
+        """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS]: what each output's reader returns."""
+        return _named(self._carried(kind, name), name, OUTPUT_KINDS[kind].per).collect(engine=collect_engine())
+
+    def _carried(self, kind: str, name: str) -> Mapping[str, pl.LazyFrame]:
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS], or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
         that exists only where the duals do, the duals' reason, and for a basis,
         [`NO_BASIS`][specsolve.relational.answer_layout.NO_BASIS] where the
         solve ended on none.
         """
-        what = f"the {output.replace('_', ' ')} of '{name}'"
+        what = f"the {kind.replace('_', ' ')} of '{name}'"
         self._unclosed(what)
         assert self._outputs is not None, 'close() releases the outputs with the primals, which _unclosed just checked'
-        if output not in self._outputs:
-            raise SpecsolveError(not_requested_message(output, name))
-        frames = self._readable(self._outputs[output], what)
-        if output in PRICED and self._no_duals is not None:
+        if kind not in self._outputs:
+            raise SpecsolveError(not_requested_message(kind, name))
+        frames = self._readable(self._outputs[kind], what)
+        if kind in PRICED and self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        if output in BASES and not frames:
+        if kind in BASES and not frames:
             raise SpecsolveError(NO_BASIS)
         return frames
 
@@ -714,7 +726,9 @@ class Result:
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
         kind = checked_kind(kind)
-        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name)
+        if kind in OUTPUT_KINDS:
+            return self._output(kind, name)
+        return {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[kind](name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
         """Every name of *kind* this result can read — what a bridge takes by default.
@@ -732,7 +746,7 @@ class Result:
             if self._no_duals is not None:
                 raise SpecsolveError(self._no_duals)
             return tuple(frames)
-        if is_output(kind):
+        if kind in OUTPUT_KINDS:
             return tuple(self._carried(kind, 'anything'))
         self._readable(self._primals, 'the expressions')
         return tuple(self._expressions or {})
@@ -741,8 +755,8 @@ class Result:
         """One name's values as a tidy `pandas.DataFrame`.
 
         *name* is read through the reader *kind* names: ``primal``, ``dual``,
-        ``expression``, or an [`Output`][specsolve.types.Output] the solve was
-        asked for. Needs pandas, which specsolve does not install; the xarray
+        ``expression``, or the reader of an
+        [`Output`][specsolve.types.Output] the solve was asked for. Needs pandas, which specsolve does not install; the xarray
         bridges need xarray too.
         """
         return tidy_to_pandas(self._frame(name, kind))
@@ -772,7 +786,8 @@ class Result:
         constraint where the duals are defined, ``expression/<name>.parquet``
         per named expression this data can evaluate, and
         ``<output>/<name>.parquet`` for each [`Output`][specsolve.types.Output]
-        the solve was asked for, such as ``activity/`` per constraint.
+        the solve was asked for, such as ``activity/`` per constraint, with
+        the basis under ``basis/variable/`` and ``basis/constraint/``.
         ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
         deliberately left out — one row per failed expression, one with an
         empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
@@ -798,7 +813,7 @@ class Result:
         primals = self._unclosed('the solution')
         out = Path(directory)
         clear_the_answer(out)
-        write_format(out, self._outputs or {})
+        write_format(out, asked_for(self._outputs or {}))
         record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
@@ -807,9 +822,9 @@ class Result:
             write_whole(frame, out / 'primal' / f'{name}.parquet')
         for name, frame in (self._duals or {}).items():
             write_whole(frame, out / 'dual' / f'{name}.parquet')
-        for output, frames in (self._outputs or {}).items():
+        for kind, frames in (self._outputs or {}).items():
             for name, frame in frames.items():
-                write_whole(frame, out / output / f'{name}.parquet')
+                write_whole(frame, out / directory_of(kind) / f'{name}.parquet')
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:

@@ -10,13 +10,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    SUPERBASIC,
     Basis,
     SolveAnswer,
     Solver,
@@ -237,7 +234,7 @@ class Highs(Solver):
         """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``."""
         import highspy
 
-        native = (1, 0, 2, 0, 3)
+        native = {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3}
         hint = highspy.HighsBasis()
         hint.col_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.columns, native)]
         hint.row_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.rows, native)]

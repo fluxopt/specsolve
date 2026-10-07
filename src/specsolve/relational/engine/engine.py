@@ -20,7 +20,7 @@ import polars as pl
 from specsolve.errors import SpecsolveError
 from specsolve.messages import unknown_name_message
 from specsolve.relational import sinks
-from specsolve.relational.answer_layout import BASES
+from specsolve.relational.answer_layout import BASIS, BASIS_STATUSES, kinds_of
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -33,7 +33,7 @@ from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.solvers.base import BASIS, BASIS_STATUSES
+from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -59,7 +59,7 @@ def _no_values_for_an_lp_message() -> str:
     return (
         'start= takes a table of values for a mixed-integer model, and this one is an LP, which a simplex '
         'starts from a basis, not from values. Pass an earlier answer of it solved with '
-        "outputs={'variable_basis', 'constraint_basis'} instead."
+        "outputs={'basis'} instead."
     )
 
 
@@ -249,20 +249,22 @@ class Engine:
                 [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* this
                 model cannot start from — refused before the solver loads.
         """
-        begin = None if start is None else self._begun(start)
+        matched = None if start is None else self._matched_start(start)
         solver, kept = self._hand_off(solver_name, solver_options, keep)
-        if begin is not None:
-            begin(solver)
+        if isinstance(matched, Basis):
+            solver.warm(matched)
+        elif matched is not None:
+            solver.start(matched)
         handoff = self._model.handoff
         self._solves += 1
         if kept == 'nothing':
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff, basis=bool(outputs & BASES))
+            answer = solver.run(handoff, basis='basis' in outputs)
         return self._answered(answer, solver_name, kept, lower, outputs)
 
-    def _begun(self, start: Result | Mapping[str, pl.DataFrame]) -> Callable[[sinks.Solver], None]:
-        """How a solver starts from *start*, laid onto this build: a basis for an LP, values for a mixed-integer model.
+    def _matched_start(self, start: Result | Mapping[str, pl.DataFrame]) -> Basis | np.ndarray:
+        """*start* laid onto this build: a basis for an LP, a value per column, NaN where none is given, for a mixed-integer model.
 
         Raises:
             SpecsolveError: Values for an LP, a table naming no variable or
@@ -275,10 +277,9 @@ class Engine:
         if not self._discrete():
             if not isinstance(start, Result):
                 raise SpecsolveError(_no_values_for_an_lp_message())
-            basis = readback.matched_basis(model, *start._basis())
-            return lambda solver: solver.warm(basis)
+            return readback.matched_basis(model, *start._basis())
         if isinstance(start, Result):
-            frames = start._readable(start._primals, 'the values to start from')
+            frames = start._values()
         else:
             frames = {name: _checked_start(name, table, model.program.variables) for name, table in start.items()}
         values = readback.matched_values(model, frames)
@@ -287,7 +288,7 @@ class Engine:
                 'start= gives no value at any coordinate this model holds, so it would start nothing. Name '
                 'the variables as the spec declares them, and their coordinates as primal() returns them.'
             )
-        return lambda solver: solver.start(values)
+        return values
 
     def _answered(
         self,
@@ -325,7 +326,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _outputs={output: self._output(output, answer) for output in outputs},
+            _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -381,19 +382,15 @@ class Engine:
         replaces rather than mutates. A ``None`` vector yields no frames rather
         than empty ones.
         """
-
-        def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
-            return {} if values is None else self._per_constraint(values)
-
         return (
-            self._per_variable(primal) if primal is not None else {},
-            rows(dual),
-            rows(dual_ray),
+            {} if primal is None else self._per_variable(primal),
+            {} if dual is None else self._per_constraint(dual),
+            {} if dual_ray is None else self._per_constraint(dual_ray),
         )
 
-    def _output(self, output: Output, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """*output*'s frames, computed only when asked for; empty where a vector it needs is absent."""
-        match output:
+    def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
             case 'reduced_cost':
@@ -410,6 +407,8 @@ class Engine:
                 return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))
             case 'constraint_basis':
                 return {} if answer.basis is None else self._per_constraint(_statuses(answer.basis.rows))
+            case _:
+                raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""

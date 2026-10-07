@@ -82,17 +82,16 @@ same. A cutting-plane master re-solved after gaining a cut has gained a *row*,
 and a rebuild loads a fresh solver. Start an LP from an earlier answer instead:
 
 ```python
-B = {'variable_basis', 'constraint_basis'}
-previous = master.solve(outputs=B)
+previous = master.solve(outputs={'basis'})
 for cut in cuts:
-    previous = master.update(cut).solve(start=previous, outputs=B)
+    previous = master.update(cut).solve(start=previous, outputs={'basis'})
 ```
 
 The engine lays the answer's basis onto the new build by coordinate. A
 coordinate both builds hold keeps its status. A variable only the new build
 holds starts at a bound, and a constraint only the new build holds starts not
 binding, so a cut enters without moving the vertex. The answer to start from
-must carry both basis outputs. It can be live, loaded with
+must be solved with `outputs={'basis'}`. It can be live, loaded with
 [`load_result`](../reference/api.md#specsolve.load_result) or read from an
 archive, and it can come from another solver.
 

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 MODELS = Path(__file__).resolve().parent / 'expansion'
 
 #: What a master answer carries so that the next master can start from it.
-BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+BASIS: frozenset[Output] = frozenset({'basis'})
 
 #: Generators per rung — the axis swept. The master is one column per
 #: generator plus ``theta``, and one row per cut it has accumulated.

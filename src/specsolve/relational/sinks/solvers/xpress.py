@@ -9,12 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    SUPERBASIC,
     Basis,
     SolveAnswer,
     Solver,
@@ -129,7 +126,9 @@ class Xpress(Solver):
         slack at ``0`` and a binding ``>=`` row at ``2``.
         """
         self._p.controls.keepbasis = 1
-        self._p.loadBasis(solver_codes(basis.rows, (1, 2, 0, 0, 3)), solver_codes(basis.columns, (1, 0, 2, 0, 3)))
+        rows = solver_codes(basis.rows, {BASIC: 1, AT_LOWER: 2, AT_UPPER: 0, FIXED: 0, SUPERBASIC: 3})
+        columns = solver_codes(basis.columns, {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3})
+        self._p.loadBasis(rows, columns)
 
     def _start(self, values: Any) -> None:
         """``addMipSol`` over the columns given a value."""

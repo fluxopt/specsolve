@@ -9,12 +9,13 @@ from mathspec import program
 
 from specsolve.errors import SpecsolveError
 from specsolve.messages import unknown_name_message
+from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve.relational.collect import collect_engine
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.solvers.base import AT_LOWER, BASIC, BASIS, settled
+from specsolve.relational.sinks.solvers.base import settled
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
