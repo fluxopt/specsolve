@@ -66,11 +66,11 @@ no basis, so it has no `variable_basis` or `constraint_basis`, and an LP
 cannot [start from it](warm-start.md#start-from-an-earlier-answer).
 
 **On HiGHS, measure before you turn it on.** On the benchmark models at rung
-`m`, it was the fastest of the three ways only on `transport`, by 13%. Simplex
+`m`, it was the fastest of the three ways only on `transport`, by 14%. Simplex
 was the fastest on `dispatch` and `storage`. On `nodal`, interior point with
-crossover was the fastest, and without crossover it took 29 times as long.
+crossover was the fastest, and without crossover it took 28 times as long.
 Every objective was within 7e-9, relative, of the simplex one
-([#NNN](https://github.com/fluxopt/specsolve/pull/NNN)). Time each way on
+([#1879](https://github.com/fluxopt/specsolve/pull/1879)). Time each way on
 your own model before you keep one.
 
 ## A solver that cannot take the model
