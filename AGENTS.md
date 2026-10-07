@@ -75,6 +75,9 @@ what coverage moved where. A release that breaks a model file or an import
 raises the minor version, and its notes name the break. A change to what a
 result, a sweep or an archive writes to disk also raises `LAYOUT` in
 `relational/answer_layout.py`, so an answer in the old layout is refused by name.
+A change to an archive's `spec.yaml`, `sources/`, `sources.parquet` or
+`axis.json` raises `INPUTS_LAYOUT` in `archive_layout.py` instead, so
+`load_inputs` still reads an archive whose answer alone is out of date.
 
 ## A claim carries its evidence
 

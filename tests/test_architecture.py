@@ -323,12 +323,21 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'see what it reads': {'tidy'},
-    'read it back': {'load_archive', 'load_result', 'load_sweep', 'scan_archive', 'scan_result', 'scan_sweep'},
+    'read it back': {
+        'load_archive',
+        'load_inputs',
+        'load_result',
+        'load_sweep',
+        'scan_archive',
+        'scan_result',
+        'scan_sweep',
+    },
 }
 
 #: The two public submodules, and every name each one binds.
 PUBLIC_MODULES = {
     'types': {
+        'ArchivedInputs',
         'ConstraintRow',
         'Diagnostics',
         'Metrics',

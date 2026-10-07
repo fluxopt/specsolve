@@ -3,9 +3,10 @@
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
 ``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
 file holds, ``answer/`` in the answer's own layout
-([`specsolve.relational.answer_layout`][]), and ``axis.json`` where the
-sources are cut. A directory archive is read where it lies; a zip is
-unpacked first. Reading one back is [`specsolve.archive`][].
+([`specsolve.relational.answer_layout`][]), ``axis.json`` where the
+sources are cut, and ``format.json`` stamping [`INPUTS_LAYOUT`][]. A
+directory archive is read where it lies; a zip is unpacked first. Reading
+one back is [`specsolve.archive`][].
 """
 
 from __future__ import annotations
@@ -25,12 +26,14 @@ from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
 from specsolve.relational.answer_layout import (
     ACTIVITY,
+    FORMAT_FILE,
     METRICS_FILE,
     RECORD_FILE,
     RESERVED,
     RUN,
     consolidated,
     digest_of_file,
+    write_format,
     write_whole,
 )
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
@@ -48,6 +51,13 @@ DIGESTS_MEMBER = 'sources.parquet'
 CATALOG_MEMBER = 'catalog.parquet'
 SOURCES_DIR = 'sources'
 ANSWER_DIR = 'answer'
+
+#: The layout of the spec and the data an archive holds: ``spec.yaml``,
+#: ``sources/``, ``sources.parquet`` and ``axis.json``. A change to any of
+#: them raises it; any other change to what an archive writes raises
+#: [`LAYOUT`][specsolve.relational.answer_layout.LAYOUT] instead. Stamped
+#: in the archive's own ``format.json``.
+INPUTS_LAYOUT = 1
 
 
 @contextmanager
@@ -118,6 +128,7 @@ def write_archive(
     tree = staging / 'tree' if zipped else part
     try:
         (tree / SOURCES_DIR).mkdir(parents=True)
+        write_format(tree, INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         digests: dict[str, str] = {}
         for name, table in tables.items():
@@ -367,7 +378,7 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
     strays = [
         member
         for member in found
-        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER, CATALOG_MEMBER}
+        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER, CATALOG_MEMBER, FORMAT_FILE}
         and not member.startswith(f'{ANSWER_DIR}/')
         and not (member.startswith(f'{SOURCES_DIR}/') and member.endswith('.parquet') and member.count('/') == 1)
     ]
@@ -377,5 +388,5 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
             f'{named} is not an archive: it {what}. One that archive= writes holds exactly '
             f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, 'sources.parquet' digesting "
             f"them, 'catalog.parquet' saying what each file holds, 'answer/' holding what the solve returned, "
-            f"and 'axis.json' where its sources are sliced."
+            f"'axis.json' where its sources are sliced, and 'format.json' stamping its layout."
         )

@@ -141,8 +141,11 @@ Each entry says what the thing is, then the module it lives in.
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
-  answer layout under `answer/`, and `axis.json` for a sweep
-  (`archive_layout.py`). Reading an archive back is `archive.py`.
+  answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
+  stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
+  `spec.yaml`, `sources/`, `sources.parquet` and `axis.json`, and a change to
+  any of them raises it. Any other change raises `LAYOUT`. Reading an archive
+  back is `archive.py`.
 
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names
