@@ -227,10 +227,10 @@ def test_the_missing_extra_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
-    """A row's status is its slack's: a binding ``<=`` row holds it at ``0``, a binding ``>=`` row at ``2``.
+    """A basis read from Xpress and loaded back is the one Xpress holds, row by row and column by column.
 
-    Xpress repairs a row status on the wrong side of its slack, so warmth alone
-    cannot tell the two mappings apart; the statuses it holds can.
+    Which side of its slack a nonbasic row names is not observable here: Xpress
+    puts the slack at its one finite bound on load, whichever side it was given.
     """
     from tests.test_basis import SPEC
 
