@@ -77,7 +77,7 @@ class SolveAnswer:
 
 
 @dataclass(frozen=True)
-class Subsystem:
+class InfeasibleSubsystemIndices:
     """An irreducible infeasible subsystem, in the solver's own row and column indices."""
 
     rows: Ints
@@ -277,7 +277,7 @@ class Solver(ABC):
         """
 
     @abstractmethod
-    def iis(self) -> Subsystem | None:
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """The rows and bounds that cannot hold together, none of which can be dropped and the rest still fail.
 
         Called only after an infeasible solve, and only on request: the search

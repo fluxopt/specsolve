@@ -275,10 +275,12 @@ class Engine:
                 f'terminated {self._solved.termination_condition!r} rather than infeasible.'
             )
         assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
-        found = self._solver.iis()
+        found = self._solver.infeasible_subsystem()
         if not found:
-            raise SpecsolveError(_no_iis_message(type(self._solver).__name__.lower(), self._discrete()))
-        return readback.subsystem(self._model, found)
+            raise SpecsolveError(
+                _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
+            )
+        return readback.infeasible_subsystem(self._model, found)
 
     def contents(self) -> str:
         """This build's digest — what a saved answer is checked against.
@@ -465,7 +467,7 @@ def expression_readers(
     return readback.readers(compiler, program.expressions, lower)
 
 
-def _no_iis_message(solver_name: str, discrete: Sequence[str]) -> str:
+def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:
     """Why an infeasible solve's solver found no subsystem."""
     if discrete and solver_name == 'highs':
         return (

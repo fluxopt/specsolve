@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING, Any
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, Subsystem, WarmStart, solver_vector
+from specsolve.relational.sinks.solvers.base import (
+    InfeasibleSubsystemIndices,
+    SolveAnswer,
+    Solver,
+    WarmStart,
+    solver_vector,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -290,7 +296,7 @@ class Highs(Solver):
         _, has_ray, values = self._handle.getDualRay()
         return solver_vector(values) if has_ray else None
 
-    def iis(self) -> Subsystem | None:
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``getIis``, kept only where HiGHS proved it irreducible.
 
         HiGHS searches the rows and bounds without integrality, so a model that
@@ -305,7 +311,7 @@ class Highs(Solver):
         bound = highspy.IisBoundStatus
         columns = np.asarray(found.col_index_, dtype=np.int64)
         sides = np.asarray([int(side) for side in found.col_bound_], dtype=np.int64)
-        return Subsystem(
+        return InfeasibleSubsystemIndices(
             np.asarray(found.row_index_, dtype=np.int64),
             columns[np.isin(sides, [int(bound.kIisBoundStatusLower), int(bound.kIisBoundStatusBoxed)])],
             columns[np.isin(sides, [int(bound.kIisBoundStatusUpper), int(bound.kIisBoundStatusBoxed)])],

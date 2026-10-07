@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
+    InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
-    Subsystem,
     WarmStart,
     solver_vector,
     spelled_senses,
@@ -161,7 +161,7 @@ class Xpress(Solver):
         values = self._p.getDualRay()
         return None if values is None else solver_vector(values)
 
-    def iis(self) -> Subsystem | None:
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``firstIIS``, emphasising a small subsystem over a quick one.
 
         A fixed column is both of its bounds; an integrality or set entry is
@@ -174,7 +174,7 @@ class Xpress(Solver):
         rows, columns, senses, sides, *_ = self._p.getIISData(1)
         rows, columns = np.asarray(rows, dtype=np.int64), np.asarray(columns, dtype=np.int64)
         sides = np.asarray(sides, dtype=str)
-        return Subsystem(
+        return InfeasibleSubsystemIndices(
             rows[np.isin(np.asarray(senses, dtype=str), list(_XPRESS_SENSE.values()))],
             columns[np.isin(sides, ['L', 'F'])],
             columns[np.isin(sides, ['U', 'F'])],

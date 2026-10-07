@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
+    InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
-    Subsystem,
     WarmStart,
     solver_vector,
     spelled_senses,
@@ -208,7 +208,7 @@ class Gurobi(Solver):
             _activity(self._blocks, self._qrows),
         )
 
-    def iis(self) -> Subsystem | None:
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``computeIIS``, kept only where Gurobi reports it minimal.
 
         A search a limit stops leaves a set that is not, or nothing readable.
@@ -226,7 +226,7 @@ class Gurobi(Solver):
         slices = [np.asarray(block.IISConstr, dtype=bool) for block in self._blocks]
         slices += [np.asarray([row.IISQConstr], dtype=bool) for row in self._qrows]
         rows = np.concatenate(slices) if slices else np.empty(0, dtype=bool)
-        return Subsystem(
+        return InfeasibleSubsystemIndices(
             np.flatnonzero(rows),
             np.flatnonzero(np.asarray(self._x.IISLB, dtype=bool)),
             np.flatnonzero(np.asarray(self._x.IISUB, dtype=bool)),

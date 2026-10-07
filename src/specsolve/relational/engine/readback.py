@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engine.assembly import BuiltModel
     from specsolve.relational.engine.attaching import AttachedSources
     from specsolve.relational.engine.compiler import Compiler
-    from specsolve.relational.sinks.solvers.base import Subsystem
+    from specsolve.relational.sinks.solvers.base import InfeasibleSubsystemIndices
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -52,7 +52,7 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
     )
 
 
-def subsystem(model: BuiltModel, found: Subsystem) -> InfeasibleSubsystem:
+def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -> InfeasibleSubsystem:
     """*found*'s solver indices as the declarations and coordinates that built them.
 
     A row carries its sense and right-hand side, a bound its side and value,

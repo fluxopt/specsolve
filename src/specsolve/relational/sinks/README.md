@@ -38,10 +38,11 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `_run(handoff)` | solve what is loaded, and read it back |
 | `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
 | `_warm(ws)` | set it on the loaded model, spans already checked |
+| `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last seven are a
+The first three are the family's and identical for everyone; the last eight are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over a `Handoff`
 and is given an answer.
