@@ -52,6 +52,7 @@ from specsolve.relational.answer_layout import (
     saved_frames,
     write_whole,
 )
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
@@ -128,7 +129,7 @@ def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFra
         DataError: As [`build`][] refuses the sources.
     """
     program = lowered(spec)
-    return {name: table.collect() for name, table in numbered(program, tidy_sources(program, sources)).items()}
+    return {name: table.pipe(collected) for name, table in numbered(program, tidy_sources(program, sources)).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -661,7 +662,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
-        name: (lambda frame=frame: frame.collect())
+        name: (lambda frame=frame: frame.pipe(collected))
         for name, frame in saved_frames(out / 'expression', whole=whole).items()
     }
     expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})

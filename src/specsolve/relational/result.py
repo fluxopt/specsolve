@@ -28,7 +28,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -531,7 +531,7 @@ class Result:
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
-        return _named(frames, name, 'variable').collect(engine=collect_engine())
+        return _named(frames, name, 'variable').pipe(collected)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -557,7 +557,7 @@ class Result:
         frames = self._readable(self._duals, f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'constraint').collect(engine=collect_engine())
+        return _named(frames, name, 'constraint').pipe(collected)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -588,7 +588,7 @@ class Result:
         if self._no_dual_ray is not None:
             raise SpecsolveError(self._no_dual_ray)
         assert self._dual_rays is not None, 'a ray is released with the primals, which _unclosed just checked'
-        return _named(self._dual_rays, name, 'constraint').collect(engine=collect_engine())
+        return _named(self._dual_rays, name, 'constraint').pipe(collected)
 
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -602,7 +602,7 @@ class Result:
             KeyError: No constraint is called *name*.
         """
         frames = self._readable(self._activities, f"the activity of '{name}'")
-        return _named(frames, name, 'constraint').collect(engine=collect_engine())
+        return _named(frames, name, 'constraint').pipe(collected)
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.

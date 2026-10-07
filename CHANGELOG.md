@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
 - feat(api): a model with no solution names the rows and bounds that conflict ([#1880](https://github.com/fluxopt/specsolve/pull/1880))
 
 ## 0.6.2 (2026-10-07)

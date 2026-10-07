@@ -23,7 +23,7 @@ from mathspec import program
 
 from specsolve.errors import DataError
 from specsolve.messages import sparse_divisor_message, uncovered_constant_message
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
 from specsolve.relational.engine.scope import join_on
@@ -73,7 +73,7 @@ def refuse_null_constants(
     """
     if not divisors:
         return
-    counts = pl.collect_all([piece.select(pl.col('cval').null_count()) for piece in pieces])
+    counts = collected_all([piece.select(pl.col('cval').null_count()) for piece in pieces])
     undefined = sum(int(count.item()) for count in counts)
     if undefined:
         raise DataError(f'{subject}: {message(", ".join(sorted(divisors)), undefined)}')
@@ -132,7 +132,7 @@ def constant_side(
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *([uncovered.alias(gap_column)] if uncovered is not None else []),
-    ).collect(engine=collect_engine())
+    ).pipe(collected)
     if uncovered is None:
         return built
     gaps = int(built.get_column(gap_column).sum())
@@ -187,4 +187,4 @@ def _uncovered_coordinates(
     keys = built.select(*shared).unique() if shared else built.select('row').head(1)
     needed = join_on(keys, masked(scope, summed, None).select(*summed), (), 'cross') if summed else keys
     holes = needed.join(scope.data.parameters[param].select(*dims), on=list(dims), how='anti')
-    return int(holes.select(pl.len()).collect().item())
+    return int(holes.select(pl.len()).pipe(collected).item())

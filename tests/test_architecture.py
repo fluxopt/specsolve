@@ -632,6 +632,23 @@ def test_both_lanes_lower_a_spec_through_one_function():
     )
 
 
+def test_every_frame_is_collected_through_one_function():
+    """``relational/collect.py`` picks the engine and keeps every join in the order it was written."""
+    calls = {
+        f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
+        for path in _all_modules()
+        if path != PKG / 'relational' / 'collect.py'
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {'collect', 'collect_all'}
+    }
+    assert not calls, (
+        f'{sorted(calls)} collect a frame directly; pipe it through relational.collect.collected, '
+        f'or polars picks the engine and reorders the joins'
+    )
+
+
 def sources_annotations(doors: dict[str, Any]) -> set[str]:
     """What each door annotates ``sources`` with — ``tests/test_linopy_lane.py`` asks the same of the lane's."""
     import inspect
