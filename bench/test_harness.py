@@ -26,7 +26,7 @@ import pytest
 import yaml
 
 from bench import conftest as harness
-from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -1268,6 +1268,16 @@ def test_a_started_master_reproduces_the_cold_answer() -> None:
         assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
             f'step {i}: a start moved the answer'
         )
+
+
+def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
+    """A method moves the route and what the answer carries, never the optimum."""
+    rows = crossover.measured('dispatch', '2xs')
+    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
+    simplex = rows[0][2]
+    for method, _, objective, duals in rows:
+        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
+        assert duals, f'{method} left no duals, which an LP solved to optimality has'
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
