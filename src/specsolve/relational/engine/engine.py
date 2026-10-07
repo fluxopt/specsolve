@@ -230,8 +230,7 @@ class Engine:
         assert (answer.activity is None) == (answer.primal is None), (
             'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
         )
-        activity = answer.activity if 'activity' in outputs else None
-        primals, duals, activities, rays = self._read_back(answer.primal, answer.dual, activity, answer.dual_ray)
+        primals, duals, rays = self._read_back(answer.primal, answer.dual, answer.dual_ray)
         no_duals = (
             None
             if answer.dual is not None
@@ -247,7 +246,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _outputs=self._carried(answer, outputs, activities),
+            _outputs={output: self._output(output, answer) for output in outputs},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -295,7 +294,6 @@ class Engine:
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
-        activity: pl.Series | None,
         dual_ray: pl.Series | None,
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
         """One solve's answer as one frame per declaration — a [`Result`][]'s own.
@@ -311,33 +309,24 @@ class Engine:
         return (
             self._per_variable(primal) if primal is not None else {},
             rows(dual),
-            rows(activity),
             rows(dual_ray),
         )
 
-    def _carried(
-        self, answer: SolveAnswer, outputs: frozenset[Output], activities: dict[str, pl.LazyFrame]
-    ) -> dict[Output, Mapping[str, pl.LazyFrame]]:
-        """The frames of each output asked for, computed only then.
-
-        Reduced costs exist where the primal and the duals both do, slacks
-        wherever the activity does; elsewhere the output maps to nothing, and
-        the reader gives the reason.
-        """
-        carried: dict[Output, Mapping[str, pl.LazyFrame]] = {}
-        if 'activity' in outputs:
-            carried['activity'] = activities
-        if 'reduced_cost' in outputs:
-            reduced: dict[str, pl.LazyFrame] = {}
-            if answer.primal is not None and answer.dual is not None:
-                reduced = self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
-            carried['reduced_cost'] = reduced
-        if 'slack' in outputs:
-            slack: dict[str, pl.LazyFrame] = {}
-            if answer.activity is not None:
-                slack = self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
-            carried['slack'] = slack
-        return carried
+    def _output(self, output: Output, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+        """*output*'s frames, computed only when asked for; empty where a vector it needs is absent."""
+        match output:
+            case 'activity':
+                return {} if answer.activity is None else self._per_constraint(answer.activity)
+            case 'reduced_cost':
+                if answer.primal is None or answer.dual is None:
+                    return {}
+                return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+            case 'slack':
+                return (
+                    {}
+                    if answer.activity is None
+                    else self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
+                )
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""

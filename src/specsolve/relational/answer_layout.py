@@ -80,7 +80,7 @@ def checked_outputs(outputs: Iterable[str]) -> frozenset[Output]:
             f'{", ".join(map(repr, OUTPUTS))} on request. The primal, the duals and the declared '
             f'expressions are carried always and are not named here.'
         )
-    return frozenset(name for name in asked if is_output(name))
+    return frozenset(filter(is_output, asked))
 
 
 def not_requested_message(output: Output, name: str) -> str:

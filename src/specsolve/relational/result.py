@@ -16,6 +16,7 @@ from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
     NO_PROVENANCE,
+    PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
@@ -541,10 +542,7 @@ class Result:
                 [`dual`][] raises.
             KeyError: No variable is called *name*.
         """
-        frames = self._carried('reduced_cost', name)
-        if self._no_duals is not None:
-            raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'variable').collect(engine=collect_engine())
+        return _named(self._carried('reduced_cost', name), name, 'variable').collect(engine=collect_engine())
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -612,13 +610,20 @@ class Result:
         return _named(self._carried('slack', name), name, 'constraint').collect(engine=collect_engine())
 
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
-        """*output*'s frames, or why they cannot be read — closed first, then not asked for, then the status."""
+        """*output*'s frames, or why they cannot be read.
+
+        Closed first, then not asked for, then the status, then, for a kind
+        that exists only where the duals do, the duals' reason.
+        """
         what = f"the {output.replace('_', ' ')} of '{name}'"
         self._unclosed(what)
         assert self._outputs is not None, 'close() releases the outputs with the primals, which _unclosed just checked'
         if output not in self._outputs:
             raise SpecsolveError(not_requested_message(output, name))
-        return self._readable(self._outputs[output], what)
+        frames = self._readable(self._outputs[output], what)
+        if output in PRICED and self._no_duals is not None:
+            raise SpecsolveError(self._no_duals)
+        return frames
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -648,24 +653,17 @@ class Result:
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
-        readers = {
-            'primal': self.primal,
-            'dual': self.dual,
-            'expression': self.evaluate,
-            'activity': self.activity,
-            'reduced_cost': self.reduced_cost,
-            'slack': self.slack,
-        }
-        return readers[checked_kind(kind)](name)
+        kind = checked_kind(kind)
+        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
         """Every name of *kind* this result can read — what a bridge takes by default.
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed, *kind* is ``dual`` and
-                the duals are undefined, or *kind* is an output the solve was
-                not asked for.
+            SpecsolveError: This result was closed, *kind* is ``dual`` or
+                ``reduced_cost`` and the duals are undefined, or *kind* is an
+                output the solve was not asked for.
         """
         if checked_kind(kind) == 'primal':
             return tuple(self._readable(self._primals, 'the solution'))

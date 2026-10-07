@@ -11,7 +11,6 @@ from collections import Counter, defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -55,9 +54,7 @@ if TYPE_CHECKING:
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
-_LABELS: Mapping[str, str] = MappingProxyType(
-    {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
-)
+_LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
 
 
 #: A spilled sweep's manifest, its keys as their own type, and the coordinates
@@ -575,15 +572,8 @@ class Sweep:
 
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
-        readers = {
-            'primal': self.primal,
-            'dual': self.dual,
-            'expression': self.evaluate,
-            'activity': self.activity,
-            'reduced_cost': self.reduced_cost,
-            'slack': self.slack,
-        }
-        return readers[checked_kind(kind)](name, per_window=per_window)
+        kind = checked_kind(kind)
+        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name, per_window=per_window)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
         """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.
