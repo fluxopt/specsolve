@@ -321,8 +321,11 @@ class Model:
                 carries beside the primal, the duals and the declared
                 expressions: ``activity`` for each constraint's left-hand side,
                 ``reduced_cost`` for each variable's reduced cost, ``slack``
-                for each constraint's distance to binding. The result, its save and its archive carry these and
-                nothing else, and the reader of one not asked for refuses.
+                for each constraint's distance to binding, and
+                ``variable_basis`` and ``constraint_basis`` for the basis
+                status the solve ended on. The result, its save and its archive
+                carry these and nothing else, and the reader of one not asked
+                for refuses.
 
         Returns:
             The solution, holding this model.
