@@ -14,12 +14,11 @@ import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
 from specsolve.errors import SpecsolveError, SpecsolveWarning
-from specsolve.messages import unknown_name_message
 from specsolve.relational import sinks
 from specsolve.relational.answer_layout import BASIS, BASIS_STATUSES, kinds_of
 from specsolve.relational.engine import readback
@@ -39,7 +38,6 @@ from specsolve.relational.result import (
     Diagnostics,
     Keep,
     Result,
-    Start,
     refuse_a_start_beside,
     unknown_keep_message,
 )
@@ -62,56 +60,6 @@ def _statuses(codes: np.ndarray) -> pl.Series:
     import numpy as np
 
     return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
-
-
-def checked_start(start: Start, declared: program.Program) -> dict[str, dict[str, pl.LazyFrame]]:
-    """*start*, each table checked to be ``(dims…, value)`` of a declaration its reader reads, a basis status in words.
-
-    Raises:
-        SpecsolveError: A key that names no reader [`Start`][] takes, a name
-            the reader has no declaration for, columns other than its dims
-            and ``value``, or a basis status outside the five words.
-    """
-    readers = tuple(Start.__annotations__)
-    by_reader = cast('Mapping[str, Mapping[str, pl.DataFrame]]', start)
-    if unknown := sorted(set(by_reader) - set(readers)):
-        raise SpecsolveError(
-            f'start= takes, under the name of the reader that returns it, a table per declaration: '
-            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
-        )
-    checked: dict[str, dict[str, pl.LazyFrame]] = {}
-    for reader, tables in by_reader.items():
-        per = 'constraint' if reader == 'constraint_basis' else 'variable'
-        named = declared.constraints if per == 'constraint' else declared.variables
-        checked[reader] = {name: _checked_table(reader, per, name, table, named) for name, table in tables.items()}
-    return checked
-
-
-def _checked_table(
-    reader: str,
-    per: str,
-    name: str,
-    table: pl.DataFrame,
-    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
-) -> pl.LazyFrame:
-    """*table*, given under *reader* for the *per* *name*, once it is the shape *reader* returns."""
-    if name not in declared:
-        raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, name, declared)}')
-    expected = [*declared[name].dims, 'value']
-    if set(table.columns) != set(expected):
-        raise SpecsolveError(
-            f"start= gives {per} '{name}' under {reader!r} the columns {table.columns}, and a table there is "
-            f'what {reader}() returns: {expected}.'
-        )
-    if reader == 'primal':
-        return table.lazy()
-    words = table.with_columns(pl.col('value').cast(pl.String))
-    if unknown := sorted(set(words['value'].drop_nulls()) - set(BASIS_STATUSES)):
-        raise SpecsolveError(
-            f"start= gives {per} '{name}' the basis status {', '.join(map(repr, unknown))}, and a status is one "
-            f'of {", ".join(map(repr, BASIS_STATUSES))}.'
-        )
-    return words.lazy()
 
 
 def _nothing_to_start_message(discrete: bool) -> str:
@@ -279,7 +227,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: Result | Start | None = None,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -302,8 +250,10 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
-            start: What to start the solve from, matched by coordinate: an LP
-                from a basis where one is given
+            start: What to start the solve from, an earlier answer or a
+                [`Start`][specsolve.types.Start] already read
+                ([`read_start`][specsolve.sources.read_start]), matched by
+                coordinate: an LP from a basis where one is given
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
@@ -333,24 +283,21 @@ class Engine:
             answer = solver.run(handoff, basis='basis' in outputs)
         return self._answered(answer, solver_name, kept, lower, outputs)
 
-    def _matched_start(self, start: Result | Start, solver_name: str) -> Basis | np.ndarray:
+    def _matched_start(
+        self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
+    ) -> Basis | np.ndarray:
         """*start* laid onto this build: a basis for an LP given one, else a value per column, NaN where none is given.
 
         A mixed-integer model starts from values, so a basis given it is not
         used. An LP given both starts from the basis.
 
         Raises:
-            SpecsolveError: A table [`checked_start`][] refuses, a start that
-                gives this model nothing it starts from or lands nowhere on
-                this build, or values for an LP that *solver_name* cannot take.
+            SpecsolveError: A start that gives this model nothing it starts
+                from or lands nowhere on this build, or values for an LP that
+                *solver_name* cannot take.
         """
-        if isinstance(start, str):
-            raise SpecsolveError(
-                f'start={start!r} is a word only solve_over takes: a solve has no slice before it. Pass an earlier '
-                'answer or a Start.'
-            )
         model = self._model
-        given = start._start() if isinstance(start, Result) else checked_start(start, model.program)
+        given = start._start() if isinstance(start, Result) else start
         discrete = bool(self._discrete())
         if not discrete and (given.get('variable_basis') or given.get('constraint_basis')):
             return readback.matched_basis(model, given.get('variable_basis', {}), given.get('constraint_basis', {}))

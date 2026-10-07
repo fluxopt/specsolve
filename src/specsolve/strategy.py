@@ -46,9 +46,8 @@ from specsolve.relational.answer_layout import (
     write_whole,
 )
 from specsolve.relational.collect import collect_engine
-from specsolve.relational.engine.engine import checked_start
 from specsolve.relational.result import Result, refuse_a_start_beside
-from specsolve.sources import numbered, tidy_sources
+from specsolve.sources import numbered, refuse_unknown_start, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
     MANIFEST_FILE,
@@ -62,7 +61,7 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
@@ -358,10 +357,10 @@ def _slice_starts(
 
     Raises:
         SpecsolveError: A word other than ``'previous'``; ``'previous'``
-            under an executor; a table over an EachWindow sweep's local index
-            alone; a slice the cut leaves nothing; or a table
-            [`checked_start`][specsolve.relational.engine.engine.checked_start]
-            refuses.
+            under an executor; a name
+            [`refuse_unknown_start`][specsolve.sources.refuse_unknown_start]
+            refuses; a table over an EachWindow sweep's local index alone; or
+            a slice the cut leaves nothing.
     """
     if start is None:
         return [None] * len(slices)
@@ -376,6 +375,7 @@ def _slice_starts(
         return 'previous'
     column = axis.dim if isinstance(axis, Axis) else key_name
     tables = _start_tables(start, column)
+    refuse_unknown_start(cast('Start', tables), program)
     if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
         raise SpecsolveError(
             f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
@@ -386,16 +386,13 @@ def _slice_starts(
     empty: list[Label] = []
     for current in slices:
         cut = current.cut or partial(_one_key, key_name, current.key)
-        given: dict[str, dict[str, pl.DataFrame]] = {}
+        given: dict[str, dict[str, Source]] = {}
         for reader, named in tables.items():
-            pieces = {
-                name: cut(table.lazy()).collect() if column in table.columns else table for name, table in named.items()
-            }
-            if held := {name: piece for name, piece in pieces.items() if piece.height}:
+            pieces = {name: _cut_one(obj, column, cut) for name, obj in named.items()}
+            if held := {name: piece for name, piece in pieces.items() if piece is not None}:
                 given[reader] = held
         if not given:
             empty.append(current.key)
-        checked_start(cast('Start', given), program)
         starts.append(cast('Start', given))
     if empty:
         raise SpecsolveError(
@@ -405,7 +402,20 @@ def _slice_starts(
     return starts
 
 
-def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[str, pl.DataFrame]]:
+def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFrame]) -> Source | None:
+    """*obj* as one slice takes it: a table cut, read into memory to cross a process, or ``None`` where the cut leaves no row.
+
+    A shape that is not a table, such as one number, carries no column to cut
+    on and reaches the slice whole.
+    """
+    table = as_frame(obj)
+    if table is None:
+        return obj
+    piece = (cut(table) if column in table.collect_schema().names() else table).collect(engine=collect_engine())
+    return piece if piece.height else None
+
+
+def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[str, Source]]:
     """*start* as tables keyed as [`Start`][specsolve.types.Start] is, an earlier sweep's keyed by *column*.
 
     A sweep's slices are keyed by its own key column, which for one cut by
@@ -422,17 +432,18 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
             reader: {name: table.rename({start.key_name: column}) if keyed else table for name, table in named.items()}
             for reader, named in cast('Mapping[str, Mapping[str, pl.DataFrame]]', start._start()).items()
         }
-    return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, pl.DataFrame]]', start).items()}
+    return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, Source]]', start).items()}
 
 
-def _over_the_local_index(tables: Mapping[str, Mapping[str, pl.DataFrame]], axis: EachWindow) -> list[str]:
+def _over_the_local_index(tables: Mapping[str, Mapping[str, Source]], axis: EachWindow) -> list[str]:
     """The names of *tables* over *axis*'s local index and not its sliced dimension, which no window can place."""
-    return sorted(
-        name
+    over = {
+        name: frame.collect_schema().names()
         for named in tables.values()
-        for name, table in named.items()
-        if axis.into in table.columns and axis.dim not in table.columns
-    )
+        for name, obj in named.items()
+        if (frame := as_frame(obj)) is not None
+    }
+    return sorted(name for name, columns in over.items() if axis.into in columns and axis.dim not in columns)
 
 
 def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
@@ -607,7 +618,7 @@ def _serially(
     model: Model | None = None
     named: frozenset[str] | None = None
     state: dict[str, pl.DataFrame] = {}
-    previous: Start | None = None
+    previous: Result | Start | None = None
     readers = ('primal', *(sorted(BASES) if 'basis' in solving['outputs'] else ()))
     try:
         for position, current in enumerate(slices):
@@ -635,8 +646,8 @@ def _serially(
                 start = previous if starts == 'previous' else starts[position]
                 result = model.solve(**solving, keep=keep, start=start)
                 answer = _answers(result, program, _slice_metrics(model.diagnostics(), before))
+                previous = result if result.has_primal else None
             primals = answer.frames.get('primal', {})
-            previous = _previous(answer, answer.frames)
             if spill is not None:
                 answer = spill.write(position, current.key, answer)
             yield current.key, answer
@@ -647,7 +658,7 @@ def _serially(
 
 
 def _previous(answer: SliceAnswer, frames: Mapping[str, Mapping[str, pl.DataFrame]]) -> Start | None:
-    """What the slice after *answer* starts from under ``start='previous'``: its primal and basis, or nothing where it left no values."""
+    """What the slice after *answer*, read back off the spill, starts from under ``start='previous'``: its frames there, or nothing where it left no values."""
     if not answer.meta.has_primal:
         return None
     return cast('Start', {reader: dict(frames[reader]) for reader in ('primal', *BASES) if frames.get(reader)})

@@ -10,9 +10,9 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
 - feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
 - feat(api): a solve or a sweep asked for outputs={'slack'} reads how far each constraint is from binding ([#1868](https://github.com/fluxopt/specsolve/pull/1868))
-- feat(api): a solve or a sweep asked for outputs={'basis'} reads the basis it ended on, in the same words on every solver ([#1876](https://github.com/fluxopt/specsolve/pull/1876))
+- feat(api): a solve or a sweep asked for outputs={'variable_basis', 'constraint_basis'} reads the basis it ended on, in the same words on every solver ([#1876](https://github.com/fluxopt/specsolve/pull/1876))
 - feat(api): an LP solve can start from an earlier answer's basis, matched by coordinate, so a model that gained a cut starts from where it was ([#1877](https://github.com/fluxopt/specsolve/pull/1877))
-- feat(api): a solve can start from an earlier answer or from tables of values and basis statuses, and a sweep from an earlier sweep, each matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
+- feat(api): a mixed-integer solve can start from values, an earlier answer's or any source a parameter takes, matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
 
 ## 0.6.2 (2026-10-07)
 

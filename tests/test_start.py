@@ -232,10 +232,34 @@ def test_a_mixed_integer_solve_holds_no_incumbent_of_its_own_at_the_root(solver_
     assert not _at_the_root(solver_name).has_primal, 'with heuristics off, no incumbent is found at the root'
 
 
-def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str) -> None:
-    every = pl.DataFrame({'item': ITEMS, 'value': [1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS]})
-    assert _at_the_root(solver_name, start={'primal': {'take': every}}).objective == pytest.approx(10.0), (
-        'the start, worth 8 + 2, is the incumbent'
+#: The two items worth 8 + 2 in, every other out: the knapsack's start as each
+#: shape a parameter's source takes.
+TWO_IN = {item: 1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS}
+
+
+def _shaped(shape: str, tmp_path: Path) -> object:
+    table = pl.DataFrame({'item': list(TWO_IN), 'value': list(TWO_IN.values())})
+    if shape == 'parquet':
+        table.write_parquet(tmp_path / 'take.parquet')
+        return str(tmp_path / 'take.parquet')
+    if shape == 'pandas':
+        pytest.importorskip('pandas')
+        pytest.importorskip('pyarrow')
+        return table.to_pandas()
+    return {'polars': table, 'mapping': TWO_IN, 'sequence': list(TWO_IN.values())}[shape]
+
+
+@pytest.mark.parametrize('shape', ['polars', 'pandas', 'parquet', 'mapping', 'sequence'])
+def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str, shape: str, tmp_path: Path) -> None:
+    """A start takes every shape a parameter's source takes, read by the same reader."""
+    assert _at_the_root(solver_name, start={'primal': {'take': _shaped(shape, tmp_path)}}).objective == pytest.approx(
+        10.0
+    ), 'the start, worth 8 + 2, is the incumbent'
+
+
+def test_one_number_starts_every_coordinate(solver_name: str) -> None:
+    assert _at_the_root(solver_name, start={'primal': {'take': 0.0}}).objective == pytest.approx(0.0), (
+        'every item out is the incumbent'
     )
 
 
@@ -269,7 +293,7 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
         ),
         pytest.param(
             {'primal': {'take': TWO_ITEMS.rename({'item': 'items'})}},
-            r"\['item', 'value'\]",
+            r"missing columns \['item'\]",
             id='a-column-not-its-dims',
         ),
         pytest.param(
@@ -281,15 +305,26 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
             {'constraint_basis': {'fits': FITS}}, 'a basis alone', id='a-basis-alone-for-a-mixed-integer-model'
         ),
         pytest.param(
-            {'primal': {'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}},
-            'no value at any',
-            id='no-coordinate-held',
+            {'primal': {'take': TWO_ITEMS.with_columns(item=pl.lit('itme1'))}},
+            "'itme1'",
+            id='a-label-the-dimension-lacks',
         ),
+        pytest.param(
+            {'primal': {'take': pl.concat([TWO_ITEMS, TWO_ITEMS])}}, 'more than one row', id='a-coordinate-twice'
+        ),
+        pytest.param({'primal': {'take': [1.0, 0.0]}}, '2 values against 12', id='a-sequence-of-the-wrong-length'),
     ],
 )
-def test_a_table_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:
+def test_a_start_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:
     with pytest.raises(SpecsolveError, match=match):
         sps.solve(KNAPSACK, knapsack_sources(), start=start)
+
+
+def test_an_answer_of_another_model_places_nothing_and_is_refused() -> None:
+    """Its names match no variable here, so it would start nothing; that is a mistake, not a hint."""
+    before = sps.solve(DISPATCH, snapshots(40))
+    with pytest.raises(SpecsolveError, match='no value at any coordinate'):
+        sps.solve(KNAPSACK, knapsack_sources(), start=before)
 
 
 # ---------------------------------------------------------------------------

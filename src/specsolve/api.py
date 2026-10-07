@@ -57,7 +57,7 @@ from specsolve.relational.answer_layout import (
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_start, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -376,7 +376,7 @@ class Model:
                 keep=keep,
                 lower=self._lower,
                 outputs=asked,
-                start=start,
+                start=start if start is None or isinstance(start, Result) else self._read_start(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -385,6 +385,20 @@ class Model:
         if out is not None:
             self._archive(out, answered)
         return answered
+
+    def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
+        """*start*'s tables read against this build, as [`read_start`][specsolve.sources.read_start] reads them.
+
+        Raises:
+            SpecsolveError: A word, which only [`solve_over`][specsolve.strategy.solve_over]
+                takes, or as [`read_start`][specsolve.sources.read_start] raises.
+        """
+        if isinstance(start, str):
+            raise SpecsolveError(
+                f'start={start!r} is a word only solve_over takes: a solve has no slice before it. Pass an earlier '
+                'answer or a Start.'
+            )
+        return read_start(start, self._program, self._tidied)
 
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.

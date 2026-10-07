@@ -132,13 +132,16 @@ yesterday = sps.load_result('runs/monday')
 today = sps.solve('commitment.yaml', sources, start=yesterday)
 ```
 
-Or pass a table per variable under `'primal'`, in the shape
-[`primal`](../reference/api.md#specsolve.types.Result.primal) returns, from a
-heuristic or a rule of thumb:
+Or pass values per variable under `'primal'`, from a heuristic or a rule of
+thumb, in any shape a parameter's source takes over the variable's dims: a
+table in the shape [`primal`](../reference/api.md#specsolve.types.Result.primal)
+returns, a parquet path, a `{label: value}` map, or one number for every
+coordinate:
 
 ```python
 on = pl.DataFrame({'unit': ['coal', 'gas'], 'hour': [0, 0], 'value': [1.0, 1.0]})
 result = sps.solve('commitment.yaml', sources, start={'primal': {'status': on}})
+result = sps.solve('commitment.yaml', sources, start={'primal': {'status': 1.0}})
 ```
 
 **An LP takes values only where the solver uses them.** HiGHS starts an LP
@@ -153,8 +156,8 @@ A basis is a status per coordinate, so it can come from anywhere: a file, a
 rule, another tool. Pass a table per variable under `'variable_basis'` and per
 constraint under `'constraint_basis'`, in the shape
 [`variable_basis`](../reference/api.md#specsolve.types.Result.variable_basis)
-returns. The status is one of `basic`, `at_lower`, `at_upper`, `fixed` and
-`superbasic`:
+returns, or a parquet path to one. The status is one of `basic`, `at_lower`,
+`at_upper`, `fixed` and `superbasic`:
 
 ```python
 loose = pl.DataFrame({'snapshot': [0, 1], 'value': ['basic', 'basic']})
@@ -171,12 +174,14 @@ has, and the count of basic entries is made one per constraint.
 A start can name some declarations and some coordinates and leave out the
 rest. The solver fills in what is missing, and repairs what does not fit, as
 far as it can. A start is a hint: it never changes the optimum, only how soon
-a good solution is found. The solve refuses, before the solver loads:
+a good solution is found. Each table is read and checked as a parameter's
+source is. The solve refuses, before the solver loads:
 
 - **A key other than the three readers.** `start=` takes `'primal'`,
   `'variable_basis'` and `'constraint_basis'`.
-- **A table for a declaration the model lacks**, or whose columns are not the
-  declaration's dims and `value`.
+- **A table for a declaration the model lacks**, or one a parameter over the
+  same dims would be refused for: a missing column, a label the dimension
+  lacks, a coordinate given twice.
 - **A basis status outside the five words.**
 - **A basis alone for a mixed-integer model**, which starts from values.
 - **A start that lands on no coordinate the model holds.**
