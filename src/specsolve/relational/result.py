@@ -604,8 +604,8 @@ class Result:
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
-        readers = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate, 'activity': self.activity}
-        return readers[checked_kind(kind)](name)
+        kind = checked_kind(kind)
+        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
         """Every name of *kind* this result can read — what a bridge takes by default.

@@ -230,8 +230,7 @@ class Engine:
         assert (answer.activity is None) == (answer.primal is None), (
             'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
         )
-        activity = answer.activity if 'activity' in outputs else None
-        primals, duals, activities, rays = self._read_back(answer.primal, answer.dual, activity, answer.dual_ray)
+        primals, duals, rays = self._read_back(answer.primal, answer.dual, answer.dual_ray)
         no_duals = (
             None
             if answer.dual is not None
@@ -247,7 +246,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _outputs={'activity': activities} if 'activity' in outputs else {},
+            _outputs={output: self._output(output, answer) for output in outputs},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -295,7 +294,6 @@ class Engine:
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
-        activity: pl.Series | None,
         dual_ray: pl.Series | None,
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
         """One solve's answer as one frame per declaration — a [`Result`][]'s own.
@@ -304,28 +302,37 @@ class Engine:
         replaces rather than mutates. A ``None`` vector yields no frames rather
         than empty ones.
         """
-        model = self._model
-        program = model.program
 
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
-            if values is None:
-                return {}
-            return {
-                name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
-                for name, c in program.constraints.items()
-            }
+            return {} if values is None else self._per_constraint(values)
 
         return (
-            {
-                name: readback.laid_out(model.attached, model.variables[name], v.dims, primal)
-                for name, v in program.variables.items()
-            }
-            if primal is not None
-            else {},
+            self._per_variable(primal) if primal is not None else {},
             rows(dual),
-            rows(activity),
             rows(dual_ray),
         )
+
+    def _output(self, output: Output, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+        """*output*'s frames, computed only when asked for; empty where a vector it needs is absent."""
+        match output:
+            case 'activity':
+                return {} if answer.activity is None else self._per_constraint(answer.activity)
+
+    def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
+            for name, c in model.program.constraints.items()
+        }
+
+    def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.variables[name], v.dims, values)
+            for name, v in model.program.variables.items()
+        }
 
     def _readers(
         self,

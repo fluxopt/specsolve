@@ -16,7 +16,6 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -178,18 +177,16 @@ def _answered_under(under: str) -> dict[str, list[str]]:
 
 
 #: The directories that hold one file per name of each kind.
-_HELD_UNDER = MappingProxyType(
-    {
-        'dimension': [SOURCES_DIR],
-        'relation': [SOURCES_DIR],
-        'parameter': [SOURCES_DIR],
-        **_answered_under(ANSWER_DIR),
-    }
-)
+_HELD_UNDER = {
+    'dimension': [SOURCES_DIR],
+    'relation': [SOURCES_DIR],
+    'parameter': [SOURCES_DIR],
+    **_answered_under(ANSWER_DIR),
+}
 
 
 #: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
-_HELD_IN_WINDOWS = MappingProxyType(_answered_under(_WINDOWS))
+_HELD_IN_WINDOWS = _answered_under(_WINDOWS)
 
 
 #: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.
