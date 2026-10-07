@@ -7,12 +7,12 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs(benchmarks): the benchmark charts read a published JSON table of measurements and label our engine specsolve ([#1851](https://github.com/fluxopt/specsolve/pull/1851))
-- docs(benchmarks): the benchmark page highlights specsolve, projects the sizes a budget refused, and compares every library with it in one table ([#1855](https://github.com/fluxopt/specsolve/pull/1855))
-- docs(benchmarks): the benchmark charts and their method are one page of the docs, in the site's theme ([#1860](https://github.com/fluxopt/specsolve/pull/1860))
-- docs(benchmarks): the benchmark tooltip ranks the libraries against specsolve, and the specsolve label sits clear of the other lines ([#1862](https://github.com/fluxopt/specsolve/pull/1862))
-- fix(archive): a sweep being archived is invisible to a reader of its directory until it lands ([#1873](https://github.com/fluxopt/specsolve/pull/1873))
 - feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
+
+## 0.6.2 (2026-10-07)
+
+- fix(archive): a sweep being archived is invisible to a reader of its directory until it lands ([#1873](https://github.com/fluxopt/specsolve/pull/1873))
+- docs(benchmarks): the benchmark page is one page in the site's theme, built on a published table of measurements ([#1851](https://github.com/fluxopt/specsolve/pull/1851), [#1855](https://github.com/fluxopt/specsolve/pull/1855), [#1860](https://github.com/fluxopt/specsolve/pull/1860), [#1862](https://github.com/fluxopt/specsolve/pull/1862))
 
 ## 0.6.1 (2026-10-06)
 
