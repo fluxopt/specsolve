@@ -263,6 +263,23 @@ keeping 24, not label 47 of the 48 it solved.
 | **a slice that leaves nothing to carry stops the sweep** | An infeasible window has no level to hand forward. The error names the slice, how it terminated, and the slice left waiting. A sweep without a carry records the slice in `record` and goes on. |
 | **`carry` excludes `executor`** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. |
 
+## Starting slices from an earlier answer
+
+`start=` takes what [`solve`](api.md#specsolve.types.Model.solve) takes, and an
+earlier sweep. A sweep passed as `start=` starts each slice from its slice of
+the same key:
+
+```python
+again = sps.solve_over('dispatch.yaml', new_sources, axis, start=sweep)
+```
+
+| Rule | |
+|---|---|
+| **an earlier sweep starts slice by slice** | Each slice starts from the earlier slice of the same key, and an `EachWindow` window from the same window. The earlier sweep must hold every key of this one, keyed by the same column, each slice with values. An archived `EachWindow` sweep needs `keep_windows=True`, which keeps its windows. |
+| **an answer or a table starts every slice the same** | An earlier `Result` or a `Start` is laid onto each slice by coordinate. `EachWindow` refuses it: its windows share their local index, so one start would put the same hours onto every window. |
+| **`start=` combines with `keep='solver'` only** | `keep='progress'` and `keep='nothing'` also say what each slice begins from, so the call is refused. |
+| **a start reaches every executor** | A slice solved in another process takes its start as data. |
+
 ## Running slices in parallel
 
 `executor` is any

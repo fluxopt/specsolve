@@ -350,8 +350,9 @@ class Model:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, a bare string as
                 *record_options* or *outputs*, a name in *outputs* that is not
-                an output, or a *start* this model or solver cannot start from:
-                a key that names no reader, a table naming no declaration or
+                an output, a *start* beside a *keep* other than ``solver``,
+                which also says what the solve begins from, or a *start* this
+                model or solver cannot start from: a key that names no reader, a table naming no declaration or
                 lacking its dims, a basis status outside the five words, a
                 basis alone for a mixed-integer model, a start that lands on
                 no coordinate, or values for an LP that the solver cannot

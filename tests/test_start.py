@@ -343,3 +343,143 @@ def test_a_nonbasic_row_is_at_the_bound_its_sense_gives() -> None:
 def test_a_carried_basis_has_one_basic_entry_per_row(columns: list[int], rows: list[int], expected: tuple) -> None:
     counted = _counted(np.asarray(columns, dtype=np.int8), np.asarray(rows, dtype=np.int8))
     assert ([*counted[0]], [*counted[1]]) == expected, 'a surplus leaves from the columns, a shortfall enters as rows'
+
+
+# ---------------------------------------------------------------------------
+# start= beside keep=, and a sweep's start
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('keep', ['progress', 'nothing'])
+@pytest.mark.parametrize('verb', ['model-solve', 'solve_over'])
+def test_a_start_beside_a_keep_that_also_says_where_to_begin_is_refused(
+    keep: str, verb: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from specsolve.relational import sinks
+
+    before = sps.solve(KNAPSACK, knapsack_sources())
+    monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
+    with pytest.raises(SpecsolveError, match=rf"start= and keep='{keep}' both say"):
+        if verb == 'model-solve':
+            sps.build(KNAPSACK, knapsack_sources()).solve(keep=keep, start=before)
+        else:
+            sps.solve_over(KNAPSACK, knapsack_sources(), DRAWS, key_name='draw', keep=keep, start=before)
+
+
+#: Two draws of the knapsack, each a whole model.
+DRAWS = [('a', knapsack_sources()), ('b', knapsack_sources())]
+
+
+def _swept_at_the_root(solver_name: str, start: Any, executor: Any = None) -> sps.types.Sweep:
+    return sps.solve_over(
+        KNAPSACK,
+        {},
+        DRAWS,
+        key_name='draw',
+        solver_name=solver_name,
+        solver_options=ROOT_ONLY[solver_name],
+        start=start,
+        executor=executor,
+    )
+
+
+EXECUTORS = [
+    pytest.param(None, id='serial'),
+    pytest.param('threads', id='threads'),
+    pytest.param('processes', id='processes'),
+]
+
+
+@pytest.mark.parametrize('how', EXECUTORS)
+def test_each_slice_starts_from_its_slice_of_an_earlier_sweep(how: str | None) -> None:
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+    earlier = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw')
+    if how is None:
+        sweep = _swept_at_the_root('highs', earlier)
+    else:
+        pool = (
+            ThreadPoolExecutor(2)
+            if how == 'threads'
+            else ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn'))
+        )
+        with pool:
+            sweep = _swept_at_the_root('highs', earlier, pool)
+    assert sweep.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'each slice, stopped at its root, returns its slice of the earlier sweep as its incumbent'
+    )
+
+
+def test_one_answer_starts_every_slice() -> None:
+    before = sps.solve(KNAPSACK, knapsack_sources())
+    sweep = _swept_at_the_root('highs', before)
+    assert sweep.record['objective'].to_list() == pytest.approx([before.objective] * 2), (
+        'every slice, stopped at its root, returns the one answer as its incumbent'
+    )
+
+
+def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve.relational.sinks.solvers.highs import Highs
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
+    warmed: list[object] = []
+    original = Highs.warm
+    monkeypatch.setattr(Highs, 'warm', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
+    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=earlier)
+    assert len(warmed) == len(earlier.keys), 'every window is warmed from a basis'
+    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'a start moves the route, never the optimum'
+    )
+
+
+def test_one_answer_for_every_window_is_refused() -> None:
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    one = {
+        'primal': {
+            'soc': earlier.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 0).drop('snapshot_start')
+        }
+    }
+    with pytest.raises(SpecsolveError, match='windows share their local index'):
+        sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=one)
+
+
+def _an_earlier_sweep(how: str, tmp_path: Path) -> Any:
+    if how == 'keyed-otherwise':
+        return sps.solve_over(KNAPSACK, {}, DRAWS, key_name='trial')
+    if how == 'short-of-a-key':
+        return sps.solve_over(KNAPSACK, {}, DRAWS[:1], key_name='draw')
+    if how == 'a-slice-with-no-values':
+        short = {**knapsack_sources(), 'capacity': pl.DataFrame({'value': [-1.0]})}
+        return sps.solve_over(KNAPSACK, {}, [DRAWS[0], ('b', short)], key_name='draw')
+    raise AssertionError(how)
+
+
+@pytest.mark.parametrize(
+    ('how', 'match'),
+    [
+        pytest.param('keyed-otherwise', "keyed by 'trial', these by 'draw'", id='keyed-otherwise'),
+        pytest.param('short-of-a-key', r"holds none for \['b'\]", id='short-of-a-key'),
+        pytest.param('a-slice-with-no-values', r"its slices \['b'\] left none", id='a-slice-with-no-values'),
+    ],
+)
+def test_an_earlier_sweep_that_cannot_start_this_one_is_refused(how: str, match: str, tmp_path: Path) -> None:
+    earlier = _an_earlier_sweep(how, tmp_path)
+    with pytest.raises(SpecsolveError, match=match):
+        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=earlier)
+
+
+def test_an_archived_window_sweep_without_its_windows_is_refused_before_a_slice_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from specsolve import strategy
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
+    archive = sps.load_archive(tmp_path / 'run.zip')
+    monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
+    with pytest.raises(SpecsolveError, match='without keep_windows=True'):
+        sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=archive.sweep)

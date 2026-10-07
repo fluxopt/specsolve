@@ -88,6 +88,23 @@ def unknown_keep_message(keep: object) -> str:
     return f'unknown keep {keep!r}. A solve may keep:\n{options}'
 
 
+def refuse_a_start_beside(keep: Keep) -> None:
+    """Refuse a ``start=`` beside a *keep* that also says what the solve begins from: any but ``solver``.
+
+    Raises:
+        SpecsolveError: *keep* is ``progress`` or ``nothing``, or none of the
+            three.
+    """
+    if keep not in KEEPS:
+        raise SpecsolveError(unknown_keep_message(keep))
+    if keep != 'solver':
+        raise SpecsolveError(
+            f'start= and keep={keep!r} both say what this solve begins from: start= the answer or the tables it '
+            f"gives, and keep={keep!r} that {KEEPS[keep]}. Pass start= with keep='solver', the default, or "
+            f'drop start=.'
+        )
+
+
 #: What the bridges out say when the environment cannot serve them, ``{module}``
 #: being pandas or xarray.
 _NEEDS_THE_EXTRA = (

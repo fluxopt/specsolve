@@ -69,6 +69,23 @@ sweep = sps.solve_over('horizon.yaml', sources, axis, keep='progress')
 Under `executor=`, every slice is a first solve and keeps `'nothing'`
 ([running slices in parallel](../reference/sweeps.md#running-slices-in-parallel)).
 
+To start each slice from the same slice of an earlier sweep, pass that sweep
+as `start=`. Each slice starts from the slice of the same key, under an
+executor too:
+
+```python
+yesterday = sps.solve_over('dispatch.yaml', sources, axis, outputs={'basis'})
+today = sps.solve_over('dispatch.yaml', new_sources, axis, start=yesterday)
+```
+
+An answer or a table passed as `start=` starts every slice the same.
+`EachWindow` refuses that, because its windows share their local index, so one
+start would put the same hours onto every window.
+
+**`start=` combines with `keep='solver'` only.** `keep='progress'` and
+`keep='nothing'` also say what the solve begins from, so a solve given either
+beside `start=` is refused.
+
 ## Time a cold solve
 
 Pass `keep='nothing'`. It discards the held solver before the load, so no

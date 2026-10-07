@@ -12,7 +12,7 @@ from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
     from specsolve.inputs import Label
     from specsolve.relational.answer_layout import Output
+    from specsolve.relational.result import Start
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
@@ -364,6 +365,39 @@ class Sweep:
     @property
     def keys(self) -> list[Label]:
         return self.record[self.key_name].to_list()
+
+    def _per_slice(self, kind: str) -> Mapping[str, pl.LazyFrame]:
+        """Every slice's frame of *kind* per name, keyed by slice and in the slice model's own coordinates.
+
+        An archived sweep that was not cut into windows holds its slices as its
+        answer, keyed already. One that was holds them only where the windows
+        were kept.
+
+        Raises:
+            SpecsolveError: An archived EachWindow sweep whose windows were not
+                kept.
+        """
+        if self._answer is not None and self._stitch is None:
+            return self._answer[kind]
+        if not self._windows:
+            raise SpecsolveError(NO_WINDOWS)
+        return self._slices.get(kind, {})
+
+    def _start(self, key: Label) -> Start:
+        """What slice *key* gives a solve to start from, keyed as [`Start`][specsolve.types.Start] is.
+
+        Its primal, and its basis where the sweep carries one. Called only for
+        a key this sweep holds and solved to values.
+        """
+        given: dict[str, dict[str, pl.DataFrame]] = {}
+        for kind in ('primal', *(sorted(BASES) if 'basis' in self._outputs else ())):
+            frames = {
+                name: frame.filter(pl.col(self.key_name) == key).drop(self.key_name).collect()
+                for name, frame in self._per_slice(kind).items()
+            }
+            if held := {name: frame for name, frame in frames.items() if frame.height}:
+                given[kind] = held
+        return cast('Start', given)
 
     def _check_per_window(self) -> None:
         """Refuse ``per_window=True`` where there are no windows to read."""
@@ -856,12 +890,7 @@ def slice_index(sweep: Sweep, kind: str) -> dict[str, dict[Label, pl.DataFrame]]
     answer, keyed already. One that was holds them only where the windows were
     kept.
     """
-    if sweep._answer is not None and sweep._stitch is None:
-        held = sweep._answer[kind]
-    elif not sweep._windows:
-        raise SpecsolveError(NO_WINDOWS)
-    else:
-        held = sweep._slices.get(kind, {})
+    held = sweep._per_slice(kind)
     key = sweep.key_name
     return {
         name: {part[key][0]: part.drop(key) for part in frame.collect().partition_by(key, maintain_order=True)}

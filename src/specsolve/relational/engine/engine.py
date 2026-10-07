@@ -33,7 +33,16 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
-from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, Start, unknown_keep_message
+from specsolve.relational.result import (
+    KEEPS,
+    ConstraintRow,
+    Diagnostics,
+    Keep,
+    Result,
+    Start,
+    refuse_a_start_beside,
+    unknown_keep_message,
+)
 from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
@@ -304,10 +313,12 @@ class Engine:
 
         Raises:
             SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* this
-                model or this solver cannot start from — refused before the
-                solver loads.
+                [`KEEPS`][specsolve.relational.result.KEEPS], a *start* beside a
+                *keep* other than ``solver``, or a *start* this model or this
+                solver cannot start from — refused before the solver loads.
         """
+        if start is not None:
+            refuse_a_start_beside(keep)
         matched = None if start is None else self._matched_start(start, solver_name)
         solver, kept = self._hand_off(solver_name, solver_options, keep)
         if isinstance(matched, Basis):

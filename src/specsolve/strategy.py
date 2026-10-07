@@ -21,7 +21,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
 
@@ -44,6 +44,7 @@ from specsolve.relational.answer_layout import (
     write_whole,
 )
 from specsolve.relational.collect import collect_engine
+from specsolve.relational.result import Result, refuse_a_start_beside
 from specsolve.sources import numbered, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
@@ -58,7 +59,7 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
@@ -66,7 +67,7 @@ if TYPE_CHECKING:
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import Diagnostics, Keep, Result
+    from specsolve.relational.result import Diagnostics, Keep, Start
 
 
 #: The codec a frame is written with to cross a process.
@@ -186,6 +187,7 @@ def solve_over(
     archive: str | Path | None = None,
     keep_windows: bool = False,
     outputs: Iterable[Output] = (),
+    start: Sweep | Result | Start | None = None,
 ) -> Sweep:
     """Solve *spec* once per slice of *axis* and fold the answers together.
 
@@ -246,6 +248,13 @@ def solve_over(
             every slice. The sweep, its spill and its archive carry these and
             nothing else; a *spill_to* directory solved with others is
             refused rather than resumed.
+        start: What each slice starts from, as
+            [`solve`][specsolve.api.Model.solve] takes it. An earlier sweep
+            starts each slice from its slice of the same key, an EachWindow
+            sweep window by window. An answer or a
+            [`Start`][specsolve.types.Start] starts every slice the same, which
+            an EachWindow sweep refuses: its windows share their local index,
+            so one start would lay the same hours onto every window.
 
     Returns:
         The sweep, which reads its answer.
@@ -258,8 +267,11 @@ def solve_over(
             allow; a *spill_to* directory holding another sweep;
             *keep_windows* without *archive* or on an axis that does not cut
             windows; *outputs* that [`solve`][specsolve.api.Model.solve]
-            refuses — each answerable from the declarations alone; keys of
-            more than one type, or two keys of one text.
+            refuses; a *start* beside a *keep* other than ``solver``, or one
+            answer or set of tables for every window — each answerable from
+            the declarations alone; keys of more than one type, or two keys of
+            one text; an earlier sweep keyed otherwise, lacking a key, holding
+            a slice of one with no values, or archived without its windows.
         DataError: No source carries the axis, an index of another
             dimension carries it, or the axis produced no slices.
 
@@ -277,6 +289,8 @@ def solve_over(
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
     asked = checked_outputs(outputs)
+    if start is not None:
+        refuse_a_start_beside(keep)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
     key_name = _key_column(axis, key_name, program)
@@ -300,11 +314,12 @@ def solve_over(
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
+    starts = _slice_starts(start, axis, key_name, keys)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
     answered = (
-        _serially(program, document, slices, solving, plan, keep, spill)
+        _serially(program, document, slices, solving, plan, keep, spill, starts)
         if executor is None
-        else _pooled(executor, workers_share_fs, program, document, slices, solving, spill)
+        else _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
     )
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
     if spill is not None:
@@ -315,6 +330,61 @@ def solve_over(
             out, document, program, cut, dict(carry or {}), sources, folded, slices[0].sources, keep_windows
         )
     return folded
+
+
+def _slice_starts(
+    start: Sweep | Result | Start | None, axis: Axis | HandBuilt, key_name: str, keys: Sequence[Label]
+) -> Callable[[Label], Start | None]:
+    """What each slice, by its key, starts from: its slice of an earlier sweep, or one start for every slice.
+
+    An answer is read into tables once, here, so that a slice solved in
+    another process takes it as data.
+
+    Raises:
+        SpecsolveError: One start for every window; an earlier sweep keyed by
+            another column, lacking a key, holding a slice of one with no
+            values, or archived without its windows.
+    """
+    if start is None:
+        return lambda _: None
+    if not isinstance(start, Sweep):
+        if isinstance(axis, EachWindow):
+            raise SpecsolveError(
+                'start= gives every window of this sweep the same start, and windows share their local index, '
+                'so one start would lay the same hours onto every window. Pass an earlier sweep over the same '
+                'windows instead: each of its windows starts the window of the same key.'
+            )
+        tables = (
+            cast(
+                'Start',
+                {
+                    kind: {name: frame.collect(engine=collect_engine()) for name, frame in frames.items()}
+                    for kind, frames in start._start().items()
+                },
+            )
+            if isinstance(start, Result)
+            else start
+        )
+        return lambda _: tables
+    if start.key_name != key_name:
+        raise SpecsolveError(
+            f'start= takes an earlier sweep whose slices start the slices of this one by key, and its slices are '
+            f'keyed by {start.key_name!r}, these by {key_name!r}.'
+        )
+    held = set(start.keys)
+    if missing := [key for key in keys if key not in held]:
+        raise SpecsolveError(
+            f'start= takes an earlier sweep holding a slice for every key of this one, and it holds none for '
+            f'{missing}. Sweep those keys without start=, or pass a sweep that holds them.'
+        )
+    solved = dict(zip(start.keys, start.record['has_primal'].to_list(), strict=True))
+    if empty := [key for key in keys if not solved[key]]:
+        raise SpecsolveError(
+            f'start= takes an earlier sweep whose slices left values to start from, and its slices {empty} '
+            f'left none. Sweep those keys without start=.'
+        )
+    start._per_slice('primal')
+    return start._start
 
 
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
@@ -471,6 +541,7 @@ def _serially(
     plan: Mapping[str, _CarryRule],
     keep: Keep,
     spill: Spill | None,
+    starts: Callable[[Label], Start | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
@@ -501,7 +572,7 @@ def _serially(
                     if model is not None:
                         model.close()
                     model, named, before = build(document, sources), names, None
-                result = model.solve(**solving, keep=keep)
+                result = model.solve(**solving, keep=keep, start=starts(current.key))
                 answer = _answers(result, program, _slice_metrics(model.diagnostics(), before))
             primals = answer.frames.get('primal', {})
             if spill is not None:
@@ -552,6 +623,7 @@ def _pooled(
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     spill: Spill | None,
+    starts: Callable[[Label], Start | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
@@ -573,6 +645,7 @@ def _pooled(
             _encode(current.sources, memo, workers_share_fs=shared) if crosses else dict(current.sources),
             crosses,
             solving,
+            starts(current.key),
         )
         for position, current in enumerate(slices)
     ]
@@ -629,9 +702,10 @@ def _run_slice(
     encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
+    start: Start | None,
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
-    with build(document, _decode(encoded)) as model, model.solve(**call) as result:
+    with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
         answer = _answers(result, program, _slice_metrics(model.diagnostics(), None))
         if not encode_out:
             return answer
