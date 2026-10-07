@@ -68,3 +68,19 @@ def test_a_coordinate_product_arrives_in_label_order():
         product = Scope(built.program, built.attached, built.variables).product(('a', 'b')).pipe(collected)
     ordinals = product.select(ordinal('a'), ordinal('b')).rows()
     assert ordinals == sorted(ordinals), 'row-major: `a` varies slowest'
+
+
+def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_frame_inputs):
+    """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857)."""
+    engines = {}
+    original = pl.LazyFrame.collect
+
+    def recording(self, *args, **kwargs):
+        engines.setdefault(tuple(self.collect_schema().names()), set()).add(kwargs.get('engine'))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
+    sps.solve(dispatch_yaml, dispatch_frame_inputs)
+    assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
+        f'every bounds collect names the in-memory engine: {engines}'
+    )

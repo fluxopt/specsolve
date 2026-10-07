@@ -88,10 +88,12 @@ Each entry says what the thing is, then the module it lives in.
   (`relational/engine/coverage.py`).
 
 **Collect engine**
-: Which polars engine materialises a frame: the streaming one where this
-  polars has it, the in-memory one otherwise. `collected()` is the one way a
-  frame is collected, on that engine and with polars' join reordering off.
-  `collect_engine()` is not the `Engine` (`relational/collect.py`).
+: Which polars engine materialises a frame: polars' own `auto` choice where
+  this polars has the streaming engine, the in-memory one otherwise. A collect
+  can ask for the in-memory engine by name (`in_memory=True`). `collected()` is
+  the one way a frame is collected, on that engine and with polars' join
+  reordering off. `collect_engine()` is not the `Engine`
+  (`relational/collect.py`).
 
 ## Sinks
 

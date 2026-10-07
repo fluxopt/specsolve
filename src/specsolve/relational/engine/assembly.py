@@ -170,7 +170,10 @@ class Assembly:
         """One variable's labelled frame, and its share of ``cols``.
 
         The share leaves in label order: ``cols`` carries no ``col``, so a row's
-        position is its solver column index.
+        position is its solver column index. The bounds are collected in memory:
+        they are parameters looked up onto labels already in memory, and polars
+        2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
+        than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
         labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
@@ -180,7 +183,7 @@ class Assembly:
         bounded = labels.in_position_order(
             self.compiler.bounds(labelled.lazy(), name, v)
             .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
-            .pipe(collected),
+            .pipe(collected, in_memory=True),
             'var_label',
         )
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
