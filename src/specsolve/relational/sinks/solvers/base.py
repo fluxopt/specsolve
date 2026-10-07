@@ -86,10 +86,6 @@ class InfeasibleSubsystemIndices:
     #: The columns whose upper bound is in it.
     upper: Ints
 
-    def __bool__(self) -> bool:
-        """Whether it holds anything: an empty one explains nothing."""
-        return bool(self.rows.size or self.lower.size or self.upper.size)
-
 
 class Solver(ABC):
     """One solver, holding one model. Subclassed once per member of ``SOLVERS``.
@@ -278,14 +274,13 @@ class Solver(ABC):
 
     @abstractmethod
     def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
-        """The rows and bounds that cannot hold together, none of which can be dropped and the rest still fail.
+        """The rows and bounds that cannot hold together, read only after an infeasible solve.
 
-        Called only after an infeasible solve, and only on request: the search
-        can cost more than the solve. Integrality, and any constraint that is
-        neither a row nor a bound, is left out.
+        Integrality, and any constraint that is neither a row nor a bound, is
+        left out.
 
         Returns:
-            The subsystem, or ``None`` where this solver found none.
+            The subsystem, or ``None`` where the solver did not prove one.
         """
 
     @abstractmethod

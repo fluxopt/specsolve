@@ -426,11 +426,11 @@ class Model:
         """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
 
         The verb for *this model has no solution and I do not know why*. It
-        asks the solver that ran the last solve for an irreducible infeasible
-        subsystem (IIS): drop any one member and the rest can hold. The search
-        runs only on this call, since it can cost more than the solve, and
-        under the solve's ``solver_options``, so a solver's IIS settings and
-        time limit go there. Read a member row's terms with [`row`][].
+        asks the solver that ran the last solve for an IIS (irreducible
+        infeasible subsystem). The search runs only on this call, since it can
+        cost more than the solve, and under the solve's ``solver_options``, so
+        a solver's IIS settings and time limit go there. Read a member row's
+        terms with [`row`][].
 
         Every sink finds one for a linear model. For a discrete model,
         ``gurobi`` and ``xpress`` leave out the integrality that makes the rows

@@ -310,7 +310,7 @@ class Highs(Solver):
             return None
         bound = highspy.IisBoundStatus
         columns = np.asarray(found.col_index_, dtype=np.int64)
-        sides = np.asarray([int(side) for side in found.col_bound_], dtype=np.int64)
+        sides = np.asarray(found.col_bound_, dtype=np.int64)
         return InfeasibleSubsystemIndices(
             np.asarray(found.row_index_, dtype=np.int64),
             columns[np.isin(sides, [int(bound.kIisBoundStatusLower), int(bound.kIisBoundStatusBoxed)])],

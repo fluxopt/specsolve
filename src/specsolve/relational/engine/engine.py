@@ -276,7 +276,7 @@ class Engine:
             )
         assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
         found = self._solver.infeasible_subsystem()
-        if not found:
+        if found is None:
             raise SpecsolveError(
                 _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
             )

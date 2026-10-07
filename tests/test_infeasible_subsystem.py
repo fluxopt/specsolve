@@ -100,10 +100,10 @@ def test_two_rows_that_conflict_with_no_bound_between_them(solver_name: str) -> 
     assert not found.bounds, "p's lower bound of zero is not needed for the conflict"
 
 
-def test_the_subsystem_prints_one_line_per_member(solver_name: str) -> None:
+def test_the_subsystem_prints_one_line_per_member() -> None:
     """What a caller reads in a terminal: the row, then each bound, at its coordinate."""
     with sps.build(SHORT, SOURCES) as model:
-        model.solve(solver_name)
+        model.solve()
         printed = str(model.infeasible_subsystem())
     assert printed.splitlines() == [
         'balance[snapshot=1] == 200',
@@ -170,28 +170,31 @@ def _solved_then_broken(model: Any) -> None:
             model.solve(keep='nothing')
 
 
+def _solved_feasible(model: Any) -> None:
+    model.update({'demand': FEASIBLE['demand']})
+    assert model.solve().termination_condition == 'optimal'
+
+
+#: What every refusal for want of a solve to explain says.
+UNSOLVED = 'not been solved since it was built, updated or closed'
+
+
 @pytest.mark.parametrize(
-    'since',
+    ('since', 'refusal'),
     [
-        pytest.param(_unsolved, id='never-solved'),
-        pytest.param(_solved_then_updated, id='updated'),
-        pytest.param(_solved_then_closed, id='closed'),
-        pytest.param(_solved_then_broken, id='a-solve-that-raised'),
+        pytest.param(_unsolved, UNSOLVED, id='never-solved'),
+        pytest.param(_solved_then_updated, UNSOLVED, id='updated'),
+        pytest.param(_solved_then_closed, UNSOLVED, id='closed'),
+        pytest.param(_solved_then_broken, UNSOLVED, id='a-solve-that-raised'),
+        pytest.param(_solved_feasible, "terminated 'optimal'", id='feasible'),
     ],
 )
-def test_no_solve_to_explain_is_refused(since: Any) -> None:
+def test_a_model_with_nothing_to_explain_is_refused(since: Any, refusal: str) -> None:
     model = sps.build(SHORT, SOURCES)
     since(model)
-    with pytest.raises(SpecsolveError, match='not been solved since it was built, updated or closed'):
+    with pytest.raises(SpecsolveError, match=refusal):
         model.infeasible_subsystem()
     model.close()
-
-
-def test_a_feasible_solve_has_no_subsystem() -> None:
-    with sps.build(SHORT, FEASIBLE) as model:
-        assert model.solve().termination_condition == 'optimal'
-        with pytest.raises(SpecsolveError, match="'optimal'"):
-            model.infeasible_subsystem()
 
 
 class _StoppedShort:

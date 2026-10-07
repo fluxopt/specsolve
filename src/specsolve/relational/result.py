@@ -121,6 +121,11 @@ def _bracket(labels: str) -> str:
     return f'[{labels}]' if labels else ''
 
 
+def _named_at(name: str, coordinate: Mapping[str, object]) -> str:
+    """``balance[snapshot=1, g=gas]`` — a declaration at one coordinate, in its dim order."""
+    return name + _bracket(', '.join(f'{dim}={label}' for dim, label in coordinate.items()))
+
+
 @dataclass(frozen=True)
 class ConstraintRow:
     """One built constraint row, spelled back out — what [`row`][specsolve.api.Model.row] returns.
@@ -155,14 +160,10 @@ class ConstraintRow:
 
     def __str__(self) -> str:
         """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``."""
-        return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
+        return f'{_named_at(self.name, self.coordinate)}: {self._body()} {self.sense} {_number(self.rhs)}'
 
     #: The line, not the field-by-field dataclass dump.
     __repr__ = __str__
-
-    def _where(self) -> str:
-        """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
-        return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
 
     def _body(self) -> str:
         """The terms, spelled out or summarised."""
@@ -196,10 +197,9 @@ class ConstraintRow:
 class InfeasibleSubsystem:
     """The rows and bounds that cannot hold together — what [`infeasible_subsystem`][specsolve.api.Model.infeasible_subsystem] returns.
 
-    Irreducible: drop any one member and the rest can be met. A model can have
+    Irreducible: drop any one member and the rest can hold. A model can have
     several, and each solver may find a different one. Printed, it is one line
-    per member, constraints first; [`row`][specsolve.api.Model.row] spells a
-    row's terms out.
+    per member, constraints first.
 
     Attributes:
         constraints: ``(dims…, sense, rhs)`` per constraint with a row in it,
@@ -214,12 +214,12 @@ class InfeasibleSubsystem:
     def __str__(self) -> str:
         """``balance[snapshot=1] == 200``, then ``p[snapshot=1, tech=gas] <= 100 (upper bound)``."""
         lines = [
-            f'{name}{_bracket(_coordinate(member, frame.columns[:-2]))} {member["sense"]} {_number(member["rhs"])}'
+            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} {member["sense"]} {_number(member["rhs"])}'
             for name, frame in self.constraints.items()
             for member in frame.iter_rows(named=True)
         ]
         lines += [
-            f'{name}{_bracket(_coordinate(member, frame.columns[:-2]))} '
+            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} '
             f'{_BOUND_SENSE[member["bound"]]} {_number(member["value"])} ({member["bound"]} bound)'
             for name, frame in self.bounds.items()
             for member in frame.iter_rows(named=True)
@@ -232,11 +232,6 @@ class InfeasibleSubsystem:
 
 #: How each side of a variable's bound reads as a comparison.
 _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
-
-
-def _coordinate(member: Mapping[str, object], dims: Sequence[str]) -> str:
-    """``snapshot=1, tech=gas`` — one member's coordinate, in its declaration's dim order."""
-    return ', '.join(f'{dim}={member[dim]}' for dim in dims)
 
 
 @dataclass(frozen=True)
