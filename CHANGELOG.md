@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- refactor(api): `solve` takes the solver options whose value the provenance shows as `disclose_solver_options`, which replaces `record_options`
+- refactor(api): `solve` takes the solver options whose value the provenance shows as `disclose_solver_options`, which replaces `record_options` and refuses a name that `solver_options` does not hold
 
 ## 0.7.0 (2026-10-07)
 
