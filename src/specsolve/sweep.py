@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -54,7 +55,9 @@ if TYPE_CHECKING:
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
-_LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
+_LABELS: Mapping[str, str] = MappingProxyType(
+    {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
+)
 
 
 #: A spilled sweep's manifest, its keys as their own type, and the coordinates
