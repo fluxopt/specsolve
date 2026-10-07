@@ -108,6 +108,24 @@ def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
     assert warm == 0, 'the frames on disk are the frames the live answer held'
 
 
+def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
+    """Its coordinates are not the earlier ones, so none of its statuses carry, and the rest still do."""
+    scalar = {
+        'variables': {'x': {'dims': [], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'cap': {'dims': [], 'expression': 'x <= 3'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
+    }
+    indexed = {
+        'dimensions': {'i': {}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'cap': {'dims': [], 'expression': 'sum(x, over=i) <= 3'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=i)'},
+    }
+    before = sps.solve(scalar, {}, outputs=BASIS)
+    with sps.solve(indexed, {'i': ['a', 'b']}, start=before) as after:
+        assert after.objective == pytest.approx(3.0), 'the cap binds however the sum is split'
+
+
 # ---------------------------------------------------------------------------
 # refusals
 # ---------------------------------------------------------------------------
