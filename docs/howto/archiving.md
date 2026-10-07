@@ -55,8 +55,11 @@ sps.solve('dispatch.yaml', sources, outputs={'activity'}, archive='case')
 
 This adds `answer/activity/<name>.parquet`, each constraint's left-hand side.
 `outputs={'reduced_cost'}` adds `answer/reduced_cost/<name>.parquet`, each
-variable's reduced cost, and `outputs={'slack'}` adds
-`answer/slack/<name>.parquet`, each constraint's distance to binding.
+variable's reduced cost, `outputs={'slack'}` adds
+`answer/slack/<name>.parquet`, each constraint's distance to binding, and
+`outputs={'variable_basis', 'constraint_basis'}` adds
+`answer/variable_basis/` and `answer/constraint_basis/`, the basis status the
+solve ended on.
 A reader of an output the solve did not ask for refuses, and the message names
 the `outputs=` to solve with.
 

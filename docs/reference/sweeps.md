@@ -92,7 +92,8 @@ how a model masks, so the gap is reported rather than refused.
 ## Reading a sweep
 
 **Every reader returns the answer.** `primal`, `dual`, `evaluate`, `activity`,
-`reduced_cost`, `slack`, `scan`, `to_pandas`, `to_dataarray` and `to_dataset`
+`reduced_cost`, `slack`, `variable_basis`, `constraint_basis`, `scan`,
+`to_pandas`, `to_dataarray` and `to_dataset`
 keep the names and shapes of [`Result`](api.md#specsolve.types.Result). For `EachWindow` the answer is over the
 real labels of the sliced dimension. Each label comes from the window that owns
 it, and the final window gives all of its rows. For `EachCoordinate` and a

@@ -12,7 +12,17 @@ from typing import TYPE_CHECKING, Any
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector
+from specsolve.relational.sinks.solvers.base import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    SUPERBASIC,
+    SolveAnswer,
+    Solver,
+    WarmStart,
+    basis_codes,
+    solver_vector,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -227,6 +237,17 @@ class Highs(Solver):
             values = np.asarray(self._handle.getSolution().col_value, dtype=np.float64)
             return WarmStart(solver='highs', column_statuses=None, row_statuses=None, column_values=values)
         return None
+
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``getBasis``, where it is valid; its statuses are ``kLower``, ``kBasic``, ``kUpper``, ``kZero``, ``kNonbasic``."""
+        basis = self._handle.getBasis()
+        if not basis.valid:
+            return None
+        codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC, SUPERBASIC)
+        return (
+            basis_codes([int(status) for status in basis.col_status], codes),
+            basis_codes([int(status) for status in basis.row_status], codes),
+        )
 
     def _warm(self, ws: WarmStart) -> None:
         """``setBasis`` for a basis, ``setSolution`` for an incumbent."""

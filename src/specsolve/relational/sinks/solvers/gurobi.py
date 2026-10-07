@@ -11,7 +11,18 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
+from specsolve.relational.sinks.solvers.base import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    SUPERBASIC,
+    SolveAnswer,
+    Solver,
+    WarmStart,
+    basis_codes,
+    solver_vector,
+    spelled_senses,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -154,6 +165,21 @@ class Gurobi(Solver):
             return None
         rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int32)
         return WarmStart(solver='gurobi', column_statuses=columns, row_statuses=rows, column_values=None)
+
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``VBasis`` and ``CBasis``, which Gurobi refuses where it holds no basis; each status is ``0`` or below, so negated it indexes."""
+        import numpy as np
+
+        gurobipy = _gurobipy()
+        if self._qrows:
+            return None
+        try:
+            columns = np.asarray(self._x.VBasis, dtype=np.int64)
+            slices = [np.asarray(block.CBasis, dtype=np.int64) for block in self._blocks]
+        except (AttributeError, gurobipy.GurobiError):
+            return None
+        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int64)
+        return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
     def _warm(self, ws: WarmStart) -> None:
         """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent."""

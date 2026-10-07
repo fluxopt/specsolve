@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Literal
 from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
+    BASES,
+    NO_BASIS,
     NO_PROVENANCE,
     PRICED,
     RECORD_FILE,
@@ -609,11 +611,49 @@ class Result:
         """
         return _named(self._carried('slack', name), name, 'constraint').collect(engine=collect_engine())
 
+    def variable_basis(self, name: str) -> pl.DataFrame:
+        """The basis status of each column of variable *name* where the solve ended — ``(dims…, value)``, [`primal`][]'s shape and order.
+
+        ``value`` is one of ``basic``, ``at_lower``, ``at_upper``, ``fixed``
+        (nonbasic at bounds that are equal) and ``superbasic`` (nonbasic
+        between its bounds), in that order as an ``Enum``, the same words for
+        every sink. Carried only where the solve was asked for it with
+        ``outputs={'variable_basis'}``, and only an LP that ended on a basis
+        has one.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its variable basis, or it ended on no basis.
+            KeyError: No variable is called *name*.
+        """
+        return _named(self._carried('variable_basis', name), name, 'variable').collect(engine=collect_engine())
+
+    def constraint_basis(self, name: str) -> pl.DataFrame:
+        """The basis status of each row of constraint *name* where the solve ended — ``(dims…, value)``, [`dual`][]'s shape and order.
+
+        In [`variable_basis`][]'s words, with the right-hand side as the
+        row's bound: a binding ``<=`` row is ``at_upper``, a binding ``>=``
+        row ``at_lower``, a binding ``==`` row ``fixed``, and a row that is
+        not binding ``basic``. Carried only where the solve was asked for it
+        with ``outputs={'constraint_basis'}``, and only an LP that ended on a
+        basis has one.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its constraint basis, or it ended on no basis.
+            KeyError: No constraint is called *name*.
+        """
+        return _named(self._carried('constraint_basis', name), name, 'constraint').collect(engine=collect_engine())
+
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
         """*output*'s frames, or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
-        that exists only where the duals do, the duals' reason.
+        that exists only where the duals do, the duals' reason, and for a basis,
+        [`NO_BASIS`][specsolve.relational.answer_layout.NO_BASIS] where the
+        solve ended on none.
         """
         what = f"the {output.replace('_', ' ')} of '{name}'"
         self._unclosed(what)
@@ -623,6 +663,8 @@ class Result:
         frames = self._readable(self._outputs[output], what)
         if output in PRICED and self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
+        if output in BASES and not frames:
+            raise SpecsolveError(NO_BASIS)
         return frames
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:

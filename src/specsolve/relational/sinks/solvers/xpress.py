@@ -10,7 +10,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
+from specsolve.relational.sinks.solvers.base import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    SUPERBASIC,
+    SolveAnswer,
+    Solver,
+    WarmStart,
+    basis_codes,
+    solver_vector,
+    spelled_senses,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -118,6 +129,22 @@ class Xpress(Solver):
             row_statuses=np.asarray(rows, dtype=np.int32),
             column_values=None,
         )
+
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``getBasis``, which returns rows first; each status is ``0`` at lower, ``1`` basic, ``2`` at upper, ``3`` superbasic.
+
+        After a mixed-integer solve Xpress hands back a trivial all-slack
+        basis rather than none, so that is asked of the problem directly; after
+        a barrier run without crossover it refuses.
+        """
+        if int(self._p.attributes.mipents):
+            return None
+        try:
+            rows, columns = self._p.getBasis()
+        except _xpress().SolverError:
+            return None
+        codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC)
+        return basis_codes(columns, codes), basis_codes(rows, codes)
 
     def _warm(self, ws: WarmStart) -> None:
         """``loadBasis`` for a basis, ``addMipSol`` for an incumbent; a basis turns ``keepbasis`` back on."""
