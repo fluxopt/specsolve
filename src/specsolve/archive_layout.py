@@ -54,9 +54,10 @@ ANSWER_DIR = 'answer'
 
 #: The layout of the spec and the data an archive holds: ``spec.yaml``,
 #: ``sources/``, ``sources.parquet`` and ``axis.json``. A change to any of
-#: them raises it; any other change to what an archive writes raises
-#: [`LAYOUT`][specsolve.relational.answer_layout.LAYOUT] instead. Stamped
-#: in the archive's own ``format.json``.
+#: them raises it; any other change to what an archive writes, ``catalog.parquet``
+#: included, raises
+#: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
+#: Stamped in the archive's own ``format.json``.
 INPUTS_LAYOUT = 1
 
 

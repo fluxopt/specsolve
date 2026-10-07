@@ -62,7 +62,7 @@ RUN = f'{RESERVED}run'
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-LAYOUT = 3
+ANSWER_LAYOUT = 3
 FORMAT_FILE = 'format.json'
 
 
@@ -74,13 +74,13 @@ def installed(distribution: str) -> str | None:
         return None
 
 
-def write_format(directory: Path, layout: int = LAYOUT) -> None:
+def write_format(directory: Path, layout: int = ANSWER_LAYOUT) -> None:
     """Stamp *directory* with the layout its contents are in, and the specsolve version that wrote them."""
     directory.mkdir(parents=True, exist_ok=True)
     (directory / FORMAT_FILE).write_text(json.dumps({'layout': layout, 'specsolve': installed('specsolve')}))
 
 
-def other_layout(directory: Path, layout: int = LAYOUT) -> str | None:
+def other_layout(directory: Path, layout: int = ANSWER_LAYOUT) -> str | None:
     """How *directory*'s stamp differs from *layout*, as a refusal names it, or ``None`` where it does not."""
     file = directory / FORMAT_FILE
     stamp = json.loads(file.read_text()) if file.is_file() else {}
@@ -104,7 +104,7 @@ def check_format(directory: Path) -> None:
     if (other := other_layout(directory)) is not None:
         raise LayoutError(
             f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
-            f'{LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
+            f'{ANSWER_LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
             f'the model again and save it.'
         )
 

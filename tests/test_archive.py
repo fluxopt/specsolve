@@ -27,7 +27,7 @@ from specsolve.api import _provenance
 from specsolve.archive import _attach_readers
 from specsolve.archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve.relational.answer_layout import (
-    LAYOUT,
+    ANSWER_LAYOUT,
     METRICS_FILE,
     RUN,
     Metrics,
@@ -1505,7 +1505,7 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': LAYOUT, 'specsolve': sps.__version__}, (
+    assert json.loads((out / 'format.json').read_text()) == {'layout': ANSWER_LAYOUT, 'specsolve': sps.__version__}, (
         'the layout this package writes, beside the version that wrote it'
     )
 
@@ -1663,9 +1663,9 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
     with pytest.raises(sps.errors.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
-    assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {LAYOUT}' in str(refused.value), (
-        'the refusal names the layout it found and the version that wrote it'
-    )
+    assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {ANSWER_LAYOUT}' in str(
+        refused.value
+    ), 'the refusal names the layout it found and the version that wrote it'
 
     (out / 'format.json').write_text(json.dumps({'answer': 0}))  # what 0.1.0 wrote
     with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):

@@ -33,8 +33,8 @@ from specsolve.axes import axis_from
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.inputs import lower
 from specsolve.relational.answer_layout import (
+    ANSWER_LAYOUT,
     KINDS,
-    LAYOUT,
     METRICS_FILE,
     RUN,
     Metrics,
@@ -278,8 +278,8 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(
-            f'{str(archive)!r} holds an answer {other} and this package reads layout {LAYOUT}, so it does not '
-            f'read the answer back. The spec and the data are in a layout this package reads: '
+            f'{str(archive)!r} holds an answer {other} and this package reads layout {ANSWER_LAYOUT}, so it '
+            f'does not read the answer back. The spec and the data are in a layout this package reads: '
             f'sps.load_inputs({str(archive)!r}) returns them, to solve again.'
         )
 
