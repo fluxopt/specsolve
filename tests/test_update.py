@@ -422,7 +422,7 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
     """
     taken = _hashes(monkeypatch)
     model.solve()
-    assert model.solve().kept == 'solver', 'an unchanged model is the easiest thing there is to keep'
+    model.solve()
     assert model.diagnostics().loads == 1, 'and keeping it means not loading it twice'
     assert len(taken) == 2, f'the outgoing model and the incoming one, as ever, not {len(taken)}'
 

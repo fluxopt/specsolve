@@ -32,15 +32,7 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
-from specsolve.relational.result import (
-    KEEPS,
-    ConstraintRow,
-    Diagnostics,
-    Keep,
-    Result,
-    refuse_a_start_beside,
-    unknown_keep_message,
-)
+from specsolve.relational.result import ConstraintRow, Diagnostics, Result
 from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
@@ -119,6 +111,9 @@ class Engine:
         self._measured = Measured()
         #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
+        #: The mark of the last solve, which the answer it produced carries:
+        #: a start from that answer carries on in the solver still holding it.
+        self._mark: object | None = None
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
@@ -195,36 +190,32 @@ class Engine:
             raise SpecsolveError(refused)
 
     def _hand_off(
-        self, solver_name: str, solver_options: Mapping[str, object] | None, keep: Keep
-    ) -> tuple[sinks.Solver, Keep]:
+        self, solver_name: str, solver_options: Mapping[str, object] | None, *, carry_on: bool = False
+    ) -> tuple[sinks.Solver, bool]:
         """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
 
         The held solver keeps the model where
         [`loaded`][specsolve.relational.sinks.solvers.loaded] allows and is
-        loaded again where not; what comes back beside it is what it kept,
-        ``nothing`` after a load. Counts toward neither ``solves`` nor
-        ``loads``: [`solve`][] counts, so timing this alone leaves them true.
+        loaded again where not; what comes back beside it is whether it was
+        loaded. A solver kept forgets the work it did, unless *carry_on*,
+        which is a start from the answer it last produced. Counts toward
+        neither ``solves`` nor ``loads``: [`solve`][] counts, so timing this
+        alone leaves them true.
         """
-        if keep not in KEEPS:
-            raise SpecsolveError(unknown_keep_message(keep))
         self.check(solver_name)
         with _clocked(self._seconds, 'handoff'):
-            if keep == 'nothing' and self._solver is not None:
-                self._solver.close()
-                self._solver = None
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
-            kept: Keep = keep if self._solver is held else 'nothing'
-            if kept == 'solver':
+            reloaded = self._solver is not held
+            if not reloaded and not carry_on:
                 self._solver.forget()
-        return self._solver, kept
+        return self._solver, reloaded
 
     def solve(
         self,
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, object] | None = None,
-        keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
         start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | None = None,
@@ -240,10 +231,6 @@ class Engine:
             solver_name: One of [`SOLVERS`][specsolve.relational.sinks.SOLVERS].
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
-            keep: How much of the session this solve may keep — one of
-                [`KEEPS`][specsolve.relational.result.KEEPS]. A preference:
-                [`kept`][specsolve.relational.result.Result.kept] reports what
-                happened.
             lower: How an expression the caller writes becomes a plan node,
                 for [`evaluate`][specsolve.relational.result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
@@ -257,31 +244,37 @@ class Engine:
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
+                The answer this engine's solver last produced is not matched
+                at all where that solver is still loaded: the solver carries
+                on from where it ended.
 
         Returns:
             The solution, holding this engine and the build it answered.
 
         Raises:
-            SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS], a *start* beside a
-                *keep* other than ``solver``, or a *start* this model or this
-                solver cannot start from — refused before the solver loads.
+            SpecsolveError: A *start* this model or this solver cannot start
+                from — refused before the solver loads, except for the answer
+                this engine last produced, which is matched only once the
+                solver it would carry on in has had to be loaded again.
         """
-        if start is not None:
-            refuse_a_start_beside(keep)
-        matched = None if start is None else self._matched_start(start, solver_name)
-        solver, kept = self._hand_off(solver_name, solver_options, keep)
+        carry_on = isinstance(start, Result) and start._solve_mark is not None and start._solve_mark is self._mark
+        matched = None if start is None or carry_on else self._matched_start(start, solver_name)
+        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
+        if carry_on and reloaded:
+            assert start is not None, 'carry_on holds only for a start'
+            matched = self._matched_start(start, solver_name)
         if isinstance(matched, Basis):
             solver.warm(matched)
         elif matched is not None:
             solver.start(matched)
         handoff = self._model.handoff
         self._solves += 1
-        if kept == 'nothing':
+        if reloaded:
             self._loads += 1
+        self._mark = object()
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff, basis='basis' in outputs)
-        return self._answered(answer, solver_name, kept, lower, outputs)
+        return self._answered(answer, solver_name, lower, outputs, mark=self._mark)
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
@@ -312,9 +305,10 @@ class Engine:
         self,
         answer: SolveAnswer,
         solver_name: str,
-        kept: Keep,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
         outputs: frozenset[Output] = frozenset(),
+        *,
+        mark: object | None = None,
     ) -> Result:
         """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
 
@@ -345,13 +339,13 @@ class Engine:
             _primals=primals,
             _duals=duals,
             _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
-            _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
             _model_digest=lambda: handoff.contents,
+            _solve_mark=mark,
         )
 
     def contents(self) -> str:

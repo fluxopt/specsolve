@@ -26,7 +26,6 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve import sweep as sweep_module
-from specsolve.api import Model
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -348,30 +347,6 @@ def test_every_slice_of_every_kind_of_sweep_names_what_produced_it(swept, tmp_pa
     assert set(record.select(Provenance._fields).rows()) == {produced}, (
         'every slice names the solver, its options and the versions that answered it'
     )
-
-
-def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
-    """`keep` reaches each slice as asked, and the default is `solve`'s.
-
-    The request is invisible in the answer and in `loads`, so it is read off
-    the call. `kept` would test the data instead: a slice whose labels moved is
-    loaded again and keeps `nothing`.
-    """
-    asked: list[object] = []
-    original = Model.solve
-
-    def recording(self, *args, **kwargs):
-        asked.append(kwargs.get('keep'))
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(Model, 'solve', recording)
-
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'))
-    assert asked == ['solver'] * 3, f'the fold defaulted to {asked}, not solve()s own default'
-
-    asked.clear()
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), keep='progress')
-    assert asked == ['progress'] * 3, f'the fold asked for {asked}, not what the caller chose'
 
 
 def test_a_serial_fold_builds_once_and_updates(builds):

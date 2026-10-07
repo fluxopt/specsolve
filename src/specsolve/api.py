@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from mathspec.program import Expression, Program
 
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep, Start
+    from specsolve.relational.result import ConstraintRow, Diagnostics, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -277,7 +277,6 @@ class Model:
         *,
         solver_options: Mapping[str, object] | None = None,
         record_options: Sequence[str] | None = None,
-        keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
         start: Result | Start | None = None,
@@ -285,8 +284,9 @@ class Model:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so an updated
-        model pushes only its numbers. How much this solve kept is its
-        [`kept`][specsolve.relational.result.Result.kept].
+        model pushes only its numbers. It begins from nothing, unless *start*
+        says otherwise; [`diagnostics`][] counts the solves that loaded it
+        again.
 
         Args:
             solver_name: ``highs``, which ships with the package; ``gurobi``,
@@ -303,12 +303,6 @@ class Model:
             record_options: More option names whose value the result
                 records, in any letter case. Name no credential here: an
                 archive goes to shared storage.
-            keep: ``solver``, the default, reuses the solver holding the model
-                and discards the work it did; ``progress`` keeps that work too,
-                for a driver that iterates one step at a time; ``nothing``
-                keeps neither, for timing a build or a cold baseline. A
-                preference: a model whose structure moved is loaded again
-                whatever was asked.
             archive: Where to write the spec, the data attached to it **now**,
                 and this answer, so that
                 [`load_archive`][specsolve.archive.load_archive] gives all
@@ -341,17 +335,18 @@ class Model:
                 an LP, and a mixed-integer model always, starts from values,
                 which the solver completes and repairs. Where a solver takes
                 values for an LP and no gain from them is known, the solve
-                warns.
+                warns. The answer this model's last solve produced is not
+                matched at all where its solver is still loaded: the solver
+                carries on from where it ended, which is the cheap way to
+                step a model through its updates.
 
         Returns:
             The solution, holding this model.
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a *keep* other than those three, a bare string as
-                *record_options* or *outputs*, a name in *outputs* that is not
-                an output, a *start* beside a *keep* other than ``solver``,
-                which also says what the solve begins from, or a *start* this
+                cannot run, a bare string as *record_options* or *outputs*, a
+                name in *outputs* that is not an output, or a *start* this
                 model or solver cannot start from: a key that names no reader, a table naming no declaration or
                 lacking its dims, a basis status outside the five words, a
                 basis alone for a mixed-integer model, a start that lands on
@@ -373,7 +368,6 @@ class Model:
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
-                keep=keep,
                 lower=self._lower,
                 outputs=asked,
                 start=start if start is None or isinstance(start, Result) else self._read_start(start),
@@ -560,9 +554,7 @@ def solve(
     """Build *spec* and solve it in one call.
 
     To solve the same spec again with new numbers, use [`build`][] and
-    [`Model.update`][]. There is no ``keep``: the solve is the first of the
-    model's life, so [`kept`][specsolve.relational.result.Result.kept] is
-    always ``nothing``.
+    [`Model.update`][].
 
     Args:
         spec: As [`check`][] takes it.
@@ -644,8 +636,7 @@ def load_result(directory: str | Path) -> Result:
     for, and the reason behind anything the solve could not produce. No build
     or solver is needed.
 
-    [`kept`][specsolve.relational.result.Result.kept] reads ``nothing``, and
-    the solver's verbatim wording behind a refusal is not recorded — the
+    The solver's verbatim wording behind a refusal is not recorded — the
     termination condition is. A solve that reached no objective reads back as
     ``nan``.
 
@@ -707,7 +698,6 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
         {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
-        'nothing',
         expressions,
         _no_duals=no_duals,
         _spec_digest=record.spec_digest,

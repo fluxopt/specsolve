@@ -583,7 +583,7 @@ parametrized by what the window moves:
 | `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
 | `one` | updates the first declared parameter alone, as `update` is usually called | push |
 | `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
-| `cold` | re-attaches the same sources under `keep='nothing'` | load |
+| `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
 `one` costs a whole rebuild all the same — `update` re-reads every source — so
@@ -591,10 +591,9 @@ it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix moves, so every such update loads the solver
 again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
-name one; the other cases skip it. `keep='progress'`
-differs from the default only in what the solver remembers, which moves the
-solve and not anything timed here; `bench/warm_payoff.py` is where a carried
-basis is weighed.
+name one; the other cases skip it. A `start=` changes only what the solver
+begins from, which moves the solve and not anything timed here;
+`bench/warm_payoff.py` is where a carried basis is weighed.
 
 The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The

@@ -45,20 +45,6 @@ if TYPE_CHECKING:
     from specsolve.relational.status import SolveStatus
 
 
-#: How much of the session a solve keeps, as a request to
-#: [`specsolve.api.Model.solve`][] and as the report in
-#: [`Result.kept`][]. The solver and the work it did can only be dropped in
-#: that order, so the fourth combination does not exist.
-Keep = Literal['nothing', 'solver', 'progress']
-
-#: What each word keeps, in the order of how much that is.
-KEEPS: Mapping[Keep, str] = {
-    'nothing': 'the model is handed to a fresh solver, which has nothing to begin from',
-    'solver': 'the solver already holding the model is reused, and the work the last solve did is discarded',
-    'progress': 'the solver is reused and carries on from where the last solve got to',
-}
-
-
 class Start(TypedDict, total=False):
     """What a solve starts from, given as tables: under the name of each reader, a table per declaration in that reader's shape.
 
@@ -82,29 +68,6 @@ class Start(TypedDict, total=False):
     primal: Mapping[str, pl.DataFrame]
     variable_basis: Mapping[str, pl.DataFrame]
     constraint_basis: Mapping[str, pl.DataFrame]
-
-
-def unknown_keep_message(keep: object) -> str:
-    """The message for a *keep* outside the three."""
-    options = '\n'.join(f'  {name}: {what}' for name, what in KEEPS.items())
-    return f'unknown keep {keep!r}. A solve may keep:\n{options}'
-
-
-def refuse_a_start_beside(keep: Keep) -> None:
-    """Refuse a ``start=`` beside a *keep* that also says what the solve begins from: any but ``solver``.
-
-    Raises:
-        SpecsolveError: *keep* is ``progress`` or ``nothing``, or none of the
-            three.
-    """
-    if keep not in KEEPS:
-        raise SpecsolveError(unknown_keep_message(keep))
-    if keep != 'solver':
-        raise SpecsolveError(
-            f'start= and keep={keep!r} both say what this solve begins from: start= the answer or the tables it '
-            f"gives, and keep={keep!r} that {KEEPS[keep]}. Pass start= with keep='solver', the default, or "
-            f'drop start=.'
-        )
 
 
 #: What the bridges out say when the environment cannot serve them, ``{module}``
@@ -289,9 +252,7 @@ class Diagnostics:
     #: How many times this model has been solved, and how many of those solves
     #: loaded the solver from scratch instead of pushing values onto one that
     #: already held it. ``loads == solves`` on an iterating driver means the
-    #: model masks on a parameter that varies, unless the driver asked for
-    #: ``keep='nothing'``. ``loads`` ticks on exactly the solves that report
-    #: [`Result.kept`][] of ``nothing``.
+    #: model masks on a parameter that varies.
     solves: int
     loads: int
 
@@ -377,8 +338,6 @@ class Result:
     #: are what this answer carries; a kind asked for by a solve that left no
     #: values maps to nothing.
     _outputs: Mapping[str, Mapping[str, pl.LazyFrame]] | None
-    #: How much of the session this solve kept, read off what actually ran.
-    _kept: Keep
     #: One deferred reader per declared named expression, and the ad-hoc
     #: evaluator. ``_evaluate`` is ``None`` where there is no spec as written:
     #: a build off an already-lowered ``Program``, or an answer read off disk.
@@ -409,6 +368,10 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
+    #: The mark of the engine solve that produced this answer, or ``None`` off
+    #: disk. A solve started from the answer bearing its engine's current mark
+    #: carries on in the solver that still holds it.
+    _solve_mark: object | None = None
 
     def model_digest(self) -> str | None:
         """Which model this answered — the document and the data it was attached to.
@@ -489,17 +452,6 @@ class Result:
             model_digest=self.model_digest(),
             provenance=self._provenance,
         )._replace(specsolve_run=self._run)
-
-    @property
-    def kept(self) -> Keep:
-        """How much of the session this solve kept: ``solver``, ``progress`` or ``nothing``.
-
-        What happened, not what was asked: a first solve or a structure that
-        moved keeps ``nothing`` whatever ``keep=`` requested, so a driver that
-        asked for ``progress`` and reads ``nothing`` is being told its labels
-        moved. Advisory, like [`Diagnostics`][]: no answer depends on it.
-        """
-        return self._kept
 
     def _unclosed(self, what: str) -> Mapping[str, pl.LazyFrame]:
         """The primals, or why nothing here can be read: this result was closed."""

@@ -1,11 +1,10 @@
-"""How much of a session a solve keeps, and the machinery under it.
+"""What a re-solve begins from, and the machinery under it.
 
-**The public half** is `solve(keep=...)` and `result.kept`. A session holds the
-solver with the model on it and the work that solver did, dropped in that
-order: `'nothing'` keeps neither, `'solver'` keeps the first, `'progress'`
-keeps both. `loads` says whether the model was handed over again, and the
-iteration count says whether the work survived. `'nothing'` discards the held
-solver, so the fresh one has nothing to begin from.
+**The public half** is `solve(start=...)`. A model keeps the solver loaded with
+it between solves, and each solve begins from nothing unless `start=` is the
+answer that solver last produced, in which case it carries on. `loads` says
+whether the model was handed over again, and the iteration count says whether
+the work survived.
 
 **The sink half** is `Solver.warm(basis)` and `start(values)`. A carried basis
 starts the simplex at the optimum, an incumbent bounds the search, and a start
@@ -24,7 +23,6 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.result import KEEPS
 from specsolve.relational.sinks import SOLVERS
 from specsolve.relational.sinks.solvers.base import Basis
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
@@ -153,74 +151,77 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
 
 
 # ---------------------------------------------------------------------------
-# the three keeps, told apart by what each holds on to
+# what a re-solve begins from: nothing, or the answer before it
 # ---------------------------------------------------------------------------
 
 
-def test_the_three_keeps_hold_the_two_things_independently(solver_name):
-    """Each word keeps one more than the last, and both halves are observed.
+def _matched(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every start the engine lays onto a build by coordinate, named by how."""
+    from specsolve.relational.engine import readback
 
-    The solver kept shows up as `loads`, the work kept as the iteration count.
-    `solver` skips the hand-off *and* begins from nothing.
-    """
+    calls: list[str] = []
+    for name in ('matched_basis', 'matched_values'):
+        original = getattr(readback, name)
+
+        def spied(*args: Any, _original: Any = original, _name: str = name, **kwargs: Any) -> Any:
+            calls.append(_name)
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(readback, name, spied)
+    return calls
+
+
+def test_a_re_solve_begins_from_nothing_on_the_solver_still_loaded(solver_name):
+    """The solver kept shows up as `loads`, the work forgotten as the iteration count."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
-        assert first.kept == 'nothing', 'a first solve has nothing to keep'
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
-        carried = model.solve(solver_name=solver_name, keep='progress')
-        assert carried.kept == 'progress', 'a kept solver asked to carry on reports that it did'
-        assert model.diagnostics().loads == 1, 'progress keeps the solver too'
+        again = model.solve(solver_name=solver_name)
+        assert model.diagnostics().loads == 1, 'the loaded solver is kept'
+        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
+            'it forgets the work it did, so it repeats the first solve iteration for iteration'
+        )
+        assert again.objective == pytest.approx(first.objective)
+
+
+def test_a_start_from_the_last_answer_carries_on_in_the_solver(solver_name, monkeypatch):
+    """Nothing is read or matched: the solver still holds where that answer ended."""
+    with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        first = model.solve(solver_name=solver_name)
+        scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        matched = _matched(monkeypatch)
+
+        carried = model.solve(solver_name=solver_name, start=first)
         assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) < scratch, (
             'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
-
-        reused = model.solve(solver_name=solver_name, keep='solver')
-        assert reused.kept == 'solver', 'the default keeps the solver and drops the work it did'
-        assert model.diagnostics().loads == 1, 'solver keeps the loaded model — that is the half it shares'
-        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
-            'keeping only the solver begins from nothing, so it repeats the first solve iteration for iteration'
-        )
-
-        cold = model.solve(solver_name=solver_name, keep='nothing')
-        assert cold.kept == 'nothing', 'nothing is kept however much the session held'
-        assert model.diagnostics().loads == 2, 'keeping nothing discards the held solver, so the model loads again'
-
-        assert reused.objective == pytest.approx(first.objective), 'a keep moves the route, never the answer'
-        assert carried.objective == pytest.approx(first.objective)
-        assert cold.objective == pytest.approx(first.objective)
+        assert model.diagnostics().loads == 1, 'carrying on keeps the solver too'
+        assert not matched, 'the solver still holds the answer, so nothing is laid onto the build'
+        assert carried.objective == pytest.approx(first.objective), 'a start moves the route, never the answer'
 
 
-def test_the_solver_is_kept_by_default_and_its_progress_is_not(solver_name):
-    """Not `progress`: carrying the solver's work on is opt-in."""
+def test_a_start_from_an_older_answer_is_matched(monkeypatch):
+    """A later solve moved the solver on, so the older answer is laid onto the build by coordinate."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
-        model.solve(solver_name=solver_name)
-        assert model.solve(solver_name=solver_name).kept == 'solver'
+        first = model.solve(outputs={'basis'})
+        model.solve()
+        matched = _matched(monkeypatch)
+        model.solve(start=first)
+    assert matched == ['matched_basis'], 'the older answer starts the solve from its basis'
 
 
-def test_an_unknown_keep_names_the_three(solver_name):
-    with (
-        sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model,
-        pytest.raises(sps.errors.SpecsolveError, match='unknown keep') as raised,
-    ):
-        model.solve(solver_name=solver_name, keep='warm')
-    assert all(word in str(raised.value) for word in KEEPS), 'the refusal has to say what the three are'
-
-
-def test_keeping_nothing_after_a_mip_solve_is_cold_too(solver_name):
-    """The structural guarantee covers the MIP state no basis carries.
-
-    An incumbent, a MIP start, cut pools — whatever the member squirrels away
-    dies with the discarded solver, with no per-solver scrubbing to forget.
-    """
-    with sps.build(KNAPSACK, knapsack_sources()) as model:
-        first = model.solve(solver_name=solver_name)
-        cold = model.solve(solver_name=solver_name, keep='nothing')
-
-        assert cold.kept == 'nothing'
-        assert cold.objective == pytest.approx(first.objective)
-        assert model.diagnostics().loads == 2, 'the discarded solver is the guarantee, and it shows up here'
+def test_the_last_answer_is_matched_once_an_update_loads_the_solver_again(monkeypatch):
+    """A snapshot fewer changes the structure, so the solver it would carry on in is gone."""
+    with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        first = model.solve(outputs={'basis'})
+        model.update(dispatch_sources(SNAPSHOTS[:-1]))
+        matched = _matched(monkeypatch)
+        again = model.solve(start=first)
+        assert model.diagnostics().loads == 2, 'the update loaded the solver again'
+    assert matched == ['matched_basis'], 'the answer is laid onto the new build instead'
+    assert again.has_primal
 
 
 # ---------------------------------------------------------------------------
