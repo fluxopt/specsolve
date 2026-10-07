@@ -1672,6 +1672,46 @@ def test_an_answer_in_another_layout_is_refused_by_name(
         sps.load_result(out)
 
 
+@pytest.mark.parametrize('suffix', [pytest.param('', id='directory'), pytest.param('.zip', id='zip')])
+def test_an_archive_whose_answer_is_in_another_layout_says_how_to_solve_it_again(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, suffix: str
+) -> None:
+    """The refusal names the archive and the files that hold the spec and the data, and those files solve again.
+
+    Before, the refusal said that the archive still held the model and the data,
+    but named neither file and gave no way to read them: `load_archive` refused
+    the whole archive, and named its `answer/` directory, which for a zip is a
+    scratch directory that is gone.
+    """
+    tree = _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case')
+    (tree / ANSWER_DIR / 'format.json').write_text(json.dumps({'layout': 0, 'specsolve': '0.0.1a359'}))
+    out = tmp_path / f'old{suffix}'
+    if suffix:
+        with zipfile.ZipFile(out, 'w') as zipped:
+            for member in tree.rglob('*'):
+                if member.is_file():
+                    zipped.write(member, member.relative_to(tree).as_posix())
+    else:
+        tree.rename(out)
+
+    with pytest.raises(sps.errors.LayoutError) as refused:
+        sps.load_archive(out)
+    says = str(refused.value)
+    missing = [part for part in (repr(str(out)), 'spec.yaml', 'sources/<key>.parquet', 'to_spec') if part not in says]
+    assert not missing, f'the refusal names the archive and how to read its spec and data, and is short of {missing}'
+
+    files = out
+    if suffix:
+        files = tmp_path / 'unpacked'
+        zipfile.ZipFile(out).extractall(files)
+    sources = {member.stem: member for member in (files / 'sources').glob('*.parquet')}
+    with (
+        sps.solve(to_spec(files / 'spec.yaml'), sources) as again,
+        sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
+    ):
+        assert again.objective == pytest.approx(direct.objective), 'the files the refusal names solve the same model'
+
+
 def test_a_hand_built_axis_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """A list of `(key, sources)` is refused, and sent to one archive per solve."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}

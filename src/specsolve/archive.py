@@ -20,9 +20,19 @@ from mathspec.program import parameters_of
 from specsolve.api import build, load_result, scan_result
 from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
 from specsolve.axes import axis_from
-from specsolve.errors import SpecsolveError
+from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.inputs import lower
-from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
+from specsolve.relational.answer_layout import (
+    KINDS,
+    LAYOUT,
+    METRICS_FILE,
+    RUN,
+    Metrics,
+    digest_of,
+    other_layout,
+    row_of,
+    saved_frames,
+)
 from specsolve.relational.collect import collected
 from specsolve.sweep import (
     MANIFEST_FILE,
@@ -134,9 +144,9 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     """
     held = Path(path)
     if into is not None or held.is_dir():
-        return _read(opened(held, into), whole=True)
+        return _read(opened(held, into), held, whole=True)
     with tempfile.TemporaryDirectory() as scratch:
-        return _read(opened(held, scratch), whole=True)
+        return _read(opened(held, scratch), held, whole=True)
 
 
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
@@ -146,10 +156,11 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     since the members have to outlive the value; a zip with no *into* raises
     ``LayoutError``.
     """
-    return _read(opened(path, into), whole=False)
+    return _read(opened(path, into), Path(path), whole=False)
 
 
-def _read(under: Path, *, whole: bool) -> ResultArchive | SweepArchive:
+def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepArchive:
+    _refuse_another_layout(under / ANSWER_DIR, archive)
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
         member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
@@ -168,6 +179,24 @@ def _read(under: Path, *, whole: bool) -> ResultArchive | SweepArchive:
     answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
     _check_the_pairing(spec, answer.record['spec_digest'].to_list())
     return SweepArchive(spec, sources, axis, carry, answer, digests)
+
+
+def _refuse_another_layout(saved: Path, archive: Path) -> None:
+    """Refuse an archived answer in another layout, naming the files that solve the model again without it.
+
+    Checked before anything else is read, so this message wins over the
+    generic one [`load_result`][] gives, which names a scratch directory for a
+    zip.
+    """
+    if (other := other_layout(saved)) is not None:
+        raise LayoutError(
+            f'{str(archive)!r} holds an answer {other} and this package reads layout {LAYOUT}, so it does not '
+            f"read the answer back. The spec and the data are still in the archive as plain files: 'spec.yaml', "
+            f"and one 'sources/<key>.parquet' per source, as the solve read it. Read the spec with "
+            f'mathspec.to_spec, pass each source as its path, and solve again. A sweep archive also holds '
+            f"'axis.json', which names the axis and the carry the sweep ran with. A .zip archive holds the same "
+            f'files as members.'
+        )
 
 
 def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
