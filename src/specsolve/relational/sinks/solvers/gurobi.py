@@ -11,7 +11,14 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
+from specsolve.relational.sinks.solvers.base import (
+    SolveAnswer,
+    Solver,
+    Subsystem,
+    WarmStart,
+    solver_vector,
+    spelled_senses,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -199,6 +206,20 @@ class Gurobi(Solver):
             solver_vector(self._x.X),
             _duals(self._blocks, self._qrows),
             _activity(self._blocks, self._qrows),
+        )
+
+    def iis(self) -> Subsystem:
+        """``computeIIS``, read back per block and per quadratic row in row order."""
+        import numpy as np
+
+        self._m.computeIIS()
+        slices = [np.asarray(block.IISConstr, dtype=bool) for block in self._blocks]
+        slices += [np.asarray([row.IISQConstr], dtype=bool) for row in self._qrows]
+        rows = np.concatenate(slices) if slices else np.empty(0, dtype=bool)
+        return Subsystem(
+            np.flatnonzero(rows),
+            np.flatnonzero(np.asarray(self._x.IISLB, dtype=bool)),
+            np.flatnonzero(np.asarray(self._x.IISUB, dtype=bool)),
         )
 
     def forget(self) -> None:

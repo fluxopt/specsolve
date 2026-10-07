@@ -59,6 +59,18 @@ def no_model_behind_this_answer_message() -> str:
     )
 
 
+def no_solver_behind_this_answer_message() -> str:
+    """An infeasible subsystem asked of an answer whose solver no longer holds its model."""
+    return (
+        'an infeasible subsystem is found by the solver that returned this answer, and that solver no '
+        'longer holds this model: the model was solved again, updated or closed since, which '
+        'sps.solve() does before it returns, or the answer was read back off disk. Build the model, '
+        'solve it, and ask iis() before anything else changes it:\n'
+        '    with sps.build(spec, sources) as model:\n'
+        '        print(model.solve().iis())'
+    )
+
+
 def position_out_of_range_message(name: str, op: str, position: int, at: int, cardinality: int) -> str:
     """A ``position(dim)`` boundary naming no coordinate of the dimension."""
     return (

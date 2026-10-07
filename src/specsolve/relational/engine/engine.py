@@ -10,6 +10,7 @@ The lane is described in docs/about/architecture.md.
 
 from __future__ import annotations
 
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve.errors import SpecsolveError
+from specsolve.messages import no_solver_behind_this_answer_message
 from specsolve.relational import sinks
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.result import InfeasibleSubsystem
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
@@ -62,6 +65,9 @@ class Engine:
         self._measured = Measured()
         #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
+        #: The token of the answer the solver still holds the model of, or
+        #: ``None`` once a load, a build or [`close`][] has changed what it holds.
+        self._holds: object | None = None
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
@@ -90,6 +96,7 @@ class Engine:
         if self._solver is not None:
             self._solver.structure()
         self._built = None
+        self._holds = None
         self._measured = Measured()
         with _clocked(self._seconds, 'attach'):
             attached = attach(program, sources)
@@ -151,6 +158,7 @@ class Engine:
         if keep not in KEEPS:
             raise SpecsolveError(unknown_keep_message(keep))
         self.check(solver_name)
+        self._holds = None
         with _clocked(self._seconds, 'handoff'):
             if keep == 'nothing' and self._solver is not None:
                 self._solver.close()
@@ -203,6 +211,7 @@ class Engine:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff)
+        self._holds = object()
         return self._answered(answer, solver_name, kept, lower)
 
     def _answered(
@@ -248,7 +257,25 @@ class Engine:
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
             _model_digest=lambda: handoff.contents,
+            _iis=_asking(self, self._holds),
         )
+
+    def iis(self, answered: object) -> InfeasibleSubsystem:
+        """The infeasible subsystem the held solver finds, by declaration and coordinate.
+
+        *answered* is the token [`solve`][] issued with the answer asking.
+
+        Raises:
+            SpecsolveError: The solver holds another model since, or found no
+                subsystem.
+        """
+        if answered is not self._holds:
+            raise SpecsolveError(no_solver_behind_this_answer_message())
+        assert self._solver is not None, 'a held answer has a solver: a load and close() both drop the token'
+        found = self._solver.iis()
+        if not found:
+            raise SpecsolveError(_no_iis_message(type(self._solver).__name__.lower(), self._discrete()))
+        return readback.subsystem(self._model, found)
 
     def contents(self) -> str:
         """This build's digest — what a saved answer is checked against.
@@ -388,6 +415,7 @@ class Engine:
             self._solver.close()
             self._solver = None
         self._built = None
+        self._holds = None
 
     def __enter__(self) -> Engine:
         return self
@@ -432,6 +460,36 @@ def expression_readers(
     """
     compiler = Compiler(Scope(program, attach(program, sources), {}))
     return readback.readers(compiler, program.expressions, lower)
+
+
+def _asking(engine: Engine, answered: object) -> Callable[[], InfeasibleSubsystem]:
+    """[`Engine.iis`][] for the answer [`solve`][Engine.solve] issued *answered* with.
+
+    The engine is held weakly, so a result kept after its model is dropped
+    keeps no solver, and no licence, alive.
+    """
+    held = weakref.ref(engine)
+
+    def iis() -> InfeasibleSubsystem:
+        if (alive := held()) is None:
+            raise SpecsolveError(no_solver_behind_this_answer_message())
+        return alive.iis(answered)
+
+    return iis
+
+
+def _no_iis_message(solver_name: str, discrete: Sequence[str]) -> str:
+    """Why an infeasible solve's solver found no subsystem."""
+    if discrete and solver_name == 'highs':
+        return (
+            f'HiGHS searches the rows and bounds without integrality and found no subsystem, and this '
+            f'model declares integer variables ({", ".join(discrete)}), so integrality may be what '
+            f'conflicts. Solve with gurobi or xpress, which search with it.'
+        )
+    return (
+        f'the model is infeasible, and the {solver_name} sink found no subsystem that explains it. The '
+        f"search runs under the solve's own solver_options, so a time limit there can stop it short."
+    )
 
 
 def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:

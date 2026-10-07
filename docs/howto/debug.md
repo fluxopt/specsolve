@@ -2,7 +2,7 @@
 
 What to read when a model solves to the wrong number, or does not solve, in
 the order that finds the fault soonest. Each step needs the file, or the file
-and its data, and none needs a solver run you have not already paid for.
+and its data. Only step 4 asks the solver for more work than the solve.
 
 ## 1. Check the file
 
@@ -48,18 +48,31 @@ mask; a coefficient you did not expect is the data
 
 ## 4. When the solve is infeasible
 
+Ask the solver which rows and bounds conflict:
+
 ```python
 result = model.solve()
 result.status, result.termination_condition  # 'warning', 'infeasible'
-result.has_primal  # False: nothing to read, and every reader raises
+print(result.iis())
+# power_balance[snapshot=2] == 180
+# p[snapshot=2, generator=gas] <= 100 (upper bound)
+# p[snapshot=2, generator=wind] <= 50 (upper bound)
 ```
 
-There is no IIS (irreducible infeasible subsystem) read-back. Locate the
-fault instead with a slack: add a variable to the balance row, minimise it,
+The lines are an IIS (irreducible infeasible subsystem): rows and bounds that
+cannot all hold, and that can all hold once you drop any one of them. Read the
+terms of a row in it with `model.row`, as in step 3. Ask before you solve,
+update or close the model again, because the solver that answered must still
+hold it. `sps.solve()` closes the model before it returns, so build it first
+([`Result.iis`](../reference/api.md#specsolve.types.Result.iis)).
+
+HiGHS searches without integrality, so it finds no IIS where integer
+variables cause the conflict. Solve that model with `gurobi` or `xpress`, or
+locate the fault with a slack: add a variable to the balance row, minimise it,
 and read where it is nonzero. The
 [feasibility model](../about/decomposition.md#when-the-subproblem-is-infeasible)
-is that file for a dispatch. Then read the row at a snapshot the slack lands
-on, as in step 3.
+is that file for a dispatch. A slack also says by how much each row fails,
+which an IIS does not.
 
 ## 5. When the number is wrong and the rows look right
 

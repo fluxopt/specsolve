@@ -10,7 +10,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from specsolve.relational.sinks.capabilities import Capabilities
-from specsolve.relational.sinks.solvers.base import SolveAnswer, Solver, WarmStart, solver_vector, spelled_senses
+from specsolve.relational.sinks.solvers.base import (
+    SolveAnswer,
+    Solver,
+    Subsystem,
+    WarmStart,
+    solver_vector,
+    spelled_senses,
+)
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
@@ -153,6 +160,25 @@ class Xpress(Solver):
         """
         values = self._p.getDualRay()
         return None if values is None else solver_vector(values)
+
+    def iis(self) -> Subsystem | None:
+        """``firstIIS``, emphasising a small subsystem over a quick one.
+
+        A fixed column is both of its bounds; an integrality or set entry is
+        neither a row nor a bound, and is dropped.
+        """
+        import numpy as np
+
+        if self._p.firstIIS(1) != 0:
+            return None
+        rows, columns, senses, sides, *_ = self._p.getIISData(1)
+        rows, columns = np.asarray(rows, dtype=np.int64), np.asarray(columns, dtype=np.int64)
+        sides = np.asarray(sides, dtype=str)
+        return Subsystem(
+            rows[np.isin(np.asarray(senses, dtype=str), list(_XPRESS_SENSE.values()))],
+            columns[np.isin(sides, ['L', 'F'])],
+            columns[np.isin(sides, ['U', 'F'])],
+        )
 
     def forget(self) -> None:
         """``keepbasis = 0``: the next solve ignores the basis this one left.

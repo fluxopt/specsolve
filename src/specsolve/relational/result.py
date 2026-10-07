@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from specsolve.errors import NoSolutionError, SpecsolveError
-from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
+from specsolve.messages import (
+    no_model_behind_this_answer_message,
+    no_solver_behind_this_answer_message,
+    unknown_name_message,
+)
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     NO_PROVENANCE,
@@ -193,6 +197,53 @@ class ConstraintRow:
 
 
 @dataclass(frozen=True)
+class InfeasibleSubsystem:
+    """The rows and bounds that cannot hold together — what [`Result.iis`][] returns.
+
+    Irreducible: drop any one member and the rest can be met. A model can have
+    several, and each solver may find a different one. Printed, it is one line
+    per member, constraints first; [`row`][specsolve.api.Model.row] spells a
+    row's terms out.
+
+    Attributes:
+        constraints: ``(dims…, sense, rhs)`` per constraint with a row in it,
+            in declaration order, its rows in label order.
+        bounds: ``(dims…, bound, value)`` per variable with a bound in it,
+            in declaration order. ``bound`` is ``lower`` or ``upper``.
+    """
+
+    constraints: Mapping[str, pl.DataFrame]
+    bounds: Mapping[str, pl.DataFrame]
+
+    def __str__(self) -> str:
+        """``balance[snapshot=1] == 200``, then ``p[snapshot=1, tech=gas] <= 100 (upper bound)``."""
+        lines = [
+            f'{name}{_bracket(_coordinate(member, frame.columns[:-2]))} {member["sense"]} {_number(member["rhs"])}'
+            for name, frame in self.constraints.items()
+            for member in frame.iter_rows(named=True)
+        ]
+        lines += [
+            f'{name}{_bracket(_coordinate(member, frame.columns[:-2]))} '
+            f'{_BOUND_SENSE[member["bound"]]} {_number(member["value"])} ({member["bound"]} bound)'
+            for name, frame in self.bounds.items()
+            for member in frame.iter_rows(named=True)
+        ]
+        return '\n'.join(lines)
+
+    #: The lines, not the field-by-field dataclass dump.
+    __repr__ = __str__
+
+
+#: How each side of a variable's bound reads as a comparison.
+_BOUND_SENSE = {'lower': '>=', 'upper': '<='}
+
+
+def _coordinate(member: Mapping[str, object], dims: Sequence[str]) -> str:
+    """``snapshot=1, tech=gas`` — one member's coordinate, in its declaration's dim order."""
+    return ', '.join(f'{dim}={member[dim]}' for dim in dims)
+
+
+@dataclass(frozen=True)
 class Diagnostics:
     """What a build and its solves did that the answer does not show.
 
@@ -344,6 +395,9 @@ class Result:
     #: Why there is no certificate — the status, or the solver setting that
     #: would have produced one. ``None`` whenever [`_dual_rays`][] holds it.
     _no_dual_ray: str | None = None
+    #: Asks the solver that answered for an infeasible subsystem, refusing
+    #: once it holds anything else. ``None`` where no solver answered here.
+    _iis: Callable[[], InfeasibleSubsystem] | None = None
     #: [`digest_of`][specsolve.relational.answer_layout.digest_of] the spec this
     #: answered, or ``None`` for a solve run off a lowered program.
     _spec_digest: str | None = None
@@ -548,6 +602,38 @@ class Result:
         assert self._dual_rays is not None, 'a ray is released with the primals, which _unclosed just checked'
         return _named(self._dual_rays, name, 'constraint').collect(engine=collect_engine())
 
+    def iis(self) -> InfeasibleSubsystem:
+        """The rows and bounds of this infeasible model that cannot hold together, by declaration and coordinate.
+
+        Asks the solver that returned this answer, on request, because the
+        search can cost more than the solve. That solver must still hold this
+        model: ask before the model is solved again, updated or closed.
+        ``sps.solve()`` closes it before it returns, so build the model first::
+
+            with sps.build(spec, sources) as model:
+                print(model.solve().iis())
+
+        Every sink finds one for a linear model. For a discrete model,
+        ``gurobi`` and ``xpress`` report the rows and bounds and leave out the
+        integrality that makes them conflict. ``highs`` searches without
+        integrality, so it finds none where integrality causes the conflict.
+
+        Raises:
+            SpecsolveError: This result was closed; the solve was not
+                infeasible; the solver no longer holds this model, or never
+                did, as for an answer read back off disk; or the solver found
+                no subsystem.
+        """
+        self._unclosed('an infeasible subsystem')
+        if self.termination_condition != 'infeasible':
+            raise SpecsolveError(
+                f'an infeasible subsystem explains why a model has no solution, and this solve '
+                f'terminated {self.termination_condition!r} rather than infeasible.'
+            )
+        if self._iis is None:
+            raise SpecsolveError(no_solver_behind_this_answer_message())
+        return self._iis()
+
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
 
@@ -700,6 +786,7 @@ class Result:
         self._primals = self._duals = self._activities = self._expressions = None
         self._dual_rays = None
         self._evaluate = None
+        self._iis = None
 
     def __enter__(self) -> Result:
         return self

@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): an infeasible solve says which rows and bounds conflict, by declaration and coordinate ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+
 ## 0.6.2 (2026-10-07)
 
 - fix(archive): a sweep being archived is invisible to a reader of its directory until it lands ([#1873](https://github.com/fluxopt/specsolve/pull/1873))

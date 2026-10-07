@@ -217,7 +217,8 @@ or reaches the plan. The names, by role:
 `specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
 `Sweep`, and the two archives that carry a spec, its data and its answer,
 `ResultArchive` and `SweepArchive`. It also holds the rows they hand back:
-`ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`.
+`ConstraintRow`, `InfeasibleSubsystem`, `Diagnostics`, `Record`, `Provenance`
+and `Metrics`.
 `specsolve.errors` holds the error tree under `SpecsolveError`,
 `NoSolutionError` and `SpecsolveWarning`.
 

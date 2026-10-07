@@ -331,6 +331,7 @@ PUBLIC_MODULES = {
     'types': {
         'ConstraintRow',
         'Diagnostics',
+        'InfeasibleSubsystem',
         'Metrics',
         'Model',
         'Provenance',

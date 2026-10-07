@@ -148,9 +148,10 @@ The modeling API is what a reader arriving from linopy misses first. Two
 pages replace it. The tutorial [Change a model](../change.md) covers the
 loops: `update` for new numbers, a longer table for more rows, a patched `dict`
 for new math. The how-to [Fixing, relaxing and removing](../howto/fix-relax-remove.md)
-aims the same loops at `fix`, `relax` and `remove_constraints`. Neither replaces
-the *debugging*: an IIS. A built row is read with
-[`row`](../reference/api.md#specsolve.types.Model.row), in linopy's own form.
+aims the same loops at `fix`, `relax` and `remove_constraints`. A built row is
+read with [`row`](../reference/api.md#specsolve.types.Model.row), in linopy's
+own form, and an IIS with [`iis`](../reference/api.md#specsolve.types.Result.iis),
+by declaration and coordinate.
 
 Where linopy is ahead, and why none of it is a ceiling question, is
 [the roadmap](roadmap.md#honest-snapshot). What is *owed* to linopy rather than
