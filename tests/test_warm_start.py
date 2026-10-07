@@ -320,7 +320,7 @@ class _Refusing:
         if name == self._call:
             import highspy
 
-            return lambda hint: highspy.HighsStatus.kError
+            return lambda *hint: highspy.HighsStatus.kError
         return getattr(self._handle, name)
 
 

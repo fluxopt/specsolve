@@ -78,7 +78,7 @@ def _checked_start(
     if set(table.columns) != set(expected):
         raise SpecsolveError(
             f"start= gives variable '{name}' the columns {table.columns}, and a table of starting values is "
-            f'the variable\'s dims and its value: {expected}, as primal() returns it.'
+            f"the variable's dims and its value: {expected}, as primal() returns it."
         )
     return table.lazy()
 
@@ -285,7 +285,7 @@ class Engine:
         if len(values) and np.isnan(values).all():
             raise SpecsolveError(
                 'start= gives no value at any coordinate this model holds, so it would start nothing. Name '
-                "the variables as the spec declares them, and their coordinates as primal() returns them."
+                'the variables as the spec declares them, and their coordinates as primal() returns them.'
             )
         return lambda solver: solver.start(values)
 

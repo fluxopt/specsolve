@@ -164,34 +164,48 @@ def test_a_closed_answer_is_refused() -> None:
 # a mixed-integer model starts from values
 # ---------------------------------------------------------------------------
 
-#: Each sink stopped at the first solution it holds, with nothing that would
-#: find a better one before it: what it returns is the start it was given.
-FIRST_SOLUTION = {
-    'highs': {'mip_max_improving_sols': 1, 'presolve': 'off'},
-    'gurobi': {'SolutionLimit': 1, 'Presolve': 0, 'Heuristics': 0},
-    'xpress': {'maxmipsol': 1, 'presolve': 0},
+#: Each sink stopped at its root node with nothing that finds a solution of its
+#: own, so that any incumbent it returns is one it was started from.
+ROOT_ONLY = {
+    'highs': {'mip_max_nodes': 0, 'mip_heuristic_effort': 0.0, 'presolve': 'off'},
+    'gurobi': {'NodeLimit': 0, 'Heuristics': 0, 'Presolve': 0, 'Cuts': 0},
+    'xpress': {'maxnode': 0, 'heuremphasis': 0, 'presolve': 0, 'cutstrategy': 0},
 }
 
-#: Two items that fit together, worth 2 + 3, far short of the optimum of 37.
+#: Two items that fit together, worth 8 + 2, far short of the optimum of 56.
 TWO_ITEMS = pl.DataFrame({'item': ['item1', 'item2'], 'value': [1.0, 1.0]})
 
 
-def _first(solver_name: str, **solve: Any) -> float:
-    return sps.solve(KNAPSACK, knapsack_sources(), solver_name=solver_name, solver_options=FIRST_SOLUTION[solver_name], **solve).objective
+def _at_the_root(solver_name: str, **solve: Any) -> Result:
+    return sps.solve(
+        KNAPSACK, knapsack_sources(), solver_name=solver_name, solver_options=ROOT_ONLY[solver_name], **solve
+    )
 
 
-def test_a_mixed_integer_solve_stops_at_the_values_it_starts_from(solver_name: str) -> None:
+def test_a_mixed_integer_solve_holds_no_incumbent_of_its_own_at_the_root(solver_name: str) -> None:
+    """The control for the three below: without a start, the root leaves nothing."""
+    assert not _at_the_root(solver_name).has_primal, 'with heuristics off, no incumbent is found at the root'
+
+
+def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str) -> None:
     every = pl.DataFrame({'item': ITEMS, 'value': [1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS]})
-    assert _first(solver_name, start={'take': every}) == pytest.approx(16.0), 'the start is the first solution'
+    assert _at_the_root(solver_name, start={'take': every}).objective == pytest.approx(10.0), (
+        'the start, worth 8 + 2, is the incumbent'
+    )
 
 
 def test_a_partial_start_is_completed_by_the_solver(solver_name: str) -> None:
-    assert _first(solver_name, start={'take': TWO_ITEMS}) == pytest.approx(16.0), 'the items not named stay out'
+    answer = _at_the_root(solver_name, start={'take': TWO_ITEMS})
+    taken = answer.primal('take').filter(pl.col('item').is_in(['item1', 'item2']))['value']
+    assert taken.to_list() == pytest.approx([1.0, 1.0]), 'the items the start names stay in'
+    assert answer.objective >= 10.0, 'the solver fills in the items the start leaves out'
 
 
 def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_name: str) -> None:
     before = sps.solve(KNAPSACK, knapsack_sources(), solver_name=solver_name)
-    assert _first(solver_name, start=before) == pytest.approx(before.objective), 'its primal is the first solution'
+    assert _at_the_root(solver_name, start=before).objective == pytest.approx(before.objective), (
+        'its primal is the incumbent'
+    )
 
 
 @pytest.mark.parametrize(
@@ -199,7 +213,9 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
     [
         pytest.param({'tkae': TWO_ITEMS}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
         pytest.param({'take': TWO_ITEMS.rename({'item': 'items'})}, r"\['item', 'value'\]", id='a-column-not-its-dims'),
-        pytest.param({'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}, 'no value at any', id='no-coordinate-held'),
+        pytest.param(
+            {'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}, 'no value at any', id='no-coordinate-held'
+        ),
     ],
 )
 def test_a_table_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:

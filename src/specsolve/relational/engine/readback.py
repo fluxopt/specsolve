@@ -367,10 +367,10 @@ def _place(
 ) -> None:
     """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*.
 
-    The join is on the dims as strings, which is how a read-back frame
-    carries them live, saved and archived alike. A frame whose columns are not
-    its declaration's dims and ``value`` is skipped, as is a coordinate only
-    one side holds.
+    The join casts every dim to a string on both sides, so a table typed
+    otherwise than the read-back still matches: ``3`` and ``'3'`` are one
+    label. A frame whose columns are not its declaration's dims and ``value``
+    is skipped, as is a coordinate only one side holds.
     """
     import numpy as np
 
@@ -380,7 +380,9 @@ def _place(
         before = previous.get(name)
         if before is None or set(before.collect_schema().names()) != {*dims, 'value'}:
             continue
-        here = laid_out(model.attached, labelled, tuple(dims), positions).rename({'value': _LABEL_ORDER})
+        here = laid_out(model.attached, labelled, tuple(dims), positions).select(
+            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col('value').alias(_LABEL_ORDER)
+        )
         given = before.select(*(pl.col(dim).cast(pl.String) for dim in dims), value)
         found = (here.join(given, on=dims, how='inner') if dims else here.join(given, how='cross')).collect(
             engine=collect_engine()
