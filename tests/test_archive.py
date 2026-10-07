@@ -1830,3 +1830,27 @@ def test_a_bare_string_of_solver_options_to_disclose_is_refused(dispatch_yaml: P
     """A string is a sequence of letters, so `disclose_solver_options='Seed'` would name `S`, `e` and `d`."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"disclose_solver_options=\['mip_max_nodes'\]"):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, disclose_solver_options='mip_max_nodes')
+
+
+@pytest.mark.parametrize(
+    ('solver_options', 'passed'),
+    [
+        pytest.param(None, 'none', id='no-solver-options'),
+        pytest.param({'mip_max_nodes': 1000}, "'mip_max_nodes'", id='a-misspelt-name'),
+    ],
+)
+def test_a_solver_option_to_disclose_that_was_not_passed_is_refused(
+    dispatch_yaml: Path, dispatch_frame_inputs, solver_options: dict[str, object] | None, passed: str
+) -> None:
+    """A name that matches no solver option is refused before the solve.
+
+    Before, it was ignored, so a misspelt name withheld the value its caller
+    asked to keep, and nothing said so until the archive was read.
+    """
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"'mip_max_node'.*{passed}"):
+        sps.solve(
+            dispatch_yaml,
+            dispatch_frame_inputs,
+            solver_options=solver_options,
+            disclose_solver_options=['mip_max_node'],
+        )

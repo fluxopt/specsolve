@@ -58,7 +58,7 @@ passed as an option.
 `result.provenance` gives the same five fields without an archive.
 
 To disclose the value of an option that is not on the solver's list, name
-it. Name no credential:
+it. A name that is not in `solver_options` is refused. Name no credential:
 
 ```python
 sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, disclose_solver_options=['mip_max_nodes'])

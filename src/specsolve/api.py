@@ -322,19 +322,16 @@ class Model:
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a *keep* other than those three, or a bare string
-                as *disclose_solver_options*.
+                cannot run, a *keep* other than those three, a bare string as
+                *disclose_solver_options*, or a name in it that is not in
+                *solver_options*.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
         out = None if archive is None else Path(archive)
         if out is not None:
             check_the_target(out)
-        if isinstance(disclose_solver_options, str):
-            raise SpecsolveError(
-                f'disclose_solver_options={disclose_solver_options!r} is one string, which would name each of its letters. '
-                f'Pass a list: disclose_solver_options=[{disclose_solver_options!r}].'
-            )
+        _refuse_undisclosable(solver_options, disclose_solver_options)
         answered = replace(
             self._engine.solve(
                 solver_name,
@@ -667,6 +664,28 @@ def _json_value(value: object) -> object:
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
     return value
+
+
+def _refuse_undisclosable(
+    solver_options: Mapping[str, object] | None, disclose_solver_options: Sequence[str] | None
+) -> None:
+    """Refuse names that would disclose nothing, before the solve rather than in an archive read later.
+
+    A name is matched in any letter case, as ``_provenance`` matches it.
+    """
+    if isinstance(disclose_solver_options, str):
+        raise SpecsolveError(
+            f'disclose_solver_options={disclose_solver_options!r} is one string, which would name each of its letters. '
+            f'Pass a list: disclose_solver_options=[{disclose_solver_options!r}].'
+        )
+    passed = {name.casefold() for name in solver_options or {}}
+    absent = [name for name in disclose_solver_options or () if name.casefold() not in passed]
+    if absent:
+        held = ', '.join(repr(name) for name in sorted(solver_options or {})) or 'none'
+        raise SpecsolveError(
+            f'disclose_solver_options names {", ".join(map(repr, absent))}, which solver_options does not hold. '
+            f'It holds: {held}.'
+        )
 
 
 def _provenance(
