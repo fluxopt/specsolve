@@ -53,7 +53,7 @@ cannot all hold.
 
 ```python
 model.solve().termination_condition  # 'infeasible'
-print(model.iis())
+print(model.infeasible_subsystem())
 # power_balance[snapshot=2] == 180
 # p[snapshot=2, generator=gas] <= 100 (upper bound)
 # p[snapshot=2, generator=wind] <= 50 (upper bound)
@@ -61,7 +61,7 @@ print(model.iis())
 
 Drop any one line and the rest can hold. Read the terms of a row with
 `model.row`, as in step 3
-([`Model.iis`](../reference/api.md#specsolve.types.Model.iis)).
+([`Model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem)).
 
 HiGHS finds no IIS where integer variables cause the conflict. Solve with
 `gurobi` or `xpress`, or add a slack to the row, minimise it, and read where

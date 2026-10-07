@@ -56,7 +56,7 @@ def test_the_subsystem_is_the_row_and_the_bounds_that_conflict(solver_name: str)
     """Snapshot 1 asks 200 of two technologies capped at 100 and 50: that row, and those two caps."""
     with sps.build(SHORT, SOURCES) as model:
         assert model.solve(solver_name).termination_condition == 'infeasible'
-        found = model.iis()
+        found = model.infeasible_subsystem()
 
     assert list(found.constraints) == ['balance'], 'ramp and its 1000 are slack, so only the balance row conflicts'
     assert found.constraints['balance'].to_dicts() == [{'snapshot': 1, 'sense': '==', 'rhs': 200.0}], (
@@ -92,7 +92,7 @@ def test_two_rows_that_conflict_with_no_bound_between_them(solver_name: str) -> 
     """A conflict no bound takes part in, which HiGHS's default search, a check of bounds alone, misses."""
     with sps.build(TWO_ROWS, TWO_ROWS_SOURCES) as model:
         model.solve(solver_name)
-        found = model.iis()
+        found = model.infeasible_subsystem()
     assert {name: frame.to_dicts() for name, frame in found.constraints.items()} == {
         'demand': [{'snapshot': 0, 'sense': '>=', 'rhs': 3.0}],
         'limit': [{'snapshot': 0, 'sense': '<=', 'rhs': 1.0}],
@@ -104,7 +104,7 @@ def test_the_subsystem_prints_one_line_per_member(solver_name: str) -> None:
     """What a caller reads in a terminal: the row, then each bound, at its coordinate."""
     with sps.build(SHORT, SOURCES) as model:
         model.solve(solver_name)
-        printed = str(model.iis())
+        printed = str(model.infeasible_subsystem())
     assert printed.splitlines() == [
         'balance[snapshot=1] == 200',
         'p[snapshot=1, tech=gas] <= 100 (upper bound)',
@@ -118,7 +118,7 @@ def test_the_last_solve_is_the_one_explained(solver_name: str) -> None:
         model.solve(solver_name)
         model.update({'demand': pl.DataFrame({'snapshot': [0, 1], 'value': [200.0, 60.0]})})
         assert model.solve(solver_name).kept == 'solver', 'only numbers moved, so the solver kept the model'
-        found = model.iis()
+        found = model.infeasible_subsystem()
     assert found.constraints['balance'].to_dicts() == [{'snapshot': 0, 'sense': '==', 'rhs': 200.0}], (
         'the shortfall is at snapshot 0 now'
     )
@@ -134,10 +134,10 @@ def test_a_discrete_model_names_the_row_where_the_solver_finds_one(solver_name: 
         assert model.solve(solver_name).termination_condition == 'infeasible'
         if solver_name == 'highs':
             with pytest.raises(SpecsolveError, match='integer') as refused:
-                model.iis()
+                model.infeasible_subsystem()
             assert 'gurobi' in str(refused.value), 'the refusal names a sink that does find one'
             return
-        found = model.iis()
+        found = model.infeasible_subsystem()
     assert list(found.constraints) == ['odd'], 'spare is slack'
     assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dims'
 
@@ -183,7 +183,7 @@ def test_no_solve_to_explain_is_refused(since: Any) -> None:
     model = sps.build(SHORT, SOURCES)
     since(model)
     with pytest.raises(SpecsolveError, match='not been solved since it was built, updated or closed'):
-        model.iis()
+        model.infeasible_subsystem()
     model.close()
 
 
@@ -191,7 +191,7 @@ def test_a_feasible_solve_has_no_subsystem() -> None:
     with sps.build(SHORT, FEASIBLE) as model:
         assert model.solve().termination_condition == 'optimal'
         with pytest.raises(SpecsolveError, match="'optimal'"):
-            model.iis()
+            model.infeasible_subsystem()
 
 
 class _StoppedShort:
@@ -218,4 +218,4 @@ def test_a_gurobi_search_stopped_short_is_refused(minimal: int | None) -> None:
         held = model._engine._solver
         held._m = _StoppedShort(held._m, minimal)
         with pytest.raises(SpecsolveError, match='found no subsystem'):
-            model.iis()
+            model.infeasible_subsystem()

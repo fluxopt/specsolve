@@ -194,7 +194,7 @@ class ConstraintRow:
 
 @dataclass(frozen=True)
 class InfeasibleSubsystem:
-    """The rows and bounds that cannot hold together — what [`iis`][specsolve.api.Model.iis] returns.
+    """The rows and bounds that cannot hold together — what [`infeasible_subsystem`][specsolve.api.Model.infeasible_subsystem] returns.
 
     Irreducible: drop any one member and the rest can be met. A model can have
     several, and each solver may find a different one. Printed, it is one line

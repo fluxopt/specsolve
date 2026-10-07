@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): an infeasible solve says which rows and bounds conflict, by declaration and coordinate ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+- feat(api): a model with no solution names the rows and bounds that conflict ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
 
 ## 0.6.2 (2026-10-07)
 

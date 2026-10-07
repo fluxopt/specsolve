@@ -71,7 +71,7 @@ elastic relaxation; dualisation, since transposing a COO matrix is swapping two
 column names. Model statistics and coefficient ranges were the first of these
 and already ship ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)),
 and so does the IIS (irreducible infeasible subsystem) read-back, a join rather
-than a scatter ([`Model.iis`](../reference/api.md#specsolve.types.Model.iis)).
+than a scatter ([`Model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem)).
 
 **Ahead of comparable declarative layers:** a sparse-by-construction build with
 no dense intermediate, and a hand-off straight to the solver rather than

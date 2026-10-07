@@ -257,8 +257,8 @@ class Engine:
             _model_digest=lambda: handoff.contents,
         )
 
-    def iis(self) -> InfeasibleSubsystem:
-        """The infeasible subsystem of the last solve, by declaration and coordinate. See [`iis`][specsolve.api.Model.iis].
+    def infeasible_subsystem(self) -> InfeasibleSubsystem:
+        """The infeasible subsystem of the last solve, by declaration and coordinate. See [`infeasible_subsystem`][specsolve.api.Model.infeasible_subsystem].
 
         Raises:
             SpecsolveError: No solve since the last build, update or close; a
@@ -267,7 +267,7 @@ class Engine:
         if self._solved is None:
             raise SpecsolveError(
                 'there is no solve to explain: this model has not been solved since it was built, '
-                'updated or closed. Solve it, and ask iis() while the last solve is the infeasible one.'
+                'updated or closed. Solve it, and ask infeasible_subsystem() while the last solve is the infeasible one.'
             )
         if self._solved.termination_condition != 'infeasible':
             raise SpecsolveError(

@@ -422,7 +422,7 @@ class Model:
         """
         return self._engine.row(name, coordinate)
 
-    def iis(self) -> InfeasibleSubsystem:
+    def infeasible_subsystem(self) -> InfeasibleSubsystem:
         """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
 
         The verb for *this model has no solution and I do not know why*. It
@@ -446,12 +446,12 @@ class Model:
         Example:
             >>> model.solve().termination_condition  # doctest: +SKIP
             'infeasible'
-            >>> print(model.iis())  # doctest: +SKIP
+            >>> print(model.infeasible_subsystem())  # doctest: +SKIP
             balance[snapshot=1] == 200
             p[snapshot=1, tech=gas] <= 100 (upper bound)
             p[snapshot=1, tech=wind] <= 50 (upper bound)
         """
-        return self._engine.iis()
+        return self._engine.infeasible_subsystem()
 
     def _evaluator(
         self,
