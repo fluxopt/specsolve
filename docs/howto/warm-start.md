@@ -98,9 +98,11 @@ archive, and it can come from another solver.
 
 **It pays most where the model changes least.** An unchanged model started
 from its own answer does no simplex work. Over a Benders run on the master of
-`bench/warm_payoff.py`, with HiGHS, a start from the previous master saved most
-of the simplex iterations (#NNN). As with `keep='progress'`, measure before
-relying on it.
+`bench/warm_payoff.py`, with HiGHS, a start from the previous master saved 66%
+to 73% of the simplex iterations at every size measured
+([#1877](https://github.com/fluxopt/specsolve/pull/1877)). Whether it saves
+time too depends on the model: on a small master, reading and matching the
+basis costs more than the iterations it saves. Measure before relying on it.
 
 ## Start a mixed-integer solve from values
 

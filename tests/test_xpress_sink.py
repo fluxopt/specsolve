@@ -224,3 +224,31 @@ def test_the_missing_extra_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not Xpress.is_available()
     with pytest.raises(ModuleNotFoundError, match=r'\[xpress\] extra'):
         sps.solve(*CASES['LP'], solver_name='xpress')
+
+
+def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
+    """A basis read from Xpress and loaded back is the one Xpress holds, row by row and column by column.
+
+    Which side of its slack a nonbasic row names is not observable here: Xpress
+    puts the slack at its one finite bound on load, whichever side it was given.
+    """
+    from tests.test_basis import SPEC
+
+    with sps.build(SPEC, {}) as model:
+        tables = model._engine._model.handoff
+    first = Xpress(tables)
+    try:
+        basis = first.run(tables, basis=True).basis
+        native_rows, native_columns = first._p.getBasis()
+    finally:
+        first.close()
+    assert basis is not None
+
+    fresh = Xpress(tables)
+    try:
+        fresh.warm(basis)
+        loaded_rows, loaded_columns = fresh._p.getBasis()
+    finally:
+        fresh.close()
+    assert list(loaded_rows) == list(native_rows), 'the rows go back in the statuses they were read in'
+    assert list(loaded_columns) == list(native_columns), 'and the columns'
