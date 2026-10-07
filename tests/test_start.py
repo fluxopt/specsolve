@@ -1,8 +1,9 @@
-"""``start=``: an LP solved from an earlier answer's basis, matched by coordinate.
+"""``start=``: an LP solved from an earlier answer's basis, a mixed-integer model from values, both matched by coordinate.
 
 Warmth is read off each solver's own simplex iteration counter, which is
-deterministic, so none of this needs an idle box. The answer is the oracle for
-correctness: a start moves the route, never the optimum.
+deterministic, so none of this needs an idle box. A mixed-integer start is read
+off the incumbent a solve stopped at its first solution returns. The answer is
+the oracle for correctness: a start moves the route, never the optimum.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from specsolve.relational.sinks.solvers.base import (
     SUPERBASIC,
     settled,
 )
-from tests.conftest import KNAPSACK, knapsack_sources
+from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
 
 if TYPE_CHECKING:
@@ -108,14 +109,34 @@ def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
     assert warm == 0, 'the frames on disk are the frames the live answer held'
 
 
+def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
+    """Its coordinates are not the earlier ones, so none of its statuses carry, and the rest still do."""
+    scalar = {
+        'variables': {'x': {'dims': [], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'cap': {'dims': [], 'expression': 'x <= 3'}},
+        'objective': {'sense': 'maximize', 'expression': 'x'},
+    }
+    indexed = {
+        'dimensions': {'i': {}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'cap': {'dims': [], 'expression': 'sum(x, over=i) <= 3'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=i)'},
+    }
+    before = sps.solve(scalar, {}, outputs=BASIS)
+    with sps.solve(indexed, {'i': ['a', 'b']}, start=before) as after:
+        assert after.objective == pytest.approx(3.0), 'the cap binds however the sum is split'
+
+
 # ---------------------------------------------------------------------------
 # refusals
 # ---------------------------------------------------------------------------
 
 
-def test_an_answer_solved_without_its_basis_is_refused_before_the_build(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_answer_solved_without_its_basis_is_refused_before_the_solver_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve.relational import sinks
+
     with sps.solve(DISPATCH, snapshots(40), outputs={'variable_basis'}) as before:
-        monkeypatch.setattr(sps.api, 'build', lambda *_: pytest.fail('the build ran before the refusal'))
+        monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
         with pytest.raises(SpecsolveError, match=r"without 'constraint_basis'.*outputs=\{'variable_basis', "):
             sps.solve(DISPATCH, snapshots(40), start=before)
 
@@ -126,10 +147,10 @@ def test_an_answer_that_ended_on_no_basis_says_why() -> None:
         sps.solve(DISPATCH, snapshots(40), start=before)
 
 
-def test_a_mixed_integer_model_takes_no_basis_to_start_from() -> None:
-    before = sps.solve(DISPATCH, snapshots(40), outputs=BASIS)
-    with pytest.raises(SpecsolveError, match='mixed-integer'):
-        sps.solve(KNAPSACK, knapsack_sources(), start=before)
+def test_an_lp_takes_no_table_of_values() -> None:
+    values = {'p': sps.solve(DISPATCH, snapshots(40)).primal('p')}
+    with pytest.raises(SpecsolveError, match='starts from a basis'):
+        sps.solve(DISPATCH, snapshots(40), start=values)
 
 
 def test_a_closed_answer_is_refused() -> None:
@@ -137,6 +158,53 @@ def test_a_closed_answer_is_refused() -> None:
     before.close()
     with pytest.raises(SpecsolveError, match='closed'):
         sps.solve(DISPATCH, snapshots(40), start=before)
+
+
+# ---------------------------------------------------------------------------
+# a mixed-integer model starts from values
+# ---------------------------------------------------------------------------
+
+#: Each sink stopped at the first solution it holds, with nothing that would
+#: find a better one before it: what it returns is the start it was given.
+FIRST_SOLUTION = {
+    'highs': {'mip_max_improving_sols': 1, 'presolve': 'off'},
+    'gurobi': {'SolutionLimit': 1, 'Presolve': 0, 'Heuristics': 0},
+    'xpress': {'maxmipsol': 1, 'presolve': 0},
+}
+
+#: Two items that fit together, worth 2 + 3, far short of the optimum of 37.
+TWO_ITEMS = pl.DataFrame({'item': ['item1', 'item2'], 'value': [1.0, 1.0]})
+
+
+def _first(solver_name: str, **solve: Any) -> float:
+    return sps.solve(KNAPSACK, knapsack_sources(), solver_name=solver_name, solver_options=FIRST_SOLUTION[solver_name], **solve).objective
+
+
+def test_a_mixed_integer_solve_stops_at_the_values_it_starts_from(solver_name: str) -> None:
+    every = pl.DataFrame({'item': ITEMS, 'value': [1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS]})
+    assert _first(solver_name, start={'take': every}) == pytest.approx(16.0), 'the start is the first solution'
+
+
+def test_a_partial_start_is_completed_by_the_solver(solver_name: str) -> None:
+    assert _first(solver_name, start={'take': TWO_ITEMS}) == pytest.approx(16.0), 'the items not named stay out'
+
+
+def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_name: str) -> None:
+    before = sps.solve(KNAPSACK, knapsack_sources(), solver_name=solver_name)
+    assert _first(solver_name, start=before) == pytest.approx(before.objective), 'its primal is the first solution'
+
+
+@pytest.mark.parametrize(
+    ('start', 'match'),
+    [
+        pytest.param({'tkae': TWO_ITEMS}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
+        pytest.param({'take': TWO_ITEMS.rename({'item': 'items'})}, r"\['item', 'value'\]", id='a-column-not-its-dims'),
+        pytest.param({'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}, 'no value at any', id='no-coordinate-held'),
+    ],
+)
+def test_a_table_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:
+    with pytest.raises(SpecsolveError, match=match):
+        sps.solve(KNAPSACK, knapsack_sources(), start=start)
 
 
 # ---------------------------------------------------------------------------

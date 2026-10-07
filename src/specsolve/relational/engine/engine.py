@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve.errors import SpecsolveError
+from specsolve.messages import unknown_name_message
 from specsolve.relational import sinks
 from specsolve.relational.answer_layout import BASES
 from specsolve.relational.engine import readback
@@ -53,13 +54,33 @@ def _statuses(codes: np.ndarray) -> pl.Series:
     return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
 
 
-def _no_basis_to_start_message(discrete: Sequence[str]) -> str:
-    """Why a mixed-integer model takes no basis to start from."""
+def _no_values_for_an_lp_message() -> str:
+    """Why an LP takes no table of values to start from."""
     return (
-        f'this model is mixed-integer — {", ".join(map(repr, discrete))} — and a basis starts an LP, so it '
-        f'has nothing to start from: a branch-and-bound search re-solves a different LP at every node. '
-        f'Solve it without start=.'
+        'start= takes a table of values for a mixed-integer model, and this one is an LP, which a simplex '
+        'starts from a basis, not from values. Pass an earlier answer of it solved with '
+        "outputs={'variable_basis', 'constraint_basis'} instead."
     )
+
+
+def _checked_start(
+    name: str, table: pl.DataFrame, variables: Mapping[str, program.VariableDeclaration]
+) -> pl.LazyFrame:
+    """*table*, the starting values of variable *name*, once it is checked to be ``(dims…, value)`` of one.
+
+    Raises:
+        SpecsolveError: *name* is no variable, or *table*'s columns are not
+            its dims and ``value``.
+    """
+    if name not in variables:
+        raise SpecsolveError(f'start= names an {unknown_name_message("variable", name, variables)}')
+    expected = [*variables[name].dims, 'value']
+    if set(table.columns) != set(expected):
+        raise SpecsolveError(
+            f"start= gives variable '{name}' the columns {table.columns}, and a table of starting values is "
+            f'the variable\'s dims and its value: {expected}, as primal() returns it.'
+        )
+    return table.lazy()
 
 
 def _no_built_model(doing: str) -> str:
@@ -190,7 +211,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: tuple[Mapping[str, pl.LazyFrame], Mapping[str, pl.LazyFrame]] | None = None,
+        start: Result | Mapping[str, pl.DataFrame] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -213,23 +234,25 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
-            start: Another answer's variable and constraint basis frames, per
-                declaration, to start this LP from, matched by coordinate
-                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]).
+            start: What to start the solve from, matched by coordinate: for an
+                LP, an earlier answer's basis
+                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]);
+                for a mixed-integer model, an earlier answer's primal or a
+                ``(dims…, value)`` table per variable
+                ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
 
         Returns:
             The solution, holding this engine and the build it answered.
 
         Raises:
             SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* for a
-                model with an integer variable.
+                [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* this
+                model cannot start from — refused before the solver loads.
         """
-        if start is not None and (discrete := self._discrete()):
-            raise SpecsolveError(_no_basis_to_start_message(discrete))
+        begin = None if start is None else self._begun(start)
         solver, kept = self._hand_off(solver_name, solver_options, keep)
-        if start is not None:
-            solver.warm(readback.matched_basis(self._model, *start))
+        if begin is not None:
+            begin(solver)
         handoff = self._model.handoff
         self._solves += 1
         if kept == 'nothing':
@@ -237,6 +260,34 @@ class Engine:
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff, basis=bool(outputs & BASES))
         return self._answered(answer, solver_name, kept, lower, outputs)
+
+    def _begun(self, start: Result | Mapping[str, pl.DataFrame]) -> Callable[[sinks.Solver], None]:
+        """How a solver starts from *start*, laid onto this build: a basis for an LP, values for a mixed-integer model.
+
+        Raises:
+            SpecsolveError: Values for an LP, a table naming no variable or
+                lacking its dims, an answer that holds nothing to start from,
+                or values at no coordinate this build holds.
+        """
+        import numpy as np
+
+        model = self._model
+        if not self._discrete():
+            if not isinstance(start, Result):
+                raise SpecsolveError(_no_values_for_an_lp_message())
+            basis = readback.matched_basis(model, *start._basis())
+            return lambda solver: solver.warm(basis)
+        if isinstance(start, Result):
+            frames = start._readable(start._primals, 'the values to start from')
+        else:
+            frames = {name: _checked_start(name, table, model.program.variables) for name, table in start.items()}
+        values = readback.matched_values(model, frames)
+        if len(values) and np.isnan(values).all():
+            raise SpecsolveError(
+                'start= gives no value at any coordinate this model holds, so it would start nothing. Name '
+                "the variables as the spec declares them, and their coordinates as primal() returns them."
+            )
+        return lambda solver: solver.start(values)
 
     def _answered(
         self,

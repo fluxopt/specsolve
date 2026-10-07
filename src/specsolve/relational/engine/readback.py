@@ -333,41 +333,59 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     take it, and [`settled`][specsolve.relational.sinks.solvers.base.settled]
     on this build's bounds.
     """
+    import numpy as np
+
     handoff = model.handoff
-    placed_columns = _placed(model, model.variables, model.program.variables, columns, handoff.column_count, AT_LOWER)
-    placed_rows = _placed(model, model.constraints, model.program.constraints, rows, handoff.row_count, BASIC)
+    status = pl.col('value').cast(BASIS).to_physical()
+    placed_columns = np.full(handoff.column_count, AT_LOWER, dtype=np.int8)
+    _place(placed_columns, model, model.variables, model.program.variables, columns, status)
+    placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
+    _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
     return settled(handoff, *_counted(placed_columns, placed_rows))
 
 
-def _placed(
+def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.ndarray:
+    """A value per column from *values*, ``(dims…, value)`` frames per variable, laid onto this build by coordinate.
+
+    NaN where *values* gives none: a variable it does not name, a coordinate
+    it lacks, a declaration whose dims changed.
+    """
+    import numpy as np
+
+    placed = np.full(model.handoff.column_count, np.nan)
+    _place(placed, model, model.variables, model.program.variables, values, pl.col('value').cast(pl.Float64))
+    return placed
+
+
+def _place(
+    into: np.ndarray,
     model: BuiltModel,
     held: Mapping[str, labels.Labelled],
     declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
     previous: Mapping[str, pl.LazyFrame],
-    count: int,
-    fill: int,
-) -> np.ndarray:
-    """A status code per label of *held*: the one *previous* gives the same coordinate, else *fill*.
+    value: pl.Expr,
+) -> None:
+    """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*.
 
     The join is on the dims as strings, which is how a read-back frame
-    carries them live, saved and archived alike.
+    carries them live, saved and archived alike. A frame whose columns are not
+    its declaration's dims and ``value`` is skipped, as is a coordinate only
+    one side holds.
     """
     import numpy as np
 
-    codes = np.full(count, fill, dtype=np.int8)
-    positions = pl.Series('value', np.arange(count, dtype=np.int64))
+    positions = pl.Series('value', np.arange(len(into), dtype=np.int64))
     for name, labelled in held.items():
         dims = list(declared[name].dims)
         before = previous.get(name)
         if before is None or set(before.collect_schema().names()) != {*dims, 'value'}:
             continue
         here = laid_out(model.attached, labelled, tuple(dims), positions).rename({'value': _LABEL_ORDER})
-        status = before.select(*dims, pl.col('value').cast(BASIS).to_physical())
-        found = (here.join(status, on=dims, how='inner') if dims else here.join(status, how='cross')).collect(
+        given = before.select(*(pl.col(dim).cast(pl.String) for dim in dims), value)
+        found = (here.join(given, on=dims, how='inner') if dims else here.join(given, how='cross')).collect(
             engine=collect_engine()
         )
-        codes[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
-    return codes
+        into[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
 
 
 def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

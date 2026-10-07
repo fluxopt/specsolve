@@ -177,7 +177,10 @@ class Solver(ABC):
         """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
 
     def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Start the next [`run`][] of this mixed-integer model from *values*, one per column, as an incumbent.
+        """Start the next [`run`][] of this mixed-integer model from *values*, one per column and NaN where none is given.
+
+        The solver takes them as a starting incumbent, completing what is
+        missing and repairing what is infeasible as far as it can.
 
         Raises:
             SpecsolveError: Values that do not span the loaded model.
@@ -187,7 +190,7 @@ class Solver(ABC):
 
     @abstractmethod
     def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand *values* to the solver as a starting incumbent. [`start`][] has checked their span."""
+        """Hand the values *values* gives to the solver as a starting incumbent. [`start`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
