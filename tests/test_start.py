@@ -197,7 +197,11 @@ def _shaped(shape: str, tmp_path: Path) -> object:
     if shape == 'parquet':
         table.write_parquet(tmp_path / 'take.parquet')
         return str(tmp_path / 'take.parquet')
-    return {'polars': table, 'pandas': table.to_pandas(), 'mapping': TWO_IN, 'sequence': list(TWO_IN.values())}[shape]
+    if shape == 'pandas':
+        pytest.importorskip('pandas')
+        pytest.importorskip('pyarrow')
+        return table.to_pandas()
+    return {'polars': table, 'mapping': TWO_IN, 'sequence': list(TWO_IN.values())}[shape]
 
 
 @pytest.mark.parametrize('shape', ['polars', 'pandas', 'parquet', 'mapping', 'sequence'])
