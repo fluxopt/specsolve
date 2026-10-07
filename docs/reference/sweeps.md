@@ -263,22 +263,26 @@ keeping 24, not label 47 of the 48 it solved.
 | **a slice that leaves nothing to carry stops the sweep** | An infeasible window has no level to hand forward. The error names the slice, how it terminated, and the slice left waiting. A sweep without a carry records the slice in `record` and goes on. |
 | **`carry` excludes `executor`** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. |
 
-## Starting slices from an earlier answer
+## Starting slices
 
-`start=` takes what [`solve`](api.md#specsolve.types.Model.solve) takes, and an
-earlier sweep. A sweep passed as `start=` starts each slice from its slice of
-the same key:
+`start=` takes what [`solve`](api.md#specsolve.types.Model.solve) takes, an
+earlier sweep, or the word `'previous'`. **A start is cut by the axis, as a
+source is**: a table that carries the sliced dimension gives each slice its own
+rows, and a table without it reaches every slice whole.
 
 ```python
-again = sps.solve_over('dispatch.yaml', new_sources, axis, start=sweep)
+again = sps.solve_over('dispatch.yaml', new_sources, axis, start=earlier)
+chained = sps.solve_over('dispatch.yaml', sources, axis, start='previous')
 ```
 
 | Rule | |
 |---|---|
-| **an earlier sweep starts slice by slice** | Each slice starts from the earlier slice of the same key, and an `EachWindow` window from the same window. The earlier sweep must hold every key of this one, keyed by the same column, each slice with values. An archived `EachWindow` sweep needs `keep_windows=True`, which keeps its windows. |
-| **an answer or a table starts every slice the same** | An earlier `Result` or a `Start` is laid onto each slice by coordinate. `EachWindow` refuses it: its windows share their local index, so one start would put the same hours onto every window. |
+| **a table over the sliced dimension gives each slice its rows** | `EachCoordinate('scenario')` gives each slice the rows of its scenario. `EachWindow` gives each window the rows of the coordinates it covers, lookahead included, over its local index. A hand-built axis cuts on its key column. |
+| **an earlier sweep is its answer** | Each slice starts from the earlier slice of its key, and each window from the answer over the coordinates it covers. An archive written without `keep_windows=True` starts a sweep too. |
+| **`'previous'` starts each slice from the one before it** | Matched by the slice model's own coordinates, so a window takes the window before it by local index. The first slice, and a slice after one that left no values, starts cold. Each slice depends on the one before, so `'previous'` under an `executor` is refused. |
+| **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused: it says nothing about which coordinates it means. So is a start that leaves a slice no row, and a table `solve` refuses. |
 | **`start=` combines with `keep='solver'` only** | `keep='progress'` and `keep='nothing'` also say what each slice begins from, so the call is refused. |
-| **a start reaches every executor** | A slice solved in another process takes its start as data. |
+| **a start reaches every executor** | Each slice's cut is taken before the slice is sent, so a slice solved in another process takes it as data. |
 
 ## Running slices in parallel
 

@@ -64,7 +64,7 @@ def _statuses(codes: np.ndarray) -> pl.Series:
     return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
 
 
-def _checked_start(start: Start, declared: program.Program) -> dict[str, dict[str, pl.LazyFrame]]:
+def checked_start(start: Start, declared: program.Program) -> dict[str, dict[str, pl.LazyFrame]]:
     """*start*, each table checked to be ``(dims…, value)`` of a declaration its reader reads, a basis status in words.
 
     Raises:
@@ -340,12 +340,17 @@ class Engine:
         used. An LP given both starts from the basis.
 
         Raises:
-            SpecsolveError: A table [`_checked_start`][] refuses, a start that
+            SpecsolveError: A table [`checked_start`][] refuses, a start that
                 gives this model nothing it starts from or lands nowhere on
                 this build, or values for an LP that *solver_name* cannot take.
         """
+        if isinstance(start, str):
+            raise SpecsolveError(
+                f'start={start!r} is a word only solve_over takes: a solve has no slice before it. Pass an earlier '
+                'answer or a Start.'
+            )
         model = self._model
-        given = start._start() if isinstance(start, Result) else _checked_start(start, model.program)
+        given = start._start() if isinstance(start, Result) else checked_start(start, model.program)
         discrete = bool(self._discrete())
         if not discrete and (given.get('variable_basis') or given.get('constraint_basis')):
             return readback.matched_basis(model, given.get('variable_basis', {}), given.get('constraint_basis', {}))

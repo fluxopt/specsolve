@@ -228,9 +228,9 @@ class Spill:
         held = pl.read_parquet(self._file('metrics', position)).row(0, named=True)
         return SliceAnswer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory))
 
-    def primals(self, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
-        """The named primals a done slice wrote; a name it did not write is absent."""
-        found = {name: self._file('primal', position, name) for name in names}
+    def written(self, kind: str, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
+        """The named frames of *kind* a done slice wrote; a name it did not write is absent."""
+        found = {name: self._file(kind, position, name) for name in names}
         return {name: pl.read_parquet(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
     def frames(self, *, whole: bool) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -366,37 +366,18 @@ class Sweep:
     def keys(self) -> list[Label]:
         return self.record[self.key_name].to_list()
 
-    def _per_slice(self, kind: str) -> Mapping[str, pl.LazyFrame]:
-        """Every slice's frame of *kind* per name, keyed by slice and in the slice model's own coordinates.
+    def _start(self) -> Start:
+        """This sweep's answer as tables to start a sweep from, keyed as [`Start`][specsolve.types.Start] is.
 
-        An archived sweep that was not cut into windows holds its slices as its
-        answer, keyed already. One that was holds them only where the windows
-        were kept.
-
-        Raises:
-            SpecsolveError: An archived EachWindow sweep whose windows were not
-                kept.
-        """
-        if self._answer is not None and self._stitch is None:
-            return self._answer[kind]
-        if not self._windows:
-            raise SpecsolveError(NO_WINDOWS)
-        return self._slices.get(kind, {})
-
-    def _start(self, key: Label) -> Start:
-        """What slice *key* gives a solve to start from, keyed as [`Start`][specsolve.types.Start] is.
-
-        Its primal, and its basis where the sweep carries one. Called only for
-        a key this sweep holds and solved to values.
+        The primal, and the basis where the sweep carries one, each read as
+        [`scan`][] reads it: keyed by slice, or over the dimension an
+        EachWindow sweep cut.
         """
         given: dict[str, dict[str, pl.DataFrame]] = {}
         for kind in ('primal', *(sorted(BASES) if 'basis' in self._outputs else ())):
-            frames = {
-                name: frame.filter(pl.col(self.key_name) == key).drop(self.key_name).collect()
-                for name, frame in self._per_slice(kind).items()
-            }
-            if held := {name: frame for name, frame in frames.items() if frame.height}:
-                given[kind] = held
+            held, _ = self._answerable(kind, per_window=False)
+            if held:
+                given[kind] = {name: self.scan(name, kind).collect() for name in held}
         return cast('Start', given)
 
     def _check_per_window(self) -> None:
@@ -732,22 +713,26 @@ class Sweep:
         self._check_requested(kind, 'anything')
         if per_window:
             self._check_per_window()
-        left_out = dict(self._absent.get(kind, {}))
-        if self._answer is not None and not per_window:
-            held: Mapping[str, object] = self._answer[kind]
-        else:
-            held = {}
-            for name, frame in self._slices.get(kind, {}).items():
-                if not per_window and (why := self._unstitchable(frame)):
-                    left_out[name] = why
-                else:
-                    held[name] = frame
+        held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
             absent = _whole_kind_absent(kind, held, self._no_duals, self.record) or _none_answered(
                 _LABELS[kind], left_out
             )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
+
+    def _answerable(self, kind: str, *, per_window: bool) -> tuple[dict[str, object], dict[str, str]]:
+        """Every name of *kind* there is an answer for, and why each name left out of the answer is."""
+        left_out = dict(self._absent.get(kind, {}))
+        if self._answer is not None and not per_window:
+            return dict(self._answer[kind]), left_out
+        held: dict[str, object] = {}
+        for name, frame in self._slices.get(kind, {}).items():
+            if not per_window and (why := self._unstitchable(frame)):
+                left_out[name] = why
+            else:
+                held[name] = frame
+        return held, left_out
 
     def __len__(self) -> int:
         return self.record.height
@@ -890,7 +875,12 @@ def slice_index(sweep: Sweep, kind: str) -> dict[str, dict[Label, pl.DataFrame]]
     answer, keyed already. One that was holds them only where the windows were
     kept.
     """
-    held = sweep._per_slice(kind)
+    if sweep._answer is not None and sweep._stitch is None:
+        held = sweep._answer[kind]
+    elif not sweep._windows:
+        raise SpecsolveError(NO_WINDOWS)
+    else:
+        held = sweep._slices.get(kind, {})
     key = sweep.key_name
     return {
         name: {part[key][0]: part.drop(key) for part in frame.collect().partition_by(key, maintain_order=True)}

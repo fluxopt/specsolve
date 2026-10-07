@@ -66,7 +66,9 @@ class Start(TypedDict, total=False):
     leave out declarations and coordinates. ``primal`` gives values, and
     ``variable_basis`` and ``constraint_basis`` give a basis status in
     [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
-    earlier [`Result`][] is the same, from the tables it carries.
+    earlier [`Result`][] is the same, from the tables it carries. Given to
+    [`solve_over`][specsolve.strategy.solve_over], a table that carries the
+    sliced dimension is cut per slice, as a source is.
 
     Example::
 
