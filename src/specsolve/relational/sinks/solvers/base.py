@@ -103,6 +103,12 @@ class Solver(ABC):
     #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
 
+    #: What a start of values does for an LP on this member, when it gives
+    #: every column a value and when it leaves some out: ``used``,
+    #: ``no_gain`` where the member takes them and no gain from them is known,
+    #: so the solve warns, or ``refused`` where it cannot take them.
+    lp_values: ClassVar[Mapping[Literal['complete', 'partial'], Literal['used', 'no_gain', 'refused']]]
+
     #: Option names, casefolded, whose value an answer records: the ones that
     #: change what a solve returns. Any other option is recorded by name
     #: alone, so a credential passed as an option never reaches an archive.
@@ -167,10 +173,11 @@ class Solver(ABC):
         """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
 
     def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Start the next [`run`][] of this mixed-integer model from *values*, one per column and NaN where none is given.
+        """Start the next [`run`][] from *values*, one per column and NaN where none is given.
 
-        The solver takes them as a starting incumbent, completing what is
-        missing and repairing what is infeasible as far as it can.
+        A mixed-integer model takes them as a starting incumbent, completing
+        what is missing and repairing what is infeasible as far as it can; an
+        LP as [`lp_values`][] says.
 
         Raises:
             SpecsolveError: Values that do not span the loaded model.
@@ -180,7 +187,7 @@ class Solver(ABC):
 
     @abstractmethod
     def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand the values *values* gives to the solver as a starting incumbent. [`start`][] has checked their span."""
+        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""

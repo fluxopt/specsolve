@@ -47,7 +47,6 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_outputs,
     digest_of,
-    directory_of,
     installed,
     kinds_of,
     read_outputs,
@@ -66,7 +65,7 @@ if TYPE_CHECKING:
     from mathspec.program import Expression, Program
 
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
+    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -281,7 +280,7 @@ class Model:
         keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
-        start: Result | Mapping[str, pl.DataFrame] | None = None,
+        start: Result | Start | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -329,19 +328,20 @@ class Model:
                 with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
-            start: What to start the solve from, matched by coordinate, so
-                one from another build of the spec, with rows or columns gained
-                or lost, starts it too. It changes how the solver gets to the
-                optimum, never which one. An LP starts only from an earlier
-                answer solved with ``outputs={'basis'}``, so ask for it on the
-                solve you mean to start from: its basis is laid onto this
-                build, and a coordinate only this build holds starts at a
-                bound if it is a variable's, and not binding if it is a
-                constraint's. A mixed-integer model starts from values, as an incumbent the
-                solver completes and repairs: an earlier answer's primal, or a
-                ``(dims…, value)`` table per variable, ``primal()``'s shape,
-                naming any of them and any of their coordinates. An answer can
-                be live, loaded with [`load_result`][] or from an archive.
+            start: What to start the solve from: an earlier answer, live,
+                loaded with [`load_result`][] or from an archive, or a
+                [`Start`][specsolve.types.Start] of tables keyed by reader. It
+                is matched by coordinate, so one from another build of the
+                spec, with rows or columns gained or lost, starts it too, and
+                it changes how the solver gets to the optimum, never which
+                one. An LP starts from a basis where one is given, which an
+                answer carries when solved with ``outputs={'basis'}``: a
+                coordinate it leaves out starts at a bound if it is a
+                variable's, and not binding if it is a constraint's. Otherwise
+                an LP, and a mixed-integer model always, starts from values,
+                which the solver completes and repairs. Where a solver takes
+                values for an LP and no gain from them is known, the solve
+                warns.
 
         Returns:
             The solution, holding this model.
@@ -350,9 +350,12 @@ class Model:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, a bare string as
                 *record_options* or *outputs*, a name in *outputs* that is not
-                an output, or a *start* this model cannot start from: an
-                answer without its basis for an LP, a table for an LP, or a
-                table naming no variable or lacking its dims.
+                an output, or a *start* this model or solver cannot start from:
+                a key that names no reader, a table naming no declaration or
+                lacking its dims, a basis status outside the five words, a
+                basis alone for a mixed-integer model, a start that lands on
+                no coordinate, or values for an LP that the solver cannot
+                take.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -537,7 +540,7 @@ def solve(
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
-    start: Result | Mapping[str, pl.DataFrame] | None = None,
+    start: Result | Start | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 
@@ -688,7 +691,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         objective,
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
-        {kind: saved_frames(out / directory_of(kind), whole=whole) for kind in kinds_of(read_outputs(out))},
+        {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
         'nothing',
         expressions,
         _no_duals=no_duals,

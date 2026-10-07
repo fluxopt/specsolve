@@ -32,7 +32,6 @@ from specsolve.relational.answer_layout import (
     RUN,
     consolidated,
     digest_of_file,
-    directory_of,
     write_whole,
 )
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
@@ -174,7 +173,7 @@ def _answered_under(under: str) -> dict[str, list[str]]:
     """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
     held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
     for kind, carried in OUTPUT_KINDS.items():
-        held[carried.per].append(f'{under}/{directory_of(kind)}')
+        held[carried.per].append(f'{under}/{kind}')
     return held
 
 

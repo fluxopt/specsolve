@@ -8,6 +8,7 @@ the oracle for correctness: a start moves the route, never the optimum.
 
 from __future__ import annotations
 
+import warnings
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -16,8 +17,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.errors import SpecsolveError
-from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, NO_BASIS, SUPERBASIC
+from specsolve.errors import SpecsolveError, SpecsolveWarning
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve.relational.engine.readback import _counted
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import settled
@@ -124,25 +125,73 @@ def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_an_answer_solved_without_its_basis_is_refused_before_the_solver_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+def _as_tables(answer: Result, reader: str) -> dict[str, pl.DataFrame]:
+    """Every table *reader* returns off *answer*, a status as plain text: a start as one written elsewhere would be."""
+    names = DISPATCH['constraints'] if reader == 'constraint_basis' else DISPATCH['variables']
+    return {name: getattr(answer, reader)(name).with_columns(pl.col('value').cast(pl.String)) for name in names}
+
+
+def test_a_basis_given_as_tables_starts_an_lp_as_an_answer_does(solver_name: str) -> None:
+    before, _ = solved(DISPATCH, snapshots(40), solver_name, outputs=BASIS)
+    start = {reader: _as_tables(before, reader) for reader in ('variable_basis', 'constraint_basis')}
+    _, warm = solved(DISPATCH, snapshots(40), solver_name, start=start)
+    assert warm == 0, 'the tables carry the basis the optimum ended on'
+
+
+def test_half_a_basis_is_completed_and_reaches_the_optimum() -> None:
+    """The rows left out start basic and the count is made right, which a solver takes, though it need not pay.
+
+    On this model it does not: the columns alone took more iterations than a
+    cold start, so the claim here is only that the start is taken.
+    """
+    before, _ = solved(DISPATCH, snapshots(40), 'highs', outputs=BASIS)
+    after, _ = solved(DISPATCH, snapshots(40), 'highs', start={'variable_basis': _as_tables(before, 'variable_basis')})
+    assert after.objective == pytest.approx(before.objective), 'a start moves the route, never the optimum'
+
+
+def test_an_lp_answer_without_its_basis_starts_from_its_values() -> None:
+    before, cold = solved(DISPATCH, snapshots(40), 'highs')
+    _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
+    assert warm < cold, 'HiGHS uses a primal that gives every column a value'
+
+
+#: What each sink does with a start of values for an LP, complete and partial.
+#: This is the claim each sink's ``lp_values`` makes, checked against the solve.
+LP_VALUES = {
+    'highs': {'complete': 'used', 'partial': 'no_gain'},
+    'gurobi': {'complete': 'no_gain', 'partial': 'no_gain'},
+    'xpress': {'complete': 'no_gain', 'partial': 'refused'},
+}
+
+
+@pytest.mark.parametrize('given', ['complete', 'partial'])
+def test_a_start_of_values_for_an_lp_is_used_warned_of_or_refused_as_its_sink_says(
+    solver_name: str, given: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from specsolve.relational import sinks
 
-    with sps.solve(DISPATCH, snapshots(40), outputs={'activity'}) as before:
+    before = sps.solve(DISPATCH, snapshots(40), solver_name=solver_name)
+    primal = before.primal('p')
+    start = {'primal': {'p': primal if given == 'complete' else primal.head(primal.height // 2)}}
+    expected = LP_VALUES[solver_name][given]
+    assert sinks.solver(solver_name).lp_values[given] == expected, 'the sink declares what this test observes'
+    if expected == 'refused':
         monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
-        with pytest.raises(SpecsolveError, match=r"solved without it.*outputs=\{'basis'\}"):
-            sps.solve(DISPATCH, snapshots(40), start=before)
+        with pytest.raises(SpecsolveError, match='leave a column out'):
+            sps.solve(DISPATCH, snapshots(40), solver_name=solver_name, start=start)
+        return
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        after = sps.solve(DISPATCH, snapshots(40), solver_name=solver_name, start=start)
+    warned = [w for w in caught if issubclass(w.category, SpecsolveWarning) and 'no gain' in str(w.message)]
+    assert bool(warned) == (expected == 'no_gain'), 'the solve warns exactly where no gain is known'
+    assert after.objective == pytest.approx(before.objective), 'the sink took the values and still solved'
 
 
-def test_an_answer_that_ended_on_no_basis_says_why() -> None:
+def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
     before = sps.solve(KNAPSACK, knapsack_sources(), outputs=BASIS)
-    with pytest.raises(SpecsolveError, match=NO_BASIS[:40]):
+    with pytest.raises(SpecsolveError, match='no value at any coordinate'):
         sps.solve(DISPATCH, snapshots(40), start=before)
-
-
-def test_an_lp_takes_no_table_of_values() -> None:
-    values = {'p': sps.solve(DISPATCH, snapshots(40)).primal('p')}
-    with pytest.raises(SpecsolveError, match='starts from a basis'):
-        sps.solve(DISPATCH, snapshots(40), start=values)
 
 
 def test_a_closed_answer_is_refused() -> None:
@@ -167,6 +216,9 @@ ROOT_ONLY = {
 #: Two items that fit together, worth 8 + 2, far short of the optimum of 56.
 TWO_ITEMS = pl.DataFrame({'item': ['item1', 'item2'], 'value': [1.0, 1.0]})
 
+#: The knapsack's one row, not binding.
+FITS = pl.DataFrame({'value': ['basic']})
+
 
 def _at_the_root(solver_name: str, **solve: Any) -> Result:
     return sps.solve(
@@ -181,13 +233,13 @@ def test_a_mixed_integer_solve_holds_no_incumbent_of_its_own_at_the_root(solver_
 
 def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str) -> None:
     every = pl.DataFrame({'item': ITEMS, 'value': [1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS]})
-    assert _at_the_root(solver_name, start={'take': every}).objective == pytest.approx(10.0), (
+    assert _at_the_root(solver_name, start={'primal': {'take': every}}).objective == pytest.approx(10.0), (
         'the start, worth 8 + 2, is the incumbent'
     )
 
 
 def test_a_partial_start_is_completed_by_the_solver(solver_name: str) -> None:
-    answer = _at_the_root(solver_name, start={'take': TWO_ITEMS})
+    answer = _at_the_root(solver_name, start={'primal': {'take': TWO_ITEMS}})
     taken = answer.primal('take').filter(pl.col('item').is_in(['item1', 'item2']))['value']
     assert taken.to_list() == pytest.approx([1.0, 1.0]), 'the items the start names stay in'
     assert answer.objective >= 10.0, 'the solver fills in the items the start leaves out'
@@ -203,10 +255,34 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
 @pytest.mark.parametrize(
     ('start', 'match'),
     [
-        pytest.param({'tkae': TWO_ITEMS}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
-        pytest.param({'take': TWO_ITEMS.rename({'item': 'items'})}, r"\['item', 'value'\]", id='a-column-not-its-dims'),
         pytest.param(
-            {'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}, 'no value at any', id='no-coordinate-held'
+            {'take': TWO_ITEMS},
+            r"'primal', 'variable_basis', 'constraint_basis', and not 'take'",
+            id='a-key-that-is-no-reader',
+        ),
+        pytest.param({'primal': {'tkae': TWO_ITEMS}}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
+        pytest.param(
+            {'constraint_basis': {'fist': FITS}},
+            "under 'constraint_basis' an unknown constraint 'fist'",
+            id='a-misspelled-constraint',
+        ),
+        pytest.param(
+            {'primal': {'take': TWO_ITEMS.rename({'item': 'items'})}},
+            r"\['item', 'value'\]",
+            id='a-column-not-its-dims',
+        ),
+        pytest.param(
+            {'primal': {'take': TWO_ITEMS}, 'constraint_basis': {'fits': FITS.with_columns(value=pl.lit('loose'))}},
+            "the basis status 'loose'",
+            id='a-status-that-is-no-word',
+        ),
+        pytest.param(
+            {'constraint_basis': {'fits': FITS}}, 'a basis alone', id='a-basis-alone-for-a-mixed-integer-model'
+        ),
+        pytest.param(
+            {'primal': {'take': TWO_ITEMS.with_columns(item=pl.lit('nothing'))}},
+            'no value at any',
+            id='no-coordinate-held',
         ),
     ],
 )

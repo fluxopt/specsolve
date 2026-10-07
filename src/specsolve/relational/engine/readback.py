@@ -333,15 +333,19 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     [`_counted`][] to one basic entry per row, which is what a solver needs to
     take it, and [`settled`][specsolve.relational.sinks.solvers.base.settled]
     on this build's bounds.
+
+    Raises:
+        SpecsolveError: No status lands at a coordinate this build holds.
     """
     import numpy as np
 
     handoff = model.handoff
     status = pl.col('value').cast(BASIS).to_physical()
     placed_columns = np.full(handoff.column_count, AT_LOWER, dtype=np.int8)
-    _place(placed_columns, model, model.variables, model.program.variables, columns, status)
+    placed = _place(placed_columns, model, model.variables, model.program.variables, columns, status)
     placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
-    _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
+    placed += _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
+    _refuse_nothing_placed(placed)
     return settled(handoff, *_counted(placed_columns, placed_rows))
 
 
@@ -350,12 +354,26 @@ def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.
 
     NaN where *values* gives none: a variable it does not name, a coordinate
     it lacks, a declaration whose dims changed.
+
+    Raises:
+        SpecsolveError: No value lands at a coordinate this build holds.
     """
     import numpy as np
 
-    placed = np.full(model.handoff.column_count, np.nan)
-    _place(placed, model, model.variables, model.program.variables, values, pl.col('value').cast(pl.Float64))
-    return placed
+    out = np.full(model.handoff.column_count, np.nan)
+    _refuse_nothing_placed(
+        _place(out, model, model.variables, model.program.variables, values, pl.col('value').cast(pl.Float64))
+    )
+    return out
+
+
+def _refuse_nothing_placed(placed: int) -> None:
+    """Refuse a start that lands nowhere, which would start nothing yet read as a start taken."""
+    if not placed:
+        raise SpecsolveError(
+            'start= gives no value at any coordinate this model holds, so it would start nothing. Name the '
+            'declarations as the spec declares them, and their coordinates as the readers return them.'
+        )
 
 
 def _place(
@@ -365,8 +383,8 @@ def _place(
     declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
     previous: Mapping[str, pl.LazyFrame],
     value: pl.Expr,
-) -> None:
-    """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*.
+) -> int:
+    """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*; how many landed.
 
     The join casts every dim to a string on both sides, so a table typed
     otherwise than the read-back still matches: ``3`` and ``'3'`` are one
@@ -376,6 +394,7 @@ def _place(
     import numpy as np
 
     positions = pl.Series('value', np.arange(len(into), dtype=np.int64))
+    placed = 0
     for name, labelled in held.items():
         dims = list(declared[name].dims)
         before = previous.get(name)
@@ -389,6 +408,8 @@ def _place(
             engine=collect_engine()
         )
         into[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
+        placed += found.height
+    return placed
 
 
 def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

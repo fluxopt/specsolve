@@ -10,14 +10,15 @@ The lane is described in docs/about/architecture.md.
 
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import polars as pl
 
-from specsolve.errors import SpecsolveError
+from specsolve.errors import SpecsolveError, SpecsolveWarning
 from specsolve.messages import unknown_name_message
 from specsolve.relational import sinks
 from specsolve.relational.answer_layout import BASIS, BASIS_STATUSES, kinds_of
@@ -32,7 +33,7 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
-from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
+from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, Start, unknown_keep_message
 from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
@@ -54,33 +55,91 @@ def _statuses(codes: np.ndarray) -> pl.Series:
     return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
 
 
-def _no_values_for_an_lp_message() -> str:
-    """Why an LP takes no table of values to start from."""
-    return (
-        'start= takes a table of values for a mixed-integer model, and this one is an LP, which a simplex '
-        'starts from a basis, not from values. Pass an earlier answer of it solved with '
-        "outputs={'basis'} instead."
-    )
-
-
-def _checked_start(
-    name: str, table: pl.DataFrame, variables: Mapping[str, program.VariableDeclaration]
-) -> pl.LazyFrame:
-    """*table*, the starting values of variable *name*, once it is checked to be ``(dims…, value)`` of one.
+def _checked_start(start: Start, declared: program.Program) -> dict[str, dict[str, pl.LazyFrame]]:
+    """*start*, each table checked to be ``(dims…, value)`` of a declaration its reader reads, a basis status in words.
 
     Raises:
-        SpecsolveError: *name* is no variable, or *table*'s columns are not
-            its dims and ``value``.
+        SpecsolveError: A key that names no reader [`Start`][] takes, a name
+            the reader has no declaration for, columns other than its dims
+            and ``value``, or a basis status outside the five words.
     """
-    if name not in variables:
-        raise SpecsolveError(f'start= names an {unknown_name_message("variable", name, variables)}')
-    expected = [*variables[name].dims, 'value']
+    readers = tuple(Start.__annotations__)
+    by_reader = cast('Mapping[str, Mapping[str, pl.DataFrame]]', start)
+    if unknown := sorted(set(by_reader) - set(readers)):
+        raise SpecsolveError(
+            f'start= takes, under the name of the reader that returns it, a table per declaration: '
+            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
+        )
+    checked: dict[str, dict[str, pl.LazyFrame]] = {}
+    for reader, tables in by_reader.items():
+        per = 'constraint' if reader == 'constraint_basis' else 'variable'
+        named = declared.constraints if per == 'constraint' else declared.variables
+        checked[reader] = {name: _checked_table(reader, per, name, table, named) for name, table in tables.items()}
+    return checked
+
+
+def _checked_table(
+    reader: str,
+    per: str,
+    name: str,
+    table: pl.DataFrame,
+    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
+) -> pl.LazyFrame:
+    """*table*, given under *reader* for the *per* *name*, once it is the shape *reader* returns."""
+    if name not in declared:
+        raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, name, declared)}')
+    expected = [*declared[name].dims, 'value']
     if set(table.columns) != set(expected):
         raise SpecsolveError(
-            f"start= gives variable '{name}' the columns {table.columns}, and a table of starting values is "
-            f"the variable's dims and its value: {expected}, as primal() returns it."
+            f"start= gives {per} '{name}' under {reader!r} the columns {table.columns}, and a table there is "
+            f'what {reader}() returns: {expected}.'
         )
-    return table.lazy()
+    if reader == 'primal':
+        return table.lazy()
+    words = table.with_columns(pl.col('value').cast(pl.String))
+    if unknown := sorted(set(words['value'].drop_nulls()) - set(BASIS_STATUSES)):
+        raise SpecsolveError(
+            f"start= gives {per} '{name}' the basis status {', '.join(map(repr, unknown))}, and a status is one "
+            f'of {", ".join(map(repr, BASIS_STATUSES))}.'
+        )
+    return words.lazy()
+
+
+def _nothing_to_start_message(discrete: bool) -> str:
+    """Why a start gives a model nothing it starts from: a basis alone for a mixed-integer model, or no table at all."""
+    if discrete:
+        return (
+            'start= gives this mixed-integer model a basis alone, and a basis starts only an LP. Give values '
+            "under 'primal' as well."
+        )
+    return "start= gives nothing to start from. Give a table under 'primal', 'variable_basis' or 'constraint_basis'."
+
+
+def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.ndarray) -> None:
+    """Refuse a start of values for an LP that *sink* cannot take, and warn of one it takes where no gain is known.
+
+    Raises:
+        SpecsolveError: *sink* cannot take values that leave a column out.
+    """
+    import numpy as np
+
+    partial = bool(np.isnan(values).any())
+    match sink.lp_values['partial' if partial else 'complete']:
+        case 'refused':
+            raise SpecsolveError(
+                f'{solver_name} cannot start an LP from values that leave a column out, and this start gives '
+                f'no value at {int(np.isnan(values).sum())} of {len(values)}. Give a value at every '
+                "coordinate of every variable, or start from an earlier answer solved with outputs={'basis'}."
+            )
+        case 'no_gain':
+            warnings.warn(
+                f'{solver_name} takes {"a partial" if partial else "a"} start of values for an LP, and no gain '
+                f'from one is known: it measured no fewer iterations than a solve started cold. An earlier '
+                f"answer solved with outputs={{'basis'}} starts an LP from its basis. If you see a start of "
+                f'values speed up a solve, please report it at https://github.com/fluxopt/specsolve/issues.',
+                SpecsolveWarning,
+                stacklevel=5,
+            )
 
 
 def _no_built_model(doing: str) -> str:
@@ -211,7 +270,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: Result | Mapping[str, pl.DataFrame] | None = None,
+        start: Result | Start | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -234,11 +293,10 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
-            start: What to start the solve from, matched by coordinate: for an
-                LP, an earlier answer's basis
-                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]);
-                for a mixed-integer model, an earlier answer's primal or a
-                ``(dims…, value)`` table per variable
+            start: What to start the solve from, matched by coordinate: an LP
+                from a basis where one is given
+                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
+                and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
 
         Returns:
@@ -247,9 +305,10 @@ class Engine:
         Raises:
             SpecsolveError: A *keep* outside
                 [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* this
-                model cannot start from — refused before the solver loads.
+                model or this solver cannot start from — refused before the
+                solver loads.
         """
-        matched = None if start is None else self._matched_start(start)
+        matched = None if start is None else self._matched_start(start, solver_name)
         solver, kept = self._hand_off(solver_name, solver_options, keep)
         if isinstance(matched, Basis):
             solver.warm(matched)
@@ -263,31 +322,27 @@ class Engine:
             answer = solver.run(handoff, basis='basis' in outputs)
         return self._answered(answer, solver_name, kept, lower, outputs)
 
-    def _matched_start(self, start: Result | Mapping[str, pl.DataFrame]) -> Basis | np.ndarray:
-        """*start* laid onto this build: a basis for an LP, a value per column, NaN where none is given, for a mixed-integer model.
+    def _matched_start(self, start: Result | Start, solver_name: str) -> Basis | np.ndarray:
+        """*start* laid onto this build: a basis for an LP given one, else a value per column, NaN where none is given.
+
+        A mixed-integer model starts from values, so a basis given it is not
+        used. An LP given both starts from the basis.
 
         Raises:
-            SpecsolveError: Values for an LP, a table naming no variable or
-                lacking its dims, an answer that holds nothing to start from,
-                or values at no coordinate this build holds.
+            SpecsolveError: A table [`_checked_start`][] refuses, a start that
+                gives this model nothing it starts from or lands nowhere on
+                this build, or values for an LP that *solver_name* cannot take.
         """
-        import numpy as np
-
         model = self._model
-        if not self._discrete():
-            if not isinstance(start, Result):
-                raise SpecsolveError(_no_values_for_an_lp_message())
-            return readback.matched_basis(model, *start._basis())
-        if isinstance(start, Result):
-            frames = start._values()
-        else:
-            frames = {name: _checked_start(name, table, model.program.variables) for name, table in start.items()}
-        values = readback.matched_values(model, frames)
-        if len(values) and np.isnan(values).all():
-            raise SpecsolveError(
-                'start= gives no value at any coordinate this model holds, so it would start nothing. Name '
-                'the variables as the spec declares them, and their coordinates as primal() returns them.'
-            )
+        given = start._start() if isinstance(start, Result) else _checked_start(start, model.program)
+        discrete = bool(self._discrete())
+        if not discrete and (given.get('variable_basis') or given.get('constraint_basis')):
+            return readback.matched_basis(model, given.get('variable_basis', {}), given.get('constraint_basis', {}))
+        if not given.get('primal'):
+            raise SpecsolveError(_nothing_to_start_message(discrete))
+        values = readback.matched_values(model, given['primal'])
+        if not discrete:
+            _checked_lp_values(sinks.solver(solver_name), solver_name, values)
         return values
 
     def _answered(

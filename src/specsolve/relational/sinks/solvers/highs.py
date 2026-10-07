@@ -7,6 +7,7 @@ so importing this module stays free for callers that only write LP files.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
@@ -188,6 +189,7 @@ class Highs(Solver):
 
     #: No SOS concept, and a Hessian beside integrality is refused; the pair is
     #: probed in ``test_sink_capability_probes.py``.
+    lp_values = MappingProxyType({'complete': 'used', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset({'integrality', 'quadratic_objective'}),
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
@@ -242,7 +244,7 @@ class Highs(Solver):
         _took(self._handle.setBasis(hint), 'the basis')
 
     def _start(self, values: Any) -> None:
-        """``setSolution`` in its sparse form, which completes the columns it is not given."""
+        """``setSolution`` in its sparse form, which completes the columns it is not given, for an LP as for a mixed-integer model."""
         import numpy as np
 
         given = np.flatnonzero(~np.isnan(values)).astype(np.int32)

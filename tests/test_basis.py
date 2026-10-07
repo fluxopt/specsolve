@@ -74,7 +74,7 @@ def test_a_saved_answer_reads_back_its_basis(tmp_path: Path) -> None:
 
 
 def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) -> None:
-    """A constraint may share a variable's name, so the two halves of a basis lie under ``basis/`` apart.
+    """A constraint may share a variable's name, so the two halves of a basis lie in directories of their own.
 
     ``loose`` is renamed ``x`` here: one directory for both halves would hold
     one ``x.parquet``, and one of the two statuses would be lost.
@@ -90,7 +90,7 @@ def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) ->
     for answer in (loaded, archived.result):
         assert answer.variable_basis('x')['value'].item() == 'basic', 'the variable x is inside its bounds'
         assert answer.constraint_basis('x')['value'].item() == 'basic', 'the constraint x is not binding'
-    assert {'answer/basis/variable/x.parquet', 'answer/basis/constraint/x.parquet'} <= set(catalog['path']), (
+    assert {'answer/variable_basis/x.parquet', 'answer/constraint_basis/x.parquet'} <= set(catalog['path']), (
         'the catalog names each half of the basis at its own path'
     )
 

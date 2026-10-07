@@ -57,8 +57,8 @@ This adds `answer/activity/<name>.parquet`, each constraint's left-hand side.
 `outputs={'reduced_cost'}` adds `answer/reduced_cost/<name>.parquet`, each
 variable's reduced cost, `outputs={'slack'}` adds
 `answer/slack/<name>.parquet`, each constraint's distance to binding, and
-`outputs={'basis'}` adds `answer/basis/variable/` and
-`answer/basis/constraint/`, the basis status the solve ended on.
+`outputs={'basis'}` adds `answer/variable_basis/` and
+`answer/constraint_basis/`, the basis status the solve ended on.
 A reader of an output the solve did not ask for refuses, and the message names
 the `outputs=` to solve with.
 

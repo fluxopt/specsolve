@@ -10,7 +10,7 @@ import importlib.util
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
@@ -28,7 +28,6 @@ from specsolve.relational.answer_layout import (
     asked_for,
     checked_kind,
     clear_the_answer,
-    directory_of,
     not_requested_message,
     write_format,
     write_reasons,
@@ -58,6 +57,29 @@ KEEPS: Mapping[Keep, str] = {
     'solver': 'the solver already holding the model is reused, and the work the last solve did is discarded',
     'progress': 'the solver is reused and carries on from where the last solve got to',
 }
+
+
+class Start(TypedDict, total=False):
+    """What a solve starts from, given as tables: under the name of each reader, a table per declaration in that reader's shape.
+
+    Each table is ``(dims…, value)`` and is matched by coordinate, so it may
+    leave out declarations and coordinates. ``primal`` gives values, and
+    ``variable_basis`` and ``constraint_basis`` give a basis status in
+    [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
+    earlier [`Result`][] is the same, from the tables it carries.
+
+    Example::
+
+        start: Start = {
+            'primal': {'on': on},
+            'variable_basis': {'p': p_status},
+            'constraint_basis': {'balance': balance_status},
+        }
+    """
+
+    primal: Mapping[str, pl.DataFrame]
+    variable_basis: Mapping[str, pl.DataFrame]
+    constraint_basis: Mapping[str, pl.DataFrame]
 
 
 def unknown_keep_message(keep: object) -> str:
@@ -648,30 +670,18 @@ class Result:
         """
         return self._output('constraint_basis', name)
 
-    def _basis(self) -> tuple[Mapping[str, pl.LazyFrame], Mapping[str, pl.LazyFrame]]:
-        """The variable and the constraint basis per declaration, for a solve to start from, or why there is none.
-
-        Raises:
-            NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed, was not solved with
-                ``outputs={'basis'}``, or ended on no basis.
-        """
-        self._unclosed('the basis to start from')
-        if not (self._outputs or {}).keys() >= BASES:
-            raise SpecsolveError(
-                'start= takes an answer carrying its basis, and this one was solved without it. Solve the '
-                "answer to start from with outputs={'basis'}."
-            )
-        return self._carried('variable_basis', 'any variable'), self._carried('constraint_basis', 'any constraint')
-
-    def _values(self) -> Mapping[str, pl.LazyFrame]:
-        """The primal per declaration, for a solve to start from.
+    def _start(self) -> dict[str, Mapping[str, pl.LazyFrame]]:
+        """What this answer gives a solve to start from, keyed as [`Start`][] is: its primal, and its basis where it carries one.
 
         Raises:
             NoSolutionError: The solve left no values to read.
             SpecsolveError: This result was closed.
         """
-        return self._readable(self._primals, 'the values to start from')
+        given = {'primal': self._readable(self._primals, 'the values to start from')}
+        for kind in BASES:
+            if frames := (self._outputs or {}).get(kind):
+                given[kind] = frames
+        return given
 
     def _output(self, kind: str, name: str) -> pl.DataFrame:
         """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS]: what each output's reader returns."""
@@ -786,8 +796,7 @@ class Result:
         constraint where the duals are defined, ``expression/<name>.parquet``
         per named expression this data can evaluate, and
         ``<output>/<name>.parquet`` for each [`Output`][specsolve.types.Output]
-        the solve was asked for, such as ``activity/`` per constraint, with
-        the basis under ``basis/variable/`` and ``basis/constraint/``.
+        the solve was asked for, such as ``activity/`` per constraint.
         ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
         deliberately left out — one row per failed expression, one with an
         empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
@@ -824,7 +833,7 @@ class Result:
             write_whole(frame, out / 'dual' / f'{name}.parquet')
         for kind, frames in (self._outputs or {}).items():
             for name, frame in frames.items():
-                write_whole(frame, out / directory_of(kind) / f'{name}.parquet')
+                write_whole(frame, out / kind / f'{name}.parquet')
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:

@@ -38,7 +38,7 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `_run(handoff)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
 | `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
-| `_start(values)` | hand a value per column to the solver as a starting incumbent |
+| `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
@@ -70,8 +70,9 @@ column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a
 basis HiGHS read warms Gurobi. It is positional, and the engine is what makes
 it fit: `solve(start=)` lays an earlier answer's basis onto the new build by
 coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
-*row* starts from every row it kept. `start(values)` hands an incumbent to a
-mixed-integer solve the same way.
+*row* starts from every row it kept. `start(values)` hands values over the same
+way: an incumbent to a mixed-integer solve, and a primal to an LP where the
+member's `lp_values` says it takes one.
 
 The guard is `Handoff.structure` — a digest of everything a re-solve may
 not change, recorded by the solver at its load and cached on the handoff. **Values are re-pushed, not diffed**: linopy's persistent layer

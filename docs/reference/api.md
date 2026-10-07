@@ -118,6 +118,10 @@ it, what the build and its solves took, and what a slice of a sweep took.
     options:
       heading_level: 4
 
+::: specsolve.types.Start
+    options:
+      heading_level: 4
+
 ### Read an answer back
 
 ::: specsolve.load_archive

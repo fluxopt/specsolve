@@ -35,7 +35,6 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_kind,
     consolidated,
-    directory_of,
     not_requested_message,
     read_outputs,
     read_reasons,
@@ -206,9 +205,7 @@ class Spill:
         return cls(directory, key_name, key_dtype)
 
     def _file(self, kind: str, position: int, name: str | None = None) -> Path:
-        under = self.directory / directory_of(kind)
-        if name is not None:
-            under /= name
+        under = self.directory / kind if name is None else self.directory / kind / name
         return under / f'{position:06d}.parquet'
 
     def done(self, position: int) -> bool:
@@ -244,7 +241,7 @@ class Spill:
         """
         out: dict[str, dict[str, pl.LazyFrame]] = {}
         for kind in KINDS:
-            under = self.directory / directory_of(kind)
+            under = self.directory / kind
             for named in sorted(under.iterdir()) if under.is_dir() else []:
                 files = sorted(named.glob('*.parquet'))
                 frame = pl.read_parquet(files).lazy() if whole else pl.scan_parquet(files)

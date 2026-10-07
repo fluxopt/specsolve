@@ -1,7 +1,7 @@
 """The answer's layout on disk: what a result and a sweep write, the rows they record, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the [`KINDS`][] the answer
-carries, the basis under ``basis/variable/`` and ``basis/constraint/``: one file per name from a result, one per slice from a sweep, read
+carries: one file per name from a result, one per slice from a sweep, read
 back as one. Beside them, the [`Record`][] says how the solve terminated and
 the [`Metrics`][] what it took, one row of each per result or per slice, and
 ``reasons.parquet`` says why a kind or a name is deliberately not there. An
@@ -51,10 +51,6 @@ class OutputKind(NamedTuple):
     output: Output
     #: What it holds one frame per.
     per: Per
-    #: Where its frames are saved, under an answer's directory. The two
-    #: halves of a basis share ``basis/``, nested, since a constraint may
-    #: share a variable's name.
-    directory: str
 
 
 #: Each kind of frame the [`OUTPUTS`][] carry, named after the reader it comes
@@ -62,11 +58,11 @@ class OutputKind(NamedTuple):
 #: ``constraint_basis``, and every other output one, of its own name.
 OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
     {
-        'activity': OutputKind('activity', 'constraint', 'activity'),
-        'reduced_cost': OutputKind('reduced_cost', 'variable', 'reduced_cost'),
-        'slack': OutputKind('slack', 'constraint', 'slack'),
-        'variable_basis': OutputKind('basis', 'variable', 'basis/variable'),
-        'constraint_basis': OutputKind('basis', 'constraint', 'basis/constraint'),
+        'activity': OutputKind('activity', 'constraint'),
+        'reduced_cost': OutputKind('reduced_cost', 'variable'),
+        'slack': OutputKind('slack', 'constraint'),
+        'variable_basis': OutputKind('basis', 'variable'),
+        'constraint_basis': OutputKind('basis', 'constraint'),
     }
 )
 
@@ -137,12 +133,6 @@ def kinds_of(outputs: Iterable[Output]) -> tuple[str, ...]:
 def asked_for(kinds: Iterable[str]) -> frozenset[Output]:
     """The [`OUTPUTS`][] that carry *kinds*, each one of the [`OUTPUT_KINDS`][]."""
     return frozenset(OUTPUT_KINDS[kind].output for kind in kinds)
-
-
-def directory_of(kind: str) -> str:
-    """Where *kind*'s frames are saved under an answer's directory: [`OutputKind.directory`][], else its own name."""
-    carried = OUTPUT_KINDS.get(kind)
-    return kind if carried is None else carried.directory
 
 
 def not_requested_message(kind: str, name: str) -> str:
@@ -520,8 +510,8 @@ def clear_the_answer(directory: Path) -> None:
     """Remove what a saved answer holds, leaving anything else in *directory* alone."""
     import shutil
 
-    for held in {directory_of(kind).partition('/')[0] for kind in KINDS}:
-        shutil.rmtree(directory / held, ignore_errors=True)
+    for kind in KINDS:
+        shutil.rmtree(directory / kind, ignore_errors=True)
     for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
         (directory / member).unlink(missing_ok=True)
 

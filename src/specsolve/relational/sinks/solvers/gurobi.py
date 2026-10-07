@@ -7,6 +7,7 @@ this module needs neither.
 from __future__ import annotations
 
 import weakref
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
@@ -103,6 +104,7 @@ class Gurobi(Solver):
 
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
+    lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset(
             {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
@@ -170,10 +172,14 @@ class Gurobi(Solver):
         self._m.update()
 
     def _start(self, values: Any) -> None:
-        """``Start``, ``GRB.UNDEFINED`` where no value is given."""
+        """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
         import numpy as np
 
-        self._x.Start = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
+        given = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
+        if self._m.IsMIP:
+            self._x.Start = given
+        else:
+            self._x.PStart = given
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:
