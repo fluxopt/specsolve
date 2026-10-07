@@ -550,13 +550,18 @@ def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
 SCENARIOS = sps.EachCoordinate('scenario')
 
 
-def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from tests.test_strategy import DISPATCH as SWEPT
     from tests.test_strategy import scenario_sources
 
     warmed = _warmed(monkeypatch)
     cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS)
-    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous')
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous', spill_to=tmp_path)
+    assert not [path.name for path in tmp_path.iterdir() if path.name.endswith('_basis')], (
+        'the basis read to chain the slices is not spilled, since the sweep did not ask for it'
+    )
     assert len(warmed) == len(chained.keys) - 1, 'every slice but the first starts from the basis before it'
     assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
         'a start moves the route, never the optimum'
