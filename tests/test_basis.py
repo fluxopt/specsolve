@@ -112,6 +112,17 @@ def test_a_solve_that_ended_on_no_basis_says_why(solver_name: str, spec: dict, h
         answer.variable_basis('x')
 
 
+def test_a_model_with_a_quadratic_constraint_ends_on_no_basis() -> None:
+    """Gurobi solves one by barrier, which has no crossover to a vertex for it to take."""
+    pytest.importorskip('gurobipy')
+    spec = {**SPEC, 'constraints': {**SPEC['constraints'], 'disc': {'dims': [], 'expression': 'x*x + y*y <= 9'}}}
+    with (
+        sps.solve(spec, {}, solver_name='gurobi', outputs=BASIS) as answer,
+        pytest.raises(SpecsolveError, match=NO_BASIS[:40]),
+    ):
+        answer.constraint_basis('cap')
+
+
 # ---------------------------------------------------------------------------
 # sweeps
 # ---------------------------------------------------------------------------
@@ -159,3 +170,24 @@ def test_a_sweep_of_slices_that_ended_on_no_basis_says_why(tmp_path: Path) -> No
     )
     with pytest.raises(SpecsolveError, match=NO_BASIS[:40]):
         sweep.variable_basis('p')
+
+
+@pytest.mark.parametrize('side', ['columns', 'rows'])
+def test_a_basis_that_does_not_span_the_model_is_refused(monkeypatch: pytest.MonkeyPatch, side: str) -> None:
+    """A basis is positional, as a primal is, so one a member reads short is a different model's.
+
+    The double overrides `_basis`, the half a sink writes; the guard is the
+    base's `run` around it, so every sink is checked.
+    """
+    from specsolve.relational.sinks import SOLVERS
+    from specsolve.relational.sinks.solvers.highs import Highs
+
+    class Crooked(Highs):
+        def _basis(self):
+            columns, rows = super()._basis()
+            return (columns[:-1], rows) if side == 'columns' else (columns, rows[:-1])
+
+    monkeypatch.setitem(SOLVERS, 'highs', Crooked)
+    which = {'columns': 'column basis values for a model with 5', 'rows': 'row basis values for a model with 4'}
+    with pytest.raises(SpecsolveError, match=which[side]):
+        sps.solve(SPEC, {}, outputs=BASIS)

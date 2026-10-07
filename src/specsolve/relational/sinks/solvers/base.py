@@ -252,9 +252,6 @@ class Solver(ABC):
         self._check_span('dual', answer.dual, handoff.row_count)
         self._check_span('activity', answer.activity, handoff.row_count)
         self._check_span('dual ray', answer.dual_ray, handoff.row_count)
-        if answer.basis is not None:
-            self._check_span('column basis', answer.basis.columns, handoff.column_count)
-            self._check_span('row basis', answer.basis.rows, handoff.row_count)
         return answer
 
     def _settled(self, handoff: Handoff) -> Basis | None:
@@ -271,6 +268,8 @@ class Solver(ABC):
         if read is None:
             return None
         columns, rows = read
+        self._check_span('column basis', columns, handoff.column_count)
+        self._check_span('row basis', rows, handoff.row_count)
         cols = handoff.dense_columns(np.inf)
         columns = np.where(np.isin(columns, (AT_LOWER, AT_UPPER)) & (cols.lb == cols.ub), FIXED, columns)
         bound = np.asarray([_ROW_BOUND[sense] for sense in SENSE_CODES], dtype=np.int8)

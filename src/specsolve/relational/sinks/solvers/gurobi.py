@@ -171,8 +171,6 @@ class Gurobi(Solver):
         import numpy as np
 
         gurobipy = _gurobipy()
-        if self._qrows:
-            return None
         try:
             columns = np.asarray(self._x.VBasis, dtype=np.int64)
             slices = [np.asarray(block.CBasis, dtype=np.int64) for block in self._blocks]
