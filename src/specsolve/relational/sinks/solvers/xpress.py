@@ -53,7 +53,7 @@ class Xpress(Solver):
 
     #: One package, and it carries its own solver library.
     requires = ('xpress',)
-    recorded_options = frozenset(
+    disclosed_options = frozenset(
         {
             'timelimit',
             'miprelstop',

@@ -177,7 +177,7 @@ def solve_over(
     executor: Executor | None = None,
     workers_share_fs: bool | None = None,
     solver_options: Mapping[str, object] | None = None,
-    record_options: Sequence[str] | None = None,
+    disclose_solver_options: Sequence[str] | None = None,
     solver_name: str = 'highs',
     keep: Keep = 'solver',
     spill_to: str | Path | None = None,
@@ -209,7 +209,7 @@ def solve_over(
             process's paths. Decided for the stdlib pools; anything else is
             assumed not to, and paths travel as bytes.
         solver_options: As [`solve`][specsolve.api.Model.solve] takes them.
-        record_options: As [`solve`][specsolve.api.Model.solve] takes them,
+        disclose_solver_options: As [`solve`][specsolve.api.Model.solve] takes them,
             reaching every slice.
         solver_name: As [`solve`][specsolve.api.Model.solve] takes it.
         keep: As [`solve`][specsolve.api.Model.solve] takes it, reaching every
@@ -286,7 +286,7 @@ def solve_over(
     solving = {
         'solver_name': solver_name,
         'solver_options': dict(solver_options or {}) or None,
-        'record_options': record_options,
+        'disclose_solver_options': disclose_solver_options,
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)

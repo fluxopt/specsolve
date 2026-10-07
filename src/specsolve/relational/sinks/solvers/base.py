@@ -114,10 +114,10 @@ class Solver(ABC):
     #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
 
-    #: Option names, casefolded, whose value an answer records: the ones that
-    #: change what a solve returns. Any other option is recorded by name
+    #: Option names, casefolded, whose value an answer discloses: the ones
+    #: that change what a solve returns. Any other option is disclosed by name
     #: alone, so a credential passed as an option never reaches an archive.
-    recorded_options: ClassVar[frozenset[str]]
+    disclosed_options: ClassVar[frozenset[str]]
 
     def structure(self) -> bytes:
         """The loaded model's digest, read off its frames once, after which the frames are let go."""

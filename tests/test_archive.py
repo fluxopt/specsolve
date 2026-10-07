@@ -1624,7 +1624,7 @@ def _known_to_xpress(name: str) -> bool:
 def test_every_recorded_option_is_one_the_solver_knows(name: str, package: str, known) -> None:
     """A misspelt name on the list records nothing, and no test would see that otherwise."""
     pytest.importorskip(package)
-    listed = SOLVERS[name].recorded_options
+    listed = SOLVERS[name].disclosed_options
     assert [option for option in sorted(listed) if not known(option)] == [], (
         f'every option {name} records is one {name} takes'
     )
@@ -1636,7 +1636,7 @@ def test_every_recorded_option_is_written_casefolded(name: str) -> None:
 
     Xpress takes a control in all upper case too, so the check against the solver passes `TIMELIMIT`.
     """
-    listed = SOLVERS[name].recorded_options
+    listed = SOLVERS[name].disclosed_options
     assert [option for option in sorted(listed) if option != option.casefold()] == [], (
         f'every option {name} records is written casefolded'
     )
@@ -1779,22 +1779,26 @@ def test_an_answer_naming_no_model_is_taken_as_given(
 
 
 @pytest.mark.parametrize(
-    ('record_options', 'written'),
+    ('disclose_solver_options', 'written'),
     [
         pytest.param(None, '<not recorded>', id='not-named'),
         pytest.param(['mip_max_nodes'], 1000, id='named'),
         pytest.param(['MIP_MAX_NODES'], 1000, id='named-in-another-letter-case'),
     ],
 )
-def test_a_caller_names_an_option_to_record_beside_the_solvers_list(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, record_options: list[str] | None, written: object
+def test_a_caller_names_an_option_to_disclose_beside_the_solvers_list(
+    dispatch_yaml: Path,
+    dispatch_frame_inputs,
+    tmp_path: Path,
+    disclose_solver_options: list[str] | None,
+    written: object,
 ) -> None:
     """`mip_max_nodes` is on no list, so only the caller's naming it keeps its value."""
     sps.solve(
         dispatch_yaml,
         dispatch_frame_inputs,
         solver_options={'time_limit': 60.0, 'mip_max_nodes': 1000},
-        record_options=record_options,
+        disclose_solver_options=disclose_solver_options,
         archive=tmp_path / 'case',
     ).close()
 
@@ -1814,7 +1818,7 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
         sources,
         sps.EachCoordinate('scenario'),
         solver_options={'mip_max_nodes': 1000},
-        record_options=['mip_max_nodes'],
+        disclose_solver_options=['mip_max_nodes'],
     )
 
     assert sweep.record['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
@@ -1822,7 +1826,7 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
     )
 
 
-def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
-    with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
-        sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
+def test_a_bare_string_of_solver_options_to_disclose_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
+    """A string is a sequence of letters, so `disclose_solver_options='Seed'` would name `S`, `e` and `d`."""
+    with pytest.raises(sps.errors.SpecsolveError, match=r"disclose_solver_options=\['mip_max_nodes'\]"):
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, disclose_solver_options='mip_max_nodes')

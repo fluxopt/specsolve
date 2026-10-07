@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): `solve` takes the solver options whose value the provenance shows as `disclose_solver_options`, which replaces `record_options`
+
 ## 0.7.0 (2026-10-07)
 
 specsolve now requires polars 2.0. An environment that must stay on polars 1.x

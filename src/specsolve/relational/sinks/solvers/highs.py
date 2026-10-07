@@ -162,7 +162,7 @@ class Highs(Solver):
     _handle: Any
 
     requires = ('highspy',)
-    recorded_options = frozenset(
+    disclosed_options = frozenset(
         {
             'time_limit',
             'mip_rel_gap',

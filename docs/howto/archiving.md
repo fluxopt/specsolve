@@ -57,11 +57,11 @@ goes to shared storage, and a Gurobi licence credential such as `WLSSecret` is
 passed as an option.
 `result.provenance` gives the same five fields without an archive.
 
-To keep the value of an option that is not on the solver's list, name it.
-Name no credential:
+To disclose the value of an option that is not on the solver's list, name
+it. Name no credential:
 
 ```python
-sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, record_options=['mip_max_nodes'])
+sps.solve('dispatch.yaml', sources, solver_options={'mip_max_nodes': 1000}, disclose_solver_options=['mip_max_nodes'])
 ```
 
 ## Read it back

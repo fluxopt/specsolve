@@ -73,7 +73,7 @@ class Gurobi(Solver):
     _env: Any
 
     requires = ('gurobipy', 'scipy.sparse')
-    recorded_options = frozenset(
+    disclosed_options = frozenset(
         {
             'timelimit',
             'mipgap',

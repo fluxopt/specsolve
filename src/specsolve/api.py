@@ -274,7 +274,7 @@ class Model:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, object] | None = None,
-        record_options: Sequence[str] | None = None,
+        disclose_solver_options: Sequence[str] | None = None,
         keep: Keep = 'solver',
         archive: str | Path | None = None,
     ) -> Result:
@@ -296,9 +296,10 @@ class Model:
                 [`provenance`][specsolve.relational.result.Result.provenance]
                 records the value of an option that changes the answer, such
                 as a time limit or a gap, and the name alone of any other.
-            record_options: More option names whose value the result
-                records, in any letter case. Name no credential here: an
-                archive goes to shared storage.
+            disclose_solver_options: More names from *solver_options*, in any
+                letter case, whose value the provenance shows rather than
+                withholds. Name no credential here: an archive goes to shared
+                storage.
             keep: ``solver``, the default, reuses the solver holding the model
                 and discards the work it did; ``progress`` keeps that work too,
                 for a driver that iterates one step at a time; ``nothing``
@@ -322,17 +323,17 @@ class Model:
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, or a bare string
-                as *record_options*.
+                as *disclose_solver_options*.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
         out = None if archive is None else Path(archive)
         if out is not None:
             check_the_target(out)
-        if isinstance(record_options, str):
+        if isinstance(disclose_solver_options, str):
             raise SpecsolveError(
-                f'record_options={record_options!r} is one string, which would name each of its letters. '
-                f'Pass a list: record_options=[{record_options!r}].'
+                f'disclose_solver_options={disclose_solver_options!r} is one string, which would name each of its letters. '
+                f'Pass a list: disclose_solver_options=[{disclose_solver_options!r}].'
             )
         answered = replace(
             self._engine.solve(
@@ -343,7 +344,7 @@ class Model:
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
-            _provenance=_provenance(solver_name, solver_options, record_options or ()),
+            _provenance=_provenance(solver_name, solver_options, disclose_solver_options or ()),
         )
         if out is not None:
             self._archive(out, answered)
@@ -501,7 +502,7 @@ def solve(
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, object] | None = None,
-    record_options: Sequence[str] | None = None,
+    disclose_solver_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
@@ -516,7 +517,7 @@ def solve(
         sources: As [`build`][] takes them.
         solver_name: As [`Model.solve`][] takes it.
         solver_options: As [`Model.solve`][] takes them.
-        record_options: As [`Model.solve`][] takes them.
+        disclose_solver_options: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
 
     Returns:
@@ -529,7 +530,9 @@ def solve(
     solver(solver_name)
     model = build(spec, sources)
     try:
-        return model.solve(solver_name, solver_options=solver_options, record_options=record_options, archive=archive)
+        return model.solve(
+            solver_name, solver_options=solver_options, disclose_solver_options=disclose_solver_options, archive=archive
+        )
     finally:
         model.close()
 
@@ -667,17 +670,17 @@ def _json_value(value: object) -> object:
 
 
 def _provenance(
-    solver_name: str, solver_options: Mapping[str, object] | None, record_options: Sequence[str] = ()
+    solver_name: str, solver_options: Mapping[str, object] | None, disclose_solver_options: Sequence[str] = ()
 ) -> Provenance:
     """What a solve on *solver_name* with *solver_options* records about itself.
 
     The options are written as one JSON object, because a column of structs is
     one that several BI tools cannot read. Only an option on the solver's
-    ``recorded_options`` keeps its value: an archive goes to storage other
+    ``disclosed_options`` keeps its value: an archive goes to storage other
     people read, and a list of what to hide would leak whatever it missed.
     """
     served = solver(solver_name)
-    recorded = served.recorded_options | {name.casefold() for name in record_options}
+    recorded = served.disclosed_options | {name.casefold() for name in disclose_solver_options}
     options = {
         name: _json_value(value) if name.casefold() in recorded else '<not recorded>'
         for name, value in (solver_options or {}).items()
