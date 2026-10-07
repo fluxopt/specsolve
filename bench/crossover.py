@@ -8,9 +8,10 @@ point followed by crossover, and interior point with crossover off. It is not an
 arm and writes no results file.
 
 What each prints beside the solve's wall seconds: whether the answer carries
-duals, and how far its objective is from the simplex one. An answer without
-crossover carries no basis, which ``tests/test_basis.py`` holds on every sink,
-so it is not asked for here, and its read-back stays out of the clock. Wall
+duals, and how far its objective is from the simplex one, relative to it. An
+answer without crossover carries no basis, which ``tests/test_basis.py`` holds
+on every sink, so it is not asked for here, and its read-back stays out of the
+clock. Wall
 time is read off ``Model.diagnostics().seconds['solve']``, so it counts the
 solve and not the build, and it prints the load averages beside itself.
 """
@@ -65,10 +66,11 @@ def main(argv: list[str] | None = None) -> int:
         for size in args.sizes:
             rows = measured(case, size)
             simplex = rows[0][2]
-            print(f'\n{case} {size}')
-            print("  method               solve s   objective - simplex's   duals")
+            print(f'\n{case} {size}, simplex objective {simplex:.6g}')
+            print('  method               solve s   relative gap   duals')
             for method, seconds, objective, duals in rows:
-                print(f'  {method:18}  {seconds:8.3f}   {objective - simplex:+.3e}             {duals!s}')
+                gap = (objective - simplex) / abs(simplex)
+                print(f'  {method:18}  {seconds:8.3f}   {gap:+.1e}        {duals!s}')
     one, five, fifteen = os.getloadavg()
     print(f'\n(load averages {one:.2f} {five:.2f} {fifteen:.2f} — only meaningful near zero)')
     return 0
