@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
+
 ## 0.6.2 (2026-10-07)
 
 - fix(archive): a sweep being archived is invisible to a reader of its directory until it lands ([#1873](https://github.com/fluxopt/specsolve/pull/1873))

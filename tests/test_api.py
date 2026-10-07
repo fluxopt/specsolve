@@ -732,6 +732,40 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
         assert len(set(written)) == 1, 'the same solution writes the same bytes'
 
 
+SCALAR_SPEC = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'variables': {
+        'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
+        'slack': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'budget_row': {'dims': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
+    'expressions': {'price': {'dims': [], 'expression': 'dual(budget_row)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('read', 'expected'),
+    [
+        pytest.param(lambda r: r.primal('slack'), 10.0, id='primal'),
+        pytest.param(lambda r: r.dual('budget_row'), 2.0, id='dual'),
+        pytest.param(lambda r: r.activity('budget_row'), 120.0, id='activity'),
+        pytest.param(lambda r: r.evaluate('price'), 2.0, id='an-expression-reading-the-dual'),
+    ],
+)
+def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expected):
+    """A product over no dimensions has one coordinate, so every reader returns one row.
+
+    On polars 2.0 each came back empty and the expression read 0.0: the reader
+    selected the declaration's dims first, which with none is a frame with no
+    columns, and polars gives that no rows.
+    """
+    sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
+    with sps.solve(SCALAR_SPEC, sources) as result:
+        assert read(result).to_dicts() == [{'value': expected}], 'one row, holding the solver value'
+
+
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
     """Reading is valid until `close()`, and nothing after it."""
     sources = dispatch_frame_inputs
