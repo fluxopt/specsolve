@@ -357,6 +357,47 @@ def test_the_archive_lands_whole(dispatch_yaml: Path, dispatch_frame_inputs, tmp
     assert not list(tmp_path.glob('later*')), 'a write that did not finish leaves nothing under either name'
 
 
+@pytest.mark.parametrize(
+    'archive',
+    [
+        pytest.param(lambda spec, sources, out: _archived(spec, sources, out), id='solve'),
+        pytest.param(
+            lambda spec, sources, out: sps.solve_over(
+                spec, {**sources, 'load': _by_scenario(['low', 'high'])}, sps.EachCoordinate('scenario'), archive=out
+            ),
+            id='solve_over',
+        ),
+    ],
+)
+def test_a_directory_of_archives_never_globs_one_still_being_written(
+    archive, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, monkeypatch
+) -> None:
+    """A directory of archives is read as ``read_parquet('<dir>/*/<member>')``, so nothing staged may sit there.
+
+    A sweep laid its answer out in ``<dir>/tmpXXXX/answer/``, which that glob
+    read as an archive while it was written, and a reader that globbed
+    during a solve failed once the scratch was removed. Looked at the moment
+    the catalogs are written, when the answer and the staged archive are both
+    complete on disk and nothing has landed yet.
+    """
+    from specsolve import archive_layout
+
+    staged: list[Path] = []
+    catalogs = archive_layout._write_catalogs
+
+    def watched(*args, **kwargs):
+        staged.extend(p.relative_to(tmp_path) for p in tmp_path.rglob('*') if p.is_file())
+        return catalogs(*args, **kwargs)
+
+    monkeypatch.setattr(archive_layout, '_write_catalogs', watched)
+    out = tmp_path / 'study'
+    archive(dispatch_yaml, dispatch_frame_inputs, out)
+    members = {p.relative_to(out) for p in out.rglob('*') if p.is_file()}
+    globbed = sorted(str(p) for p in staged if len(p.parts) > 1 and p.relative_to(p.parts[0]) in members)
+    assert globbed == [], f'staged where <dir>/*/<member> reads them, before the archive landed: {globbed}'
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['study'], 'and nothing staged is left beside the archive'
+
+
 def test_an_archive_carries_the_answer_beside_the_question(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
