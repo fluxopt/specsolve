@@ -183,9 +183,12 @@ def test_an_integer_variable_leaves_no_reduced_cost_and_says_why() -> None:
         answer.reduced_cost('p')
 
 
-@pytest.mark.xfail(strict=True, reason='the bridge lists no names and fails unpacking them')
 @pytest.mark.parametrize('saved', [pytest.param(False, id='live'), pytest.param(True, id='saved')])
 def test_an_integer_answer_bridged_to_xarray_gives_the_duals_reason(tmp_path: Path, saved: bool) -> None:
+    """A bridge reads every name the output holds, and a mixed-integer answer holds none.
+
+    It listed nothing and failed unpacking that, rather than giving the reason.
+    """
     pytest.importorskip('xarray', reason='specsolve does not install xarray, and the floors environment has none')
     integer = spec('minimize', 'sum(p, over=g) >= total', domain='integer')
     with sps.solve(integer, SOURCES, outputs=RC) as answer:
