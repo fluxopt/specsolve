@@ -9,13 +9,16 @@ snapshot are feasible, and must stay out of it.
 from __future__ import annotations
 
 import gc
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
 
 import specsolve as sps
 from specsolve.errors import SpecsolveError
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SHORT = {
     'dimensions': {'snapshot': {'dtype': 'int'}, 'tech': {'dtype': 'str'}},
@@ -170,6 +173,30 @@ def test_a_model_dropped_without_closing_takes_its_solver_with_it() -> None:
         answer.iis()
 
 
+def test_a_solve_that_raised_still_ends_the_earlier_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A load begins a new answer, so the earlier one is refused even when the run never returns."""
+    from specsolve.relational.sinks.solvers.highs import Highs
+
+    def broken(self: Highs, handoff: object) -> None:
+        raise RuntimeError('the run broke')
+
+    with sps.build(SHORT, SOURCES) as model:
+        answer = model.solve()
+        monkeypatch.setattr(Highs, '_run', broken)
+        with pytest.raises(RuntimeError, match='the run broke'):
+            model.solve(keep='nothing')
+        with pytest.raises(SpecsolveError, match='ask iis'):
+            answer.iis()
+
+
+def test_an_answer_read_off_disk_has_no_solver(tmp_path: Path) -> None:
+    with sps.build(SHORT, SOURCES) as model:
+        loaded = sps.load_result(model.solve().save(tmp_path))
+    assert loaded.termination_condition == 'infeasible'
+    with pytest.raises(SpecsolveError, match='read back off disk'):
+        loaded.iis()
+
+
 def test_the_one_call_solve_has_no_solver_left() -> None:
     """``sps.solve`` closes the model before it returns, and the refusal says how to keep one."""
     answer = sps.solve(SHORT, SOURCES)
@@ -190,5 +217,5 @@ def test_a_closed_result_is_refused() -> None:
     with sps.build(SHORT, SOURCES) as model:
         answer = model.solve()
         answer.close()
-        with pytest.raises(SpecsolveError, match='closed'):
+        with pytest.raises(SpecsolveError, match='this result was closed'):
             answer.iis()

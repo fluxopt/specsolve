@@ -786,7 +786,6 @@ class Result:
         self._primals = self._duals = self._activities = self._expressions = None
         self._dual_rays = None
         self._evaluate = None
-        self._iis = None
 
     def __enter__(self) -> Result:
         return self
