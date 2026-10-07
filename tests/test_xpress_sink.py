@@ -224,3 +224,31 @@ def test_the_missing_extra_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not Xpress.is_available()
     with pytest.raises(ModuleNotFoundError, match=r'\[xpress\] extra'):
         sps.solve(*CASES['LP'], solver_name='xpress')
+
+
+def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
+    """A row's status is its slack's: a binding ``<=`` row holds it at ``0``, a binding ``>=`` row at ``2``.
+
+    Xpress repairs a row status on the wrong side of its slack, so warmth alone
+    cannot tell the two mappings apart; the statuses it holds can.
+    """
+    from tests.test_basis import SPEC
+
+    with sps.build(SPEC, {}) as model:
+        tables = model._engine._model.handoff
+    first = Xpress(tables)
+    try:
+        basis = first.run(tables, basis=True).basis
+        native_rows, native_columns = first._p.getBasis()
+    finally:
+        first.close()
+    assert basis is not None
+
+    fresh = Xpress(tables)
+    try:
+        fresh.warm(basis)
+        loaded_rows, loaded_columns = fresh._p.getBasis()
+    finally:
+        fresh.close()
+    assert list(loaded_rows) == list(native_rows), 'the rows go back in the statuses they were read in'
+    assert list(loaded_columns) == list(native_columns), 'and the columns'
