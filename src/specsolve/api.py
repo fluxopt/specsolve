@@ -433,10 +433,10 @@ class Model:
         a solver's IIS settings and time limit go there. Read a member row's
         terms with [`row`][].
 
-        Every sink finds one for a linear model. For a discrete model,
-        ``gurobi`` and ``xpress`` leave out the integrality that makes the rows
-        and bounds conflict. ``highs`` searches without integrality, so it
-        finds none where integrality causes the conflict.
+        Every sink finds one for a linear model. For a discrete model, every
+        sink leaves out the integrality that makes the rows and bounds
+        conflict, and ``highs`` can find none where integrality causes the
+        conflict.
 
         Raises:
             SpecsolveError: The model has not been solved since it was built,

@@ -127,17 +127,17 @@ def test_the_last_solve_is_the_one_explained(solver_name: str) -> None:
 def test_a_discrete_model_names_the_row_where_the_solver_finds_one(solver_name: str) -> None:
     """Integrality is what makes ``odd`` fail, and no sink reports it: the row is the whole report.
 
-    HiGHS searches without integrality, where ``odd`` holds, so it finds none
-    and the refusal names the sinks that do.
+    HiGHS 1.13 finds the row. HiGHS 1.15.1 searches without integrality, where
+    ``odd`` holds, so it finds none and the refusal names the sinks that do.
     """
     with sps.build(INTEGER, INTEGER_SOURCES) as model:
         assert model.solve(solver_name).termination_condition == 'infeasible'
-        if solver_name == 'highs':
-            with pytest.raises(SpecsolveError, match='integer') as refused:
-                model.infeasible_subsystem()
-            assert 'gurobi' in str(refused.value), 'the refusal names a sink that does find one'
+        try:
+            found = model.infeasible_subsystem()
+        except SpecsolveError as refused:
+            assert solver_name == 'highs', f'{solver_name} searches with integrality, so it finds the row'
+            assert 'gurobi' in str(refused), 'the refusal names a sink that does find one'
             return
-        found = model.infeasible_subsystem()
     assert list(found.constraints) == ['odd'], 'spare is slack'
     assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dims'
 

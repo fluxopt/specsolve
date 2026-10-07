@@ -471,9 +471,9 @@ def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) 
     """Why an infeasible solve's solver found no subsystem."""
     if discrete and solver_name == 'highs':
         return (
-            f'HiGHS searches the rows and bounds without integrality and found no subsystem, and this '
-            f'model declares integer variables ({", ".join(discrete)}), so integrality may be what '
-            f'conflicts. Solve with gurobi or xpress, which search with it.'
+            f'HiGHS found no subsystem, and this model declares integer variables '
+            f'({", ".join(discrete)}), so integrality may be what conflicts, which HiGHS can search '
+            f'without. Solve with gurobi or xpress, which search with it.'
         )
     return (
         f'the model is infeasible, and the {solver_name} sink found no subsystem that explains it. The '

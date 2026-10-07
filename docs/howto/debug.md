@@ -63,7 +63,7 @@ Drop any one line and the rest can hold. Read the terms of a row with
 `model.row`, as in step 3
 ([`Model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem)).
 
-HiGHS finds no IIS where integer variables cause the conflict. Solve with
+HiGHS can find no IIS where integer variables cause the conflict. Solve with
 `gurobi` or `xpress`, or add a slack to the row, minimise it, and read where
 it is nonzero, as the
 [feasibility model](../about/decomposition.md#when-the-subproblem-is-infeasible)

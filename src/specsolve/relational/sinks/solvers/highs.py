@@ -299,8 +299,8 @@ class Highs(Solver):
     def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``getIis``, kept only where HiGHS proved it irreducible.
 
-        HiGHS searches the rows and bounds without integrality, so a model that
-        integrality alone makes infeasible gets none.
+        A model that integrality alone makes infeasible gets one on 1.13 and
+        none on 1.15.1, which searches without integrality.
         """
         import highspy
         import numpy as np
