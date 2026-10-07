@@ -225,17 +225,17 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
 def read(model: Any, answer: Any, into: str) -> Counts:
     """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
 
-    ``frames`` collects every variable's primal and every constraint's dual
-    and activity; ``parquet`` is ``Result.save``.
+    ``frames`` collects every variable's primal and every constraint's dual;
+    ``parquet`` is ``Result.save``. Both read the default answer, which holds
+    no optional output.
     """
-    result = model._engine._answered(answer, 'highs', 'nothing', None, frozenset({'activity'}))
+    result = model._engine._answered(answer, 'highs', 'nothing', None)
     if into == 'frames':
         for name in model._program.variables:
             result.primal(name)
         for name in model._program.constraints:
             if answer.dual is not None:
                 result.dual(name)
-            result.activity(name)
     else:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
             result.save(Path(tmp) / 'answer')
