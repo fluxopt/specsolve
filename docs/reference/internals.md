@@ -118,8 +118,9 @@ Each entry says what the thing is, then the module it lives in.
   rebuilt model (`relational/sinks/handoff.py`).
 
 **Warm start**
-: A basis or an incumbent read out of one solve and set on the next. No
-  caller uses it yet ([#382](https://github.com/fluxopt/specsolve/issues/382);
+: A basis read out of one solve and set on the next, laid onto the new build
+  by coordinate, so a model that gained or lost rows or columns takes it too.
+  `solve(start=)` is its caller (`relational/engine/readback.py`,
   `relational/sinks/solvers/base.py`).
 
 ## Answers on disk

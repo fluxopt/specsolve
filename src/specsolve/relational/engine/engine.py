@@ -53,6 +53,15 @@ def _statuses(codes: np.ndarray) -> pl.Series:
     return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
 
 
+def _no_basis_to_start_message(discrete: Sequence[str]) -> str:
+    """Why a mixed-integer model takes no basis to start from."""
+    return (
+        f'this model is mixed-integer — {", ".join(map(repr, discrete))} — and a basis starts an LP, so it '
+        f'has nothing to start from: a branch-and-bound search re-solves a different LP at every node. '
+        f'Solve it without start=.'
+    )
+
+
 def _no_built_model(doing: str) -> str:
     """The message for a call made with no built model."""
     return (
@@ -181,6 +190,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
+        start: tuple[Mapping[str, pl.LazyFrame], Mapping[str, pl.LazyFrame]] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -203,15 +213,23 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
+            start: Another answer's variable and constraint basis frames, per
+                declaration, to start this LP from, matched by coordinate
+                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]).
 
         Returns:
             The solution, holding this engine and the build it answered.
 
         Raises:
             SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS].
+                [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* for a
+                model with an integer variable.
         """
+        if start is not None and (discrete := self._discrete()):
+            raise SpecsolveError(_no_basis_to_start_message(discrete))
         solver, kept = self._hand_off(solver_name, solver_options, keep)
+        if start is not None:
+            solver.warm(readback.matched_basis(self._model, *start))
         handoff = self._model.handoff
         self._solves += 1
         if kept == 'nothing':

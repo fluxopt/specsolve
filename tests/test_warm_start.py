@@ -7,16 +7,16 @@ keeps both. `loads` says whether the model was handed over again, and the
 iteration count says whether the work survived. `'nothing'` discards the held
 solver, so the fresh one has nothing to begin from.
 
-**The sink half** is `Solver.warm_start()` / `warm()`, with no caller above the
-family yet (#382). A carried basis starts the simplex at the optimum, and every
-refusal it can check is checked.
+**The sink half** is `Solver.warm(basis)` and `start(values)`. A carried basis
+starts the simplex at the optimum, an incumbent bounds the search, and a start
+that does not span the model is refused. `tests/test_start.py` holds the
+public `start=` above them.
 
 Iteration counts are deterministic, so none of this needs an idle box.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -26,6 +26,7 @@ import pytest
 import specsolve as sps
 from specsolve.relational.result import KEEPS
 from specsolve.relational.sinks import SOLVERS
+from specsolve.relational.sinks.solvers.base import Basis
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 
 # ---------------------------------------------------------------------------
@@ -113,18 +114,17 @@ def test_a_carried_basis_starts_at_the_optimum_not_from_scratch(solver_name):
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
-        first.run(tables)
+        basis = first.run(tables, basis=True).basis
         cold = SIMPLEX_ITERATIONS[solver_name](first)
-        ws = first.warm_start()
     finally:
         first.close()
 
     assert cold > 0, 'the model must make the simplex work, or warmth would be unobservable'
-    assert ws is not None and ws.column_statuses is not None, 'an LP solve leaves a basis to carry'
+    assert basis is not None, 'an LP solve leaves a basis to carry'
 
     fresh = member(tables)
     try:
-        fresh.warm(ws)
+        fresh.warm(basis)
         fresh.run(tables)
         assert SIMPLEX_ITERATIONS[solver_name](fresh) == 0, 'a carried basis starts at the optimum, not from scratch'
     finally:
@@ -137,15 +137,14 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
-        cold = first.run(tables)
-        ws = first.warm_start()
+        cold = first.run(tables, basis=True)
     finally:
         first.close()
-    assert ws is not None
+    assert cold.basis is not None
 
     fresh = member(tables)
     try:
-        fresh.warm(ws)
+        fresh.warm(cold.basis)
         warm = fresh.run(tables)
         assert warm.objective == pytest.approx(cold.objective), 'the carried basis reached a different optimum'
         assert warm.primal.to_list() == pytest.approx(cold.primal.to_list()), 'and a different vertex'
@@ -234,19 +233,19 @@ def test_a_mixed_integer_solve_carries_an_incumbent_not_a_basis(solver_name):
     member = SOLVERS[solver_name]
     first = member(tables)
     try:
-        before = first.run(tables).objective
-        ws = first.warm_start()
+        before = first.run(tables, basis=True)
     finally:
         first.close()
 
-    assert ws is not None, 'a solved MIP still leaves something to carry'
-    assert ws.column_statuses is None and ws.row_statuses is None, 'a solved MIP leaves no valid basis on any solver'
-    assert ws.column_values is not None, 'what crosses a MIP rebuild is the incumbent'
+    assert before.basis is None, 'a solved MIP leaves no valid basis on any solver'
+    assert before.primal is not None, 'what crosses a MIP rebuild is the incumbent'
 
     fresh = member(tables)
     try:
-        fresh.warm(ws)
-        assert fresh.run(tables).objective == pytest.approx(before), 'an incumbent bounds the search, never the answer'
+        fresh.start(before.primal.to_numpy())
+        assert fresh.run(tables).objective == pytest.approx(before.objective), (
+            'an incumbent bounds the search, never the answer'
+        )
     finally:
         fresh.close()
 
@@ -277,54 +276,31 @@ SHAPES = [
 ]
 
 
-def _read_from(solver_name: str, spec: dict[str, Any], given: dict[str, Any]) -> Any:
-    """The warm start one solve of *spec* leaves, the session closed behind it."""
+def _carried(solver_name: str, spec: dict[str, Any], given: dict[str, Any]) -> Any:
+    """What one solve of *spec* leaves to start another, the session closed behind it: a basis, else the incumbent."""
     tables = _tables(spec, given)
     session = SOLVERS[solver_name](tables)
     try:
-        session.run(tables)
-        return session.warm_start()
+        answer = session.run(tables, basis=True)
+        return answer.basis if answer.basis is not None else answer.primal.to_numpy()
     finally:
         session.close()
 
 
 @pytest.mark.parametrize(('spec', 'given', 'other'), SHAPES)
-def test_a_warm_start_for_a_differently_shaped_model_is_refused(solver_name, spec, given, other):
-    """A basis is positional, so a wrong span is a start about a different model.
+def test_a_start_for_a_differently_shaped_model_is_refused(solver_name, spec, given, other):
+    """A basis and an incumbent are positional, so a wrong span is a start about a different model.
 
-    The refusal a cutting-plane master meets on its own update: a master that
-    gained a row is exactly the second column of this table (#382).
+    The engine lays a start out on the build it warms, so this guards the family
+    against an engine that did not.
     """
-    ws = _read_from(solver_name, spec, given)
+    carried = _carried(solver_name, spec, given)
     other_spec, other_given = other
     tables = _tables(other_spec, other_given)
     session = SOLVERS[solver_name](tables)
     try:
-        with pytest.raises(sps.errors.SpecsolveError, match='warm start carries'):
-            session.warm(ws)
-    finally:
-        session.close()
-
-
-def test_a_warm_start_from_another_solver_is_refused(solver_name):
-    """Statuses are the reading solver's own encoding; nothing else takes them."""
-    ws = _read_from(solver_name, DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
-    assert ws is not None
-    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
-    session = SOLVERS[solver_name](tables)
-    try:
-        with pytest.raises(sps.errors.SpecsolveError, match='read from'):
-            session.warm(replace(ws, solver='someone_else'))
-    finally:
-        session.close()
-
-
-def test_a_solver_that_has_not_run_has_nothing_to_carry(solver_name):
-    """Loaded is not solved: there is no basis and no incumbent to read yet."""
-    tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
-    session = SOLVERS[solver_name](tables)
-    try:
-        assert session.warm_start() is None, 'a model that has not been solved has left nothing behind'
+        with pytest.raises(sps.errors.SpecsolveError, match='carries'):
+            session.warm(carried) if isinstance(carried, Basis) else session.start(carried)
     finally:
         session.close()
 
@@ -361,11 +337,9 @@ def test_a_hint_the_solver_refuses_is_loud_not_a_silent_cold_start(spec, given, 
     member = SOLVERS['highs']
     session = member(tables)
     try:
-        session.run(tables)
-        ws = session.warm_start()
-        assert ws is not None
+        answer = session.run(tables, basis=True)
         session._handle = _Refusing(session._handle, call)
         with pytest.raises(sps.errors.SpecsolveError, match='refused'):
-            session.warm(ws)
+            session.warm(answer.basis) if answer.basis is not None else session.start(answer.primal.to_numpy())
     finally:
         session.close()

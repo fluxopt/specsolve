@@ -17,10 +17,11 @@ from specsolve.relational.sinks.solvers.base import (
     AT_UPPER,
     BASIC,
     SUPERBASIC,
+    Basis,
     SolveAnswer,
     Solver,
-    WarmStart,
     basis_codes,
+    solver_codes,
     solver_vector,
 )
 from specsolve.relational.status import SolveStatus
@@ -221,23 +222,6 @@ class Highs(Solver):
         _loaded(self._handle, self._handle.changeRowsBounds(handoff.row_count, rows, rlb, rub), 'new right-hand sides')
         _pass_hessian(self._handle, handoff)
 
-    def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, its incumbent after a MIP, or ``None`` before any solve."""
-        import numpy as np
-
-        basis = self._handle.getBasis()
-        if basis.valid:
-            return WarmStart(
-                solver='highs',
-                column_statuses=np.fromiter((int(status) for status in basis.col_status), dtype=np.int8),
-                row_statuses=np.fromiter((int(status) for status in basis.row_status), dtype=np.int8),
-                column_values=None,
-            )
-        if _has_primal(self._handle):
-            values = np.asarray(self._handle.getSolution().col_value, dtype=np.float64)
-            return WarmStart(solver='highs', column_statuses=None, row_statuses=None, column_values=values)
-        return None
-
     def _basis(self) -> tuple[Any, Any] | None:
         """``getBasis``, where it is valid; its statuses are ``kLower``, ``kBasic``, ``kUpper``, ``kZero``, ``kNonbasic``."""
         basis = self._handle.getBasis()
@@ -249,24 +233,24 @@ class Highs(Solver):
             basis_codes([int(status) for status in basis.row_status], codes),
         )
 
-    def _warm(self, ws: WarmStart) -> None:
-        """``setBasis`` for a basis, ``setSolution`` for an incumbent."""
+    def _warm(self, basis: Basis) -> None:
+        """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``."""
         import highspy
 
-        if (statuses := ws.basis()) is not None:
-            column_statuses, row_statuses = statuses
-            basis = highspy.HighsBasis()
-            basis.col_status = [highspy.HighsBasisStatus(int(status)) for status in column_statuses]
-            basis.row_status = [highspy.HighsBasisStatus(int(status)) for status in row_statuses]
-            basis.valid = True
-            _took(self._handle.setBasis(basis), 'the carried basis')
-        else:
-            assert ws.column_values is not None, (
-                'a warm start with no basis carries an incumbent — it holds nothing else'
-            )
-            solution = highspy.HighsSolution()
-            solution.col_value = [float(value) for value in ws.column_values]
-            _took(self._handle.setSolution(solution), 'the carried incumbent')
+        native = (1, 0, 2, 0, 3)
+        hint = highspy.HighsBasis()
+        hint.col_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.columns, native)]
+        hint.row_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.rows, native)]
+        hint.valid = True
+        _took(self._handle.setBasis(hint), 'the basis')
+
+    def _start(self, values: Any) -> None:
+        """``setSolution``."""
+        import highspy
+
+        solution = highspy.HighsSolution()
+        solution.col_value = [float(value) for value in values]
+        _took(self._handle.setSolution(solution), 'the starting values')
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """A ``kError`` from ``run()`` leaves the status unset, so on a quadratic model it is refused explicitly."""

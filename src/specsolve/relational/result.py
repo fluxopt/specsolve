@@ -647,6 +647,24 @@ class Result:
         """
         return _named(self._carried('constraint_basis', name), name, 'constraint').collect(engine=collect_engine())
 
+    def _basis(self) -> tuple[Mapping[str, pl.LazyFrame], Mapping[str, pl.LazyFrame]]:
+        """The variable and the constraint basis per declaration, for a solve to start from, or why there is none.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, was not solved with both
+                basis outputs, or ended on no basis.
+        """
+        self._unclosed('the basis to start from')
+        missing = sorted(BASES - set(self._outputs or {}))
+        if missing:
+            raise SpecsolveError(
+                f'start= takes an answer carrying its basis, and this one was solved without '
+                f'{" and ".join(map(repr, missing))}. Solve the answer to start from with '
+                f"outputs={{'variable_basis', 'constraint_basis'}}."
+            )
+        return self._carried('variable_basis', 'any variable'), self._carried('constraint_basis', 'any constraint')
+
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
         """*output*'s frames, or why they cannot be read.
 

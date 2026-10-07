@@ -14,14 +14,18 @@ from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
 from specsolve.relational.sinks.handoff import SENSE_CODES
+from specsolve.relational.sinks.solvers.base import AT_LOWER, BASIC, BASIS, settled
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+    import numpy as np
 
     from specsolve.relational.engine.assembly import BuiltModel
     from specsolve.relational.engine.attaching import AttachedSources
     from specsolve.relational.engine.compiler import Compiler
     from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.solvers.base import Basis
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -316,3 +320,73 @@ def _reported_divisor_message(name: str, missing: int) -> str:
         f'  Supply the missing rows.\n'
         f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
     )
+
+
+def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:
+    """Another answer's basis, *columns* and *rows* as its readers return them, laid onto this build by coordinate.
+
+    A coordinate both builds hold keeps its status. A column only this build
+    holds starts nonbasic at a bound, and a row only this build holds starts
+    basic, which is how a row gained between two builds enters without moving
+    the vertex. A declaration whose dims changed is new. The result is then
+    [`_counted`][] to one basic entry per row, which is what a solver needs to
+    take it, and [`settled`][specsolve.relational.sinks.solvers.base.settled]
+    on this build's bounds.
+    """
+    handoff = model.handoff
+    placed_columns = _placed(model, model.variables, model.program.variables, columns, handoff.column_count, AT_LOWER)
+    placed_rows = _placed(model, model.constraints, model.program.constraints, rows, handoff.row_count, BASIC)
+    return settled(handoff, *_counted(placed_columns, placed_rows))
+
+
+def _placed(
+    model: BuiltModel,
+    held: Mapping[str, labels.Labelled],
+    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
+    previous: Mapping[str, pl.LazyFrame],
+    count: int,
+    fill: int,
+) -> np.ndarray:
+    """A status code per label of *held*: the one *previous* gives the same coordinate, else *fill*.
+
+    The join is on the dims as strings, which is how a read-back frame
+    carries them live, saved and archived alike.
+    """
+    import numpy as np
+
+    codes = np.full(count, fill, dtype=np.int8)
+    positions = pl.Series('value', np.arange(count, dtype=np.int64))
+    for name, labelled in held.items():
+        dims = list(declared[name].dims)
+        before = previous.get(name)
+        if before is None or set(before.collect_schema().names()) != {*dims, 'value'}:
+            continue
+        here = laid_out(model.attached, labelled, tuple(dims), positions).rename({'value': _LABEL_ORDER})
+        status = before.select(*dims, pl.col('value').cast(BASIS).to_physical())
+        found = (here.join(status, on=dims, how='inner') if dims else here.join(status, how='cross')).collect(
+            engine=collect_engine()
+        )
+        codes[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
+    return codes
+
+
+def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """*columns* and *rows* with exactly one basic entry per row, the count every solver's simplex needs.
+
+    A basis carried across a rebuild has one too many for each nonbasic row
+    the rebuild dropped, and one too few for each basic column it dropped.
+    The surplus leaves from the last basic columns, which go to a bound; the
+    shortfall is made up by the last nonbasic rows, whose slacks enter. Which
+    ones is arbitrary: a basis the count makes singular, each solver repairs.
+    """
+    import numpy as np
+
+    columns, rows = columns.copy(), rows.copy()
+    surplus = int((columns == BASIC).sum() + (rows == BASIC).sum()) - len(rows)
+    if surplus > 0:
+        leaving = np.flatnonzero(columns == BASIC)[-surplus:]
+        columns[leaving] = AT_LOWER
+    elif surplus < 0:
+        entering = np.flatnonzero(rows != BASIC)[surplus:]
+        rows[entering] = BASIC
+    return columns, rows

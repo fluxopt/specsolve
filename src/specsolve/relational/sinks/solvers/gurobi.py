@@ -16,10 +16,11 @@ from specsolve.relational.sinks.solvers.base import (
     AT_UPPER,
     BASIC,
     SUPERBASIC,
+    Basis,
     SolveAnswer,
     Solver,
-    WarmStart,
     basis_codes,
+    solver_codes,
     solver_vector,
     spelled_senses,
 )
@@ -150,22 +151,6 @@ class Gurobi(Solver):
         _set_quadratic(self._m, self._x, handoff, cols.cost)
         self._m.update()
 
-    def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, else its incumbent, else ``None``; Gurobi refuses ``VBasis`` without one."""
-        import numpy as np
-
-        gurobipy = _gurobipy()
-        try:
-            columns = np.asarray(self._x.VBasis, dtype=np.int32)
-            slices = [np.asarray(block.CBasis, dtype=np.int32) for block in self._blocks]
-        except (AttributeError, gurobipy.GurobiError):
-            if self._m.SolCount > 0:
-                values = np.asarray(self._x.X, dtype=np.float64)
-                return WarmStart(solver='gurobi', column_statuses=None, row_statuses=None, column_values=values)
-            return None
-        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int32)
-        return WarmStart(solver='gurobi', column_statuses=columns, row_statuses=rows, column_values=None)
-
     def _basis(self) -> tuple[Any, Any] | None:
         """``VBasis`` and ``CBasis``, which Gurobi refuses where it holds no basis; each status is ``0`` or below, so negated it indexes."""
         import numpy as np
@@ -179,18 +164,16 @@ class Gurobi(Solver):
         rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int64)
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
-    def _warm(self, ws: WarmStart) -> None:
-        """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent."""
-        if (basis := ws.basis()) is not None:
-            column_statuses, row_statuses = basis
-            self._x.VBasis = column_statuses
-            for block, rows in self._per_block(row_statuses):
-                block.CBasis = rows
-        else:
-            assert ws.column_values is not None, (
-                'a warm start with no basis carries an incumbent — it holds nothing else'
-            )
-            self._x.Start = ws.column_values
+    def _warm(self, basis: Basis) -> None:
+        """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
+        self._x.VBasis = solver_codes(basis.columns, (0, -1, -2, -1, -3))
+        for block, rows in self._per_block(solver_codes(basis.rows, (0, -1, -1, -1, -1))):
+            block.CBasis = rows
+        self._m.update()
+
+    def _start(self, values: Any) -> None:
+        """``Start``."""
+        self._x.Start = values
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:
