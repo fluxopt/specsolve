@@ -115,19 +115,21 @@ yesterday = sps.load_result('runs/monday')
 today = sps.solve('commitment.yaml', sources, start=yesterday)
 ```
 
-Or pass a table per variable, in the shape
-[`primal`](../reference/api.md#specsolve.types.Result.primal) returns, from a
-heuristic or a rule of thumb:
+Or pass values per variable, from a heuristic or a rule of thumb, in any shape
+a parameter's source takes over the variable's dims: a table in the shape
+[`primal`](../reference/api.md#specsolve.types.Result.primal) returns, a
+parquet path, a `{label: value}` map, or one number for every coordinate:
 
 ```python
 on = pl.DataFrame({'unit': ['coal', 'gas'], 'hour': [0, 0], 'value': [1.0, 1.0]})
 result = sps.solve('commitment.yaml', sources, start={'status': on})
+result = sps.solve('commitment.yaml', sources, start={'status': 1.0})
 ```
 
 A start can name some variables and some coordinates and leave out the rest.
 The solver fills in what is missing, and repairs what does not fit, as far as
 it can. A start is a hint: it never changes the optimum, only how soon a good
-solution is found. A table that names no variable of the model, or whose
-columns are not the variable's dims and `value`, is refused. So is one that
-holds no coordinate the model has, and a table for an LP, which starts from a
-basis.
+solution is found. Values are read and checked as a parameter's source is, so
+a label the dimension lacks or a coordinate given twice is refused. So is a
+name that is no variable, a start that places no value at all, and values for
+an LP, which starts from a basis.

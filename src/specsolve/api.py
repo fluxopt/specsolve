@@ -38,6 +38,7 @@ from specsolve.errors import (
     SpecsolveWarning,
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve.messages import unknown_name_message
 from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
@@ -56,7 +57,7 @@ from specsolve.relational.answer_layout import (
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_values, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -279,7 +280,7 @@ class Model:
         keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
-        start: Result | Mapping[str, pl.DataFrame] | None = None,
+        start: Result | Mapping[str, Source] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -336,9 +337,11 @@ class Model:
                 and the answer must have been solved with
                 ``outputs={'variable_basis', 'constraint_basis'}``. A
                 mixed-integer model starts from values, as an incumbent the
-                solver completes and repairs: an earlier answer's primal, or a
-                ``(dims…, value)`` table per variable, ``primal()``'s shape,
-                naming any of them and any of their coordinates. An answer can
+                solver completes and repairs: an earlier answer's primal, or
+                values per variable in any shape a parameter's source takes
+                over the variable's dims, from a parquet path or a table to
+                one number for every coordinate, naming any of the variables
+                and any of their coordinates. An answer can
                 be live, loaded with [`load_result`][] or from an archive.
 
         Returns:
@@ -370,7 +373,7 @@ class Model:
                 keep=keep,
                 lower=self._lower,
                 outputs=asked,
-                start=start,
+                start=start if start is None or isinstance(start, Result) else self._start_values(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -379,6 +382,21 @@ class Model:
         if out is not None:
             self._archive(out, answered)
         return answered
+
+    def _start_values(self, start: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+        """*start*'s values per variable, read and checked as a parameter's source is, over the variable's dims.
+
+        Raises:
+            SpecsolveError: A name that is no variable.
+            DataError: A source a parameter over the same dims would be refused for.
+        """
+        variables = self._program.variables
+        if unknown := next((name for name in start if name not in variables), None):
+            raise SpecsolveError(f'start= names an {unknown_name_message("variable", unknown, variables)}')
+        return {
+            name: read_values('start= for variable', name, variables[name].dims, values, self._tidied)
+            for name, values in start.items()
+        }
 
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.
@@ -535,7 +553,7 @@ def solve(
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
-    start: Result | Mapping[str, pl.DataFrame] | None = None,
+    start: Result | Mapping[str, Source] | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 

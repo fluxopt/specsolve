@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve.errors import SpecsolveError
-from specsolve.messages import unknown_name_message
 from specsolve.relational import sinks
 from specsolve.relational.answer_layout import BASES
 from specsolve.relational.engine import readback
@@ -61,26 +60,6 @@ def _no_values_for_an_lp_message() -> str:
         'starts from a basis, not from values. Pass an earlier answer of it solved with '
         "outputs={'variable_basis', 'constraint_basis'} instead."
     )
-
-
-def _checked_start(
-    name: str, table: pl.DataFrame, variables: Mapping[str, program.VariableDeclaration]
-) -> pl.LazyFrame:
-    """*table*, the starting values of variable *name*, once it is checked to be ``(dims…, value)`` of one.
-
-    Raises:
-        SpecsolveError: *name* is no variable, or *table*'s columns are not
-            its dims and ``value``.
-    """
-    if name not in variables:
-        raise SpecsolveError(f'start= names an {unknown_name_message("variable", name, variables)}')
-    expected = [*variables[name].dims, 'value']
-    if set(table.columns) != set(expected):
-        raise SpecsolveError(
-            f"start= gives variable '{name}' the columns {table.columns}, and a table of starting values is "
-            f"the variable's dims and its value: {expected}, as primal() returns it."
-        )
-    return table.lazy()
 
 
 def _no_built_model(doing: str) -> str:
@@ -211,7 +190,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: Result | Mapping[str, pl.DataFrame] | None = None,
+        start: Result | Mapping[str, pl.LazyFrame] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -238,7 +217,7 @@ class Engine:
                 LP, an earlier answer's basis
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]);
                 for a mixed-integer model, an earlier answer's primal or a
-                ``(dims…, value)`` table per variable
+                tidy ``(dims…, value)`` frame per variable, already read
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
 
         Returns:
@@ -261,13 +240,12 @@ class Engine:
             answer = solver.run(handoff, basis=bool(outputs & BASES))
         return self._answered(answer, solver_name, kept, lower, outputs)
 
-    def _begun(self, start: Result | Mapping[str, pl.DataFrame]) -> Callable[[sinks.Solver], None]:
+    def _begun(self, start: Result | Mapping[str, pl.LazyFrame]) -> Callable[[sinks.Solver], None]:
         """How a solver starts from *start*, laid onto this build: a basis for an LP, values for a mixed-integer model.
 
         Raises:
-            SpecsolveError: Values for an LP, a table naming no variable or
-                lacking its dims, an answer that holds nothing to start from,
-                or values at no coordinate this build holds.
+            SpecsolveError: Values for an LP, an answer that holds nothing to
+                start from, or values at no coordinate this build holds.
         """
         import numpy as np
 
@@ -277,10 +255,7 @@ class Engine:
                 raise SpecsolveError(_no_values_for_an_lp_message())
             basis = readback.matched_basis(model, *start._basis())
             return lambda solver: solver.warm(basis)
-        if isinstance(start, Result):
-            frames = start._readable(start._primals, 'the values to start from')
-        else:
-            frames = {name: _checked_start(name, table, model.program.variables) for name, table in start.items()}
+        frames = start._readable(start._primals, 'the values to start from') if isinstance(start, Result) else start
         values = readback.matched_values(model, frames)
         if len(values) and np.isnan(values).all():
             raise SpecsolveError(
