@@ -40,6 +40,7 @@ from specsolve.relational.answer_layout import (
     Metrics,
     Record,
     checked_outputs,
+    kinds_of,
     refuse_reserved,
     write_format,
     write_reasons,
@@ -261,6 +262,9 @@ def solve_over(
             word ``'previous'`` starts each slice from the answer of the one
             before it, matched by the slice model's own coordinates; the first
             slice, and one after a slice that left no values, starts cold.
+            Each slice is then solved with its basis, which the next slice
+            starts from whether or not *outputs* asks for it; the sweep keeps
+            only what *outputs* asks for.
 
     Returns:
         The sweep, which reads its answer.
@@ -609,7 +613,9 @@ def _serially(
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    A slice naming other sources than the last is rebuilt, since ``update`` is
+    Under ``start='previous'`` each slice is solved with its basis as well,
+    which the next slice starts from and the answer does not keep. A slice
+    naming other sources than the last is rebuilt, since ``update`` is
     partial. A generator because slice ``i+1``'s carry is read from slice
     ``i``'s frames after the yield; the caller closes it to release the model.
     A slice the spill holds is read back, and one solved here is written
@@ -619,7 +625,9 @@ def _serially(
     named: frozenset[str] | None = None
     state: dict[str, pl.DataFrame] = {}
     previous: Result | Start | None = None
-    readers = ('primal', *(sorted(BASES) if 'basis' in solving['outputs'] else ()))
+    asked: frozenset[Output] = solving['outputs']
+    with_basis: Mapping[str, Any] = {**solving, 'outputs': asked | {'basis'}}  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
+    readers = ('primal', *(sorted(BASES) if 'basis' in asked else ()))
     try:
         for position, current in enumerate(slices):
             if spill is not None and spill.done(position):
@@ -643,9 +651,11 @@ def _serially(
                     if model is not None:
                         model.close()
                     model, named, before = build(document, sources), names, None
-                start = previous if starts == 'previous' else starts[position]
-                result = model.solve(**solving, keep=keep, start=start)
-                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before))
+                if starts == 'previous':
+                    result = model.solve(**with_basis, keep=keep, start=previous)
+                else:
+                    result = model.solve(**solving, keep=keep, start=starts[position])
+                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before), asked)
                 previous = result if result.has_primal else None
             primals = answer.frames.get('primal', {})
             if spill is not None:
@@ -745,11 +755,13 @@ def _pooled(
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
-def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
+def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozenset[Output]) -> SliceAnswer:
     """One slice's answer, read out of *result*, every declared expression evaluated now.
 
-    A slice with no primal, or with undefined duals, is not a failure: the
-    reason ``Result.dual`` gives is carried.
+    It carries the *outputs* the sweep asked for and no others, so a basis
+    read only to start the next slice from is not kept. A slice with no
+    primal, or with undefined duals, is not a failure: the reason
+    ``Result.dual`` gives is carried.
     """
     meta = Record.of(
         result.termination_condition,
@@ -765,9 +777,9 @@ def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
         'primal': {name: result.primal(name) for name in program.variables},
         'expression': {},
     }
-    for output, laid in (result._outputs or {}).items():
-        if laid:
-            frames[output] = {name: frame.collect(engine=collect_engine()) for name, frame in laid.items()}
+    for kind in kinds_of(outputs):
+        if laid := (result._outputs or {}).get(kind):
+            frames[kind] = {name: frame.collect(engine=collect_engine()) for name, frame in laid.items()}
     no_expressions: dict[str, str] = {}
     for name in program.expressions:
         try:
@@ -791,7 +803,7 @@ def _run_slice(
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
     with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
-        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None))
+        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None), call['outputs'])
         if not encode_out:
             return answer
         return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})

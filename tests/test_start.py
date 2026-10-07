@@ -556,18 +556,20 @@ def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(monkeypatch
 
     warmed = _warmed(monkeypatch)
     cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS)
-    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous', outputs=BASIS)
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous')
     assert len(warmed) == len(chained.keys) - 1, 'every slice but the first starts from the basis before it'
     assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
+    with pytest.raises(SpecsolveError, match=r"outputs=\{'basis'\}"):
+        chained.variable_basis('p')
 
 
 def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.MonkeyPatch) -> None:
     from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
 
     warmed = _warmed(monkeypatch)
-    sweep = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous', outputs=BASIS)
+    sweep = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
     assert len(warmed) == len(sweep.keys) - 1, 'a window takes the basis before it, matched by its local index'
 
 
