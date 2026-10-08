@@ -311,12 +311,10 @@ def checked_axes(axis: Axis | Axes) -> Axes:
     """*axis* as the axes it cuts with, outer first; one axis is a tuple of one.
 
     Raises:
-        SpecsolveError: No axis, one that is not an axis, a window outside
-            another axis, or two axes over one dimension.
+        SpecsolveError: One that is not an axis, a window outside another
+            axis, or two axes over one dimension.
     """
     axes = axis if isinstance(axis, tuple) else (axis,)
-    if not axes:
-        raise SpecsolveError('axis=() names no axis, so there is nothing to cut the sources by. Pass one or more axes.')
     if odd := [repr(each) for each in axes if not isinstance(each, (EachCoordinate, EachWindow))]:
         raise SpecsolveError(
             f'a tuple of axes takes EachCoordinate and EachWindow, outer first, and {", ".join(odd)} is neither. '

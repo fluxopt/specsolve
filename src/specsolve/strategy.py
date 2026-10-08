@@ -551,8 +551,8 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     if keep_windows:
         (under / WINDOWS_DIR).mkdir()
         shutil.copyfile(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE)
-    write_whole(sweep.record.drop(sweep.key_name), under / RECORD_FILE)
-    write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
+    write_whole(sweep.record.drop(sweep.key_names), under / RECORD_FILE)
+    write_whole(sweep.metrics.drop(sweep.key_names), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
         for name, frame in sweep._slices.get(kind, {}).items():

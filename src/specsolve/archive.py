@@ -91,7 +91,7 @@ class SweepArchive:
             holds them. A source the axis cuts holds the axis column first; a
             parameter given as one number over a window's local index is held
             over the axis, so each slice cuts from it what it attached.
-        axis: What cut them.
+        axis: What cut them: one axis, or a tuple of axes, outer first.
         carry: ``{parameter: variable}`` the slices were chained with, empty
             where they were not.
         sweep: The archived answer, in memory from [`load_archive`][], on

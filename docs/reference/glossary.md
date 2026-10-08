@@ -201,8 +201,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Axis** · **slice** · **key**
 : An axis says how the sources split: `EachCoordinate(dim)`, one slice per
-  label; `EachWindow(dim, ...)`, one per window of consecutive labels; or a
-  hand-built list of `(key, sources)` pairs. A slice is one set of sources,
+  label; `EachWindow(dim, ...)`, one per window of consecutive labels; a
+  tuple of them, outer first; or a hand-built list of `(key, sources)` pairs. A slice is one set of sources,
   solved as one model, and its key is the [label](#the-verbs) its rows are
   prefixed with in every table the sweep hands back.
 
@@ -213,9 +213,15 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   reads a windowed sweep one window at a time, keyed by where each window
   started, lookahead rows included.
 
+**Chain**
+: The slices of a sweep over several axes that share every outer key, one
+  scenario's windows for instance. They run in order, a carry and
+  `start='previous'` follow them, and an executor runs chains concurrently
+  ([several axes](sweeps.md#several-axes)).
+
 **carry**
-: `carry={parameter: variable}` hands one slice's solution to the next as
-  data, in slice order.
+: `carry={parameter: variable}` hands one slice's solution to the next of its
+  chain as data, in slice order.
 
 **held** · **spilled**
 : Where a sweep's frames are. A **held** sweep carries them in memory, and
