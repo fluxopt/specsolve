@@ -72,6 +72,17 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
+def zero_divisor_message(name: str, zeros: int) -> str:
+    """The message for a divisor parameter that is zero where the model divides by it."""
+    return (
+        f"parameter '{name}' is used as a divisor and is zero at {zeros} of the "
+        f'coordinates the model divides at. A quotient by zero has no value, so '
+        f'there is no coefficient to build there.\n'
+        f'  Supply a non-zero value, or mask the coordinates out with a where '
+        f'that admits only a non-zero divisor.'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """The message for a bound parameter missing values at some coordinates."""
     return (

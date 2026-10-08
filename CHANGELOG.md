@@ -20,6 +20,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
 - docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
+- fix(data): a divisor that is zero where a constraint or the objective divides by it is refused rather than sent to the solver ([#TBD](https://github.com/fluxopt/specsolve/pull/TBD))
 
 ## 0.7.0 (2026-10-07)
 

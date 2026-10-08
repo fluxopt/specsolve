@@ -12,6 +12,9 @@ a divisor under a constant     a null value in the piece            before [`con
 a constant piece the row sees  a null after the join onto the rows  on the rows pass itself
 a constant piece summed away   a coordinate the parameter lacks     of the parameter, the piece no longer showing it
 =============================  ===================================  ==========================================
+
+A divisor that is zero has no reading either. It is asked at the same two
+moments, as a NaN in place of the null.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import sparse_divisor_message, uncovered_constant_message
+from specsolve.messages import sparse_divisor_message, uncovered_constant_message, zero_divisor_message
 from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
@@ -42,7 +45,7 @@ def divisors_of(*expressions: program.Expression) -> tuple[program.Expression, .
 
 
 def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: program.Expression) -> None:
-    """A null coefficient in *stacked* means a divisor had no value where the model divided.
+    """A null coefficient in *stacked* means a divisor had no value where the model divided, and a NaN a zero one.
 
     Asked before any cell collapses, since ``sum`` reads a null as zero.
 
@@ -50,10 +53,9 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
         DataError: Naming the divisor parameters of *expressions* and the
             count of undefined entries.
     """
-    undefined = int(stacked.get_column('coeff').null_count())
-    if undefined:
-        params = sorted(program.parameters_of(*divisors_of(*expressions)))
-        raise DataError(f'{subject}: {sparse_divisor_message(", ".join(params), undefined)}')
+    coeff = stacked.get_column('coeff')
+    divisors = program.parameters_of(*divisors_of(*expressions))
+    _refuse_undefined(int(coeff.null_count()), int(coeff.cast(pl.Float64).is_nan().sum()), divisors, subject)
 
 
 def refuse_null_constants(
@@ -62,7 +64,7 @@ def refuse_null_constants(
     subject: str,
     message: Callable[[str, int], str] = sparse_divisor_message,
 ) -> None:
-    """A null value in a constant *piece* means a divisor had no value where the model divided.
+    """A null value in a constant *piece* means a divisor had no value where the model divided, and a NaN a zero one.
 
     Asked before [`constant_scalar`][pieces.constant_scalar] sums the piece,
     which reads a null as zero. *pieces* are narrowed by the caller to the
@@ -73,10 +75,34 @@ def refuse_null_constants(
     """
     if not divisors:
         return
-    counts = collected_all([piece.select(pl.col('cval').null_count()) for piece in pieces])
-    undefined = sum(int(count.item()) for count in counts)
+    cval = pl.col('cval')
+    counts = collected_all(
+        [
+            piece.select(cval.null_count().alias('null'), cval.cast(pl.Float64).is_nan().sum().alias('nan'))
+            for piece in pieces
+        ]
+    )
+    undefined = sum(int(count.item(0, 'null')) for count in counts)
+    zeros = sum(int(count.item(0, 'nan')) for count in counts)
+    _refuse_undefined(undefined, zeros, divisors, subject, message)
+
+
+def _refuse_undefined(
+    undefined: int,
+    zeros: int,
+    divisors: Collection[str],
+    subject: str,
+    message: Callable[[str, int], str] = sparse_divisor_message,
+) -> None:
+    """Refuse *undefined* quotients by a divisor with no value, then *zeros* by a zero one.
+
+    A zero divisor reaches here as a NaN ([`join_mul`][specsolve.relational.engine.pieces.join_mul]).
+    """
+    names = ', '.join(sorted(divisors))
     if undefined:
-        raise DataError(f'{subject}: {message(", ".join(sorted(divisors)), undefined)}')
+        raise DataError(f'{subject}: {message(names, undefined)}')
+    if zeros:
+        raise DataError(f'{subject}: {zero_divisor_message(names, zeros)}')
 
 
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.LazyFrame]:

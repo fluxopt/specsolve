@@ -18,9 +18,9 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.conftest import law_data, law_spec, override
+from tests.conftest import law_data, law_spec, override, schema_of
 from tests.differential import RTOL, both_lanes_refuse, differential
-from tests.oracle import pd
+from tests.oracle import pd, specsolve_linopy
 
 # ---------------------------------------------------------------------------
 # the fixture: `x` total, `y` absent at f=b, `w` a dense coefficient
@@ -466,6 +466,68 @@ def test_a_sparse_divisor_has_an_escape(patch, expected):
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )
+
+
+#: ``d`` has a row at every coordinate, and the row at ``b`` is zero.
+ZERO_D = {'f': ['a', 'b'], 'd': pd.Series([2.0, 0.0], index=pd.Index(['a', 'b'], name='f'))}
+#: ``h`` for the cases that divide on the constant side.
+H = {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
+
+
+@pytest.mark.parametrize(
+    ('patch', 'data'),
+    [
+        pytest.param({'constraints.c.expression': 'x / d <= 10'}, ZERO_D, id='a-term'),
+        pytest.param({'constraints.c.expression': 'x * d / d <= 10'}, ZERO_D, id='a-term-zero-over-zero'),
+        pytest.param({'constraints.c.expression': 'x / (2 - d) <= 10'}, ZERO_D, id='a-divisor-that-adds-up-to-zero'),
+        pytest.param(
+            {'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'},
+            ZERO_D | H,
+            id='a-constant-side',
+        ),
+    ],
+)
+def test_a_zero_divisor_in_a_constraint_is_refused_on_both_lanes(patch, data):
+    """A divisor row that is present and zero has no quotient to build, so it is refused, not solved (#1892).
+
+    Both lanes divided by the zero and handed the solver an infinite or NaN
+    coefficient with no error: `x * r / r >= 1` reported `infeasible`.
+    """
+    message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), data, match="parameter 'd' is used as a divisor")
+    assert 'is zero at 1 ' in message, 'the message counts the one coordinate where the divisor is zero'
+
+
+def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
+    """The report's own model, refused rather than solved (#1892).
+
+    `sum(x * d / d)` with `d` zero at `b` solved `optimal` with a NaN objective.
+    """
+    spec = override(
+        DIVISOR_SPEC,
+        **{
+            'variables.x.bounds.lower': 1,
+            'constraints.c.expression': 'x <= 10',
+            'objective.sense': 'minimize',
+            'objective.expression': 'sum(x * d / d, over=f)',
+        },
+    )
+    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
+        sps.build(spec, ZERO_D).close()
+    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
+        specsolve_linopy.build(schema_of(spec).expand(), ZERO_D)
+
+
+@pytest.mark.parametrize(
+    'patch',
+    [
+        pytest.param({'constraints.c.where': 'd != 0'}, id='mask-the-row'),
+        pytest.param({'variables.x.where': 'd != 0'}, id='mask-the-variable'),
+    ],
+)
+def test_a_zero_divisor_has_the_escape_a_sparse_one_has(patch):
+    """The refusal is keyed to the quotients built, so a mask that removes the zero lifts it."""
+    with differential(override(DIVISOR_SPEC, **patch), ZERO_D, lp=True) as run:
+        assert run.oracle > 0, 'the masked model builds and solves on both lanes'
 
 
 #: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent
