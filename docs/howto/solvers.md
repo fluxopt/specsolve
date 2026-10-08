@@ -71,7 +71,7 @@ values rather than a basis.
 was the fastest on `dispatch` and `storage`. On `nodal`, interior point with
 crossover was the fastest, and without crossover it took 20 times as long.
 Every objective was within 7e-9, relative, of the simplex one
-([#NNNN](https://github.com/fluxopt/specsolve/pull/NNNN)). Time each way on
+([#1895](https://github.com/fluxopt/specsolve/pull/1895)). Time each way on
 your own model before you keep one.
 
 ## A solver that cannot take the model
