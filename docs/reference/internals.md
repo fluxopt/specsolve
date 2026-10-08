@@ -88,9 +88,12 @@ Each entry says what the thing is, then the module it lives in.
   (`relational/engine/coverage.py`).
 
 **Collect engine**
-: Which polars engine materialises a frame: the streaming one where this
-  polars has it, the in-memory one otherwise. `collect_engine()` is not the
-  `Engine` (`relational/collect.py`).
+: Which polars engine materialises a frame: polars' own `auto` choice where
+  this polars has the streaming engine, the in-memory one otherwise. A collect
+  can ask for the in-memory engine by name (`in_memory=True`). `collected()` is
+  the one way a frame is collected, on that engine and with polars' join
+  reordering off. `collect_engine()` is not the `Engine`
+  (`relational/collect.py`).
 
 ## Sinks
 
@@ -136,19 +139,22 @@ Each entry says what the thing is, then the module it lives in.
   name, and whether it holds a frame per variable or per constraint. The
   readers, `kind=`, the fold, the spill, the archive and its catalog all read
   it. `format.json` names the outputs an answer holds, so a reader tells "not
-  asked for" from "not defined", and a new output adds no `LAYOUT` bump
+  asked for" from "not defined", and a new output adds no `ANSWER_LAYOUT` bump
   (`relational/answer_layout.py`).
 
 **Answer layout**
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
-  `Metrics` rows, `reasons.parquet` and the `format.json` stamp. `LAYOUT` is
-  its version, and a change to it raises the number
+  `Metrics` rows, `reasons.parquet` and the `format.json` stamp.
+  `ANSWER_LAYOUT` is its version, and a change to it raises the number
   (`relational/answer_layout.py`).
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
-  answer layout under `answer/`, and `axis.json` for a sweep
-  (`archive_layout.py`). Reading an archive back is `archive.py`.
+  answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
+  stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
+  `spec.yaml`, `sources/`, `sources.parquet` and `axis.json`, and a change to
+  any of them raises it. Any other change, `catalog.parquet` included, raises
+  `ANSWER_LAYOUT`. Reading an archive back is `archive.py`.
 
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names

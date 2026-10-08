@@ -25,7 +25,7 @@ from importlib.metadata import version as _installed_version
 from specsolve import errors as errors
 from specsolve import types as types
 from specsolve.api import build, check, evaluate, load_result, scan_result, solve, tidy, write
-from specsolve.archive import load_archive, scan_archive
+from specsolve.archive import load_archive, load_inputs, scan_archive
 from specsolve.axes import EachCoordinate, EachWindow
 from specsolve.strategy import solve_over
 from specsolve.sweep import load_sweep, scan_sweep
@@ -37,6 +37,7 @@ __all__ = [
     'check',
     'evaluate',
     'load_archive',
+    'load_inputs',
     'load_result',
     'load_sweep',
     'scan_archive',

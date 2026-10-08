@@ -8,8 +8,8 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.messages import unknown_name_message
-from specsolve.relational.collect import collect_engine
+from specsolve.messages import coordinate_expr, unknown_name_message
+from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.result import ConstraintRow
@@ -70,7 +70,7 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
     schema = frame.collect_schema()
     ordered = {d: coordinate[d] for d in dims}
     predicates = [pl.col(d) == _label(name, d, v, schema[d]) for d, v in ordered.items()]
-    found = frame.filter(predicates).collect() if predicates else frame.collect()
+    found = frame.filter(predicates).pipe(collected) if predicates else frame.pipe(collected)
     if not found.height:
         raise SpecsolveError(
             f"constraint '{name}' built no row at {ordered}. Either a `where` masked the "
@@ -112,13 +112,14 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
         picked = held.frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
-        rendered = pl.concat_str([pl.col(d).cast(pl.String) for d in dims], separator=', ') if dims else pl.lit('')
+        schema = held.frame.collect_schema()
+        rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
                 pl.col('var_label').alias('col'),
                 pl.lit(variable).alias('variable'),
                 rendered.alias('coordinate'),
-            ).collect()
+            ).pipe(collected)
         )
     labelled = (
         pl.concat(named)
@@ -137,11 +138,9 @@ def laid_out(
 ) -> pl.LazyFrame:
     """One declaration's coordinates in label order, beside its share of *values*.
 
-    The share is a column, not a concatenated frame, so a mismatched length
-    raises instead of padding with nulls. Dim columns leave as ``String``
-    ([`_as_strings`][]).
+    Dim columns leave as ``String`` ([`_as_strings`][]).
     """
-    return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
+    return _as_strings(held.valued(dims, values), attached, dims)
 
 
 def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Series:
@@ -243,7 +242,7 @@ def _aligned(
         )
     if not dims:
         return stored['value'].rename(_SOLUTION)
-    order = _as_strings(held.frame.select(*dims).collect(), attached, dims).with_row_index(_LABEL_ORDER)
+    order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
     if joined['value'].null_count():
         raise SpecsolveError(
@@ -306,7 +305,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=collect_engine())
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
@@ -363,9 +362,7 @@ def _placed(
             continue
         here = laid_out(model.attached, labelled, tuple(dims), positions).rename({'value': _LABEL_ORDER})
         status = before.select(*dims, pl.col('value').cast(BASIS).to_physical())
-        found = (here.join(status, on=dims, how='inner') if dims else here.join(status, how='cross')).collect(
-            engine=collect_engine()
-        )
+        found = (here.join(status, on=dims, how='inner') if dims else here.join(status, how='cross')).pipe(collected)
         codes[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
     return codes
 

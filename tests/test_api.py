@@ -478,6 +478,24 @@ def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
         sps.check(spec)
 
 
+@pytest.mark.parametrize('name', ['value', 'Value', 'VALUE'], ids=str)
+def test_a_dimension_named_value_is_refused_at_load(name):
+    """A parameter's table and every answer frame hold a dimension's labels beside a column named `value`.
+
+    So a dimension of that name cannot be told apart from the numbers. Query
+    engines read column names without case, so `Value` collides as well.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^dimension '{name}' has the name of the column 'value'"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
@@ -731,6 +749,40 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
 
         written = [(result.save(tmp_path / f'solution{i}') / 'primal' / 'p.parquet').read_bytes() for i in range(3)]
         assert len(set(written)) == 1, 'the same solution writes the same bytes'
+
+
+SCALAR_SPEC = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'variables': {
+        'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
+        'slack': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'budget_row': {'dims': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
+    'expressions': {'price': {'dims': [], 'expression': 'dual(budget_row)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('read', 'expected'),
+    [
+        pytest.param(lambda r: r.primal('slack'), 10.0, id='primal'),
+        pytest.param(lambda r: r.dual('budget_row'), 2.0, id='dual'),
+        pytest.param(lambda r: r.activity('budget_row'), 120.0, id='activity'),
+        pytest.param(lambda r: r.evaluate('price'), 2.0, id='an-expression-reading-the-dual'),
+    ],
+)
+def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expected):
+    """A product over no dimensions has one coordinate, so every reader returns one row.
+
+    On polars 2.0 each came back empty and the expression read 0.0: the reader
+    selected the declaration's dims first, which with none is a frame with no
+    columns, and polars gives that no rows.
+    """
+    sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
+    with sps.solve(SCALAR_SPEC, sources, outputs={'activity'}) as result:
+        assert read(result).to_dicts() == [{'value': expected}], 'one row, holding the solver value'
 
 
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):

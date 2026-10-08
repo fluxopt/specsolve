@@ -47,7 +47,7 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
     )
 
 
-#: `polars>=1.30` -> ('polars', '1.30', None), `mathspec>=0.2.1,<0.3` ->
+#: `polars>=2.0` -> ('polars', '2.0', None), `mathspec>=0.2.1,<0.3` ->
 #: ('mathspec', '0.2.1', '0.3'). A lower bound is a claim the `floors`
 #: environment has to pin to prove; a ceiling, where there is one, is not.
 _FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,<([0-9][0-9a-zA-Z.]*))?$')

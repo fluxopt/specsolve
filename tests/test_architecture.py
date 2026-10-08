@@ -323,12 +323,21 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
     'see what it reads': {'tidy'},
-    'read it back': {'load_archive', 'load_result', 'load_sweep', 'scan_archive', 'scan_result', 'scan_sweep'},
+    'read it back': {
+        'load_archive',
+        'load_inputs',
+        'load_result',
+        'load_sweep',
+        'scan_archive',
+        'scan_result',
+        'scan_sweep',
+    },
 }
 
 #: The two public submodules, and every name each one binds.
 PUBLIC_MODULES = {
     'types': {
+        'ArchivedInputs',
         'ConstraintRow',
         'Diagnostics',
         'Metrics',
@@ -632,6 +641,23 @@ def test_both_lanes_lower_a_spec_through_one_function():
     assert reading == {'inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
         f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
+    )
+
+
+def test_every_frame_is_collected_through_one_function():
+    """``relational/collect.py`` picks the engine and keeps every join in the order it was written."""
+    calls = {
+        f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
+        for path in _all_modules()
+        if path != PKG / 'relational' / 'collect.py'
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {'collect', 'collect_all'}
+    }
+    assert not calls, (
+        f'{sorted(calls)} collect a frame directly; pipe it through relational.collect.collected, '
+        f'or polars picks the engine and reorders the joins'
     )
 
 

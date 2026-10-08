@@ -184,7 +184,7 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path)
     assert 'divisor' not in str(relational_error.value), (
         'the message names the hole, not a divisor the model has not got'
     )
-    assert "f='b'" in str(relational_error.value), 'and names the coordinate the hole sits at'
+    assert 'f=b' in str(relational_error.value), 'and names the coordinate the hole sits at'
     assert str(relational_error.value) == str(linopy_error.value), 'one defect, one sentence'
 
 
