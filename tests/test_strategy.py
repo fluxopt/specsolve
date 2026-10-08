@@ -2137,9 +2137,14 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 
 
-def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_path):
+def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     """A rolling horizon interrupted after two windows continues from the
-    second window's file, and ends where an uninterrupted one does."""
+    second window's file, and ends where an uninterrupted one does.
+
+    Both start each window from nothing: the resumed run builds the third
+    window afresh, so a carried-on solve could end on another vertex of the
+    same optimum.
+    """
     answered = strategy._answers
     seen: list[int] = []
 
@@ -2151,15 +2156,16 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_p
 
     monkeypatch.setattr(strategy, '_answers', two_then_fail)
     with pytest.raises(RuntimeError, match='went away'):
-        _spilled(tmp_path)
+        _spilled(tmp_path, start=None)
     monkeypatch.setattr(strategy, '_answers', answered)
     assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
-    resumed = _spilled(tmp_path)
-    assert answer_of(resumed).equals(answer_of(priced))
-    assert resumed.scan('soc').collect().equals(priced.primal('soc'))
-    assert resumed.scan('soc', per_window=True).collect().equals(priced.primal('soc', per_window=True))
-    loads = priced.metrics['loads'].to_list()
+    resumed = _spilled(tmp_path, start=None)
+    cold = sps.solve_over(SPENDING, horizon_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
+    assert answer_of(resumed).equals(answer_of(cold))
+    assert resumed.scan('soc').collect().equals(cold.primal('soc'))
+    assert resumed.scan('soc', per_window=True).collect().equals(cold.primal('soc', per_window=True))
+    loads = cold.metrics['loads'].to_list()
     loads[2] = 1
     assert resumed.metrics['loads'].to_list() == loads, (
         'the two read back are the record they left, and the third loads where the uninterrupted run updated'

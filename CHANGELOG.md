@@ -15,7 +15,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(api): a mixed-integer solve can start from values, an earlier answer's or any source a parameter takes, matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
 - feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
 - perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
-- refactor(api): keep= is gone, and a solve started from the model's last answer carries on in the solver that holds it ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
+- refactor(api): keep= is gone, and a re-solve carries on from where the last solve ended unless start=None says otherwise ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
 - feat(api): a sweep can be cut by several axes at once, each carrying its own state, such as a rolling horizon per scenario ([#1888](https://github.com/fluxopt/specsolve/pull/1888))
 - feat(api): a window can hold windows of its own, such as a myopic pathway with foresight whose decades each roll through their hours ([#1890](https://github.com/fluxopt/specsolve/pull/1890))
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))

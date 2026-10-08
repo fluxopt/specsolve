@@ -240,7 +240,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
             built = master._engine._model.handoff
 
             loads = master.diagnostics().loads
-            cold, cold_iterations, cold_seconds = _solved(master)
+            cold, cold_iterations, cold_seconds = _solved(master, start=None)
             assert master.diagnostics().loads == loads + 1, 'the cold arm loads the master the gained cut changed'
             carried, warm_iterations, warm_seconds = _solved(master, start=carried, outputs=BASIS)
             warm = carried

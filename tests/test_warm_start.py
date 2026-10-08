@@ -1,10 +1,10 @@
 """What a re-solve begins from, and the machinery under it.
 
 **The public half** is `solve(start=...)`. A model keeps the solver loaded with
-it between solves, and each solve begins from nothing unless `start=` is the
-answer that solver last produced, in which case it carries on. `loads` says
-whether the model was handed over again, and the iteration count says whether
-the work survived.
+it between solves, and by default each solve carries on from the last one;
+`start=None` begins from nothing, and an answer given is matched by coordinate.
+`loads` says whether the model was handed over again, and the iteration count
+says whether the work survived.
 
 **The sink half** is `Solver.warm(basis)` and `start(values)`. A carried basis
 starts the simplex at the optimum, an incumbent bounds the search, and a start
@@ -172,14 +172,14 @@ def _matched(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return calls
 
 
-def test_a_re_solve_begins_from_nothing_on_the_solver_still_loaded(solver_name):
+def test_a_re_solve_with_no_start_begins_from_nothing_on_the_solver_still_loaded(solver_name):
     """The solver kept shows up as `loads`, the work forgotten as the iteration count."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
-        again = model.solve(solver_name=solver_name)
+        again = model.solve(solver_name=solver_name, start=None)
         assert model.diagnostics().loads == 1, 'the loaded solver is kept'
         assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
             'it forgets the work it did, so it repeats the first solve iteration for iteration'
@@ -187,14 +187,14 @@ def test_a_re_solve_begins_from_nothing_on_the_solver_still_loaded(solver_name):
         assert again.objective == pytest.approx(first.objective)
 
 
-def test_a_start_from_the_last_answer_carries_on_in_the_solver(solver_name, monkeypatch):
-    """Nothing is read or matched: the solver still holds where that answer ended."""
+def test_a_re_solve_carries_on_in_the_solver_by_default(solver_name, monkeypatch):
+    """Nothing is read or matched: the solver still holds where the last solve ended."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
         matched = _matched(monkeypatch)
 
-        carried = model.solve(solver_name=solver_name, start=first)
+        carried = model.solve(solver_name=solver_name)
         assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) < scratch, (
             'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
@@ -203,35 +203,33 @@ def test_a_start_from_the_last_answer_carries_on_in_the_solver(solver_name, monk
         assert carried.objective == pytest.approx(first.objective), 'a start moves the route, never the answer'
 
 
-def test_a_start_from_an_older_answer_is_matched(monkeypatch):
-    """A later solve moved the solver on, so the older answer is laid onto the build by coordinate."""
+@pytest.mark.parametrize('last', [pytest.param(True, id='the-last-answer'), pytest.param(False, id='an-older-answer')])
+def test_an_answer_given_is_matched(monkeypatch, last):
+    """An answer given as `start=` is laid onto the build by coordinate, even the model's last."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
-        first = model.solve(outputs={'basis'})
-        model.solve()
+        given = model.solve(outputs={'basis'})
+        if not last:
+            model.solve()
         matched = _matched(monkeypatch)
-        model.solve(start=first)
-    assert matched == ['matched_basis'], 'the older answer starts the solve from its basis'
+        model.solve(start=given)
+    assert matched == ['matched_basis'], 'the answer starts the solve from its basis'
 
 
-def test_the_last_answer_is_matched_once_an_update_loads_the_solver_again(monkeypatch):
-    """A snapshot fewer changes the structure, so the solver it would carry on in is gone."""
+def test_the_default_begins_from_nothing_once_an_update_loads_the_solver_again(monkeypatch):
+    """A snapshot fewer changes the structure, so the solver it would carry on in is gone, and nothing is matched."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
-        first = model.solve(outputs={'basis'})
+        model.solve()
         model.update(dispatch_sources(SNAPSHOTS[:-1]))
         matched = _matched(monkeypatch)
-        again = model.solve(start=first)
+        again = model.solve()
         assert model.diagnostics().loads == 2, 'the update loaded the solver again'
-    assert matched == ['matched_basis'], 'the answer is laid onto the new build instead'
+    assert not matched, 'the default reads and matches nothing'
     assert again.has_primal
 
 
 @pytest.mark.parametrize('last', [pytest.param(True, id='the-last-answer'), pytest.param(False, id='an-older-answer')])
 def test_a_start_from_an_answer_with_no_values_is_refused(last):
-    """An infeasible answer gives nothing to start from, whether or not it is the model's last.
-
-    The last one used to carry on in the solver silently, while an older one
-    was refused.
-    """
+    """An infeasible answer gives nothing to start from, whether or not it is the model's last."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         sources = dispatch_sources()
         infeasible = model.update({'load': sources['load'].with_columns(pl.col('value') * 100)}).solve()

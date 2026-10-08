@@ -58,7 +58,7 @@ from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, read_start, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -280,14 +280,13 @@ class Model:
         record_options: Sequence[str] | None = None,
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
-        start: Result | Start | None = None,
+        start: Result | Start | Literal['previous'] | None = 'previous',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so an updated
         model pushes only its numbers; [`diagnostics`][] counts the solves
-        that loaded it again. A solve begins from nothing unless *start* says
-        otherwise.
+        that loaded it again.
 
         Args:
             solver_name: ``highs``, which ships with the package; ``gurobi``,
@@ -323,22 +322,22 @@ class Model:
                 with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
-            start: What to start the solve from: an earlier answer, live,
-                loaded with [`load_result`][] or from an archive, or a
-                [`Start`][specsolve.types.Start] of tables keyed by reader. It
-                is matched by coordinate, so one from another build of the
-                spec, with rows or columns gained or lost, starts it too, and
-                it changes how the solver gets to the optimum, never which
-                one. An LP starts from a basis where one is given, which an
+            start: What the solve begins from; it changes how the solver gets
+                to the optimum, never which one. ``'previous'``, the default,
+                carries on from the last solve while the solver stays loaded,
+                and begins from nothing after an update that loads it again.
+                ``None`` begins from nothing. An earlier answer, live, loaded
+                with [`load_result`][] or from an archive, or a
+                [`Start`][specsolve.types.Start] of tables keyed by reader, is
+                matched by coordinate, so one from another build of the spec,
+                with rows or columns gained or lost, starts it too. An LP starts from a basis where one is given, which an
                 answer carries when solved with ``outputs={'basis'}``: a
                 coordinate it leaves out starts at a bound if it is a
                 variable's, and not binding if it is a constraint's. Otherwise
                 an LP, and a mixed-integer model always, starts from values,
                 which the solver completes and repairs. Where a solver takes
                 values for an LP and no gain from them is known, the solve
-                warns. This model's last answer is not matched while its
-                solver stays loaded: the solver carries on, the cheap way to
-                step a model through updates.
+                warns.
 
         Returns:
             The solution, holding this model.
@@ -346,7 +345,8 @@ class Model:
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a bare string as *record_options* or *outputs*, a
-                name in *outputs* that is not an output, or a *start* this
+                name in *outputs* that is not an output, a *start* word other
+                than ``'previous'``, or a *start* this
                 model or solver cannot start from: a key that names no reader, a table naming no declaration or
                 lacking its dims, a basis status outside the five words, a
                 basis alone for a mixed-integer model, a start that lands on
@@ -364,13 +364,14 @@ class Model:
                 f'Pass a list: record_options=[{record_options!r}].'
             )
         asked = checked_outputs(outputs)
+        refuse_unknown_start_word(start)
         answered = replace(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
                 lower=self._lower,
                 outputs=asked,
-                start=start if start is None or isinstance(start, Result) else self._read_start(start),
+                start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -384,14 +385,8 @@ class Model:
         """*start*'s tables read against this build, as [`read_start`][specsolve.sources.read_start] reads them.
 
         Raises:
-            SpecsolveError: A word, which only [`solve_over`][specsolve.strategy.solve_over]
-                takes, or as [`read_start`][specsolve.sources.read_start] raises.
+            SpecsolveError: As [`read_start`][specsolve.sources.read_start] raises.
         """
-        if isinstance(start, str):
-            raise SpecsolveError(
-                f'start={start!r} is a word only solve_over takes: a solve has no slice before it. Pass an earlier '
-                'answer or a Start.'
-            )
         return read_start(start, self._program, self._tidied)
 
     def _archive(self, out: Path, answered: Result) -> None:
