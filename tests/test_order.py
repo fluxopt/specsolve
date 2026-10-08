@@ -102,6 +102,8 @@ def _one_sum_over(expression: str, where: str) -> dict[str, Any]:
         pytest.param('x + sum(weight)', 'objective', id='an-objective-constant'),
         pytest.param('x >= sum(weight)', 'constraint', id='a-right-hand-side'),
         pytest.param('x / sum(weight) <= 1', 'constraint', id='a-divisor'),
+        pytest.param('sum(weight * x) <= 1', 'constraint', id='a-coefficient'),
+        pytest.param('sum(weight * x)', 'objective', id='a-cost'),
     ],
 )
 def test_a_constant_summed_over_many_rows_builds_the_same_model_whatever_their_order(
@@ -147,3 +149,26 @@ def test_a_sum_per_key_is_the_same_to_the_last_bit_however_many_rows_each_key_ha
         assert totals(frame.sample(fraction=1.0, shuffle=True, seed=seed)).equals(plain), (
             'the same values, shuffled, summed to another total for some key'
         )
+
+
+def test_an_expression_read_after_the_solve_is_the_same_to_the_last_bit_whatever_order_its_rows_arrive_in() -> None:
+    """``evaluate`` sums an expression at the answer through the same compiler, so its value holds as the model does."""
+    rng = np.random.default_rng(0)
+    items = 200_000
+    weights = pl.DataFrame(
+        {'item': range(items), 'value': rng.uniform(0.0, 1e3, items) * 10.0 ** rng.integers(-6, 6, items)}
+    )
+    spec = {
+        'dimensions': {'item': {'dtype': 'int'}},
+        'parameters': {'weight': {'dims': ['item']}},
+        'variables': {'x': {'dims': ['item'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+    }
+
+    def read(weight: pl.DataFrame) -> float:
+        with sps.solve(spec, {'item': list(range(items)), 'weight': weight}) as result:
+            return result.evaluate('sum(weight * (x + 1))').item(0, 'value')
+
+    assert read(weights.sample(fraction=1.0, shuffle=True, seed=0)) == read(weights), (
+        'the same weights, shuffled, read back another value'
+    )
