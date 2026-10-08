@@ -16,6 +16,7 @@ from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
     NO_PROVENANCE,
+    PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
@@ -506,7 +507,7 @@ class Result:
         the sign.
 
         Duals exist only where a solver ran here, not for a model written to a
-        file and solved elsewhere. Reduced costs and slacks are not read.
+        file and solved elsewhere. Slacks are not read.
 
         Raises:
             NoSolutionError: The solve left no values at all.
@@ -521,6 +522,28 @@ class Result:
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
         return _named(frames, name, 'constraint').pipe(collected)
+
+    def reduced_cost(self, name: str) -> pl.DataFrame:
+        """Reduced costs of variable *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
+
+        Each is the rate at which the optimal objective rises as the
+        variable's binding bound rises, in the sign convention of [`dual`][]
+        for every sense and sink: of ``x >= l``, the rate in ``d`` of
+        ``x >= l + d``. A variable strictly between its bounds has zero.
+
+        It is computed from the duals as the objective's gradient less each
+        row's gradient times that row's dual, so it exists wherever
+        [`dual`][] does and nowhere else. Carried only where the solve was
+        asked for it with ``outputs={'reduced_cost'}``.
+
+        Raises:
+            NoSolutionError: The solve left no values at all.
+            SpecsolveError: This result was closed; the solve was not asked
+                for reduced costs; or it left primals but no duals, as
+                [`dual`][] raises.
+            KeyError: No variable is called *name*.
+        """
+        return _named(self._carried('reduced_cost', name), name, 'variable').pipe(collected)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -569,13 +592,20 @@ class Result:
         return _named(self._carried('activity', name), name, 'constraint').pipe(collected)
 
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
-        """*output*'s frames, or why they cannot be read — closed first, then not asked for, then the status."""
+        """*output*'s frames, or why they cannot be read.
+
+        Closed first, then not asked for, then the status, then, for a kind
+        that exists only where the duals do, the duals' reason.
+        """
         what = f"the {output.replace('_', ' ')} of '{name}'"
         self._unclosed(what)
         assert self._outputs is not None, 'close() releases the outputs with the primals, which _unclosed just checked'
         if output not in self._outputs:
             raise SpecsolveError(not_requested_message(output, name))
-        return self._readable(self._outputs[output], what)
+        frames = self._readable(self._outputs[output], what)
+        if output in PRICED and self._no_duals is not None:
+            raise SpecsolveError(self._no_duals)
+        return frames
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -613,9 +643,9 @@ class Result:
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed, *kind* is ``dual`` and
-                the duals are undefined, or *kind* is an output the solve was
-                not asked for.
+            SpecsolveError: This result was closed, *kind* is ``dual`` or
+                ``reduced_cost`` and the duals are undefined, or *kind* is an
+                output the solve was not asked for.
         """
         if checked_kind(kind) == 'primal':
             return tuple(self._readable(self._primals, 'the solution'))

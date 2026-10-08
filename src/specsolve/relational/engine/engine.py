@@ -317,6 +317,10 @@ class Engine:
         match output:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
+            case 'reduced_cost':
+                if answer.primal is None or answer.dual is None:
+                    return {}
+                return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""

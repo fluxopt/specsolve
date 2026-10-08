@@ -55,6 +55,8 @@ sps.solve('dispatch.yaml', sources, outputs={'activity'}, archive='case')
 ```
 
 This adds `answer/activity/<name>.parquet`, each constraint's left-hand side.
+`outputs={'reduced_cost'}` adds `answer/reduced_cost/<name>.parquet`, each
+variable's reduced cost.
 A reader of an output the solve did not ask for refuses, and the message names
 the `outputs=` to solve with.
 

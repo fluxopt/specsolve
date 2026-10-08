@@ -31,16 +31,21 @@ if TYPE_CHECKING:
 
 #: What an answer carries only where the solve asked for it with ``outputs=``,
 #: beside the primal, the duals and the declared expressions it always
-#: carries. ``activity`` is each constraint's left-hand side at the solution.
+#: carries. ``activity`` is each constraint's left-hand side at the solution,
+#: and ``reduced_cost`` each variable's reduced cost.
 #: Each is named after its reader on a result and a sweep, and the directory
 #: its frames are saved under.
-Output = Literal['activity']
+Output = Literal['activity', 'reduced_cost']
 
 #: What an [`Output`][] holds one frame per.
 Per = Literal['variable', 'constraint']
 
 #: Every [`Output`][], and what it holds one frame per.
-OUTPUTS: Mapping[Output, Per] = MappingProxyType({'activity': 'constraint'})
+OUTPUTS: Mapping[Output, Per] = MappingProxyType({'activity': 'constraint', 'reduced_cost': 'variable'})
+
+#: The kinds that exist exactly where the duals do. Where a solve left none,
+#: each carries the duals' reason.
+PRICED = frozenset({'dual', 'reduced_cost'})
 
 #: Every kind of frame an answer can hold: the three every solve answers with,
 #: then the [`OUTPUTS`][]. Each is named after the reader it comes back
