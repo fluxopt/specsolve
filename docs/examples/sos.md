@@ -184,15 +184,15 @@ Not every sink can take that stream:
 | | what it does with this model |
 |---|---|
 | `gurobi`, `xpress` | `addSOS` — branches on the set, no binaries in the model at all |
-| `lp_file` | an `sos` section, read by any solver whose parser has one |
-| `highs` | **no SOS concept** — the set arrives reformulated, as a binary per segment and a linking row per member |
+| `.lp`, `.mps` | an `sos` section, read by any solver whose parser has one |
+| `highs` | **no SOS concept** — the model is refused before the solver loads, and the error names the way past it |
 
-The same file runs everywhere, and what differs is the *search*, not the
-answer. On HiGHS the reformulation is close to what `method: adjacency` would
-have emitted, so the capability gap costs a worse relaxation, never a refusal.
-Two conditions come with it. Every member needs a finite upper bound, which
-the emitted weights carry. The result is mixed-integer, so an otherwise
-continuous model gives up its duals.
+Nothing is rewritten at the hand-off. To solve this file on HiGHS, write the
+sets out first: `mathspec.to_spec(...).expand()` states each set as binaries
+and linking rows, which every sink takes. For a set a `piecewise:` block
+emitted, `method: adjacency` gives the same result in the file itself. Either
+way the model is mixed-integer, so an otherwise continuous model gives up its
+duals.
 
 Compare [piecewise](piecewise.md), the same file except for `method: convex`.
 Both expand before the plan exists, and nothing called *piecewise* survives

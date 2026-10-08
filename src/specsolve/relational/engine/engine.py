@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from polars._typing import PolarsDataType
 
     from specsolve.relational.answer_layout import Output
+    from specsolve.relational.result import InfeasibleSubsystem
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
@@ -109,6 +110,9 @@ class Engine:
         self._measured = Measured()
         #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
+        #: What the last solve concluded, or ``None`` once a load, a build or
+        #: [`close`][] has changed what the solver holds.
+        self._solved: SolveStatus | None = None
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
@@ -137,6 +141,7 @@ class Engine:
         if self._solver is not None:
             self._solver.structure()
         self._built = None
+        self._solved = None
         self._measured = Measured()
         with _clocked(self._seconds, 'attach'):
             attached = attach(program, sources)
@@ -195,6 +200,7 @@ class Engine:
         ``solves`` nor ``loads``, so timing this alone leaves them true.
         """
         self.check(solver_name)
+        self._solved = None
         with _clocked(self._seconds, 'handoff'):
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
@@ -259,6 +265,7 @@ class Engine:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff, basis='basis' in outputs)
+        self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
 
     def _matched_start(
@@ -329,6 +336,31 @@ class Engine:
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
             _model_digest=lambda: handoff.contents,
         )
+
+    def infeasible_subsystem(self) -> InfeasibleSubsystem:
+        """The infeasible subsystem of the last solve, by declaration and coordinate. See [`infeasible_subsystem`][specsolve.api.Model.infeasible_subsystem].
+
+        Raises:
+            SpecsolveError: No solve since the last build, update or close; a
+                last solve that was not infeasible; or no subsystem found.
+        """
+        if self._solved is None:
+            raise SpecsolveError(
+                'there is no solve to explain: this model has not been solved since it was built, '
+                'updated or closed. Solve it, and ask infeasible_subsystem() while the last solve is the infeasible one.'
+            )
+        if self._solved.termination_condition != 'infeasible':
+            raise SpecsolveError(
+                f'an infeasible subsystem explains why a model has no solution, and the last solve '
+                f'terminated {self._solved.termination_condition!r} rather than infeasible.'
+            )
+        assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
+        found = self._solver.infeasible_subsystem()
+        if found is None:
+            raise SpecsolveError(
+                _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
+            )
+        return readback.infeasible_subsystem(self._model, found)
 
     def contents(self) -> str:
         """This build's digest — what a saved answer is checked against.
@@ -488,6 +520,7 @@ class Engine:
             self._solver.close()
             self._solver = None
         self._built = None
+        self._solved = None
 
     def __enter__(self) -> Engine:
         return self
@@ -532,6 +565,20 @@ def expression_readers(
     """
     compiler = Compiler(Scope(program, attach(program, sources), {}))
     return readback.readers(compiler, program.expressions, lower)
+
+
+def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:
+    """Why an infeasible solve's solver found no subsystem."""
+    if discrete and solver_name == 'highs':
+        return (
+            f'HiGHS found no subsystem, and this model declares integer variables '
+            f'({", ".join(discrete)}), so integrality may be what conflicts, which HiGHS can search '
+            f'without. Solve with gurobi or xpress, which search with it.'
+        )
+    return (
+        f'the model is infeasible, and the {solver_name} sink found no subsystem that explains it. The '
+        f"search runs under the solve's own solver_options, so a time limit there can stop it short."
+    )
 
 
 def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:

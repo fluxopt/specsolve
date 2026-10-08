@@ -39,6 +39,7 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
 | `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
 | `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
+| `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 

@@ -66,7 +66,7 @@ if TYPE_CHECKING:
     from mathspec.program import Expression, Program
 
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Start
+    from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -462,6 +462,37 @@ class Model:
             balance[snapshot=1]: +1 p[snapshot=1, tech=wind] +50 p[snapshot=1, tech=gas] >= 60
         """
         return self._engine.row(name, coordinate)
+
+    def infeasible_subsystem(self) -> InfeasibleSubsystem:
+        """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
+
+        The verb for *this model has no solution and I do not know why*. It
+        asks the solver that ran the last solve for an IIS (irreducible
+        infeasible subsystem). The search runs only on this call, since it can
+        cost more than the solve, and under the solve's ``solver_options``, so
+        a solver's IIS settings and time limit go there. Read a member row's
+        terms with [`row`][].
+
+        Every sink finds one for a linear model. For a discrete model, every
+        sink leaves out the integrality that makes the rows and bounds
+        conflict, and ``highs`` can find none where integrality causes the
+        conflict.
+
+        Raises:
+            SpecsolveError: The model has not been solved since it was built,
+                updated or closed; the last solve was not infeasible; or the
+                solver found no subsystem, or stopped at a limit before it was
+                irreducible.
+
+        Example:
+            >>> model.solve().termination_condition  # doctest: +SKIP
+            'infeasible'
+            >>> print(model.infeasible_subsystem())  # doctest: +SKIP
+            balance[snapshot=1] == 200
+            p[snapshot=1, tech=gas] <= 100 (upper bound)
+            p[snapshot=1, tech=wind] <= 50 (upper bound)
+        """
+        return self._engine.infeasible_subsystem()
 
     def _evaluator(
         self,
