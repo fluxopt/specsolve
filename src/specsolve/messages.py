@@ -77,8 +77,17 @@ def non_finite_message(divisors: str, count: int) -> str:
     by = f" where the model divides by '{divisors}'" if divisors else ''
     return (
         f'{count} coefficient(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
-        f'and neither leaves a number to build.\n'
+        f'and a coefficient must be a finite number.\n'
         f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
+    )
+
+
+def nan_constant_message(divisors: str, count: int) -> str:
+    """The message for constant values that are NaN where the model divides by *divisors*."""
+    return (
+        f"{count} constant value(s) are NaN where the model divides by '{divisors}': 0 / 0 or inf - inf "
+        f'leaves no number. An infinite constant is a limit and is kept; a NaN is not.\n'
+        f'  Supply a non-zero divisor, or mask the coordinates out with a where.'
     )
 
 

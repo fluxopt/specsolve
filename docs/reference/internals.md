@@ -85,7 +85,7 @@ Each entry says what the thing is, then the module it lives in.
 **Coverage**
 : Whether data is there where a declaration reads it. A divisor and a
   constant piece are refused at the last moment the gap can still be seen,
-  and a coefficient that is not finite at the same moment
+  and a coefficient that is not finite, or a constant that is NaN, at the same moment
   (`relational/engine/coverage.py`).
 
 **Collect engine**

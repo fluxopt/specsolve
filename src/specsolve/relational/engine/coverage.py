@@ -14,7 +14,8 @@ a constant piece summed away   a coordinate the parameter lacks     of the param
 =============================  ===================================  ==========================================
 
 A coefficient that is not finite, from a divisor that is zero or a value that
-is infinite, has no reading either. It is asked at the same two moments.
+is infinite, has no reading either, and neither has a constant that is NaN. An
+infinite constant is a limit and is kept. Both are asked at the same moments.
 """
 
 from __future__ import annotations
@@ -25,7 +26,12 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve.messages import (
+    nan_constant_message,
+    non_finite_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
@@ -68,7 +74,8 @@ def refuse_null_constants(
 ) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided.
 
-    One that is not finite has no number to build either.
+    One that is NaN has no number either. One that is infinite is a limit, and
+    is kept.
 
     Asked before [`constant_scalar`][pieces.constant_scalar] sums the piece,
     which reads a null as zero. *pieces* are narrowed by the caller to the
@@ -82,30 +89,29 @@ def refuse_null_constants(
     cval = pl.col('cval')
     counts = collected_all(
         [
-            piece.select(
-                cval.null_count().alias('null'), cval.cast(pl.Float64).is_finite().not_().sum().alias('non_finite')
-            )
+            piece.select(cval.null_count().alias('null'), cval.cast(pl.Float64).is_nan().sum().alias('nan'))
             for piece in pieces
         ]
     )
     undefined = sum(int(count.item(0, 'null')) for count in counts)
-    non_finite = sum(int(count.item(0, 'non_finite')) for count in counts)
-    _refuse_undefined(undefined, non_finite, divisors, subject, message)
+    nan = sum(int(count.item(0, 'nan')) for count in counts)
+    _refuse_undefined(undefined, nan, divisors, subject, message, nan_constant_message)
 
 
 def _refuse_undefined(
     undefined: int,
-    non_finite: int,
+    invalid: int,
     divisors: Collection[str],
     subject: str,
     message: Callable[[str, int], str] = sparse_divisor_message,
+    invalid_message: Callable[[str, int], str] = non_finite_message,
 ) -> None:
-    """Refuse *undefined* quotients by a divisor with no value, then *non_finite* values."""
+    """Refuse *undefined* quotients by a divisor with no value, then *invalid* values."""
     names = ', '.join(sorted(divisors))
     if undefined:
         raise DataError(f'{subject}: {message(names, undefined)}')
-    if non_finite:
-        raise DataError(f'{subject}: {non_finite_message(names, non_finite)}')
+    if invalid:
+        raise DataError(f'{subject}: {invalid_message(names, invalid)}')
 
 
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.LazyFrame]:

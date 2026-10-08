@@ -19,7 +19,12 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve.messages import (
+    nan_constant_message,
+    non_finite_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
@@ -126,7 +131,7 @@ def check_divisors_cover(
     mask: Any,
     evaluate: Callable[[program.Expression], Any],
 ) -> None:
-    """A divisor must have a value, and one that is not zero, wherever this declaration divides by it.
+    """A divisor must have a value wherever this declaration divides by it, and not be zero under a variable.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
     keyed to the coordinate product would refuse models that never touch the
@@ -140,7 +145,9 @@ def check_divisors_cover(
     0.0 at the parameter leaf, and from there the division yields an infinity
     and the row is masked out silently. A zero the data holds is asked after
     the gaps, of the divisor as *evaluate* reads it, so a divisor that adds up
-    to zero is found too.
+    to zero is found too. Under a variable it leaves no coefficient; under a
+    constant it is refused only where the numerator is zero as well, since
+    any other constant over zero is an infinite limit.
     """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
@@ -157,14 +164,15 @@ def check_divisors_cover(
                 missing = gaps_under(ctx.dataset[param], needed)
                 if missing:
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-            zeros = _zeros_under(evaluate(quotient.divisor), needed)
-            if zeros:
-                raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+            divisors = ', '.join(sorted(params))
+            zero = xr.DataArray(evaluate(quotient.divisor)) == 0
+            if program.variables_of(quotient.numerator):
+                if zeros := _count_under(zero, needed):
+                    raise DataError(f'{name}: {non_finite_message(divisors, zeros)}')
+            elif nans := _count_under(zero & (xr.DataArray(evaluate(quotient.numerator)) == 0), needed):
+                raise DataError(f'{name}: {nan_constant_message(divisors, nans)}')
 
 
-def _zeros_under(divisor: Any, mask: Any) -> int:
-    """How many slots of *divisor* are zero where *mask* still admits the row."""
-    zero = xr.DataArray(divisor) == 0
-    if mask is not None:
-        zero = zero & mask
-    return int(zero.sum())
+def _count_under(flags: Any, mask: Any) -> int:
+    """How many slots of *flags* are set where *mask* still admits the row."""
+    return int((flags & mask if mask is not None else flags).sum())
