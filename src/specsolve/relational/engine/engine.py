@@ -109,9 +109,8 @@ class Engine:
         self._measured = Measured()
         #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
-        #: The mark of the last solve, which the answer it produced carries:
-        #: a start from that answer carries on in the solver still holding it.
-        self._mark: object | None = None
+        #: The last solve's mark, which its answer carries.
+        self._mark = object()
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
@@ -192,13 +191,10 @@ class Engine:
     ) -> tuple[sinks.Solver, bool]:
         """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
 
-        The held solver keeps the model where
-        [`loaded`][specsolve.relational.sinks.solvers.loaded] allows and is
-        loaded again where not; what comes back beside it is whether it was
-        loaded. A solver kept forgets the work it did, unless *carry_on*,
-        which is a start from the answer it last produced. Counts toward
-        neither ``solves`` nor ``loads``: [`solve`][] counts, so timing this
-        alone leaves them true.
+        Returns the solver and whether it was loaded again, which
+        [`loaded`][specsolve.relational.sinks.solvers.loaded] decides. A solver
+        kept forgets its last run unless *carry_on*. Counts toward neither
+        ``solves`` nor ``loads``, so timing this alone leaves them true.
         """
         self.check(solver_name)
         with _clocked(self._seconds, 'handoff'):
@@ -242,20 +238,18 @@ class Engine:
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
-                The answer this engine's solver last produced is not matched
-                at all where that solver is still loaded: the solver carries
-                on from where it ended.
+                The last solve's answer is not matched while its solver stays
+                loaded: the solver carries on.
 
         Returns:
             The solution, holding this engine and the build it answered.
 
         Raises:
             SpecsolveError: A *start* this model or this solver cannot start
-                from — refused before the solver loads, except for the answer
-                this engine last produced, which is matched only once the
-                solver it would carry on in has had to be loaded again.
+                from, refused before the solver loads. The last solve's answer
+                is matched, and so refused, only once the solver loads again.
         """
-        carry_on = isinstance(start, Result) and start._solve_mark is not None and start._solve_mark is self._mark
+        carry_on = isinstance(start, Result) and start.has_primal and start._solve_mark is self._mark
         matched = None if start is None or carry_on else self._matched_start(start, solver_name)
         solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
         if carry_on and reloaded:
