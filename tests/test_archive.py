@@ -1878,6 +1878,23 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
     ('change', 'same'),
     [
         pytest.param(lambda s: s | {'cost': s['cost'].reverse()}, True, id='a-table-in-another-row-order'),
+        pytest.param(
+            lambda s: s | {'cost': s['cost'].with_columns(pl.col('generator').cast(pl.Categorical))},
+            True,
+            id='labels-as-categories',
+        ),
+        pytest.param(
+            lambda s: (
+                s
+                | {
+                    'cost': s['cost'].with_columns(
+                        pl.col('generator').cast(pl.Enum(s['generator']['generator'].to_list()))
+                    )
+                }
+            ),
+            True,
+            id='labels-as-enum-members',
+        ),
         pytest.param(lambda s: s | {'generator': s['generator'].reverse()}, False, id='a-dimension-in-another-order'),
     ],
 )

@@ -19,6 +19,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.relational.collect import collected
@@ -282,12 +283,13 @@ def digest_of_data(spec_digest: str, tables: Mapping[str, pl.LazyFrame], ordered
     Over the values the tables hold rather than anything computed from them,
     so a rebuild on another machine or another polars version agrees. A
     table's rows count in any order, except the tables *ordered* names: a
-    dimension's row order is its coordinate order. A tidied table holds no
-    null, so none is told apart.
+    dimension's row order is its coordinate order. A label counts by its text,
+    whether it arrives as a string, a category or an enum member. A tidied
+    table holds no null, so none is told apart.
     """
     sha = hashlib.sha256(spec_digest.encode())
     for name in sorted(tables):
-        table = tables[name].pipe(collected)
+        table = tables[name].with_columns(cs.categorical().cast(pl.String), cs.enum().cast(pl.String)).pipe(collected)
         if name not in ordered:
             table = table.sort(table.columns)
         sha.update(f'\x1e{name}\x1f{table.height}'.encode())
