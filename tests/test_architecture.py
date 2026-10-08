@@ -340,6 +340,7 @@ PUBLIC_MODULES = {
         'ArchivedInputs',
         'ConstraintRow',
         'Diagnostics',
+        'InfeasibleSubsystem',
         'Metrics',
         'Model',
         'Output',

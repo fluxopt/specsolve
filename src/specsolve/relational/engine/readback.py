@@ -13,7 +13,7 @@ from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
-from specsolve.relational.result import ConstraintRow
+from specsolve.relational.result import ConstraintRow, InfeasibleSubsystem
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import settled
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from specsolve.relational.engine.attaching import AttachedSources
     from specsolve.relational.engine.compiler import Compiler
     from specsolve.relational.sinks.handoff import Handoff
-    from specsolve.relational.sinks.solvers.base import Basis
+    from specsolve.relational.sinks.solvers.base import Basis, InfeasibleSubsystemIndices
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -56,6 +56,59 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
         sense=str(stated.item(0, 'sense')),
         rhs=float(stated.item(0, 'rhs')),
     )
+
+
+def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -> InfeasibleSubsystem:
+    """*found*'s solver indices as the declarations and coordinates that built them.
+
+    A row carries its sense and right-hand side, a bound its side and value,
+    read off the hand-off the solver was given.
+    """
+    rows = pl.DataFrame({'row': found.rows}).join(
+        model.handoff.rows.select(pl.col('row').cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on='row'
+    )
+    columns = model.handoff.cols
+    bounds = pl.concat(
+        [
+            pl.DataFrame({'var_label': indices, 'value': columns[column].gather(indices)}).select(
+                'var_label', pl.lit(side).alias('bound'), 'value'
+            )
+            for side, column, indices in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
+        ]
+    )
+    return InfeasibleSubsystem(
+        constraints=_members(model, model.constraints, model.program.constraints, rows, 'row', ('sense', 'rhs')),
+        bounds=_members(model, model.variables, model.program.variables, bounds, 'var_label', ('bound', 'value')),
+    )
+
+
+def _members(
+    model: BuiltModel,
+    registry: Mapping[str, labels.Labelled],
+    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    found: pl.DataFrame,
+    label: str,
+    carried: Sequence[str],
+) -> dict[str, pl.DataFrame]:
+    """``(dims…, *carried)`` per declaration owning a label in *found*, in declaration and label order.
+
+    A declaration owns a contiguous run of labels, so its share is a range test.
+    """
+    found = found.with_columns(pl.col(label).cast(pl.Int64))
+    out = {}
+    for name, held in registry.items():
+        mine = found.filter((pl.col(label) >= held.start) & (pl.col(label) < held.start + held.height))
+        if not mine.height:
+            continue
+        dims = declared[name].dims
+        frame = (
+            held.frame.with_columns(pl.col(label).cast(pl.Int64))
+            .join(mine.lazy(), on=label)
+            .sort(label, *carried)
+            .select(*dims, *carried)
+        )
+        out[name] = _as_strings(frame, model.attached, dims).pipe(collected)
+    return out
 
 
 def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> tuple[int, dict[str, object]]:

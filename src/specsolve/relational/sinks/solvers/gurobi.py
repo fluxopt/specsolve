@@ -15,6 +15,7 @@ from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED,
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
     Basis,
+    InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
     basis_codes,
@@ -212,6 +213,30 @@ class Gurobi(Solver):
             solver_vector(self._x.X),
             _duals(self._blocks, self._qrows),
             _activity(self._blocks, self._qrows),
+        )
+
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
+        """``computeIIS``, kept only where Gurobi reports it minimal.
+
+        A search a limit stops leaves a set that is not, or nothing readable.
+        Read back per block and per quadratic row, in row order.
+        """
+        import numpy as np
+
+        gurobipy = _gurobipy()
+        self._m.computeIIS()
+        try:
+            if not self._m.IISMinimal:
+                return None
+        except (AttributeError, gurobipy.GurobiError):
+            return None
+        slices = [np.asarray(block.IISConstr, dtype=bool) for block in self._blocks]
+        slices += [np.asarray([row.IISQConstr], dtype=bool) for row in self._qrows]
+        rows = np.concatenate(slices) if slices else np.empty(0, dtype=bool)
+        return InfeasibleSubsystemIndices(
+            np.flatnonzero(rows),
+            np.flatnonzero(np.asarray(self._x.IISLB, dtype=bool)),
+            np.flatnonzero(np.asarray(self._x.IISUB, dtype=bool)),
         )
 
     def forget(self) -> None:

@@ -2,7 +2,7 @@
 
 What to read when a model solves to the wrong number, or does not solve, in
 the order that finds the fault soonest. Each step needs the file, or the file
-and its data, and none needs a solver run you have not already paid for.
+and its data.
 
 ## 1. Check the file
 
@@ -48,18 +48,26 @@ mask; a coefficient you did not expect is the data
 
 ## 4. When the solve is infeasible
 
+Ask for the IIS (irreducible infeasible subsystem): the rows and bounds that
+cannot all hold.
+
 ```python
-result = model.solve()
-result.status, result.termination_condition  # 'warning', 'infeasible'
-result.has_primal  # False: nothing to read, and every reader raises
+model.solve().termination_condition  # 'infeasible'
+print(model.infeasible_subsystem())
+# power_balance[snapshot=2] == 180
+# p[snapshot=2, generator=gas] <= 100 (upper bound)
+# p[snapshot=2, generator=wind] <= 50 (upper bound)
 ```
 
-There is no IIS (irreducible infeasible subsystem) read-back. Locate the
-fault instead with a slack: add a variable to the balance row, minimise it,
-and read where it is nonzero. The
+Drop any one line and the rest can hold. Read the terms of a row with
+`model.row`, as in step 3
+([`Model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem)).
+
+HiGHS can find no IIS where integer variables cause the conflict. Solve with
+`gurobi` or `xpress`, or add a slack to the row, minimise it, and read where
+it is nonzero, as the
 [feasibility model](../about/decomposition.md#when-the-subproblem-is-infeasible)
-is that file for a dispatch. Then read the row at a snapshot the slack lands
-on, as in step 3.
+does.
 
 ## 5. When the number is wrong and the rows look right
 
