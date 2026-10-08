@@ -587,6 +587,7 @@ is structure.
 | `relational/engine/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
 | `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `ANSWER_LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
+| `relational/names.py` | the columns specsolve writes beside a spec's own — `value`, and the `specsolve_` prefix with `specsolve_run` and `specsolve_position` under it — and the refusals that keep a declared name off them. Every module that names one imports it from here |
 | `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; the oracle declares what it builds in the same vocabulary (`tests/linopy_lane/builder.py`) |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/relational/sinks/README.md) |

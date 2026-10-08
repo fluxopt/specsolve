@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.inputs import ArrowTable
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -103,7 +104,7 @@ def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | N
         return None
     if series.index.name is None:
         series = series.rename_axis(dims[0])
-    return series.rename('value').reset_index()
+    return series.rename(VALUE).reset_index()
 
 
 def _from_pandas(frame: pd.DataFrame) -> pl.LazyFrame:

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
 import polars as pl
 
 from specsolve.errors import LayoutError, SpecsolveError
+from specsolve.relational.names import RUN
 from specsolve.relational.status import SolveStatus, status_of
 
 if TYPE_CHECKING:
@@ -36,49 +37,6 @@ KINDS = ('primal', 'dual', 'expression')
 #: The directory a saved result keeps each constraint's activity under,
 #: beside the [`KINDS`][]; a sweep saves none.
 ACTIVITY = 'activity'
-
-#: The prefix reserved, in any letter case, for the columns specsolve adds, so
-#: that no name a spec declares can collide with one.
-RESERVED = 'specsolve_'
-
-
-def refuse_reserved(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it starts with [`RESERVED`][] in any letter case.
-
-    Raises:
-        SpecsolveError: A name a column specsolve adds could collide with.
-    """
-    if name.casefold().startswith(RESERVED):
-        raise SpecsolveError(
-            f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
-            f'specsolve adds, so it could collide with one. Rename it.'
-        )
-
-
-#: The column that holds the numbers beside a declaration's dimensions, in a
-#: parameter's table and in every frame an answer comes back as. Besides the
-#: names under [`RESERVED`][], it is the one name a dimension may not take.
-VALUE = 'value'
-
-
-def refuse_value(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it is [`VALUE`][] in any letter case.
-
-    Raises:
-        SpecsolveError: A name the ``value`` column would collide with.
-    """
-    if name.casefold() == VALUE:
-        raise SpecsolveError(
-            f'{which} has the name of the column {VALUE!r}, which holds the numbers beside the dimensions '
-            f"in a parameter's table and in every frame an answer comes back as. Query engines read column "
-            f'names without case, so the two columns would collide in any letter case. Rename it.'
-        )
-
-
-#: The column an archive adds to every table it holds, naming the run the
-#: table came from. Read back, a frame comes without it.
-RUN = f'{RESERVED}run'
-
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.

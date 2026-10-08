@@ -17,6 +17,7 @@ from specsolve.relational.collect import collected
 from specsolve.relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
 from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
 from specsolve.relational.engine.scope import join_on
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -107,7 +108,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
 
     width_name = s.width if isinstance(s.width, str) else None
     if width_name is not None:
-        widest = int(scope.data.parameters[width_name].select(pl.col('value').max()).pipe(collected).item() or 0)
+        widest = int(scope.data.parameters[width_name].select(pl.col(VALUE).max()).pipe(collected).item() or 0)
     else:
         assert not isinstance(s.width, str)
         widest = s.width
@@ -284,6 +285,6 @@ def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[p
     keys = [order.grouping.column_of(d) or d for d in dims]
     frame = scope.data.parameters[name].select(
         *(pl.col(d).alias(key) for d, key in zip(dims, keys, strict=True)),
-        pl.col('value').cast(pl.Int64).alias(alias),
+        pl.col(VALUE).cast(pl.Int64).alias(alias),
     )
     return frame, keys

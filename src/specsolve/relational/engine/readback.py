@@ -12,6 +12,7 @@ from specsolve.messages import coordinate_expr, unknown_name_message
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
+from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow
 
 if TYPE_CHECKING:
@@ -184,15 +185,15 @@ def _aligned(
             f'answer. Re-solve rather than read.'
         )
     if not dims:
-        return stored['value'].rename(_SOLUTION)
+        return stored[VALUE].rename(_SOLUTION)
     order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
-    if joined['value'].null_count():
+    if joined[VALUE].null_count():
         raise SpecsolveError(
             f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
-    return joined['value'].rename(_SOLUTION)
+    return joined[VALUE].rename(_SOLUTION)
 
 
 def readers(
@@ -248,7 +249,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).pipe(collected)
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 

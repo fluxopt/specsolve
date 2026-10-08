@@ -18,8 +18,8 @@ from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.messages import coordinate_text, coordinates_text
-from specsolve.relational.answer_layout import RESERVED
 from specsolve.relational.collect import collected
+from specsolve.relational.names import POSITION, VALUE
 
 if TYPE_CHECKING:
     from mathspec.program import DimensionDeclaration, ParameterDeclaration, Program, RelationDeclaration
@@ -90,10 +90,6 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
     validate_assumptions(program, sources)
     return sources
-
-
-#: The column a dimension's table numbers its labels in, from 0 in index order.
-POSITION = f'{RESERVED}position'
 
 
 def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
@@ -412,7 +408,7 @@ def _parameter_frame(
         raise DataError(
             f"parameter '{name}': a pandas Series with a MultiIndex is not a source. An index is "
             f'a pandas idea with no counterpart in the frames a build reads, and its depth is a '
-            f"second claim about what '{name}' is over. Pass a tidy frame carrying {[*p.dims, 'value']} — "
+            f"second claim about what '{name}' is over. Pass a tidy frame carrying {[*p.dims, VALUE]} — "
             f'series.reset_index() is the whole change.'
         )
     table = as_frame(obj, p.dims)
@@ -434,10 +430,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
     else:
         least = (
-            _parameter_frame(name, program.parameters[name], obj, {})
-            .select(pl.col('value').min())
-            .pipe(collected)
-            .item()
+            _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
         )
     return 0 if least is None else int(least)
 
@@ -456,7 +449,7 @@ def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, p
     if isinstance(obj, Mapping):
         if len(dims) != 1:
             raise DataError(_wrong_rank(name, 'a dict maps one label to one value', dims))
-        return pl.LazyFrame({dims[0]: list(obj.keys()), 'value': list(obj.values())})
+        return pl.LazyFrame({dims[0]: list(obj.keys()), VALUE: list(obj.values())})
 
     if isinstance(obj, bool):
         return _broadcast(name, pl.lit(obj, dtype=pl.Boolean), dims, sources)
@@ -474,12 +467,12 @@ def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, p
                 f"'{dims[0]}' labels. A sequence is positional, so it must have "
                 f'one entry per label, in the order the index declares them.'
             )
-        return pl.LazyFrame({dims[0]: labels, 'value': values})
+        return pl.LazyFrame({dims[0]: labels, VALUE: values})
 
     raise DataError(
         f"parameter '{name}': cannot adapt {type(obj).__name__} to a tidy "
         f'table — pass any table polars can read with columns '
-        f'{[*dims, "value"]} (polars, pyarrow, pandas), a parquet path, or the '
+        f'{[*dims, VALUE]} (polars, pyarrow, pandas), a parquet path, or the '
         f'plain-Python shapes: a dict, a sequence, or one number.'
     )
 
@@ -487,8 +480,7 @@ def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, p
 def _wrong_rank(name: str, said: str, dims: Sequence[str]) -> str:
     """One wording for a plain-Python shape against the dims it cannot cover."""
     return (
-        f"parameter '{name}': {said}, and '{name}' is over {dims}. Pass a table "
-        f'with columns {[*dims, "value"]} instead.'
+        f"parameter '{name}': {said}, and '{name}' is over {dims}. Pass a table with columns {[*dims, VALUE]} instead."
     )
 
 
@@ -497,7 +489,7 @@ def _broadcast(name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[
     frame = pl.LazyFrame({'__one__': [0]})
     for dim in dims:
         frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources)}), how='cross')
-    return frame.drop('__one__').with_columns(value.alias('value'))
+    return frame.drop('__one__').with_columns(value.alias(VALUE))
 
 
 def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[Label]:
@@ -529,12 +521,12 @@ def _checked_parameter(
             for one coordinate or a label its dimension lacks, carries a null
             or NaN value, or types the column differently from the declaration.
     """
-    wanted = [*p.dims, 'value']
+    wanted = [*p.dims, VALUE]
     available = table.collect_schema().names()
     if missing := set(wanted) - set(available):
         raise DataError(
             f"source for parameter '{name}' is missing columns {sorted(missing)} "
-            f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
+            f'(need dims {list(p.dims)} plus {VALUE!r}; has {available}). Rename them to '
             f'the declared dims, or drop the index names to attach positionally.'
         )
     frame = in_microseconds(table.select(wanted).pipe(collected), f"parameter '{name}'")
@@ -599,8 +591,8 @@ def _check_one_row_per_coordinate(
 
 def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read."""
-    value = pl.col('value')
-    holed = value.is_null() | value.is_nan() if frame.schema['value'].is_float() else value.is_null()
+    value = pl.col(VALUE)
+    holed = value.is_null() | value.is_nan() if frame.schema[VALUE].is_float() else value.is_null()
     holes = int(frame.select(holed.sum()).item())
     if not holes:
         return
@@ -610,7 +602,7 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
         f"parameter '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
         f'In long form the absence of a value is the absence of the row, and such a row '
         f'says the coordinate exists and denies it in the same breath.\n'
-        f'  Drop them     polars .drop_nulls("value").drop_nans("value"), pandas .dropna(subset=["value"])\n'
+        f'  Drop them     polars .drop_nulls({VALUE!r}).drop_nans({VALUE!r}), pandas .dropna(subset=[{VALUE!r}])\n'
         f'  Supply them   if a number was what was meant'
     )
 
@@ -637,7 +629,7 @@ def _check_value_dtype(name: str, p: ParameterDeclaration, frame: pl.DataFrame) 
     Asked after the holes, so a column of nothing but nulls — which polars
     types ``Null`` — is told it has no values rather than the wrong kind.
     """
-    column = frame.schema['value']
+    column = frame.schema[VALUE]
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
     arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
