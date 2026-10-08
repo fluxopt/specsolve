@@ -85,22 +85,19 @@ names; a bare relation holds each row at most once.
 value is null or NaN. Polars and parquet write a hole as a null, pandas has
 only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 
-**An infinite value is a limit, never a coefficient.** A parameter may hold
-`inf` or `-inf`, as PyPSA's `p_nom_max` and `e_sum_max` do. As a bound, or on
-a constraint's constant side, it means "no limit": `x <= inf` holds for every
-`x`. Where it multiplies a variable, or a variable is divided by zero, there is
-no coefficient for the solver, so the build refuses it. A quotient follows the
-same rule:
+**A number the model computes is finite.** A coefficient, a constant side and
+the objective constant each need a finite number, so the build refuses a value
+that is not finite wherever the model divides, or wherever a value multiplies a
+variable:
 
-| The model reads | Where it lands | The build |
-|---|---|---|
-| `x / d`, `d` zero | a coefficient | refuses it |
-| `x * p`, `p` infinite | a coefficient | refuses it |
-| `h / d`, `d` zero, `h` not zero | a constant: `±inf` | keeps it as a limit |
-| `h / d`, both zero | a constant: NaN | refuses it |
-| `h`, `h` infinite | a constant | keeps it as a limit |
+| The model reads | The build |
+|---|---|
+| `x / d` or `h / d`, `d` zero | refuses it: there is no quotient |
+| `x * p`, `p` infinite | refuses it: there is no coefficient |
+| `h` on a constant side, `h` infinite | keeps it: `x <= inf` never binds |
 
-A reported value follows its own rule: a reported quotient by zero is absent
+An infinite value in the data is accepted as a bound or on a constant side,
+where it is a limit that never binds. A reported quotient by zero is absent
 ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
 
 ### Refused
@@ -138,8 +135,7 @@ A reported value follows its own rule: a reported quotient by zero is absent
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
 | a divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
-| a coefficient that is not finite, from a divisor that is zero or a value that is infinite | names the declaration and how many |
-| a constant that is NaN, from `0 / 0` | names the declaration and how many |
+| a value that is not finite, from a divisor that is zero or an infinite value times a variable | names the declaration and how many |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
 
