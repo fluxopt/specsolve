@@ -292,10 +292,9 @@ def join_mul(a: Piece, c: Piece, kind: Kind, divide: bool = False) -> Piece:
     The right-hand value is renamed first: a suffix collision on ``cval`` would
     multiply a column by itself. A divide joins left, so a coordinate the
     divisor has no value for yields a null coefficient rather than dropping the
-    term, and one where it is zero a NaN ([`_quotient`][]); a coordinate where
-    the divisor is absent leaves the frame, the quotient being absent too. The
-    presences of both sides travel out: at a read *c* may be a variable at its
-    primal.
+    term; a coordinate where the divisor is absent leaves the frame, the
+    quotient being absent too. The presences of both sides travel out: at a
+    read *c* may be a variable at its primal.
     """
     joined, out_dims = _paired(a, c, c.frame.rename({'cval': _RHS}), 'left' if divide else 'inner')
     if divide:
@@ -303,7 +302,7 @@ def join_mul(a: Piece, c: Piece, kind: Kind, divide: bool = False) -> Piece:
             joined = presence.restrict(joined, presence.keys(c.dims))
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
-    combined = _quotient(value, rhs) if divide else value * rhs
+    combined = value / rhs if divide else value * rhs
     out = value_column(kind)
     frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
     if kind != 'const':
@@ -321,17 +320,6 @@ def join_mul(a: Piece, c: Piece, kind: Kind, divide: bool = False) -> Piece:
         region=both_regions(a.region, c.region),
         parameters=parameters,
     )
-
-
-def _quotient(value: pl.Expr, divisor: pl.Expr) -> pl.Expr:
-    """*value* over *divisor*, NaN wherever *divisor* is zero, whatever *value* is.
-
-    The NaN is the mark [`coverage`][specsolve.relational.engine.coverage]
-    refuses a zero divisor by. Plain division gives ``inf`` for a non-zero
-    numerator, which a parameter can also hold, so it would not tell the two
-    apart.
-    """
-    return pl.when(divisor == 0).then(float('nan')).otherwise(value / divisor)
 
 
 def join_pow(a: Piece, b: Piece) -> Piece:

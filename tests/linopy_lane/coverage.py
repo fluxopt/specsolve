@@ -19,7 +19,7 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import sparse_divisor_message, uncovered_constant_message, zero_divisor_message
+from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
@@ -159,7 +159,7 @@ def check_divisors_cover(
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
             zeros = _zeros_under(evaluate(quotient.divisor), needed)
             if zeros:
-                raise DataError(f'{name}: {zero_divisor_message(", ".join(sorted(params)), zeros)}')
+                raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
 
 
 def _zeros_under(divisor: Any, mask: Any) -> int:

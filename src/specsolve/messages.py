@@ -72,14 +72,13 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
-def zero_divisor_message(name: str, zeros: int) -> str:
-    """The message for a divisor parameter that is zero where the model divides by it."""
+def non_finite_message(divisors: str, count: int) -> str:
+    """The message for coefficients that are not finite, where the model divides by *divisors* or reads a value."""
+    by = f" where the model divides by '{divisors}'" if divisors else ''
     return (
-        f"parameter '{name}' is used as a divisor and is zero at {zeros} of the "
-        f'coordinates the model divides at. A quotient by zero has no value, so '
-        f'there is no coefficient to build there.\n'
-        f'  Supply a non-zero value, or mask the coordinates out with a where '
-        f'that admits only a non-zero divisor.'
+        f'{count} coefficient(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
+        f'and neither leaves a number to build.\n'
+        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
     )
 
 

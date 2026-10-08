@@ -493,8 +493,10 @@ def test_a_zero_divisor_in_a_constraint_is_refused_on_both_lanes(patch, data):
     Both lanes divided by the zero and handed the solver an infinite or NaN
     coefficient with no error: `x * r / r >= 1` reported `infeasible`.
     """
-    message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), data, match="parameter 'd' is used as a divisor")
-    assert 'is zero at 1 ' in message, 'the message counts the one coordinate where the divisor is zero'
+    message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), data, match="where the model divides by 'd'")
+    assert '1 coefficient(s) are not finite' in message, (
+        'the message counts the one coordinate the zero divisor reaches'
+    )
 
 
 def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
@@ -511,9 +513,9 @@ def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
             'objective.expression': 'sum(x * d / d, over=f)',
         },
     )
-    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
+    with pytest.raises(DataError, match=r"1 coefficient\(s\) are not finite where the model divides by 'd'"):
         sps.build(spec, ZERO_D).close()
-    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
+    with pytest.raises(DataError, match=r"1 coefficient\(s\) are not finite where the model divides by 'd'"):
         specsolve_linopy.build(schema_of(spec).expand(), ZERO_D)
 
 
@@ -545,7 +547,7 @@ SCALAR_ZERO_DATA = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index([
 def test_a_zero_scalar_divisor_on_a_constant_side_is_refused_on_both_lanes(expression):
     """A divisor with no dimensions is asked like any other."""
     spec = override(DIVISOR_SPEC, **SCALAR_ZERO, **{'constraints.c.expression': expression})
-    both_lanes_refuse(spec, SCALAR_ZERO_DATA, match="parameter 'r' is used as a divisor and is zero")
+    both_lanes_refuse(spec, SCALAR_ZERO_DATA, match="are not finite where the model divides by 'r'")
 
 
 def test_a_zero_scalar_divisor_in_the_objective_constant_is_refused():
@@ -556,8 +558,25 @@ def test_a_zero_scalar_divisor_in_the_objective_constant_is_refused():
     any objective constant (#894).
     """
     spec = override(DIVISOR_SPEC, **SCALAR_ZERO, **{'objective.expression': 'sum(x, over=f) + 5 / r'})
-    with pytest.raises(DataError, match="objective: parameter 'r' is used as a divisor and is zero"):
+    with pytest.raises(
+        DataError, match="objective: 1 coefficient\\(s\\) are not finite where the model divides by 'r'"
+    ):
         sps.build(spec, SCALAR_ZERO_DATA).close()
+
+
+def test_an_infinite_value_as_a_coefficient_is_refused():
+    """A cost of ``inf`` reached the solver as a coefficient, and the solve reported optimal at 0.0.
+
+    The check counts any coefficient that is not finite, so it refuses this
+    as it refuses a zero divisor. Only the relational lane is asked: the
+    linopy lane is the oracle for the divisor case alone.
+    """
+    spec = override(DIVISOR_SPEC, **{'objective.expression': 'sum(x * d, over=f)'})
+    data = {'f': ['a', 'b'], 'd': pd.Series([2.0, float('inf')], index=pd.Index(['a', 'b'], name='f'))}
+    with pytest.raises(
+        DataError, match=r'objective: 1 coefficient\(s\) are not finite: a divisor is zero there, or a value'
+    ):
+        sps.build(spec, data).close()
 
 
 #: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent
