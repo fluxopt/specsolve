@@ -14,12 +14,13 @@ Example::
 """
 
 from specsolve.api import Model
-from specsolve.archive import ResultArchive, SweepArchive
+from specsolve.archive import ArchivedInputs, ResultArchive, SweepArchive
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Result
 from specsolve.sweep import Sweep
 
 __all__ = [
+    'ArchivedInputs',
     'ConstraintRow',
     'Diagnostics',
     'InfeasibleSubsystem',

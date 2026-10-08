@@ -99,6 +99,10 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
     options:
       heading_level: 4
 
+::: specsolve.types.ArchivedInputs
+    options:
+      heading_level: 4
+
 The rows and frames those hand back: how a solve terminated, what produced
 it, what the build and its solves took, and what a slice of a sweep took.
 
@@ -121,6 +125,10 @@ it, what the build and its solves took, and what a slice of a sweep took.
 ### Read an answer back
 
 ::: specsolve.load_archive
+    options:
+      heading_level: 4
+
+::: specsolve.load_inputs
     options:
       heading_level: 4
 
