@@ -168,15 +168,22 @@ def ordered_sum(column: str) -> pl.Expr:
 
 
 def ordered_sum_per(frame: pl.LazyFrame, keys: Sequence[str], column: str) -> pl.LazyFrame:
-    """*column* added up per *keys* as [`ordered_sum`][] adds it: ``(keys…, column)``.
+    """*column* added up per *keys*, to one total to the last bit whatever order the rows arrive in: ``(keys…, column)``.
 
-    A sum of one or two values is the same in either order, so only a key with
-    three or more rows takes the sort, which polars runs per group, off its
-    fast path; most keys of a constant piece hold one row.
+    A sum of one or two values is the same in either order, so those keys take
+    polars' plain ``sum``. A key with more rows gathers them into a list,
+    sorts it and sums it; a list sums its elements in their order. Gathering
+    stays on polars' fast path, where [`ordered_sum`][] in the aggregate does
+    not.
     """
     counted = frame.with_columns(pl.len().over(keys).alias('#rows'))
     few = counted.filter(pl.col('#rows') <= 2).group_by(keys).agg(pl.col(column).sum())
-    many = counted.filter(pl.col('#rows') > 2).group_by(keys).agg(ordered_sum(column))
+    many = (
+        counted.filter(pl.col('#rows') > 2)
+        .group_by(keys)
+        .agg(pl.col(column))
+        .with_columns(pl.col(column).list.sort().list.sum())
+    )
     return pl.concat([few, many])
 
 
