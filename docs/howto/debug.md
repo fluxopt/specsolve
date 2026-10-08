@@ -37,7 +37,7 @@ you have is the difference between a `where:` you wrote and a row you lost
 
 ```python
 print(model.row('power_balance', snapshot=2))
-# power_balance[snapshot=2]: +1 p[2, wind] +1 p[2, gas] == 180
+# power_balance[snapshot=2]: +1 p[snapshot=2, generator=wind] +1 p[snapshot=2, generator=gas] == 180
 ```
 
 The line is the row as the solver got it: every coefficient the data
@@ -78,7 +78,7 @@ constraint as written:
 
 ## 6. When a loop of re-solves is slow
 
-Compare `keep='solver'` with `keep='progress'` on the loop, as
-[warm-starting a re-solve](warm-start.md#check-that-it-pays) shows. A `kept`
-of `'nothing'` on every iteration means each update moved a mask, so the loop
-pays for a rebuild, not for the solve.
+Compare the loop with the default and with `start=None`, as
+[warm-starting a re-solve](warm-start.md#check-that-it-pays) shows. A
+`diagnostics().loads` that counts every iteration means each update moved a
+mask, so the loop pays for loading the solver, not for the solve.

@@ -414,5 +414,5 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
     bare = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
-    vacated = q.expression(bare, 'test').consts[0].frame.collect()
+    vacated = q.expression(bare, 'test').consts[0].frame.collect().sort('snapshot')
     assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

@@ -7,15 +7,19 @@ this module needs neither.
 from __future__ import annotations
 
 import weakref
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
+    Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
-    WarmStart,
+    basis_codes,
+    solver_codes,
     solver_vector,
     spelled_senses,
 )
@@ -101,6 +105,7 @@ class Gurobi(Solver):
 
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
+    lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset(
             {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
@@ -146,34 +151,36 @@ class Gurobi(Solver):
         _set_quadratic(self._m, self._x, handoff, cols.cost)
         self._m.update()
 
-    def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, else its incumbent, else ``None``; Gurobi refuses ``VBasis`` without one."""
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``VBasis`` and ``CBasis``, which Gurobi refuses where it holds no basis; each status is ``0`` or below, so negated it indexes."""
         import numpy as np
 
         gurobipy = _gurobipy()
         try:
-            columns = np.asarray(self._x.VBasis, dtype=np.int32)
-            slices = [np.asarray(block.CBasis, dtype=np.int32) for block in self._blocks]
+            columns = np.asarray(self._x.VBasis, dtype=np.int64)
+            slices = [np.asarray(block.CBasis, dtype=np.int64) for block in self._blocks]
         except (AttributeError, gurobipy.GurobiError):
-            if self._m.SolCount > 0:
-                values = np.asarray(self._x.X, dtype=np.float64)
-                return WarmStart(solver='gurobi', column_statuses=None, row_statuses=None, column_values=values)
             return None
-        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int32)
-        return WarmStart(solver='gurobi', column_statuses=columns, row_statuses=rows, column_values=None)
+        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int64)
+        return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
-    def _warm(self, ws: WarmStart) -> None:
-        """``VBasis``/``CBasis`` for a basis, ``Start`` for an incumbent."""
-        if (basis := ws.basis()) is not None:
-            column_statuses, row_statuses = basis
-            self._x.VBasis = column_statuses
-            for block, rows in self._per_block(row_statuses):
-                block.CBasis = rows
+    def _warm(self, basis: Basis) -> None:
+        """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
+        self._x.VBasis = solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
+        rows = solver_codes(basis.rows, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -1, FIXED: -1, SUPERBASIC: -1})
+        for block, part in self._per_block(rows):
+            block.CBasis = part
+        self._m.update()
+
+    def _start(self, values: Any) -> None:
+        """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
+        import numpy as np
+
+        given = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
+        if self._m.IsMIP:
+            self._x.Start = given
         else:
-            assert ws.column_values is not None, (
-                'a warm start with no basis carries an incumbent — it holds nothing else'
-            )
-            self._x.Start = ws.column_values
+            self._x.PStart = given
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:

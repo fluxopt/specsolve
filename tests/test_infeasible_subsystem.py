@@ -117,7 +117,8 @@ def test_the_last_solve_is_the_one_explained(solver_name: str) -> None:
     with sps.build(SHORT, SOURCES) as model:
         model.solve(solver_name)
         model.update({'demand': pl.DataFrame({'snapshot': [0, 1], 'value': [200.0, 60.0]})})
-        assert model.solve(solver_name).kept == 'solver', 'only numbers moved, so the solver kept the model'
+        model.solve(solver_name)
+        assert model.diagnostics().loads == 1, 'only numbers moved, so the solver kept the model'
         found = model.infeasible_subsystem()
     assert found.constraints['balance'].to_dicts() == [{'snapshot': 0, 'sense': '==', 'rhs': 200.0}], (
         'the shortfall is at snapshot 0 now'
@@ -157,7 +158,7 @@ def _solved_then_closed(model: Any) -> None:
 
 
 def _solved_then_broken(model: Any) -> None:
-    """A second solve whose run raises after its load: the solver no longer holds what the first solved."""
+    """A second solve from nothing whose run raises: the solver no longer holds what the first solved."""
     from specsolve.relational.sinks.solvers.highs import Highs
 
     def broken(self: Highs, handoff: object) -> None:
@@ -167,7 +168,7 @@ def _solved_then_broken(model: Any) -> None:
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(Highs, '_run', broken)
         with pytest.raises(RuntimeError, match='the run broke'):
-            model.solve(keep='nothing')
+            model.solve(start=None)
 
 
 def _solved_feasible(model: Any) -> None:

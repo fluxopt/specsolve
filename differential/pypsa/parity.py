@@ -845,7 +845,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     same_model(stem, full, model)
     declared = mathspec.to_spec(cut)
     committed(stem, spec.name, declared, cut_sources)
-    result = model.solve(solver_name='highs')
+    result = model.solve(solver_name='highs', outputs={'activity'})
     assert result.is_ok, f'{stem}: specsolve did not solve — {result.termination_condition}'
     if bug is None:
         n = solved(stem, n)

@@ -26,7 +26,6 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve import sweep as sweep_module
-from specsolve.api import Model
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -348,30 +347,6 @@ def test_every_slice_of_every_kind_of_sweep_names_what_produced_it(swept, tmp_pa
     assert set(record.select(Provenance._fields).rows()) == {produced}, (
         'every slice names the solver, its options and the versions that answered it'
     )
-
-
-def test_a_fold_passes_its_keep_to_every_slice_and_chooses_none(monkeypatch):
-    """`keep` reaches each slice as asked, and the default is `solve`'s.
-
-    The request is invisible in the answer and in `loads`, so it is read off
-    the call. `kept` would test the data instead: a slice whose labels moved is
-    loaded again and keeps `nothing`.
-    """
-    asked: list[object] = []
-    original = Model.solve
-
-    def recording(self, *args, **kwargs):
-        asked.append(kwargs.get('keep'))
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(Model, 'solve', recording)
-
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'))
-    assert asked == ['solver'] * 3, f'the fold defaulted to {asked}, not solve()s own default'
-
-    asked.clear()
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), keep='progress')
-    assert asked == ['progress'] * 3, f'the fold asked for {asked}, not what the caller chose'
 
 
 def test_a_serial_fold_builds_once_and_updates(builds):
@@ -2166,9 +2141,14 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 
 
-def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_path):
+def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     """A rolling horizon interrupted after two windows continues from the
-    second window's file, and ends where an uninterrupted one does."""
+    second window's file, and ends where an uninterrupted one does.
+
+    Both start each window from nothing: the resumed run builds the third
+    window afresh, so a carried-on solve could end on another vertex of the
+    same optimum.
+    """
     answered = strategy._answers
     seen: list[int] = []
 
@@ -2180,15 +2160,16 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(priced, monkeypatch, tmp_p
 
     monkeypatch.setattr(strategy, '_answers', two_then_fail)
     with pytest.raises(RuntimeError, match='went away'):
-        _spilled(tmp_path)
+        _spilled(tmp_path, start=None)
     monkeypatch.setattr(strategy, '_answers', answered)
     assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
-    resumed = _spilled(tmp_path)
-    assert answer_of(resumed).equals(answer_of(priced))
-    assert resumed.scan('soc').collect().equals(priced.primal('soc'))
-    assert resumed.scan('soc', per_window=True).collect().equals(priced.primal('soc', per_window=True))
-    loads = priced.metrics['loads'].to_list()
+    resumed = _spilled(tmp_path, start=None)
+    cold = sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, start=None)
+    assert answer_of(resumed).equals(answer_of(cold))
+    assert resumed.scan('soc').collect().equals(cold.primal('soc'))
+    assert resumed.scan('soc', per_window=True).collect().equals(cold.primal('soc', per_window=True))
+    loads = cold.metrics['loads'].to_list()
     loads[2] = 1
     assert resumed.metrics['loads'].to_list() == loads, (
         'the two read back are the record they left, and the third loads where the uninterrupted run updated'

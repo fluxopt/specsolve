@@ -7,14 +7,18 @@ stays free for a caller who never solves with it.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
+    Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
-    WarmStart,
+    basis_codes,
+    solver_codes,
     solver_vector,
     spelled_senses,
 )
@@ -42,9 +46,8 @@ _CONDITION_OF_SOL_STATUS = {
 #: ``OPTIMAL`` and ``FEASIBLE``, by value: the solution statuses that carry values.
 _HAS_PRIMAL = frozenset({1, 2})
 
-#: ``SolveStatus.UNSTARTED`` and ``SolveStatus.FAILED``, by value: whether there
-#: has been a run, and whether it errored, which ``solstatus`` cannot say.
-_SOLVE_UNSTARTED = 0
+#: ``SolveStatus.FAILED``, by value: whether the run errored, which
+#: ``solstatus`` cannot say.
 _SOLVE_FAILED = 2
 
 
@@ -78,6 +81,7 @@ class Xpress(Solver):
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
     #: sink does not hand it one.
+    lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'refused'})
     capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
@@ -102,41 +106,42 @@ class Xpress(Solver):
         self._p.chgObj(np.append(every, -1), np.append(cols.cost, -handoff.objective_constant))
         self._p.chgRHS(np.arange(handoff.row_count, dtype=np.int64), handoff.dense_rows(xpress.infinity).rhs)
 
-    def warm_start(self) -> WarmStart | None:
-        """The basis the last solve left, its incumbent after a MIP, or ``None``.
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``getBasis``, which returns rows first; each status is ``0`` at lower, ``1`` basic, ``2`` at upper, ``3`` superbasic.
 
-        Xpress hands back a trivial all-slack basis before any solve and after a
-        MIP, so both are asked of the problem directly. ``getBasis`` returns
-        ``(rows, columns)``, the opposite of [`WarmStart`][]'s order.
+        After a mixed-integer solve Xpress hands back a trivial all-slack
+        basis rather than none, so that is asked of the problem directly; after
+        a barrier run without crossover it refuses.
         """
+        if int(self._p.attributes.mipents):
+            return None
+        try:
+            rows, columns = self._p.getBasis()
+        except _xpress().SolverError:
+            return None
+        codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC)
+        return basis_codes(columns, codes), basis_codes(rows, codes)
+
+    def _warm(self, basis: Basis) -> None:
+        """``loadBasis``, which takes rows first, with ``keepbasis`` back on.
+
+        A row's status is its slack's, and a binding ``<=`` row holds its
+        slack at ``0`` and a binding ``>=`` row at ``2``.
+        """
+        self._p.controls.keepbasis = 1
+        rows = solver_codes(basis.rows, {BASIC: 1, AT_LOWER: 2, AT_UPPER: 0, FIXED: 0, SUPERBASIC: 3})
+        columns = solver_codes(basis.columns, {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3})
+        self._p.loadBasis(rows, columns)
+
+    def _start(self, values: Any) -> None:
+        """``addMipSol`` over the columns given a value, or for an LP ``loadLPSol``, which takes only a value for every column."""
         import numpy as np
 
-        if int(self._p.attributes.solvestatus) == _SOLVE_UNSTARTED:
-            return None
-        if int(self._p.attributes.mipents):
-            if int(self._p.attributes.solstatus) not in _HAS_PRIMAL:
-                return None
-            values = np.asarray(self._p.getSolution(), dtype=np.float64)
-            return WarmStart(solver='xpress', column_statuses=None, row_statuses=None, column_values=values)
-        rows, columns = self._p.getBasis()
-        return WarmStart(
-            solver='xpress',
-            column_statuses=np.asarray(columns, dtype=np.int32),
-            row_statuses=np.asarray(rows, dtype=np.int32),
-            column_values=None,
-        )
-
-    def _warm(self, ws: WarmStart) -> None:
-        """``loadBasis`` for a basis, ``addMipSol`` for an incumbent; a basis turns ``keepbasis`` back on."""
-        if (basis := ws.basis()) is not None:
-            column_statuses, row_statuses = basis
-            self._p.controls.keepbasis = 1
-            self._p.loadBasis(row_statuses, column_statuses)
-        else:
-            assert ws.column_values is not None, (
-                'a warm start with no basis carries an incumbent — it holds nothing else'
-            )
-            self._p.addMipSol(ws.column_values)
+        if not int(self._p.attributes.mipents):
+            self._p.loadLPSol(values, None, None, None)
+            return
+        given = np.flatnonzero(~np.isnan(values))
+        self._p.addMipSol(values[given], given)
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """Solve what is loaded and read it back; the objective constant is already in the model."""

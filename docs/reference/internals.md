@@ -121,17 +121,29 @@ Each entry says what the thing is, then the module it lives in.
   rebuilt model (`relational/sinks/handoff.py`).
 
 **Warm start**
-: A basis or an incumbent read out of one solve and set on the next. No
-  caller uses it yet ([#382](https://github.com/fluxopt/specsolve/issues/382);
+: What a solve starts from instead of from scratch, laid onto the build by
+  coordinate, so a model that gained or lost rows or columns takes it too: a
+  basis or values for an LP, values for a mixed-integer model. `solve(start=)` is its
+  caller (`relational/engine/readback.py`,
   `relational/sinks/solvers/base.py`).
 
 ## Answers on disk
 
 **Kind**
-: One of the three frames a solve answers with, `primal`, `dual` and
-  `expression`, named after the reader each comes back through. Each kind is
-  also the directory its frames are saved under. A saved result also holds
-  `activity/` (`relational/answer_layout.py`).
+: One of the frames an answer holds, named after the reader it comes back
+  through: `primal`, `dual` and `expression` always, and each output the solve
+  asked for with `outputs=`, such as `activity`. Each kind is also the
+  directory its frames are saved under (`relational/answer_layout.py`).
+
+**Output**
+: What an answer holds only on request, named in `outputs=`. Each carries
+  one kind, of its own name, except `basis`, which carries `variable_basis`
+  and `constraint_basis`. `OUTPUT_KINDS` is the one table: each kind, the
+  output that asks for it, and whether it holds a frame per variable or per
+  constraint. The readers, `kind=`, the fold, the spill,
+  the archive and its catalog all read it. `format.json` names the outputs an answer holds, so a reader tells "not
+  asked for" from "not defined", and a new output adds no `ANSWER_LAYOUT` bump
+  (`relational/answer_layout.py`).
 
 **Answer layout**
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
