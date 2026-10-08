@@ -321,3 +321,13 @@ def test_a_parameter_two_axes_carry_is_refused():
     axes = (sps.EachCoordinate('scenario', carry=carry), sps.EachCoordinate('period', carry=carry))
     with pytest.raises(sps.errors.SpecsolveError, match='Carry each parameter on one axis'):
         sps.solve_over(MYOPIC, {**base, 'demand': demand}, axes)
+
+
+def test_an_outer_carry_makes_its_axis_part_of_the_chain():
+    """Periods hand the fleet on, so they cannot run apart: the whole pathway is one chain, and an executor is refused."""
+    axes = (
+        sps.EachCoordinate('period', carry={'existing': 'capacity'}),
+        replace(WINDOW_AXIS, carry=CARRY),
+    )
+    with ThreadPoolExecutor(2) as executor, pytest.raises(sps.errors.SpecsolveError, match='one chain'):
+        sps.solve_over(BUILDING, building_sources(), axes, executor=executor)
