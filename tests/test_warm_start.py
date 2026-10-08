@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.errors import NoSolutionError
 from specsolve.relational.sinks import SOLVERS
 from specsolve.relational.sinks.solvers.base import Basis
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
@@ -222,6 +223,23 @@ def test_the_last_answer_is_matched_once_an_update_loads_the_solver_again(monkey
         assert model.diagnostics().loads == 2, 'the update loaded the solver again'
     assert matched == ['matched_basis'], 'the answer is laid onto the new build instead'
     assert again.has_primal
+
+
+@pytest.mark.parametrize('last', [pytest.param(True, id='the-last-answer'), pytest.param(False, id='an-older-answer')])
+def test_a_start_from_an_answer_with_no_values_is_refused(last):
+    """An infeasible answer gives nothing to start from, whether or not it is the model's last.
+
+    The last one used to carry on in the solver silently, while an older one
+    was refused.
+    """
+    with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
+        sources = dispatch_sources()
+        infeasible = model.update({'load': sources['load'].with_columns(pl.col('value') * 100)}).solve()
+        assert not infeasible.has_primal, 'a load past every generator leaves no values'
+        if not last:
+            model.solve()
+        with pytest.raises(NoSolutionError):
+            model.solve(start=infeasible)
 
 
 # ---------------------------------------------------------------------------
