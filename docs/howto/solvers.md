@@ -67,9 +67,9 @@ no basis, so `outputs={'basis'}` gives none, and an LP
 values rather than a basis.
 
 **On HiGHS, measure before you turn it on.** On the benchmark models at rung
-`m`, it was the fastest of the three ways only on `transport`, by 14%. Simplex
+`m`, it was the fastest of the three ways only on `transport`, by 13%. Simplex
 was the fastest on `dispatch` and `storage`. On `nodal`, interior point with
-crossover was the fastest, and without crossover it took 28 times as long.
+crossover was the fastest, and without crossover it took 20 times as long.
 Every objective was within 7e-9, relative, of the simplex one
 ([#NNNN](https://github.com/fluxopt/specsolve/pull/NNNN)). Time each way on
 your own model before you keep one.
