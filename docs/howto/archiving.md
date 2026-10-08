@@ -23,6 +23,7 @@ parameter as its dims and `value`, a relation as its columns:
 
 ```text
 case/
+    format.json                   the layout the spec and the sources are in
     spec.yaml
     sources/cost.parquet
     sources/load.parquet
@@ -102,6 +103,32 @@ case = sps.load_archive('case.zip')
 Pass `into=` when you want the extracted tree as well, to query it with an
 engine that reads parquet. A directory archive is read where it lies and
 refuses an `into=`.
+
+## Read the spec and the data alone
+
+**`load_inputs` reads the spec and the data, and never opens `answer/`.** The
+archive stamps the answer and the inputs with two separate layout numbers. A
+release that changes how the answer is laid out makes `load_archive` refuse an
+archive that an earlier release wrote. `load_inputs` still reads that archive,
+so you can solve it again:
+
+```python
+inputs = sps.load_inputs('case/')
+
+sps.solve(inputs.spec, inputs.sources)  # the same question, asked again
+```
+
+A sweep archive also gives back the axes it ran over, each with its carry:
+
+```python
+inputs = sps.load_inputs('roll/')
+
+sps.solve_over(inputs.spec, inputs.sources, inputs.axis)
+```
+
+When the spec and the sources are in an earlier layout too, both readers refuse
+the archive. The message names the files to read by hand: `spec.yaml` with
+`mathspec.to_spec`, and each `sources/<key>.parquet` passed as its path.
 
 ## Read one too big to hold
 

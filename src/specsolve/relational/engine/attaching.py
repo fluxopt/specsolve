@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve.relational.collect import collected
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -43,9 +45,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it.
     """
-    dimensions = {d: _ordinal_frame(d, sources[d]).collect() for d in program.dimensions}
-    relations = {name: sources[name].collect() for name in program.relations}
-    parameters = {name: sources[name].collect() for name in program.parameters}
+    dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
+    relations = {name: sources[name].pipe(collected) for name in program.relations}
+    parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
