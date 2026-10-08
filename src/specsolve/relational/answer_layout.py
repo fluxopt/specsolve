@@ -359,7 +359,7 @@ class Record(NamedTuple):
     #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
     #: A digest of the model this answered — the spec *and* the values of its
-    #: data ([`digest_of_data`][]), where [`spec_digest`][] is the document
+    #: data (``digest_of_data``), where [`spec_digest`][] is the document
     #: alone. ``None`` for an answer that never held one.
     model_digest: str | None = None
     #: What the sweep that solved this called its slices — ``scenario``,
