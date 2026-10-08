@@ -347,6 +347,7 @@ PUBLIC_MODULES = {
         'Record',
         'Result',
         'ResultArchive',
+        'Start',
         'Sweep',
         'SweepArchive',
     },

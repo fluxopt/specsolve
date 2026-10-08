@@ -7,15 +7,13 @@ this module needs neither.
 from __future__ import annotations
 
 import weakref
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    SUPERBASIC,
     Basis,
     SolveAnswer,
     Solver,
@@ -106,6 +104,7 @@ class Gurobi(Solver):
 
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
+    lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset(
             {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
@@ -166,16 +165,21 @@ class Gurobi(Solver):
 
     def _warm(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
-        self._x.VBasis = solver_codes(basis.columns, (0, -1, -2, -1, -3))
-        for block, rows in self._per_block(solver_codes(basis.rows, (0, -1, -1, -1, -1))):
-            block.CBasis = rows
+        self._x.VBasis = solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
+        rows = solver_codes(basis.rows, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -1, FIXED: -1, SUPERBASIC: -1})
+        for block, part in self._per_block(rows):
+            block.CBasis = part
         self._m.update()
 
     def _start(self, values: Any) -> None:
-        """``Start``, ``GRB.UNDEFINED`` where no value is given."""
+        """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
         import numpy as np
 
-        self._x.Start = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
+        given = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
+        if self._m.IsMIP:
+            self._x.Start = given
+        else:
+            self._x.PStart = given
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:

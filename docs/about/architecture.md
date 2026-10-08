@@ -220,8 +220,9 @@ or reaches the plan. The names, by role:
 `ResultArchive` and `SweepArchive`, and `ArchivedInputs`, which carries the spec
 and the data alone. It also holds the rows they hand back:
 `ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`. And it
-holds `Output`, the `Literal` of the names `outputs=` takes, so a caller that
-builds that set can type it. `specsolve.errors` holds the error tree under `SpecsolveError`,
+holds `Output`, the `Literal` of the names `outputs=` takes, and `Start`, the
+`TypedDict` of the tables `start=` takes, so a caller that builds either can
+type it. `specsolve.errors` holds the error tree under `SpecsolveError`,
 `NoSolutionError` and `SpecsolveWarning`.
 
 What each one takes and returns is its docstring, which

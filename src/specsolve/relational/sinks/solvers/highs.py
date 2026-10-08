@@ -7,21 +7,18 @@ so importing this module stays free for callers that only write LP files.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    SUPERBASIC,
     Basis,
     SolveAnswer,
     Solver,
     basis_codes,
-    solver_codes,
     solver_vector,
 )
 from specsolve.relational.status import SolveStatus
@@ -29,6 +26,7 @@ from specsolve.relational.status import SolveStatus
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    import numpy as np
     import polars as pl
 
     from specsolve.relational.sinks.handoff import Handoff, RowVectors
@@ -191,6 +189,7 @@ class Highs(Solver):
 
     #: No SOS concept, and a Hessian beside integrality is refused; the pair is
     #: probed in ``test_sink_capability_probes.py``.
+    lp_values = MappingProxyType({'complete': 'used', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset({'integrality', 'quadratic_objective'}),
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
@@ -229,23 +228,32 @@ class Highs(Solver):
             return None
         codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC, SUPERBASIC)
         return (
-            basis_codes([int(status) for status in basis.col_status], codes),
-            basis_codes([int(status) for status in basis.row_status], codes),
+            basis_codes(_values(basis.col_status), codes),
+            basis_codes(_values(basis.row_status), codes),
         )
 
     def _warm(self, basis: Basis) -> None:
-        """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``."""
-        import highspy
+        """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``.
 
-        native = (1, 0, 2, 0, 3)
+        highspy takes a basis only as a list of ``HighsBasisStatus`` members, so
+        each status is picked from the five members by numpy rather than
+        constructed one call at a time.
+        """
+        import highspy
+        import numpy as np
+
+        native = {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3}
+        members = np.array(
+            [highspy.HighsBasisStatus(native[code]) for code in range(len(BASIS_STATUSES))], dtype=object
+        )
         hint = highspy.HighsBasis()
-        hint.col_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.columns, native)]
-        hint.row_status = [highspy.HighsBasisStatus(int(code)) for code in solver_codes(basis.rows, native)]
+        hint.col_status = members[basis.columns].tolist()
+        hint.row_status = members[basis.rows].tolist()
         hint.valid = True
         _took(self._handle.setBasis(hint), 'the basis')
 
     def _start(self, values: Any) -> None:
-        """``setSolution`` in its sparse form, which completes the columns it is not given."""
+        """``setSolution`` in its sparse form, which completes the columns it is not given, for an LP as for a mixed-integer model."""
         import numpy as np
 
         given = np.flatnonzero(~np.isnan(values)).astype(np.int32)
@@ -348,3 +356,10 @@ def _has_primal(h: Any) -> bool:
     import highspy
 
     return h.getInfo().primal_solution_status == int(highspy.SolutionStatus.kSolutionStatusFeasible)
+
+
+def _values(statuses: list[Any]) -> np.ndarray[tuple[int], np.dtype[np.int64]]:
+    """The integer behind each ``HighsBasisStatus``: highspy hands a basis back only as a list of members."""
+    import numpy as np
+
+    return np.fromiter((status.value for status in statuses), dtype=np.int64, count=len(statuses))

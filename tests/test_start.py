@@ -8,6 +8,8 @@ the oracle for correctness: a start moves the route, never the optimum.
 
 from __future__ import annotations
 
+import warnings
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -16,19 +18,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.errors import SpecsolveError
-from specsolve.relational.answer_layout import NO_BASIS
+from specsolve.errors import SpecsolveError, SpecsolveWarning
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve.relational.engine.readback import _counted
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.solvers.base import (
-    AT_LOWER,
-    AT_UPPER,
-    BASIC,
-    BASIS_STATUSES,
-    FIXED,
-    SUPERBASIC,
-    settled,
-)
+from specsolve.relational.sinks.solvers.base import settled
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
 
@@ -37,7 +31,7 @@ if TYPE_CHECKING:
 
     from specsolve.types import Output, Result
 
-BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+BASIS: frozenset[Output] = frozenset({'basis'})
 
 #: One set of numbers over 44 snapshots, so a build over fewer is a subset of it.
 FULL = dispatch_sources(list(range(44))) | {'snapshot': list(range(44))}
@@ -132,25 +126,73 @@ def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_an_answer_solved_without_its_basis_is_refused_before_the_solver_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+def _as_tables(answer: Result, reader: str) -> dict[str, pl.DataFrame]:
+    """Every table *reader* returns off *answer*, a status as plain text: a start as one written elsewhere would be."""
+    names = DISPATCH['constraints'] if reader == 'constraint_basis' else DISPATCH['variables']
+    return {name: getattr(answer, reader)(name).with_columns(pl.col('value').cast(pl.String)) for name in names}
+
+
+def test_a_basis_given_as_tables_starts_an_lp_as_an_answer_does(solver_name: str) -> None:
+    before, _ = solved(DISPATCH, snapshots(40), solver_name, outputs=BASIS)
+    start = {reader: _as_tables(before, reader) for reader in ('variable_basis', 'constraint_basis')}
+    _, warm = solved(DISPATCH, snapshots(40), solver_name, start=start)
+    assert warm == 0, 'the tables carry the basis the optimum ended on'
+
+
+def test_half_a_basis_is_completed_and_reaches_the_optimum() -> None:
+    """The rows left out start basic and the count is made right, which a solver takes, though it need not pay.
+
+    On this model it does not: the columns alone took more iterations than a
+    cold start, so the claim here is only that the start is taken.
+    """
+    before, _ = solved(DISPATCH, snapshots(40), 'highs', outputs=BASIS)
+    after, _ = solved(DISPATCH, snapshots(40), 'highs', start={'variable_basis': _as_tables(before, 'variable_basis')})
+    assert after.objective == pytest.approx(before.objective), 'a start moves the route, never the optimum'
+
+
+def test_an_lp_answer_without_its_basis_starts_from_its_values() -> None:
+    before, cold = solved(DISPATCH, snapshots(40), 'highs')
+    _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
+    assert warm < cold, 'HiGHS uses a primal that gives every column a value'
+
+
+#: What each sink does with a start of values for an LP, complete and partial.
+#: This is the claim each sink's ``lp_values`` makes, checked against the solve.
+LP_VALUES = {
+    'highs': {'complete': 'used', 'partial': 'no_gain'},
+    'gurobi': {'complete': 'no_gain', 'partial': 'no_gain'},
+    'xpress': {'complete': 'no_gain', 'partial': 'refused'},
+}
+
+
+@pytest.mark.parametrize('given', ['complete', 'partial'])
+def test_a_start_of_values_for_an_lp_is_used_warned_of_or_refused_as_its_sink_says(
+    solver_name: str, given: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from specsolve.relational import sinks
 
-    with sps.solve(DISPATCH, snapshots(40), outputs={'variable_basis'}) as before:
+    before = sps.solve(DISPATCH, snapshots(40), solver_name=solver_name)
+    primal = before.primal('p')
+    start = {'primal': {'p': primal if given == 'complete' else primal.head(primal.height // 2)}}
+    expected = LP_VALUES[solver_name][given]
+    assert sinks.solver(solver_name).lp_values[given] == expected, 'the sink declares what this test observes'
+    if expected == 'refused':
         monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
-        with pytest.raises(SpecsolveError, match=r"without 'constraint_basis'.*outputs=\{'variable_basis', "):
-            sps.solve(DISPATCH, snapshots(40), start=before)
+        with pytest.raises(SpecsolveError, match='leave a column out'):
+            sps.solve(DISPATCH, snapshots(40), solver_name=solver_name, start=start)
+        return
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        after = sps.solve(DISPATCH, snapshots(40), solver_name=solver_name, start=start)
+    warned = [w for w in caught if issubclass(w.category, SpecsolveWarning) and 'no gain' in str(w.message)]
+    assert bool(warned) == (expected == 'no_gain'), 'the solve warns exactly where no gain is known'
+    assert after.objective == pytest.approx(before.objective), 'the sink took the values and still solved'
 
 
-def test_an_answer_that_ended_on_no_basis_says_why() -> None:
+def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
     before = sps.solve(KNAPSACK, knapsack_sources(), outputs=BASIS)
-    with pytest.raises(SpecsolveError, match=NO_BASIS[:40]):
+    with pytest.raises(SpecsolveError, match='no value at any coordinate'):
         sps.solve(DISPATCH, snapshots(40), start=before)
-
-
-def test_an_lp_takes_no_table_of_values() -> None:
-    values = {'p': sps.solve(DISPATCH, snapshots(40)).primal('p')}
-    with pytest.raises(SpecsolveError, match='starts from a basis'):
-        sps.solve(DISPATCH, snapshots(40), start=values)
 
 
 def test_a_closed_answer_is_refused() -> None:
@@ -174,6 +216,9 @@ ROOT_ONLY = {
 
 #: Two items that fit together, worth 8 + 2, far short of the optimum of 56.
 TWO_ITEMS = pl.DataFrame({'item': ['item1', 'item2'], 'value': [1.0, 1.0]})
+
+#: The knapsack's one row, not binding.
+FITS = pl.DataFrame({'value': ['basic']})
 
 
 def _at_the_root(solver_name: str, **solve: Any) -> Result:
@@ -207,19 +252,19 @@ def _shaped(shape: str, tmp_path: Path) -> object:
 @pytest.mark.parametrize('shape', ['polars', 'pandas', 'parquet', 'mapping', 'sequence'])
 def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str, shape: str, tmp_path: Path) -> None:
     """A start takes every shape a parameter's source takes, read by the same reader."""
-    assert _at_the_root(solver_name, start={'take': _shaped(shape, tmp_path)}).objective == pytest.approx(10.0), (
-        'the start, worth 8 + 2, is the incumbent'
-    )
+    assert _at_the_root(solver_name, start={'primal': {'take': _shaped(shape, tmp_path)}}).objective == pytest.approx(
+        10.0
+    ), 'the start, worth 8 + 2, is the incumbent'
 
 
 def test_one_number_starts_every_coordinate(solver_name: str) -> None:
-    assert _at_the_root(solver_name, start={'take': 0.0}).objective == pytest.approx(0.0), (
+    assert _at_the_root(solver_name, start={'primal': {'take': 0.0}}).objective == pytest.approx(0.0), (
         'every item out is the incumbent'
     )
 
 
 def test_a_partial_start_is_completed_by_the_solver(solver_name: str) -> None:
-    answer = _at_the_root(solver_name, start={'take': TWO_ITEMS})
+    answer = _at_the_root(solver_name, start={'primal': {'take': TWO_ITEMS}})
     taken = answer.primal('take').filter(pl.col('item').is_in(['item1', 'item2']))['value']
     assert taken.to_list() == pytest.approx([1.0, 1.0]), 'the items the start names stay in'
     assert answer.objective >= 10.0, 'the solver fills in the items the start leaves out'
@@ -235,15 +280,39 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
 @pytest.mark.parametrize(
     ('start', 'match'),
     [
-        pytest.param({'tkae': TWO_ITEMS}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
         pytest.param(
-            {'take': TWO_ITEMS.rename({'item': 'items'})}, r"missing columns \['item'\]", id='a-column-not-its-dims'
+            {'take': TWO_ITEMS},
+            r"'primal', 'variable_basis', 'constraint_basis', and not 'take'",
+            id='a-key-that-is-no-reader',
+        ),
+        pytest.param({'primal': {'tkae': TWO_ITEMS}}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
+        pytest.param(
+            {'constraint_basis': {'fist': FITS}},
+            "under 'constraint_basis' an unknown constraint 'fist'",
+            id='a-misspelled-constraint',
         ),
         pytest.param(
-            {'take': TWO_ITEMS.with_columns(item=pl.lit('itme1'))}, "'itme1'", id='a-label-the-dimension-lacks'
+            {'primal': {'take': TWO_ITEMS.rename({'item': 'items'})}},
+            r"missing columns \['item'\]",
+            id='a-column-not-its-dims',
         ),
-        pytest.param({'take': pl.concat([TWO_ITEMS, TWO_ITEMS])}, 'more than one row', id='a-coordinate-twice'),
-        pytest.param({'take': [1.0, 0.0]}, '2 values against 12', id='a-sequence-of-the-wrong-length'),
+        pytest.param(
+            {'primal': {'take': TWO_ITEMS}, 'constraint_basis': {'fits': FITS.with_columns(value=pl.lit('loose'))}},
+            "the basis status 'loose'",
+            id='a-status-that-is-no-word',
+        ),
+        pytest.param(
+            {'constraint_basis': {'fits': FITS}}, 'a basis alone', id='a-basis-alone-for-a-mixed-integer-model'
+        ),
+        pytest.param(
+            {'primal': {'take': TWO_ITEMS.with_columns(item=pl.lit('itme1'))}},
+            "'itme1'",
+            id='a-label-the-dimension-lacks',
+        ),
+        pytest.param(
+            {'primal': {'take': pl.concat([TWO_ITEMS, TWO_ITEMS])}}, 'more than one row', id='a-coordinate-twice'
+        ),
+        pytest.param({'primal': {'take': [1.0, 0.0]}}, '2 values against 12', id='a-sequence-of-the-wrong-length'),
     ],
 )
 def test_a_start_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:
@@ -310,3 +379,269 @@ def test_a_nonbasic_row_is_at_the_bound_its_sense_gives() -> None:
 def test_a_carried_basis_has_one_basic_entry_per_row(columns: list[int], rows: list[int], expected: tuple) -> None:
     counted = _counted(np.asarray(columns, dtype=np.int8), np.asarray(rows, dtype=np.int8))
     assert ([*counted[0]], [*counted[1]]) == expected, 'a surplus leaves from the columns, a shortfall enters as rows'
+
+
+# ---------------------------------------------------------------------------
+# start= beside keep=, and a sweep's start
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('keep', ['progress', 'nothing'])
+@pytest.mark.parametrize('verb', ['model-solve', 'solve_over'])
+def test_a_start_beside_a_keep_that_also_says_where_to_begin_is_refused(
+    keep: str, verb: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from specsolve.relational import sinks
+
+    before = sps.solve(KNAPSACK, knapsack_sources())
+    monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
+    with pytest.raises(SpecsolveError, match=rf"start= and keep='{keep}' both say"):
+        if verb == 'model-solve':
+            sps.build(KNAPSACK, knapsack_sources()).solve(keep=keep, start=before)
+        else:
+            sps.solve_over(KNAPSACK, knapsack_sources(), DRAWS, key_name='draw', keep=keep, start=before)
+
+
+#: Two draws of the knapsack, each a whole model.
+DRAWS = [('a', knapsack_sources()), ('b', knapsack_sources())]
+
+
+def _swept_at_the_root(solver_name: str, start: Any, executor: Any = None) -> sps.types.Sweep:
+    return sps.solve_over(
+        KNAPSACK,
+        {},
+        DRAWS,
+        key_name='draw',
+        solver_name=solver_name,
+        solver_options=ROOT_ONLY[solver_name],
+        start=start,
+        executor=executor,
+    )
+
+
+EXECUTORS = [
+    pytest.param(None, id='serial'),
+    pytest.param('threads', id='threads'),
+    pytest.param('processes', id='processes'),
+]
+
+
+@pytest.mark.parametrize('how', EXECUTORS)
+def test_each_slice_starts_from_its_slice_of_an_earlier_sweep(how: str | None) -> None:
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+
+    earlier = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw')
+    if how is None:
+        sweep = _swept_at_the_root('highs', earlier)
+    else:
+        pool = (
+            ThreadPoolExecutor(2)
+            if how == 'threads'
+            else ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn'))
+        )
+        with pool:
+            sweep = _swept_at_the_root('highs', earlier, pool)
+    assert sweep.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'each slice, stopped at its root, returns its slice of the earlier sweep as its incumbent'
+    )
+
+
+def test_one_answer_starts_every_slice() -> None:
+    before = sps.solve(KNAPSACK, knapsack_sources())
+    sweep = _swept_at_the_root('highs', before)
+    assert sweep.record['objective'].to_list() == pytest.approx([before.objective] * 2), (
+        'every slice, stopped at its root, returns the one answer as its incumbent'
+    )
+
+
+def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve.relational.sinks.solvers.highs import Highs
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
+    warmed: list[object] = []
+    original = Highs.warm
+    monkeypatch.setattr(Highs, 'warm', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
+    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=earlier)
+    assert len(warmed) == len(earlier.keys), 'every window is warmed from a basis'
+    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'a start moves the route, never the optimum'
+    )
+
+
+def test_a_table_over_the_windows_local_index_alone_is_refused() -> None:
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    first = earlier.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 0).drop('snapshot_start')
+    with pytest.raises(SpecsolveError, match="over the windows' local index 't' and not over 'snapshot'"):
+        sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': {'soc': first}})
+
+
+def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_covers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from specsolve.relational.sinks.solvers.highs import Highs
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    tables = {name: earlier.primal(name) for name in WINDOW['variables']}
+    given: list[np.ndarray] = []
+    original = Highs.start
+    monkeypatch.setattr(Highs, 'start', lambda self, values: (given.append(values), original(self, values))[1])
+    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': tables})
+    assert len(given) == len(earlier.keys), 'every window is started'
+    assert all(not np.isnan(values).any() for values in given), 'each window takes a value for every hour it covers'
+    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'a start moves the route, never the optimum'
+    )
+
+
+def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path) -> None:
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
+    archived = sps.load_archive(tmp_path / 'run.zip')
+    assert isinstance(archived, sps.archive.SweepArchive)
+    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=archived.sweep)
+    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+        'the answer over the hours is all a window needs, kept windows or not'
+    )
+
+
+#: The second draw cannot be packed at all.
+EMPTY_HANDED = {**knapsack_sources(), 'capacity': pl.DataFrame({'value': [-1.0]})}
+
+
+@pytest.mark.parametrize(
+    'start',
+    [
+        pytest.param(lambda: sps.solve_over(KNAPSACK, {}, DRAWS[:1], key_name='draw'), id='a-sweep-short-of-a-key'),
+        pytest.param(
+            lambda: sps.solve_over(KNAPSACK, {}, [DRAWS[0], ('b', EMPTY_HANDED)], key_name='draw'),
+            id='a-sweep-with-a-slice-that-left-no-values',
+        ),
+        pytest.param(
+            lambda: {'primal': {'take': TWO_ITEMS.with_columns(draw=pl.lit('a'))}}, id='a-table-short-of-a-key'
+        ),
+    ],
+)
+def test_a_slice_its_start_leaves_no_row_starts_from_nothing_with_a_warning(start: Any) -> None:
+    """A missing start costs the slice its head start, not the sweep its answer."""
+    given = start()
+    with pytest.warns(SpecsolveWarning, match=r"start= gives the slices \['b'\] no row"):
+        sweep = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=given)
+    assert sweep.record['has_primal'].to_list() == [True, True], 'both draws solve, the second from nothing'
+
+
+# ---------------------------------------------------------------------------
+# start='previous'
+# ---------------------------------------------------------------------------
+
+
+def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Every basis HiGHS is warmed from, in order."""
+    from specsolve.relational.sinks.solvers.highs import Highs
+
+    warmed: list[object] = []
+    original = Highs.warm
+    monkeypatch.setattr(Highs, 'warm', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
+    return warmed
+
+
+SCENARIOS = sps.EachCoordinate('scenario')
+
+
+def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from tests.test_strategy import DISPATCH as SWEPT
+    from tests.test_strategy import scenario_sources
+
+    warmed = _warmed(monkeypatch)
+    cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS)
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous', spill_to=tmp_path)
+    assert not [path.name for path in tmp_path.iterdir() if path.name.endswith('_basis')], (
+        'the basis read to chain the slices is not spilled, since the sweep did not ask for it'
+    )
+    assert len(warmed) == len(chained.keys) - 1, 'every slice but the first starts from the basis before it'
+    assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
+        'a start moves the route, never the optimum'
+    )
+    with pytest.raises(SpecsolveError, match=r"outputs=\{'basis'\}"):
+        chained.variable_basis('p')
+
+
+def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+
+    warmed = _warmed(monkeypatch)
+    sweep = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
+    assert len(warmed) == len(sweep.keys) - 1, 'a window takes the basis before it, matched by its local index'
+
+
+def test_a_slice_after_one_that_left_no_values_starts_cold(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve.relational.sinks.solvers.highs import Highs
+
+    started: list[object] = []
+    original = Highs.start
+    monkeypatch.setattr(Highs, 'start', lambda self, values: (started.append(values), original(self, values))[1])
+    draws = [DRAWS[0], ('b', EMPTY_HANDED), ('c', knapsack_sources())]
+    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw', start='previous')
+    assert sweep.record['has_primal'].to_list() == [True, False, True], 'the middle draw cannot be packed'
+    assert len(started) == 1, "only 'b' is started, from 'a'; 'c' follows a slice with no values and starts cold"
+
+
+def test_a_spilled_slice_read_back_starts_the_one_after_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The slice before the one solved again lies on disk, and its frames there are the start."""
+    from tests.test_strategy import DISPATCH as SWEPT
+    from tests.test_strategy import scenario_sources
+
+    call = {'start': 'previous', 'outputs': BASIS, 'spill_to': tmp_path / 'spill'}
+    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
+    last = max((tmp_path / 'spill' / 'record').glob('*.parquet'))
+    last.unlink()
+    warmed = _warmed(monkeypatch)
+    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
+    assert len(warmed) == 1, 'only the last slice is solved again, warmed from the one before it on disk'
+
+
+@pytest.mark.parametrize(
+    ('call', 'match'),
+    [
+        pytest.param(
+            lambda: sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start='prev'),
+            "takes 'previous' as a word, and not 'prev'",
+            id='another-word',
+        ),
+        pytest.param(
+            lambda: sps.solve_over(
+                KNAPSACK,
+                {},
+                DRAWS,
+                key_name='draw',
+                start='previous',
+                executor=ThreadPoolExecutor(2),
+            ),
+            'cannot run concurrently',
+            id='previous-under-an-executor',
+        ),
+        pytest.param(
+            lambda: sps.solve(KNAPSACK, knapsack_sources(), start='previous'),
+            'a word only solve_over takes',
+            id='previous-on-one-solve',
+        ),
+    ],
+)
+def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None:
+    with pytest.raises(SpecsolveError, match=match):
+        call()
+
+
+def test_a_start_table_solve_refuses_stops_the_sweep_before_a_slice_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve import strategy
+
+    monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
+    with pytest.raises(SpecsolveError, match="unknown variable 'tkae'"):
+        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start={'primal': {'tkae': TWO_ITEMS}})

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 MODELS = Path(__file__).resolve().parent / 'expansion'
 
 #: What a master answer carries so that the next master can start from it.
-BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+BASIS: frozenset[Output] = frozenset({'basis'})
 
 #: Generators per rung — the axis swept. The master is one column per
 #: generator plus ``theta``, and one row per cut it has accumulated.
@@ -134,12 +134,16 @@ def instance(n_gen: int, n_snap: int) -> dict[str, pl.DataFrame]:
 def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
     """One solve of *master* from a fresh solver, the simplex iterations it took, and its wall seconds.
 
-    The iteration count is read off the private handle; no public surface
-    reports it.
+    A start combines with ``keep='solver'`` only, so a started solve asks for
+    that and is run first after the update that gained a cut: the new row
+    changes the structure, so the solver is loaded fresh anyway, as ``kept``
+    reports. The iteration count is read off the private handle; no public
+    surface reports it.
     """
     began = time.perf_counter()
-    answer = master.solve(keep='nothing', **solve)
+    answer = master.solve(keep='solver' if 'start' in solve else 'nothing', **solve)
     seconds = time.perf_counter() - began
+    assert answer.kept == 'nothing', "every arm solves on a fresh solver, so neither carries the other's work"
     return answer, int(master._engine._solver._handle.getInfo().simplex_iteration_count), seconds
 
 
@@ -236,8 +240,8 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
             )
             built = master._engine._model.handoff
 
-            cold, cold_iterations, cold_seconds = _solved(master)
             carried, warm_iterations, warm_seconds = _solved(master, start=carried, outputs=BASIS)
+            cold, cold_iterations, cold_seconds = _solved(master)
             warm = carried
             assert abs(warm.objective - cold.objective) <= 1e-6 * max(abs(cold.objective), 1.0), (
                 f'a carried basis moved the answer: cold {cold.objective!r}, warm {warm.objective!r} '

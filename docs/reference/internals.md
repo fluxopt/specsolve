@@ -123,7 +123,7 @@ Each entry says what the thing is, then the module it lives in.
 **Warm start**
 : What a solve starts from instead of from scratch, laid onto the build by
   coordinate, so a model that gained or lost rows or columns takes it too: a
-  basis for an LP, values for a mixed-integer model. `solve(start=)` is its
+  basis or values for an LP, values for a mixed-integer model. `solve(start=)` is its
   caller (`relational/engine/readback.py`,
   `relational/sinks/solvers/base.py`).
 
@@ -136,10 +136,12 @@ Each entry says what the thing is, then the module it lives in.
   directory its frames are saved under (`relational/answer_layout.py`).
 
 **Output**
-: A kind an answer holds only on request. `OUTPUTS` is its one table: the
-  name, and whether it holds a frame per variable or per constraint. The
-  readers, `kind=`, the fold, the spill, the archive and its catalog all read
-  it. `format.json` names the outputs an answer holds, so a reader tells "not
+: What an answer holds only on request, named in `outputs=`. Each carries
+  one kind, of its own name, except `basis`, which carries `variable_basis`
+  and `constraint_basis`. `OUTPUT_KINDS` is the one table: each kind, the
+  output that asks for it, and whether it holds a frame per variable or per
+  constraint. The readers, `kind=`, the fold, the spill,
+  the archive and its catalog all read it. `format.json` names the outputs an answer holds, so a reader tells "not
   asked for" from "not defined", and a new output adds no `ANSWER_LAYOUT` bump
   (`relational/answer_layout.py`).
 

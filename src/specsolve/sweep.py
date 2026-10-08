@@ -12,7 +12,7 @@ from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -25,7 +25,7 @@ from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
     NO_BASIS,
-    OUTPUTS,
+    OUTPUT_KINDS,
     PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
@@ -35,7 +35,6 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_kind,
     consolidated,
-    is_output,
     not_requested_message,
     read_outputs,
     read_reasons,
@@ -55,11 +54,17 @@ if TYPE_CHECKING:
 
     from specsolve.inputs import Label
     from specsolve.relational.answer_layout import Output
+    from specsolve.relational.result import Start
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
 _LABELS: Mapping[str, str] = MappingProxyType(
-    {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
+    {
+        'primal': 'variable',
+        'dual': 'constraint',
+        'expression': 'named expression',
+        **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
+    }
 )
 
 
@@ -180,18 +185,18 @@ class Spill:
         if record.exists():
             check_format(directory)
             found = json.loads(record.read_text())
-            if found != manifest and {**found, 'outputs': manifest['outputs']} == manifest:
+            if {**found, 'outputs': None} != {**manifest, 'outputs': None}:
+                raise SpecsolveError(
+                    f'{str(directory)!r} holds a sweep keyed by {found["key_name"]!r} over {found["keys"]}, and '
+                    f'this one is keyed by {key_name!r} over {manifest["keys"]}. A directory holds one sweep: '
+                    f'point spill_to= at an empty one, or delete this one to solve it again.'
+                )
+            if found['outputs'] != manifest['outputs']:
                 raise SpecsolveError(
                     f'{str(directory)!r} holds this sweep solved with outputs={found["outputs"]}, and this '
                     f'run asks for outputs={manifest["outputs"]}. A slice on disk carries only what it was '
                     f'solved with, so the two could not be read as one sweep: ask for the same outputs to '
                     f'resume it, or point spill_to= at an empty directory.'
-                )
-            if found != manifest:
-                raise SpecsolveError(
-                    f'{str(directory)!r} holds a sweep keyed by {found["key_name"]!r} over {found["keys"]}, and '
-                    f'this one is keyed by {key_name!r} over {manifest["keys"]}. A directory holds one sweep: '
-                    f'point spill_to= at an empty one, or delete this one to solve it again.'
                 )
         else:
             write_format(directory, outputs)
@@ -224,9 +229,9 @@ class Spill:
         held = pl.read_parquet(self._file('metrics', position)).row(0, named=True)
         return SliceAnswer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory))
 
-    def primals(self, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
-        """The named primals a done slice wrote; a name it did not write is absent."""
-        found = {name: self._file('primal', position, name) for name in names}
+    def written(self, kind: str, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
+        """The named frames of *kind* a done slice wrote; a name it did not write is absent."""
+        found = {name: self._file(kind, position, name) for name in names}
         return {name: pl.read_parquet(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
     def frames(self, *, whole: bool) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -362,6 +367,20 @@ class Sweep:
     def keys(self) -> list[Label]:
         return self.record[self.key_name].to_list()
 
+    def _start(self) -> Start:
+        """This sweep's answer as tables to start a sweep from, keyed as [`Start`][specsolve.types.Start] is.
+
+        The primal, and the basis where the sweep carries one, each read as
+        [`scan`][] reads it: keyed by slice, or over the dimension an
+        EachWindow sweep cut.
+        """
+        given: dict[str, dict[str, pl.DataFrame]] = {}
+        for kind in ('primal', *(sorted(BASES) if 'basis' in self._outputs else ())):
+            held, _ = self._answerable(kind, per_window=False)
+            if held:
+                given[kind] = {name: self.scan(name, kind).pipe(collected) for name in held}
+        return cast('Start', given)
+
     def _check_per_window(self) -> None:
         """Refuse ``per_window=True`` where there are no windows to read."""
         if self._stitch is None:
@@ -374,8 +393,8 @@ class Sweep:
             raise SpecsolveError(NO_WINDOWS)
 
     def _check_requested(self, kind: str, name: str) -> None:
-        """Refuse an output the sweep was not asked for."""
-        if is_output(kind) and kind not in self._outputs:
+        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS] the sweep was not asked for."""
+        if kind in OUTPUT_KINDS and OUTPUT_KINDS[kind].output not in self._outputs:
             raise SpecsolveError(not_requested_message(kind, name))
 
     def _named(self, kind: str, name: str, *, per_window: bool) -> pl.LazyFrame:
@@ -525,12 +544,12 @@ class Sweep:
         [`primal`][]'s shape and arguments, and
         [`Result.variable_basis`][specsolve.relational.result.Result.variable_basis]'s
         words. Carried only where the sweep was asked for it with
-        ``outputs={'variable_basis'}``. A slice that ended on no basis
-        contributes none.
+        ``outputs={'basis'}``. A slice that ended on no basis contributes
+        none.
 
         Raises:
-            SpecsolveError: The sweep was not asked for its variable basis, no
-                slice ended on a basis, or as [`primal`][] raises.
+            SpecsolveError: The sweep was not asked for its basis, no slice
+                ended on one, or as [`primal`][] raises.
         """
         return self._named('variable_basis', name, per_window=per_window).pipe(collected)
 
@@ -540,12 +559,12 @@ class Sweep:
         [`primal`][]'s shape and arguments, and
         [`Result.constraint_basis`][specsolve.relational.result.Result.constraint_basis]'s
         words. Carried only where the sweep was asked for it with
-        ``outputs={'constraint_basis'}``. A slice that ended on no basis
-        contributes none.
+        ``outputs={'basis'}``. A slice that ended on no basis contributes
+        none.
 
         Raises:
-            SpecsolveError: The sweep was not asked for its constraint basis,
-                no slice ended on a basis, or as [`primal`][] raises.
+            SpecsolveError: The sweep was not asked for its basis, no slice
+                ended on one, or as [`primal`][] raises.
         """
         return self._named('constraint_basis', name, per_window=per_window).pipe(collected)
 
@@ -609,7 +628,9 @@ class Sweep:
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
         kind = checked_kind(kind)
-        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name, per_window=per_window)
+        if kind == 'expression':
+            return self.evaluate(name, per_window=per_window)
+        return self._named(kind, name, per_window=per_window).pipe(collected)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
         """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.
@@ -693,22 +714,26 @@ class Sweep:
         self._check_requested(kind, 'anything')
         if per_window:
             self._check_per_window()
-        left_out = dict(self._absent.get(kind, {}))
-        if self._answer is not None and not per_window:
-            held: Mapping[str, object] = self._answer[kind]
-        else:
-            held = {}
-            for name, frame in self._slices.get(kind, {}).items():
-                if not per_window and (why := self._unstitchable(frame)):
-                    left_out[name] = why
-                else:
-                    held[name] = frame
+        held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
             absent = _whole_kind_absent(kind, held, self._no_duals, self.record) or _none_answered(
                 _LABELS[kind], left_out
             )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
+
+    def _answerable(self, kind: str, *, per_window: bool) -> tuple[dict[str, object], dict[str, str]]:
+        """Every name of *kind* there is an answer for, and why each name left out of the answer is."""
+        left_out = dict(self._absent.get(kind, {}))
+        if self._answer is not None and not per_window:
+            return dict(self._answer[kind]), left_out
+        held: dict[str, object] = {}
+        for name, frame in self._slices.get(kind, {}).items():
+            if not per_window and (why := self._unstitchable(frame)):
+                left_out[name] = why
+            else:
+                held[name] = frame
+        return held, left_out
 
     def __len__(self) -> int:
         return self.record.height

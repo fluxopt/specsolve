@@ -28,7 +28,7 @@ from specsolve.inputs import lowered
 from specsolve.relational.answer_layout import (
     FORMAT_FILE,
     METRICS_FILE,
-    OUTPUTS,
+    OUTPUT_KINDS,
     RECORD_FILE,
     RESERVED,
     RUN,
@@ -184,8 +184,8 @@ _WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
 def _answered_under(under: str) -> dict[str, list[str]]:
     """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
     held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
-    for output, per in OUTPUTS.items():
-        held[per].append(f'{under}/{output}')
+    for kind, carried in OUTPUT_KINDS.items():
+        held[carried.per].append(f'{under}/{kind}')
     return held
 
 

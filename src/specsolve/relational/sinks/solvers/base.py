@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 import polars as pl
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
@@ -25,19 +26,8 @@ if TYPE_CHECKING:
     from specsolve.relational.status import SolveStatus
 
 
-#: A basis status in the one vocabulary every member reads its solver's into,
-#: each at the index that is its code. A row's bound is its right-hand side,
-#: so a binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``,
-#: and a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
-#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
-BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
-BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
-
 #: The status of a nonbasic row, by its sense.
 _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
-
-#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
-BASIS = pl.Enum(BASIS_STATUSES)
 
 
 @dataclass(frozen=True)
@@ -113,6 +103,12 @@ class Solver(ABC):
     #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
 
+    #: What a start of values does for an LP on this member, when it gives
+    #: every column a value and when it leaves some out: ``used``,
+    #: ``no_gain`` where the member takes them and no gain from them is known,
+    #: so the solve warns, or ``refused`` where it cannot take them.
+    lp_values: ClassVar[Mapping[Literal['complete', 'partial'], Literal['used', 'no_gain', 'refused']]]
+
     #: Option names, casefolded, whose value an answer records: the ones that
     #: change what a solve returns. Any other option is recorded by name
     #: alone, so a credential passed as an option never reaches an archive.
@@ -177,10 +173,11 @@ class Solver(ABC):
         """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
 
     def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Start the next [`run`][] of this mixed-integer model from *values*, one per column and NaN where none is given.
+        """Start the next [`run`][] from *values*, one per column and NaN where none is given.
 
-        The solver takes them as a starting incumbent, completing what is
-        missing and repairing what is infeasible as far as it can.
+        A mixed-integer model takes them as a starting incumbent, completing
+        what is missing and repairing what is infeasible as far as it can; an
+        LP as [`lp_values`][] says.
 
         Raises:
             SpecsolveError: Values that do not span the loaded model.
@@ -190,7 +187,7 @@ class Solver(ABC):
 
     @abstractmethod
     def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand the values *values* gives to the solver as a starting incumbent. [`start`][] has checked their span."""
+        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
@@ -346,11 +343,15 @@ def basis_codes(native: Any, codes: Sequence[int]) -> np.ndarray[tuple[int], np.
     return np.asarray(codes, dtype=np.int8)[np.asarray(native, dtype=np.int64)]
 
 
-def solver_codes(codes: np.ndarray, native: Sequence[int]) -> np.ndarray[tuple[int], np.dtype[np.int64]]:
-    """[`BASIS_STATUSES`][] *codes* as a solver's own statuses: *native* holds one per status, in that order."""
+def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tuple[int], np.dtype[np.int64]]:
+    """[`BASIS_STATUSES`][] *codes* as a solver's own statuses: *native* maps every code to the solver's status.
+
+    Raises:
+        KeyError: A *native* that leaves a code out.
+    """
     import numpy as np
 
-    return np.asarray(native, dtype=np.int64)[codes]
+    return np.asarray([native[code] for code in range(len(BASIS_STATUSES))], dtype=np.int64)[codes]
 
 
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type

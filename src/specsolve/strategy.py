@@ -16,22 +16,25 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import warnings
 from collections.abc import Iterator
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import polars as pl
 
 from specsolve.api import build, check
 from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
 from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
-from specsolve.errors import DataError, SpecsolveError
+from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
 from specsolve.relational.answer_layout import (
+    BASES,
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
@@ -39,13 +42,15 @@ from specsolve.relational.answer_layout import (
     Metrics,
     Record,
     checked_outputs,
+    kinds_of,
     refuse_reserved,
     write_format,
     write_reasons,
     write_whole,
 )
 from specsolve.relational.collect import collected
-from specsolve.sources import numbered, tidy_sources
+from specsolve.relational.result import Result, refuse_a_start_beside
+from specsolve.sources import numbered, refuse_unknown_start, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
     MANIFEST_FILE,
@@ -59,7 +64,7 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
@@ -67,7 +72,7 @@ if TYPE_CHECKING:
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import Diagnostics, Keep, Result
+    from specsolve.relational.result import Diagnostics, Keep, Start
 
 
 #: The codec a frame is written with to cross a process.
@@ -187,6 +192,7 @@ def solve_over(
     archive: str | Path | None = None,
     keep_windows: bool = False,
     outputs: Iterable[Output] = (),
+    start: Sweep | Result | Start | Literal['previous'] | None = None,
 ) -> Sweep:
     """Solve *spec* once per slice of *axis* and fold the answers together.
 
@@ -247,6 +253,20 @@ def solve_over(
             every slice. The sweep, its spill and its archive carry these and
             nothing else; a *spill_to* directory solved with others is
             refused rather than resumed.
+        start: What each slice starts from, as
+            [`solve`][specsolve.api.Model.solve] takes it: an earlier answer,
+            an earlier sweep, or a [`Start`][specsolve.types.Start] of tables.
+            Each table is cut by the axis as a source is: one that carries the
+            sliced dimension, or a hand-built axis's key column, gives each
+            slice its own rows, and one without reaches every slice whole. An
+            earlier sweep is its answer, so each slice starts from the earlier
+            slice of its key, and each window from the hours it covers. The
+            word ``'previous'`` starts each slice from the answer of the one
+            before it, matched by the slice model's own coordinates; the first
+            slice, and one after a slice that left no values, starts cold.
+            Each slice is then solved with its basis, which the next slice
+            starts from whether or not *outputs* asks for it; the sweep keeps
+            only what *outputs* asks for.
 
     Returns:
         The sweep, which reads its answer.
@@ -259,15 +279,20 @@ def solve_over(
             allow; a *spill_to* directory holding another sweep;
             *keep_windows* without *archive* or on an axis that does not cut
             windows; *outputs* that [`solve`][specsolve.api.Model.solve]
-            refuses — each answerable from the declarations alone; keys of
-            more than one type, or two keys of one text.
+            refuses; a *start* beside a *keep* other than ``solver``, a word
+            other than ``'previous'``, or ``'previous'`` with an executor —
+            each answerable from the declarations alone; keys of more than one
+            type, or two keys of one text; a *start* table over an EachWindow
+            sweep's local index alone, or one
+            [`solve`][specsolve.api.Model.solve] refuses.
         DataError: No source carries the axis, an index of another
             dimension carries it, or the axis produced no slices.
 
     Warns:
         SpecsolveWarning: A source carrying the axis that is short of a
-            coordinate another has — that slice builds it empty — or a
-            position the model counts, which every window restarts.
+            coordinate another has — that slice builds it empty — a position
+            the model counts, which every window restarts, or a *start* that
+            leaves a slice no row, which starts that slice from nothing.
     """
     if carry and executor is not None:
         raise SpecsolveError(
@@ -278,6 +303,8 @@ def solve_over(
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
     asked = checked_outputs(outputs)
+    if start is not None:
+        refuse_a_start_beside(keep)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
     key_name = _key_column(axis, key_name, program)
@@ -301,12 +328,13 @@ def solve_over(
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
+    starts = _slice_starts(start, axis, slices, key_name, program, concurrent=executor is not None)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
-    answered = (
-        _serially(program, document, slices, solving, plan, keep, spill)
-        if executor is None
-        else _pooled(executor, workers_share_fs, program, document, slices, solving, spill)
-    )
+    if executor is None:
+        answered = _serially(program, document, slices, solving, plan, keep, spill, starts)
+    else:
+        assert starts != 'previous', "_slice_starts refuses start='previous' under an executor"
+        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
@@ -316,6 +344,123 @@ def solve_over(
             out, document, program, cut, dict(carry or {}), sources, folded, slices[0].sources, keep_windows
         )
     return folded
+
+
+def _slice_starts(
+    start: Sweep | Result | Start | Literal['previous'] | None,
+    axis: Axis | HandBuilt,
+    slices: Sequence[Slice],
+    key_name: str,
+    program: Program,
+    *,
+    concurrent: bool,
+) -> list[Start | None] | Literal['previous']:
+    """What each slice starts from: its cut of *start*, as it cut its sources, or the slice before it.
+
+    Every cut is taken and checked here, before a slice is built, so a start
+    that cannot start a slice stops the sweep before anything is solved; it
+    also lets a slice solved in another process take its start as data. A
+    table without the sliced column reaches every slice whole.
+
+    Raises:
+        SpecsolveError: A word other than ``'previous'``; ``'previous'``
+            under an executor; a name
+            [`refuse_unknown_start`][specsolve.sources.refuse_unknown_start]
+            refuses; or a table over an EachWindow sweep's local index alone.
+
+    Warns:
+        SpecsolveWarning: A slice the cut leaves nothing, which starts from
+            nothing.
+    """
+    if start is None:
+        return [None] * len(slices)
+    if isinstance(start, str):
+        if start != 'previous':
+            raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
+        if concurrent:
+            raise SpecsolveError(
+                "start='previous' starts each slice from the one before it, so the slices cannot run "
+                'concurrently. Drop the executor, or pass another start.'
+            )
+        return 'previous'
+    column = axis.dim if isinstance(axis, Axis) else key_name
+    tables = _start_tables(start, column)
+    refuse_unknown_start(cast('Start', tables), program)
+    if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
+        raise SpecsolveError(
+            f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
+            f'table would lay the same {axis.dim!r} onto every window. Write it over {axis.dim!r}, as a source is, '
+            f'and each window takes the rows it covers.'
+        )
+    starts: list[Start | None] = []
+    empty: list[Label] = []
+    for current in slices:
+        cut = current.cut or partial(_one_key, key_name, current.key)
+        given: dict[str, dict[str, Source]] = {}
+        for reader, named in tables.items():
+            pieces = {name: _cut_one(obj, column, cut) for name, obj in named.items()}
+            if held := {name: piece for name, piece in pieces.items() if piece is not None}:
+                given[reader] = held
+        if not given:
+            empty.append(current.key)
+        starts.append(cast('Start', given) if given else None)
+    if empty:
+        warnings.warn(
+            f'start= gives the slices {empty} no row, so they start from nothing: no table carries their '
+            f'{column!r}, and none reaches every slice. The answer is the same; only the time it takes changes.',
+            SpecsolveWarning,
+            stacklevel=3,
+        )
+    return starts
+
+
+def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFrame]) -> Source | None:
+    """*obj* as one slice takes it: a table cut, read into memory to cross a process, or ``None`` where the cut leaves no row.
+
+    A shape that is not a table, such as one number, carries no column to cut
+    on and reaches the slice whole.
+    """
+    table = as_frame(obj)
+    if table is None:
+        return obj
+    piece = (cut(table) if column in table.collect_schema().names() else table).pipe(collected)
+    return piece if piece.height else None
+
+
+def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[str, Source]]:
+    """*start* as tables keyed as [`Start`][specsolve.types.Start] is, an earlier sweep's keyed by *column*.
+
+    A sweep's slices are keyed by its own key column, which for one cut by
+    coordinate holds the coordinates a sweep cut by *column* cuts.
+    """
+    if isinstance(start, Result):
+        return {
+            reader: {name: frame.pipe(collected) for name, frame in frames.items()}
+            for reader, frames in start._start().items()
+        }
+    if isinstance(start, Sweep):
+        keyed = start._stitch is None and start.key_name != column
+        return {
+            reader: {name: table.rename({start.key_name: column}) if keyed else table for name, table in named.items()}
+            for reader, named in cast('Mapping[str, Mapping[str, pl.DataFrame]]', start._start()).items()
+        }
+    return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, Source]]', start).items()}
+
+
+def _over_the_local_index(tables: Mapping[str, Mapping[str, Source]], axis: EachWindow) -> list[str]:
+    """The names of *tables* over *axis*'s local index and not its sliced dimension, which no window can place."""
+    over = {
+        name: frame.collect_schema().names()
+        for named in tables.values()
+        for name, obj in named.items()
+        if (frame := as_frame(obj)) is not None
+    }
+    return sorted(name for name, columns in over.items() if axis.into in columns and axis.dim not in columns)
+
+
+def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
+    """*table*'s rows of the hand-built slice *key*, without the key column."""
+    return table.filter(pl.col(key_name) == key).drop(key_name)
 
 
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
@@ -472,10 +617,13 @@ def _serially(
     plan: Mapping[str, _CarryRule],
     keep: Keep,
     spill: Spill | None,
+    starts: Sequence[Start | None] | Literal['previous'],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    A slice naming other sources than the last is rebuilt, since ``update`` is
+    Under ``start='previous'`` each slice is solved with its basis as well,
+    which the next slice starts from and the answer does not keep. A slice
+    naming other sources than the last is rebuilt, since ``update`` is
     partial. A generator because slice ``i+1``'s carry is read from slice
     ``i``'s frames after the yield; the caller closes it to release the model.
     A slice the spill holds is read back, and one solved here is written
@@ -484,11 +632,20 @@ def _serially(
     model: Model | None = None
     named: frozenset[str] | None = None
     state: dict[str, pl.DataFrame] = {}
+    previous: Result | Start | None = None
+    asked: frozenset[Output] = solving['outputs']
+    with_basis: Mapping[str, Any] = {**solving, 'outputs': asked | {'basis'}}  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
+    readers = ('primal', *(sorted(BASES) if 'basis' in asked else ()))
     try:
         for position, current in enumerate(slices):
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
-                primals = spill.primals(position, {rule.variable for rule in plan.values()})
+                primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
+                if starts == 'previous':
+                    previous = _previous(
+                        answer,
+                        {reader: spill.written(reader, position, _declared(program, reader)) for reader in readers},
+                    )
                 yield current.key, answer
                 state = _carried(plan, primals, current, position, slices, answer)
                 continue
@@ -502,8 +659,12 @@ def _serially(
                     if model is not None:
                         model.close()
                     model, named, before = build(document, sources), names, None
-                result = model.solve(**solving, keep=keep)
-                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before))
+                if starts == 'previous':
+                    result = model.solve(**with_basis, keep=keep, start=previous)
+                else:
+                    result = model.solve(**solving, keep=keep, start=starts[position])
+                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before), asked)
+                previous = result if result.has_primal else None
             primals = answer.frames.get('primal', {})
             if spill is not None:
                 answer = spill.write(position, current.key, answer)
@@ -512,6 +673,18 @@ def _serially(
     finally:
         if model is not None:
             model.close()
+
+
+def _previous(answer: SliceAnswer, frames: Mapping[str, Mapping[str, pl.DataFrame]]) -> Start | None:
+    """What the slice after *answer*, read back off the spill, starts from under ``start='previous'``: its frames there, or nothing where it left no values."""
+    if not answer.meta.has_primal:
+        return None
+    return cast('Start', {reader: dict(frames[reader]) for reader in ('primal', *BASES) if frames.get(reader)})
+
+
+def _declared(program: Program, reader: str) -> Iterable[str]:
+    """The declarations *reader* reads, by name."""
+    return program.constraints if reader == 'constraint_basis' else program.variables
 
 
 def _carried(
@@ -553,6 +726,7 @@ def _pooled(
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     spill: Spill | None,
+    starts: Sequence[Start | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
@@ -574,6 +748,7 @@ def _pooled(
             _encode(current.sources, memo, workers_share_fs=shared) if crosses else dict(current.sources),
             crosses,
             solving,
+            starts[position],
         )
         for position, current in enumerate(slices)
     ]
@@ -588,11 +763,13 @@ def _pooled(
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
-def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
+def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozenset[Output]) -> SliceAnswer:
     """One slice's answer, read out of *result*, every declared expression evaluated now.
 
-    A slice with no primal, or with undefined duals, is not a failure: the
-    reason ``Result.dual`` gives is carried.
+    It carries the *outputs* the sweep asked for and no others, so a basis
+    read only to start the next slice from is not kept. A slice with no
+    primal, or with undefined duals, is not a failure: the reason
+    ``Result.dual`` gives is carried.
     """
     meta = Record.of(
         result.termination_condition,
@@ -608,9 +785,9 @@ def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
         'primal': {name: result.primal(name) for name in program.variables},
         'expression': {},
     }
-    for output, laid in (result._outputs or {}).items():
-        if laid:
-            frames[output] = {name: frame.pipe(collected) for name, frame in laid.items()}
+    for kind in kinds_of(outputs):
+        if laid := (result._outputs or {}).get(kind):
+            frames[kind] = {name: frame.pipe(collected) for name, frame in laid.items()}
     no_expressions: dict[str, str] = {}
     for name in program.expressions:
         try:
@@ -630,10 +807,11 @@ def _run_slice(
     encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
+    start: Start | None,
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
-    with build(document, _decode(encoded)) as model, model.solve(**call) as result:
-        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None))
+    with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
+        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None), call['outputs'])
         if not encode_out:
             return answer
         return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})

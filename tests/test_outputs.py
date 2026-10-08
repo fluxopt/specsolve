@@ -11,21 +11,20 @@ from __future__ import annotations
 import json
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import get_context
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.answer_layout import OUTPUTS
-from specsolve.types import Output
+from specsolve.relational.answer_layout import OUTPUT_KINDS, OUTPUTS
 from tests.test_strategy import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from specsolve.types import Result, Sweep
+    from specsolve.types import Output, Result, Sweep
 
 ACTIVITY: frozenset[Output] = frozenset({'activity'})
 NONE: frozenset[Output] = frozenset()
@@ -40,8 +39,10 @@ ONE = {
 type Answer = Result | Sweep
 
 
-def test_the_type_and_the_table_name_the_same_outputs() -> None:
-    assert set(get_args(Output)) == set(OUTPUTS), 'Output is the type a caller writes, OUTPUTS the table the code reads'
+def test_every_output_carries_a_kind_and_every_kind_has_its_output() -> None:
+    assert {carried.output for carried in OUTPUT_KINDS.values()} == set(OUTPUTS), (
+        'an output that carries no kind would be asked for and hold nothing'
+    )
 
 
 # ---------------------------------------------------------------------------

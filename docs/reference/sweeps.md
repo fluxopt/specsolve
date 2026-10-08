@@ -263,6 +263,28 @@ keeping 24, not label 47 of the 48 it solved.
 | **a slice that leaves nothing to carry stops the sweep** | An infeasible window has no level to hand forward. The error names the slice, how it terminated, and the slice left waiting. A sweep without a carry records the slice in `record` and goes on. |
 | **`carry` excludes `executor`** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. |
 
+## Starting slices
+
+`start=` takes what [`solve`](api.md#specsolve.types.Model.solve) takes, an
+earlier sweep, or the word `'previous'`. **A start is cut by the axis, as a
+source is**: a table that carries the sliced dimension gives each slice its own
+rows, and a table without it reaches every slice whole.
+
+```python
+again = sps.solve_over('dispatch.yaml', new_sources, axis, start=earlier)
+chained = sps.solve_over('dispatch.yaml', sources, axis, start='previous')
+```
+
+| Rule | |
+|---|---|
+| **a table over the sliced dimension gives each slice its rows** | `EachCoordinate('scenario')` gives each slice the rows of its scenario. `EachWindow` gives each window the rows of the coordinates it covers, lookahead included, over its local index. A hand-built axis cuts on its key column. |
+| **an earlier sweep is its answer** | Each slice starts from the earlier slice of its key, and each window from the answer over the coordinates it covers. An archive written without `keep_windows=True` starts a sweep too. |
+| **`'previous'` starts each slice from the one before it** | Matched by the slice model's own coordinates, so a window takes the window before it by local index. Each slice is solved with its basis for the next to start from, whether or not `outputs=` asks for it; the sweep keeps only what `outputs=` asks for. The first slice, and a slice after one that left no values, starts cold. Each slice depends on the one before, so `'previous'` under an `executor` is refused. |
+| **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused: it says nothing about which coordinates it means. So is a table `solve` refuses. |
+| **a slice its start leaves no row starts from nothing** | A table short of a slice's key, or an earlier sweep whose slice left no values, warns and starts that slice from nothing. The answer is the same; only the time it takes changes. |
+| **`start=` combines with `keep='solver'` only** | `keep='progress'` and `keep='nothing'` also say what each slice begins from, so the call is refused. |
+| **a start reaches every executor** | Each slice's cut is taken before the slice is sent, so a slice solved in another process takes it as data. |
+
 ## Running slices in parallel
 
 `executor` is any

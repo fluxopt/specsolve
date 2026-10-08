@@ -8,7 +8,7 @@ on whether that data is usable is made here, once.
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.selectors as cs
@@ -16,14 +16,21 @@ from mathspec import did_you_mean
 from mathspec.program import ParameterDeclaration
 
 from specsolve.assumptions import validate_assumptions
-from specsolve.errors import DataError
+from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve.messages import coordinate_text, coordinates_text
-from specsolve.relational.answer_layout import RESERVED
+from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
+from specsolve.relational.answer_layout import BASIS_STATUSES, RESERVED
 from specsolve.relational.collect import collected
+from specsolve.relational.result import Start
 
 if TYPE_CHECKING:
-    from mathspec.program import DimensionDeclaration, Program, RelationDeclaration
+    from mathspec.program import (
+        ConstraintDeclaration,
+        DimensionDeclaration,
+        Program,
+        RelationDeclaration,
+        VariableDeclaration,
+    )
 
     from specsolve.inputs import Label, Source
 
@@ -420,19 +427,91 @@ def _parameter_frame(
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
 
 
-def read_values(
-    kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame]
-) -> pl.LazyFrame:
-    """*obj*, ``(dims…, value)`` numbers over *dims*, read and checked as a parameter's source is.
+def read_start(
+    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
+) -> dict[str, dict[str, pl.LazyFrame]]:
+    """*start*'s tables, each read and checked as a parameter's source is, over its declaration's dims.
 
-    It takes every shape a parameter takes, from a parquet path to one number
-    for every coordinate, and *indexes* holds each dimension's labels under
-    its own name. *kind* and *name* say whose values they are in a refusal.
+    Every shape a parameter takes is read, from a parquet path to one number
+    for every coordinate; *indexes* holds each dimension's labels under its
+    own name. ``primal`` holds numbers, and ``variable_basis`` and
+    ``constraint_basis`` hold basis statuses in their words.
 
     Raises:
-        DataError: As [`tidy_sources`][] raises for a parameter's source.
+        SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
+            status outside the five words.
+        DataError: A table a parameter over the same dims would be refused
+            for.
     """
-    declared = ParameterDeclaration(dims=tuple(dims))
+    refuse_unknown_start(start, program)
+    read: dict[str, dict[str, pl.LazyFrame]] = {}
+    for reader, tables in _by_reader(start).items():
+        per, declared = _read_by(reader, program)
+        dtype = 'float' if reader == 'primal' else 'str'
+        read[reader] = {}
+        for name, obj in tables.items():
+            kind = f'start= under {reader!r} for {per}'
+            frame = _read_values(kind, name, declared[name].dims, obj, indexes, dtype)
+            if reader != 'primal':
+                _refuse_unknown_statuses(kind, name, frame)
+            read[reader][name] = frame
+    return read
+
+
+def refuse_unknown_start(start: Start, program: Program) -> None:
+    """Refuse a *start* keyed by no reader [`Start`][specsolve.types.Start] takes, or naming no declaration its reader reads.
+
+    Asked of the names alone, so a sweep asks it before a slice is built.
+
+    Raises:
+        SpecsolveError: A key that names no reader, or a name the reader has
+            no declaration for.
+    """
+    readers = tuple(Start.__annotations__)
+    by_reader = _by_reader(start)
+    if unknown := sorted(set(by_reader) - set(readers)):
+        raise SpecsolveError(
+            f'start= takes, under the name of the reader that returns it, a table per declaration: '
+            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
+        )
+    for reader, tables in by_reader.items():
+        per, declared = _read_by(reader, program)
+        if missing := next((name for name in tables if name not in declared), None):
+            raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, missing, declared)}')
+
+
+def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
+    """*start* as the mapping it is, whatever keys it was given."""
+    return cast('Mapping[str, Mapping[str, Source]]', start)
+
+
+def _read_by(
+    reader: str, program: Program
+) -> tuple[str, Mapping[str, VariableDeclaration] | Mapping[str, ConstraintDeclaration]]:
+    """What *reader* holds a table per, and those declarations by name."""
+    if reader == 'constraint_basis':
+        return 'constraint', program.constraints
+    return 'variable', program.variables
+
+
+def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
+    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve.relational.answer_layout.BASIS_STATUSES]."""
+    held = frame.select(pl.col('value').cast(pl.String).unique()).pipe(collected)['value']
+    if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
+        raise SpecsolveError(
+            f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
+            f'{", ".join(map(repr, BASIS_STATUSES))}.'
+        )
+
+
+def _read_values(
+    kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame], dtype: str
+) -> pl.LazyFrame:
+    """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
+
+    *kind* and *name* say whose values they are in a refusal.
+    """
+    declared = ParameterDeclaration(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
     return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 

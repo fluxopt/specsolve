@@ -38,7 +38,6 @@ from specsolve.errors import (
     SpecsolveWarning,
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
-from specsolve.messages import unknown_name_message
 from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
@@ -49,6 +48,7 @@ from specsolve.relational.answer_layout import (
     checked_outputs,
     digest_of,
     installed,
+    kinds_of,
     read_outputs,
     read_reasons,
     saved_frames,
@@ -58,7 +58,7 @@ from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, read_values, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_start, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -66,7 +66,7 @@ if TYPE_CHECKING:
     from mathspec.program import Expression, Program
 
     from specsolve.relational.answer_layout import Output
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
+    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -281,7 +281,7 @@ class Model:
         keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
-        start: Result | Mapping[str, Source] | None = None,
+        start: Result | Start | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -324,26 +324,25 @@ class Model:
                 carries beside the primal, the duals and the declared
                 expressions: ``activity`` for each constraint's left-hand side,
                 ``reduced_cost`` for each variable's reduced cost, ``slack``
-                for each constraint's distance to binding, and
-                ``variable_basis`` and ``constraint_basis`` for the basis
-                status the solve ended on. The result, its save and its archive
+                for each constraint's distance to binding, and ``basis`` for
+                the basis status each variable and constraint ended on, read
+                with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
-            start: What to start the solve from, matched by coordinate, so
-                one from another build of the spec, with rows or columns gained
-                or lost, starts it too. It changes how the solver gets to the
-                optimum, never which one. An LP starts from an earlier answer's
-                basis: a coordinate only this build holds starts at a bound if
-                it is a variable's, and not binding if it is a constraint's,
-                and the answer must have been solved with
-                ``outputs={'variable_basis', 'constraint_basis'}``. A
-                mixed-integer model starts from values, as an incumbent the
-                solver completes and repairs: an earlier answer's primal, or
-                values per variable in any shape a parameter's source takes
-                over the variable's dims, from a parquet path or a table to
-                one number for every coordinate, naming any of the variables
-                and any of their coordinates. An answer can
-                be live, loaded with [`load_result`][] or from an archive.
+            start: What to start the solve from: an earlier answer, live,
+                loaded with [`load_result`][] or from an archive, or a
+                [`Start`][specsolve.types.Start] of tables keyed by reader. It
+                is matched by coordinate, so one from another build of the
+                spec, with rows or columns gained or lost, starts it too, and
+                it changes how the solver gets to the optimum, never which
+                one. An LP starts from a basis where one is given, which an
+                answer carries when solved with ``outputs={'basis'}``: a
+                coordinate it leaves out starts at a bound if it is a
+                variable's, and not binding if it is a constraint's. Otherwise
+                an LP, and a mixed-integer model always, starts from values,
+                which the solver completes and repairs. Where a solver takes
+                values for an LP and no gain from them is known, the solve
+                warns.
 
         Returns:
             The solution, holding this model.
@@ -352,9 +351,13 @@ class Model:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, a bare string as
                 *record_options* or *outputs*, a name in *outputs* that is not
-                an output, or a *start* this model cannot start from: an
-                answer without its basis for an LP, a table for an LP, or a
-                table naming no variable or lacking its dims.
+                an output, a *start* beside a *keep* other than ``solver``,
+                which also says what the solve begins from, or a *start* this
+                model or solver cannot start from: a key that names no reader, a table naming no declaration or
+                lacking its dims, a basis status outside the five words, a
+                basis alone for a mixed-integer model, a start that lands on
+                no coordinate, or values for an LP that the solver cannot
+                take.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -374,7 +377,7 @@ class Model:
                 keep=keep,
                 lower=self._lower,
                 outputs=asked,
-                start=start if start is None or isinstance(start, Result) else self._start_values(start),
+                start=start if start is None or isinstance(start, Result) else self._read_start(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -384,20 +387,19 @@ class Model:
             self._archive(out, answered)
         return answered
 
-    def _start_values(self, start: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
-        """*start*'s values per variable, read and checked as a parameter's source is, over the variable's dims.
+    def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
+        """*start*'s tables read against this build, as [`read_start`][specsolve.sources.read_start] reads them.
 
         Raises:
-            SpecsolveError: A name that is no variable.
-            DataError: A source a parameter over the same dims would be refused for.
+            SpecsolveError: A word, which only [`solve_over`][specsolve.strategy.solve_over]
+                takes, or as [`read_start`][specsolve.sources.read_start] raises.
         """
-        variables = self._program.variables
-        if unknown := next((name for name in start if name not in variables), None):
-            raise SpecsolveError(f'start= names an {unknown_name_message("variable", unknown, variables)}')
-        return {
-            name: read_values('start= for variable', name, variables[name].dims, values, self._tidied)
-            for name, values in start.items()
-        }
+        if isinstance(start, str):
+            raise SpecsolveError(
+                f'start={start!r} is a word only solve_over takes: a solve has no slice before it. Pass an earlier '
+                'answer or a Start.'
+            )
+        return read_start(start, self._program, self._tidied)
 
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.
@@ -554,7 +556,7 @@ def solve(
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
-    start: Result | Mapping[str, Source] | None = None,
+    start: Result | Start | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 
@@ -705,7 +707,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         objective,
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
-        {output: saved_frames(out / output, whole=whole) for output in read_outputs(out)},
+        {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
         'nothing',
         expressions,
         _no_duals=no_duals,

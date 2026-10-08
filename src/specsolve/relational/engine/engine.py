@@ -10,6 +10,7 @@ The lane is described in docs/about/architecture.md.
 
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
@@ -17,9 +18,9 @@ from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
-from specsolve.errors import SpecsolveError
+from specsolve.errors import SpecsolveError, SpecsolveWarning
 from specsolve.relational import sinks
-from specsolve.relational.answer_layout import BASES
+from specsolve.relational.answer_layout import BASIS, BASIS_STATUSES, kinds_of
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -31,8 +32,16 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
-from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
-from specsolve.relational.sinks.solvers.base import BASIS, BASIS_STATUSES
+from specsolve.relational.result import (
+    KEEPS,
+    ConstraintRow,
+    Diagnostics,
+    Keep,
+    Result,
+    refuse_a_start_beside,
+    unknown_keep_message,
+)
+from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -48,18 +57,44 @@ if TYPE_CHECKING:
 
 def _statuses(codes: np.ndarray) -> pl.Series:
     """Basis status codes as the series a frame is laid out from."""
+    return pl.Series('value', BASIS_STATUSES, dtype=BASIS).gather(codes)
+
+
+def _nothing_to_start_message(discrete: bool) -> str:
+    """Why a start gives a model nothing it starts from: a basis alone for a mixed-integer model, or no table at all."""
+    if discrete:
+        return (
+            'start= gives this mixed-integer model a basis alone, and a basis starts only an LP. Give values '
+            "under 'primal' as well."
+        )
+    return "start= gives nothing to start from. Give a table under 'primal', 'variable_basis' or 'constraint_basis'."
+
+
+def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.ndarray) -> None:
+    """Refuse a start of values for an LP that *sink* cannot take, and warn of one it takes where no gain is known.
+
+    Raises:
+        SpecsolveError: *sink* cannot take values that leave a column out.
+    """
     import numpy as np
 
-    return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
-
-
-def _no_values_for_an_lp_message() -> str:
-    """Why an LP takes no table of values to start from."""
-    return (
-        'start= takes a table of values for a mixed-integer model, and this one is an LP, which a simplex '
-        'starts from a basis, not from values. Pass an earlier answer of it solved with '
-        "outputs={'variable_basis', 'constraint_basis'} instead."
-    )
+    partial = bool(np.isnan(values).any())
+    match sink.lp_values['partial' if partial else 'complete']:
+        case 'refused':
+            raise SpecsolveError(
+                f'{solver_name} cannot start an LP from values that leave a column out, and this start gives '
+                f'no value at {int(np.isnan(values).sum())} of {len(values)}. Give a value at every '
+                "coordinate of every variable, or start from an earlier answer solved with outputs={'basis'}."
+            )
+        case 'no_gain':
+            warnings.warn(
+                f'{solver_name} takes {"a partial" if partial else "a"} start of values for an LP, and no gain '
+                f'from one is known: it measured no fewer iterations than a solve started cold. An earlier '
+                f"answer solved with outputs={{'basis'}} starts an LP from its basis. If you see a start of "
+                f'values speed up a solve, please report it at https://github.com/fluxopt/specsolve/issues.',
+                SpecsolveWarning,
+                stacklevel=5,
+            )
 
 
 def _no_built_model(doing: str) -> str:
@@ -190,7 +225,7 @@ class Engine:
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: Result | Mapping[str, pl.LazyFrame] | None = None,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -213,11 +248,12 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
-            start: What to start the solve from, matched by coordinate: for an
-                LP, an earlier answer's basis
-                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]);
-                for a mixed-integer model, an earlier answer's primal or a
-                tidy ``(dims…, value)`` frame per variable, already read
+            start: What to start the solve from, an earlier answer or a
+                [`Start`][specsolve.types.Start] already read
+                ([`read_start`][specsolve.sources.read_start]), matched by
+                coordinate: an LP from a basis where one is given
+                ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
+                and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
 
         Returns:
@@ -225,44 +261,50 @@ class Engine:
 
         Raises:
             SpecsolveError: A *keep* outside
-                [`KEEPS`][specsolve.relational.result.KEEPS], or a *start* this
-                model cannot start from — refused before the solver loads.
+                [`KEEPS`][specsolve.relational.result.KEEPS], a *start* beside a
+                *keep* other than ``solver``, or a *start* this model or this
+                solver cannot start from — refused before the solver loads.
         """
-        begin = None if start is None else self._begun(start)
+        if start is not None:
+            refuse_a_start_beside(keep)
+        matched = None if start is None else self._matched_start(start, solver_name)
         solver, kept = self._hand_off(solver_name, solver_options, keep)
-        if begin is not None:
-            begin(solver)
+        if isinstance(matched, Basis):
+            solver.warm(matched)
+        elif matched is not None:
+            solver.start(matched)
         handoff = self._model.handoff
         self._solves += 1
         if kept == 'nothing':
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff, basis=bool(outputs & BASES))
+            answer = solver.run(handoff, basis='basis' in outputs)
         return self._answered(answer, solver_name, kept, lower, outputs)
 
-    def _begun(self, start: Result | Mapping[str, pl.LazyFrame]) -> Callable[[sinks.Solver], None]:
-        """How a solver starts from *start*, laid onto this build: a basis for an LP, values for a mixed-integer model.
+    def _matched_start(
+        self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
+    ) -> Basis | np.ndarray:
+        """*start* laid onto this build: a basis for an LP given one, else a value per column, NaN where none is given.
+
+        A mixed-integer model starts from values, so a basis given it is not
+        used. An LP given both starts from the basis.
 
         Raises:
-            SpecsolveError: Values for an LP, an answer that holds nothing to
-                start from, or values at no coordinate this build holds.
+            SpecsolveError: A start that gives this model nothing it starts
+                from or lands nowhere on this build, or values for an LP that
+                *solver_name* cannot take.
         """
-        import numpy as np
-
         model = self._model
-        if not self._discrete():
-            if not isinstance(start, Result):
-                raise SpecsolveError(_no_values_for_an_lp_message())
-            basis = readback.matched_basis(model, *start._basis())
-            return lambda solver: solver.warm(basis)
-        frames = start._readable(start._primals, 'the values to start from') if isinstance(start, Result) else start
-        values = readback.matched_values(model, frames)
-        if len(values) and np.isnan(values).all():
-            raise SpecsolveError(
-                'start= gives no value at any coordinate this model holds, so it would start nothing. Name '
-                'the variables as the spec declares them, and their coordinates as primal() returns them.'
-            )
-        return lambda solver: solver.start(values)
+        given = start._start() if isinstance(start, Result) else start
+        discrete = bool(self._discrete())
+        if not discrete and (given.get('variable_basis') or given.get('constraint_basis')):
+            return readback.matched_basis(model, given.get('variable_basis', {}), given.get('constraint_basis', {}))
+        if not given.get('primal'):
+            raise SpecsolveError(_nothing_to_start_message(discrete))
+        values = readback.matched_values(model, given['primal'])
+        if not discrete:
+            _checked_lp_values(sinks.solver(solver_name), solver_name, values)
+        return values
 
     def _answered(
         self,
@@ -300,7 +342,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _outputs={output: self._output(output, answer) for output in outputs},
+            _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -356,19 +398,15 @@ class Engine:
         replaces rather than mutates. A ``None`` vector yields no frames rather
         than empty ones.
         """
-
-        def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
-            return {} if values is None else self._per_constraint(values)
-
         return (
-            self._per_variable(primal) if primal is not None else {},
-            rows(dual),
-            rows(dual_ray),
+            {} if primal is None else self._per_variable(primal),
+            {} if dual is None else self._per_constraint(dual),
+            {} if dual_ray is None else self._per_constraint(dual_ray),
         )
 
-    def _output(self, output: Output, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """*output*'s frames, computed only when asked for; empty where a vector it needs is absent."""
-        match output:
+    def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve.relational.answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
             case 'reduced_cost':
@@ -385,6 +423,8 @@ class Engine:
                 return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))
             case 'constraint_basis':
                 return {} if answer.basis is None else self._per_constraint(_statuses(answer.basis.rows))
+            case _:
+                raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
