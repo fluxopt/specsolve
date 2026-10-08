@@ -12,7 +12,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import polars as pl
 import pytest
-from polars.testing import assert_frame_equal
 
 import specsolve as sps
 from specsolve import api, strategy
@@ -49,7 +48,8 @@ def alone(scenario: str, **options) -> sps.types.Sweep:
 
 def same(got: pl.DataFrame, expected: pl.DataFrame) -> None:
     """The two frames hold one answer: a solver may write zero as ``-0.0``, which ``equals`` tells apart."""
-    assert_frame_equal(got, expected, check_exact=False, abs_tol=1e-9)
+    assert got.drop('value').equals(expected.drop('value')), 'the same coordinates, in the same order'
+    assert got['value'].to_list() == pytest.approx(expected['value'].to_list(), abs=1e-9), 'the same values'
 
 
 def chain_of(frame: pl.DataFrame, scenario: str) -> pl.DataFrame:
