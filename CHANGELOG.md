@@ -16,7 +16,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
 - perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
 - refactor(api): keep= is gone, and a solve started from the model's last answer carries on in the solver that holds it ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
-- feat(api): a sweep can be cut by several axes at once, such as a rolling horizon per scenario ([#1888](https://github.com/fluxopt/specsolve/pull/1888))
+- feat(api): a sweep can be cut by several axes at once, each carrying its own state, such as a rolling horizon per scenario ([#1888](https://github.com/fluxopt/specsolve/pull/1888))
 
 ## 0.6.2 (2026-10-07)
 
