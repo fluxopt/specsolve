@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import warnings
 from collections.abc import Iterator
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
@@ -29,7 +30,7 @@ import polars as pl
 from specsolve.api import build, check
 from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
 from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
-from specsolve.errors import DataError, SpecsolveError
+from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
 from specsolve.relational.answer_layout import (
@@ -274,15 +275,16 @@ def solve_over(
             windows; *outputs* that [`solve`][specsolve.api.Model.solve]
             refuses; a *start* word other than ``'previous'`` — each answerable from the declarations alone; keys of more than one
             type, or two keys of one text; a *start* table over an EachWindow
-            sweep's local index alone, one that leaves a slice no row, or one
+            sweep's local index alone, or one
             [`solve`][specsolve.api.Model.solve] refuses.
         DataError: No source carries the axis, an index of another
             dimension carries it, or the axis produced no slices.
 
     Warns:
         SpecsolveWarning: A source carrying the axis that is short of a
-            coordinate another has — that slice builds it empty — or a
-            position the model counts, which every window restarts.
+            coordinate another has — that slice builds it empty — a position
+            the model counts, which every window restarts, or a *start* that
+            leaves a slice no row, which starts that slice from nothing.
     """
     if carry and executor is not None:
         raise SpecsolveError(
@@ -350,8 +352,11 @@ def _slice_starts(
     Raises:
         SpecsolveError: A word other than ``'previous'``; a name
             [`refuse_unknown_start`][specsolve.sources.refuse_unknown_start]
-            refuses; a table over an EachWindow sweep's local index alone; or
-            a slice the cut leaves nothing.
+            refuses; or a table over an EachWindow sweep's local index alone.
+
+    Warns:
+        SpecsolveWarning: A slice the cut leaves nothing, which starts from
+            nothing.
     """
     refuse_unknown_start_word(start)
     if start is None or isinstance(start, str):
@@ -376,11 +381,13 @@ def _slice_starts(
                 given[reader] = held
         if not given:
             empty.append(current.key)
-        starts.append(cast('Start', given))
+        starts.append(cast('Start', given) if given else None)
     if empty:
-        raise SpecsolveError(
-            f'start= gives the slices {empty} no row to start from: no table carries their {column!r}, and none '
-            f'reaches every slice. Give rows for them, or sweep them without start=.'
+        warnings.warn(
+            f'start= gives the slices {empty} no row, so they start from nothing: no table carries their '
+            f'{column!r}, and none reaches every slice. The answer is the same; only the time it takes changes.',
+            SpecsolveWarning,
+            stacklevel=3,
         )
     return starts
 

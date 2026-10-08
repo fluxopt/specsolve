@@ -280,7 +280,8 @@ cold = sps.solve_over('dispatch.yaml', sources, axis, start=None)
 | **a table over the sliced dimension gives each slice its rows** | `EachCoordinate('scenario')` gives each slice the rows of its scenario. `EachWindow` gives each window the rows of the coordinates it covers, lookahead included, over its local index. A hand-built axis cuts on its key column. |
 | **an earlier sweep is its answer** | Each slice starts from the earlier slice of its key, and each window from the answer over the coordinates it covers. An archive written without `keep_windows=True` starts a sweep too. |
 | **`'previous'`, the default, carries each slice on from the one before it** | As [`solve`](api.md#specsolve.types.Model.solve) does, on the model the sweep updates in place. A slice whose update loads the solver again, the first slice, and every slice under an `executor` begin from nothing. `start=None` begins every slice from nothing. |
-| **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused: it says nothing about which coordinates it means. So is a start that leaves a slice no row, and a table `solve` refuses. |
+| **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused: it says nothing about which coordinates it means. So is a table `solve` refuses. |
+| **a slice its start leaves no row starts from nothing** | A table short of a slice's key, or an earlier sweep whose slice left no values, warns and starts that slice from nothing. The answer is the same; only the time it takes changes. |
 | **a start reaches every executor** | Each slice's cut is taken before the slice is sent, so a slice solved in another process takes it as data. |
 
 ## Running slices in parallel
