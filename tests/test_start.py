@@ -515,21 +515,24 @@ EMPTY_HANDED = {**knapsack_sources(), 'capacity': pl.DataFrame({'value': [-1.0]}
 
 
 @pytest.mark.parametrize(
-    'earlier',
+    'start',
     [
-        pytest.param(DRAWS[:1], id='short-of-a-key'),
-        pytest.param([DRAWS[0], ('b', EMPTY_HANDED)], id='a-slice-with-no-values'),
+        pytest.param(lambda: sps.solve_over(KNAPSACK, {}, DRAWS[:1], key_name='draw'), id='a-sweep-short-of-a-key'),
+        pytest.param(
+            lambda: sps.solve_over(KNAPSACK, {}, [DRAWS[0], ('b', EMPTY_HANDED)], key_name='draw'),
+            id='a-sweep-with-a-slice-that-left-no-values',
+        ),
+        pytest.param(
+            lambda: {'primal': {'take': TWO_ITEMS.with_columns(draw=pl.lit('a'))}}, id='a-table-short-of-a-key'
+        ),
     ],
 )
-def test_an_earlier_sweep_that_leaves_a_slice_no_row_is_refused_before_a_slice_is_built(
-    earlier: list, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from specsolve import strategy
-
-    before = sps.solve_over(KNAPSACK, {}, earlier, key_name='draw')
-    monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
-    with pytest.raises(SpecsolveError, match=r"the slices \['b'\] no row to start from"):
-        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=before)
+def test_a_slice_its_start_leaves_no_row_starts_from_nothing_with_a_warning(start: Any) -> None:
+    """A missing start costs the slice its head start, not the sweep its answer."""
+    given = start()
+    with pytest.warns(SpecsolveWarning, match=r"start= gives the slices \['b'\] no row"):
+        sweep = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=given)
+    assert sweep.record['has_primal'].to_list() == [True, True], 'both draws solve, the second from nothing'
 
 
 # ---------------------------------------------------------------------------
