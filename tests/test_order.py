@@ -45,7 +45,7 @@ def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dic
 
 def _digest(port: dict[str, Any], given: Mapping[str, Any]) -> str:
     with sps.build(expanded(port['spec']), given) as model:
-        return model._model_digest()
+        return model._engine.contents()
 
 
 def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:

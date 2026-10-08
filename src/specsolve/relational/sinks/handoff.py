@@ -241,10 +241,11 @@ class Handoff:
     def contents(self) -> str:
         """A digest of the built model **whole** — the numbers included.
 
-        The question a saved answer asks of a model rebuilt later: is this the
-        model I answered? So it covers what [`structure`][] leaves out — the
-        bounds, costs and right-hand sides a re-solve may push — since a pushed
-        number is a different answer over the same matrix.
+        Whether two builds made one model, to the last bit. So it covers what
+        [`structure`][] leaves out — the bounds, costs and right-hand sides a
+        re-solve may push. A saved answer is checked against the data instead
+        ([`digest_of_data`][specsolve.relational.answer_layout.digest_of_data]),
+        which another machine reads the same.
 
         Over the built model rather than the sources, so two source mappings a
         build cannot tell apart agree here. A source whose rows moved builds a

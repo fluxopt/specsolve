@@ -13,7 +13,7 @@ import zipfile
 from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -34,6 +34,7 @@ from specsolve.relational.answer_layout import (
     Output,
     Provenance,
     Record,
+    digest_of_data,
     digest_of_file,
     read_reasons,
     write_reasons,
@@ -1857,6 +1858,39 @@ def test_an_archive_whose_data_was_replaced_is_refused_at_the_rebuild(
     )
 
 
+def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums(tmp_path: Path) -> None:
+    """``osemosys_utopia`` sums its costs over rows in no fixed order, so each build differs in the last bit.
+
+    The check compared the built model to the last bit, so every archive of
+    it refused an undeclared read as built from other data. It compares the
+    data now, which a rebuild anywhere reads the same.
+    """
+    from tests.conftest import expanded, port_sources, port_spec
+
+    spec = expanded(port_spec('osemosys_utopia'))
+    sps.solve(spec, port_sources('osemosys_utopia'), archive=tmp_path / 'run.zip').close()
+    variable = next(iter(sps.check(spec).variables))
+    assert sps.load_archive(tmp_path / 'run.zip').result.evaluate(f'sum({variable})').height == 1
+
+
+@pytest.mark.parametrize(
+    ('change', 'same'),
+    [
+        pytest.param(lambda s: s | {'cost': s['cost'].reverse()}, True, id='a-table-in-another-row-order'),
+        pytest.param(lambda s: s | {'generator': s['generator'].reverse()}, False, id='a-dimension-in-another-order'),
+    ],
+)
+def test_the_data_digest_reads_a_tables_rows_in_any_order_but_a_dimensions(
+    dispatch_yaml: Path, dispatch_frame_inputs, change: Any, same: bool
+) -> None:
+    """A dimension's row order is its coordinate order, so moving it is other data; moving a table's rows is not."""
+    with (
+        sps.build(dispatch_yaml, dispatch_frame_inputs) as plain,
+        sps.build(dispatch_yaml, change(dispatch_frame_inputs)) as moved,
+    ):
+        assert (moved._model_digest() == plain._model_digest()) == same
+
+
 def test_an_answer_naming_no_model_is_taken_as_given(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -1920,3 +1954,9 @@ def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, disp
     """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
+
+
+def test_the_data_digest_tells_labels_apart_where_their_characters_run_together() -> None:
+    joined_alike = [pl.LazyFrame({'name': ['ab', 'c']}), pl.LazyFrame({'name': ['a', 'bc']})]
+    digests = {digest_of_data('spec', {'name': table}, ordered={'name'}) for table in joined_alike}
+    assert len(digests) == 2, "'ab', 'c' and 'a', 'bc' are other labels, though their characters read alike end to end"
