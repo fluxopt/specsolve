@@ -123,7 +123,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
         if width_name is None:
             return frame
         widths, keys = _named_amount(scope, order, width_name, _WIDTH)
-        return frame.join(widths, on=keys, how='inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
+        return join_on(frame, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
 
     remap = partial(order.remap, moved=moved, prepared=lagged)
 
@@ -166,7 +166,7 @@ def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) 
         if edge.offsets is None:
             return frame
         offsets, keys = edge.offsets
-        return frame.join(offsets, on=keys, how='inner')
+        return join_on(frame, offsets, keys, 'inner')
 
     remap = partial(order.remap, moved=moved, prepared=offsetted)
 

@@ -554,8 +554,9 @@ def _spread(
     """A parameter written as plain Python, spread over the dims it declares.
 
     A ``{label: value}`` map, a sequence in the dimension's own label order,
-    or one number standing for every coordinate. A bool stays boolean rather
-    than widening to float: a mask's truthiness is read off the column type.
+    or one number standing for every coordinate. One number keeps its Python
+    type, so an int attaches to an ``int`` declaration and a bool stays
+    boolean: a mask's truthiness is read off the column type.
 
     Raises:
         DataError: A shape that does not fit the declared dims, a sequence of
@@ -568,8 +569,10 @@ def _spread(
 
     if isinstance(obj, bool):
         return _broadcast(name, pl.lit(obj, dtype=pl.Boolean), dims, sources, kind)
-    if isinstance(obj, (int, float)):
-        return _broadcast(name, pl.lit(float(obj), dtype=pl.Float64), dims, sources, kind)
+    if isinstance(obj, int):
+        return _broadcast(name, pl.lit(obj, dtype=pl.Int64), dims, sources, kind)
+    if isinstance(obj, float):
+        return _broadcast(name, pl.lit(obj, dtype=pl.Float64), dims, sources, kind)
 
     if isinstance(obj, Collection) and not isinstance(obj, (str, bytes)):
         if len(dims) != 1:
