@@ -50,6 +50,7 @@ from specsolve.relational.engine.predicates import Carrier, compile_predicate, f
 from specsolve.relational.engine.relations import landed, mapping, walk_join
 from specsolve.relational.engine.scope import UNIT, Scope
 from specsolve.relational.engine.shifts import translate_piece, window_piece
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -151,8 +152,8 @@ class Compiler:
             return None
 
         position = self.scope.row_major(v.dims, self.scope.ordinal_of)
-        pairs = table.select(position.alias('__at__'), pl.col('value')).pipe(collected)
-        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
+        pairs = table.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
+        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
 
     # ------------------------------------------------------------------
     # expressions → pieces
@@ -338,7 +339,7 @@ class Compiler:
     def _parameter_piece(self, name: str) -> Piece:
         """A parameter as a constant part, keyed by its declared dims."""
         dims = self.scope.program.parameters[name].dims
-        frame = self.scope.data.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
+        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
         return Piece(dims, frame, 'const', parameters=frozenset({name}))
 
     def _variable_piece(self, name: str) -> Piece:
