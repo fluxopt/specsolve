@@ -128,14 +128,34 @@ def refuse_reserved(name: str, which: str) -> None:
         )
 
 
+#: The column that holds the numbers beside a declaration's dimensions, in a
+#: parameter's table and in every frame an answer comes back as. Besides the
+#: names under [`RESERVED`][], it is the one name a dimension may not take.
+VALUE = 'value'
+
+
+def refuse_value(name: str, which: str) -> None:
+    """Refuse *name*, which *which* describes, where it is [`VALUE`][] in any letter case.
+
+    Raises:
+        SpecsolveError: A name the ``value`` column would collide with.
+    """
+    if name.casefold() == VALUE:
+        raise SpecsolveError(
+            f'{which} has the name of the column {VALUE!r}, which holds the numbers beside the dimensions '
+            f"in a parameter's table and in every frame an answer comes back as. Query engines read column "
+            f'names without case, so the two columns would collide in any letter case. Rename it.'
+        )
+
+
 #: The column an archive adds to every table it holds, naming the run the
 #: table came from. Read back, a frame comes without it.
 RUN = f'{RESERVED}run'
 
 
-#: The layout a result, a sweep and an archive write to disk. A change to
-#: any of them raises it. Compared, never branched on.
-LAYOUT = 4
+#: The layout a result and a sweep write to disk, and an archive under its
+#: ``answer/``. A change to any of them raises it. Compared, never branched on.
+ANSWER_LAYOUT = 4
 FORMAT_FILE = 'format.json'
 
 
@@ -147,10 +167,15 @@ def installed(distribution: str) -> str | None:
         return None
 
 
-def write_format(directory: Path, outputs: Iterable[Output]) -> None:
-    """Stamp *directory* with the layout its contents are in, the specsolve version that wrote them, and the [`OUTPUTS`][] it carries."""
+def write_format(directory: Path, outputs: Iterable[Output] | None = None, layout: int = ANSWER_LAYOUT) -> None:
+    """Stamp *directory* with the layout its contents are in, the specsolve version that wrote them, and the [`OUTPUTS`][] an answer carries.
+
+    An archive's own stamp, over its spec and its data, names no *outputs*.
+    """
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = {'layout': LAYOUT, 'specsolve': installed('specsolve'), 'outputs': sorted(outputs)}
+    stamp: dict[str, object] = {'layout': layout, 'specsolve': installed('specsolve')}
+    if outputs is not None:
+        stamp['outputs'] = sorted(outputs)
     (directory / FORMAT_FILE).write_text(json.dumps(stamp))
 
 
@@ -164,6 +189,19 @@ def read_outputs(directory: Path) -> frozenset[Output]:
     return frozenset(name for name in json.loads((directory / FORMAT_FILE).read_text())['outputs'] if is_output(name))
 
 
+def other_layout(directory: Path, layout: int = ANSWER_LAYOUT) -> str | None:
+    """How *directory*'s stamp differs from *layout*, as a refusal names it, or ``None`` where it does not."""
+    file = directory / FORMAT_FILE
+    stamp = json.loads(file.read_text()) if file.is_file() else {}
+    found = stamp.get('layout')
+    if found == layout:
+        return None
+    writer = stamp.get('specsolve')
+    which = f'in layout {found}' if found is not None else 'with no layout stamp'
+    by = f', written by specsolve {writer},' if writer else ''
+    return f'{which}{by}'
+
+
 def check_format(directory: Path) -> None:
     """Refuse a saved answer whose layout is not the one this package reads.
 
@@ -172,18 +210,11 @@ def check_format(directory: Path) -> None:
     Raises:
         LayoutError: A missing stamp, or one that is not this package's.
     """
-    file = directory / FORMAT_FILE
-    stamp = json.loads(file.read_text()) if file.is_file() else {}
-    found = stamp.get('layout')
-    if found != LAYOUT:
-        writer = stamp.get('specsolve')
-        which = f'in layout {found}' if found is not None else 'with no layout stamp'
-        by = f', written by specsolve {writer},' if writer else ''
+    if (other := other_layout(directory)) is not None:
         raise LayoutError(
-            f'{str(directory)!r} holds a saved answer {which}{by} and this package reads layout '
-            f'{LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
-            f'the model again and save it. An archive that archive= wrote still holds the model and '
-            f'the data to do that with.'
+            f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
+            f'{ANSWER_LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
+            f'the model again and save it.'
         )
 
 

@@ -35,6 +35,7 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
+    VALUE,
     Metrics,
     Record,
     checked_outputs,
@@ -43,7 +44,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.sources import numbered, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
@@ -609,7 +610,7 @@ def _answers(result: Result, program: Program, metrics: Metrics) -> SliceAnswer:
     }
     for output, laid in (result._outputs or {}).items():
         if laid:
-            frames[output] = {name: frame.collect(engine=collect_engine()) for name, frame in laid.items()}
+            frames[output] = {name: frame.pipe(collected) for name, frame in laid.items()}
     no_expressions: dict[str, str] = {}
     for name in program.expressions:
         try:
@@ -658,7 +659,7 @@ def _key_column(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
             f'with a column the frames already carry. Name it something the spec does not use.'
         )
-    fixed = tuple(dict.fromkeys(('value', *Record._fields, *Metrics._fields)))
+    fixed = tuple(dict.fromkeys((VALUE, *Record._fields, *Metrics._fields)))
     if key_name in fixed:
         raise SpecsolveError(
             f'key_name={key_name!r} is a column a sweep frame carries ({", ".join(fixed)}), so the slice '
@@ -711,7 +712,7 @@ def _encode(
             out[name] = obj
         else:
             buffer = io.BytesIO()
-            table.collect().write_parquet(buffer, compression=_COMPRESSION)
+            table.pipe(collected).write_parquet(buffer, compression=_COMPRESSION)
             out[name] = buffer.getvalue()
         memo[name] = (obj, out[name])
     return out
