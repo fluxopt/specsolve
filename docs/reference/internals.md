@@ -117,8 +117,10 @@ Each entry says what the thing is, then the module it lives in.
 : A digest of everything a re-solve may not change: the counts, the matrix,
   each row's comparison, each column's type and the sets. A loaded solver
   keeps its model only while this digest stays the same. The **contents
-  digest** adds the numbers, and says whether a saved answer belongs to a
-  rebuilt model (`relational/sinks/handoff.py`).
+  digest** adds the numbers, and says whether two builds made one model to the
+  last bit (`relational/sinks/handoff.py`). A saved answer is checked against
+  the **data digest** instead, over the values of the data it was built from
+  (`relational/answer_layout.py`), which another machine reads the same.
 
 **Warm start**
 : What a solve starts from instead of from scratch, laid onto the build by
