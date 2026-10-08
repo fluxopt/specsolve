@@ -63,7 +63,9 @@ each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
 **A datetime label is held in microseconds**, in the time zone it arrives in.
-A column must be in its index's time zone.
+A column must be in its index's time zone. Under a `dtype: datetime`
+dimension, a date is the microsecond its day starts on. The index
+`[date(2030, 1, 1)]` and a column of `datetime(2030, 1, 1)` hold the same label.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
@@ -127,6 +129,8 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 |---|---|
 | an undeclared column in a table | ignored |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
+| a date under a `dtype: datetime` dimension | held as the microsecond its day starts on |
+| a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
 | a coordinate with no row | sparse variables; what a missing row means where it is read is [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` names the parameters that arrived short of their dims ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
 | a value that is readable and wrong | bound as given |
 

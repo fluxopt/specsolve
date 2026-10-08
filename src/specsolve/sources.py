@@ -57,7 +57,8 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's index as one column of labels
     under its own name in the order they arrived, a relation as one column
-    per declared column. A datetime label is held in microseconds.
+    per declared column. A datetime label is held in microseconds, and a date
+    under a ``datetime`` dimension as the microsecond its day starts on.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -78,7 +79,9 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _index(data[dname], dname, declared.dtype)
-    relations = {name: _read_relation(data[name], name, relation) for name, relation in program.relations.items()}
+    relations = {
+        name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
+    }
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
@@ -175,7 +178,9 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = in_microseconds(table.select(dim).pipe(collected), f"index for dimension '{dim}'")
+    labels = in_microseconds(
+        table.select(dim).pipe(collected), f"index for dimension '{dim}'", (dim,) if dtype == 'datetime' else ()
+    )
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -253,8 +258,15 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
                 )
 
 
-def in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
+def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
     """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
+
+    Args:
+        frame: The table whose datetime columns are cast.
+        owner: What carried *frame*, as a refusal names it.
+        midnight: The columns whose dates are labels of a datetime dimension.
+            A date there becomes the microsecond its day starts on, the same
+            instant.
 
     Raises:
         DataError: A label with a part below one microsecond, which the cast would drop.
@@ -267,7 +279,19 @@ def in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
                     f"{owner} holds '{column}' label(s) finer than a microsecond, such as {finer.cast(pl.String)[0]}. "
                     f"Round them before attaching: polars .dt.round('1us'), pandas .dt.round('us')."
                 )
-    return frame.with_columns(cs.datetime().dt.cast_time_unit('us'))
+    return frame.with_columns(
+        cs.datetime().dt.cast_time_unit('us'), (cs.by_name(midnight) & cs.date()).cast(pl.Datetime('us'))
+    )
+
+
+def _over_datetimes(columns: Iterable[tuple[str, str]], indexes: Mapping[str, pl.LazyFrame]) -> list[str]:
+    """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's index holds datetime labels.
+
+    The index is read first and follows its declaration, so a column follows
+    the index rather than the declaration: a date beside an index of dates
+    stays a date.
+    """
+    return [c for c, dim in columns if dim in indexes and isinstance(indexes[dim].collect_schema()[dim], pl.Datetime)]
 
 
 def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, index: pl.DataType) -> None:
@@ -339,8 +363,12 @@ def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
     return index.select(dim).pipe(collected)[dim]
 
 
-def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> pl.LazyFrame:
+def _read_relation(
+    source: Source, name: str, relation: RelationDeclaration, indexes: Mapping[str, pl.LazyFrame]
+) -> pl.LazyFrame:
     """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
+
+    A column is read in its dimension's label type, from *indexes*.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -365,7 +393,9 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = in_microseconds(table.select(*roles).pipe(collected), f"relation '{name}'")
+    rows = in_microseconds(
+        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, indexes)
+    )
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -650,7 +680,9 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = in_microseconds(table.select(wanted).pipe(collected), f"{kind} '{name}'")
+    frame = in_microseconds(
+        table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
+    )
     _check_one_row_per_coordinate(name, p, frame, sources, kind)
     _check_values_are_present(name, p, frame, kind)
     _check_value_dtype(name, p, frame, kind)

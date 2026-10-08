@@ -19,6 +19,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - refactor(api): keep= is gone, and a re-solve carries on from where the last solve ended unless start=None says otherwise ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
+- fix(data): a datetime dimension takes a date, a nanosecond or a pandas seconds column for the same instant ([#TBD](https://github.com/fluxopt/specsolve/pull/TBD))
 - docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
 
 ## 0.7.0 (2026-10-07)
