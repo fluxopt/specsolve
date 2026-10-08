@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(api): sps.solve lets go of its own copy of the model before the solver runs, so the solve peaks lower ([#1911](https://github.com/fluxopt/specsolve/pull/1911))
 - feat(api): a model with no solution names the rows and bounds that conflict ([#1880](https://github.com/fluxopt/specsolve/pull/1880))
 - feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
 - feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
