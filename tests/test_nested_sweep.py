@@ -12,6 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 import specsolve as sps
 from specsolve import api, strategy
@@ -23,7 +24,12 @@ SCENARIOS = {'low': 1.0, 'high': 1.5}
 
 
 def scenario_horizons() -> dict[str, object]:
-    """Twelve snapshots of load under each scenario, `high` half as large again as `low`."""
+    """Twelve snapshots of load under each scenario, `high` half as large again as `low`.
+
+    The store starts each scenario at 50 and every window empties it, so a
+    window that took the seed rather than the level carried to it would solve
+    another problem.
+    """
     base = horizon_sources(12)
     load = pl.concat(
         [
@@ -31,7 +37,7 @@ def scenario_horizons() -> dict[str, object]:
             for name, scale in SCENARIOS.items()
         ]
     )
-    return {**base, 'load': load}
+    return {**base, 'load': load, 'soc_initial': pl.DataFrame({'value': [50.0]})}
 
 
 def alone(scenario: str, **options) -> sps.types.Sweep:
@@ -39,6 +45,11 @@ def alone(scenario: str, **options) -> sps.types.Sweep:
     sources = scenario_horizons()
     load = sources['load'].filter(pl.col('scenario') == scenario).drop('scenario')
     return sps.solve_over(WINDOW, {**sources, 'load': load}, WINDOW_AXIS, **options)
+
+
+def same(got: pl.DataFrame, expected: pl.DataFrame) -> None:
+    """The two frames hold one answer: a solver may write zero as ``-0.0``, which ``equals`` tells apart."""
+    assert_frame_equal(got, expected, check_exact=False, abs_tol=1e-9)
 
 
 def chain_of(frame: pl.DataFrame, scenario: str) -> pl.DataFrame:
@@ -54,7 +65,7 @@ def nested() -> sps.types.Sweep:
 def test_each_chain_answers_as_its_own_sweep_would(nested, scenario):
     """The carry hands the level on within a scenario and restarts from the seed at the next one."""
     own = alone(scenario, carry=CARRY)
-    assert chain_of(nested.primal('soc'), scenario).equals(own.primal('soc'))
+    same(chain_of(nested.primal('soc'), scenario), own.primal('soc'))
     objectives = chain_of(nested.record, scenario)['objective'].to_list()
     assert objectives == pytest.approx(own.record['objective'].to_list()), 'every window solves as it would alone'
 
@@ -83,7 +94,10 @@ def test_previous_starts_each_chain_cold(monkeypatch):
         'cold at the first window of each scenario, and from the window before everywhere else'
     )
     for scenario in SCENARIOS:
-        assert chain_of(runs.primal('soc'), scenario).equals(alone(scenario, carry=CARRY).primal('soc'))
+        own = alone(scenario, carry=CARRY, start='previous').record['objective'].to_list()
+        assert chain_of(runs.record, scenario)['objective'].to_list() == pytest.approx(own), (
+            'each window reaches the optimum it reaches alone; a start may end the LP on another optimal vertex'
+        )
 
 
 def _threads():
@@ -98,9 +112,19 @@ def _processes():
 def test_an_executor_runs_the_chains_concurrently_and_each_in_order(nested, pool):
     """A carry no longer rules an executor out where there is more than one chain."""
     with pool() as executor:
-        runs = sps.solve_over(WINDOW, scenario_horizons(), AXES, carry=CARRY, start='previous', executor=executor)
-    assert runs.primal('soc').equals(nested.primal('soc'))
+        runs = sps.solve_over(WINDOW, scenario_horizons(), AXES, carry=CARRY, executor=executor)
+    same(runs.primal('soc'), nested.primal('soc'))
     assert runs.keys == nested.keys
+
+
+def test_under_an_executor_previous_starts_each_chain_cold_once(monkeypatch):
+    """Each chain is one task, so only its first slice starts from nothing."""
+    given = []
+    original = api.Model.solve
+    monkeypatch.setattr(api.Model, 'solve', lambda self, **kw: given.append(kw.get('start')) or original(self, **kw))
+    with ThreadPoolExecutor(2) as executor:
+        sps.solve_over(WINDOW, scenario_horizons(), AXES, carry=CARRY, start='previous', executor=executor)
+    assert sum(start is None for start in given) == len(SCENARIOS), 'one cold start per chain, whatever the order'
 
 
 def test_an_executor_on_a_sweep_of_one_chain_still_refuses_a_carry():
@@ -115,7 +139,7 @@ def test_a_spilled_nested_sweep_resumes_without_solving(nested, tmp_path, monkey
     again = sps.solve_over(WINDOW, scenario_horizons(), AXES, carry=CARRY, spill_to=tmp_path / 'spill')
 
     assert not built, 'every slice is on disk, so none is built again'
-    assert again.primal('soc').equals(nested.primal('soc'))
+    same(again.primal('soc'), nested.primal('soc'))
     assert sps.load_sweep(tmp_path / 'spill').key_names == nested.key_names
 
 
@@ -124,17 +148,17 @@ def test_a_nested_sweep_archive_holds_its_axes_and_runs_again(nested, tmp_path):
     archive = sps.load_archive(tmp_path / 'run')
 
     assert archive.axis == AXES
-    assert archive.sweep.primal('soc').equals(nested.primal('soc'))
-    assert archive.sweep.primal('soc', per_window=True).equals(nested.primal('soc', per_window=True))
+    same(archive.sweep.primal('soc'), nested.primal('soc'))
+    same(archive.sweep.primal('soc', per_window=True), nested.primal('soc', per_window=True))
     again = sps.solve_over(archive.spec, archive.sources, archive.axis, carry=archive.carry)
-    assert again.primal('soc').equals(nested.primal('soc'))
+    same(again.primal('soc'), nested.primal('soc'))
 
 
 def test_an_undeclared_expression_reads_off_a_nested_archive(nested, tmp_path):
     sps.solve_over(WINDOW, scenario_horizons(), AXES, carry=CARRY, archive=tmp_path / 'run', keep_windows=True)
     doubled = sps.load_archive(tmp_path / 'run').sweep.evaluate('soc * 2')
     expected = nested.primal('soc').with_columns(pl.col('value') * 2)
-    assert doubled.equals(expected)
+    same(doubled, expected)
 
 
 def test_a_nested_sweep_starts_from_an_earlier_one(nested, monkeypatch):
@@ -147,7 +171,7 @@ def test_a_nested_sweep_starts_from_an_earlier_one(nested, monkeypatch):
     windows = nested.primal('soc', per_window=True)
     for key, start in zip(nested.keys, given, strict=True):
         own = windows.filter(pl.col('scenario') == key[0], pl.col('snapshot_start') == key[1])
-        assert start['primal']['soc'].select('t', 'value').sort('t').equals(own.select('t', 'value').sort('t')), key
+        same(start['primal']['soc'].select('t', 'value').sort('t'), own.select('t', 'value').sort('t'))
     assert again.record['objective'].to_list() == pytest.approx(nested.record['objective'].to_list()), (
         'the same optimum, though the LP may end on another of its optimal vertices'
     )
@@ -161,7 +185,7 @@ def test_three_axes_cut_in_turn():
     assert runs.key_names == ('year', 'scenario', 'snapshot_start'), 'one key column per axis, outer first'
     assert len(runs) == 2 * 2 * 3, 'two years, two scenarios, three windows each'
     one = runs.primal('soc').filter(pl.col('year') == 2040).drop('year')
-    assert chain_of(one, 'high').equals(alone('high', carry=CARRY).primal('soc'))
+    same(chain_of(one, 'high'), alone('high', carry=CARRY).primal('soc'))
 
 
 def test_two_coordinate_axes_chain_the_inner_one():
@@ -180,7 +204,7 @@ def test_two_coordinate_axes_chain_the_inner_one():
     for scenario in SCENARIOS:
         mine = demand.filter(pl.col('scenario') == scenario).drop('scenario')
         own = sps.solve_over(MYOPIC, {**base, 'demand': mine}, sps.EachCoordinate('period'), carry=carry)
-        assert chain_of(runs.primal('total'), scenario).equals(own.primal('total'))
+        same(chain_of(runs.primal('total'), scenario), own.primal('total'))
 
 
 @pytest.mark.parametrize(
