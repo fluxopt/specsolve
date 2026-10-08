@@ -131,6 +131,11 @@ def _bracket(coordinate: str) -> str:
     return f'[{coordinate}]' if coordinate else ''
 
 
+def _named_at(name: str, coordinate: Mapping[str, object]) -> str:
+    """``balance[snapshot=1, g=gas]`` — a declaration at one coordinate, in its dim order."""
+    return name + _bracket(coordinate_text(coordinate))
+
+
 @dataclass(frozen=True)
 class ConstraintRow:
     """One built constraint row, spelled back out — what [`row`][specsolve.api.Model.row] returns.
@@ -166,14 +171,10 @@ class ConstraintRow:
 
     def __str__(self) -> str:
         """The row as one line: ``balance[snapshot=1]: +1 p[…] +50 p[…] >= 60``."""
-        return f'{self.name}{_bracket(self._where())}: {self._body()} {self.sense} {_number(self.rhs)}'
+        return f'{_named_at(self.name, self.coordinate)}: {self._body()} {self.sense} {_number(self.rhs)}'
 
     #: The line, not the field-by-field dataclass dump.
     __repr__ = __str__
-
-    def _where(self) -> str:
-        """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
-        return coordinate_text(self.coordinate)
 
     def _body(self) -> str:
         """The terms, spelled out or summarised."""
@@ -201,6 +202,47 @@ class ConstraintRow:
             else f'{variable}: {terms} (|coef| {_number(low)}…{_number(high)})'
             for variable, terms, low, high in grouped.iter_rows()
         )
+
+
+@dataclass(frozen=True)
+class InfeasibleSubsystem:
+    """The rows and bounds that cannot hold together — what [`infeasible_subsystem`][specsolve.api.Model.infeasible_subsystem] returns.
+
+    Irreducible: drop any one member and the rest can hold. A model can have
+    several, and each solver may find a different one. Printed, it is one line
+    per member, constraints first.
+
+    Attributes:
+        constraints: ``(dims…, sense, rhs)`` per constraint with a row in it,
+            in declaration order, its rows in label order.
+        bounds: ``(dims…, bound, value)`` per variable with a bound in it,
+            in declaration order. ``bound`` is ``lower`` or ``upper``.
+    """
+
+    constraints: Mapping[str, pl.DataFrame]
+    bounds: Mapping[str, pl.DataFrame]
+
+    def __str__(self) -> str:
+        """``balance[snapshot=1] == 200``, then ``p[snapshot=1, tech=gas] <= 100 (upper bound)``."""
+        lines = [
+            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} {member["sense"]} {_number(member["rhs"])}'
+            for name, frame in self.constraints.items()
+            for member in frame.iter_rows(named=True)
+        ]
+        lines += [
+            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} '
+            f'{_BOUND_SENSE[member["bound"]]} {_number(member["value"])} ({member["bound"]} bound)'
+            for name, frame in self.bounds.items()
+            for member in frame.iter_rows(named=True)
+        ]
+        return '\n'.join(lines)
+
+    #: The lines, not the field-by-field dataclass dump.
+    __repr__ = __str__
+
+
+#: How each side of a variable's bound reads as a comparison.
+_BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 
 @dataclass(frozen=True)
