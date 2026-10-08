@@ -304,7 +304,7 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
 def test_a_bare_relation_holding_a_pair_twice_is_refused():
     """A table has each coordinate at most once, and a bare relation's coordinate is the whole row."""
     sources = _bare_sources() | {'connection': pl.concat([CONNECTION, CONNECTION.head(1)])}
-    with pytest.raises(DataError, match=r"relates 1 tuple\(s\) more than once: generator='g1', bus='a'"):
+    with pytest.raises(DataError, match=r'relates 1 tuple\(s\) more than once: generator=g1, bus=a'):
         sps.solve(_bare_spec(), sources)
 
 

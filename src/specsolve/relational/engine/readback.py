@@ -8,7 +8,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.messages import unknown_name_message
+from specsolve.messages import coordinate_expr, unknown_name_message
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
@@ -106,7 +106,8 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
         picked = held.frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
-        rendered = pl.concat_str([pl.col(d).cast(pl.String) for d in dims], separator=', ') if dims else pl.lit('')
+        schema = held.frame.collect_schema()
+        rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
                 pl.col('var_label').alias('col'),

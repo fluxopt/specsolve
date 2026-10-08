@@ -17,6 +17,7 @@ from mathspec import did_you_mean
 from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
+from specsolve.messages import coordinate_text, coordinates_text
 from specsolve.relational.answer_layout import RESERVED
 from specsolve.relational.collect import collected
 
@@ -362,7 +363,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
     if holes.height:
         holed = [c for c in roles if holes[c].null_count()]
         where = repr(holed[0]) if len(holed) == 1 else str(holed)
-        shown = coordinates_shown(roles, holes.head(5).rows())
+        shown = coordinates_text(roles, holes.head(5).rows())
         raise DataError(
             f"relation '{name}' carries {holes.height} row(s) with a null in {where}: {shown}. A relation "
             f'is partial by leaving a row out, not by relating a label to nothing — drop the row and '
@@ -373,7 +374,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
     key = list(relation.key)
     twice = rows.group_by(key).len().filter(pl.col('len') > 1).sort(key)
     if twice.height:
-        shown = coordinates_shown(key, twice.select(key).head(5).rows())
+        shown = coordinates_text(key, twice.select(key).head(5).rows())
         if relation.values:
             raise DataError(
                 f"relation '{name}' maps {twice.height} key(s) more than once: {shown}. "
@@ -586,7 +587,7 @@ def _check_one_row_per_coordinate(
         return
     duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
-        ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["#rows"]} rows)'
+        f'{coordinate_text({d: row[d] for d in p.dims})} ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(
@@ -603,7 +604,7 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
     holes = int(frame.select(holed.sum()).item())
     if not holes:
         return
-    shown = coordinates_shown(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
+    shown = coordinates_text(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
     at = f': {shown}' if shown else ''
     raise DataError(
         f"parameter '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
@@ -612,11 +613,6 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
         f'  Drop them     polars .drop_nulls("value").drop_nans("value"), pandas .dropna(subset=["value"])\n'
         f'  Supply them   if a number was what was meant'
     )
-
-
-def coordinates_shown(dims: Sequence[str], rows: Iterable[Sequence[Label]]) -> str:
-    """Coordinates as a refusal prints them: ``f='b'; f='c'``."""
-    return '; '.join(', '.join(f'{d}={v!r}' for d, v in zip(dims, row, strict=True)) for row in rows)
 
 
 #: The column each declared dtype *is*, in polars types.
