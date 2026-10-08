@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     import numpy as np
 
     from specsolve.relational.sinks.capabilities import Capabilities
-    from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.handoff import Handoff, Ints
     from specsolve.relational.status import SolveStatus
 
 
@@ -63,6 +63,17 @@ class SolveAnswer:
     def unreadable(cls, status: SolveStatus, dual_ray: pl.Series | None = None) -> SolveAnswer:
         """The answer for a solve that left nothing worth reading: a NaN objective and no vector but the ray."""
         return cls(status, float('nan'), None, None, None, dual_ray)
+
+
+@dataclass(frozen=True)
+class InfeasibleSubsystemIndices:
+    """An irreducible infeasible subsystem, in the solver's own row and column indices."""
+
+    rows: Ints
+    #: The columns whose lower bound is in it.
+    lower: Ints
+    #: The columns whose upper bound is in it.
+    upper: Ints
 
 
 class Solver(ABC):
@@ -267,6 +278,17 @@ class Solver(ABC):
         Returns:
             The weights in row order, or ``None`` where this solver produced
             none.
+        """
+
+    @abstractmethod
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
+        """The rows and bounds that cannot hold together, read only after an infeasible solve.
+
+        Integrality, and any constraint that is neither a row nor a bound, is
+        left out.
+
+        Returns:
+            The subsystem, or ``None`` where the solver did not prove one.
         """
 
     @abstractmethod

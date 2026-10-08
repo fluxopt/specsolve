@@ -66,8 +66,7 @@ itself a reason to add anything.
 
 ## Honest snapshot
 
-**Cheaper here, because the model is tables:** IIS (irreducible infeasible
-subsystem) read-back, a join rather than a scatter; serialisation to parquet;
+**Cheaper here, because the model is tables:** serialisation to parquet;
 elastic relaxation; dualisation, since transposing a COO matrix is swapping two
 column names. Model statistics and coefficient ranges were the first of these
 and already ship ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
@@ -80,8 +79,8 @@ N links with per-link signs, convex mode and `active` gating; load-time
 validation of every expression, `where` string and *uncalled* macro template.
 
 **Behind linopy**, and none of it a ceiling question: the post-solve object
-(labelled DataArrays vs tidy tables; `to_dataarray` bridges), debugging (an
-IIS via Gurobi), lifecycle (`relax` and `fix` as verbs, where here they are
+(labelled DataArrays vs tidy tables; `to_dataarray` bridges), lifecycle
+(`relax` and `fix` as verbs, where here they are
 [loops](../howto/fix-relax-remove.md)), solver breadth (ten backends and four handoffs vs three direct
 [sinks](../reference/glossary.md#how-it-runs) plus files), and the variable
 types and constraint kinds the capability model still gates.
