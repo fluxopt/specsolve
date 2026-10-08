@@ -108,8 +108,8 @@ holds starts at a bound, and a constraint only the new build holds starts not
 binding, so a cut enters without moving the vertex. The answer can be live,
 loaded with [`load_result`](../reference/api.md#specsolve.load_result) or read
 from an archive, and it can come from another solver. An answer solved without
-`outputs={'basis'}` carries no basis, and an LP then starts from its values, as
-the next section describes.
+`outputs={'basis'}`, or by interior point with crossover off, carries no basis,
+and an LP then starts from its values, as the next section describes.
 
 **It pays most where the model changes least.** An unchanged model started
 from its own answer does no simplex work. Over a Benders run on the master of
