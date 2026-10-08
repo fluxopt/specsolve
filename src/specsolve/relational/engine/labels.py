@@ -63,12 +63,13 @@ def frame(
     solver's own index with no remapping. *restrictions* are the
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
-    path. With no dims the query selects [`UNIT`][], since selecting nothing
-    drops the empty product's one row.
+    path.
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next
-        free label is ``start`` plus its height.
+        free label is ``start`` plus its height. With no dims it is
+        ``([`UNIT`][], label)``, the column a reader keys a scalar on, since selecting
+        nothing drops the empty product's one row.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, where.dims)
@@ -95,7 +96,7 @@ def frame(
         return materialised
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
-    return materialised.select(*dims, pl.col(label).set_sorted())
+    return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
 
 
 def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> int:
