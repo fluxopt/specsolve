@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -70,3 +71,33 @@ def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], s
     assert _digest(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
         'shuffling the rows of a table built another model'
     )
+
+
+def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
+    """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
+
+    The solver was kept only while every coefficient matched to the last bit,
+    so the same numbers in another row order loaded it again at every update
+    and lost the warm start.
+    """
+    rng = np.random.default_rng(0)
+    items, periods = 2_000, 50
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i', 't']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 1e6'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    cost = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods),
+            't': np.tile(np.arange(periods), items),
+            'value': rng.uniform(0.0, 1e3, items * periods) * 10.0 ** rng.integers(-6, 6, items * periods),
+        }
+    )
+    with sps.build(spec, {'i': list(range(items)), 't': list(range(periods)), 'cost': cost}) as model:
+        model.solve()
+        for seed in range(3):
+            model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
+        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
