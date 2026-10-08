@@ -48,20 +48,13 @@ which solver to keep or checks what one returned — an engine hands over a `Han
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
-the solver already holds. Whether it also solves from where the last run ended
-is the caller's `start=`: the answer that run produced carries the solver on,
-and anything else — the default included — calls `forget()` so the run begins
-as if the model were new. Every member implements `forget()`; a solver with
-nothing to discard implements it as a no-op.
+the solver already holds. A `start=` of the last run's answer carries the
+solver on; any other solve calls `forget()`, so the run begins as if the model
+were new. A member with nothing to discard implements `forget()` as a no-op.
+`forget()` rather than a reload, because keeping the solver skips the hand-off,
+while carrying its progress wins or loses by model.
 
-`forget()` rather than a reload because the two costs are different ones. A
-solver kept skips the hand-off, which nothing pays for; carrying its progress
-on trades against whatever the member prepares for a run that starts from
-nothing, and that trade goes either way by model. Splitting them is what lets
-a caller take the first without the second.
-
-A **genuine rebuild** gets no carry from the solver: the new session holds a
-fresh model and starts cold.
+A **genuine rebuild** loads a fresh solver, which starts cold.
 
 `warm(basis)` is how a caller carries one anyway. A `Basis` is a code per
 column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a

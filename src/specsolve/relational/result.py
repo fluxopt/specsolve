@@ -369,9 +369,7 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
-    #: The mark of the engine solve that produced this answer, or ``None`` off
-    #: disk. A solve started from the answer bearing its engine's current mark
-    #: carries on in the solver that still holds it.
+    #: The mark of the engine solve that produced this answer; ``None`` off disk.
     _solve_mark: object | None = None
 
     def model_digest(self) -> str | None:
