@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
@@ -169,6 +170,7 @@ class Engine:
         solver_options: Mapping[str, object] | None = None,
         keep: Keep = 'solver',
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
+        outputs: frozenset[Output] = frozenset(),
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -188,6 +190,9 @@ class Engine:
             lower: How an expression the caller writes becomes a plan node,
                 for [`evaluate`][specsolve.relational.result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
+            outputs: Which of
+                [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
+                result carries, already checked.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -203,7 +208,7 @@ class Engine:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff)
-        return self._answered(answer, solver_name, kept, lower)
+        return self._answered(answer, solver_name, kept, lower, outputs)
 
     def _answered(
         self,
@@ -211,6 +216,7 @@ class Engine:
         solver_name: str,
         kept: Keep,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
+        outputs: frozenset[Output] = frozenset(),
     ) -> Result:
         """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
 
@@ -224,7 +230,7 @@ class Engine:
         assert (answer.activity is None) == (answer.primal is None), (
             'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
         )
-        primals, duals, activities, rays = self._read_back(answer.primal, answer.dual, answer.activity, answer.dual_ray)
+        primals, duals, rays = self._read_back(answer.primal, answer.dual, answer.dual_ray)
         no_duals = (
             None
             if answer.dual is not None
@@ -240,7 +246,7 @@ class Engine:
             _objective=answer.objective,
             _primals=primals,
             _duals=duals,
-            _activities=activities,
+            _outputs={output: self._output(output, answer) for output in outputs},
             _kept=kept,
             _expressions=expressions,
             _evaluate=evaluate,
@@ -288,7 +294,6 @@ class Engine:
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
-        activity: pl.Series | None,
         dual_ray: pl.Series | None,
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
         """One solve's answer as one frame per declaration — a [`Result`][]'s own.
@@ -297,28 +302,37 @@ class Engine:
         replaces rather than mutates. A ``None`` vector yields no frames rather
         than empty ones.
         """
-        model = self._model
-        program = model.program
 
         def rows(values: pl.Series | None) -> dict[str, pl.LazyFrame]:
-            if values is None:
-                return {}
-            return {
-                name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
-                for name, c in program.constraints.items()
-            }
+            return {} if values is None else self._per_constraint(values)
 
         return (
-            {
-                name: readback.laid_out(model.attached, model.variables[name], v.dims, primal)
-                for name, v in program.variables.items()
-            }
-            if primal is not None
-            else {},
+            self._per_variable(primal) if primal is not None else {},
             rows(dual),
-            rows(activity),
             rows(dual_ray),
         )
+
+    def _output(self, output: Output, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+        """*output*'s frames, computed only when asked for; empty where a vector it needs is absent."""
+        match output:
+            case 'activity':
+                return {} if answer.activity is None else self._per_constraint(answer.activity)
+
+    def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
+            for name, c in model.program.constraints.items()
+        }
+
+    def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
+        """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
+        model = self._model
+        return {
+            name: readback.laid_out(model.attached, model.variables[name], v.dims, values)
+            for name, v in model.program.variables.items()
+        }
 
     def _readers(
         self,

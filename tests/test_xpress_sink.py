@@ -191,7 +191,7 @@ def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
     at 0 against caps of 10 and 20, so activity and rhs differ by the whole of
     each bound.
     """
-    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress') as solution:
+    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress', outputs={'activity'}) as solution:
         assert solution.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
             'activity is the row value at the solution, not the bound it was compared against'
         )

@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Literal
 from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
-    ACTIVITY,
     NO_PROVENANCE,
     RECORD_FILE,
     RECORD_SCHEMA,
@@ -24,6 +23,8 @@ from specsolve.relational.answer_layout import (
     Record,
     checked_kind,
     clear_the_answer,
+    is_output,
+    not_requested_message,
     write_format,
     write_reasons,
     write_whole,
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     import polars as pl
     import xarray as xr
 
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.status import SolveStatus
 
 
@@ -325,9 +327,11 @@ class Result:
     #: mapping is a solve that left nothing.
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
-    #: The constraints' left-hand sides at the solution, laid out exactly as
-    #: [`_duals`][], and present whenever the primals are.
-    _activities: Mapping[str, pl.LazyFrame] | None
+    #: ``{output: {name: frame}}`` for each
+    #: [`Output`][specsolve.relational.answer_layout.Output] the solve was asked for, laid out as [`_primals`][] or [`_duals`][]. Its
+    #: keys are what this answer carries; an output asked for by a solve that
+    #: left no values maps to nothing.
+    _outputs: Mapping[Output, Mapping[str, pl.LazyFrame]] | None
     #: How much of the session this solve kept, read off what actually ran.
     _kept: Keep
     #: One deferred reader per declared named expression, and the ad-hoc
@@ -475,7 +479,7 @@ class Result:
                 f'hands back a full-length vector of zeros either way and it is '
                 f'indistinguishable from an answer.'
             )
-        assert frames is not None, 'close() releases the primal, dual and activity frames together'
+        assert frames is not None, 'close() releases the primal, dual and output frames together'
         return frames
 
     def primal(self, name: str) -> pl.DataFrame:
@@ -553,15 +557,25 @@ class Result:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
 
         The solver's own number, not a recomputation, and readable whenever
-        there is a solution, a mixed-integer one included.
+        there is a solution, a mixed-integer one included. Carried only where
+        the solve was asked for it with ``outputs={'activity'}``.
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed.
+            SpecsolveError: This result was closed, or the solve was not asked
+                for its activity.
             KeyError: No constraint is called *name*.
         """
-        frames = self._readable(self._activities, f"the activity of '{name}'")
-        return _named(frames, name, 'constraint').pipe(collected)
+        return _named(self._carried('activity', name), name, 'constraint').pipe(collected)
+
+    def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
+        """*output*'s frames, or why they cannot be read — closed first, then not asked for, then the status."""
+        what = f"the {output.replace('_', ' ')} of '{name}'"
+        self._unclosed(what)
+        assert self._outputs is not None, 'close() releases the outputs with the primals, which _unclosed just checked'
+        if output not in self._outputs:
+            raise SpecsolveError(not_requested_message(output, name))
+        return self._readable(self._outputs[output], what)
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -591,16 +605,17 @@ class Result:
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
-        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[checked_kind(kind)]
-        return reader(name)
+        kind = checked_kind(kind)
+        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
         """Every name of *kind* this result can read — what a bridge takes by default.
 
         Raises:
             NoSolutionError: The solve left no values to read.
-            SpecsolveError: This result was closed, or *kind* is ``dual`` and
-                the duals are undefined.
+            SpecsolveError: This result was closed, *kind* is ``dual`` and
+                the duals are undefined, or *kind* is an output the solve was
+                not asked for.
         """
         if checked_kind(kind) == 'primal':
             return tuple(self._readable(self._primals, 'the solution'))
@@ -609,15 +624,18 @@ class Result:
             if self._no_duals is not None:
                 raise SpecsolveError(self._no_duals)
             return tuple(frames)
+        if is_output(kind):
+            return tuple(self._carried(kind, 'anything'))
         self._readable(self._primals, 'the expressions')
         return tuple(self._expressions or {})
 
     def to_pandas(self, name: str, kind: str = 'primal') -> pd.DataFrame:
         """One name's values as a tidy `pandas.DataFrame`.
 
-        *name* is read through the reader *kind* names: ``primal``, ``dual``
-        or ``expression``. Needs pandas, which specsolve does not install; the
-        xarray bridges need xarray too.
+        *name* is read through the reader *kind* names: ``primal``, ``dual``,
+        ``expression``, or an [`Output`][specsolve.types.Output] the solve was
+        asked for. Needs pandas, which specsolve does not install; the xarray
+        bridges need xarray too.
         """
         return tidy_to_pandas(self._frame(name, kind))
 
@@ -643,16 +661,18 @@ class Result:
         [`Record`][specsolve.relational.answer_layout.Record], with a null
         rather than ``nan`` objective where none was reached. Beside it are
         ``primal/<name>.parquet`` per variable, ``dual/<name>.parquet`` per
-        constraint where the duals are defined, ``activity/<name>.parquet``
-        per constraint, and ``expression/<name>.parquet`` per named expression
-        this data can evaluate. ``reasons.parquet`` holds
-        ``(kind, name, reason)`` for whatever is deliberately left out — one
-        row per failed expression, one with an empty *name* for the duals —
-        and is absent when nothing is. A solve that left no values writes the
+        constraint where the duals are defined, ``expression/<name>.parquet``
+        per named expression this data can evaluate, and
+        ``<output>/<name>.parquet`` for each [`Output`][specsolve.types.Output]
+        the solve was asked for, such as ``activity/`` per constraint.
+        ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
+        deliberately left out — one row per failed expression, one with an
+        empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
         record alone. The same model and data write the same bytes.
 
-        ``format.json`` stamps the layout and the specsolve that wrote it:
-        ``{"layout": 3, "specsolve": "…"}``. Every reader refuses another
+        ``format.json`` stamps the layout, the specsolve that wrote it and the
+        outputs the answer carries:
+        ``{"layout": 4, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
         layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
         to solve the model again and save it.
 
@@ -670,7 +690,7 @@ class Result:
         primals = self._unclosed('the solution')
         out = Path(directory)
         clear_the_answer(out)
-        write_format(out)
+        write_format(out, self._outputs or {})
         record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
@@ -679,8 +699,9 @@ class Result:
             write_whole(frame, out / 'primal' / f'{name}.parquet')
         for name, frame in (self._duals or {}).items():
             write_whole(frame, out / 'dual' / f'{name}.parquet')
-        for name, frame in (self._activities or {}).items():
-            write_whole(frame, out / ACTIVITY / f'{name}.parquet')
+        for output, frames in (self._outputs or {}).items():
+            for name, frame in frames.items():
+                write_whole(frame, out / output / f'{name}.parquet')
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
@@ -698,7 +719,7 @@ class Result:
         Frames already read stay valid. The model and the solver are the
         [`Model`][specsolve.api.Model]'s to close.
         """
-        self._primals = self._duals = self._activities = self._expressions = None
+        self._primals = self._duals = self._outputs = self._expressions = None
         self._dual_rays = None
         self._evaluate = None
 

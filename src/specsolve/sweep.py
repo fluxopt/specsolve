@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -22,6 +23,7 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     METRICS_SCHEMA,
+    OUTPUTS,
     RECORD_FILE,
     RECORD_SCHEMA,
     RUN,
@@ -30,6 +32,9 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_kind,
     consolidated,
+    is_output,
+    not_requested_message,
+    read_outputs,
     read_reasons,
     row_of,
     write_format,
@@ -46,10 +51,13 @@ if TYPE_CHECKING:
     import xarray as xr
 
     from specsolve.inputs import Label
+    from specsolve.relational.answer_layout import Output
 
 
 #: What each of the [`KINDS`][specsolve.relational.answer_layout.KINDS] is a frame of, as a message names it.
-_LABELS = {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression'}
+_LABELS: Mapping[str, str] = MappingProxyType(
+    {'primal': 'variable', 'dual': 'constraint', 'expression': 'named expression', **OUTPUTS}
+)
 
 
 #: A spilled sweep's manifest, its keys as their own type, and the coordinates
@@ -67,9 +75,9 @@ class SliceAnswer:
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
     #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve.relational.answer_layout.KINDS]:
-    #: every variable, every constraint's dual and every declared named
-    #: expression, evaluated at this slice's solution. A kind the slice
-    #: produced nothing of is absent.
+    #: every variable, every constraint's dual, every declared named
+    #: expression evaluated at this slice's solution, and each output the
+    #: sweep was asked for. A kind the slice produced nothing of is absent.
     frames: dict[str, dict[str, pl.DataFrame]] = field(default_factory=dict)
     #: Why this slice has no duals, when it has none.
     no_duals: str | None = None
@@ -136,8 +144,8 @@ class Spill:
     ``<kind>/<name>/<position>.parquet`` holds the keyed frames, and
     ``record/`` and ``metrics/`` the rows, which name their slice as text in
     ``slice_axis`` and ``slice``; ``keys.parquet`` holds the keys as their own
-    type. ``sweep.json`` names the key and the keys, so a directory answers
-    for one sweep. Every file lands whole. A slice's record file is written
+    type. ``sweep.json`` names the key, the keys and the outputs, so a
+    directory answers for one sweep. Every file lands whole. A slice's record file is written
     last and marks it done; ``sweep.json`` lands after the files a scan reads
     beside it and marks the directory stamped.
     """
@@ -155,6 +163,7 @@ class Spill:
         keys: Sequence[Label],
         key_dtype: pl.DataType,
         stitch: Stitch | None,
+        outputs: frozenset[Output],
     ) -> Spill:
         """The directory ready to take this sweep: stamped if it holds none, checked and never re-stamped if it does."""
         directory = Path(directory)
@@ -162,11 +171,19 @@ class Spill:
             'key_name': key_name,
             'keys': [str(key) for key in keys],
             'stitch': None if stitch is None else {'local': stitch.local, 'dim': stitch.dim},
+            'outputs': sorted(outputs),
         }
         record = directory / MANIFEST_FILE
         if record.exists():
             check_format(directory)
             found = json.loads(record.read_text())
+            if found != manifest and {**found, 'outputs': manifest['outputs']} == manifest:
+                raise SpecsolveError(
+                    f'{str(directory)!r} holds this sweep solved with outputs={found["outputs"]}, and this '
+                    f'run asks for outputs={manifest["outputs"]}. A slice on disk carries only what it was '
+                    f'solved with, so the two could not be read as one sweep: ask for the same outputs to '
+                    f'resume it, or point spill_to= at an empty directory.'
+                )
             if found != manifest:
                 raise SpecsolveError(
                     f'{str(directory)!r} holds a sweep keyed by {found["key_name"]!r} over {found["keys"]}, and '
@@ -174,7 +191,7 @@ class Spill:
                     f'point spill_to= at an empty one, or delete this one to solve it again.'
                 )
         else:
-            write_format(directory)
+            write_format(directory, outputs)
             write_whole(pl.DataFrame([pl.Series(key_name, keys, dtype=key_dtype)]), directory / KEYS_FILE)
             if stitch is not None:
                 write_whole(stitch.owned, directory / OWNED_FILE)
@@ -278,6 +295,9 @@ class Sweep:
     #: Whether the per-window frames are there to read: not on an archive
     #: written without ``keep_windows=True``.
     _windows: bool = field(repr=False, default=True)
+    #: Each [`Output`][specsolve.relational.answer_layout.Output] the sweep was
+    #: asked for, and so carries.
+    _outputs: frozenset[Output] = field(repr=False, default=frozenset())
     #: What [`evaluate`][] lowers an undeclared expression through; ``None``
     #: on a live solve's Sweep, which retains no model.
     _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = field(repr=False, default=None)
@@ -290,6 +310,7 @@ class Sweep:
         answered: Generator[tuple[Label, SliceAnswer], None, None],
         spill: Spill | None,
         key_dtype: pl.DataType,
+        outputs: frozenset[Output],
     ) -> Sweep:
         """Every slice's answer absorbed, in the order they arrive.
 
@@ -331,6 +352,7 @@ class Sweep:
             _absent={'expression': no_expressions} if no_expressions else {},
             _stitch=stitch,
             _spill=spill,
+            _outputs=outputs,
         )
 
     @property
@@ -348,12 +370,18 @@ class Sweep:
         if not self._windows:
             raise SpecsolveError(NO_WINDOWS)
 
+    def _check_requested(self, kind: str, name: str) -> None:
+        """Refuse an output the sweep was not asked for."""
+        if is_output(kind) and kind not in self._outputs:
+            raise SpecsolveError(not_requested_message(kind, name))
+
     def _named(self, kind: str, name: str, *, per_window: bool) -> pl.LazyFrame:
         """*name*'s frame of *kind*, lazily: the answer, or the frames per window.
 
         An archive's answer is read off its own files; any other answer is
         stitched from the slices.
         """
+        self._check_requested(kind, name)
         if per_window:
             self._check_per_window()
         answer = None if per_window else self._answer
@@ -384,7 +412,7 @@ class Sweep:
         return None if self._stitch is None else self._stitch.unstitchable(frame)
 
     def scan(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pl.LazyFrame:
-        """One name's answer as a `polars.LazyFrame`: [`primal`][], [`dual`][] or [`evaluate`][], not collected.
+        """One name's answer as a `polars.LazyFrame`: [`primal`][], [`dual`][], [`evaluate`][] or an output, not collected.
 
         On a sweep whose frames lie on disk — solved with ``spill_to=``, or
         read by [`scan_sweep`][] or
@@ -395,14 +423,16 @@ class Sweep:
         Args:
             name: A variable, a constraint or a named expression the spec
                 declares, as *kind* says.
-            kind: ``primal``, ``dual`` or ``expression`` — the reader this
-                stands in for.
+            kind: ``primal``, ``dual``, ``expression``, or an
+                [`Output`][specsolve.types.Output] the sweep was asked for —
+                the reader this stands in for.
             per_window: Read an EachWindow sweep one window at a time instead
                 of its answer.
 
         Raises:
             SpecsolveError: No slice produced *name*, a *kind* that names no
-                reader, or ``per_window`` where there are no windows to read.
+                reader, an output the sweep was not asked for, or
+                ``per_window`` where there are no windows to read.
         """
         kind = checked_kind(kind)
         if kind == 'expression' and not self._holds_expression(name):
@@ -442,6 +472,19 @@ class Sweep:
                 which of the two it was — or as [`primal`][] raises.
         """
         return self._named('dual', name, per_window=per_window).pipe(collected)
+
+    def activity(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One constraint's left-hand side at every slice's solution.
+
+        [`primal`][]'s shape and arguments, and carried only where the sweep
+        was asked for it with ``outputs={'activity'}``. In the answer of an
+        EachWindow sweep each coordinate carries the window that owns it.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its activity, or as
+                [`primal`][] raises.
+        """
+        return self._named('activity', name, per_window=per_window).pipe(collected)
 
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
@@ -502,8 +545,8 @@ class Sweep:
 
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
-        reader = {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[checked_kind(kind)]
-        return reader(name, per_window=per_window)
+        kind = checked_kind(kind)
+        return getattr(self, 'evaluate' if kind == 'expression' else kind)(name, per_window=per_window)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
         """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.
@@ -532,7 +575,7 @@ class Sweep:
                 sweep has an answer for. A name an EachWindow sweep cannot
                 stitch is left out, as an archive leaves out its file; named,
                 or read ``per_window``, it is read as [`primal`][] reads it.
-            kind: ``primal``, ``dual`` or ``expression``.
+            kind: As [`scan`][] takes it.
             per_window: Read an EachWindow sweep one window at a time instead
                 of its answer.
 
@@ -547,8 +590,8 @@ class Sweep:
     def save(self, directory: str | Path) -> Path:
         """Everything the sweep holds, per slice, in the layout ``spill_to=`` writes.
 
-        ``<kind>/<name>/<position>.parquet`` for every primal, dual and
-        expression, the slice key a column of each, with ``record/``,
+        ``<kind>/<name>/<position>.parquet`` for every primal, dual,
+        expression and output it carries, the slice key a column of each, with ``record/``,
         ``metrics/`` and the manifest beside them. [`scan`][] reads it, and
         the call that made this sweep, pointed at it with ``spill_to=``, reads
         it back without solving a slice. A sweep whose every slice terminated
@@ -562,7 +605,9 @@ class Sweep:
                 its windows.
         """
         by_key = {kind: slice_index(self, kind) for kind in KINDS}
-        spill = Spill.opened(directory, self.key_name, self.keys, self.record[self.key_name].dtype, self._stitch)
+        spill = Spill.opened(
+            directory, self.key_name, self.keys, self.record[self.key_name].dtype, self._stitch, self._outputs
+        )
         write_reasons(spill.directory, self._no_duals, self._absent)
         for position, key in enumerate(self.keys):
             meta = Record(**self.record.drop(self.key_name).row(position, named=True))
@@ -582,6 +627,7 @@ class Sweep:
         ``_unstitchable`` refuses, which an archive's answer already lacks.
         """
         kind = checked_kind(kind)
+        self._check_requested(kind, 'anything')
         if per_window:
             self._check_per_window()
         left_out = dict(self._absent.get(kind, {}))
@@ -703,6 +749,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
         metrics=_rekeyed(consolidated(under, METRICS_FILE), keys),
         _no_duals=no_duals,
         _absent=absent,
+        _outputs=read_outputs(under),
         _stitch=None
         if stitch is None
         else Stitch(

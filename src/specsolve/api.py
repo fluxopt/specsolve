@@ -39,15 +39,16 @@ from specsolve.errors import (
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve.relational.answer_layout import (
-    ACTIVITY,
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
     Provenance,
     Record,
     check_format,
+    checked_outputs,
     digest_of,
     installed,
+    read_outputs,
     read_reasons,
     saved_frames,
     write_whole,
@@ -59,10 +60,11 @@ from specsolve.relational.sinks import solver, writer
 from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from mathspec.program import Expression, Program
 
+    from specsolve.relational.answer_layout import Output
     from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
@@ -277,6 +279,7 @@ class Model:
         record_options: Sequence[str] | None = None,
         keep: Keep = 'solver',
         archive: str | Path | None = None,
+        outputs: Iterable[Output] = (),
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -315,14 +318,20 @@ class Model:
                 [`Metrics`][specsolve.relational.answer_layout.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
+            outputs: Each [`Output`][specsolve.types.Output] the answer
+                carries beside the primal, the duals and the declared
+                expressions: ``{'activity'}`` for each constraint's left-hand
+                side. The result, its save and its archive carry these and
+                nothing else, and the reader of one not asked for refuses.
 
         Returns:
             The solution, holding this model.
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a *keep* other than those three, or a bare string
-                as *record_options*.
+                cannot run, a *keep* other than those three, a bare string as
+                *record_options* or *outputs*, or a name in *outputs* that is
+                not an output.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -334,12 +343,14 @@ class Model:
                 f'record_options={record_options!r} is one string, which would name each of its letters. '
                 f'Pass a list: record_options=[{record_options!r}].'
             )
+        asked = checked_outputs(outputs)
         answered = replace(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
                 keep=keep,
                 lower=self._lower,
+                outputs=asked,
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -503,6 +514,7 @@ def solve(
     solver_options: Mapping[str, object] | None = None,
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
+    outputs: Iterable[Output] = (),
 ) -> Result:
     """Build *spec* and solve it in one call.
 
@@ -518,18 +530,27 @@ def solve(
         solver_options: As [`Model.solve`][] takes them.
         record_options: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
+        outputs: As [`Model.solve`][] takes them.
 
     Returns:
         The solution. It owns its frames; the model and the solver are
         released before this returns.
 
     Raises:
-        SpecsolveError: A solver name nothing serves — checked before the build.
+        SpecsolveError: A solver name nothing serves, or *outputs* that
+            [`Model.solve`][] refuses — both checked before the build.
     """
     solver(solver_name)
+    checked_outputs(outputs)
     model = build(spec, sources)
     try:
-        return model.solve(solver_name, solver_options=solver_options, record_options=record_options, archive=archive)
+        return model.solve(
+            solver_name,
+            solver_options=solver_options,
+            record_options=record_options,
+            archive=archive,
+            outputs=outputs,
+        )
     finally:
         model.close()
 
@@ -575,8 +596,9 @@ def load_result(directory: str | Path) -> Result:
     """Read back an answer [`Result.save`][] wrote — a solve, off disk.
 
     Every reader answers what it answered in the session that solved: the
-    values, the duals and activities, each named expression, and the reason
-    behind anything the solve could not produce. No build or solver is needed.
+    values, the duals, each named expression, the outputs the solve was asked
+    for, and the reason behind anything the solve could not produce. No build
+    or solver is needed.
 
     [`kept`][specsolve.relational.result.Result.kept] reads ``nothing``, and
     the solver's verbatim wording behind a refusal is not recorded — the
@@ -640,7 +662,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         objective,
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
-        saved_frames(out / ACTIVITY, whole=whole),
+        {output: saved_frames(out / output, whole=whole) for output in read_outputs(out)},
         'nothing',
         expressions,
         _no_duals=no_duals,

@@ -46,6 +46,18 @@ sps.solve('dispatch.yaml', sources, archive='case.zip')
 **`sps.solve`, `model.solve` and `sps.solve_over` take `archive=`.** Nothing
 else writes one.
 
+**An answer holds what you ask for.** Every answer holds the primal, the duals
+and the declared expressions. Anything else is an output, and only a solve that
+asks for it holds it, live, saved and archived alike:
+
+```python
+sps.solve('dispatch.yaml', sources, outputs={'activity'}, archive='case')
+```
+
+This adds `answer/activity/<name>.parquet`, each constraint's left-hand side.
+A reader of an output the solve did not ask for refuses, and the message names
+the `outputs=` to solve with.
+
 **The record says what produced the answer.** `answer/record.parquet` names
 the solver, its version and the options it ran with, and the specsolve and
 mathspec versions that built the model. So you can install the same

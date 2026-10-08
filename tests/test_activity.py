@@ -18,6 +18,7 @@ from tests.oracle import pd  # through the guard: a bare import would beat it
 from tests.test_milp import COMMITMENT_YAML
 
 ACTIVITY_RTOL = 1e-9
+ACTIVITY = frozenset({'activity'})
 
 
 def _agrees_with_csr(run) -> None:
@@ -36,7 +37,7 @@ def _agrees_with_csr(run) -> None:
 def test_activity_matches_the_csr_recomputation(dispatch_yaml, dispatch_inputs):
     """The solver's row values against Ax recomputed from the model's own CSR."""
     data = dispatch_inputs
-    with differential(dispatch_yaml, data) as run:
+    with differential(dispatch_yaml, data, outputs=ACTIVITY) as run:
         got = run.result.activity('power_balance')
         assert got.columns == ['snapshot', 'value']
         assert got.height == len(data['snapshot'])
@@ -46,7 +47,7 @@ def test_activity_matches_the_csr_recomputation(dispatch_yaml, dispatch_inputs):
 def test_activity_matches_the_linopy_lane(dispatch_yaml, dispatch_inputs):
     """The linopy lane has no accessor, so its half is lhs evaluated at the solution."""
     data = dispatch_inputs
-    with differential(dispatch_yaml, data) as run:
+    with differential(dispatch_yaml, data, outputs=ACTIVITY) as run:
         oracle = run.model.constraints['power_balance'].lhs.solution
         expected = pd.Series(np.asarray(oracle), index=np.asarray(oracle.indexes['snapshot'])).sort_index()
         actual = run.result.activity('power_balance').sort('snapshot')['value'].to_numpy()
@@ -56,7 +57,7 @@ def test_activity_matches_the_linopy_lane(dispatch_yaml, dispatch_inputs):
 def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
     """Activity is gated on `has_primal` alone: an integer incumbent has one."""
     data = commitment_inputs
-    with differential(COMMITMENT_YAML, data) as run:
+    with differential(COMMITMENT_YAML, data, outputs=ACTIVITY) as run:
         assert run.result.has_primal
         _agrees_with_csr(run)
 
@@ -71,7 +72,7 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
 def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_frame_inputs):
     """On an `==` row activity equals the rhs up to solver tolerance, by construction."""
     data = dispatch_frame_inputs
-    with sps.solve(dispatch_yaml, data) as sol:
+    with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         got = sol.activity('power_balance').sort('snapshot')['value'].to_numpy()
         assert got == pytest.approx(data['load'].sort('snapshot')['value'].to_numpy(), rel=ACTIVITY_RTOL), (
             'an == row holds at the solution, so its activity is its rhs — a residual check, not a bug'
@@ -86,7 +87,7 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
     data = dispatch_inputs
     data = dict(data, load=pd.Series(1e6, index=data['snapshot']))  # more than every generator together
 
-    with sps.solve(dispatch_yaml, data) as result:
+    with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as result:
         assert not result.has_primal
         with pytest.raises(NoSolutionError, match='cannot read the activity'):
             result.activity('power_balance')
@@ -95,7 +96,7 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
 def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
     """close() releases the activity frames with the primal and dual ones."""
     data = dispatch_frame_inputs
-    with sps.solve(dispatch_yaml, data) as sol:
+    with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         pass
     with pytest.raises(SpecsolveError, match='closed'):
         sol.activity('power_balance')

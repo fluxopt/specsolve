@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -25,9 +26,9 @@ import polars.selectors as cs
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
 from specsolve.relational.answer_layout import (
-    ACTIVITY,
     FORMAT_FILE,
     METRICS_FILE,
+    OUTPUTS,
     RECORD_FILE,
     RESERVED,
     RUN,
@@ -129,7 +130,7 @@ def write_archive(
     tree = staging / 'tree' if zipped else part
     try:
         (tree / SOURCES_DIR).mkdir(parents=True)
-        write_format(tree, INPUTS_LAYOUT)
+        write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         digests: dict[str, str] = {}
         for name, table in tables.items():
@@ -180,23 +181,27 @@ _CATALOG_SCHEMA = {
 _WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
 
 
+def _answered_under(under: str) -> dict[str, list[str]]:
+    """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
+    held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
+    for output, per in OUTPUTS.items():
+        held[per].append(f'{under}/{output}')
+    return held
+
+
 #: The directories that hold one file per name of each kind.
-_HELD_UNDER = {
-    'dimension': [SOURCES_DIR],
-    'relation': [SOURCES_DIR],
-    'parameter': [SOURCES_DIR],
-    'variable': [f'{ANSWER_DIR}/primal'],
-    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/{ACTIVITY}'],
-    'expression': [f'{ANSWER_DIR}/expression'],
-}
+_HELD_UNDER = MappingProxyType(
+    {
+        'dimension': [SOURCES_DIR],
+        'relation': [SOURCES_DIR],
+        'parameter': [SOURCES_DIR],
+        **_answered_under(ANSWER_DIR),
+    }
+)
 
 
 #: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
-_HELD_IN_WINDOWS = {
-    'variable': [f'{_WINDOWS}/primal'],
-    'constraint': [f'{_WINDOWS}/dual'],
-    'expression': [f'{_WINDOWS}/expression'],
-}
+_HELD_IN_WINDOWS = MappingProxyType(_answered_under(_WINDOWS))
 
 
 #: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.

@@ -9,7 +9,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
 
 import pytest
 
@@ -342,6 +342,7 @@ PUBLIC_MODULES = {
         'Diagnostics',
         'Metrics',
         'Model',
+        'Output',
         'Provenance',
         'Record',
         'Result',
@@ -408,8 +409,11 @@ def test_the_public_surface_is_exactly_what_is_declared():
     [
         pytest.param(
             'types',
-            lambda held: isinstance(held, type) and not issubclass(held, BaseException | Warning),
-            id='types-holds-only-classes-that-are-not-errors',
+            lambda held: (
+                get_origin(held) is Literal
+                or (isinstance(held, type) and not issubclass(held, BaseException | Warning))
+            ),
+            id='types-holds-only-classes-that-are-not-errors-and-vocabularies',
         ),
         pytest.param(
             'errors',
@@ -419,7 +423,7 @@ def test_the_public_surface_is_exactly_what_is_declared():
     ],
 )
 def test_each_public_module_holds_one_kind_of_name(module, belongs):
-    """``specsolve.types`` holds what a call returns, and ``specsolve.errors`` what it raises."""
+    """``specsolve.types`` holds what a call returns and the vocabulary it takes, and ``specsolve.errors`` what it raises."""
     import specsolve
 
     held = getattr(specsolve, module)

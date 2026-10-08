@@ -590,26 +590,28 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
         with pytest.raises(sps.errors.SpecsolveError, match='integer'):
             result.to_dataset(kind='dual')
     assert sorted(p.name for p in out.iterdir()) == [
-        'activity',
         'expression',
         'format.json',
         'primal',
         'reasons.parquet',
         'record.parquet',
-    ], 'no dual/ — there are none to write, and reasons.parquet is where that is said'
+    ], 'no dual/ — there are none to write, and reasons.parquet says so; no activity/, which was not asked for'
     assert [p.name for p in (out / 'expression').iterdir()] == ['twice.parquet'], 'the one that evaluated'
     assert pl.read_parquet(out / 'expression' / 'twice.parquet')['value'].to_list() == [4.0, 6.0], (
         'twice the integer dispatch that meets 1.5 and 2.5'
     )
 
 
-def test_a_saved_solution_carries_the_activities(dispatch_solution, dispatch_yaml, tmp_path):
-    """A saved answer carries each row's left-hand side."""
-    out = dispatch_solution.save(tmp_path / 'solution')
-    constraints = set(sps.check(dispatch_yaml).constraints)
-    assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
-    for name in constraints:
-        assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(dispatch_solution.activity(name))
+def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+    """An answer asked for its activities saves each row's left-hand side, and loads it back."""
+    with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs={'activity'}) as solution:
+        out = solution.save(tmp_path / 'solution')
+        constraints = set(sps.check(dispatch_yaml).constraints)
+        assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
+        loaded = sps.load_result(out)
+        for name in constraints:
+            assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(solution.activity(name))
+            assert loaded.activity(name).equals(solution.activity(name))
 
 
 def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
@@ -653,7 +655,6 @@ def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_solution, dis
         assert loaded.primal(name).equals(dispatch_solution.primal(name))
     for name in program.constraints:
         assert loaded.dual(name).equals(dispatch_solution.dual(name))
-        assert loaded.activity(name).equals(dispatch_solution.activity(name))
 
 
 def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
@@ -780,7 +781,7 @@ def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expecte
     columns, and polars gives that no rows.
     """
     sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
-    with sps.solve(SCALAR_SPEC, sources) as result:
+    with sps.solve(SCALAR_SPEC, sources, outputs={'activity'}) as result:
         assert read(result).to_dicts() == [{'value': expected}], 'one row, holding the solver value'
 
 
