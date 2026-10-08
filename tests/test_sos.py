@@ -512,5 +512,7 @@ def test_a_one_shot_solve_lets_go_of_the_sets_before_the_solver_runs(monkeypatch
         return run(self, handoff, **options)
 
     monkeypatch.setattr(Solver, 'run', recorded)
-    assert sps.solve(spec(1), DATA, 'gurobi').objective == pytest.approx(best(1))
+    assert sps.solve(spec(1), DATA, 'gurobi').objective == pytest.approx(best(1)), (
+        'the answer is the same optimum with the build let go'
+    )
     assert members == [0], 'the run is handed no set members: the solver already holds them'
