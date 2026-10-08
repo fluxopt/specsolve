@@ -109,8 +109,6 @@ class Engine:
         self._measured = Measured()
         #: The solver holding this model, kept between solves and across rebuilds.
         self._solver: sinks.Solver | None = None
-        #: The last solve's mark, which its answer carries.
-        self._mark = object()
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
         self._loads = 0
@@ -212,7 +210,7 @@ class Engine:
         solver_options: Mapping[str, object] | None = None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
-        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | None = None,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -231,30 +229,26 @@ class Engine:
             outputs: Which of
                 [`OUTPUTS`][specsolve.relational.answer_layout.OUTPUTS] the
                 result carries, already checked.
-            start: What to start the solve from, an earlier answer or a
+            start: ``'previous'``, to carry on from the last solve while its
+                solver stays loaded and begin from nothing otherwise; ``None``,
+                to begin from nothing; or an earlier answer or a
                 [`Start`][specsolve.types.Start] already read
                 ([`read_start`][specsolve.sources.read_start]), matched by
                 coordinate: an LP from a basis where one is given
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
-                The last solve's answer is not matched while its solver stays
-                loaded: the solver carries on.
 
         Returns:
             The solution, holding this engine and the build it answered.
 
         Raises:
             SpecsolveError: A *start* this model or this solver cannot start
-                from, refused before the solver loads. The last solve's answer
-                is matched, and so refused, only once the solver loads again.
+                from, refused before the solver loads.
         """
-        carry_on = isinstance(start, Result) and start.has_primal and start._solve_mark is self._mark
-        matched = None if start is None or carry_on else self._matched_start(start, solver_name)
+        carry_on = start == 'previous'
+        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
         solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
-        if carry_on and reloaded:
-            assert start is not None, 'carry_on holds only for a start'
-            matched = self._matched_start(start, solver_name)
         if isinstance(matched, Basis):
             solver.warm(matched)
         elif matched is not None:
@@ -263,10 +257,9 @@ class Engine:
         self._solves += 1
         if reloaded:
             self._loads += 1
-        self._mark = object()
         with _clocked(self._seconds, 'solve'):
             answer = solver.run(handoff, basis='basis' in outputs)
-        return self._answered(answer, solver_name, lower, outputs, mark=self._mark)
+        return self._answered(answer, solver_name, lower, outputs)
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
@@ -299,8 +292,6 @@ class Engine:
         solver_name: str,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
         outputs: frozenset[Output] = frozenset(),
-        *,
-        mark: object | None = None,
     ) -> Result:
         """[`solve`][] after the run: *answer*'s vectors laid out against this build, as a [`Result`][].
 
@@ -337,7 +328,6 @@ class Engine:
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
             _model_digest=lambda: handoff.contents,
-            _solve_mark=mark,
         )
 
     def contents(self) -> str:

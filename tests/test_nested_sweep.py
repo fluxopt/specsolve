@@ -88,23 +88,6 @@ def test_the_keys_name_every_axis_outer_first(nested):
     )
 
 
-def test_previous_starts_each_chain_cold(monkeypatch):
-    """`start='previous'` follows the chain: the first window of every scenario starts from nothing."""
-    given = []
-    original = api.Model.solve
-    monkeypatch.setattr(api.Model, 'solve', lambda self, **kw: given.append(kw.get('start')) or original(self, **kw))
-    runs = sps.solve_over(WINDOW, scenario_horizons(), CARRIED, start='previous')
-
-    assert [start is None for start in given] == [True, False, False, True, False, False], (
-        'cold at the first window of each scenario, and from the window before everywhere else'
-    )
-    for scenario in SCENARIOS:
-        own = alone(scenario, start='previous').record['objective'].to_list()
-        assert chain_of(runs.record, scenario)['objective'].to_list() == pytest.approx(own), (
-            'each window reaches the optimum it reaches alone; a start may end the LP on another optimal vertex'
-        )
-
-
 def _threads():
     return ThreadPoolExecutor(2)
 
@@ -122,14 +105,14 @@ def test_an_executor_runs_the_chains_concurrently_and_each_in_order(nested, pool
     assert runs.keys == nested.keys
 
 
-def test_under_an_executor_previous_starts_each_chain_cold_once(monkeypatch):
-    """Each chain is one task, so only its first slice starts from nothing."""
-    given = []
-    original = api.Model.solve
-    monkeypatch.setattr(api.Model, 'solve', lambda self, **kw: given.append(kw.get('start')) or original(self, **kw))
+def test_under_an_executor_each_chain_is_one_task_built_once(monkeypatch):
+    """A chain runs in order on one model, so its slices after the first update it in place."""
+    built = []
+    original = strategy.build
+    monkeypatch.setattr(strategy, 'build', lambda *a, **k: built.append(a) or original(*a, **k))
     with ThreadPoolExecutor(2) as executor:
-        sps.solve_over(WINDOW, scenario_horizons(), CARRIED, start='previous', executor=executor)
-    assert sum(start is None for start in given) == len(SCENARIOS), 'one cold start per chain, whatever the order'
+        sps.solve_over(WINDOW, scenario_horizons(), CARRIED, executor=executor)
+    assert len(built) == len(SCENARIOS), 'one build per chain, not one per slice'
 
 
 def test_an_executor_on_a_sweep_of_one_chain_still_refuses_a_carry():

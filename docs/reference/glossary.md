@@ -185,12 +185,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   the metrics clock as `handoff_seconds`.
 
 **start** · **previous**
-: What a solve begins from: an earlier answer, or tables under `primal`,
-  `variable_basis` and `constraint_basis`. A start changes how soon the solver
-  reaches the optimum, never the optimum
-  ([warm-starting](../howto/warm-start.md)). On `solve_over`,
-  `start='previous'` starts each slice from the answer of the slice before it,
-  never "prior". Unlike a [carry](#sweeps), it changes no data.
+: What a solve begins from: `'previous'`, the default, carries on from the
+  solve before, `None` begins from nothing, and an earlier answer or tables
+  under `primal`, `variable_basis` and `constraint_basis` are matched by
+  coordinate. A start changes how soon the solver reaches the optimum, never
+  the optimum ([warm-starting](../howto/warm-start.md)). Never "prior". Unlike
+  a [carry](#sweeps), it changes no data.
 
 ## Sweeps
 
@@ -216,8 +216,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Chain**
 : The slices of a sweep over several axes that share the keys of every axis
   outside the outermost one that carries, one scenario's windows for
-  instance. They run in order, `start='previous'` follows them, and an
-  executor runs chains concurrently ([several axes](sweeps.md#several-axes)).
+  instance. They run in order, and an executor runs chains concurrently, each
+  one as a task ([several axes](sweeps.md#several-axes)).
 
 **carry**
 : An axis's `carry={parameter: variable}` hands one slice's solution to the
