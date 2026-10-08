@@ -207,7 +207,6 @@ STRICT = {
         'spec_digest': pl.String,
         'solved_at': pl.Datetime('us', 'UTC'),
         'specsolve_run': pl.String,
-        'model_digest': pl.String,
         'slice_axis': pl.String,
         'slice': pl.String,
         'solver': pl.String,

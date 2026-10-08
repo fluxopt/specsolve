@@ -19,14 +19,12 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
-import polars.selectors as cs
 
 from specsolve.errors import LayoutError, SpecsolveError
-from specsolve.relational.collect import collected
 from specsolve.relational.status import SolveStatus, status_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from mathspec import Spec
@@ -277,31 +275,6 @@ def digest_of(spec: Spec) -> str:
     return hashlib.sha256(spec.to_yaml().encode()).hexdigest()[:_DIGEST_WIDTH]
 
 
-def digest_of_data(spec_digest: str, tables: Mapping[str, pl.LazyFrame], ordered: Collection[str]) -> str:
-    """A short, stable name for a spec and the data attached to it — what an answer and a rebuild must share.
-
-    Over the values the tables hold rather than anything computed from them,
-    so a rebuild on another machine or another polars version agrees. A
-    table's rows count in any order, except the tables *ordered* names: a
-    dimension's row order is its coordinate order. A label counts by its text,
-    whether it arrives as a string, a category or an enum member. A tidied
-    table holds no null, so none is told apart.
-    """
-    sha = hashlib.sha256(spec_digest.encode())
-    for name in sorted(tables):
-        table = tables[name].with_columns(cs.categorical().cast(pl.String), cs.enum().cast(pl.String)).pipe(collected)
-        if name not in ordered:
-            table = table.sort(table.columns)
-        sha.update(f'\x1e{name}\x1f{table.height}'.encode())
-        for column in table.iter_columns():
-            if column.dtype == pl.String:
-                sha.update(column.str.len_bytes().to_numpy().tobytes())
-                sha.update(column.str.join('').item().encode())
-            else:
-                sha.update(column.to_physical().to_numpy().tobytes())
-    return sha.hexdigest()[:_DIGEST_WIDTH]
-
-
 class Provenance(NamedTuple):
     """What produced an answer: the solver, the options it ran with, and the packages that built the model.
 
@@ -358,10 +331,6 @@ class Record(NamedTuple):
     #: halves of its name. Null until the archive is written. Every other
     #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
-    #: A digest of the model this answered — the spec *and* the values of its
-    #: data (``digest_of_data``), where [`spec_digest`][] is the document
-    #: alone. ``None`` for an answer that never held one.
-    model_digest: str | None = None
     #: What the sweep that solved this called its slices — ``scenario``,
     #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
     #: null for a single solve. Fixed names rather than a column named for the
@@ -384,7 +353,6 @@ class Record(NamedTuple):
         has_primal: bool,
         spec_digest: str | None,
         solved_at: datetime | None,
-        model_digest: str | None = None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes; each argument fills the column of its name.
@@ -400,7 +368,6 @@ class Record(NamedTuple):
             has_primal,
             spec_digest,
             solved_at,
-            model_digest=model_digest,
             **provenance._asdict(),
         )
 

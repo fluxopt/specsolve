@@ -10,22 +10,19 @@ import json
 import math
 import shutil
 import zipfile
-from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
 import pytest
-import yaml
 import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import strategy
 from specsolve.api import _provenance
-from specsolve.archive import _attach_readers
 from specsolve.archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve.relational.answer_layout import (
     ANSWER_LAYOUT,
@@ -35,7 +32,6 @@ from specsolve.relational.answer_layout import (
     Output,
     Provenance,
     Record,
-    digest_of_data,
     digest_of_file,
     read_reasons,
     write_reasons,
@@ -1408,24 +1404,6 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     ], 'a plain glob reads every row, the slice named as text and null for the single solve'
 
 
-def test_an_archive_whose_answer_names_another_spec_is_refused(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
-) -> None:
-    """A hand-edited archive whose answer and model do not belong together is refused."""
-    archive = _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case.zip')
-    other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1.0})
-    tampered = tmp_path / 'tampered.zip'
-    with zipfile.ZipFile(archive) as held, zipfile.ZipFile(tampered, 'w') as edited:
-        for name in held.namelist():
-            edited.writestr(name, pyyaml.safe_dump(other) if name == 'spec.yaml' else held.read(name))
-
-    with pytest.raises(sps.errors.SpecsolveError, match='came back from a different spec'):
-        sps.load_archive(tampered, tmp_path / 'out')
-    assert sps.load_archive(archive, tmp_path / 'fine').spec == to_spec(dispatch_yaml), (
-        'and the archive as written reads back as the model it holds'
-    )
-
-
 def test_every_slice_of_a_sweep_names_the_model_it_answered(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -1438,19 +1416,6 @@ def test_every_slice_of_a_sweep_names_the_model_it_answered(
     assert runs.record['spec_digest'].unique().to_list() == [alone.spec_digest], (
         'and it is the same digest one solve of the same file carries'
     )
-
-
-def test_a_sweep_archive_whose_answer_names_another_spec_is_refused(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
-) -> None:
-    """A sweep archive with a swapped `spec.yaml` is refused."""
-    sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
-    other = override(raw_of(dispatch_yaml), **{'variables.p.bounds.upper': 1.0})
-    (tmp_path / 'study' / 'spec.yaml').write_text(pyyaml.safe_dump(other))
-
-    with pytest.raises(sps.errors.SpecsolveError, match='came back from a different spec'):
-        sps.load_archive(tmp_path / 'study')
 
 
 def test_saving_an_answer_twice_leaves_only_the_second(
@@ -1810,7 +1775,7 @@ def test_a_written_archive_leaves_no_staging_beside_it(dispatch_yaml: Path, disp
 
 
 # ---------------------------------------------------------------------------
-# the model digest: which data an answer came back from
+# reading a quantity the archive never saved
 # ---------------------------------------------------------------------------
 
 
@@ -1818,53 +1783,22 @@ def test_a_written_archive_leaves_no_staging_beside_it(dispatch_yaml: Path, disp
 _UNDECLARED = 'sum(p * cost, over=generator)'
 
 
-def test_a_solve_that_never_saves_hashes_nothing(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """The digest is computed when asked for, not at the solve."""
-    with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
-        solved.primal('p')
-        assert callable(solved._model_digest), 'reading values must not hash the model'
-        assert isinstance(solved.model_digest(), str), 'and asking for it produces one'
-        assert isinstance(solved._model_digest, str), 'which is then kept rather than hashed again'
-
-
-def test_two_builds_of_one_model_digest_the_same(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """The digest names a model, however its sparse frames are laid out."""
-    with sps.build(dispatch_yaml, dispatch_frame_inputs) as one, sps.build(dispatch_yaml, dispatch_frame_inputs) as two:
-        assert one._model_digest() == two._model_digest(), (
-            'one model, one digest, however its sparse frames are laid out'
-        )
-
-    halved = dispatch_frame_inputs | {'cost': dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 0.5)}
-    with sps.build(dispatch_yaml, dispatch_frame_inputs) as base, sps.build(dispatch_yaml, halved) as other:
-        assert base._model_digest() != other._model_digest(), 'and data that moved a cost is a different model'
-
-
-def test_an_archive_whose_data_was_replaced_is_refused_at_the_rebuild(
+def test_an_archive_reads_an_undeclared_expression_as_the_solve_did(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A source member replaced since the archive was written is refused at the rebuild."""
-    _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case')
-    intact = sps.load_archive(tmp_path / 'case')
-    want = intact.result.evaluate(_UNDECLARED)['value'].sum()
-
-    moved = dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 99)
-    moved.write_parquet(tmp_path / 'case' / 'sources' / 'cost.parquet')
-
-    tampered = sps.load_archive(tmp_path / 'case')
-    with pytest.raises(sps.errors.SpecsolveError, match='came back from another model') as refused:
-        tampered.result.evaluate(_UNDECLARED)
-    assert 'what differs is the data' in str(refused.value), 'and the refusal says which half moved'
-    assert want == pytest.approx(intact.result.evaluate(_UNDECLARED)['value'].sum(), rel=1e-9), (
-        'while the archive as written still reads'
-    )
+    """The archive rebuilds its own spec over its own data, and reads the saved values against that build."""
+    with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case') as solved:
+        want = solved.evaluate(_UNDECLARED)['value'].sum()
+    read = sps.load_archive(tmp_path / 'case').result.evaluate(_UNDECLARED)['value'].sum()
+    assert read == pytest.approx(want, rel=1e-9), 'the archive reads the expression as the live answer did'
 
 
 def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums(tmp_path: Path) -> None:
     """``osemosys_utopia`` sums its costs over rows in no fixed order, so each build differs in the last bit.
 
-    The check compared the built model to the last bit, so every archive of
-    it refused an undeclared read as built from other data. It compares the
-    data now, which a rebuild anywhere reads the same.
+    Reading an archive compared a digest of the built model to the last bit,
+    so every archive of it refused an undeclared read as built from other
+    data. An archive is read as it was written now, with no digest compared.
     """
     from tests.conftest import expanded, port_sources, port_spec
 
@@ -1872,56 +1806,6 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
     sps.solve(spec, port_sources('osemosys_utopia'), archive=tmp_path / 'run.zip').close()
     variable = next(iter(sps.check(spec).variables))
     assert sps.load_archive(tmp_path / 'run.zip').result.evaluate(f'sum({variable})').height == 1
-
-
-@pytest.mark.parametrize(
-    ('change', 'same'),
-    [
-        pytest.param(lambda s: s | {'cost': s['cost'].reverse()}, True, id='a-table-in-another-row-order'),
-        pytest.param(
-            lambda s: s | {'cost': s['cost'].with_columns(pl.col('generator').cast(pl.Categorical))},
-            True,
-            id='labels-as-categories',
-        ),
-        pytest.param(
-            lambda s: (
-                s
-                | {
-                    'cost': s['cost'].with_columns(
-                        pl.col('generator').cast(pl.Enum(s['generator']['generator'].to_list()))
-                    )
-                }
-            ),
-            True,
-            id='labels-as-enum-members',
-        ),
-        pytest.param(lambda s: s | {'generator': s['generator'].reverse()}, False, id='a-dimension-in-another-order'),
-    ],
-)
-def test_the_data_digest_reads_a_tables_rows_in_any_order_but_a_dimensions(
-    dispatch_yaml: Path, dispatch_frame_inputs, change: Any, same: bool
-) -> None:
-    """A dimension's row order is its coordinate order, so moving it is other data; moving a table's rows is not."""
-    with (
-        sps.build(dispatch_yaml, dispatch_frame_inputs) as plain,
-        sps.build(dispatch_yaml, change(dispatch_frame_inputs)) as moved,
-    ):
-        assert (moved._model_digest() == plain._model_digest()) == same
-
-
-def test_an_answer_naming_no_model_is_taken_as_given(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
-) -> None:
-    """An answer written before the column has no digest to compare, and is not refused for it."""
-    with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
-        want = solved.evaluate(_UNDECLARED)['value'].sum()
-        solved.save(tmp_path / 'answer')
-
-    older = replace(sps.load_result(tmp_path / 'answer'), _model_digest=None)
-    read = _attach_readers(older, dispatch_yaml, dispatch_frame_inputs)
-    assert read.evaluate(_UNDECLARED)['value'].sum() == pytest.approx(want, rel=1e-9), (
-        'an answer carrying no model digest reads against the data it is handed'
-    )
 
 
 @pytest.mark.parametrize(
@@ -1972,16 +1856,3 @@ def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, disp
     """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
-
-
-def test_one_data_under_two_specs_digests_as_two_models(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    spec = yaml.safe_load(dispatch_yaml.read_text())
-    maximised = {**spec, 'objective': {**spec['objective'], 'sense': 'maximize'}}
-    with sps.build(spec, dispatch_frame_inputs) as one, sps.build(maximised, dispatch_frame_inputs) as other:
-        assert one._model_digest() != other._model_digest()
-
-
-def test_the_data_digest_tells_labels_apart_where_their_characters_run_together() -> None:
-    joined_alike = [pl.LazyFrame({'name': ['ab', 'c']}), pl.LazyFrame({'name': ['a', 'bc']})]
-    digests = {digest_of_data('spec', {'name': table}, ordered={'name'}) for table in joined_alike}
-    assert len(digests) == 2, "'ab', 'c' and 'a', 'bc' are other labels, though their characters read alike end to end"

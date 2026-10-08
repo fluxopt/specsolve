@@ -23,7 +23,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(engine): an expression that reads a variable with no dimensions reads its solved value, in a save and a sweep too ([#1903](https://github.com/fluxopt/specsolve/pull/1903))
 - fix(data): an int parameter can be given as one number, and a sum_back window or a shift offset may be a parameter with no dimensions ([#1907](https://github.com/fluxopt/specsolve/pull/1907))
 - docs(data): data given to a model must not change while the model or its answers are in use ([#1909](https://github.com/fluxopt/specsolve/pull/1909))
-- fix(archive): an archive reads back on any rebuild of its data, because the check compares the data's values rather than the built model ([#1904](https://github.com/fluxopt/specsolve/pull/1904))
+- fix(archive): an archive is read as it was written, so one whose rebuild differs in its last bit reads back, and an answer no longer carries a model digest ([#1904](https://github.com/fluxopt/specsolve/pull/1904))
 
 ## 0.7.0 (2026-10-07)
 

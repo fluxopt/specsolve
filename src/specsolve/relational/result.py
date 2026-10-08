@@ -401,26 +401,12 @@ class Result:
     _spec_digest: str | None = None
     #: When the solver returned, in UTC.
     _solved_at: datetime | None = None
-    #: The built model's digest, or the callable that computes it on the first
-    #: ask. ``None`` for an answer written before the column, or built by hand.
-    #: Read through [`model_digest`][].
-    _model_digest: str | Callable[[], str] | None = None
     #: The archive this answer was read back out of, as its record names it.
     #: ``None`` for a live solve: the name is stamped when an archive is
     #: written, not when the solver returns.
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
-
-    def model_digest(self) -> str | None:
-        """Which model this answered — the document and the data it was attached to.
-
-        [`spec_digest`][] names the document alone, so two scenarios of one
-        spec share that and differ here. Computed on the first ask and kept.
-        """
-        if callable(self._model_digest):
-            self._model_digest = self._model_digest()
-        return self._model_digest
 
     @property
     def status(self) -> str:
@@ -480,7 +466,7 @@ class Result:
 
         A sweep keeps the same row per slice in [`record`][specsolve.sweep.Sweep.record].
         ``objective`` is ``None`` rather than ``nan`` where there are no
-        values. Asking computes [`model_digest`][], as a save does.
+        values.
         """
         return Record.of(
             self.termination_condition,
@@ -488,7 +474,6 @@ class Result:
             has_primal=self.has_primal,
             spec_digest=self._spec_digest,
             solved_at=self._solved_at,
-            model_digest=self.model_digest(),
             provenance=self._provenance,
         )._replace(specsolve_run=self._run)
 

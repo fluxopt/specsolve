@@ -71,10 +71,9 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Digest**
 : A hash that says whether two things are the same input. `spec_digest` names
-  the document an answer came from, and an archive whose answer names another
-  is refused; `model_digest` names the document and the values of its data, so
-  an undeclared read against other data is refused; `archive.source_digests`
-  names each data member, so two archives of one spec say which input moved.
+  the document an answer came from; `archive.source_digests` names each data
+  member, so two archives of one spec say which input moved. Reading an
+  archive compares neither: an archive is read as it was written.
 
 ## The verbs
 

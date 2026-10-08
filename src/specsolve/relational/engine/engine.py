@@ -360,16 +360,6 @@ class Engine:
             )
         return readback.infeasible_subsystem(self._model, found)
 
-    def contents(self) -> str:
-        """This build's digest: the built model whole, to the last bit ([`contents`][specsolve.relational.sinks.handoff.Handoff.contents]).
-
-        Raises:
-            SpecsolveError: Asked of an engine holding no built model.
-        """
-        if self._built is None:
-            raise SpecsolveError(_no_built_model('to digest'))
-        return self._model.handoff.contents
-
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured

@@ -266,7 +266,6 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'spec_digest',
         'solved_at',
         'specsolve_run',
-        'model_digest',
         'slice_axis',
         'slice',
         'solver',

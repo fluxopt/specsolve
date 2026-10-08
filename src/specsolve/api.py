@@ -24,7 +24,6 @@ import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -48,7 +47,6 @@ from specsolve.relational.answer_layout import (
     check_format,
     checked_outputs,
     digest_of,
-    digest_of_data,
     installed,
     kinds_of,
     read_outputs,
@@ -209,7 +207,7 @@ class Model:
     def __init__(self, spec: Buildable, sources: Mapping[str, Source]) -> None:
         self._spec = declared(spec)
         self._program = lowered(self._spec)
-        #: The document's digest; the data's is [`_model_digest`][].
+        #: The document's digest, which every answer carries.
         self._spec_digest = digest_of(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
@@ -376,7 +374,6 @@ class Model:
                 start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
             ),
             _spec_digest=self._spec_digest,
-            _model_digest=partial(digest_of_data, self._spec_digest, self._tidied, tuple(self._program.dimensions)),
             _solved_at=datetime.now(UTC),
             _provenance=_provenance(solver_name, solver_options, record_options or ()),
         )
@@ -518,10 +515,6 @@ class Model:
         evaluate = self._engine.reconstruct(primals, duals, no_duals, self._lower)
         assert evaluate is not None, 'a model built from a spec as written lowers an ad-hoc expression'
         return evaluate
-
-    def _model_digest(self) -> str:
-        """Which model this build *is* — the document and the data attached to it now ([`digest_of_data`][])."""
-        return digest_of_data(self._spec_digest, self._tidied, self._program.dimensions)
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.
@@ -730,7 +723,6 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         _no_duals=no_duals,
         _spec_digest=record.spec_digest,
         _solved_at=record.solved_at,
-        _model_digest=record.model_digest,
         _run=record.specsolve_run,
         _provenance=record.provenance,
     )
