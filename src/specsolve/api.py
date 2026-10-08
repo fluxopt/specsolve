@@ -38,6 +38,7 @@ from specsolve.errors import (
     SpecsolveWarning,
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve.messages import unknown_name_message
 from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
@@ -57,7 +58,7 @@ from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_values, refuse_unknown_sources, tidy_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -280,7 +281,7 @@ class Model:
         keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
-        start: Result | None = None,
+        start: Result | Mapping[str, Source] | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -328,15 +329,21 @@ class Model:
                 status the solve ended on. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
-            start: An earlier answer of an LP to start the simplex from: its
-                basis, matched by coordinate, so an answer of another build of
-                the spec, with rows or columns gained or lost, starts it too. A
-                coordinate only this build holds starts at a bound if it is a
-                variable's, and not binding if it is a constraint's. Live,
-                loaded with [`load_result`][] or from an archive alike, it must
-                have been solved with
-                ``outputs={'variable_basis', 'constraint_basis'}``. It changes
-                how the solver gets to the optimum, never which one.
+            start: What to start the solve from, matched by coordinate, so
+                one from another build of the spec, with rows or columns gained
+                or lost, starts it too. It changes how the solver gets to the
+                optimum, never which one. An LP starts from an earlier answer's
+                basis: a coordinate only this build holds starts at a bound if
+                it is a variable's, and not binding if it is a constraint's,
+                and the answer must have been solved with
+                ``outputs={'variable_basis', 'constraint_basis'}``. A
+                mixed-integer model starts from values, as an incumbent the
+                solver completes and repairs: an earlier answer's primal, or
+                values per variable in any shape a parameter's source takes
+                over the variable's dims, from a parquet path or a table to
+                one number for every coordinate, naming any of the variables
+                and any of their coordinates. An answer can
+                be live, loaded with [`load_result`][] or from an archive.
 
         Returns:
             The solution, holding this model.
@@ -345,8 +352,9 @@ class Model:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, a bare string as
                 *record_options* or *outputs*, a name in *outputs* that is not
-                an output, a *start* that carries no basis, or a *start* for a
-                model with an integer variable.
+                an output, or a *start* this model cannot start from: an
+                answer without its basis for an LP, a table for an LP, or a
+                table naming no variable or lacking its dims.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -366,7 +374,7 @@ class Model:
                 keep=keep,
                 lower=self._lower,
                 outputs=asked,
-                start=None if start is None else start._basis(),
+                start=start if start is None or isinstance(start, Result) else self._start_values(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -375,6 +383,21 @@ class Model:
         if out is not None:
             self._archive(out, answered)
         return answered
+
+    def _start_values(self, start: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+        """*start*'s values per variable, read and checked as a parameter's source is, over the variable's dims.
+
+        Raises:
+            SpecsolveError: A name that is no variable.
+            DataError: A source a parameter over the same dims would be refused for.
+        """
+        variables = self._program.variables
+        if unknown := next((name for name in start if name not in variables), None):
+            raise SpecsolveError(f'start= names an {unknown_name_message("variable", unknown, variables)}')
+        return {
+            name: read_values('start= for variable', name, variables[name].dims, values, self._tidied)
+            for name, values in start.items()
+        }
 
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.
@@ -531,7 +554,7 @@ def solve(
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
-    start: Result | None = None,
+    start: Result | Mapping[str, Source] | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 
@@ -555,14 +578,12 @@ def solve(
         released before this returns.
 
     Raises:
-        SpecsolveError: A solver name nothing serves, *outputs* that
-            [`Model.solve`][] refuses, or a *start* that carries no basis — all
-            checked before the build — or as [`Model.solve`][] raises.
+        SpecsolveError: A solver name nothing serves, or *outputs* that
+            [`Model.solve`][] refuses — both checked before the build — or as
+            [`Model.solve`][] raises.
     """
     solver(solver_name)
     checked_outputs(outputs)
-    if start is not None:
-        start._basis()
     model = build(spec, sources)
     try:
         return model.solve(

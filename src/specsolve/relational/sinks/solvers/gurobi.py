@@ -172,8 +172,10 @@ class Gurobi(Solver):
         self._m.update()
 
     def _start(self, values: Any) -> None:
-        """``Start``."""
-        self._x.Start = values
+        """``Start``, ``GRB.UNDEFINED`` where no value is given."""
+        import numpy as np
+
+        self._x.Start = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
         self._m.update()
 
     def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:

@@ -1,8 +1,9 @@
-"""``start=``: an LP solved from an earlier answer's basis, matched by coordinate.
+"""``start=``: an LP solved from an earlier answer's basis, a mixed-integer model from values, both matched by coordinate.
 
 Warmth is read off each solver's own simplex iteration counter, which is
-deterministic, so none of this needs an idle box. The answer is the oracle for
-correctness: a start moves the route, never the optimum.
+deterministic, so none of this needs an idle box. A mixed-integer start is read
+off the incumbent a solve stopped at its first solution returns. The answer is
+the oracle for correctness: a start moves the route, never the optimum.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from specsolve.relational.sinks.solvers.base import (
     SUPERBASIC,
     settled,
 )
-from tests.conftest import KNAPSACK, knapsack_sources
+from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
 
 if TYPE_CHECKING:
@@ -131,9 +132,11 @@ def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_an_answer_solved_without_its_basis_is_refused_before_the_build(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_answer_solved_without_its_basis_is_refused_before_the_solver_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    from specsolve.relational import sinks
+
     with sps.solve(DISPATCH, snapshots(40), outputs={'variable_basis'}) as before:
-        monkeypatch.setattr(sps.api, 'build', lambda *_: pytest.fail('the build ran before the refusal'))
+        monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
         with pytest.raises(SpecsolveError, match=r"without 'constraint_basis'.*outputs=\{'variable_basis', "):
             sps.solve(DISPATCH, snapshots(40), start=before)
 
@@ -144,10 +147,10 @@ def test_an_answer_that_ended_on_no_basis_says_why() -> None:
         sps.solve(DISPATCH, snapshots(40), start=before)
 
 
-def test_a_mixed_integer_model_takes_no_basis_to_start_from() -> None:
-    before = sps.solve(DISPATCH, snapshots(40), outputs=BASIS)
-    with pytest.raises(SpecsolveError, match='mixed-integer'):
-        sps.solve(KNAPSACK, knapsack_sources(), start=before)
+def test_an_lp_takes_no_table_of_values() -> None:
+    values = {'p': sps.solve(DISPATCH, snapshots(40)).primal('p')}
+    with pytest.raises(SpecsolveError, match='starts from a basis'):
+        sps.solve(DISPATCH, snapshots(40), start=values)
 
 
 def test_a_closed_answer_is_refused() -> None:
@@ -155,6 +158,104 @@ def test_a_closed_answer_is_refused() -> None:
     before.close()
     with pytest.raises(SpecsolveError, match='closed'):
         sps.solve(DISPATCH, snapshots(40), start=before)
+
+
+# ---------------------------------------------------------------------------
+# a mixed-integer model starts from values
+# ---------------------------------------------------------------------------
+
+#: Each sink stopped at its root node with nothing that finds a solution of its
+#: own, so that any incumbent it returns is one it was started from.
+ROOT_ONLY = {
+    'highs': {'mip_max_nodes': 0, 'mip_heuristic_effort': 0.0, 'presolve': 'off'},
+    'gurobi': {'NodeLimit': 0, 'Heuristics': 0, 'Presolve': 0, 'Cuts': 0},
+    'xpress': {'maxnode': 0, 'heuremphasis': 0, 'presolve': 0, 'cutstrategy': 0},
+}
+
+#: Two items that fit together, worth 8 + 2, far short of the optimum of 56.
+TWO_ITEMS = pl.DataFrame({'item': ['item1', 'item2'], 'value': [1.0, 1.0]})
+
+
+def _at_the_root(solver_name: str, **solve: Any) -> Result:
+    return sps.solve(
+        KNAPSACK, knapsack_sources(), solver_name=solver_name, solver_options=ROOT_ONLY[solver_name], **solve
+    )
+
+
+def test_a_mixed_integer_solve_holds_no_incumbent_of_its_own_at_the_root(solver_name: str) -> None:
+    """The control for the three below: without a start, the root leaves nothing."""
+    assert not _at_the_root(solver_name).has_primal, 'with heuristics off, no incumbent is found at the root'
+
+
+#: The two items worth 8 + 2 in, every other out: the knapsack's start as each
+#: shape a parameter's source takes.
+TWO_IN = {item: 1.0 if item in ('item1', 'item2') else 0.0 for item in ITEMS}
+
+
+def _shaped(shape: str, tmp_path: Path) -> object:
+    table = pl.DataFrame({'item': list(TWO_IN), 'value': list(TWO_IN.values())})
+    if shape == 'parquet':
+        table.write_parquet(tmp_path / 'take.parquet')
+        return str(tmp_path / 'take.parquet')
+    if shape == 'pandas':
+        pytest.importorskip('pandas')
+        pytest.importorskip('pyarrow')
+        return table.to_pandas()
+    return {'polars': table, 'mapping': TWO_IN, 'sequence': list(TWO_IN.values())}[shape]
+
+
+@pytest.mark.parametrize('shape', ['polars', 'pandas', 'parquet', 'mapping', 'sequence'])
+def test_a_mixed_integer_solve_returns_the_values_it_starts_from(solver_name: str, shape: str, tmp_path: Path) -> None:
+    """A start takes every shape a parameter's source takes, read by the same reader."""
+    assert _at_the_root(solver_name, start={'take': _shaped(shape, tmp_path)}).objective == pytest.approx(10.0), (
+        'the start, worth 8 + 2, is the incumbent'
+    )
+
+
+def test_one_number_starts_every_coordinate(solver_name: str) -> None:
+    assert _at_the_root(solver_name, start={'take': 0.0}).objective == pytest.approx(0.0), (
+        'every item out is the incumbent'
+    )
+
+
+def test_a_partial_start_is_completed_by_the_solver(solver_name: str) -> None:
+    answer = _at_the_root(solver_name, start={'take': TWO_ITEMS})
+    taken = answer.primal('take').filter(pl.col('item').is_in(['item1', 'item2']))['value']
+    assert taken.to_list() == pytest.approx([1.0, 1.0]), 'the items the start names stay in'
+    assert answer.objective >= 10.0, 'the solver fills in the items the start leaves out'
+
+
+def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_name: str) -> None:
+    before = sps.solve(KNAPSACK, knapsack_sources(), solver_name=solver_name)
+    assert _at_the_root(solver_name, start=before).objective == pytest.approx(before.objective), (
+        'its primal is the incumbent'
+    )
+
+
+@pytest.mark.parametrize(
+    ('start', 'match'),
+    [
+        pytest.param({'tkae': TWO_ITEMS}, "unknown variable 'tkae'.*take", id='a-misspelled-variable'),
+        pytest.param(
+            {'take': TWO_ITEMS.rename({'item': 'items'})}, r"missing columns \['item'\]", id='a-column-not-its-dims'
+        ),
+        pytest.param(
+            {'take': TWO_ITEMS.with_columns(item=pl.lit('itme1'))}, "'itme1'", id='a-label-the-dimension-lacks'
+        ),
+        pytest.param({'take': pl.concat([TWO_ITEMS, TWO_ITEMS])}, 'more than one row', id='a-coordinate-twice'),
+        pytest.param({'take': [1.0, 0.0]}, '2 values against 12', id='a-sequence-of-the-wrong-length'),
+    ],
+)
+def test_a_start_that_cannot_start_the_model_is_refused(start: dict, match: str) -> None:
+    with pytest.raises(SpecsolveError, match=match):
+        sps.solve(KNAPSACK, knapsack_sources(), start=start)
+
+
+def test_an_answer_of_another_model_places_nothing_and_is_refused() -> None:
+    """Its names match no variable here, so it would start nothing; that is a mistake, not a hint."""
+    before = sps.solve(DISPATCH, snapshots(40))
+    with pytest.raises(SpecsolveError, match='no value at any coordinate'):
+        sps.solve(KNAPSACK, knapsack_sources(), start=before)
 
 
 # ---------------------------------------------------------------------------

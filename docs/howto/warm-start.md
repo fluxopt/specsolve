@@ -94,8 +94,7 @@ holds starts at a bound, and a constraint only the new build holds starts not
 binding, so a cut enters without moving the vertex. The answer to start from
 must carry both basis outputs. It can be live, loaded with
 [`load_result`](../reference/api.md#specsolve.load_result) or read from an
-archive, and it can come from another solver. A mixed-integer model is refused:
-it has no basis to start from.
+archive, and it can come from another solver.
 
 **It pays most where the model changes least.** An unchanged model started
 from its own answer does no simplex work. Over a Benders run on the master of
@@ -104,3 +103,33 @@ to 73% of the simplex iterations at every size measured
 ([#1877](https://github.com/fluxopt/specsolve/pull/1877)). Whether it saves
 time too depends on the model: on a small master, reading and matching the
 basis costs more than the iterations it saves. Measure before relying on it.
+
+## Start a mixed-integer solve from values
+
+A mixed-integer model has no basis to start from, so `start=` gives it values
+instead. The solver takes them as its first incumbent, which bounds the search
+from the start. Pass an earlier answer, and its primal is the start:
+
+```python
+yesterday = sps.load_result('runs/monday')
+today = sps.solve('commitment.yaml', sources, start=yesterday)
+```
+
+Or pass values per variable, from a heuristic or a rule of thumb, in any shape
+a parameter's source takes over the variable's dims: a table in the shape
+[`primal`](../reference/api.md#specsolve.types.Result.primal) returns, a
+parquet path, a `{label: value}` map, or one number for every coordinate:
+
+```python
+on = pl.DataFrame({'unit': ['coal', 'gas'], 'hour': [0, 0], 'value': [1.0, 1.0]})
+result = sps.solve('commitment.yaml', sources, start={'status': on})
+result = sps.solve('commitment.yaml', sources, start={'status': 1.0})
+```
+
+A start can name some variables and some coordinates and leave out the rest.
+The solver fills in what is missing, and repairs what does not fit, as far as
+it can. A start is a hint: it never changes the optimum, only how soon a good
+solution is found. Values are read and checked as a parameter's source is, so
+a label the dimension lacks or a coordinate given twice is refused. So is a
+name that is no variable, a start that places no value at all, and values for
+an LP, which starts from a basis.

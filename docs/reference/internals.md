@@ -121,9 +121,10 @@ Each entry says what the thing is, then the module it lives in.
   rebuilt model (`relational/sinks/handoff.py`).
 
 **Warm start**
-: A basis read out of one solve and set on the next, laid onto the new build
-  by coordinate, so a model that gained or lost rows or columns takes it too.
-  `solve(start=)` is its caller (`relational/engine/readback.py`,
+: What a solve starts from instead of from scratch, laid onto the build by
+  coordinate, so a model that gained or lost rows or columns takes it too: a
+  basis for an LP, values for a mixed-integer model. `solve(start=)` is its
+  caller (`relational/engine/readback.py`,
   `relational/sinks/solvers/base.py`).
 
 ## Answers on disk

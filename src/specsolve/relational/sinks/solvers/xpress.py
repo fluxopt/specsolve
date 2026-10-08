@@ -132,8 +132,11 @@ class Xpress(Solver):
         self._p.loadBasis(solver_codes(basis.rows, (1, 2, 0, 0, 3)), solver_codes(basis.columns, (1, 0, 2, 0, 3)))
 
     def _start(self, values: Any) -> None:
-        """``addMipSol``."""
-        self._p.addMipSol(values)
+        """``addMipSol`` over the columns given a value."""
+        import numpy as np
+
+        given = np.flatnonzero(~np.isnan(values))
+        self._p.addMipSol(values[given], given)
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """Solve what is loaded and read it back; the objective constant is already in the model."""

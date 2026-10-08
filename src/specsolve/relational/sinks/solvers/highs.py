@@ -245,12 +245,11 @@ class Highs(Solver):
         _took(self._handle.setBasis(hint), 'the basis')
 
     def _start(self, values: Any) -> None:
-        """``setSolution``."""
-        import highspy
+        """``setSolution`` in its sparse form, which completes the columns it is not given."""
+        import numpy as np
 
-        solution = highspy.HighsSolution()
-        solution.col_value = [float(value) for value in values]
-        _took(self._handle.setSolution(solution), 'the starting values')
+        given = np.flatnonzero(~np.isnan(values)).astype(np.int32)
+        _took(self._handle.setSolution(len(given), given, values[given]), 'the starting values')
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """A ``kError`` from ``run()`` leaves the status unset, so on a quadratic model it is refused explicitly."""
