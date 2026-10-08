@@ -458,6 +458,16 @@ def read_start(
     return read
 
 
+def refuse_unknown_start_word(start: object) -> None:
+    """Refuse a *start* given as a word other than ``'previous'``.
+
+    Raises:
+        SpecsolveError: Any other string.
+    """
+    if isinstance(start, str) and start != 'previous':
+        raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
+
+
 def refuse_unknown_start(start: Start, program: Program) -> None:
     """Refuse a *start* keyed by no reader [`Start`][specsolve.types.Start] takes, or naming no declaration its reader reads.
 

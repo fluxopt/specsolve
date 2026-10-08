@@ -132,18 +132,17 @@ def instance(n_gen: int, n_snap: int) -> dict[str, pl.DataFrame]:
 
 
 def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
-    """One solve of *master* from a fresh solver, the simplex iterations it took, and its wall seconds.
+    """One solve of *master*, the simplex iterations it took, and its wall seconds.
 
-    A start combines with ``keep='solver'`` only, so a started solve asks for
-    that and is run first after the update that gained a cut: the new row
-    changes the structure, so the solver is loaded fresh anyway, as ``kept``
-    reports. The iteration count is read off the private handle; no public
-    surface reports it.
+    The cold arm runs first after the update that gained a cut, whose new row
+    loads the solver fresh. The warm arm then reuses that solver, which
+    forgets its work before the carried basis is set, as any start does. The
+    iteration count is read off the private handle; no public surface reports
+    it.
     """
     began = time.perf_counter()
-    answer = master.solve(keep='solver' if 'start' in solve else 'nothing', **solve)
+    answer = master.solve(**solve)
     seconds = time.perf_counter() - began
-    assert answer.kept == 'nothing', "every arm solves on a fresh solver, so neither carries the other's work"
     return answer, int(master._engine._solver._handle.getInfo().simplex_iteration_count), seconds
 
 
@@ -240,8 +239,10 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
             )
             built = master._engine._model.handoff
 
+            loads = master.diagnostics().loads
+            cold, cold_iterations, cold_seconds = _solved(master, start=None)
+            assert master.diagnostics().loads == loads + 1, 'the cold arm loads the master the gained cut changed'
             carried, warm_iterations, warm_seconds = _solved(master, start=carried, outputs=BASIS)
-            cold, cold_iterations, cold_seconds = _solved(master)
             warm = carried
             assert abs(warm.objective - cold.objective) <= 1e-6 * max(abs(cold.objective), 1.0), (
                 f'a carried basis moved the answer: cold {cold.objective!r}, warm {warm.objective!r} '

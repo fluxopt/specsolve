@@ -20,7 +20,7 @@ from pathlib import Path
 TESTS = Path(__file__).resolve().parent
 
 #: Assertions in breach. A ratchet: lower it in the PR that lowers the count.
-IN_BREACH = 205
+IN_BREACH = 203
 
 
 def _unwritten_claim(node: ast.Assert) -> str | None:

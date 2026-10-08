@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -133,34 +134,52 @@ def window_setup(
     measured peak includes them. A ``one`` window updates the first declared
     parameter alone, as ``update`` is usually called; a ``coefficient`` window
     updates whatever *following* carries, which is one parameter inside the
-    matrix; a ``cold`` window asks for ``keep='nothing'``.
+    matrix; a ``cold`` window drops the held solver, so the next is loaded fresh.
     """
     import specsolve as sps
 
     spec, sources = prepared
     model = sps.build(spec, sources)
-    model._engine._hand_off(sink, None, 'solver')
+    _handed_off(model, sink)
     updated = following[1]
     if change == 'one':
         first = next(name for name in model._program.parameters if name in updated)
         updated = {first: updated[first]}
-    return (model, sink, updated, 'nothing' if change == 'cold' else 'solver'), {}
+    return (model, sink, updated, change == 'cold'), {}
 
 
-def window(model: Any, sink: str, sources: dict[str, str], keep: str) -> Counts:
+def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
     ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
-    one is kept.
+    one is kept. A *cold* window closes the held solver first, so the model
+    is loaded from scratch.
     """
     before = _clocks(model)
     model.update(sources)
-    _, kept = model._engine._hand_off(sink, None, keep)
+    reloaded = _handed_off(model, sink, cold=cold)
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
-    return _counts(_handoff(model), nonzeros=True) | {'reloaded': kept == 'nothing', 'phases': phases}
+    return _counts(_handoff(model), nonzeros=True) | {'reloaded': reloaded, 'phases': phases}
+
+
+def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
+    """``Engine._hand_off`` as the checkout under test spells it, and whether it loaded the solver from scratch.
+
+    A checkout that still takes ``keep`` closes the held solver itself for a
+    cold window, inside the timed hand-off; a later one has no ``keep``, so a
+    cold window closes it here first.
+    """
+    engine = model._engine
+    if 'keep' in inspect.signature(engine._hand_off).parameters:
+        _, kept = engine._hand_off(sink, None, 'nothing' if cold else 'solver')
+        return kept == 'nothing'
+    if cold and engine._solver is not None:
+        engine._solver.close()
+        engine._solver = None
+    return engine._hand_off(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
@@ -229,7 +248,9 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     ``parquet`` is ``Result.save``. Both read the default answer, which holds
     no optional output.
     """
-    result = model._engine._answered(answer, 'highs', 'nothing', None)
+    answered = model._engine._answered
+    kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
+    result = answered(answer, 'highs', *kept, None)
     if into == 'frames':
         for name in model._program.variables:
             result.primal(name)

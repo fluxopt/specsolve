@@ -195,6 +195,19 @@ def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
         sps.solve(DISPATCH, snapshots(40), start=before)
 
 
+def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_loads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neither an answer read back nor a model never solved bears a mark, and two absent marks are not one solve."""
+    from specsolve.relational import sinks
+
+    sps.solve(DISPATCH, snapshots(40)).save(tmp_path / 'answer')
+    loaded = sps.load_result(tmp_path / 'answer')
+    monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
+    with pytest.raises(SpecsolveError, match='no value at any coordinate'):
+        sps.solve(KNAPSACK, knapsack_sources(), start=loaded)
+
+
 def test_a_closed_answer_is_refused() -> None:
     before = sps.solve(DISPATCH, snapshots(40), outputs=BASIS)
     before.close()
@@ -382,24 +395,8 @@ def test_a_carried_basis_has_one_basic_entry_per_row(columns: list[int], rows: l
 
 
 # ---------------------------------------------------------------------------
-# start= beside keep=, and a sweep's start
+# a sweep's start
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize('keep', ['progress', 'nothing'])
-@pytest.mark.parametrize('verb', ['model-solve', 'solve_over'])
-def test_a_start_beside_a_keep_that_also_says_where_to_begin_is_refused(
-    keep: str, verb: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from specsolve.relational import sinks
-
-    before = sps.solve(KNAPSACK, knapsack_sources())
-    monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
-    with pytest.raises(SpecsolveError, match=rf"start= and keep='{keep}' both say"):
-        if verb == 'model-solve':
-            sps.build(KNAPSACK, knapsack_sources()).solve(keep=keep, start=before)
-        else:
-            sps.solve_over(KNAPSACK, knapsack_sources(), DRAWS, key_name='draw', keep=keep, start=before)
 
 
 #: Two draws of the knapsack, each a whole model.
@@ -550,22 +547,34 @@ def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     return warmed
 
 
+def _forgotten(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Every time HiGHS forgets the work it did: a solve that begins from nothing on the solver it kept."""
+    from specsolve.relational.sinks.solvers.highs import Highs
+
+    forgotten: list[object] = []
+    original = Highs.forget
+    monkeypatch.setattr(Highs, 'forget', lambda self: (forgotten.append(self), original(self))[1])
+    return forgotten
+
+
 SCENARIOS = sps.EachCoordinate('scenario')
 
 
-def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(
+def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from tests.test_strategy import DISPATCH as SWEPT
     from tests.test_strategy import scenario_sources
 
-    warmed = _warmed(monkeypatch)
-    cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS)
-    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous', spill_to=tmp_path)
+    forgotten = _forgotten(monkeypatch)
+    cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start=None)
+    assert len(forgotten) == len(cold.keys) - 1, 'under start=None every slice after the first forgets the work'
+    forgotten.clear()
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, spill_to=tmp_path)
     assert not [path.name for path in tmp_path.iterdir() if path.name.endswith('_basis')], (
-        'the basis read to chain the slices is not spilled, since the sweep did not ask for it'
+        'no basis is read to chain the slices, so none is spilled'
     )
-    assert len(warmed) == len(chained.keys) - 1, 'every slice but the first starts from the basis before it'
+    assert not forgotten, 'by default every slice after the first carries on in the solver the slice before it left'
     assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
@@ -576,35 +585,29 @@ def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(
 def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.MonkeyPatch) -> None:
     from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
 
-    warmed = _warmed(monkeypatch)
-    sweep = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
-    assert len(warmed) == len(sweep.keys) - 1, 'a window takes the basis before it, matched by its local index'
+    forgotten = _forgotten(monkeypatch)
+    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
+    assert not forgotten, 'windows of one length keep the solver, so each carries on from the window before it'
 
 
-def test_a_slice_after_one_that_left_no_values_starts_cold(monkeypatch: pytest.MonkeyPatch) -> None:
-    from specsolve.relational.sinks.solvers.highs import Highs
-
-    started: list[object] = []
-    original = Highs.start
-    monkeypatch.setattr(Highs, 'start', lambda self, values: (started.append(values), original(self, values))[1])
+def test_a_slice_after_one_that_left_no_values_carries_on_and_solves() -> None:
     draws = [DRAWS[0], ('b', EMPTY_HANDED), ('c', knapsack_sources())]
-    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw', start='previous')
-    assert sweep.record['has_primal'].to_list() == [True, False, True], 'the middle draw cannot be packed'
-    assert len(started) == 1, "only 'b' is started, from 'a'; 'c' follows a slice with no values and starts cold"
+    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw')
+    assert sweep.record['has_primal'].to_list() == [True, False, True], (
+        "the middle draw cannot be packed, and 'c' solves on the solver it left"
+    )
 
 
-def test_a_spilled_slice_read_back_starts_the_one_after_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The slice before the one solved again lies on disk, and its frames there are the start."""
+def test_previous_under_an_executor_starts_every_slice_from_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each slice builds its own model, so there is no solver to carry on in and nothing is matched."""
     from tests.test_strategy import DISPATCH as SWEPT
     from tests.test_strategy import scenario_sources
 
-    call = {'start': 'previous', 'outputs': BASIS, 'spill_to': tmp_path / 'spill'}
-    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
-    last = max((tmp_path / 'spill' / 'record').glob('*.parquet'))
-    last.unlink()
     warmed = _warmed(monkeypatch)
-    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
-    assert len(warmed) == 1, 'only the last slice is solved again, warmed from the one before it on disk'
+    with ThreadPoolExecutor(2) as pool:
+        sweep = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, executor=pool)
+    assert sweep.record['has_primal'].all()
+    assert not warmed, 'no slice is warmed from another'
 
 
 @pytest.mark.parametrize(
@@ -616,21 +619,9 @@ def test_a_spilled_slice_read_back_starts_the_one_after_it(tmp_path: Path, monke
             id='another-word',
         ),
         pytest.param(
-            lambda: sps.solve_over(
-                KNAPSACK,
-                {},
-                DRAWS,
-                key_name='draw',
-                start='previous',
-                executor=ThreadPoolExecutor(2),
-            ),
-            'cannot run concurrently',
-            id='previous-under-an-executor',
-        ),
-        pytest.param(
-            lambda: sps.solve(KNAPSACK, knapsack_sources(), start='previous'),
-            'a word only solve_over takes',
-            id='previous-on-one-solve',
+            lambda: sps.solve(KNAPSACK, knapsack_sources(), start='prev'),
+            "takes 'previous' as a word, and not 'prev'",
+            id='another-word-on-one-solve',
         ),
     ],
 )
@@ -639,9 +630,18 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
         call()
 
 
-def test_a_start_table_solve_refuses_stops_the_sweep_before_a_slice_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ('start', 'match'),
+    [
+        pytest.param({'primal': {'tkae': TWO_ITEMS}}, "unknown variable 'tkae'", id='a-table-solve-refuses'),
+        pytest.param('prev', "takes 'previous' as a word", id='another-word'),
+    ],
+)
+def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
+    monkeypatch: pytest.MonkeyPatch, start: Any, match: str
+) -> None:
     from specsolve import strategy
 
     monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
-    with pytest.raises(SpecsolveError, match="unknown variable 'tkae'"):
-        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start={'primal': {'tkae': TWO_ITEMS}})
+    with pytest.raises(SpecsolveError, match=match):
+        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=start)

@@ -184,10 +184,13 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   part), `qmatrix` (the constraints') and `sos`. Handing it over is the phase
   the metrics clock as `handoff_seconds`.
 
-**keep**
-: How much of a session `model.solve` carries to the next solve: `solver`
-  (default), `progress` (its work too) or `nothing`
-  ([`Model.solve`](api.md#specsolve.types.Model.solve)).
+**start** · **previous**
+: What a solve begins from: `'previous'`, the default, carries on from the
+  solve before, `None` begins from nothing, and an earlier answer or tables
+  under `primal`, `variable_basis` and `constraint_basis` are matched by
+  coordinate. A start changes how soon the solver reaches the optimum, never
+  the optimum ([warm-starting](../howto/warm-start.md)). Never "prior". Unlike
+  a [carry](#sweeps), it changes no data.
 
 ## Sweeps
 

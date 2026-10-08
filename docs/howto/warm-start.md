@@ -1,13 +1,13 @@
 # Warm-starting a re-solve
 
-How to start each solve in a loop from the work the solve before it did. It
-suits a loop whose solves differ by a small step: a rolling horizon, a myopic
-pathway, a search that inches. The reference is
+How each solve in a loop starts from the work the solve before it did, and how
+to turn that off. It suits a loop whose solves differ by a small step: a
+rolling horizon, a myopic pathway, a search that inches. The reference is
 [`Model.solve`](../reference/api.md#specsolve.types.Model.solve).
 
-## Keep the solver's progress
+## Carry on from the solve before
 
-Build once, then solve each `update` with `keep='progress'`:
+Build once, then update and solve:
 
 ```python
 import specsolve as sps
@@ -15,59 +15,55 @@ import specsolve as sps
 model = sps.build('dispatch.yaml', sources)
 model.solve()
 for numbers in steps:
-    result = model.update(numbers).solve(keep='progress')
-    print(result.kept)  # progress
+    result = model.update(numbers).solve()
 ```
 
-[`kept`](../reference/api.md#specsolve.types.Result.kept) says
-what the solve actually kept. The first solve of a model keeps `'nothing'`,
-because no work came before it. An `update` that moves a mask or a coordinate
-set also gives `'nothing'`: the columns change, so the model is loaded again
-([`Model.update`](../reference/api.md#specsolve.types.Model.update)).
-
-The default, `keep='solver'`, reuses the loaded model and discards the work.
-The answer is the same under every `keep`; only the time changes.
+While an `update` keeps the loaded solver, each solve carries on from where the
+last one ended, and nothing is read or matched. An `update` that moves a mask
+or a coordinate set loads the solver again
+([`Model.update`](../reference/api.md#specsolve.types.Model.update)), and that
+solve begins from nothing. `start=None` begins from nothing every time. The
+answer is the same either way; only the time changes.
 
 ## Check that it pays
 
-Run the loop once with each `keep=` and read the clock the package keeps:
+Run the loop once each way and read the clock the package keeps:
 
 ```python
-for keep in ('solver', 'progress'):
+for start in ('previous', None):
     model = sps.build('dispatch.yaml', sources)
+    model.solve()
     for numbers in steps:
-        assert model.update(numbers).solve(keep=keep).kept in {keep, 'nothing'}
-    print(keep, model.diagnostics().seconds['solve'])
+        model.update(numbers).solve(start=start)
+    print(start, model.diagnostics().seconds['solve'], model.diagnostics().loads)
 ```
 
-Take the faster one. `'nothing'` on every iteration means each update moved a
-mask and the model was rebuilt, so the loop is paying for the build, not the
-solve.
+Take the faster one. `loads` equal to the number of solves means each update
+moved a mask and the model was loaded again, so the loop is paying for the
+load, not the solve.
 
-**`keep='progress'` can lose by an order of magnitude and win by a factor of
-two**, so measure rather than guess. Over six updates on HiGHS
-([#815](https://github.com/fluxopt/specsolve/pull/815)), carrying the solver's
-work cost **76.6 s against 4.3 s** on a dispatch model whose presolve cracks
-the problem outright, an 18× loss, and **111.2 s against 213.9 s** on a
-storage model whose cyclic recurrence presolve cannot crack, a 1.9× win. It
-pays where the model is hard for its solver's preprocessing *and* consecutive
-solves differ by a small step. The answer does not change either way: across
-both models the objectives agreed to 2e-15 relative. No solver option reaches
-the same thing; on both solvers that ship, an option asking for it did not
-produce it (#815).
+**Carrying on usually pays, and can lose by an order of magnitude**, so
+measure a loop that matters. Over six updates on the bench's dispatch and
+storage models, it cut the wall time by 1.5× to 5.7× on HiGHS and Gurobi
+([#1884](https://github.com/fluxopt/specsolve/pull/1884)). On a dispatch model
+whose presolve cracks the problem outright, it cost **76.6 s against 4.3 s** on
+HiGHS, an 18× loss, because a solver that carries on skips its presolve
+([#815](https://github.com/fluxopt/specsolve/pull/815)). The answer does not
+change either way: the objectives agreed to 2e-15 relative. No solver option
+gives a solver that carries on its presolve back; on both solvers that ship,
+an option asking for it did not produce it (#815).
 
-## Warm-start a sweep
+## A sweep
 
-[`solve_over`](../reference/sweeps.md) takes the same `keep=`, and carries
-from one slice to the next:
+[`solve_over`](../reference/sweeps.md) carries each slice on from the one
+before it in the same way, on the model it updates in place. Under an
+executor each slice builds its own model, so each begins from nothing.
+`start=None` turns it off:
 
 ```python
 axis = sps.EachWindow('hour', steps=24, lookahead=24, into='t')
-sweep = sps.solve_over('horizon.yaml', sources, axis, keep='progress')
+sweep = sps.solve_over('horizon.yaml', sources, axis, start=None)
 ```
-
-Under `executor=`, every slice is a first solve and keeps `'nothing'`
-([running slices in parallel](../reference/sweeps.md#running-slices-in-parallel)).
 
 To start a sweep from an earlier one, pass that sweep as `start=`. Each slice
 starts from the earlier slice of its key, under an executor too:
@@ -79,24 +75,20 @@ tuesday = sps.solve_over('dispatch.yaml', tuesday_sources, axis, start=monday)
 
 A table passed as `start=` is cut by the axis, as a source is. Write it over
 the sliced dimension, such as `snapshot` for `EachWindow`, and each window
-takes the rows of the coordinates it covers. To start each slice from the one
-before it instead, pass `start='previous'`. That runs only without an executor.
-
-**`start=` combines with `keep='solver'` only.** `keep='progress'` and
-`keep='nothing'` also say what the solve begins from, so a solve given either
-beside `start=` is refused.
+takes the rows of the coordinates it covers.
 
 ## Time a cold solve
 
-Pass `keep='nothing'`. It discards the held solver before the load, so no
-basis, incumbent or solver-internal state survives. A benchmark needs that, and
-so does comparing two sets of `solver_options`.
+Pass `start=None`, and the solve begins from nothing. For no solver-internal
+state to survive, close the model and build it again. A benchmark needs that,
+and so does comparing two sets of `solver_options`.
 
 ## Start from an earlier answer
 
-`keep='progress'` carries the work only while the model's structure stays the
-same. A cutting-plane master re-solved after gaining a cut has gained a *row*,
-and a rebuild loads a fresh solver. Start an LP from an earlier answer instead:
+The solver carries on only while the model's structure stays the same. A
+cutting-plane master re-solved after gaining a cut has gained a *row*, so the
+update loads a fresh solver, which begins from nothing. Start an LP from an
+earlier answer that carries its basis instead:
 
 ```python
 previous = master.solve(outputs={'basis'})
@@ -110,8 +102,8 @@ holds starts at a bound, and a constraint only the new build holds starts not
 binding, so a cut enters without moving the vertex. The answer can be live,
 loaded with [`load_result`](../reference/api.md#specsolve.load_result) or read
 from an archive, and it can come from another solver. An answer solved without
-`outputs={'basis'}` carries no basis, and an LP then starts from its values, as
-the next section describes.
+`outputs={'basis'}`, or by interior point with crossover off, carries no basis,
+and an LP then starts from its values, as the next section describes.
 
 **It pays most where the model changes least.** An unchanged model started
 from its own answer does no simplex work. Over a Benders run on the master of
