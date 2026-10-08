@@ -37,7 +37,7 @@ you have is the difference between a `where:` you wrote and a row you lost
 
 ```python
 print(model.row('power_balance', snapshot=2))
-# power_balance[snapshot=2]: +1 p[2, wind] +1 p[2, gas] == 180
+# power_balance[snapshot=2]: +1 p[snapshot=2, generator=wind] +1 p[snapshot=2, generator=gas] == 180
 ```
 
 The line is the row as the solver got it: every coefficient the data

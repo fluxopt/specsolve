@@ -203,7 +203,7 @@ returns, and `specsolve.errors` holds what a call raises or warns. Every other
 module under `specsolve.` is internal, whatever its name, and any release can
 change it.
 
-**Fifteen names to call, and the count is the feature.** The spec is the YAML
+**Sixteen names to call, and the count is the feature.** The spec is the YAML
 file, and Python is how you *run* it. So nothing on the surface constructs math
 or reaches the plan. The names, by role:
 
@@ -212,11 +212,13 @@ or reaches the plan. The names, by role:
 - `tidy`, the tables a solve reads from the sources, as an archive holds them;
 - `load_archive`, `load_result` and `load_sweep` to read an answer back whole,
   and `scan_archive`, `scan_result` and `scan_sweep` to read it off the
-  directory it lies in.
+  directory it lies in;
+- `load_inputs`, the spec and the data an archive holds, without its answer.
 
 `specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
-`Sweep`, and the two archives that carry a spec, its data and its answer,
-`ResultArchive` and `SweepArchive`. It also holds the rows they hand back:
+`Sweep`, the two archives that carry a spec, its data and its answer,
+`ResultArchive` and `SweepArchive`, and `ArchivedInputs`, which carries the spec
+and the data alone. It also holds the rows they hand back:
 `ConstraintRow`, `Diagnostics`, `Record`, `Provenance` and `Metrics`. And it
 holds `Output`, the `Literal` of the names `outputs=` takes, and `Start`, the
 `TypedDict` of the tables `start=` takes, so a caller that builds either can
@@ -560,10 +562,10 @@ is structure.
 |---|---|
 | `mathspec` (a dependency) | the whole language, read, expanded, resolved, judged and lowered there; what crosses is a `Spec` and the `Program` it lowers to — [its own reference](https://mathspec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, and `load_result` / `scan_result` for an answer read back off disk; linopy-free |
-| `archive_layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/` in the answer's own layout, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together |
-| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `ResultArchive` and `SweepArchive`. It reads; it never writes |
+| `archive_layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/` in the answer's own layout, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together. `INPUTS_LAYOUT` stamps the spec and the sources apart from the answer's `ANSWER_LAYOUT` |
+| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `ResultArchive` and `SweepArchive`, and `load_inputs`, which gives back `ArchivedInputs` without reading the answer. It reads; it never writes |
 | `inputs.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through; `lower`, an expression the file never named spliced into the spec as written and lowered with it |
-| `relational/collect.py` | which polars engine materialises a frame: the streaming one where this polars has it, asked once; a build without it, the browser's, gets the in-memory one |
+| `relational/collect.py` | how polars materialises a frame, for every collect in the package: polars' own `auto` engine where this polars has the streaming one, asked once, else the in-memory one, which a build without it, the browser's, gets; the in-memory one by name where a collect asks for it; and joins in the order they were written, never reordered by polars |
 | `sources.py` | the one door: caller data (parquet paths, in-memory tables, plain-Python shapes) read into tidy tables and checked against the declarations |
 | `assumptions.py` | the one guard that needs numbers: every `assumptions:` entry the file wrote, and each condition a `piecewise:` method puts on its breakpoints, evaluated as the masks the language states them as |
 | `frames.py` | the boundary: caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the oracle |
@@ -587,7 +589,7 @@ is structure.
 | `relational/engine/readback.py` | a built row, a solve's tables and a named expression, spelled back out in the model's own labels |
 | `relational/engine/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
-| `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
+| `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `ANSWER_LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
 | `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
 | `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; the oracle declares what it builds in the same vocabulary (`tests/linopy_lane/builder.py`) |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/relational/sinks/README.md) |

@@ -18,9 +18,9 @@ from mathspec.program import ParameterDeclaration
 from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve.messages import unknown_name_message
+from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
 from specsolve.relational.answer_layout import BASIS_STATUSES, RESERVED
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.result import Start
 
 if TYPE_CHECKING:
@@ -175,7 +175,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = in_microseconds(table.select(dim).collect(), f"index for dimension '{dim}'")
+    labels = in_microseconds(table.select(dim).pipe(collected), f"index for dimension '{dim}'")
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -321,7 +321,7 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
     """
     _check_same_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
     known = set(labels.to_list())
-    strays: dict[object, None] = {v: None for v in rows.select(role).collect()[role].to_list() if v not in known}
+    strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
     if not strays:
         return
     shown = ', '.join(repr(v) for v in list(strays)[:5]) + (' …' if len(strays) > 5 else '')
@@ -336,7 +336,7 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
 
 def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
     """One dimension's labels."""
-    return index.select(dim).collect()[dim]
+    return index.select(dim).pipe(collected)[dim]
 
 
 def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> pl.LazyFrame:
@@ -365,13 +365,13 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = in_microseconds(table.select(*roles).collect(), f"relation '{name}'")
+    rows = in_microseconds(table.select(*roles).pipe(collected), f"relation '{name}'")
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
         holed = [c for c in roles if holes[c].null_count()]
         where = repr(holed[0]) if len(holed) == 1 else str(holed)
-        shown = coordinates_shown(roles, holes.head(5).rows())
+        shown = coordinates_text(roles, holes.head(5).rows())
         raise DataError(
             f"relation '{name}' carries {holes.height} row(s) with a null in {where}: {shown}. A relation "
             f'is partial by leaving a row out, not by relating a label to nothing — drop the row and '
@@ -382,7 +382,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
     key = list(relation.key)
     twice = rows.group_by(key).len().filter(pl.col('len') > 1).sort(key)
     if twice.height:
-        shown = coordinates_shown(key, twice.select(key).head(5).rows())
+        shown = coordinates_text(key, twice.select(key).head(5).rows())
         if relation.values:
             raise DataError(
                 f"relation '{name}' maps {twice.height} key(s) more than once: {shown}. "
@@ -496,7 +496,7 @@ def _read_by(
 
 def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
     """Refuse a basis status outside [`BASIS_STATUSES`][specsolve.relational.answer_layout.BASIS_STATUSES]."""
-    held = frame.select(pl.col('value').cast(pl.String).unique()).collect(engine=collect_engine())['value']
+    held = frame.select(pl.col('value').cast(pl.String).unique()).pipe(collected)['value']
     if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
         raise SpecsolveError(
             f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
@@ -529,7 +529,12 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
     elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
     else:
-        least = _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col('value').min()).collect().item()
+        least = (
+            _parameter_frame(name, program.parameters[name], obj, {})
+            .select(pl.col('value').min())
+            .pipe(collected)
+            .item()
+        )
     return 0 if least is None else int(least)
 
 
@@ -608,7 +613,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str)
             f"for '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
         )
-    return source.select(dim).collect()[dim].to_list()
+    return source.select(dim).pipe(collected)[dim].to_list()
 
 
 def _checked_parameter(
@@ -635,7 +640,7 @@ def _checked_parameter(
             f"(need dims {list(p.dims)} plus 'value'; has {available}). Rename them to "
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = in_microseconds(table.select(wanted).collect(engine=collect_engine()), f"{kind} '{name}'")
+    frame = in_microseconds(table.select(wanted).pipe(collected), f"{kind} '{name}'")
     _check_one_row_per_coordinate(name, p, frame, sources, kind)
     _check_values_are_present(name, p, frame, kind)
     _check_value_dtype(name, p, frame, kind)
@@ -685,7 +690,7 @@ def _check_one_row_per_coordinate(
         return
     duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
-        ', '.join(f'{d}={row[d]!r}' for d in p.dims) + f' ({row["#rows"]} rows)'
+        f'{coordinate_text({d: row[d] for d in p.dims})} ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(
@@ -702,7 +707,7 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
     holes = int(frame.select(holed.sum()).item())
     if not holes:
         return
-    shown = coordinates_shown(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
+    shown = coordinates_text(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
     at = f': {shown}' if shown else ''
     raise DataError(
         f"{kind} '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
@@ -711,11 +716,6 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
         f'  Drop them     polars .drop_nulls("value").drop_nans("value"), pandas .dropna(subset=["value"])\n'
         f'  Supply them   if a number was what was meant'
     )
-
-
-def coordinates_shown(dims: Sequence[str], rows: Iterable[Sequence[Label]]) -> str:
-    """Coordinates as a refusal prints them: ``f='b'; f='c'``."""
-    return '; '.join(', '.join(f'{d}={v!r}' for d, v in zip(dims, row, strict=True)) for row in rows)
 
 
 #: The column each declared dtype *is*, in polars types.

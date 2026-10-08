@@ -590,7 +590,7 @@ def test_a_where_reads_a_map_that_leaves_a_label_out():
         ),
         pytest.param(
             pl.DataFrame({'generator': ['g1', 'g1'], 'bus': ['north', 'south']}),
-            r"maps 1 key\(s\) more than once: generator='g1'",
+            r'maps 1 key\(s\) more than once: generator=g1',
             id='mapped-twice',
         ),
         pytest.param(
