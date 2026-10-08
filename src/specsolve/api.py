@@ -285,9 +285,9 @@ class Model:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so an updated
-        model pushes only its numbers. It begins from nothing, unless *start*
-        says otherwise; [`diagnostics`][] counts the solves that loaded it
-        again.
+        model pushes only its numbers; [`diagnostics`][] counts the solves
+        that loaded it again. A solve begins from nothing unless *start* says
+        otherwise.
 
         Args:
             solver_name: ``highs``, which ships with the package; ``gurobi``,
@@ -336,10 +336,9 @@ class Model:
                 an LP, and a mixed-integer model always, starts from values,
                 which the solver completes and repairs. Where a solver takes
                 values for an LP and no gain from them is known, the solve
-                warns. The answer this model's last solve produced is not
-                matched at all where its solver is still loaded: the solver
-                carries on from where it ended, which is the cheap way to
-                step a model through its updates.
+                warns. This model's last answer is not matched while its
+                solver stays loaded: the solver carries on, the cheap way to
+                step a model through updates.
 
         Returns:
             The solution, holding this model.

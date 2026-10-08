@@ -22,9 +22,8 @@ While an `update` keeps the loaded solver, the solver carries on from where
 the last solve ended, and nothing is read or matched. An `update` that moves a
 mask or a coordinate set loads the solver again
 ([`Model.update`](../reference/api.md#specsolve.types.Model.update)), and the
-answer is then matched onto the new build by coordinate, as the sections below
-describe. Without `start=`, each solve begins from nothing on the solver still
-loaded. The answer is the same either way; only the time changes.
+answer is then matched by coordinate, as below. Without `start=`, each solve
+begins from nothing. The answer is the same either way; only the time changes.
 
 ## Check that it pays
 
@@ -58,8 +57,7 @@ produce it (#815).
 ## Warm-start a sweep
 
 [`solve_over`](../reference/sweeps.md) takes `start='previous'`, which starts
-each slice from the one before it. Where the update between them keeps the
-solver, the solver carries on:
+each slice from the one before it, as above:
 
 ```python
 axis = sps.EachWindow('hour', steps=24, lookahead=24, into='t')
@@ -84,10 +82,9 @@ takes the rows of the coordinates it covers.
 
 ## Time a cold solve
 
-Pass no `start=`. The loaded solver forgets the work the last solve did, so
-the solve begins from nothing. To discard the loaded solver as well, so that
-no solver-internal state survives, close the model and build it again. A
-benchmark needs that, and so does comparing two sets of `solver_options`.
+Pass no `start=`, and the solve begins from nothing. For no solver-internal
+state to survive, close the model and build it again. A benchmark needs that,
+and so does comparing two sets of `solver_options`.
 
 ## Start from an earlier answer
 

@@ -319,15 +319,13 @@ def solve_over(
             earlier sweep is its answer, so each slice starts from the earlier
             slice of its key, and each window from the hours it covers. The
             word ``'previous'`` starts each slice from the answer of the one
-            before it in its chain: where the update kept the solver, the
-            solver carries on from where it ended, and elsewhere the answer is
-            matched by the slice model's own coordinates. The first slice of
-            each chain, and one after a slice that left no values, starts cold.
-            Where no axis carries, a chain is the last axis's slices under
-            each combination of the outer keys. Each slice is solved with
-            its basis, for a next slice the solver could not carry on into,
-            whether or not *outputs* asks for it; the sweep keeps only what
-            *outputs* asks for.
+            before it in its chain, as [`solve`][specsolve.api.Model.solve]
+            does; a match is by the slice model's own coordinates. The first
+            slice of each chain, and one after a slice that left no values,
+            starts cold. Where no axis carries, a chain is the last axis's
+            slices under each combination of the outer keys. Each slice is
+            also solved with its basis, which the sweep keeps only where
+            *outputs* asks for it.
 
     Returns:
         The sweep, which reads its answer.
@@ -699,12 +697,9 @@ def _serially(
     Each axis's carry reaches the slices of its next label, and resets to the
     seed where an outer key changes; ``start='previous'`` follows each chain,
     so the first slice of a chain starts cold.
-    Under ``start='previous'`` each slice starts from the answer before it:
-    where the update kept the solver, it carries on from where it ended, and
-    where it did not, from the basis each slice is solved with as well, which
-    the answer does not keep. A slice
-    naming other sources than the last is rebuilt, since ``update`` is
-    partial. A generator because slice ``i+1``'s carry is read from slice
+    Under ``start='previous'`` each slice is solved with its basis as well,
+    for a next slice whose update loads the solver again. A slice naming other
+    sources than the last is rebuilt, since ``update`` is partial. A generator because slice ``i+1``'s carry is read from slice
     ``i``'s frames after the yield; the caller closes it to release the model.
     A slice the spill holds is read back, and one solved here is written
     before it is yielded.
