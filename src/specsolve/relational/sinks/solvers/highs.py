@@ -16,6 +16,7 @@ from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import (
     Basis,
+    InfeasibleSubsystemIndices,
     SolveAnswer,
     Solver,
     basis_codes,
@@ -57,8 +58,16 @@ _CONDITION_OF_HIGHS_STATUS = {
 }
 
 
+#: ``kIisModelStatusIrreducible``, by value: highspy does not bind the enum.
+_IIS_IRREDUCIBLE = 3
+
+
 def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     """The populated `highspy.Highs`.
+
+    ``iis_strategy`` leads the caller's options: the default checks bounds
+    alone, and on a conflict between rows it returns an empty subsystem with
+    no error.
 
     The integrality vector spans every column even where none is integer: HiGHS
     reads an empty one as whatever the memory held (1.15.1).
@@ -79,6 +88,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     inf = highspy.kHighsInf
     h = highspy.Highs()
     h.setOptionValue('output_flag', False)
+    strategy = highspy.IisStrategy
+    h.setOptionValue('iis_strategy', int(strategy.kIisStrategyFromLp) | int(strategy.kIisStrategyIrreducible))
     for option, value in (solver_options or {}).items():
         h.setOptionValue(option, value)
 
@@ -291,6 +302,27 @@ class Highs(Solver):
         """``getDualRay``, signed the way the contract wants, whether or not presolve found the infeasibility."""
         _, has_ray, values = self._handle.getDualRay()
         return solver_vector(values) if has_ray else None
+
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
+        """``getIis``, kept only where HiGHS proved it irreducible.
+
+        A model that integrality alone makes infeasible gets one on 1.13 and
+        none on 1.15.1, which searches without integrality.
+        """
+        import highspy
+        import numpy as np
+
+        _, found = self._handle.getIis()
+        if not found.valid_ or found.status_ != _IIS_IRREDUCIBLE:
+            return None
+        bound = highspy.IisBoundStatus
+        columns = np.asarray(found.col_index_, dtype=np.int64)
+        sides = np.asarray(found.col_bound_, dtype=np.int64)
+        return InfeasibleSubsystemIndices(
+            np.asarray(found.row_index_, dtype=np.int64),
+            columns[np.isin(sides, [int(bound.kIisBoundStatusLower), int(bound.kIisBoundStatusBoxed)])],
+            columns[np.isin(sides, [int(bound.kIisBoundStatusUpper), int(bound.kIisBoundStatusBoxed)])],
+        )
 
     def forget(self) -> None:
         """``clearSolver``: the basis and the solution go, the model stays."""
