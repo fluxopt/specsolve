@@ -34,7 +34,7 @@ from specsolve.relational.answer_layout import (
     write_format,
     write_whole,
 )
-from specsolve.relational.names import RESERVED, RUN, VALUE
+from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
 if TYPE_CHECKING:
@@ -255,7 +255,7 @@ def _catalog(
 
 def _rows(head: tuple[object, ...], held: Path, dims: Mapping[str, str]) -> list[tuple[object, ...]]:
     """*head* once per column of labels *held* is written with, and once with no column where it has none."""
-    labels = [column for column in _columns(held) if column != VALUE and not column.startswith(RESERVED)]
+    labels = [column for column in _columns(held) if column != VALUE and not column.startswith(RESERVED_PREFIX)]
     return [(*head, column, dims.get(column)) for column in labels] or [(*head, None, None)]
 
 

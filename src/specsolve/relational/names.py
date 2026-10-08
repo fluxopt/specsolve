@@ -1,10 +1,16 @@
 """The column names specsolve writes beside a spec's own, and the refusals that keep a spec from taking them.
 
-Every module that names one of these columns imports it from here, and
-[`lowered`][specsolve.inputs.lowered] refuses a declaration that would collide
-with one, so [`check`][specsolve.api.check] and every other verb name the
-collision before any data is read. It imports nothing from the package but
-its errors, so every layer can import it.
+There are two rules, and they differ in shape and in reach. Every declared
+name is refused where it starts with [`RESERVED_PREFIX`][], which covers every
+column specsolve adds under it. A dimension alone is refused where it is
+[`VALUE`][], the one whole name, because only a dimension becomes a column
+beside it: a parameter or a variable called ``value`` is accepted.
+[`lowered`][specsolve.inputs.lowered] applies both, so
+[`check`][specsolve.api.check] and every other verb name the collision before
+any data is read.
+
+Every module that names one of these columns imports it from here. It imports
+nothing from the package but its errors, so every layer can import it.
 """
 
 from __future__ import annotations
@@ -13,33 +19,33 @@ from specsolve.errors import SpecsolveError
 
 #: The prefix reserved, in any letter case, for the columns specsolve adds, so
 #: that no name a spec declares can collide with one.
-RESERVED = 'specsolve_'
+RESERVED_PREFIX = 'specsolve_'
 
 
 #: The column an archive adds to every table it holds, naming the run the
 #: table came from. Read back, a frame comes without it.
-RUN = f'{RESERVED}run'
+RUN = f'{RESERVED_PREFIX}run'
 
 #: The column a dimension's table numbers its labels in, from 0 in index order.
-POSITION = f'{RESERVED}position'
+POSITION = f'{RESERVED_PREFIX}position'
 
 
 def refuse_reserved(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it starts with [`RESERVED`][] in any letter case.
+    """Refuse *name*, which *which* describes, where it starts with [`RESERVED_PREFIX`][] in any letter case.
 
     Raises:
         SpecsolveError: A name a column specsolve adds could collide with.
     """
-    if name.casefold().startswith(RESERVED):
+    if name.casefold().startswith(RESERVED_PREFIX):
         raise SpecsolveError(
-            f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
+            f'{which} starts with {RESERVED_PREFIX!r}, which is reserved in any letter case for the columns '
             f'specsolve adds, so it could collide with one. Rename it.'
         )
 
 
 #: The column that holds the numbers beside a declaration's dimensions, in a
 #: parameter's table and in every frame an answer comes back as. Besides the
-#: names under [`RESERVED`][], it is the one name a dimension may not take.
+#: names under [`RESERVED_PREFIX`][], it is the one name a dimension may not take.
 VALUE = 'value'
 
 
