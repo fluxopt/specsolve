@@ -591,6 +591,25 @@ class Result:
         """
         return _named(self._carried('activity', name), name, 'constraint').pipe(collected)
 
+    def slack(self, name: str) -> pl.DataFrame:
+        """How far constraint *name* is from binding at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
+
+        Non-negative wherever the row holds, whichever side a term is written
+        on: ``rhs - lhs`` for ``<=``, ``lhs - rhs`` for ``>=``, and
+        ``-|rhs - lhs|`` for ``==``, which holds only at zero. A binding row
+        reads zero, and a violated one, such as at an incumbent within the
+        solver's tolerance, reads below zero by how much. Computed from
+        [`activity`][], so readable wherever it is, and carried only where
+        the solve was asked for it with ``outputs={'slack'}``.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, or the solve was not asked
+                for its slack.
+            KeyError: No constraint is called *name*.
+        """
+        return _named(self._carried('slack', name), name, 'constraint').pipe(collected)
+
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
         """*output*'s frames, or why they cannot be read.
 

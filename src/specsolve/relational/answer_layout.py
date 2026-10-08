@@ -32,16 +32,19 @@ if TYPE_CHECKING:
 #: What an answer carries only where the solve asked for it with ``outputs=``,
 #: beside the primal, the duals and the declared expressions it always
 #: carries. ``activity`` is each constraint's left-hand side at the solution,
-#: and ``reduced_cost`` each variable's reduced cost.
+#: ``reduced_cost`` each variable's reduced cost, and ``slack`` each
+#: constraint's distance to binding.
 #: Each is named after its reader on a result and a sweep, and the directory
 #: its frames are saved under.
-Output = Literal['activity', 'reduced_cost']
+Output = Literal['activity', 'reduced_cost', 'slack']
 
 #: What an [`Output`][] holds one frame per.
 Per = Literal['variable', 'constraint']
 
 #: Every [`Output`][], and what it holds one frame per.
-OUTPUTS: Mapping[Output, Per] = MappingProxyType({'activity': 'constraint', 'reduced_cost': 'variable'})
+OUTPUTS: Mapping[Output, Per] = MappingProxyType(
+    {'activity': 'constraint', 'reduced_cost': 'variable', 'slack': 'constraint'}
+)
 
 #: The kinds that exist exactly where the duals do. Where a solve left none,
 #: each carries the duals' reason.

@@ -9,6 +9,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 - feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
 - feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
+- feat(api): a solve or a sweep asked for outputs={'slack'} reads how far each constraint is from binding ([#1868](https://github.com/fluxopt/specsolve/pull/1868))
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
 

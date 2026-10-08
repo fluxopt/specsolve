@@ -321,6 +321,12 @@ class Engine:
                 if answer.primal is None or answer.dual is None:
                     return {}
                 return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+            case 'slack':
+                return (
+                    {}
+                    if answer.activity is None
+                    else self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
+                )
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""

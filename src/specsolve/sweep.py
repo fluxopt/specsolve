@@ -487,6 +487,20 @@ class Sweep:
         """
         return self._named('activity', name, per_window=per_window).pipe(collected)
 
+    def slack(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One constraint's distance to binding at every slice's solution.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.slack`][specsolve.relational.result.Result.slack]'s sign.
+        Carried only where the sweep was asked for it with
+        ``outputs={'slack'}``.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its slack, or as
+                [`primal`][] raises.
+        """
+        return self._named('slack', name, per_window=per_window).pipe(collected)
+
     def reduced_cost(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One variable's reduced costs at every slice's solution.
 
