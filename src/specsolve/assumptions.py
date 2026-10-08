@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from mathspec.program import assumption_message
 
 from specsolve.errors import DataError
+from specsolve.messages import coordinate_text
 from specsolve.relational.collect import collected
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.predicates import masked
@@ -61,5 +62,5 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
     if not offending.height:
         return None
     row = offending.row(0, named=True)
-    at = ', '.join(f'{d}={row[d]!r}' for d in dims)
+    at = coordinate_text({d: row[d] for d in dims})
     return f'\n  Not so at {at}' if at else ''

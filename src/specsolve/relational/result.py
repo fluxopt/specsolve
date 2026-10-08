@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from specsolve.errors import NoSolutionError, SpecsolveError
-from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
+from specsolve.messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
     ACTIVITY,
     NO_PROVENANCE,
@@ -116,9 +116,9 @@ def _number(value: float, *, sign: bool = False) -> str:
     return f'+{text}' if sign and not text.startswith('-') else text
 
 
-def _bracket(labels: str) -> str:
-    """``[1, wind]``, or nothing at all for a declaration over no dims."""
-    return f'[{labels}]' if labels else ''
+def _bracket(coordinate: str) -> str:
+    """``[t=1, g=wind]``, or nothing at all for a declaration over no dims."""
+    return f'[{coordinate}]' if coordinate else ''
 
 
 @dataclass(frozen=True)
@@ -130,16 +130,17 @@ class ConstraintRow:
     the data made exactly zero have already removed their terms, so it can be
     shorter than the file suggests.
 
-    Printed, it is one line of math in linopy's format; a row wider than
-    [`display_terms`][] prints each variable's term count and coefficient
-    span instead. [`terms`][] is the same content as a frame.
+    Printed, it is one line of math, each term at its named coordinate; a row
+    wider than [`display_terms`][] prints each variable's term count and
+    coefficient span instead. [`terms`][] is the same content as a frame.
 
     Attributes:
         name: The constraint this row belongs to.
         coordinate: Where in that declaration it sits.
         terms: ``(variable, coordinate, coefficient)``, one row per term, in
-            the solver's own column order. ``coordinate`` is the term's labels
-            in its variable's dim order, as one string.
+            the solver's own column order. ``coordinate`` is the term's
+            coordinate as one string, ``t=1, g=gas``, in its variable's dim
+            order.
         sense: ``<=``, ``>=`` or ``==``.
         rhs: What the left-hand side is compared against.
     """
@@ -162,7 +163,7 @@ class ConstraintRow:
 
     def _where(self) -> str:
         """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
-        return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
+        return coordinate_text(self.coordinate)
 
     def _body(self) -> str:
         """The terms, spelled out or summarised."""

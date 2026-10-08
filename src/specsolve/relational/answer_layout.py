@@ -55,6 +55,26 @@ def refuse_reserved(name: str, which: str) -> None:
         )
 
 
+#: The column that holds the numbers beside a declaration's dimensions, in a
+#: parameter's table and in every frame an answer comes back as. Besides the
+#: names under [`RESERVED`][], it is the one name a dimension may not take.
+VALUE = 'value'
+
+
+def refuse_value(name: str, which: str) -> None:
+    """Refuse *name*, which *which* describes, where it is [`VALUE`][] in any letter case.
+
+    Raises:
+        SpecsolveError: A name the ``value`` column would collide with.
+    """
+    if name.casefold() == VALUE:
+        raise SpecsolveError(
+            f'{which} has the name of the column {VALUE!r}, which holds the numbers beside the dimensions '
+            f"in a parameter's table and in every frame an answer comes back as. Query engines read column "
+            f'names without case, so the two columns would collide in any letter case. Rename it.'
+        )
+
+
 #: The column an archive adds to every table it holds, naming the run the
 #: table came from. Read back, a frame comes without it.
 RUN = f'{RESERVED}run'

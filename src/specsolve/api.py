@@ -419,7 +419,7 @@ class Model:
 
         Example:
             >>> print(model.row('balance', snapshot=1))  # doctest: +SKIP
-            balance[snapshot=1]: +1 p[1, wind] +50 p[1, gas] >= 60
+            balance[snapshot=1]: +1 p[snapshot=1, tech=wind] +50 p[snapshot=1, tech=gas] >= 60
         """
         return self._engine.row(name, coordinate)
 

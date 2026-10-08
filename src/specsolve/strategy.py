@@ -35,6 +35,7 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
+    VALUE,
     Metrics,
     Record,
     refuse_reserved,
@@ -642,7 +643,7 @@ def _key_column(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
             f'with a column the frames already carry. Name it something the spec does not use.'
         )
-    fixed = tuple(dict.fromkeys(('value', *Record._fields, *Metrics._fields)))
+    fixed = tuple(dict.fromkeys((VALUE, *Record._fields, *Metrics._fields)))
     if key_name in fixed:
         raise SpecsolveError(
             f'key_name={key_name!r} is a column a sweep frame carries ({", ".join(fixed)}), so the slice '

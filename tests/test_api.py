@@ -478,6 +478,24 @@ def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
         sps.check(spec)
 
 
+@pytest.mark.parametrize('name', ['value', 'Value', 'VALUE'], ids=str)
+def test_a_dimension_named_value_is_refused_at_load(name):
+    """A parameter's table and every answer frame hold a dimension's labels beside a column named `value`.
+
+    So a dimension of that name cannot be told apart from the numbers. Query
+    engines read column names without case, so `Value` collides as well.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^dimension '{name}' has the name of the column 'value'"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
