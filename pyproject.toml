@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "mathspec>=0.2.1,<0.3",
-    "polars>=1.30,<2",
+    "polars>=2.0",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.
     "highspy>=1.13",
@@ -125,7 +125,7 @@ python = "3.12.*"
 # Each pin is the floor `[project.dependencies]` declares; tests/test_tooling_pins.py checks it.
 [tool.pixi.feature.floors.pypi-dependencies]
 specsolve = { path = "." }
-polars = "==1.30"
+polars = "==2.0"
 numpy = "==1.26"
 highspy = "==1.13"
 mathspec = "==0.2.1"

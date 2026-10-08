@@ -19,6 +19,7 @@ from mathspec import did_you_mean
 
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
+from specsolve.relational.collect import collected
 from specsolve.sources import in_microseconds, least_value
 
 if TYPE_CHECKING:
@@ -86,7 +87,7 @@ class Stitch:
         rest = [column for column in columns if column not in (*keys, 'value')]
         restored = frame.lazy().join(self.owned.lazy(), on=keys, how='inner').drop(keys)
         stitched = restored.select(self.dim, *rest, 'value').sort(self.dim, *rest)
-        return stitched if isinstance(frame, pl.LazyFrame) else stitched.collect()  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
+        return stitched if isinstance(frame, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
 def bulleted(entries: Mapping[str, str]) -> str:
@@ -364,7 +365,7 @@ def _coordinates(sources: Mapping[str, Source], dim: str, verb: str) -> tuple[di
             f"no source carries a '{dim}' column, so there is nothing to {verb} over. "
             f'EachCoordinate names a column the data has; a span of consecutive coordinates is EachWindow.'
         )
-    unique = {name: table.select(pl.col(dim).unique()).collect() for name, table in carrying.items()}
+    unique = {name: table.select(pl.col(dim).unique()).pipe(collected) for name, table in carrying.items()}
     held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
     carrying = {name: _in_microseconds(table, dim) for name, table in carrying.items()}
     coordinates = sorted(set().union(*held.values()))

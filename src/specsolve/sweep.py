@@ -43,6 +43,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
+from specsolve.relational.collect import collected
 from specsolve.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
@@ -377,7 +378,7 @@ class Sweep:
         for kind in ('primal', *(sorted(BASES) if 'basis' in self._outputs else ())):
             held, _ = self._answerable(kind, per_window=False)
             if held:
-                given[kind] = {name: self.scan(name, kind).collect() for name in held}
+                given[kind] = {name: self.scan(name, kind).pipe(collected) for name in held}
         return cast('Start', given)
 
     def _check_per_window(self) -> None:
@@ -478,7 +479,7 @@ class Sweep:
                 that was not cut into windows, or on an archive written
                 without them.
         """
-        return self._named('primal', name, per_window=per_window).collect()
+        return self._named('primal', name, per_window=per_window).pipe(collected)
 
     def dual(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One constraint's shadow prices.
@@ -492,7 +493,7 @@ class Sweep:
             SpecsolveError: No slice produced duals for *name* — the message says
                 which of the two it was — or as [`primal`][] raises.
         """
-        return self._named('dual', name, per_window=per_window).collect()
+        return self._named('dual', name, per_window=per_window).pipe(collected)
 
     def activity(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One constraint's left-hand side at every slice's solution.
@@ -505,7 +506,7 @@ class Sweep:
             SpecsolveError: The sweep was not asked for its activity, or as
                 [`primal`][] raises.
         """
-        return self._named('activity', name, per_window=per_window).collect()
+        return self._named('activity', name, per_window=per_window).pipe(collected)
 
     def slack(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One constraint's distance to binding at every slice's solution.
@@ -519,7 +520,7 @@ class Sweep:
             SpecsolveError: The sweep was not asked for its slack, or as
                 [`primal`][] raises.
         """
-        return self._named('slack', name, per_window=per_window).collect()
+        return self._named('slack', name, per_window=per_window).pipe(collected)
 
     def reduced_cost(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One variable's reduced costs at every slice's solution.
@@ -535,7 +536,7 @@ class Sweep:
                 slice produced them — the message says why — or as
                 [`primal`][] raises.
         """
-        return self._named('reduced_cost', name, per_window=per_window).collect()
+        return self._named('reduced_cost', name, per_window=per_window).pipe(collected)
 
     def variable_basis(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One variable's basis status where every slice's solve ended.
@@ -550,7 +551,7 @@ class Sweep:
             SpecsolveError: The sweep was not asked for its basis, no slice
                 ended on one, or as [`primal`][] raises.
         """
-        return self._named('variable_basis', name, per_window=per_window).collect()
+        return self._named('variable_basis', name, per_window=per_window).pipe(collected)
 
     def constraint_basis(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
         """One constraint's basis status where every slice's solve ended.
@@ -565,7 +566,7 @@ class Sweep:
             SpecsolveError: The sweep was not asked for its basis, no slice
                 ended on one, or as [`primal`][] raises.
         """
-        return self._named('constraint_basis', name, per_window=per_window).collect()
+        return self._named('constraint_basis', name, per_window=per_window).pipe(collected)
 
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
@@ -600,7 +601,7 @@ class Sweep:
                 does not declare.
         """
         if isinstance(expression, str) and self._holds_expression(expression):
-            return self._named('expression', expression, per_window=per_window).collect()
+            return self._named('expression', expression, per_window=per_window).pipe(collected)
         if self._evaluate is None:
             raise SpecsolveError(self._nothing_to_evaluate(expression))
         if per_window:
@@ -629,7 +630,7 @@ class Sweep:
         kind = checked_kind(kind)
         if kind == 'expression':
             return self.evaluate(name, per_window=per_window)
-        return self._named(kind, name, per_window=per_window).collect()
+        return self._named(kind, name, per_window=per_window).pipe(collected)
 
     def to_pandas(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pd.DataFrame:
         """One name's answer as a tidy `pandas.DataFrame`; [`scan`][]'s arguments.
@@ -883,6 +884,6 @@ def slice_index(sweep: Sweep, kind: str) -> dict[str, dict[Label, pl.DataFrame]]
         held = sweep._slices.get(kind, {})
     key = sweep.key_name
     return {
-        name: {part[key][0]: part.drop(key) for part in frame.collect().partition_by(key, maintain_order=True)}
+        name: {part[key][0]: part.drop(key) for part in frame.pipe(collected).partition_by(key, maintain_order=True)}
         for name, frame in held.items()
     }

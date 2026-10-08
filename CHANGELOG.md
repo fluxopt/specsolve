@@ -16,6 +16,15 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
 - perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
 - refactor(api): keep= is gone, and a solve started from the model's last answer carries on in the solver that holds it ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
+- fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
+- feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
+
+## 0.7.0 (2026-10-07)
+
+specsolve now requires polars 2.0. An environment that must stay on polars 1.x
+keeps 0.6.2.
+
+- feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
 
 ## 0.6.2 (2026-10-07)
 

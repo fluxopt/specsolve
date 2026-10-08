@@ -37,6 +37,7 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
+    VALUE,
     Metrics,
     Record,
     checked_outputs,
@@ -46,7 +47,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.result import Result
 from specsolve.sources import numbered, refuse_unknown_start, tidy_sources
 from specsolve.sweep import (
@@ -411,7 +412,7 @@ def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFram
     table = as_frame(obj)
     if table is None:
         return obj
-    piece = (cut(table) if column in table.collect_schema().names() else table).collect(engine=collect_engine())
+    piece = (cut(table) if column in table.collect_schema().names() else table).pipe(collected)
     return piece if piece.height else None
 
 
@@ -423,7 +424,7 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
     """
     if isinstance(start, Result):
         return {
-            reader: {name: frame.collect(engine=collect_engine()) for name, frame in frames.items()}
+            reader: {name: frame.pipe(collected) for name, frame in frames.items()}
             for reader, frames in start._start().items()
         }
     if isinstance(start, Sweep):
@@ -776,7 +777,7 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
     }
     for kind in kinds_of(outputs):
         if laid := (result._outputs or {}).get(kind):
-            frames[kind] = {name: frame.collect(engine=collect_engine()) for name, frame in laid.items()}
+            frames[kind] = {name: frame.pipe(collected) for name, frame in laid.items()}
     no_expressions: dict[str, str] = {}
     for name in program.expressions:
         try:
@@ -826,7 +827,7 @@ def _key_column(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
             f'with a column the frames already carry. Name it something the spec does not use.'
         )
-    fixed = tuple(dict.fromkeys(('value', *Record._fields, *Metrics._fields)))
+    fixed = tuple(dict.fromkeys((VALUE, *Record._fields, *Metrics._fields)))
     if key_name in fixed:
         raise SpecsolveError(
             f'key_name={key_name!r} is a column a sweep frame carries ({", ".join(fixed)}), so the slice '
@@ -879,7 +880,7 @@ def _encode(
             out[name] = obj
         else:
             buffer = io.BytesIO()
-            table.collect().write_parquet(buffer, compression=_COMPRESSION)
+            table.pipe(collected).write_parquet(buffer, compression=_COMPRESSION)
             out[name] = buffer.getvalue()
         memo[name] = (obj, out[name])
     return out
