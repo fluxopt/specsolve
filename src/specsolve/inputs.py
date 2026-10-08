@@ -15,7 +15,7 @@ from mathspec import to_spec
 from mathspec.program import Program
 
 from specsolve.errors import LanguageError, SpecsolveError
-from specsolve.relational.answer_layout import refuse_reserved, refuse_value
+from specsolve.relational.names import refuse_reserved, refuse_value
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping

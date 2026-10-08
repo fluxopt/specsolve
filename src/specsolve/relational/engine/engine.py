@@ -32,6 +32,7 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
+from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, Diagnostics, Result
 from specsolve.relational.sinks.solvers.base import Basis
 
@@ -50,7 +51,7 @@ if TYPE_CHECKING:
 
 def _statuses(codes: np.ndarray) -> pl.Series:
     """Basis status codes as the series a frame is laid out from."""
-    return pl.Series('value', BASIS_STATUSES, dtype=BASIS).gather(codes)
+    return pl.Series(VALUE, BASIS_STATUSES, dtype=BASIS).gather(codes)
 
 
 def _nothing_to_start_message(discrete: bool) -> str:

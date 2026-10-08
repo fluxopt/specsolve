@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -92,7 +93,7 @@ class Scope:
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
-        table = self.data.parameters[param].rename({'value': alias})
+        table = self.data.parameters[param].rename({VALUE: alias})
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
