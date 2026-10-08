@@ -294,3 +294,28 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
 def test_a_bare_check_stays_silent_about_all_of_it():
     """Whether a model is sayable is solver-independent, and this one is."""
     sps.check(SPEC)
+
+
+@pytest.mark.parametrize(
+    ('outputs', 'kept'),
+    [
+        pytest.param((), False, id='nothing-asked'),
+        pytest.param(('reduced_cost',), True, id='reduced-cost-keeps-the-quadratic-rows'),
+    ],
+)
+def test_a_one_shot_solve_lets_go_of_the_quadratic_rows_before_the_solver_runs(monkeypatch, outputs, kept):
+    """The solver holds the quadratic rows once loaded, so ``sps.solve`` drops the build's copy unless a reduced cost reads it."""
+    from specsolve.relational.sinks.solvers.base import Solver
+
+    entries: list[int] = []
+    run = Solver.run
+
+    def recorded(self: Solver, handoff, **options):
+        entries.append(handoff.qmatrix.height)
+        return run(self, handoff, **options)
+
+    monkeypatch.setattr(Solver, 'run', recorded)
+    with sps.solve(SPEC, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}, outputs=outputs) as result:
+        assert result.status == 'ok'
+    (held,) = entries
+    assert (held > 0) == kept, f'the quadratic rows reach the run exactly where {outputs or "nothing"} reads them'
