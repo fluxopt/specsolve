@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from specsolve.errors import NoSolutionError, SpecsolveError
-from specsolve.messages import no_model_behind_this_answer_message, unknown_name_message
+from specsolve.messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve.relational.answer_layout import (
     BASES,
     NO_BASIS,
@@ -32,7 +32,7 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -121,9 +121,9 @@ def _number(value: float, *, sign: bool = False) -> str:
     return f'+{text}' if sign and not text.startswith('-') else text
 
 
-def _bracket(labels: str) -> str:
-    """``[1, wind]``, or nothing at all for a declaration over no dims."""
-    return f'[{labels}]' if labels else ''
+def _bracket(coordinate: str) -> str:
+    """``[t=1, g=wind]``, or nothing at all for a declaration over no dims."""
+    return f'[{coordinate}]' if coordinate else ''
 
 
 @dataclass(frozen=True)
@@ -135,16 +135,17 @@ class ConstraintRow:
     the data made exactly zero have already removed their terms, so it can be
     shorter than the file suggests.
 
-    Printed, it is one line of math in linopy's format; a row wider than
-    [`display_terms`][] prints each variable's term count and coefficient
-    span instead. [`terms`][] is the same content as a frame.
+    Printed, it is one line of math, each term at its named coordinate; a row
+    wider than [`display_terms`][] prints each variable's term count and
+    coefficient span instead. [`terms`][] is the same content as a frame.
 
     Attributes:
         name: The constraint this row belongs to.
         coordinate: Where in that declaration it sits.
         terms: ``(variable, coordinate, coefficient)``, one row per term, in
-            the solver's own column order. ``coordinate`` is the term's labels
-            in its variable's dim order, as one string.
+            the solver's own column order. ``coordinate`` is the term's
+            coordinate as one string, ``t=1, g=gas``, in its variable's dim
+            order.
         sense: ``<=``, ``>=`` or ``==``.
         rhs: What the left-hand side is compared against.
     """
@@ -167,7 +168,7 @@ class ConstraintRow:
 
     def _where(self) -> str:
         """``snapshot=1, g=gas`` — the coordinate, in the declaration's dim order."""
-        return ', '.join(f'{dim}={label}' for dim, label in self.coordinate.items())
+        return coordinate_text(self.coordinate)
 
     def _body(self) -> str:
         """The terms, spelled out or summarised."""
@@ -496,7 +497,7 @@ class Result:
             KeyError: No variable is called *name*.
         """
         frames = self._readable(self._primals, f"the primal of '{name}'")
-        return _named(frames, name, 'variable').collect(engine=collect_engine())
+        return _named(frames, name, 'variable').pipe(collected)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -522,7 +523,7 @@ class Result:
         frames = self._readable(self._duals, f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'constraint').collect(engine=collect_engine())
+        return _named(frames, name, 'constraint').pipe(collected)
 
     def reduced_cost(self, name: str) -> pl.DataFrame:
         """Reduced costs of variable *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -544,7 +545,7 @@ class Result:
                 [`dual`][] raises.
             KeyError: No variable is called *name*.
         """
-        return _named(self._carried('reduced_cost', name), name, 'variable').collect(engine=collect_engine())
+        return _named(self._carried('reduced_cost', name), name, 'variable').pipe(collected)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -575,7 +576,7 @@ class Result:
         if self._no_dual_ray is not None:
             raise SpecsolveError(self._no_dual_ray)
         assert self._dual_rays is not None, 'a ray is released with the primals, which _unclosed just checked'
-        return _named(self._dual_rays, name, 'constraint').collect(engine=collect_engine())
+        return _named(self._dual_rays, name, 'constraint').pipe(collected)
 
     def activity(self, name: str) -> pl.DataFrame:
         """The left-hand side of constraint *name* at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -590,7 +591,7 @@ class Result:
                 for its activity.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('activity', name), name, 'constraint').collect(engine=collect_engine())
+        return _named(self._carried('activity', name), name, 'constraint').pipe(collected)
 
     def slack(self, name: str) -> pl.DataFrame:
         """How far constraint *name* is from binding at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -609,7 +610,7 @@ class Result:
                 for its slack.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('slack', name), name, 'constraint').collect(engine=collect_engine())
+        return _named(self._carried('slack', name), name, 'constraint').pipe(collected)
 
     def variable_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each column of variable *name* where the solve ended — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -627,7 +628,7 @@ class Result:
                 its variable basis, or it ended on no basis.
             KeyError: No variable is called *name*.
         """
-        return _named(self._carried('variable_basis', name), name, 'variable').collect(engine=collect_engine())
+        return _named(self._carried('variable_basis', name), name, 'variable').pipe(collected)
 
     def constraint_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each row of constraint *name* where the solve ended — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -645,7 +646,7 @@ class Result:
                 its constraint basis, or it ended on no basis.
             KeyError: No constraint is called *name*.
         """
-        return _named(self._carried('constraint_basis', name), name, 'constraint').collect(engine=collect_engine())
+        return _named(self._carried('constraint_basis', name), name, 'constraint').pipe(collected)
 
     def _carried(self, output: Output, name: str) -> Mapping[str, pl.LazyFrame]:
         """*output*'s frames, or why they cannot be read.

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.predicates import masked
 from specsolve.relational.engine.scope import UNIT, ordinal
 
@@ -37,6 +37,16 @@ class Labelled:
     def share(self, values: pl.Series) -> pl.Series:
         """This declaration's share of a solver vector — a slice, never a join."""
         return values.slice(self.start, self.height)
+
+    def valued(self, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
+        """``(dims…, values.name)``: each coordinate beside its [`share`][] of *values*, in label order.
+
+        Projected after the share is attached, never ``select(*dims)`` first:
+        with no dims that keeps no column, and polars gives a frame with no
+        columns no rows, so a scalar's one value would be lost. A share of the
+        wrong length raises rather than padding with nulls.
+        """
+        return self.frame.with_columns(self.share(values)).select(*dims, values.name)
 
 
 def frame(
@@ -77,7 +87,7 @@ def frame(
         numbering = pl.lit(start, dtype=pl.Int64) + numbering
     position = '#position' if dropped else label
     materialised = in_position_order(
-        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).collect(engine=collect_engine()),
+        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).pipe(collected),
         position,
     )
     if not dropped and dims:
@@ -96,7 +106,7 @@ def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | N
     """
     if where is None:
         return math.prod(scope.data.cardinality[d] for d in dims)
-    return int(masked(scope, dims, where).select(pl.len()).collect(engine=collect_engine()).item())
+    return int(masked(scope, dims, where).select(pl.len()).pipe(collected).item())
 
 
 def _factored(
@@ -118,11 +128,7 @@ def _factored(
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
     survivors = (
-        masked(scope, kept, where)
-        .sort([ordinal(d) for d in kept])
-        .select(*kept)
-        .with_row_index(rank)
-        .collect(engine=collect_engine())
+        masked(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
     )
     width = survivors.height
     if width == 0:
@@ -136,7 +142,7 @@ def _factored(
             *dims,
             (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
         )
-        .collect(engine=collect_engine())
+        .pipe(collected)
     )
     return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 
