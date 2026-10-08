@@ -14,6 +14,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(api): an LP solve can start from an earlier answer's basis, matched by coordinate, so a model that gained a cut starts from where it was ([#1877](https://github.com/fluxopt/specsolve/pull/1877))
 - feat(api): a mixed-integer solve can start from values, an earlier answer's or any source a parameter takes, matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
 - feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
+- perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
 
 ## 0.6.2 (2026-10-07)
 
