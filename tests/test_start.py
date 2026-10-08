@@ -557,21 +557,21 @@ def _forgotten(monkeypatch: pytest.MonkeyPatch) -> list[object]:
 SCENARIOS = sps.EachCoordinate('scenario')
 
 
-def test_each_slice_starts_from_the_one_before_it_and_the_first_cold(
+def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from tests.test_strategy import DISPATCH as SWEPT
     from tests.test_strategy import scenario_sources
 
     forgotten = _forgotten(monkeypatch)
-    cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS)
-    assert len(forgotten) == len(cold.keys) - 1, 'without a start, every slice after the first forgets the work'
+    cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start=None)
+    assert len(forgotten) == len(cold.keys) - 1, 'under start=None every slice after the first forgets the work'
     forgotten.clear()
-    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start='previous', spill_to=tmp_path)
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, spill_to=tmp_path)
     assert not [path.name for path in tmp_path.iterdir() if path.name.endswith('_basis')], (
-        'the basis read to chain the slices is not spilled, since the sweep did not ask for it'
+        'no basis is read to chain the slices, so none is spilled'
     )
-    assert not forgotten, 'every slice after the first carries on in the solver the slice before it left'
+    assert not forgotten, 'by default every slice after the first carries on in the solver the slice before it left'
     assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
@@ -587,26 +587,24 @@ def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.Monkey
     assert not forgotten, 'windows of one length keep the solver, so each carries on from the window before it'
 
 
-def test_a_slice_after_one_that_left_no_values_starts_cold(monkeypatch: pytest.MonkeyPatch) -> None:
-    forgotten = _forgotten(monkeypatch)
+def test_a_slice_after_one_that_left_no_values_carries_on_and_solves() -> None:
     draws = [DRAWS[0], ('b', EMPTY_HANDED), ('c', knapsack_sources())]
-    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw', start='previous')
-    assert sweep.record['has_primal'].to_list() == [True, False, True], 'the middle draw cannot be packed'
-    assert len(forgotten) == 1, "'b' carries on from 'a'; only 'c', after a slice with no values, starts cold"
+    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw')
+    assert sweep.record['has_primal'].to_list() == [True, False, True], (
+        "the middle draw cannot be packed, and 'c' solves on the solver it left"
+    )
 
 
-def test_a_spilled_slice_read_back_starts_the_one_after_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The slice before the one solved again lies on disk, and its frames there are the start."""
+def test_previous_under_an_executor_starts_every_slice_from_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each slice builds its own model, so there is no solver to carry on in and nothing is matched."""
     from tests.test_strategy import DISPATCH as SWEPT
     from tests.test_strategy import scenario_sources
 
-    call = {'start': 'previous', 'outputs': BASIS, 'spill_to': tmp_path / 'spill'}
-    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
-    last = max((tmp_path / 'spill' / 'record').glob('*.parquet'))
-    last.unlink()
     warmed = _warmed(monkeypatch)
-    sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, **call)
-    assert len(warmed) == 1, 'only the last slice is solved again, warmed from the one before it on disk'
+    with ThreadPoolExecutor(2) as pool:
+        sweep = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, executor=pool)
+    assert sweep.record['has_primal'].all()
+    assert not warmed, 'no slice is warmed from another'
 
 
 @pytest.mark.parametrize(
@@ -618,21 +616,9 @@ def test_a_spilled_slice_read_back_starts_the_one_after_it(tmp_path: Path, monke
             id='another-word',
         ),
         pytest.param(
-            lambda: sps.solve_over(
-                KNAPSACK,
-                {},
-                DRAWS,
-                key_name='draw',
-                start='previous',
-                executor=ThreadPoolExecutor(2),
-            ),
-            'cannot run concurrently',
-            id='previous-under-an-executor',
-        ),
-        pytest.param(
-            lambda: sps.solve(KNAPSACK, knapsack_sources(), start='previous'),
-            'a word only solve_over takes',
-            id='previous-on-one-solve',
+            lambda: sps.solve(KNAPSACK, knapsack_sources(), start='prev'),
+            "takes 'previous' as a word, and not 'prev'",
+            id='another-word-on-one-solve',
         ),
     ],
 )

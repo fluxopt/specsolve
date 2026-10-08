@@ -48,9 +48,9 @@ which solver to keep or checks what one returned — an engine hands over a `Han
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
-the solver already holds. A `start=` of the last run's answer carries the
-solver on; any other solve calls `forget()`, so the run begins as if the model
-were new. A member with nothing to discard implements `forget()` as a no-op.
+the solver already holds. A solve carries the solver on by default;
+`start=None` or an answer given calls `forget()`, so the run begins as if the
+model were new. A member with nothing to discard implements `forget()` as a no-op.
 `forget()` rather than a reload, because keeping the solver skips the hand-off,
 while carrying its progress wins or loses by model.
 

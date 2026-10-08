@@ -33,7 +33,6 @@ from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
 from specsolve.relational.answer_layout import (
-    BASES,
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
@@ -49,7 +48,7 @@ from specsolve.relational.answer_layout import (
 )
 from specsolve.relational.collect import collected
 from specsolve.relational.result import Result
-from specsolve.sources import numbered, refuse_unknown_start, tidy_sources
+from specsolve.sources import numbered, refuse_unknown_start, refuse_unknown_start_word, tidy_sources
 from specsolve.sweep import (
     KEYS_FILE,
     MANIFEST_FILE,
@@ -190,7 +189,7 @@ def solve_over(
     archive: str | Path | None = None,
     keep_windows: bool = False,
     outputs: Iterable[Output] = (),
-    start: Sweep | Result | Start | Literal['previous'] | None = None,
+    start: Sweep | Result | Start | Literal['previous'] | None = 'previous',
 ) -> Sweep:
     """Solve *spec* once per slice of *axis* and fold the answers together.
 
@@ -255,13 +254,12 @@ def solve_over(
             sliced dimension, or a hand-built axis's key column, gives each
             slice its own rows, and one without reaches every slice whole. An
             earlier sweep is its answer, so each slice starts from the earlier
-            slice of its key, and each window from the hours it covers. The
-            word ``'previous'`` starts each slice from the answer of the one
-            before it, as [`solve`][specsolve.api.Model.solve] does; a match is
-            by the slice model's own coordinates. The first slice, and one
-            after a slice that left no values, starts cold. Each slice is also
-            solved with its basis, which the sweep keeps only where *outputs*
-            asks for it.
+            slice of its key, and each window from the hours it covers.
+            ``'previous'``, the default, carries each slice on from the one
+            before it on the model updated in place, as
+            [`solve`][specsolve.api.Model.solve] does, and under an executor
+            starts every slice from nothing. ``None`` starts every slice from
+            nothing.
 
     Returns:
         The sweep, which reads its answer.
@@ -274,9 +272,7 @@ def solve_over(
             allow; a *spill_to* directory holding another sweep;
             *keep_windows* without *archive* or on an axis that does not cut
             windows; *outputs* that [`solve`][specsolve.api.Model.solve]
-            refuses; a *start* word other than ``'previous'``, or
-            ``'previous'`` with an executor —
-            each answerable from the declarations alone; keys of more than one
+            refuses; a *start* word other than ``'previous'`` — each answerable from the declarations alone; keys of more than one
             type, or two keys of one text; a *start* table over an EachWindow
             sweep's local index alone, one that leaves a slice no row, or one
             [`solve`][specsolve.api.Model.solve] refuses.
@@ -320,12 +316,11 @@ def solve_over(
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
-    starts = _slice_starts(start, axis, slices, key_name, program, concurrent=executor is not None)
+    starts = _slice_starts(start, axis, slices, key_name, program)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
     if executor is None:
         answered = _serially(program, document, slices, solving, plan, spill, starts)
     else:
-        assert starts != 'previous', "_slice_starts refuses start='previous' under an executor"
         answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
     if spill is not None:
@@ -344,9 +339,7 @@ def _slice_starts(
     slices: Sequence[Slice],
     key_name: str,
     program: Program,
-    *,
-    concurrent: bool,
-) -> list[Start | None] | Literal['previous']:
+) -> Sequence[Start | Literal['previous'] | None]:
     """What each slice starts from: its cut of *start*, as it cut its sources, or the slice before it.
 
     Every cut is taken and checked here, before a slice is built, so a start
@@ -355,23 +348,14 @@ def _slice_starts(
     table without the sliced column reaches every slice whole.
 
     Raises:
-        SpecsolveError: A word other than ``'previous'``; ``'previous'``
-            under an executor; a name
+        SpecsolveError: A word other than ``'previous'``; a name
             [`refuse_unknown_start`][specsolve.sources.refuse_unknown_start]
             refuses; a table over an EachWindow sweep's local index alone; or
             a slice the cut leaves nothing.
     """
-    if start is None:
-        return [None] * len(slices)
-    if isinstance(start, str):
-        if start != 'previous':
-            raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
-        if concurrent:
-            raise SpecsolveError(
-                "start='previous' starts each slice from the one before it, so the slices cannot run "
-                'concurrently. Drop the executor, or pass another start.'
-            )
-        return 'previous'
+    refuse_unknown_start_word(start)
+    if start is None or isinstance(start, str):
+        return [start] * len(slices)
     column = axis.dim if isinstance(axis, Axis) else key_name
     tables = _start_tables(start, column)
     refuse_unknown_start(cast('Start', tables), program)
@@ -603,13 +587,12 @@ def _serially(
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     plan: Mapping[str, _CarryRule],
     spill: Spill | None,
-    starts: Sequence[Start | None] | Literal['previous'],
+    starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    Under ``start='previous'`` each slice is solved with its basis as well,
-    for a next slice whose update loads the solver again. A slice naming other
-    sources than the last is rebuilt, since ``update`` is partial. A generator because slice ``i+1``'s carry is read from slice
+    A slice naming other sources than the last is rebuilt, since ``update`` is
+    partial. A generator because slice ``i+1``'s carry is read from slice
     ``i``'s frames after the yield; the caller closes it to release the model.
     A slice the spill holds is read back, and one solved here is written
     before it is yielded.
@@ -617,20 +600,11 @@ def _serially(
     model: Model | None = None
     named: frozenset[str] | None = None
     state: dict[str, pl.DataFrame] = {}
-    previous: Result | Start | None = None
-    asked: frozenset[Output] = solving['outputs']
-    with_basis: Mapping[str, Any] = {**solving, 'outputs': asked | {'basis'}}  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    readers = ('primal', *(sorted(BASES) if 'basis' in asked else ()))
     try:
         for position, current in enumerate(slices):
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
                 primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
-                if starts == 'previous':
-                    previous = _previous(
-                        answer,
-                        {reader: spill.written(reader, position, _declared(program, reader)) for reader in readers},
-                    )
                 yield current.key, answer
                 state = _carried(plan, primals, current, position, slices, answer)
                 continue
@@ -644,12 +618,8 @@ def _serially(
                     if model is not None:
                         model.close()
                     model, named, before = build(document, sources), names, None
-                if starts == 'previous':
-                    result = model.solve(**with_basis, start=previous)
-                else:
-                    result = model.solve(**solving, start=starts[position])
-                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before), asked)
-                previous = result if result.has_primal else None
+                result = model.solve(**solving, start=starts[position])
+                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before), solving['outputs'])
             primals = answer.frames.get('primal', {})
             if spill is not None:
                 answer = spill.write(position, current.key, answer)
@@ -658,18 +628,6 @@ def _serially(
     finally:
         if model is not None:
             model.close()
-
-
-def _previous(answer: SliceAnswer, frames: Mapping[str, Mapping[str, pl.DataFrame]]) -> Start | None:
-    """What the slice after *answer*, read back off the spill, starts from under ``start='previous'``: its frames there, or nothing where it left no values."""
-    if not answer.meta.has_primal:
-        return None
-    return cast('Start', {reader: dict(frames[reader]) for reader in ('primal', *BASES) if frames.get(reader)})
-
-
-def _declared(program: Program, reader: str) -> Iterable[str]:
-    """The declarations *reader* reads, by name."""
-    return program.constraints if reader == 'constraint_basis' else program.variables
 
 
 def _carried(
@@ -711,7 +669,7 @@ def _pooled(
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     spill: Spill | None,
-    starts: Sequence[Start | None],
+    starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
@@ -792,7 +750,7 @@ def _run_slice(
     encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    start: Start | None,
+    start: Start | Literal['previous'] | None,
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
     with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:

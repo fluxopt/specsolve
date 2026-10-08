@@ -70,7 +70,7 @@ constraint as written:
 
 ## 6. When a loop of re-solves is slow
 
-Compare the loop with and without `start=` the answer before, as
+Compare the loop with the default and with `start=None`, as
 [warm-starting a re-solve](warm-start.md#check-that-it-pays) shows. A
 `diagnostics().loads` that counts every iteration means each update moved a
 mask, so the loop pays for loading the solver, not for the solve.
