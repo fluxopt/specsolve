@@ -249,7 +249,7 @@ class Engine:
                 from, refused before the solver loads. The last solve's answer
                 is matched, and so refused, only once the solver loads again.
         """
-        carry_on = isinstance(start, Result) and start._solve_mark is self._mark
+        carry_on = isinstance(start, Result) and start.has_primal and start._solve_mark is self._mark
         matched = None if start is None or carry_on else self._matched_start(start, solver_name)
         solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
         if carry_on and reloaded:
