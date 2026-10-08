@@ -106,17 +106,24 @@ def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | N
     return series.rename('value').reset_index()
 
 
+#: The numpy datetime units polars reads; a coarser one is cast to microseconds without loss.
+_POLARS_DATETIMES = frozenset({'datetime64[ms]', 'datetime64[us]', 'datetime64[ns]'})
+
+
 def _from_pandas(frame: pd.DataFrame) -> pl.LazyFrame:
     """A pandas frame, column by column, without pyarrow.
 
     Object arrays go through a list so numpy's ``nan`` becomes a null rather
-    than a string.
+    than a string. A datetime in a unit polars does not read, such as the
+    seconds ``pd.to_datetime`` gives a date, is cast to microseconds first.
     """
     columns: dict[str, object] = {}
     for name in frame.columns:
         values = frame[name].to_numpy()
         if values.dtype == object:
             columns[name] = pl.Series(name, [None if _is_missing(v) else v for v in values], strict=False)
+        elif values.dtype.kind == 'M' and values.dtype.name not in _POLARS_DATETIMES:
+            columns[name] = values.astype('datetime64[us]')
         else:
             columns[name] = values
     return pl.DataFrame(columns).lazy()
