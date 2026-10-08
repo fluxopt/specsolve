@@ -49,9 +49,7 @@ if TYPE_CHECKING:
 
 def _statuses(codes: np.ndarray) -> pl.Series:
     """Basis status codes as the series a frame is laid out from."""
-    import numpy as np
-
-    return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
+    return pl.Series('value', BASIS_STATUSES, dtype=BASIS).gather(codes)
 
 
 def _nothing_to_start_message(discrete: bool) -> str:
