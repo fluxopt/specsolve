@@ -215,7 +215,12 @@ def test_two_coordinate_axes_chain_the_inner_one():
 @pytest.mark.parametrize(
     ('axis', 'options', 'match'),
     [
-        pytest.param((WINDOW_AXIS, sps.EachCoordinate('scenario')), {}, 'only be the last axis', id='window-outside'),
+        pytest.param(
+            (sps.EachWindow('scenario', steps=1, lookahead=0, into='t'), WINDOW_AXIS),
+            {},
+            'two windows re-index into',
+            id='one-local-index-for-two-windows',
+        ),
         pytest.param(
             (sps.EachCoordinate('scenario'), sps.EachCoordinate('scenario')), {}, 'Cut each dimension once', id='twice'
         ),
@@ -331,3 +336,120 @@ def test_an_outer_carry_makes_its_axis_part_of_the_chain():
     )
     with ThreadPoolExecutor(2) as executor, pytest.raises(sps.errors.SpecsolveError, match='one chain'):
         sps.solve_over(BUILDING, building_sources(), axes, executor=executor)
+
+
+#: Periods as the local index `y`, hours as `t`: a fleet that grows period to
+#: period, dispatched hour by hour with a store, and `spend` the running cost
+#: of each hour, so a period's cost reads off the stitched answer.
+PATHWAY = {
+    'dimensions': {'y': {'dtype': 'int'}, 't': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'parameters': {
+        'cost': {'dims': ['generator']},
+        'build_cost': {'dims': ['generator']},
+        'existing': {'dims': ['generator']},
+        'load': {'dims': ['y', 't']},
+        'soc_initial': {'dims': ['y']},
+    },
+    'variables': {
+        'build': {'dims': ['y', 'generator'], 'bounds': {'lower': 0, 'upper': 100}},
+        'capacity': {'dims': ['y', 'generator'], 'bounds': {'lower': 0, 'upper': 500}},
+        'gen': {'dims': ['y', 't', 'generator'], 'bounds': {'lower': 0}},
+        'charge': {'dims': ['y', 't'], 'bounds': {'lower': 0, 'upper': 30}},
+        'discharge': {'dims': ['y', 't'], 'bounds': {'lower': 0, 'upper': 30}},
+        'soc': {'dims': ['y', 't'], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'expressions': {'spend': {'dims': ['y', 't'], 'expression': 'sum(gen * cost, over=generator)'}},
+    'constraints': {
+        'grow_first': {'dims': ['y', 'generator'], 'where': 'y == 0', 'expression': 'capacity == existing + build'},
+        'grow': {
+            'dims': ['y', 'generator'],
+            'where': 'y > 0',
+            'expression': 'capacity == shift(capacity, along=y, offset=1) + build',
+        },
+        'limit': {'dims': ['y', 't', 'generator'], 'expression': 'gen <= capacity'},
+        'balance': {'dims': ['y', 't'], 'expression': 'sum(gen, over=generator) + discharge - charge == load'},
+        'soc_open': {
+            'dims': ['y', 't'],
+            'where': 't == 0',
+            'expression': 'soc == soc_initial + charge * 0.9 - discharge',
+        },
+        'soc_step': {
+            'dims': ['y', 't'],
+            'where': 't > 0',
+            'expression': 'soc == shift(soc, along=t, offset=1) + charge * 0.9 - discharge',
+        },
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(gen * cost) + sum(build * build_cost)'},
+}
+DECADES = {2030: 1.0, 2040: 1.5, 2050: 2.0}
+HOURS = replace(WINDOW_AXIS, carry=CARRY)
+
+
+def pathway_sources(periods: list[int] | None = None) -> dict[str, object]:
+    """Eight hours of load per decade, growing; only *periods*, re-indexed as `y`, when given."""
+    load = horizon_sources(8)['load']
+    rows = pl.concat(
+        [load.with_columns(pl.lit(year).alias('period'), pl.col('value') * k) for year, k in DECADES.items()]
+    )
+    seed = pl.DataFrame({'period': list(DECADES), 'value': [50.0] * len(DECADES)})
+    if periods is not None:
+        local = {year: position for position, year in enumerate(periods)}
+        rows, seed = (
+            frame.filter(pl.col('period').is_in(periods))
+            .with_columns(pl.col('period').replace_strict(local).alias('y'))
+            .drop('period')
+            for frame in (rows, seed)
+        )
+    return {
+        'generator': pl.DataFrame({'generator': FLEET}),
+        'cost': pl.DataFrame({'generator': FLEET, 'value': [50.0, 1.0]}),
+        'build_cost': pl.DataFrame({'generator': FLEET, 'value': [10.0, 30.0]}),
+        'existing': pl.DataFrame({'generator': FLEET, 'value': [20.0, 0.0]}),
+        'load': rows,
+        'soc_initial': seed,
+        **({'y': range(len(periods))} if periods is not None else {}),
+    }
+
+
+def test_windows_inside_windows_answer_over_both_dimensions():
+    """A decade window that looks one decade ahead, an hourly horizon inside it: the answer keeps what each owns.
+
+    Each hour of a decade comes from the decade window that owns it, never
+    from the window before, which solved it only as lookahead.
+    """
+    decades = sps.EachWindow('period', steps=1, lookahead=1, into='y')
+    runs = sps.solve_over(PATHWAY, pathway_sources(), (decades, HOURS))
+
+    assert runs.key_names == ('period_start', 'snapshot_start'), 'one key column per window axis, outer first'
+    soc = runs.primal('soc')
+    assert soc.columns == ['period', 'snapshot', 'value'], 'both windowed dimensions stand where the locals did'
+    assert soc.height == len(DECADES) * 8, 'every decade and hour once: the lookahead decade is dropped'
+    per_window = runs.primal('soc', per_window=True)
+    assert per_window.columns == ['period_start', 'snapshot_start', 'y', 't', 'value'], (
+        'per window, every key and local'
+    )
+
+
+def test_a_decade_window_hands_its_fleet_to_the_next():
+    """Myopic with foresight: each decade window sees the next, keeps its own, and hands its fleet on.
+
+    The oracle is the loop by hand: each decade window solved as its own
+    hourly horizon over its decade and the next, `existing` set to the
+    capacity the window before ended its own decade with.
+    """
+    decades = sps.EachWindow('period', steps=1, lookahead=1, into='y', carry={'existing': 'capacity'})
+    runs = sps.solve_over(PATHWAY, pathway_sources(), (decades, HOURS))
+
+    existing = pathway_sources()['existing']
+    years = list(DECADES)
+    for position, year in enumerate(years):
+        window = years[position : position + 2]
+        own = sps.solve_over(PATHWAY, {**pathway_sources(window), 'existing': existing}, HOURS)
+        mine = runs.record.filter(pl.col('period_start') == year)['objective'].to_list()
+        assert mine == pytest.approx(own.record['objective'].to_list()), f'the {year} window solves as the loop does'
+        last = own.primal('capacity', per_window=True).filter(
+            pl.col('snapshot_start') == own.keys[-1], pl.col('y') == 0
+        )
+        existing = last.drop('snapshot_start', 'y')
+    own_hours = runs.evaluate('spend').group_by('period').agg(pl.col('value').sum()).sort('period')
+    assert own_hours.height == len(DECADES), 'each decade owns its hours once'

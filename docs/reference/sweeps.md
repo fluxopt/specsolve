@@ -112,9 +112,9 @@ sweep.primal('soc')  # (scenario, snapshot, value)
 | Rule | |
 |---|---|
 | **each chain answers as its own sweep would** | The answer for one scenario equals `solve_over` on that scenario's sources alone, with the same carry and start. |
-| **every axis but the last is an `EachCoordinate`** | The last axis may be windows. A window outside another axis is refused before a slice is taken, and so are two axes over one dimension. |
+| **any axis may be windows** | Two axes over one dimension, and two windows over one local index, are refused before a slice is taken. |
 | **one key column per axis** | `sweep.key_names` names them outer first, and `sweep.key_name` is the last. Every frame and `sweep.record` carry them all, and `sweep.keys` holds one tuple of labels per slice. On disk, `slice_axis` and `slice` join the names and the labels with `/`, as `scenario/snapshot_start` and `high/0`. |
-| **the windows stitch within each chain** | The answer of a windowed last axis is over the dimension it cut, beside the outer key columns. Per window, it carries every key column and the local index. |
+| **windows stitch at every level** | The answer is over every dimension a window cut, beside the key columns of the other axes, and holds only what every window owns: a decade window that looks ahead one decade keeps its own hours, and the decade it looked ahead to comes from its own window. Per window, it carries every key column and every local index. |
 | **each axis carries its own state** | An axis's carry reaches the slices of its next label. Under an axis inside it, the value is what the last inner slice holds, and it reaches every inner slice of the next label: a period hands the next period the fleet its last window ended with. An inner carry starts again from its seed at each outer label. |
 | **`'previous'` follows the chain** | The first slice of each chain starts cold. Where no axis carries, a chain is the last axis's slices under each combination of the outer keys. |
 | **an executor runs the chains concurrently** | Where an axis carries, or under `start='previous'`, each chain is one task, run in order on one model. Otherwise each slice is one task. |
@@ -122,13 +122,21 @@ sweep.primal('soc')  # (scenario, snapshot, value)
 | **a tuple of axes spills and archives** | `spill_to=` resumes it, and `load_archive` gives the tuple back as `archive.axis`. |
 | **`key_name=` is refused with a tuple** | Each axis names its own key column. |
 
-The window rule, refused:
+Windows inside windows are a myopic pathway with foresight: each decade
+window sees the next decade, solves its hours as a rolling horizon, and hands
+the fleet it ends its own decade with to the next window. The spec declares
+both local indexes, `y` and `t`:
 
-```text
-SpecsolveError: EachWindow('snapshot') is outside another axis, and windows can only be
-the last axis: a window is stitched back over 'snapshot', and an axis inside it would cut
-each window again. Put the windows last, so each combination of the outer keys is one
-horizon.
+```python
+sweep = sps.solve_over(
+    'pathway.yaml',
+    sources,
+    (
+        sps.EachWindow('period', steps=1, lookahead=1, into='y', carry={'existing': 'capacity'}),
+        sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
+    ),
+)
+sweep.primal('soc')  # (period, snapshot, value)
 ```
 
 ## Reading a sweep

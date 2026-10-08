@@ -214,7 +214,7 @@ def _archiving(archive: str | Path | None, axes: Axes | None, *, keep_windows: b
             'sweep in memory reads its windows through per_window=True already. Pass archive=, or drop '
             'keep_windows.'
         )
-    if keep_windows and not (axes is not None and isinstance(axes[-1], EachWindow)):
+    if keep_windows and not (axes is not None and any(isinstance(each, EachWindow) for each in axes)):
         raise SpecsolveError(
             "keep_windows=True keeps an EachWindow sweep's frames per window beside its answer, and this axis "
             'does not cut windows: its answer already is one frame per slice, which the archive holds. Drop '
@@ -262,8 +262,8 @@ def solve_over(
             it and passes the rest through.
         axis: [`EachCoordinate`][], [`EachWindow`][], a tuple of them, outer
             first, or a list of ``(key, sources)`` written by hand. A tuple
-            cuts with each axis in turn: every axis but the last is an
-            EachCoordinate, and the last may be windows. An axis's ``carry=``
+            cuts with each axis in turn, and any of them may be windows. An
+            axis's ``carry=``
             chains its slices; the slices that share the keys of every axis
             outside the outermost one that carries are a chain, and the answer
             carries one key column per axis.
@@ -332,8 +332,8 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: Before a slice is taken: a tuple of axes with a window
-            outside another axis, or two axes over one dimension; a carry that
+        SpecsolveError: Before a slice is taken: a tuple of axes with two
+            windows over one local index, or two axes over one dimension; a carry that
             cannot line up, has no seed, collapses a dimension its axis does
             not advance along, writes a parameter another axis carries too, or
             is asked with an executor on a sweep of one chain; a key that collides with a column the frames carry; an
@@ -455,13 +455,13 @@ def _slice_starts(
     columns = [each.dim for each in axes] if axes is not None else [key_names[-1]]
     tables = _start_tables(start, columns[-1])
     refuse_unknown_start(cast('Start', tables), program)
-    axis = axes[-1] if axes is not None else None
-    if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
-        raise SpecsolveError(
-            f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
-            f'table would lay the same {axis.dim!r} onto every window. Write it over {axis.dim!r}, as a source is, '
-            f'and each window takes the rows it covers.'
-        )
+    for axis in axes or ():
+        if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
+            raise SpecsolveError(
+                f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so "
+                f'one table would lay the same {axis.dim!r} onto every window. Write it over {axis.dim!r}, as a '
+                f'source is, and each window takes the rows it covers.'
+            )
     starts: list[Start | None] = []
     empty: list[Label] = []
     for current in slices:
@@ -562,7 +562,13 @@ def _archive_the_sweep(
     tidied = numbered(program, tidy_sources(program, one_slice))
     sliced = {name: table for each in axes for name, table in sources_with_column(sources, each.dim).items()}
     cut = {name: _uncut(program, axes, name, table) for name, table in sliced.items()}
-    held = {**tidied, **_spread_over_the_axis(program, axes[-1], sources, tidied), **cut}
+    spread = {
+        name: table
+        for each in axes
+        if isinstance(each, EachWindow)
+        for name, table in _spread_over_the_axis(program, each, sources, tidied).items()
+    }
+    held = {**tidied, **spread, **cut}
     tables = {name: held[name] for name in sources}
     with beside(out) as scratch:
         spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
@@ -614,10 +620,10 @@ def _uncut(program: Program, axes: Axes, name: str, table: pl.LazyFrame) -> pl.L
     declared = (
         [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
     )
-    local = axes[-1].into if isinstance(axes[-1], EachWindow) else None
+    locals_ = {each.into for each in axes if isinstance(each, EachWindow)}
     held = table.collect_schema().names()
     carried = [each.dim for each in axes if each.dim in held]
-    return table.select(list(dict.fromkeys([*carried, *(column for column in declared if column != local)])))
+    return table.select(list(dict.fromkeys([*carried, *(column for column in declared if column not in locals_)])))
 
 
 def _spread_over_the_axis(
@@ -800,7 +806,8 @@ def _carried(
         )
     return {
         carry.depth: {
-            p: rule.value_from(primals, p, key_label(current.key), current.owns) for p, rule in carry.rules.items()
+            p: rule.value_from(primals, p, key_label(current.key), current.owns[carry.depth])
+            for p, rule in carry.rules.items()
         }
         for carry in handing
     }
@@ -925,7 +932,7 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
 def _run_chain(
     program: Program,
     document: Spec,
-    entries: Sequence[tuple[tuple[Label, ...], dict[str, Any], int | None, tuple[Label, ...]]],  # pyrefly: ignore[explicit-any] — what crossed to the worker
+    entries: Sequence[tuple[tuple[Label, ...], dict[str, Any], tuple[int | None, ...], tuple[Label, ...]]],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     carries: Sequence[_Carry],

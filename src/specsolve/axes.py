@@ -33,14 +33,15 @@ if TYPE_CHECKING:
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and what it owns.
 
-    ``key`` holds one label per axis, outer first. ``owns`` counts the coordinates of the re-indexed
-    dimension this slice keeps, the rest being lookahead, or is ``None`` where
-    the axis re-indexed nothing; a ``carry`` reads the seam off it.
+    ``key`` holds one label per axis, outer first, and ``owns`` one count per
+    axis: the coordinates of the dimension a window re-indexed that this
+    slice keeps, the rest being lookahead, or ``None`` where the axis
+    re-indexed nothing. A ``carry`` reads its axis's seam off it.
     """
 
     key: tuple[Label, ...]
     sources: Mapping[str, Source]
-    owns: int | None = None
+    owns: tuple[int | None, ...] = ()
     #: How this slice cuts a table as it cut its sources: each axis cuts the
     #: table where it carries that axis's column, and passes it through where
     #: it does not; ``None`` for a slice written by hand.
@@ -53,37 +54,46 @@ class Slice(NamedTuple):
 
 @dataclass(frozen=True)
 class Stitch:
-    """The way from a windowed sweep's frames to its answer over the dimension it sliced.
+    """The way from a windowed sweep's frames to its answer over the dimensions its windows sliced.
 
-    ``owned`` is ``(*outer, key, local, dim)`` for the coordinates each window
-    owns; the lookahead rows are not in it.
+    ``owned`` holds one row per coordinate every window axis owns: the key
+    columns it is matched on, each window's local index, and the coordinate
+    of each dimension it stands for. The lookahead rows of any window are not
+    in it.
     """
 
-    local: str
-    dim: str
+    #: Each window axis's local index, outer first.
+    locals: tuple[str, ...]
+    #: The dimension each of [`locals`][] stands for.
+    dims: tuple[str, ...]
     owned: pl.DataFrame
-    #: The key columns of the axes outside the windows, outer first, which
-    #: the answer keeps.
+    #: The key columns of the window axes, which the answer drops.
+    keys: tuple[str, ...]
+    #: The key columns of every other axis, outer first, which the answer keeps.
     outer: tuple[str, ...] = ()
 
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
-        """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
+        """Why *frame* has no answer over [`dims`][], or ``None`` where it has one.
 
-        A frame with no [`local`][] column is over no coordinate a window owns.
+        A frame with no column of a local index is over no coordinate a window
+        of that axis owns.
         """
-        if self.local in frame.collect_schema().names():
+        names = frame.collect_schema().names()
+        missing = [(local, dim) for local, dim in zip(self.locals, self.dims, strict=True) if local not in names]
+        if not missing:
             return None
+        local, dim = missing[0]
         return (
-            f'this has no answer over {self.dim!r}: the frame has no {self.local!r} column, because the '
+            f'this has no answer over {dim!r}: the frame has no {local!r} column, because the '
             f'quantity is not over the windowed dimension — each row covers a whole window, lookahead '
             f'included under an overlapping window. Read it with per_window=True for the value of each '
-            f'window, or read a quantity that keeps {self.local!r} and aggregate its answer.'
+            f'window, or read a quantity that keeps {local!r} and aggregate its answer.'
         )
 
-    def restore[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F, key_name: str) -> F:
-        """*frame* over the dimension the axis sliced, sorted on it; lazy in, lazy out.
+    def restore[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F) -> F:
+        """*frame* over the dimensions the windows sliced, sorted on them; lazy in, lazy out.
 
-        The inner join on ``owned`` drops the lookahead rows.
+        The inner join on ``owned`` drops the lookahead rows of every window axis.
 
         Raises:
             SpecsolveError: *frame* is [`unstitchable`][].
@@ -91,10 +101,11 @@ class Stitch:
         if why := self.unstitchable(frame):
             raise SpecsolveError(why)
         columns = frame.collect_schema().names()
-        keys = [key_name, self.local]
-        rest = [column for column in columns if column not in (*self.outer, *keys, 'value')]
-        restored = frame.lazy().join(self.owned.lazy(), on=[*self.outer, *keys], how='inner').drop(keys)
-        stitched = restored.select(*self.outer, self.dim, *rest, 'value').sort(*self.outer, self.dim, *rest)
+        dropped = (*self.keys, *self.locals)
+        rest = [column for column in columns if column not in (*self.outer, *dropped, 'value')]
+        on = [column for column in self.owned.columns if column not in self.dims]
+        restored = frame.lazy().join(self.owned.lazy(), on=on, how='inner').drop(dropped)
+        stitched = restored.select(*self.outer, *self.dims, *rest, 'value').sort(*self.outer, *self.dims, *rest)
         return stitched if isinstance(frame, pl.LazyFrame) else stitched.collect()  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
@@ -154,7 +165,7 @@ class EachCoordinate:
         for key in coordinates:
             cut = partial(_one_coordinate, self.dim, key)
             filtered = {name: cut(table) for name, table in carrying.items()}
-            out.append(Slice((key,), {**sources, **filtered}, cut=partial(_where_carried, self.dim, cut)))
+            out.append(Slice((key,), {**sources, **filtered}, (None,), partial(_where_carried, self.dim, cut)))
         return out, None
 
 
@@ -279,13 +290,13 @@ class EachWindow:
             cut = partial(_one_window, self.dim, self.into, window)
             filtered = {name: cut(table) for name, table in carrying.items()}
             tolerant = partial(_where_carried, self.dim, cut)
-            out.append(Slice((window[0],), {**sources, **filtered, self.into: range(len(window))}, owns, tolerant))
+            out.append(Slice((window[0],), {**sources, **filtered, self.into: range(len(window))}, (owns,), tolerant))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[:owns])
             )
             start += owns
-        return out, Stitch(self.into, self.dim, pl.DataFrame(owned))
+        return out, Stitch((self.into,), (self.dim,), pl.DataFrame(owned), (key_name,))
 
     def _blocks(self, total: int) -> list[int]:
         """How many coordinates each window owns, in order, summing to exactly *total*.
@@ -330,8 +341,8 @@ def checked_axes(axis: Axis | Axes) -> Axes:
     """*axis* as the axes it cuts with, outer first; one axis is a tuple of one.
 
     Raises:
-        SpecsolveError: One that is not an axis, a window outside another
-            axis, or two axes over one dimension.
+        SpecsolveError: One that is not an axis, two windows over one local
+            index, or two axes over one dimension.
     """
     axes = axis if isinstance(axis, tuple) else (axis,)
     if odd := [repr(each) for each in axes if not isinstance(each, (EachCoordinate, EachWindow))]:
@@ -339,11 +350,11 @@ def checked_axes(axis: Axis | Axes) -> Axes:
             f'a tuple of axes takes EachCoordinate and EachWindow, outer first, and {", ".join(odd)} is neither. '
             f'A hand-built list of slices is passed alone, as axis=.'
         )
-    if outside := [each.dim for each in axes[:-1] if isinstance(each, EachWindow)]:
+    into = [each.into for each in axes if isinstance(each, EachWindow)]
+    if shared := sorted({local for local in into if into.count(local) > 1}):
         raise SpecsolveError(
-            f'EachWindow({outside[0]!r}) is outside another axis, and windows can only be the last axis: a '
-            f'window is stitched back over {outside[0]!r}, and an axis inside it would cut each window again. '
-            f'Put the windows last, so each combination of the outer keys is one horizon.'
+            f'two windows re-index into {shared[0]!r}, so one local index would stand for two dimensions. Give '
+            f'each window its own into=, a dimension the spec declares.'
         )
     dims = [each.dim for each in axes]
     if repeated := sorted({dim for dim in dims if dims.count(dim) > 1}):
@@ -355,30 +366,54 @@ def checked_axes(axis: Axis | Axes) -> Axes:
 
 
 def cut_by(axes: Axes, sources: Mapping[str, Source], key_names: Sequence[str]) -> tuple[list[Slice], Stitch | None]:
-    """Every slice *axes* cut *sources* into, outer first, and the [`Stitch`][] of a sweep whose last axis is windows.
+    """Every slice *axes* cut *sources* into, outer first, and the [`Stitch`][] of a sweep with any window axis.
 
     Each outer slice is cut again by the axes inside it, so the coordinates
     and the windows of an inner axis are the ones that outer slice holds. A
     slice's key prepends the outer keys to its own, and its cut applies each
-    axis in turn.
+    axis in turn. A coordinate owned under every window axis is one row of the
+    stitch: a window outside another owns the inner coordinates under the
+    outer coordinates it owns.
     """
     first, *inner = axes
+    parents, parent_stitch = first._slice(sources, key_names[0])
     if not inner:
-        return first._slice(sources, key_names[0])
+        return parents, parent_stitch
     out: list[Slice] = []
     owned: list[pl.DataFrame] = []
     stitch: Stitch | None = None
-    for outer in first._slice(sources, key_names[0])[0]:
+    for outer in parents:
         slices, stitch = cut_by(tuple(inner), outer.sources, key_names[1:])
         out.extend(
-            Slice((*outer.key, *each.key), each.sources, each.owns, partial(_in_turn, outer.cut, each.cut))
+            Slice(
+                (*outer.key, *each.key),
+                each.sources,
+                (*outer.owns, *each.owns),
+                partial(_in_turn, outer.cut, each.cut),
+            )
             for each in slices
         )
-        if stitch is not None:
-            owned.append(stitch.owned.select(pl.lit(outer.key[0]).alias(key_names[0]), pl.all()))
-    if stitch is None:
+        mine = _owned_by(parent_stitch, key_names[0], outer.key[0])
+        if stitch is None:
+            if mine is not None:
+                owned.append(mine)
+            continue
+        keyed = stitch.owned.select(pl.lit(outer.key[0]).alias(key_names[0]), pl.all())
+        owned.append(keyed if mine is None else keyed.join(mine, on=key_names[0]))
+    if stitch is None and parent_stitch is None:
         return out, None
-    return out, Stitch(stitch.local, stitch.dim, pl.concat(owned), (key_names[0], *stitch.outer))
+    locals_ = (*(parent_stitch.locals if parent_stitch else ()), *(stitch.locals if stitch else ()))
+    dims = (*(parent_stitch.dims if parent_stitch else ()), *(stitch.dims if stitch else ()))
+    keys = (*(parent_stitch.keys if parent_stitch else ()), *(stitch.keys if stitch else ()))
+    kept = tuple(name for name in key_names if name not in keys)
+    return out, Stitch(locals_, dims, pl.concat(owned), keys, kept)
+
+
+def _owned_by(stitch: Stitch | None, key_name: str, key: Label) -> pl.DataFrame | None:
+    """The rows of a window axis's *stitch* that the window keyed *key* owns, or ``None`` for a coordinate axis."""
+    if stitch is None:
+        return None
+    return stitch.owned.filter(pl.col(key_name) == key)
 
 
 def keyed_slices(
