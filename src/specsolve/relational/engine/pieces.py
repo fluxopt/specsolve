@@ -167,11 +167,24 @@ def ordered_sum(column: str) -> pl.Expr:
     return pl.col(column).sort().cum_sum().last().fill_null(0.0)
 
 
+def ordered_sum_per(frame: pl.LazyFrame, keys: Sequence[str], column: str) -> pl.LazyFrame:
+    """*column* added up per *keys* as [`ordered_sum`][] adds it: ``(keys…, column)``.
+
+    A sum of one or two values is the same in either order, so only a key with
+    three or more rows takes the sort, which polars runs per group, off its
+    fast path; most keys of a constant piece hold one row.
+    """
+    counted = frame.with_columns(pl.len().over(keys).alias('#rows'))
+    few = counted.filter(pl.col('#rows') <= 2).group_by(keys).agg(pl.col(column).sum())
+    many = counted.filter(pl.col('#rows') > 2).group_by(keys).agg(ordered_sum(column))
+    return pl.concat([few, many])
+
+
 def constant_scalar(p: Piece) -> pl.LazyFrame:
     """The const piece summed per coordinate: ``(dims…, cval)``."""
     if not p.dims:
         return p.frame.select(ordered_sum('cval'))
-    return p.frame.group_by(p.dims).agg(ordered_sum('cval'))
+    return ordered_sum_per(p.frame, p.dims, 'cval')
 
 
 def absence_restrictions(pieces: Sequence[Piece]) -> list[Presence]:

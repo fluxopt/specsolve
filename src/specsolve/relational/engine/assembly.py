@@ -20,7 +20,7 @@ from specsolve.relational import sinks
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.pieces import Piece, absence_restrictions, ordered_sum
+from specsolve.relational.engine.pieces import Piece, absence_restrictions, ordered_sum, ordered_sum_per
 from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
@@ -474,7 +474,7 @@ def _collapsed(
         repeated = _repeats_a_label(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
-    aggregated = stacked.lazy().group_by(*keys).agg(ordered_sum('coeff'))
+    aggregated = ordered_sum_per(stacked.lazy(), keys, 'coeff')
     if ordered:
         aggregated = aggregated.sort(*keys)
     summed = aggregated.pipe(collected)

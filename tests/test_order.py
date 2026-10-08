@@ -21,7 +21,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.engine.pieces import ordered_sum
+from specsolve.relational.engine.pieces import ordered_sum, ordered_sum_per
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
@@ -127,3 +127,23 @@ def test_a_constant_summed_over_many_rows_builds_the_same_model_whatever_their_o
 def test_a_sum_of_nothing_is_zero_as_polars_sum_gives() -> None:
     nothing = pl.DataFrame({'value': []}, schema={'value': pl.Float64})
     assert nothing.select(ordered_sum('value')).item() == nothing.select(pl.col('value').sum()).item() == 0.0
+
+
+def test_a_sum_per_key_is_the_same_to_the_last_bit_however_many_rows_each_key_has() -> None:
+    """Keys of one, two and three rows take the plain sum or the ordered one, and either way the total holds."""
+    rng = np.random.default_rng(0)
+    sizes = [1] * 2_000 + [2] * 2_000 + [3] * 20_000 + [50] * 500
+    keys = np.repeat(np.arange(len(sizes)), sizes)
+    frame = pl.DataFrame(
+        {'key': keys, 'value': rng.uniform(0.0, 1e3, len(keys)) * 10.0 ** rng.integers(-6, 6, len(keys))}
+    )
+
+    def totals(rows: pl.DataFrame) -> pl.Series:
+        return ordered_sum_per(rows.lazy(), ['key'], 'value').collect().sort('key').get_column('value')
+
+    plain = totals(frame)
+    assert plain.len() == len(sizes), 'one total per key'
+    for seed in range(3):
+        assert totals(frame.sample(fraction=1.0, shuffle=True, seed=seed)).equals(plain), (
+            'the same values, shuffled, summed to another total for some key'
+        )
