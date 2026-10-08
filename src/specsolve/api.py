@@ -555,6 +555,9 @@ def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
             or a bare sequence — wherever the YAML declares none. The shapes a
             value may take, and what attaching refuses, are
             [the data contract](https://specsolve.readthedocs.io/en/latest/reference/data/).
+            Each is read once and kept without a copy, so it must not change
+            while the model or its answers are in use; change data through
+            [`Model.update`][].
 
     Returns:
         The built model.

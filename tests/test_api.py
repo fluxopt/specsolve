@@ -1110,3 +1110,19 @@ def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_fra
         sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_frame_inputs)) as tidied,
     ):
         assert tidied.objective == pytest.approx(direct.objective, rel=1e-9), 'the tidy tables build the same model'
+
+
+def test_a_parquet_source_is_read_at_the_build_so_a_file_rewritten_afterwards_does_not_reach_the_model(
+    dispatch_yaml, dispatch_frame_inputs, tmp_path
+) -> None:
+    path = tmp_path / 'cost.parquet'
+    dispatch_frame_inputs['cost'].write_parquet(path)
+    with sps.build(dispatch_yaml, dispatch_frame_inputs | {'cost': str(path)}) as model:
+        dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(path)
+        with model.solve() as after, sps.solve(dispatch_yaml, dispatch_frame_inputs) as before:
+            assert after.objective == pytest.approx(before.objective, rel=1e-9), (
+                'the solve read the file as it was at the build'
+            )
+            assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
+                before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
+            ), 'and so does an expression read after the solve'

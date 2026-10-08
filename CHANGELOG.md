@@ -22,6 +22,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
 - fix(engine): an expression that reads a variable with no dimensions reads its solved value, in a save and a sweep too ([#1903](https://github.com/fluxopt/specsolve/pull/1903))
 - fix(data): an int parameter can be given as one number, and a sum_back window or a shift offset may be a parameter with no dimensions ([#1907](https://github.com/fluxopt/specsolve/pull/1907))
+- docs(data): data given to a model must not change while the model or its answers are in use ([#1909](https://github.com/fluxopt/specsolve/pull/1909))
 
 ## 0.7.0 (2026-10-07)
 
