@@ -222,29 +222,13 @@ declared name cannot collide with one. Case does not tell two columns apart:
 SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
 covers dimensions, relations and their columns, parameters, variables,
 constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
-with the prefix is refused too.
+with the prefix is refused too, and so is a dimension called `value`, which
+would collide with the column that holds a parameter's numbers.
 
 ```
 variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
 letter case for the columns specsolve adds, so it could collide with one.
 Rename it.
-```
-
-### A dimension called `value`
-
-**A dimension called `value` is refused**, in any letter case, whichever verb
-lowers the spec. A parameter's table holds its numbers in a column called
-`value`, beside one column per dimension, and every frame an answer comes back
-as has the same shape. A dimension of that name would be a second `value`
-column. It is the only whole name specsolve reserves, and it applies to
-dimensions alone: a parameter, a variable or a relation column may be called
-`value`.
-
-```
-dimension 'value' has the name of the column 'value', which holds the numbers
-beside the dimensions in a parameter's table and in every frame an answer
-comes back as. Query engines read column names without case, so the two
-columns would collide in any letter case. Rename it.
 ```
 
 ### What each sink takes
