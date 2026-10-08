@@ -15,7 +15,7 @@ from mathspec import to_spec
 from mathspec.program import Program
 
 from specsolve.errors import LanguageError, SpecsolveError
-from specsolve.relational.answer_layout import refuse_reserved
+from specsolve.relational.answer_layout import refuse_reserved, refuse_value
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
@@ -113,7 +113,7 @@ def _case_collision(program: Program) -> str | None:
 
 
 def _refuse_reserved_names(program: Program) -> None:
-    """Refuse a declaration whose name starts with ``specsolve_`` in any letter case."""
+    """Refuse a declaration whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -131,6 +131,8 @@ def _refuse_reserved_names(program: Program) -> None:
     )
     for which, name in named:
         refuse_reserved(name, which)
+    for name in program.dimensions:
+        refuse_value(name, f"dimension '{name}'")
 
 
 def lowered(spec: Buildable) -> Program:
@@ -143,7 +145,8 @@ def lowered(spec: Buildable) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case, or a name that starts with ``specsolve_`` in any letter case.
+            by case, a name that starts with ``specsolve_``, or a dimension
+            called ``value``, in any letter case.
     """
     program = declared(spec).program
     if program.given:
