@@ -25,9 +25,9 @@ import specsolve as sps
 from specsolve import strategy
 from specsolve.api import _provenance
 from specsolve.archive import _attach_readers
-from specsolve.archive_layout import ANSWER_DIR, _staging_for
+from specsolve.archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve.relational.answer_layout import (
-    LAYOUT,
+    ANSWER_LAYOUT,
     METRICS_FILE,
     RUN,
     Metrics,
@@ -144,13 +144,17 @@ def test_the_archive_is_the_file_and_stored_parquet(dispatch_yaml: Path, dispatc
         members = {info.filename: info.compress_type for info in zipped.infolist()}
         beside_the_answer = {name for name in members if not name.startswith('answer/')}
         assert beside_the_answer == {
+            'format.json',
             'spec.yaml',
             'sources.parquet',
             'catalog.parquet',
             *(f'sources/{k}.parquet' for k in dispatch_frame_inputs),
         }, (
-            'the layout is spec.yaml, one parquet member per source key, the table digesting them, the catalog '
-            'saying what each file holds, and the answer under its own'
+            'the layout is its stamp, spec.yaml, one parquet member per source key, the table digesting them, the '
+            'catalog saying what each file holds, and the answer under its own'
+        )
+        assert json.loads(zipped.read('format.json')) == {'layout': INPUTS_LAYOUT, 'specsolve': sps.__version__}, (
+            'the spec and the sources are stamped with a layout of their own, apart from the answer'
         )
         assert any(name.startswith('answer/') for name in members), 'every archive carries the answer that made it'
         assert set(members.values()) == {zipfile.ZIP_STORED}, 'members are stored — parquet is already compressed'
@@ -1501,7 +1505,7 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': LAYOUT, 'specsolve': sps.__version__}, (
+    assert json.loads((out / 'format.json').read_text()) == {'layout': ANSWER_LAYOUT, 'specsolve': sps.__version__}, (
         'the layout this package writes, beside the version that wrote it'
     )
 
@@ -1659,9 +1663,9 @@ def test_an_answer_in_another_layout_is_refused_by_name(
 
     with pytest.raises(sps.errors.LayoutError, match='solve the model again and save it') as refused:
         sps.load_result(out)
-    assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {LAYOUT}' in str(refused.value), (
-        'the refusal names the layout it found and the version that wrote it'
-    )
+    assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {ANSWER_LAYOUT}' in str(
+        refused.value
+    ), 'the refusal names the layout it found and the version that wrote it'
 
     (out / 'format.json').write_text(json.dumps({'answer': 0}))  # what 0.1.0 wrote
     with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
@@ -1670,6 +1674,93 @@ def test_an_answer_in_another_layout_is_refused_by_name(
     (out / 'format.json').unlink()
     with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
         sps.load_result(out)
+
+
+def _restamped(tree: Path, stamp: dict[str, object] | None, out: Path) -> Path:
+    """*tree*, a directory archive, at *out* with *stamp* as the ``format.json`` its members carry, or none; packed where *out* is a zip."""
+    if stamp is None:
+        (tree / 'format.json').unlink()
+    else:
+        (tree / 'format.json').write_text(json.dumps(stamp))
+    if out.suffix != '.zip':
+        return tree.rename(out)
+    with zipfile.ZipFile(out, 'w') as zipped:
+        for member in sorted(tree.rglob('*')):
+            if member.is_file():
+                zipped.write(member, member.relative_to(tree).as_posix())
+    return out
+
+
+_IN_ANOTHER_LAYOUT = {'layout': 0, 'specsolve': '0.0.1a359'}
+
+
+@pytest.mark.parametrize('suffix', [pytest.param('', id='directory'), pytest.param('.zip', id='zip')])
+def test_load_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_in_another_layout(
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, suffix: str
+) -> None:
+    """The answer and the inputs are stamped apart, so an answer in an old layout does not lock the inputs away."""
+    tree = _archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case')
+    (tree / ANSWER_DIR / 'format.json').write_text(json.dumps(_IN_ANOTHER_LAYOUT))
+    out = _restamped(tree, json.loads((tree / 'format.json').read_text()), tmp_path / f'old{suffix}')
+
+    with pytest.raises(sps.errors.LayoutError) as refused:
+        sps.load_archive(out)
+    assert f'sps.load_inputs({str(out)!r})' in str(refused.value), (
+        'the refusal names the archive as the caller passed it, and the reader that still takes it'
+    )
+
+    inputs = sps.load_inputs(out)
+    assert (inputs.axis, inputs.carry) == (None, {}), 'an archive of one solve holds no axis and no carry'
+    with (
+        sps.solve(inputs.spec, inputs.sources) as again,
+        sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
+    ):
+        assert again.objective == pytest.approx(direct.objective), 'the inputs read back solve the same model'
+
+
+@pytest.mark.parametrize(
+    'stamp', [pytest.param(_IN_ANOTHER_LAYOUT, id='another-layout'), pytest.param(None, id='no-stamp')]
+)
+@pytest.mark.parametrize('read', [sps.load_archive, sps.load_inputs], ids=['load_archive', 'load_inputs'])
+def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_solve_them_again(
+    read: Callable[[Path], object],
+    stamp: dict[str, object] | None,
+    dispatch_yaml: Path,
+    dispatch_frame_inputs,
+    tmp_path: Path,
+) -> None:
+    """The refusal names the files that hold the spec and the data, and those files solve to the same objective.
+
+    An archive written before the spec and the sources had a stamp of their
+    own carries none, and is refused the same way.
+    """
+    out = _restamped(_archived(dispatch_yaml, dispatch_frame_inputs, tmp_path / 'case'), stamp, tmp_path / 'old')
+
+    with pytest.raises(sps.errors.LayoutError) as refused:
+        read(out)
+    says = str(refused.value)
+    missing = [part for part in (repr(str(out)), 'spec.yaml', 'sources/<key>.parquet', 'to_spec') if part not in says]
+    assert not missing, f'the refusal names the archive and how to read its spec and data, and is short of {missing}'
+
+    sources = {member.stem: member for member in (out / 'sources').glob('*.parquet')}
+    with (
+        sps.solve(to_spec(out / 'spec.yaml'), sources) as again,
+        sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
+    ):
+        assert again.objective == pytest.approx(direct.objective), 'the files the refusal names solve the same model'
+
+
+def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
+    from tests.test_strategy import WINDOW, horizon_sources
+
+    sps.solve_over(WINDOW, horizon_sources(12), ROLLING, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll')
+    archived = sps.load_archive(tmp_path / 'roll')
+    inputs = sps.load_inputs(tmp_path / 'roll')
+
+    assert (inputs.axis, inputs.carry) == (archived.axis, archived.carry), 'the axis and carry the sweep ran with'
+    unlike = [key for key in archived.sources if not inputs.sources[key].equals(archived.sources[key])]
+    assert inputs.sources.keys() == archived.sources.keys(), 'one table per source the archive holds'
+    assert not unlike, f'sources that differ from what load_archive gives back: {unlike}'
 
 
 def test_a_hand_built_axis_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:

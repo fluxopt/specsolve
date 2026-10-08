@@ -60,9 +60,9 @@ def refuse_reserved(name: str, which: str) -> None:
 RUN = f'{RESERVED}run'
 
 
-#: The layout a result, a sweep and an archive write to disk. A change to
-#: any of them raises it. Compared, never branched on.
-LAYOUT = 3
+#: The layout a result and a sweep write to disk, and an archive under its
+#: ``answer/``. A change to any of them raises it. Compared, never branched on.
+ANSWER_LAYOUT = 3
 FORMAT_FILE = 'format.json'
 
 
@@ -74,10 +74,23 @@ def installed(distribution: str) -> str | None:
         return None
 
 
-def write_format(directory: Path) -> None:
+def write_format(directory: Path, layout: int = ANSWER_LAYOUT) -> None:
     """Stamp *directory* with the layout its contents are in, and the specsolve version that wrote them."""
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': installed('specsolve')}))
+    (directory / FORMAT_FILE).write_text(json.dumps({'layout': layout, 'specsolve': installed('specsolve')}))
+
+
+def other_layout(directory: Path, layout: int = ANSWER_LAYOUT) -> str | None:
+    """How *directory*'s stamp differs from *layout*, as a refusal names it, or ``None`` where it does not."""
+    file = directory / FORMAT_FILE
+    stamp = json.loads(file.read_text()) if file.is_file() else {}
+    found = stamp.get('layout')
+    if found == layout:
+        return None
+    writer = stamp.get('specsolve')
+    which = f'in layout {found}' if found is not None else 'with no layout stamp'
+    by = f', written by specsolve {writer},' if writer else ''
+    return f'{which}{by}'
 
 
 def check_format(directory: Path) -> None:
@@ -88,18 +101,11 @@ def check_format(directory: Path) -> None:
     Raises:
         LayoutError: A missing stamp, or one that is not this package's.
     """
-    file = directory / FORMAT_FILE
-    stamp = json.loads(file.read_text()) if file.is_file() else {}
-    found = stamp.get('layout')
-    if found != LAYOUT:
-        writer = stamp.get('specsolve')
-        which = f'in layout {found}' if found is not None else 'with no layout stamp'
-        by = f', written by specsolve {writer},' if writer else ''
+    if (other := other_layout(directory)) is not None:
         raise LayoutError(
-            f'{str(directory)!r} holds a saved answer {which}{by} and this package reads layout '
-            f'{LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
-            f'the model again and save it. An archive that archive= wrote still holds the model and '
-            f'the data to do that with.'
+            f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
+            f'{ANSWER_LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
+            f'the model again and save it.'
         )
 
 

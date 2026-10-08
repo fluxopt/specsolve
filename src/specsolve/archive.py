@@ -1,7 +1,8 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
 [`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
-disk. ``archive=`` on the verbs that solve writes one, through
+disk; [`load_inputs`][] reads the spec and the data without the answer.
+``archive=`` on the verbs that solve writes one, through
 [`specsolve.archive_layout`][].
 """
 
@@ -10,6 +11,7 @@ from __future__ import annotations
 import json
 import tempfile
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,11 +20,29 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve.api import build, load_result, scan_result
-from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
+from specsolve.archive_layout import (
+    ANSWER_DIR,
+    AXIS_MEMBER,
+    DIGESTS_MEMBER,
+    INPUTS_LAYOUT,
+    SOURCES_DIR,
+    SPEC_MEMBER,
+    opened,
+)
 from specsolve.axes import axis_from
-from specsolve.errors import SpecsolveError
+from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.inputs import lower
-from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
+from specsolve.relational.answer_layout import (
+    ANSWER_LAYOUT,
+    KINDS,
+    METRICS_FILE,
+    RUN,
+    Metrics,
+    digest_of,
+    other_layout,
+    row_of,
+    saved_frames,
+)
 from specsolve.relational.collect import collected
 from specsolve.sweep import (
     MANIFEST_FILE,
@@ -46,7 +66,7 @@ if TYPE_CHECKING:
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Result
 
-__all__ = ['ResultArchive', 'SweepArchive', 'load_archive', 'scan_archive']
+__all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'load_archive', 'load_inputs', 'scan_archive']
 
 
 @dataclass(frozen=True)
@@ -110,6 +130,53 @@ class SweepArchive:
     source_digests: pl.DataFrame
 
 
+@dataclass(frozen=True)
+class ArchivedInputs:
+    """A spec and the data it was solved with, read off an archive without its answer.
+
+    ``sps.solve(inputs.spec, inputs.sources)`` asks the question again, and
+    ``sps.solve_over(inputs.spec, inputs.sources, inputs.axis, carry=inputs.carry)``
+    runs a sweep again.
+
+    Attributes:
+        spec: The spec as written.
+        sources: What was attached, keyed as the file declares it, as the
+            tables [`tidy`][specsolve.api.tidy] returns. A sweep's are uncut,
+            as [`SweepArchive`][] holds them.
+        axis: What cut the sources, or ``None`` for an archive of one solve.
+        carry: ``{parameter: variable}`` the slices were chained with, empty
+            where they were not and for an archive of one solve.
+    """
+
+    spec: Spec
+    sources: Mapping[str, Source]
+    axis: Axis | None
+    carry: Mapping[str, str]
+
+
+def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
+    """Read the spec and the data an archive holds, without its answer.
+
+    The spec and the sources have a layout of their own, so this reads an
+    archive whose answer [`load_archive`][] refuses because its layout has
+    moved.
+
+    Args:
+        path: The archive, a ``.zip`` or the directory one was written to.
+        into: Where to unpack a zip, kept afterwards. Without it a zip
+            unpacks to a scratch directory removed before this returns.
+            Refused for a directory archive, which is read where it lies.
+
+    Raises:
+        LanguageError: A ``spec.yaml`` the language does not accept.
+        LayoutError: A member outside the layout, an *into* given for a
+            directory, or a spec and sources whose layout has moved since
+            they were written.
+        zipfile.BadZipFile: A file that is not a zip archive.
+    """
+    return _whole(path, into, partial(_inputs, whole=True))
+
+
 def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back whole: the sources as tables, the answer's frames in memory.
 
@@ -126,17 +193,27 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
         LayoutError: A member outside the layout, an *into* given for a
-            directory, or an answer whose layout has moved since it was
-            written.
+            directory, or a spec, sources or answer whose layout has moved
+            since it was written. Where only the answer's has,
+            [`load_inputs`][] still reads the spec and the sources.
         SpecsolveError: An answer that names a different spec than the one
             beside it.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
+    return _whole(path, into, partial(_read, whole=True))
+
+
+def _whole[T](path: str | Path, into: str | Path | None, read: Callable[[Path, Path], T]) -> T:
+    """What *read* makes of the archive at *path*, given where its members are and the path to name.
+
+    A zip with no *into* is unpacked to a scratch directory that is gone when
+    this returns, so *read* must not hand back a path into it.
+    """
     held = Path(path)
     if into is not None or held.is_dir():
-        return _read(opened(held, into), whole=True)
+        return read(opened(held, into), held)
     with tempfile.TemporaryDirectory() as scratch:
-        return _read(opened(held, scratch), whole=True)
+        return read(opened(held, scratch), held)
 
 
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
@@ -146,28 +223,65 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     since the members have to outlive the value; a zip with no *into* raises
     ``LayoutError``.
     """
-    return _read(opened(path, into), whole=False)
+    return _read(opened(path, into), Path(path), whole=False)
 
 
-def _read(under: Path, *, whole: bool) -> ResultArchive | SweepArchive:
+def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
+    """The spec, the sources and the axis the archive *under* holds, its sources as tables where *whole*, else as paths."""
+    _refuse_other_inputs(under, archive)
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
         member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
-    digests = pl.read_parquet(under / DIGESTS_MEMBER)
-    saved = under / ANSWER_DIR
     axis_member = under / AXIS_MEMBER
     if not axis_member.is_file():
+        return ArchivedInputs(spec, sources, None, {})
+    manifest = json.loads(axis_member.read_text())
+    return ArchivedInputs(spec, sources, axis_from(manifest), manifest.get('carry', {}))
+
+
+def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepArchive:
+    inputs = _inputs(under, archive, whole=whole)
+    _refuse_another_layout(under / ANSWER_DIR, archive)
+    spec, sources = inputs.spec, inputs.sources
+    digests = pl.read_parquet(under / DIGESTS_MEMBER)
+    saved = under / ANSWER_DIR
+    if inputs.axis is None:
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         _check_the_pairing(spec, [answer.spec_digest])
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, digests, metrics)
-    manifest = json.loads(axis_member.read_text())
-    axis, carry = axis_from(manifest), manifest.get('carry', {})
-    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
+    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis, inputs.carry)
     _check_the_pairing(spec, answer.record['spec_digest'].to_list())
-    return SweepArchive(spec, sources, axis, carry, answer, digests)
+    return SweepArchive(spec, sources, inputs.axis, inputs.carry, answer, digests)
+
+
+def _refuse_other_inputs(under: Path, archive: Path) -> None:
+    """Refuse a spec and sources in another layout, naming the files that solve the model again by hand."""
+    if (other := other_layout(under, INPUTS_LAYOUT)) is not None:
+        raise LayoutError(
+            f'{str(archive)!r} holds a spec and sources {other} and this package reads layout '
+            f'{INPUTS_LAYOUT}. The layout moves before 1.0 and nothing reads another one back. The files are '
+            f"plain: 'spec.yaml' is the spec, and each 'sources/<key>.parquet' is one source as the solve read "
+            f'it. Read the spec with mathspec.to_spec, pass each source as its path, and solve again. A sweep '
+            f"archive also holds 'axis.json', which names the axis and the carry the sweep ran with. A .zip "
+            f'archive holds the same files as members.'
+        )
+
+
+def _refuse_another_layout(saved: Path, archive: Path) -> None:
+    """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
+
+    Checked before the answer is read, so this message wins over the generic
+    one [`load_result`][] gives, which names a scratch directory for a zip.
+    """
+    if (other := other_layout(saved)) is not None:
+        raise LayoutError(
+            f'{str(archive)!r} holds an answer {other} and this package reads layout {ANSWER_LAYOUT}, so it '
+            f'does not read the answer back. The spec and the data are in a layout this package reads: '
+            f'sps.load_inputs({str(archive)!r}) returns them, to solve again.'
+        )
 
 
 def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
