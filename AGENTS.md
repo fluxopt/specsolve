@@ -73,11 +73,15 @@ closed schema's own error names the valid keys, which is the whole migration
 story. **A test asserting the old behaviour is not a blocker**; say in the PR
 what coverage moved where. A release that breaks a model file or an import
 raises the minor version, and its notes name the break. A change to what a
-result, a sweep or an archive writes to disk also raises `LAYOUT` in
-`relational/answer_layout.py`, so an answer in the old layout is refused by name.
-A new output in `OUTPUTS` is the exception: `format.json` names the outputs an
-answer holds, so an older answer reads the new one as not asked for, and the
-layout stays. Changing what an existing file or output holds still raises it.
+result, a sweep or an archive writes to disk also raises a layout number, so a
+file in the old layout is refused by name: `INPUTS_LAYOUT` in
+`archive_layout.py` for an archive's `spec.yaml`, `sources/`, `sources.parquet`
+and `axis.json`, and `ANSWER_LAYOUT` in `relational/answer_layout.py` for
+everything else, `catalog.parquet` included. `load_inputs` then still reads an
+archive whose answer alone is out of date. A new output in `OUTPUTS` is the
+exception: an answer's `format.json` names the outputs it holds, so an older
+answer reads the new one as not asked for, and the layout stays. Changing what
+an existing file or output holds still raises it.
 
 ## A claim carries its evidence
 
