@@ -4,16 +4,13 @@
     pixi run -e bench python -m bench.warm_payoff s m l --steps 200 --wall
 
 A capacity-expansion Benders (#382) whose master is sized from data and solved
-three ways at every rebuild: cold, from the previous basis spliced per
-declaration, and from that basis truncated to the new height. It is not an arm
-and writes no results file; no ``src/`` code carries a basis across a rebuild.
+two ways at every rebuild: cold, and with ``start=`` the previous master's
+answer, whose basis the engine lays onto the new build by coordinate. It is not
+an arm and writes no results file.
 
 The primary number is simplex iterations, which are deterministic. Wall time is
-behind ``--wall`` and prints the load averages beside itself.
-
-Rows are numbered per declaration, so a row gained by ``optimality_cut`` shifts
-every row of ``feasibility_cut``: :func:`spliced` re-indexes for that, and
-:func:`prefixed` does not.
+behind ``--wall``, counts the whole ``solve`` call, the matching included, and
+prints the load averages beside itself.
 """
 
 from __future__ import annotations
@@ -25,25 +22,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import highspy
 import numpy as np
 import polars as pl
 from mathspec import to_spec
 
 import specsolve as sps
 from bench.cases import Shape, _seed
-from specsolve.relational.sinks.solvers import SOLVERS
-from specsolve.relational.sinks.solvers.base import WarmStart
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
-    from specsolve.relational.engine.engine import Engine
+    from specsolve.types import Output, Result
 
 MODELS = Path(__file__).resolve().parent / 'expansion'
 
-#: The status of a spliced row the previous basis did not have: a fresh slack is basic.
-BASIC = int(highspy.HighsBasisStatus.kBasic)
+#: What a master answer carries so that the next master can start from it.
+BASIS: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
 
 #: Generators per rung — the axis swept. The master is one column per
 #: generator plus ``theta``, and one row per cut it has accumulated.
@@ -58,14 +52,13 @@ TOLERANCE = 1e-6
 
 @dataclass(frozen=True)
 class Step:
-    """One master rebuild, solved three ways."""
+    """One master rebuild, solved two ways."""
 
     columns: int
     rows: int
     nonzeros: int
     cold_iterations: int
     warm_iterations: int
-    naive_iterations: int
     cold_objective: float
     warm_objective: float
     cold_seconds: float
@@ -90,10 +83,6 @@ class Run:
     @property
     def warm_iterations(self) -> int:
         return sum(s.warm_iterations for s in self.steps)
-
-    @property
-    def naive_iterations(self) -> int:
-        return sum(s.naive_iterations for s in self.steps)
 
     @property
     def nonzeros(self) -> int:
@@ -142,70 +131,16 @@ def instance(n_gen: int, n_snap: int) -> dict[str, pl.DataFrame]:
     }
 
 
-def spliced(
-    previous: WarmStart,
-    was: Mapping[str, Any],
-    now: Mapping[str, Any],
-    order: Sequence[str],
-    n_rows: int,
-) -> WarmStart:
-    """*previous* re-indexed onto a model whose declarations changed height.
-
-    *was* and *now* are the engine's ``name -> Labelled`` maps before and after
-    the rebuild, and *order* the declaration order they were numbered in. Each
-    declaration keeps the leading rows it still has and the rest start
-    :data:`BASIC`; a declaration that appeared or vanished is skipped, which
-    leaves its rows basic too. Columns cross unchanged.
-    """
-    assert previous.row_statuses is not None, 'a spliced start carries a basis; an incumbent has no rows to splice'
-    rows = np.full(n_rows, BASIC, dtype=np.int8)
-    for name in order:
-        old, new = was.get(name), now.get(name)
-        if old is None or new is None:
-            continue
-        keep = min(old.height, new.height)
-        rows[new.start : new.start + keep] = previous.row_statuses[old.start : old.start + keep]
-    return WarmStart(
-        solver='highs',
-        column_statuses=previous.column_statuses,
-        row_statuses=rows,
-        column_values=None,
-    )
-
-
-def prefixed(previous: WarmStart, n_rows: int) -> WarmStart:
-    """*previous* truncated or padded to *n_rows*, ignoring declaration order.
-
-    Right only for a model whose growth is all in the last declaration.
-    """
-    assert previous.row_statuses is not None, 'a prefix carry needs a basis; an incumbent has no rows to truncate'
-    rows = np.full(n_rows, BASIC, dtype=np.int8)
-    keep = min(len(previous.row_statuses), n_rows)
-    rows[:keep] = previous.row_statuses[:keep]
-    return WarmStart(
-        solver='highs',
-        column_statuses=previous.column_statuses,
-        row_statuses=rows,
-        column_values=None,
-    )
-
-
-def _solved(tables: Any, start: WarmStart | None) -> tuple[Any, int, float, WarmStart | None]:
-    """A fresh HiGHS session on *tables*, optionally started from *start*.
+def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
+    """One solve of *master* from a fresh solver, the simplex iterations it took, and its wall seconds.
 
     The iteration count is read off the private handle; no public surface
     reports it.
     """
-    solver = SOLVERS['highs'](tables)
-    if start is not None:
-        solver.warm(start)
     began = time.perf_counter()
-    answer = solver.run(tables)
+    answer = master.solve(keep='nothing', **solve)
     seconds = time.perf_counter() - began
-    iterations = int(solver._handle.getInfo().simplex_iteration_count)
-    carried = solver.warm_start()
-    solver.close()
-    return answer, iterations, seconds, carried
+    return answer, int(master._engine._solver._handle.getInfo().simplex_iteration_count), seconds
 
 
 def _slope_at(solution: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
@@ -248,17 +183,12 @@ def _empty_cuts() -> dict[str, pl.DataFrame]:
     }
 
 
-def _blocks(engine: Engine) -> tuple[dict[str, Any], list[str]]:
-    """The engine's row blocks and the order they were numbered in."""
-    return dict(engine._model.constraints), list(engine._model.program.constraints)
-
-
 def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
-    """Run the decomposition once, solving every master rebuild three ways.
+    """Run the decomposition once, solving every master rebuild two ways.
 
-    The cold answer drives the loop, so all three see the same masters. Each
-    carrying arm chains its own basis, and the warm objective is asserted equal
-    to the cold one every step.
+    The cold answer drives the loop, so both see the same masters. The warm arm
+    chains its own answers, and its objective is asserted equal to the cold one
+    every step.
     """
     data = instance(n_gen, n_snap)
     gens = data['invest']['generator'].to_list()
@@ -273,9 +203,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     cuts = _empty_cuts()
     capacity = pl.DataFrame({'generator': gens, 'value': [0.0] * n_gen})
     upper, lower = float('inf'), float('-inf')
-    carried: WarmStart | None = None
-    naive: WarmStart | None = None
-    was: dict[str, Any] = {}
+    carried: Result | None = None
     taken: list[Step] = []
     converged = False
 
@@ -306,15 +234,11 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
                     'fcut': cuts['fcut_const']['fcut'].to_list(),
                 }
             )
-            engine = master._engine
-            built = engine._model.handoff
-            now, order = _blocks(engine)
+            built = master._engine._model.handoff
 
-            cold, cold_iterations, cold_seconds, _ = _solved(built, None)
-            start = None if carried is None else spliced(carried, was, now, order, built.row_count)
-            warm, warm_iterations, warm_seconds, carried = _solved(built, start)
-            crude = None if naive is None else prefixed(naive, built.row_count)
-            _, naive_iterations, _, naive = _solved(built, crude)
+            cold, cold_iterations, cold_seconds = _solved(master)
+            carried, warm_iterations, warm_seconds = _solved(master, start=carried, outputs=BASIS)
+            warm = carried
             assert abs(warm.objective - cold.objective) <= 1e-6 * max(abs(cold.objective), 1.0), (
                 f'a carried basis moved the answer: cold {cold.objective!r}, warm {warm.objective!r} '
                 f'at {built.row_count} rows — a warm start may move the route and never the optimum'
@@ -327,7 +251,6 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
                     nonzeros=built.matrix.height,
                     cold_iterations=cold_iterations,
                     warm_iterations=warm_iterations,
-                    naive_iterations=naive_iterations,
                     cold_objective=cold.objective,
                     warm_objective=warm.objective,
                     cold_seconds=cold_seconds,
@@ -335,12 +258,9 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
                 )
             )
 
-            was = now
             lower = cold.objective
-            assert cold.primal is not None, 'the master is bounded and feasible at every capacity it proposes'
-            capacity = pl.DataFrame(
-                {'generator': gens, 'value': engine._model.variables['cap'].share(cold.primal).to_list()}
-            )
+            assert cold.has_primal, 'the master is bounded and feasible at every capacity it proposes'
+            capacity = cold.primal('cap')
             if upper < float('inf') and upper - lower <= TOLERANCE * abs(upper):
                 converged = True
                 break
@@ -355,13 +275,12 @@ def _report(run: Run, wall: bool) -> None:
     print(f'  master: {last.columns} columns, {last.rows} rows, {last.nonzeros} nonzeros at the last rebuild')
     print(f'  bounds: lower {run.lower:.6g}, upper {run.upper:.6g}')
 
-    print('\n  step   rows   cold iters   spliced   prefix')
+    print('\n  step   rows   cold iters   started')
     for i, s in enumerate(run.steps):
-        print(f'  {i:4}  {s.rows:5}   {s.cold_iterations:10}   {s.warm_iterations:7}   {s.naive_iterations:6}')
+        print(f'  {i:4}  {s.rows:5}   {s.cold_iterations:10}   {s.warm_iterations:7}')
     saved = 1 - run.warm_iterations / run.cold_iterations if run.cold_iterations else 0.0
     print(
-        f'\n  total simplex iterations: cold {run.cold_iterations}, spliced {run.warm_iterations} '
-        f'({saved:.1%} saved), naive prefix {run.naive_iterations}'
+        f'\n  total simplex iterations: cold {run.cold_iterations}, started {run.warm_iterations} ({saved:.1%} saved)'
     )
     print(f'  coefficients the rebuilds emitted, whatever the solve started from: {run.nonzeros}')
 

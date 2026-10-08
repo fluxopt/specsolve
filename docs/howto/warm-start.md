@@ -75,8 +75,32 @@ Pass `keep='nothing'`. It discards the held solver before the load, so no
 basis, incumbent or solver-internal state survives. A benchmark needs that, and
 so does comparing two sets of `solver_options`.
 
-## What a rebuild loses
+## Start from an earlier answer
 
-**A rebuild carries no progress.** A cutting-plane master re-solved after
-gaining a cut has gained a *row*, and a basis spans the model it was read
-from. [#382](https://github.com/fluxopt/specsolve/issues/382) tracks that case.
+`keep='progress'` carries the work only while the model's structure stays the
+same. A cutting-plane master re-solved after gaining a cut has gained a *row*,
+and a rebuild loads a fresh solver. Start an LP from an earlier answer instead:
+
+```python
+B = {'variable_basis', 'constraint_basis'}
+previous = master.solve(outputs=B)
+for cut in cuts:
+    previous = master.update(cut).solve(start=previous, outputs=B)
+```
+
+The engine lays the answer's basis onto the new build by coordinate. A
+coordinate both builds hold keeps its status. A variable only the new build
+holds starts at a bound, and a constraint only the new build holds starts not
+binding, so a cut enters without moving the vertex. The answer to start from
+must carry both basis outputs. It can be live, loaded with
+[`load_result`](../reference/api.md#specsolve.load_result) or read from an
+archive, and it can come from another solver. A mixed-integer model is refused:
+it has no basis to start from.
+
+**It pays most where the model changes least.** An unchanged model started
+from its own answer does no simplex work. Over a Benders run on the master of
+`bench/warm_payoff.py`, with HiGHS, a start from the previous master saved 66%
+to 73% of the simplex iterations at every size measured
+([#1877](https://github.com/fluxopt/specsolve/pull/1877)). Whether it saves
+time too depends on the model: on a small master, reading and matching the
+basis costs more than the iterations it saves. Measure before relying on it.

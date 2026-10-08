@@ -280,6 +280,7 @@ class Model:
         keep: Keep = 'solver',
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
+        start: Result | None = None,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -327,6 +328,15 @@ class Model:
                 status the solve ended on. The result, its save and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
+            start: An earlier answer of an LP to start the simplex from: its
+                basis, matched by coordinate, so an answer of another build of
+                the spec, with rows or columns gained or lost, starts it too. A
+                coordinate only this build holds starts at a bound if it is a
+                variable's, and not binding if it is a constraint's. Live,
+                loaded with [`load_result`][] or from an archive alike, it must
+                have been solved with
+                ``outputs={'variable_basis', 'constraint_basis'}``. It changes
+                how the solver gets to the optimum, never which one.
 
         Returns:
             The solution, holding this model.
@@ -334,8 +344,9 @@ class Model:
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
                 cannot run, a *keep* other than those three, a bare string as
-                *record_options* or *outputs*, or a name in *outputs* that is
-                not an output.
+                *record_options* or *outputs*, a name in *outputs* that is not
+                an output, a *start* that carries no basis, or a *start* for a
+                model with an integer variable.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -355,6 +366,7 @@ class Model:
                 keep=keep,
                 lower=self._lower,
                 outputs=asked,
+                start=None if start is None else start._basis(),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -519,6 +531,7 @@ def solve(
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
+    start: Result | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 
@@ -535,17 +548,21 @@ def solve(
         record_options: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
         outputs: As [`Model.solve`][] takes them.
+        start: As [`Model.solve`][] takes it.
 
     Returns:
         The solution. It owns its frames; the model and the solver are
         released before this returns.
 
     Raises:
-        SpecsolveError: A solver name nothing serves, or *outputs* that
-            [`Model.solve`][] refuses — both checked before the build.
+        SpecsolveError: A solver name nothing serves, *outputs* that
+            [`Model.solve`][] refuses, or a *start* that carries no basis — all
+            checked before the build — or as [`Model.solve`][] raises.
     """
     solver(solver_name)
     checked_outputs(outputs)
+    if start is not None:
+        start._basis()
     model = build(spec, sources)
     try:
         return model.solve(
@@ -554,6 +571,7 @@ def solve(
             record_options=record_options,
             archive=archive,
             outputs=outputs,
+            start=start,
         )
     finally:
         model.close()
