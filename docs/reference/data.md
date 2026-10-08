@@ -178,6 +178,15 @@ original did.
 [`update`](api.md#specsolve.types.Model.update).** A sweep over slices of one
 dimension is [`solve_over`](sweeps.md). Both attach through the rules above.
 
+**Data given to a model must not change while the model or its answers are in
+use.** A model reads each source once, at `build` and at each `update`, and keeps
+what it read without a copy. A parquet path is read into memory then, so a file
+rewritten afterwards does not reach the model. A table over memory you still
+write into does: a polars frame made from a numpy array shares the array's
+memory, and writing into the array changes what an answer's
+[`evaluate`](api.md#specsolve.types.Result.evaluate) reads and what a save
+records. Change data through `update`, or pass a copy.
+
 **The [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
 attaches by these same rules, refusals included**, held to them by
 `tests/test_data_parity.py`. The same malformed source gets the same verdict,
