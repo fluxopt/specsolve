@@ -128,10 +128,19 @@ class Solver(ABC):
     def structure(self) -> bytes:
         """The loaded model's digest, read off its frames once, after which the frames are let go."""
         if self._structure is None:
-            assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
+            assert self._handoff is not None, (
+                'a solver holds the handoff it loaded until its digest replaces it or release() drops it'
+            )
             self._structure = self._handoff.structure
             self._handoff = None
         return self._structure
+
+    def release(self) -> None:
+        """Let go of the frames this solver was loaded from, for a model that will not be loaded again.
+
+        Nothing is hashed, so [`structure`][] cannot be asked afterwards.
+        """
+        self._handoff = None
 
     def keeps(self, handoff: Handoff, solver_options: Mapping[str, Any] | None) -> bool:
         """Whether this held solver may keep its load and take *handoff* by value."""

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import warnings
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -217,6 +218,7 @@ class Engine:
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
         start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
+        last: bool = False,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -244,6 +246,10 @@ class Engine:
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
+            last: Whether the caller closes this engine after this solve. The
+                build then lets go of what the answer does not read before the
+                solver runs ([`_let_go`][]), so the solver's run does not share
+                the process with a second copy of the model.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -259,6 +265,8 @@ class Engine:
             solver.warm(matched)
         elif matched is not None:
             solver.start(matched)
+        if last:
+            self._let_go(solver, outputs)
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:
@@ -267,6 +275,28 @@ class Engine:
             answer = solver.run(handoff, basis='basis' in outputs)
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
+
+    def _let_go(self, solver: sinks.Solver, outputs: frozenset[Output]) -> None:
+        """Drop the frames the answer of a last solve does not read, from the build and from *solver*.
+
+        The solver has its own copy of the model by now, so the build's
+        matrix, objective, columns and sets are a second copy. ``rows`` and
+        the quadratic objective stay, since the run reads them. The columns
+        stay where a basis is asked for, and the matrix and objective where a
+        reduced cost is.
+        """
+        solver.release()
+        handoff = self._model.handoff
+        priced, based = 'reduced_cost' in outputs, 'basis' in outputs
+        kept = replace(
+            handoff,
+            cols=handoff.cols if based else handoff.cols.clear(),
+            obj=handoff.obj if priced else handoff.obj.clear(),
+            qmatrix=handoff.qmatrix if priced else handoff.qmatrix.clear(),
+            matrix=handoff.matrix if priced else handoff.matrix.clear(),
+            sos=handoff.sos.clear(),
+        )
+        self._built = replace(self._model, handoff=kept)
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
