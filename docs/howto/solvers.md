@@ -50,30 +50,6 @@ limit is `time_limit` on HiGHS and `TimeLimit` on Gurobi:
 result = sps.solve('dispatch.yaml', sources, solver_name='gurobi', solver_options={'TimeLimit': 60})
 ```
 
-## Solve an LP by interior point without crossover
-
-An LP can be solved by interior point and left there, without the crossover
-that moves the answer to a vertex:
-
-| solver | `solver_options=` |
-|---|---|
-| HiGHS | `{'solver': 'ipm', 'run_crossover': 'off'}` |
-| Gurobi | `{'Method': 2, 'Crossover': 0}` |
-| Xpress | `{'lpflags': 4, 'crossover': 0}` |
-
-The answer is optimal to the solver's tolerance and carries duals. It ends on
-no basis, so `outputs={'basis'}` gives none, and an LP
-[started from it](warm-start.md#start-from-an-earlier-answer) starts from its
-values rather than a basis.
-
-**On HiGHS, measure before you turn it on.** On the benchmark models at rung
-`m`, it was the fastest of the three ways only on `transport`, by 13%. Simplex
-was the fastest on `dispatch` and `storage`. On `nodal`, interior point with
-crossover was the fastest, and without crossover it took 20 times as long.
-Every objective was within 7e-9, relative, of the simplex one
-([#1895](https://github.com/fluxopt/specsolve/pull/1895)). Time each way on
-your own model before you keep one.
-
 ## A solver that cannot take the model
 
 Solvers take different constructs: HiGHS has no SOS sets, for example. `solve`

@@ -12,9 +12,9 @@ What each prints beside the solve's wall seconds: whether the answer carries
 duals, and how far its objective is from the simplex one, relative to it. An
 answer without crossover carries no basis, which ``tests/test_basis.py`` holds
 on every sink, so it is not asked for here, and its read-back stays out of the
-clock. Wall
-time is read off ``Model.diagnostics().seconds['solve']``, so it counts the
-solve and not the build, and it prints the load averages beside itself.
+clock. Wall time is read off ``Model.diagnostics().seconds['solve']``, so it
+counts the solve and not the build, and it prints the load averages beside
+itself.
 """
 
 from __future__ import annotations
