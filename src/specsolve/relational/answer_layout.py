@@ -292,7 +292,6 @@ def digest_of_data(spec_digest: str, tables: Mapping[str, pl.LazyFrame], ordered
             table = table.sort(table.columns)
         sha.update(f'\x1e{name}\x1f{table.height}'.encode())
         for column in table.iter_columns():
-            sha.update(f'\x1f{column.name}\x1f{column.dtype}'.encode())
             if column.dtype == pl.String:
                 sha.update(column.str.len_bytes().to_numpy().tobytes())
                 sha.update(column.str.join('').item().encode())

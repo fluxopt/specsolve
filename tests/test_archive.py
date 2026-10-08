@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 import yaml as pyyaml
 from mathspec import to_spec
 
@@ -1954,6 +1955,13 @@ def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, disp
     """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
         sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
+
+
+def test_one_data_under_two_specs_digests_as_two_models(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
+    spec = yaml.safe_load(dispatch_yaml.read_text())
+    maximised = {**spec, 'objective': {**spec['objective'], 'sense': 'maximize'}}
+    with sps.build(spec, dispatch_frame_inputs) as one, sps.build(maximised, dispatch_frame_inputs) as other:
+        assert one._model_digest() != other._model_digest()
 
 
 def test_the_data_digest_tells_labels_apart_where_their_characters_run_together() -> None:
