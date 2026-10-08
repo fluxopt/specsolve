@@ -39,15 +39,17 @@ from specsolve.errors import (
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve.relational.answer_layout import (
-    ACTIVITY,
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
     Provenance,
     Record,
     check_format,
+    checked_outputs,
     digest_of,
     installed,
+    kinds_of,
+    read_outputs,
     read_reasons,
     saved_frames,
     write_whole,
@@ -56,14 +58,15 @@ from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
-from specsolve.sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve.sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     from mathspec.program import Expression, Program
 
-    from specsolve.relational.result import ConstraintRow, Diagnostics, Keep
+    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -275,14 +278,15 @@ class Model:
         *,
         solver_options: Mapping[str, object] | None = None,
         record_options: Sequence[str] | None = None,
-        keep: Keep = 'solver',
         archive: str | Path | None = None,
+        outputs: Iterable[Output] = (),
+        start: Result | Start | Literal['previous'] | None = 'previous',
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
         A solver that can stay loaded is kept between calls, so an updated
-        model pushes only its numbers. How much this solve kept is its
-        [`kept`][specsolve.relational.result.Result.kept].
+        model pushes only its numbers; [`diagnostics`][] counts the solves
+        that loaded it again.
 
         Args:
             solver_name: ``highs``, which ships with the package; ``gurobi``,
@@ -299,12 +303,6 @@ class Model:
             record_options: More option names whose value the result
                 records, in any letter case. Name no credential here: an
                 archive goes to shared storage.
-            keep: ``solver``, the default, reuses the solver holding the model
-                and discards the work it did; ``progress`` keeps that work too,
-                for a driver that iterates one step at a time; ``nothing``
-                keeps neither, for timing a build or a cold baseline. A
-                preference: a model whose structure moved is loaded again
-                whatever was asked.
             archive: Where to write the spec, the data attached to it **now**,
                 and this answer, so that
                 [`load_archive`][specsolve.archive.load_archive] gives all
@@ -315,14 +313,45 @@ class Model:
                 [`Metrics`][specsolve.relational.answer_layout.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
+            outputs: Each [`Output`][specsolve.types.Output] the answer
+                carries beside the primal, the duals and the declared
+                expressions: ``activity`` for each constraint's left-hand side,
+                ``reduced_cost`` for each variable's reduced cost, ``slack``
+                for each constraint's distance to binding, and ``basis`` for
+                the basis status each variable and constraint ended on, read
+                with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
+                carry these and nothing else, and the reader of one not asked
+                for refuses.
+            start: What the solve begins from; it changes how the solver gets
+                to the optimum, never which one. ``'previous'``, the default,
+                carries on from the last solve while the solver stays loaded,
+                and begins from nothing after an update that loads it again.
+                ``None`` begins from nothing. An earlier answer, live, loaded
+                with [`load_result`][] or from an archive, or a
+                [`Start`][specsolve.types.Start] of tables keyed by reader, is
+                matched by coordinate, so one from another build of the spec,
+                with rows or columns gained or lost, starts it too. An LP starts from a basis where one is given, which an
+                answer carries when solved with ``outputs={'basis'}``: a
+                coordinate it leaves out starts at a bound if it is a
+                variable's, and not binding if it is a constraint's. Otherwise
+                an LP, and a mixed-integer model always, starts from values,
+                which the solver completes and repairs. Where a solver takes
+                values for an LP and no gain from them is known, the solve
+                warns.
 
         Returns:
             The solution, holding this model.
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a *keep* other than those three, or a bare string
-                as *record_options*.
+                cannot run, a bare string as *record_options* or *outputs*, a
+                name in *outputs* that is not an output, a *start* word other
+                than ``'previous'``, or a *start* this
+                model or solver cannot start from: a key that names no reader, a table naming no declaration or
+                lacking its dims, a basis status outside the five words, a
+                basis alone for a mixed-integer model, a start that lands on
+                no coordinate, or values for an LP that the solver cannot
+                take.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
@@ -334,12 +363,15 @@ class Model:
                 f'record_options={record_options!r} is one string, which would name each of its letters. '
                 f'Pass a list: record_options=[{record_options!r}].'
             )
+        asked = checked_outputs(outputs)
+        refuse_unknown_start_word(start)
         answered = replace(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
-                keep=keep,
                 lower=self._lower,
+                outputs=asked,
+                start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
             ),
             _spec_digest=self._spec_digest,
             _solved_at=datetime.now(UTC),
@@ -348,6 +380,14 @@ class Model:
         if out is not None:
             self._archive(out, answered)
         return answered
+
+    def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
+        """*start*'s tables read against this build, as [`read_start`][specsolve.sources.read_start] reads them.
+
+        Raises:
+            SpecsolveError: As [`read_start`][specsolve.sources.read_start] raises.
+        """
+        return read_start(start, self._program, self._tidied)
 
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.
@@ -423,6 +463,37 @@ class Model:
         """
         return self._engine.row(name, coordinate)
 
+    def infeasible_subsystem(self) -> InfeasibleSubsystem:
+        """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
+
+        The verb for *this model has no solution and I do not know why*. It
+        asks the solver that ran the last solve for an IIS (irreducible
+        infeasible subsystem). The search runs only on this call, since it can
+        cost more than the solve, and under the solve's ``solver_options``, so
+        a solver's IIS settings and time limit go there. Read a member row's
+        terms with [`row`][].
+
+        Every sink finds one for a linear model. For a discrete model, every
+        sink leaves out the integrality that makes the rows and bounds
+        conflict, and ``highs`` can find none where integrality causes the
+        conflict.
+
+        Raises:
+            SpecsolveError: The model has not been solved since it was built,
+                updated or closed; the last solve was not infeasible; or the
+                solver found no subsystem, or stopped at a limit before it was
+                irreducible.
+
+        Example:
+            >>> model.solve().termination_condition  # doctest: +SKIP
+            'infeasible'
+            >>> print(model.infeasible_subsystem())  # doctest: +SKIP
+            balance[snapshot=1] == 200
+            p[snapshot=1, tech=gas] <= 100 (upper bound)
+            p[snapshot=1, tech=wind] <= 50 (upper bound)
+        """
+        return self._engine.infeasible_subsystem()
+
     def _evaluator(
         self,
         primals: Mapping[str, pl.DataFrame],
@@ -484,6 +555,9 @@ def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
             or a bare sequence — wherever the YAML declares none. The shapes a
             value may take, and what attaching refuses, are
             [the data contract](https://specsolve.readthedocs.io/en/latest/reference/data/).
+            Each is read once and kept without a copy, so it must not change
+            while the model or its answers are in use; change data through
+            [`Model.update`][].
 
     Returns:
         The built model.
@@ -503,13 +577,13 @@ def solve(
     solver_options: Mapping[str, object] | None = None,
     record_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
+    outputs: Iterable[Output] = (),
+    start: Result | Start | None = None,
 ) -> Result:
     """Build *spec* and solve it in one call.
 
     To solve the same spec again with new numbers, use [`build`][] and
-    [`Model.update`][]. There is no ``keep``: the solve is the first of the
-    model's life, so [`kept`][specsolve.relational.result.Result.kept] is
-    always ``nothing``.
+    [`Model.update`][].
 
     Args:
         spec: As [`check`][] takes it.
@@ -518,18 +592,30 @@ def solve(
         solver_options: As [`Model.solve`][] takes them.
         record_options: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
+        outputs: As [`Model.solve`][] takes them.
+        start: As [`Model.solve`][] takes it.
 
     Returns:
         The solution. It owns its frames; the model and the solver are
         released before this returns.
 
     Raises:
-        SpecsolveError: A solver name nothing serves — checked before the build.
+        SpecsolveError: A solver name nothing serves, or *outputs* that
+            [`Model.solve`][] refuses — both checked before the build — or as
+            [`Model.solve`][] raises.
     """
     solver(solver_name)
+    checked_outputs(outputs)
     model = build(spec, sources)
     try:
-        return model.solve(solver_name, solver_options=solver_options, record_options=record_options, archive=archive)
+        return model.solve(
+            solver_name,
+            solver_options=solver_options,
+            record_options=record_options,
+            archive=archive,
+            outputs=outputs,
+            start=start,
+        )
     finally:
         model.close()
 
@@ -575,11 +661,11 @@ def load_result(directory: str | Path) -> Result:
     """Read back an answer [`Result.save`][] wrote — a solve, off disk.
 
     Every reader answers what it answered in the session that solved: the
-    values, the duals and activities, each named expression, and the reason
-    behind anything the solve could not produce. No build or solver is needed.
+    values, the duals, each named expression, the outputs the solve was asked
+    for, and the reason behind anything the solve could not produce. No build
+    or solver is needed.
 
-    [`kept`][specsolve.relational.result.Result.kept] reads ``nothing``, and
-    the solver's verbatim wording behind a refusal is not recorded — the
+    The solver's verbatim wording behind a refusal is not recorded — the
     termination condition is. A solve that reached no objective reads back as
     ``nan``.
 
@@ -640,8 +726,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         objective,
         saved_frames(out / 'primal', whole=whole),
         saved_frames(out / 'dual', whole=whole),
-        saved_frames(out / ACTIVITY, whole=whole),
-        'nothing',
+        {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
         expressions,
         _no_duals=no_duals,
         _spec_digest=record.spec_digest,

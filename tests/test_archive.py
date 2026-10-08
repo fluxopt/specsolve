@@ -30,6 +30,7 @@ from specsolve.relational.answer_layout import (
     ANSWER_LAYOUT,
     METRICS_FILE,
     Metrics,
+    Output,
     Provenance,
     Record,
     digest_of_file,
@@ -73,9 +74,9 @@ def _unstamped_digest(member: Path, scratch: Path) -> str:
     return digest_of_file(unstamped)
 
 
-def _archived(spec, sources, out: Path) -> Path:
+def _archived(spec, sources, out: Path, outputs: frozenset[Output] = frozenset()) -> Path:
     """The archive a solve writes, which is the only way one is made."""
-    with sps.solve(spec, sources, archive=out):
+    with sps.solve(spec, sources, archive=out, outputs=outputs):
         return out
 
 
@@ -564,7 +565,7 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
     tell ``sources/load.parquet`` from ``answer/dual/load.parquet``, and no run
     to tell one archive's catalog from another's.
     """
-    _archived(to_spec(_CATALOGED), _cataloged_sources(50.0), tmp_path / 'base')
+    _archived(to_spec(_CATALOGED), _cataloged_sources(50.0), tmp_path / 'base', frozenset({'activity'}))
 
     assert pl.read_parquet(tmp_path / 'base' / 'catalog.parquet').rows() == [
         ('base', 'answer/activity/load.parquet', 'load', 'constraint', None, None, 'bus', 'bus'),
@@ -1505,9 +1506,11 @@ def test_a_saved_answer_is_stamped_with_its_layout_and_the_specsolve_that_wrote_
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as solved:
         out = solved.save(tmp_path / 'solution')
 
-    assert json.loads((out / 'format.json').read_text()) == {'layout': ANSWER_LAYOUT, 'specsolve': sps.__version__}, (
-        'the layout this package writes, beside the version that wrote it'
-    )
+    assert json.loads((out / 'format.json').read_text()) == {
+        'layout': ANSWER_LAYOUT,
+        'specsolve': sps.__version__,
+        'outputs': [],
+    }, 'the layout this package writes, beside the version that wrote it and the outputs it carries, none by default'
 
 
 @pytest.mark.parametrize('scale', [pytest.param(1.0, id='with-values'), pytest.param(100.0, id='infeasible')])

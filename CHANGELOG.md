@@ -7,8 +7,23 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): a model with no solution names the rows and bounds that conflict ([#1880](https://github.com/fluxopt/specsolve/pull/1880))
+- feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
+- feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
+- feat(api): a solve or a sweep asked for outputs={'slack'} reads how far each constraint is from binding ([#1868](https://github.com/fluxopt/specsolve/pull/1868))
+- feat(api): a solve or a sweep asked for outputs={'variable_basis', 'constraint_basis'} reads the basis it ended on, in the same words on every solver ([#1876](https://github.com/fluxopt/specsolve/pull/1876))
+- feat(api): an LP solve can start from an earlier answer's basis, matched by coordinate, so a model that gained a cut starts from where it was ([#1877](https://github.com/fluxopt/specsolve/pull/1877))
+- feat(api): a mixed-integer solve can start from values, an earlier answer's or any source a parameter takes, matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
+- feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
+- perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
+- refactor(api): keep= is gone, and a re-solve carries on from where the last solve ended unless start=None says otherwise ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
+- fix(data): a datetime dimension takes a date, a nanosecond or a pandas seconds column for the same instant ([#1908](https://github.com/fluxopt/specsolve/pull/1908))
+- docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
+- fix(engine): an expression that reads a variable with no dimensions reads its solved value, in a save and a sweep too ([#1903](https://github.com/fluxopt/specsolve/pull/1903))
+- fix(data): an int parameter can be given as one number, and a sum_back window or a shift offset may be a parameter with no dimensions ([#1907](https://github.com/fluxopt/specsolve/pull/1907))
+- docs(data): data given to a model must not change while the model or its answers are in use ([#1909](https://github.com/fluxopt/specsolve/pull/1909))
 
 ## 0.7.0 (2026-10-07)
 

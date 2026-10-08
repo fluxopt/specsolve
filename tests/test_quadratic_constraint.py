@@ -108,7 +108,7 @@ def test_the_activity_is_the_whole_left_hand_side():
     ``Ax`` is 0, the row owning no linear entry at all.
     """
     with sps.build(SPEC, SOURCES) as model:
-        result = model.solve(solver_name='gurobi')
+        result = model.solve(solver_name='gurobi', outputs={'activity'})
         recomputed = recomputed_row_values(model._engine, result)
         block = model._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()

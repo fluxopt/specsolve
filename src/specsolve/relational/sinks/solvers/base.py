@@ -7,50 +7,36 @@ from __future__ import annotations
 
 import importlib.util
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
 from specsolve.errors import SpecsolveError
+from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve.relational.names import VALUE
 from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence, Sized
 
     import numpy as np
 
     from specsolve.relational.sinks.capabilities import Capabilities
-    from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.handoff import Handoff, Ints
     from specsolve.relational.status import SolveStatus
 
 
+#: The status of a nonbasic row, by its sense.
+_ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
+
+
 @dataclass(frozen=True)
-class WarmStart:
-    """What one solve leaves for a later session: a basis, or an incumbent.
+class Basis:
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
 
-    Read with [`Solver.warm_start`][], applied with [`Solver.warm`][]. The
-    statuses are the reading solver's own encoding, so only that solver takes
-    it back.
-    """
-
-    #: The member of ``SOLVERS`` that read it.
-    solver: str
-    #: Basis status per column in label order, or ``None`` where no basis was left.
-    column_statuses: Any | None
-    #: Basis status per row in label order; filled exactly when
-    #: [`column_statuses`][] is.
-    row_statuses: Any | None
-    #: Primal value per column in label order (a mixed-integer incumbent), or
-    #: ``None`` where the basis carries the start.
-    column_values: Any | None
-
-    def basis(self) -> tuple[Any, Any] | None:
-        """Both status vectors, or ``None`` where the incumbent carries the start."""
-        if self.column_statuses is not None and self.row_statuses is not None:
-            return self.column_statuses, self.row_statuses
-        return None
+    columns: np.ndarray[tuple[int], np.dtype[np.int8]]
+    rows: np.ndarray[tuple[int], np.dtype[np.int8]]
 
 
 @dataclass(frozen=True)
@@ -70,11 +56,25 @@ class SolveAnswer:
     #: A weight per row certifying that the constraints cannot all hold, in
     #: the sign convention of [`Solver.dual_ray`][], or ``None``.
     dual_ray: pl.Series | None = None
+    #: The basis the solve ended on, read only where [`Solver.run`][] was asked
+    #: for it, and ``None`` wherever the solve ended at no vertex.
+    basis: Basis | None = None
 
     @classmethod
     def unreadable(cls, status: SolveStatus, dual_ray: pl.Series | None = None) -> SolveAnswer:
         """The answer for a solve that left nothing worth reading: a NaN objective and no vector but the ray."""
         return cls(status, float('nan'), None, None, None, dual_ray)
+
+
+@dataclass(frozen=True)
+class InfeasibleSubsystemIndices:
+    """An irreducible infeasible subsystem, in the solver's own row and column indices."""
+
+    rows: Ints
+    #: The columns whose lower bound is in it.
+    lower: Ints
+    #: The columns whose upper bound is in it.
+    upper: Ints
 
 
 class Solver(ABC):
@@ -101,7 +101,7 @@ class Solver(ABC):
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The loaded model's spans, read by [`_takes`][].
+        #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
 
@@ -114,6 +114,12 @@ class Solver(ABC):
 
     #: What to tell a caller when [`is_available`][] says no.
     unavailable_message: ClassVar[str]
+
+    #: What a start of values does for an LP on this member, when it gives
+    #: every column a value and when it leaves some out: ``used``,
+    #: ``no_gain`` where the member takes them and no gain from them is known,
+    #: so the solve warns, or ``refused`` where it cannot take them.
+    lp_values: ClassVar[Mapping[Literal['complete', 'partial'], Literal['used', 'no_gain', 'refused']]]
 
     #: Option names, casefolded, whose value an answer records: the ones that
     #: change what a solve returns. Any other option is recorded by name
@@ -164,70 +170,83 @@ class Solver(ABC):
         Called only after *handoff*'s digest matched the loaded one.
         """
 
-    @abstractmethod
-    def warm_start(self) -> WarmStart | None:
-        """What the loaded model holds to warm a later session.
-
-        The basis after an LP solve, the incumbent after a mixed-integer one,
-        or ``None`` where it holds neither, as before any solve.
-        """
-
-    def warm(self, ws: WarmStart) -> None:
-        """Start the next [`run`][] from *ws* instead of from scratch.
-
-        The caller vouches that *ws* was read from a model with this one's
-        label set.
+    def warm(self, basis: Basis) -> None:
+        """Start the next [`run`][] of this LP from *basis* instead of from scratch.
 
         Raises:
-            SpecsolveError: A warm start read from another solver, or whose
-                vectors do not span the loaded model.
+            SpecsolveError: A basis that does not span the loaded model.
         """
-        self._takes(ws)
-        self._warm(ws)
-
-    def _takes(self, ws: WarmStart) -> None:
-        """Refuse a warm start from another solver, or whose vectors do not span the loaded model."""
-        mine = type(self).__name__.lower()
-        if ws.solver != mine:
-            raise SpecsolveError(
-                f'this warm start was read from {ws.solver!r} and cannot warm a {mine!r} session: '
-                f"basis statuses and incumbents are the reading solver's own encoding, so applied "
-                f'elsewhere they would start the solve from a state that means something else. '
-                f'Read a warm start from the solver that will take it back.'
-            )
-        spans = (
-            ('column statuses', ws.column_statuses, self._columns, 'columns'),
-            ('row statuses', ws.row_statuses, self._rows, 'rows'),
-            ('column values', ws.column_values, self._columns, 'columns'),
-        )
-        for quantity, values, expected, axis in spans:
-            if values is not None and len(values) != expected:
-                raise SpecsolveError(
-                    f'this warm start carries {len(values)} {quantity} for a model with {expected} '
-                    f'{axis}. A basis and an incumbent are positional, so one read from a '
-                    f'differently shaped model would start the solve from a state about a '
-                    f'different one — carry a warm start only across builds whose label set '
-                    f'is unchanged.'
-                )
+        self._spans('basis', basis.columns, self._columns, 'columns')
+        self._spans('basis', basis.rows, self._rows, 'rows')
+        self._warm(basis)
 
     @abstractmethod
-    def _warm(self, ws: WarmStart) -> None:
-        """Apply *ws* onto the loaded model. [`warm`][] has already checked its solver and spans."""
+    def _warm(self, basis: Basis) -> None:
+        """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
 
-    def run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded and read it back.
+    def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+        """Start the next [`run`][] from *values*, one per column and NaN where none is given.
+
+        A mixed-integer model takes them as a starting incumbent, completing
+        what is missing and repairing what is infeasible as far as it can; an
+        LP as [`lp_values`][] says.
+
+        Raises:
+            SpecsolveError: Values that do not span the loaded model.
+        """
+        self._spans('start', values, self._columns, 'columns')
+        self._start(values)
+
+    @abstractmethod
+    def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
+
+    def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
+        """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
+        if len(values) != expected:
+            raise SpecsolveError(
+                f'this {what} carries {len(values)} entries for a model with {expected} {axis}. It is '
+                f'positional, so one laid out for a differently shaped model would start the solve from a '
+                f'state about a different one. This is an engine bug rather than a problem with the model '
+                f'— please report it.'
+            )
+
+    def run(self, handoff: Handoff, *, basis: bool = False) -> SolveAnswer:
+        """Solve what is loaded and read it back, with the [`Basis`][] it ended on where *basis* asks.
 
         Raises:
             SpecsolveError: A solver vector that does not span the model.
         """
         answer = self._run(handoff)
+        if basis and answer.primal is not None:
+            answer = replace(answer, basis=self._settled(handoff))
         self._check_span('primal', answer.primal, handoff.column_count)
         self._check_span('dual', answer.dual, handoff.row_count)
         self._check_span('activity', answer.activity, handoff.row_count)
         self._check_span('dual ray', answer.dual_ray, handoff.row_count)
         return answer
 
-    def _check_span(self, quantity: str, values: pl.Series | None, expected: int) -> None:
+    def _settled(self, handoff: Handoff) -> Basis | None:
+        """[`_basis`][], [`settled`][] against the model it was read from, after its spans are checked."""
+        read = self._basis()
+        if read is None:
+            return None
+        columns, rows = read
+        self._check_span('column basis', columns, handoff.column_count)
+        self._check_span('row basis', rows, handoff.row_count)
+        return settled(handoff, columns, rows)
+
+    @abstractmethod
+    def _basis(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """The basis the last [`run`][] ended on as [`BASIS_STATUSES`][] codes, columns then rows.
+
+        Called only after a run that left a primal. ``None`` where it ended at
+        no vertex: a mixed-integer model, an interior-point run without
+        crossover. A nonbasic row may carry any nonbasic code, and a column at
+        equal bounds either bound's: [`_settled`][] reads both off the model.
+        """
+
+    def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:
         """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
@@ -260,6 +279,17 @@ class Solver(ABC):
         Returns:
             The weights in row order, or ``None`` where this solver produced
             none.
+        """
+
+    @abstractmethod
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
+        """The rows and bounds that cannot hold together, read only after an infeasible solve.
+
+        Integrality, and any constraint that is neither a row nor a bound, is
+        left out.
+
+        Returns:
+            The subsystem, or ``None`` where the solver did not prove one.
         """
 
     @abstractmethod
@@ -306,6 +336,45 @@ def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], n
     for sense, code in SENSE_CODES.items():
         out[code] = spelling[sense]
     return out
+
+
+def settled(handoff: Handoff, columns: np.ndarray, rows: np.ndarray) -> Basis:
+    """*columns* and *rows*, [`BASIS_STATUSES`][] codes, with each nonbasic one at a bound *handoff* has.
+
+    A member reads only basic or not, and which bound a column sits at, and a
+    basis carried from another model may name a bound this one lacks. So a
+    column keeps its side where that bound is finite, else takes the other,
+    else is ``superbasic`` (free, at zero), and is ``fixed`` where its bounds
+    are equal. A row's bound follows from its sense, since each row has one.
+    """
+    import numpy as np
+
+    cols = handoff.dense_columns(np.inf)
+    lower, upper = np.isfinite(cols.lb), np.isfinite(cols.ub)
+    side = np.where(upper & ((columns == AT_UPPER) | ~lower), AT_UPPER, np.where(lower, AT_LOWER, SUPERBASIC))
+    side = np.where(cols.lb == cols.ub, FIXED, side)
+    columns = np.where(np.isin(columns, (AT_LOWER, AT_UPPER, FIXED)), side, columns)
+    bound = np.asarray([_ROW_BOUND[sense] for sense in SENSE_CODES], dtype=np.int8)
+    rows = np.where(np.isin(rows, (BASIC, SUPERBASIC)), rows, bound[handoff.dense_rows(np.inf).sense])
+    return Basis(columns.astype(np.int8), rows.astype(np.int8))
+
+
+def basis_codes(native: Any, codes: Sequence[int]) -> np.ndarray[tuple[int], np.dtype[np.int8]]:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
+    """A solver's own basis statuses as [`BASIS_STATUSES`][] codes: *codes* indexed by each status."""
+    import numpy as np
+
+    return np.asarray(codes, dtype=np.int8)[np.asarray(native, dtype=np.int64)]
+
+
+def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tuple[int], np.dtype[np.int64]]:
+    """[`BASIS_STATUSES`][] *codes* as a solver's own statuses: *native* maps every code to the solver's status.
+
+    Raises:
+        KeyError: A *native* that leaves a code out.
+    """
+    import numpy as np
+
+    return np.asarray([native[code] for code in range(len(BASIS_STATUSES))], dtype=np.int64)[codes]
 
 
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type

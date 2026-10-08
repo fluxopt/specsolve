@@ -31,49 +31,40 @@ that evidence at the load; a subclass owns **the hand-off**:
 | | |
 |---|---|
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(handoff)` | `_run`, plus the refusal of a vector that does not span the model |
-| `Solver.warm(ws)` | `_warm`, plus the refusal of a `WarmStart` from another solver or another shape |
+| `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
+| `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
 | `_load(handoff, batch_rows)` | hand the model over and hold what reads it back |
 | `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(handoff)` | solve what is loaded, and read it back |
-| `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
-| `_warm(ws)` | set it on the loaded model, spans already checked |
+| `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
+| `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
+| `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
+| `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last seven are a
+The first three are the family's and identical for everyone; the last nine are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over a `Handoff`
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
-the solver already holds. Whether it also solves from the basis the last one
-ended on is the caller's `keep=`: `'progress'` keeps it, and `'solver'` — the
-default — calls `forget()` so the run begins as if the model were new. Every
-member implements both; a solver with nothing to discard implements `forget()`
-as a no-op.
+the solver already holds. A solve carries the solver on by default;
+`start=None` or an answer given calls `forget()`, so the run begins as if the
+model were new. A member with nothing to discard implements `forget()` as a no-op.
+`forget()` rather than a reload, because keeping the solver skips the hand-off,
+while carrying its progress wins or loses by model.
 
-`forget()` rather than a reload because the two costs are different ones. A
-caller keeping the *solver* skips the hand-off, which nothing pays for; one
-keeping its *progress* trades against whatever the member prepares for a run
-that starts from nothing, and that trade goes either way by model. Splitting
-them is what lets a caller take the first without the second.
+A **genuine rebuild** loads a fresh solver, which starts cold.
 
-A **genuine rebuild** gets no carry at all: the new session holds a fresh model
-and starts cold, and `Engine.solve(keep='nothing')` is how a caller asks
-for that on purpose — the held solver is discarded, so cold is structural
-rather than scrubbed.
-
-`warm_start()` / `warm(ws)` are the machinery for carrying one anyway:
-`warm_start()` reads the basis — or, after a mixed-integer solve, the
-incumbent, no solver leaving a valid basis behind one — out of a session as an
-opaque `WarmStart`, and `warm(ws)` sets it on the next, refusing a start from
-another solver or one whose spans do not match the ingested model. **Nothing
-above the family calls either**, and `WarmStart` is deliberately not
-re-exported: the case that wants a carry most, a cutting-plane master
-re-solved after gaining a cut, gains a *row*, so the span check refuses it by
-construction. [#382](https://github.com/fluxopt/specsolve/issues/382) holds what
-has to be answered before this reaches a caller.
+`warm(basis)` is how a caller carries one anyway. A `Basis` is a code per
+column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a
+basis HiGHS read warms Gurobi. It is positional, and the engine is what makes
+it fit: `solve(start=)` lays an earlier answer's basis onto the new build by
+coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
+*row* starts from every row it kept. `start(values)` hands values over the same
+way: an incumbent to a mixed-integer solve, and a primal to an LP where the
+member's `lp_values` says it takes one.
 
 The guard is `Handoff.structure` — a digest of everything a re-solve may
 not change, recorded by the solver at its load and cached on the handoff. **Values are re-pushed, not diffed**: linopy's persistent layer

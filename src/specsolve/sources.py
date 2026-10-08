@@ -8,21 +8,30 @@ on whether that data is usable is made here, once.
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.selectors as cs
 from mathspec import did_you_mean
+from mathspec.program import ParameterDeclaration
 
 from specsolve.assumptions import validate_assumptions
-from specsolve.errors import DataError
+from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve.messages import coordinate_text, coordinates_text
+from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
+from specsolve.relational.answer_layout import BASIS_STATUSES
 from specsolve.relational.collect import collected
 from specsolve.relational.names import POSITION, VALUE
+from specsolve.relational.result import Start
 
 if TYPE_CHECKING:
-    from mathspec.program import DimensionDeclaration, ParameterDeclaration, Program, RelationDeclaration
+    from mathspec.program import (
+        ConstraintDeclaration,
+        DimensionDeclaration,
+        Program,
+        RelationDeclaration,
+        VariableDeclaration,
+    )
 
     from specsolve.inputs import Label, Source
 
@@ -49,7 +58,8 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's index as one column of labels
     under its own name in the order they arrived, a relation as one column
-    per declared column. A datetime label is held in microseconds.
+    per declared column. A datetime label is held in microseconds, and a date
+    under a ``datetime`` dimension as the microsecond its day starts on.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -70,7 +80,9 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _index(data[dname], dname, declared.dtype)
-    relations = {name: _read_relation(data[name], name, relation) for name, relation in program.relations.items()}
+    relations = {
+        name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
+    }
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
@@ -163,7 +175,9 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
             f"index for dimension '{dim}' is a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
-    labels = in_microseconds(table.select(dim).pipe(collected), f"index for dimension '{dim}'")
+    labels = in_microseconds(
+        table.select(dim).pipe(collected), f"index for dimension '{dim}'", (dim,) if dtype == 'datetime' else ()
+    )
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -241,8 +255,15 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
                 )
 
 
-def in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
+def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
     """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
+
+    Args:
+        frame: The table whose datetime columns are cast.
+        owner: What carried *frame*, as a refusal names it.
+        midnight: The columns whose dates are labels of a datetime dimension.
+            A date there becomes the microsecond its day starts on, the same
+            instant.
 
     Raises:
         DataError: A label with a part below one microsecond, which the cast would drop.
@@ -255,7 +276,19 @@ def in_microseconds(frame: pl.DataFrame, owner: str) -> pl.DataFrame:
                     f"{owner} holds '{column}' label(s) finer than a microsecond, such as {finer.cast(pl.String)[0]}. "
                     f"Round them before attaching: polars .dt.round('1us'), pandas .dt.round('us')."
                 )
-    return frame.with_columns(cs.datetime().dt.cast_time_unit('us'))
+    return frame.with_columns(
+        cs.datetime().dt.cast_time_unit('us'), (cs.by_name(midnight) & cs.date()).cast(pl.Datetime('us'))
+    )
+
+
+def _over_datetimes(columns: Iterable[tuple[str, str]], indexes: Mapping[str, pl.LazyFrame]) -> list[str]:
+    """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's index holds datetime labels.
+
+    The index is read first and follows its declaration, so a column follows
+    the index rather than the declaration: a date beside an index of dates
+    stays a date.
+    """
+    return [c for c, dim in columns if dim in indexes and isinstance(indexes[dim].collect_schema()[dim], pl.Datetime)]
 
 
 def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, index: pl.DataType) -> None:
@@ -327,8 +360,12 @@ def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
     return index.select(dim).pipe(collected)[dim]
 
 
-def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> pl.LazyFrame:
+def _read_relation(
+    source: Source, name: str, relation: RelationDeclaration, indexes: Mapping[str, pl.LazyFrame]
+) -> pl.LazyFrame:
     """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
+
+    A column is read in its dimension's label type, from *indexes*.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -353,7 +390,9 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = in_microseconds(table.select(*roles).pipe(collected), f"relation '{name}'")
+    rows = in_microseconds(
+        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, indexes)
+    )
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -390,7 +429,7 @@ def _read_relation(source: Source, name: str, relation: RelationDeclaration) -> 
 
 
 def _parameter_frame(
-    name: str, p: ParameterDeclaration, obj: Source, sources: Mapping[str, pl.LazyFrame]
+    name: str, p: ParameterDeclaration, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy frame, whatever shape it took.
 
@@ -399,20 +438,118 @@ def _parameter_frame(
     """
     if is_dense_array(obj):
         raise DataError(
-            f"parameter '{name}': an xarray.DataArray is not a source. specsolve reads tables — "
+            f"{kind} '{name}': an xarray.DataArray is not a source. specsolve reads tables — "
             f'rows under named columns — and hands arrays back rather than taking them. Pass '
             f'array.to_series().reset_index() for a tidy frame, whose columns attach by name. '
             f'Result.to_dataarray() is the way back out.'
         )
     if is_multi_indexed(obj):
         raise DataError(
-            f"parameter '{name}': a pandas Series with a MultiIndex is not a source. An index is "
+            f"{kind} '{name}': a pandas Series with a MultiIndex is not a source. An index is "
             f'a pandas idea with no counterpart in the frames a build reads, and its depth is a '
             f"second claim about what '{name}' is over. Pass a tidy frame carrying {[*p.dims, VALUE]} — "
             f'series.reset_index() is the whole change.'
         )
     table = as_frame(obj, p.dims)
-    return table if table is not None else _spread(name, obj, p.dims, sources)
+    return table if table is not None else _spread(name, obj, p.dims, sources, kind)
+
+
+def read_start(
+    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
+) -> dict[str, dict[str, pl.LazyFrame]]:
+    """*start*'s tables, each read and checked as a parameter's source is, over its declaration's dims.
+
+    Every shape a parameter takes is read, from a parquet path to one number
+    for every coordinate; *indexes* holds each dimension's labels under its
+    own name. ``primal`` holds numbers, and ``variable_basis`` and
+    ``constraint_basis`` hold basis statuses in their words.
+
+    Raises:
+        SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
+            status outside the five words.
+        DataError: A table a parameter over the same dims would be refused
+            for.
+    """
+    refuse_unknown_start(start, program)
+    read: dict[str, dict[str, pl.LazyFrame]] = {}
+    for reader, tables in _by_reader(start).items():
+        per, declared = _read_by(reader, program)
+        dtype = 'float' if reader == 'primal' else 'str'
+        read[reader] = {}
+        for name, obj in tables.items():
+            kind = f'start= under {reader!r} for {per}'
+            frame = _read_values(kind, name, declared[name].dims, obj, indexes, dtype)
+            if reader != 'primal':
+                _refuse_unknown_statuses(kind, name, frame)
+            read[reader][name] = frame
+    return read
+
+
+def refuse_unknown_start_word(start: object) -> None:
+    """Refuse a *start* given as a word other than ``'previous'``.
+
+    Raises:
+        SpecsolveError: Any other string.
+    """
+    if isinstance(start, str) and start != 'previous':
+        raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
+
+
+def refuse_unknown_start(start: Start, program: Program) -> None:
+    """Refuse a *start* keyed by no reader [`Start`][specsolve.types.Start] takes, or naming no declaration its reader reads.
+
+    Asked of the names alone, so a sweep asks it before a slice is built.
+
+    Raises:
+        SpecsolveError: A key that names no reader, or a name the reader has
+            no declaration for.
+    """
+    readers = tuple(Start.__annotations__)
+    by_reader = _by_reader(start)
+    if unknown := sorted(set(by_reader) - set(readers)):
+        raise SpecsolveError(
+            f'start= takes, under the name of the reader that returns it, a table per declaration: '
+            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
+        )
+    for reader, tables in by_reader.items():
+        per, declared = _read_by(reader, program)
+        if missing := next((name for name in tables if name not in declared), None):
+            raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, missing, declared)}')
+
+
+def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
+    """*start* as the mapping it is, whatever keys it was given."""
+    return cast('Mapping[str, Mapping[str, Source]]', start)
+
+
+def _read_by(
+    reader: str, program: Program
+) -> tuple[str, Mapping[str, VariableDeclaration] | Mapping[str, ConstraintDeclaration]]:
+    """What *reader* holds a table per, and those declarations by name."""
+    if reader == 'constraint_basis':
+        return 'constraint', program.constraints
+    return 'variable', program.variables
+
+
+def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
+    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve.relational.answer_layout.BASIS_STATUSES]."""
+    held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
+    if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
+        raise SpecsolveError(
+            f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
+            f'{", ".join(map(repr, BASIS_STATUSES))}.'
+        )
+
+
+def _read_values(
+    kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame], dtype: str
+) -> pl.LazyFrame:
+    """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
+
+    *kind* and *name* say whose values they are in a refusal.
+    """
+    declared = ParameterDeclaration(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
+    return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -435,12 +572,15 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
     return 0 if least is None else int(least)
 
 
-def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
+def _spread(
+    name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dims it declares.
 
     A ``{label: value}`` map, a sequence in the dimension's own label order,
-    or one number standing for every coordinate. A bool stays boolean rather
-    than widening to float: a mask's truthiness is read off the column type.
+    or one number standing for every coordinate. One number keeps its Python
+    type, so an int attaches to an ``int`` declaration and a bool stays
+    boolean: a mask's truthiness is read off the column type.
 
     Raises:
         DataError: A shape that does not fit the declared dims, a sequence of
@@ -448,51 +588,53 @@ def _spread(name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, p
     """
     if isinstance(obj, Mapping):
         if len(dims) != 1:
-            raise DataError(_wrong_rank(name, 'a dict maps one label to one value', dims))
+            raise DataError(_wrong_rank(name, 'a dict maps one label to one value', dims, kind))
         return pl.LazyFrame({dims[0]: list(obj.keys()), VALUE: list(obj.values())})
 
     if isinstance(obj, bool):
-        return _broadcast(name, pl.lit(obj, dtype=pl.Boolean), dims, sources)
-    if isinstance(obj, (int, float)):
-        return _broadcast(name, pl.lit(float(obj), dtype=pl.Float64), dims, sources)
+        return _broadcast(name, pl.lit(obj, dtype=pl.Boolean), dims, sources, kind)
+    if isinstance(obj, int):
+        return _broadcast(name, pl.lit(obj, dtype=pl.Int64), dims, sources, kind)
+    if isinstance(obj, float):
+        return _broadcast(name, pl.lit(obj, dtype=pl.Float64), dims, sources, kind)
 
     if isinstance(obj, Collection) and not isinstance(obj, (str, bytes)):
         if len(dims) != 1:
-            raise DataError(_wrong_rank(name, 'a sequence runs along one dimension', dims))
-        labels = _labels(name, dims[0], sources)
+            raise DataError(_wrong_rank(name, 'a sequence runs along one dimension', dims, kind))
+        labels = _labels(name, dims[0], sources, kind)
         values = list(obj)
         if len(values) != len(labels):
             raise DataError(
-                f"parameter '{name}': {len(values)} values against {len(labels)} "
+                f"{kind} '{name}': {len(values)} values against {len(labels)} "
                 f"'{dims[0]}' labels. A sequence is positional, so it must have "
                 f'one entry per label, in the order the index declares them.'
             )
         return pl.LazyFrame({dims[0]: labels, VALUE: values})
 
     raise DataError(
-        f"parameter '{name}': cannot adapt {type(obj).__name__} to a tidy "
+        f"{kind} '{name}': cannot adapt {type(obj).__name__} to a tidy "
         f'table — pass any table polars can read with columns '
         f'{[*dims, VALUE]} (polars, pyarrow, pandas), a parquet path, or the '
         f'plain-Python shapes: a dict, a sequence, or one number.'
     )
 
 
-def _wrong_rank(name: str, said: str, dims: Sequence[str]) -> str:
+def _wrong_rank(name: str, said: str, dims: Sequence[str], kind: str) -> str:
     """One wording for a plain-Python shape against the dims it cannot cover."""
-    return (
-        f"parameter '{name}': {said}, and '{name}' is over {dims}. Pass a table with columns {[*dims, VALUE]} instead."
-    )
+    return f"{kind} '{name}': {said}, and '{name}' is over {dims}. Pass a table with columns {[*dims, VALUE]} instead."
 
 
-def _broadcast(name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
+def _broadcast(
+    name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str
+) -> pl.LazyFrame:
     """One number over every coordinate of *dims*."""
     frame = pl.LazyFrame({'__one__': [0]})
     for dim in dims:
-        frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources)}), how='cross')
+        frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources, kind)}), how='cross')
     return frame.drop('__one__').with_columns(value.alias(VALUE))
 
 
-def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[Label]:
+def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str) -> list[Label]:
     """*dim*'s labels, in index order, for a shape that has none of its own.
 
     Raises:
@@ -501,7 +643,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[La
     source = sources.get(dim)
     if source is None:
         raise DataError(
-            f"parameter '{name}' is written positionally over '{dim}', so it says what the "
+            f"{kind} '{name}' is written positionally over '{dim}', so it says what the "
             f'values are but not what they are labelled — and nothing else supplies an index '
             f"for '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
@@ -510,7 +652,11 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame]) -> list[La
 
 
 def _checked_parameter(
-    name: str, p: ParameterDeclaration, table: pl.LazyFrame, sources: Mapping[str, pl.LazyFrame]
+    name: str,
+    p: ParameterDeclaration,
+    table: pl.LazyFrame,
+    sources: Mapping[str, pl.LazyFrame],
+    kind: str = 'parameter',
 ) -> pl.LazyFrame:
     """*table* held to what its declaration claims, collected once.
 
@@ -525,21 +671,23 @@ def _checked_parameter(
     available = table.collect_schema().names()
     if missing := set(wanted) - set(available):
         raise DataError(
-            f"source for parameter '{name}' is missing columns {sorted(missing)} "
+            f"source for {kind} '{name}' is missing columns {sorted(missing)} "
             f'(need dims {list(p.dims)} plus {VALUE!r}; has {available}). Rename them to '
             f'the declared dims, or drop the index names to attach positionally.'
         )
-    frame = in_microseconds(table.select(wanted).pipe(collected), f"parameter '{name}'")
-    _check_one_row_per_coordinate(name, p, frame, sources)
-    _check_values_are_present(name, p, frame)
-    _check_value_dtype(name, p, frame)
+    frame = in_microseconds(
+        table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
+    )
+    _check_one_row_per_coordinate(name, p, frame, sources, kind)
+    _check_values_are_present(name, p, frame, kind)
+    _check_value_dtype(name, p, frame, kind)
     return frame.lazy()
 
 
 def _check_one_row_per_coordinate(
-    name: str, p: ParameterDeclaration, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame]
+    name: str, p: ParameterDeclaration, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
 ) -> None:
-    """A parameter is a function of its dims: one row per coordinate, every label a real one.
+    """A table of values is a function of its dims: one row per coordinate, every label a real one.
 
     Labels are checked against the dimensions whose index has been read; one
     still missing is refused once every source is in.
@@ -547,7 +695,7 @@ def _check_one_row_per_coordinate(
     if not p.dims:
         if frame.height != 1:
             raise DataError(
-                f"parameter '{name}' is declared with no dims, which means one value "
+                f"{kind} '{name}' is declared with no dims, which means one value "
                 f'broadcast everywhere — but its source has {frame.height} rows. '
                 f'Declare the dims it is indexed by, or reduce the source to a single row.'
             )
@@ -555,7 +703,7 @@ def _check_one_row_per_coordinate(
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
     for d, labels in known.items():
-        _check_same_clock(f"parameter '{name}'", d, d, frame.schema[d], labels.dtype)
+        _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
     answers = frame.select(
         pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
         *(pl.col(d).is_in(labels.implode()).all().alias(f'#known {d}') for d, labels in known.items()),
@@ -567,10 +715,10 @@ def _check_one_row_per_coordinate(
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
             raise DataError(
-                f"parameter '{name}' has label(s) in dimension '{d}' that are not coordinates "
+                f"{kind} '{name}' has label(s) in dimension '{d}' that are not coordinates "
                 f'of it: {shown}{more}.\n'
                 f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-                f'A missing row is a zero coefficient, but a label that is not a coordinate is a '
+                f'A missing row means no value there, but a label that is not a coordinate is a '
                 f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
                 f'as absent. Fix the label, or declare it as a coordinate.'
             )
@@ -583,13 +731,13 @@ def _check_one_row_per_coordinate(
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(
-        f"parameter '{name}' has more than one row for a coordinate: {shown}. "
-        f'A parameter is a function of its dims, so which value applies is undefined — '
+        f"{kind} '{name}' has more than one row for a coordinate: {shown}. "
+        f'It holds one value per coordinate, so which value applies is undefined — '
         f'aggregate the source to one row per {list(p.dims)} before attaching it.'
     )
 
 
-def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame) -> None:
+def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame, kind: str) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read."""
     value = pl.col(VALUE)
     holed = value.is_null() | value.is_nan() if frame.schema[VALUE].is_float() else value.is_null()
@@ -599,7 +747,7 @@ def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.Data
     shown = coordinates_text(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
     at = f': {shown}' if shown else ''
     raise DataError(
-        f"parameter '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
+        f"{kind} '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
         f'In long form the absence of a value is the absence of the row, and such a row '
         f'says the coordinate exists and denies it in the same breath.\n'
         f'  Drop them     polars .drop_nulls({VALUE!r}).drop_nans({VALUE!r}), pandas .dropna(subset=[{VALUE!r}])\n'
@@ -623,7 +771,7 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
-def _check_value_dtype(name: str, p: ParameterDeclaration, frame: pl.DataFrame) -> None:
+def _check_value_dtype(name: str, p: ParameterDeclaration, frame: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the declaration claims.
 
     Asked after the holes, so a column of nothing but nulls — which polars
@@ -634,7 +782,7 @@ def _check_value_dtype(name: str, p: ParameterDeclaration, frame: pl.DataFrame) 
         return
     arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
     raise DataError(
-        f"parameter '{name}' is declared '{p.dtype}' and its values arrived as '{arrived}'. "
+        f"{kind} '{name}' is declared '{p.dtype}' and its values arrived as '{arrived}'. "
         f'A declared dtype is a claim about the values, and it is checked here — the file '
         f'says what the column is, or the column is not attached.\n'
         f'  Cast the column to {p.dtype}, if the declaration is what you meant\n'

@@ -33,8 +33,8 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
   checked against how the model couples before it runs. [Sweep a model →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Fast, and hard to get wrong.** Tables hold only the rows that exist, so a
   model's topology does not change its cost. The solver stays loaded:
-  `update()` puts new numbers on it, and `keep='progress'` warm-starts from the
-  last run. The API is a handful of verbs, with nothing to tune.
+  `update()` puts new numbers on it, and the next solve carries on from where
+  the last one ended. The API is a handful of verbs, with nothing to tune.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All

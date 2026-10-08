@@ -22,13 +22,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import numpy as np
-import polars as pl
 import pytest
 import yaml
 
 from bench import conftest as harness
-from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -43,8 +41,6 @@ from bench.conftest import (
 )
 from bench.test_ladder import RELOADS, _fresh
 from specsolve.relational.engine.engine import Engine
-from specsolve.relational.engine.labels import Labelled
-from specsolve.relational.sinks.solvers.base import WarmStart
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -1264,36 +1260,24 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
 
 
-def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
-    """A carried basis may move the route and never the optimum."""
+def test_a_started_master_reproduces_the_cold_answer() -> None:
+    """A start may move the route and never the optimum."""
     run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
-    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the splice would go unexercised'
+    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the start would go unexercised'
     for i, step in enumerate(run.steps):
         assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
-            f'step {i}: a carried basis moved the answer'
+            f'step {i}: a start moved the answer'
         )
 
 
-def test_the_splice_shifts_a_later_declarations_rows() -> None:
-    """`feasibility_cut` follows `optimality_cut`, so a row gained by the first
-    moves every row of the second."""
-    was = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 2), 'feasibility_cut': Labelled(pl.LazyFrame(), 2, 2)}
-    now = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 3), 'feasibility_cut': Labelled(pl.LazyFrame(), 3, 2)}
-    previous = WarmStart(
-        solver='highs',
-        column_statuses=np.zeros(4, dtype=np.int8),
-        row_statuses=np.array([10, 11, 20, 21], dtype=np.int8),
-        column_values=None,
-    )
-    order = ['optimality_cut', 'feasibility_cut']
-
-    carried = warm_payoff.spliced(previous, was, now, order, 5).row_statuses
-    assert list(carried) == [10, 11, warm_payoff.BASIC, 20, 21], (
-        'the second declaration keeps its own statuses at its new start, and the gained row starts basic'
-    )
-    assert list(warm_payoff.prefixed(previous, 5).row_statuses) == [10, 11, 20, 21, warm_payoff.BASIC], (
-        'the prefix carry is the mistake this splice exists to avoid; it must stay measurably different'
-    )
+def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
+    """A method moves the route and what the answer carries, never the optimum."""
+    rows = crossover.measured('dispatch', '2xs')
+    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
+    simplex = rows[0][2]
+    for method, _, objective, duals in rows:
+        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
+        assert duals, f'{method} left no duals, which an LP solved to optimality has'
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:

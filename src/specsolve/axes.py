@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
+from functools import partial
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import polars as pl
@@ -23,7 +24,7 @@ from specsolve.relational.names import VALUE
 from specsolve.sources import in_microseconds, least_value
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from mathspec.program import Program
 
@@ -41,6 +42,9 @@ class Slice(NamedTuple):
     key: Label
     sources: Mapping[str, Source]
     owns: int | None = None
+    #: How this slice cuts a table that carries the sliced dimension, as it
+    #: cut its sources; ``None`` for a slice written by hand.
+    cut: Callable[[pl.LazyFrame], pl.LazyFrame] | None = None
 
 
 @dataclass(frozen=True)
@@ -130,8 +134,8 @@ class EachCoordinate:
         carrying, coordinates = _coordinates(sources, self.dim, 'slice')
         out: list[Slice] = []
         for key in coordinates:
-            filtered = {name: table.filter(pl.col(self.dim) == key).drop(self.dim) for name, table in carrying.items()}
-            out.append(Slice(key, {**sources, **filtered}))
+            cut = partial(_one_coordinate, self.dim, key)
+            out.append(Slice(key, {**sources, **{name: cut(table) for name, table in carrying.items()}}, cut=cut))
         return out, None
 
 
@@ -243,16 +247,9 @@ class EachWindow:
         start = 0
         for owns in self._blocks(len(coordinates)):
             window = coordinates[start : start + owns + self.lookahead]
-            local = {coordinate: position for position, coordinate in enumerate(window)}
-            filtered = {
-                name: (
-                    table.filter(pl.col(self.dim).is_in(window))
-                    .with_columns(pl.col(self.dim).replace_strict(local, return_dtype=pl.Int64).alias(self.into))
-                    .drop(self.dim)
-                )
-                for name, table in carrying.items()
-            }
-            out.append(Slice(window[0], {**sources, **filtered, self.into: range(len(window))}, owns))
+            cut = partial(_one_window, self.dim, self.into, window)
+            filtered = {name: cut(table) for name, table in carrying.items()}
+            out.append(Slice(window[0], {**sources, **filtered, self.into: range(len(window))}, owns, cut))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[:owns])
@@ -330,6 +327,27 @@ def axis_from(manifest: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-
     return EachWindow(manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'])
 
 
+def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
+    """*table*'s rows at coordinate *key* of *dim*, without the column."""
+    return _in_microseconds(table, dim).filter(pl.col(dim) == key).drop(dim)
+
+
+def _one_window(dim: str, into: str, window: Sequence[Label], table: pl.LazyFrame) -> pl.LazyFrame:
+    """*table*'s rows at the coordinates of *window*, each over its position in it as *into* rather than *dim*."""
+    local = {coordinate: position for position, coordinate in enumerate(window)}
+    return (
+        _in_microseconds(table, dim)
+        .filter(pl.col(dim).is_in(window))
+        .with_columns(pl.col(dim).replace_strict(local, return_dtype=pl.Int64).alias(into))
+        .drop(dim)
+    )
+
+
+def _in_microseconds(table: pl.LazyFrame, dim: str) -> pl.LazyFrame:
+    """*table* with a datetime *dim* held in microseconds, as attach holds a label, so a coordinate matches its rows."""
+    return table.with_columns((cs.by_name(dim) & cs.datetime()).dt.cast_time_unit('us'))
+
+
 def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
     """The sources that carry a column called *dim*, by name; a sweep and its archive both cut these."""
     tables = {name: table for name, obj in sources.items() if (table := as_frame(obj)) is not None}
@@ -350,10 +368,7 @@ def _coordinates(sources: Mapping[str, Source], dim: str, verb: str) -> tuple[di
         )
     unique = {name: table.select(pl.col(dim).unique()).pipe(collected) for name, table in carrying.items()}
     held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
-    carrying = {
-        name: table.with_columns((cs.by_name(dim) & cs.datetime()).dt.cast_time_unit('us'))
-        for name, table in carrying.items()
-    }
+    carrying = {name: _in_microseconds(table, dim) for name, table in carrying.items()}
     coordinates = sorted(set().union(*held.values()))
     for name, mine in held.items():
         if missing := sorted(set(coordinates) - mine):
