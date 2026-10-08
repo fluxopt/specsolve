@@ -171,18 +171,18 @@ is over `snapshot`, as `sweep.primal('soc')` returns it. Each file carries
 `specsolve_run`, as a single solve's does, and the readers drop it:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t')
-sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/')
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+sps.solve_over('window.yaml', sources, axis, archive='roll/')
 ```
 
-The archive carries the axis and the carry, so the sweep runs again from the
+The archive holds the axis with its carry, so the sweep runs again from the
 file alone:
 
 ```python
 archived = sps.load_archive('roll/')
 
 archived.sweep.primal('soc')  # (snapshot, value), off answer/primal/soc.parquet
-sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
 A source the axis cuts is held uncut, the axis column first. A parameter
@@ -197,7 +197,7 @@ also writes each window's frames, lookahead rows included, under
 reads off the archive:
 
 ```python
-sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)
+sps.solve_over('window.yaml', sources, axis, archive='roll/', keep_windows=True)
 sps.load_archive('roll/').sweep.primal('soc', per_window=True)  # (snapshot_start, t, value)
 ```
 

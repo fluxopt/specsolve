@@ -82,7 +82,7 @@ class ResultArchive:
 class SweepArchive:
     """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
 
-    ``sps.solve_over(archive.spec, archive.sources, archive.axis, carry=archive.carry)``
+    ``sps.solve_over(archive.spec, archive.sources, archive.axis)``
     runs it again.
 
     Attributes:
@@ -91,9 +91,8 @@ class SweepArchive:
             holds them. A source the axis cuts holds the axis column first; a
             parameter given as one number over a window's local index is held
             over the axis, so each slice cuts from it what it attached.
-        axis: What cut them: one axis, or a tuple of axes, outer first.
-        carry: ``{parameter: variable}`` the slices were chained with, empty
-            where they were not.
+        axis: What cut them, each axis with its ``carry=``: one axis, or a
+            tuple of axes, outer first.
         sweep: The archived answer, in memory from [`load_archive`][], on
             disk from [`scan_archive`][]. ``per_window=True`` reads an
             EachWindow sweep's windows where ``keep_windows=True`` kept them,
@@ -104,7 +103,6 @@ class SweepArchive:
     spec: Spec
     sources: Mapping[str, Source]
     axis: Axis | Axes
-    carry: Mapping[str, str]
     sweep: Sweep
     source_digests: pl.DataFrame
 
@@ -163,10 +161,10 @@ def _read(under: Path, *, whole: bool) -> ResultArchive | SweepArchive:
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, digests, metrics)
     manifest = json.loads(axis_member.read_text())
-    axis, carry = axis_from(manifest), manifest.get('carry', {})
-    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, axis, carry)
+    axis = axis_from(manifest)
+    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, axis)
     _check_the_pairing(spec, answer.record['spec_digest'].to_list())
-    return SweepArchive(spec, sources, axis, carry, answer, digests)
+    return SweepArchive(spec, sources, axis, answer, digests)
 
 
 def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
@@ -260,14 +258,13 @@ def _attach_sweep_readers(
     spec: Spec,
     sources: Mapping[str, Source],
     axis: Axis | Axes,
-    carry: Mapping[str, str],
 ) -> Sweep:
     """*sweep* with an undeclared expression readable through [`Sweep.evaluate`][], over a sweep archive's own inputs.
 
     Each slice's saved primal is put back against its rebuilt model, so nothing
     is re-solved.
     """
-    return replace(sweep, _evaluate=_sweep_evaluator(sweep, spec, sources, axis, carry))
+    return replace(sweep, _evaluate=_sweep_evaluator(sweep, spec, sources, axis))
 
 
 def _per_slice(
@@ -289,7 +286,7 @@ def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
         raise SpecsolveError(
             f'this expression reads {touched}, which the sweep carried from one slice into the next, and a '
             f"carried value is a previous slice's answer rather than stored data — so it cannot be put back "
-            f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis, carry=...) '
+            f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis) '
             f'and evaluate on what comes back, or read a quantity over the sweep that reads no carried parameter.'
         )
 
@@ -299,10 +296,9 @@ def _sweep_evaluator(
     spec: Spec,
     sources: Mapping[str, Source],
     axis: Axis | Axes,
-    carry: Mapping[str, str],
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
-    carried = set(carry)
+    carried = {parameter for each in (axis if isinstance(axis, tuple) else (axis,)) for parameter in each.carry}
     columns = KeyColumns(sweep.key_names, tuple(sweep.record.schema[name] for name in sweep.key_names))
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:

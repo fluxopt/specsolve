@@ -214,14 +214,15 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   started, lookahead rows included.
 
 **Chain**
-: The slices of a sweep over several axes that share every outer key, one
-  scenario's windows for instance. They run in order, a carry and
-  `start='previous'` follow them, and an executor runs chains concurrently
-  ([several axes](sweeps.md#several-axes)).
+: The slices of a sweep over several axes that share the keys of every axis
+  outside the outermost one that carries, one scenario's windows for
+  instance. They run in order, `start='previous'` follows them, and an
+  executor runs chains concurrently ([several axes](sweeps.md#several-axes)).
 
 **carry**
-: `carry={parameter: variable}` hands one slice's solution to the next of its
-  chain as data, in slice order.
+: An axis's `carry={parameter: variable}` hands one slice's solution to the
+  next slice of that axis as data, in slice order
+  ([carrying state](sweeps.md#carrying-state-between-slices)).
 
 **held** · **spilled**
 : Where a sweep's frames are. A **held** sweep carries them in memory, and

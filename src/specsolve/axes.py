@@ -33,8 +33,7 @@ if TYPE_CHECKING:
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and what it owns.
 
-    ``key`` holds one label per axis, outer first; every label but the last
-    names the slice's chain. ``owns`` counts the coordinates of the re-indexed
+    ``key`` holds one label per axis, outer first. ``owns`` counts the coordinates of the re-indexed
     dimension this slice keeps, the rest being lookahead, or is ``None`` where
     the axis re-indexed nothing; a ``carry`` reads the seam off it.
     """
@@ -46,11 +45,10 @@ class Slice(NamedTuple):
     #: table where it carries that axis's column, and passes it through where
     #: it does not; ``None`` for a slice written by hand.
     cut: Callable[[pl.LazyFrame], pl.LazyFrame] | None = None
-
-    @property
-    def chain(self) -> tuple[Label, ...]:
-        """The outer keys, which the slices that run in order after one another share."""
-        return self.key[:-1]
+    #: The keys of the axes outside the outermost one that chains its slices,
+    #: which the slices that run in order after one another share; set by the
+    #: sweep, which knows which axes chain.
+    chain: tuple[Label, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -111,11 +109,22 @@ class EachCoordinate:
     Parameters and relations carrying *dim* are filtered to one coordinate and
     the column dropped, so the model never mentions it; a *dim* the spec
     declares is refused, and so is an index that carries it. Every other
-    source passes through untouched. Slices run in sorted coordinate order,
-    which is the order a ``carry`` chains them in.
+    source passes through untouched. Slices run in sorted coordinate order.
+
+    ``carry={parameter: variable}`` chains them in that order: each slice's
+    answer is copied into the next slice's data, and the first takes the
+    parameter from the sources as its seed. Under an axis inside this one,
+    the value handed on is the last inner slice's, and it reaches every inner
+    slice of the next coordinate.
     """
 
     dim: str
+    #: ``{parameter: variable}`` handed from each slice to the next; empty for
+    #: slices that do not depend on one another.
+    carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'carry', dict(self.carry))
 
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
@@ -168,20 +177,29 @@ class EachWindow:
     ahead; and a ``position()`` the model counts warns, since every window
     restarts it. What the rows read *behind* is the rolling-horizon seed, met
     by the edge policy, and is not refused.
+
+    ``carry={parameter: variable}`` chains the windows in order: each window's
+    answer is copied into the next window's data. Where the two are over
+    different dimensions, the dropped one is *into*, and the last coordinate
+    the window owns is handed on. The first window takes the parameter from
+    the sources as its seed.
     """
 
     dim: str
     steps: int | Sequence[int] = field(kw_only=True)
     lookahead: int = field(kw_only=True)
     into: str = field(kw_only=True)
+    #: ``{parameter: variable}`` handed from each window to the next; empty for
+    #: windows that do not depend on one another.
+    carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
 
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
 
         For building one window alone: ``sps.build(spec, axis.slices(sources)[37][1])``.
         The pairs carry no ownership: solved as a list, the slices need
-        ``key_name=``, the answer is keyed by slice rather than stitched, and a
-        ``carry`` cannot collapse a dimension.
+        ``key_name=``, the answer is keyed by slice rather than stitched, and
+        nothing is carried between them.
         """
         return [(current.key[-1], current.sources) for current in self._slice(sources, self._key_name())[0]]
 
@@ -197,6 +215,7 @@ class EachWindow:
             )
         if not isinstance(self.steps, int):
             object.__setattr__(self, 'steps', tuple(blocks))
+        object.__setattr__(self, 'carry', dict(self.carry))
         if not self.into:
             raise ValueError('into must name the local index the spec declares — it has no default')
         if self.into == self.dim:
@@ -410,19 +429,30 @@ def axis_manifest(axis: Axis | Axes) -> dict[str, Any]:  # pyrefly: ignore[expli
     """*axis* as the JSON an archive carries, read back by [`axis_from`][]."""
     if isinstance(axis, tuple):
         return {'each': 'axes', 'axes': [axis_manifest(each) for each in axis]}
+    carry = {'carry': dict(axis.carry)} if axis.carry else {}
     if isinstance(axis, EachCoordinate):
-        return {'each': 'coordinate', 'dim': axis.dim}
+        return {'each': 'coordinate', 'dim': axis.dim, **carry}
     steps = axis.steps if isinstance(axis.steps, int) else list(axis.steps)
-    return {'each': 'window', 'dim': axis.dim, 'steps': steps, 'lookahead': axis.lookahead, 'into': axis.into}
+    return {
+        'each': 'window',
+        'dim': axis.dim,
+        'steps': steps,
+        'lookahead': axis.lookahead,
+        'into': axis.into,
+        **carry,
+    }
 
 
 def axis_from(manifest: Mapping[str, Any]) -> Axis | Axes:  # pyrefly: ignore[explicit-any] — the archive's own JSON
     """The axis [`axis_manifest`][] wrote."""
     if manifest['each'] == 'axes':
         return tuple(cast('Axis', axis_from(each)) for each in manifest['axes'])
+    carry = manifest.get('carry', {})
     if manifest['each'] == 'coordinate':
-        return EachCoordinate(manifest['dim'])
-    return EachWindow(manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'])
+        return EachCoordinate(manifest['dim'], carry=carry)
+    return EachWindow(
+        manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'], carry=carry
+    )
 
 
 def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

@@ -802,8 +802,8 @@ class Sweep:
 NO_WINDOWS = (
     'this archive holds the answer only, because it was written without keep_windows=True, so it has no '
     'per-window frames to read. Solving again from the archived spec and sources restores them: '
-    'load_archive gives both, with the axis and the carry, so '
-    'sps.solve_over(archive.spec, archive.sources, archive.axis, carry=archive.carry) runs the sweep again.'
+    'load_archive gives both, with the axis and its carry, so '
+    'sps.solve_over(archive.spec, archive.sources, archive.axis) runs the sweep again.'
 )
 
 

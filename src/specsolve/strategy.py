@@ -3,10 +3,10 @@
 A plan cannot contain a loop; a process may loop over plans. A strategy is a
 driver above [`specsolve.api`][], built from the public verbs.
 
-    scenario / sweep    ``EachCoordinate('scenario')``            independent
-    myopic pathway      ``EachCoordinate('period')``              + ``carry``
-    rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, into='t')``  + ``carry``
-    horizon per case    ``(EachCoordinate('scenario'), EachWindow(...))``  + ``carry``, one chain per scenario
+    scenario / sweep    ``EachCoordinate('scenario')``                          independent
+    myopic pathway      ``EachCoordinate('period', carry={...})``               chained
+    rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={...})``
+    horizon per case    ``(EachCoordinate('scenario'), EachWindow(..., carry={...}))``  one chain per scenario
 
 The axes are [`specsolve.axes`][] and what a fold returns is
 [`specsolve.sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
@@ -159,6 +159,53 @@ class _CarryRule:
         return picked
 
 
+@dataclass(frozen=True)
+class _Carry:
+    """One axis's carry: where its label sits in a slice's key, and its rules by parameter.
+
+    The value is handed on from the last slice that holds a label of this
+    axis to every slice of the next label under the same outer keys, and
+    reset to the seed where an outer key changes.
+    """
+
+    depth: int
+    rules: Mapping[str, _CarryRule]
+
+    def hands_on(self, current: Slice, following: Slice | None) -> bool:
+        """Whether *current* is the last slice of its label of this axis, with a next label after it."""
+        if following is None:
+            return False
+        parent = slice(0, self.depth)
+        return following.key[parent] == current.key[parent] and following.key[self.depth] != current.key[self.depth]
+
+
+def _carries(program: Program, axes: Axes | None, first: Mapping[str, Source]) -> tuple[_Carry, ...]:
+    """Each axis's carry, outer first, checked against the plan and the first slice's sources before any is read.
+
+    Raises:
+        SpecsolveError: A carry that cannot line up, has no seed, collapses a
+            dimension its axis does not advance along, or a parameter two
+            axes carry.
+    """
+    out: list[_Carry] = []
+    seen: dict[str, str] = {}
+    for depth, axis in enumerate(axes or ()):
+        rules = {
+            parameter: _CarryRule.resolved(program, parameter, variable) for parameter, variable in axis.carry.items()
+        }
+        for parameter in rules:
+            if parameter in seen:
+                raise SpecsolveError(
+                    f'carry writes {parameter!r} from both {seen[parameter]} and {axis!r}, so a slice would take '
+                    f'two values for it. Carry each parameter on one axis.'
+                )
+            seen[parameter] = repr(axis)
+        _check_the_carry(rules, axis, first)
+        if rules:
+            out.append(_Carry(depth, rules))
+    return tuple(out)
+
+
 def _archiving(archive: str | Path | None, axes: Axes | None, *, keep_windows: bool) -> tuple[Path, Axes] | None:
     """Where the archive goes and the axes that re-run it, or ``None`` for no archive; *axes* is ``None`` for slices written by hand."""
     if keep_windows and archive is None:
@@ -191,7 +238,6 @@ def solve_over(
     sources: Mapping[str, Source],
     axis: Axis | Axes | HandBuilt,
     *,
-    carry: Mapping[str, str] | None = None,
     key_name: str | None = None,
     executor: Executor | None = None,
     workers_share_fs: bool | None = None,
@@ -217,19 +263,15 @@ def solve_over(
         axis: [`EachCoordinate`][], [`EachWindow`][], a tuple of them, outer
             first, or a list of ``(key, sources)`` written by hand. A tuple
             cuts with each axis in turn: every axis but the last is an
-            EachCoordinate, and the last may be windows. Its slices fall into
-            chains, one per combination of the outer keys, and the answer
+            EachCoordinate, and the last may be windows. An axis's ``carry=``
+            chains its slices; the slices that share the keys of every axis
+            outside the outermost one that carries are a chain, and the answer
             carries one key column per axis.
-        carry: ``{parameter: variable}``: one slice's answer copied into the
-            next slice of its chain as data. Where the two are over different
-            dimensions, the last coordinate the slice owns is handed on. The
-            first slice of each chain takes the parameter from *sources* as
-            its seed.
         key_name: What to call the slice column; a class axis names its own,
             a hand-built list has to be told.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
-            slices in order on one model. Under a ``carry`` or
-            ``start='previous'`` it runs the chains concurrently, each one in
+            slices in order on one model. Where an axis carries, or under
+            ``start='previous'``, it runs the chains concurrently, each one in
             order, and otherwise every slice. A process pool must be ``spawn``
             or ``forkserver`` — a forked worker hangs.
         workers_share_fs: Whether the executor's workers can read this
@@ -279,7 +321,9 @@ def solve_over(
             before it in its chain: where the update kept the solver, the
             solver carries on from where it ended, and elsewhere the answer is
             matched by the slice model's own coordinates. The first slice of
-            each chain, and one after a slice that left no values, starts cold. Each slice is solved with
+            each chain, and one after a slice that left no values, starts cold.
+            Where no axis carries, a chain is the last axis's slices under
+            each combination of the outer keys. Each slice is solved with
             its basis, for a next slice the solver could not carry on into,
             whether or not *outputs* asks for it; the sweep keeps only what
             *outputs* asks for.
@@ -290,9 +334,9 @@ def solve_over(
     Raises:
         SpecsolveError: Before a slice is taken: a tuple of axes with a window
             outside another axis, or two axes over one dimension; a carry that
-            cannot line up, has no seed, collapses a dimension the axis does
-            not advance along, or is asked with an executor on a sweep of one
-            chain; a key that collides with a column the frames carry; an
+            cannot line up, has no seed, collapses a dimension its axis does
+            not advance along, writes a parameter another axis carries too, or
+            is asked with an executor on a sweep of one chain; a key that collides with a column the frames carry; an
             axis the program does not allow; a *spill_to* directory holding
             another sweep; *keep_windows* without *archive* or on an axis
             that does not cut windows; *outputs* that
@@ -317,11 +361,10 @@ def solve_over(
     archiving = _archiving(archive, axes, keep_windows=keep_windows)
     asked = checked_outputs(outputs)
     program = check(document)
-    plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
+    carries = _carries(program, axes, sources)
     key_names = _key_columns(axes, key_name, program)
 
     if axes is not None:
-        _check_the_carry(plan, axes[-1], sources)
         for each in axes:
             check_no_index_is_cut(program, sources, each)
             each._check_the_program(program, sources)
@@ -329,11 +372,12 @@ def solve_over(
     else:
         slices = [Slice((key,), named) for key, named in cast('HandBuilt', axis)]
         stitch = None
-        _check_the_carry(plan, None, slices[0].sources if slices else {})
     if not slices:
         raise DataError('the axis produced no slices')
+    depth = carries[0].depth if carries else len(key_names) - 1
+    slices = [current._replace(chain=current.key[:depth]) for current in slices]
     one_chain = len({current.chain for current in slices}) == 1
-    if carry and executor is not None and one_chain:
+    if carries and executor is not None and one_chain:
         raise SpecsolveError(
             'carry and executor are mutually exclusive on a sweep of one chain: a carried value makes slice '
             "i+1 depend on slice i's answer, so the slices cannot run concurrently, and an executor runs "
@@ -350,17 +394,15 @@ def solve_over(
     starts = _slice_starts(start, axes, slices, key_names, program, concurrent=executor is not None and one_chain)
     spill = None if spill_to is None else Spill.opened(spill_to, columns, keys, stitch, asked)
     if executor is None:
-        answered = _serially(program, document, slices, solving, plan, spill, starts)
+        answered = _serially(program, document, slices, solving, carries, spill, starts)
     else:
-        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, plan, spill, starts)
+        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, carries, spill, starts)
     folded = Sweep._folded(columns, stitch, answered, spill, asked)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
     if archiving is not None:
         out, cut = archiving
-        _archive_the_sweep(
-            out, document, program, cut, dict(carry or {}), sources, folded, slices[0].sources, keep_windows
-        )
+        _archive_the_sweep(out, document, program, cut, sources, folded, slices[0].sources, keep_windows)
     return folded
 
 
@@ -505,7 +547,6 @@ def _archive_the_sweep(
     spec: Spec,
     program: Program,
     axes: Axes,
-    carry: Mapping[str, str],
     sources: Mapping[str, Source],
     folded: Sweep,
     one_slice: Mapping[str, Source],
@@ -518,8 +559,6 @@ def _archive_the_sweep(
     to scratch first, so the answer is always read off a spill.
     """
     manifest = axis_manifest(axes if len(axes) > 1 else axes[0])
-    if carry:
-        manifest['carry'] = dict(carry)
     tidied = numbered(program, tidy_sources(program, one_slice))
     sliced = {name: table for each in axes for name, table in sources_with_column(sources, each.dim).items()}
     cut = {name: _uncut(program, axes, name, table) for name, table in sliced.items()}
@@ -612,13 +651,13 @@ def _spread_over_the_axis(
 
 def _check_the_carry(
     plan: Mapping[str, _CarryRule],
-    axis: Axis | None,
+    axis: Axis,
     first: Mapping[str, Source],
 ) -> None:
     """Refuse a carry with no seed, or one that collapses a dimension other than [`EachWindow.into`][].
 
     Reads no source: the seed is a key of *first*, and the owned dimension is
-    that of *axis*, the last axis, or ``None`` for slices written by hand.
+    that of *axis*, the axis that carries.
     """
     for parameter, rule in plan.items():
         if parameter not in first:
@@ -644,14 +683,15 @@ def _serially(
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    plan: Mapping[str, _CarryRule],
+    carries: Sequence[_Carry],
     spill: Spill | None,
     starts: Sequence[Start | None] | Literal['previous'],
 ) -> Generator[tuple[tuple[Label, ...], SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    A ``carry`` and ``start='previous'`` follow each chain, so the first
-    slice of a chain takes its seed from its own sources and starts cold.
+    Each axis's carry reaches the slices of its next label, and resets to the
+    seed where an outer key changes; ``start='previous'`` follows each chain,
+    so the first slice of a chain starts cold.
     Under ``start='previous'`` each slice starts from the answer before it:
     where the update kept the solver, it carries on from where it ended, and
     where it did not, from the basis each slice is solved with as well, which
@@ -664,27 +704,34 @@ def _serially(
     """
     model: Model | None = None
     named: frozenset[str] | None = None
-    state: dict[str, pl.DataFrame] = {}
+    state: dict[int, dict[str, pl.DataFrame]] = {}
     previous: Result | Start | None = None
+    variables = {rule.variable for carry in carries for rule in carry.rules.values()}
     asked: frozenset[Output] = solving['outputs']
     with_basis: Mapping[str, Any] = {**solving, 'outputs': asked | {'basis'}}  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     readers = ('primal', *(sorted(BASES) if 'basis' in asked else ()))
     try:
         for position, current in enumerate(slices):
-            if position and current.chain != slices[position - 1].chain:
-                previous = None
+            if position:
+                before_this = slices[position - 1]
+                if current.chain != before_this.chain:
+                    previous = None
+                state = {depth: held for depth, held in state.items() if current.key[:depth] == before_this.key[:depth]}
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
-                primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
+                primals = spill.written('primal', position, variables)
                 if starts == 'previous':
                     previous = _previous(
                         answer,
                         {reader: spill.written(reader, position, _declared(program, reader)) for reader in readers},
                     )
                 yield current.key, answer
-                state = _carried(plan, primals, current, position, slices, answer)
+                state.update(_carried(carries, primals, current, position, slices, answer))
                 continue
-            sources = {**current.sources, **state}
+            sources = {
+                **current.sources,
+                **{name: value for depth in sorted(state) for name, value in state[depth].items()},
+            }
             names = frozenset(sources)
             with _named_slice(current.key, position, len(slices)):
                 if model is not None and names == named:
@@ -704,7 +751,7 @@ def _serially(
             if spill is not None:
                 answer = spill.write(position, current.key, answer)
             yield current.key, answer
-            state = _carried(plan, primals, current, position, slices, answer)
+            state.update(_carried(carries, primals, current, position, slices, answer))
     finally:
         if model is not None:
             model.close()
@@ -723,24 +770,40 @@ def _declared(program: Program, reader: str) -> Iterable[str]:
 
 
 def _carried(
-    plan: Mapping[str, _CarryRule],
+    carries: Sequence[_Carry],
     primals: Mapping[str, pl.DataFrame],
     current: Slice,
     position: int,
     slices: Sequence[Slice],
     answer: SliceAnswer,
-) -> dict[str, pl.DataFrame]:
-    """What the next slice starts from, read out of *primals*; nothing for the last slice of a chain, or with no plan."""
-    if not plan or position == len(slices) - 1 or slices[position + 1].chain != current.chain:
+) -> dict[int, dict[str, pl.DataFrame]]:
+    """What each axis hands the slices of its next label, read out of *primals*, by the axis's depth.
+
+    Only an axis whose label ends with *current* hands anything on, so a slice
+    in the middle of an outer label hands on its own axis's carry alone.
+
+    Raises:
+        SpecsolveError: *current* left nothing to hand on.
+    """
+    following = slices[position + 1] if position + 1 < len(slices) else None
+    handing = [carry for carry in carries if carry.hands_on(current, following)]
+    if not handing:
         return {}
     if not primals:
+        assert following is not None, 'only a slice with one after it hands anything on'
+        variables = sorted({rule.variable for carry in handing for rule in carry.rules.values()})
         raise SpecsolveError(
             f'slice {key_label(current.key)!r} ({position + 1} of {len(slices)}) terminated '
-            f'{answer.meta.termination_condition}, so slice {key_label(slices[position + 1].key)!r} has no '
-            f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
+            f'{answer.meta.termination_condition}, so slice {key_label(following.key)!r} has no '
+            f'{variables} to start from. A carried sweep '
             f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
         )
-    return {p: rule.value_from(primals, p, key_label(current.key), current.owns) for p, rule in plan.items()}
+    return {
+        carry.depth: {
+            p: rule.value_from(primals, p, key_label(current.key), current.owns) for p, rule in carry.rules.items()
+        }
+        for carry in handing
+    }
 
 
 @contextmanager
@@ -760,13 +823,13 @@ def _pooled(
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    plan: Mapping[str, _CarryRule],
+    carries: Sequence[_Carry],
     spill: Spill | None,
     starts: Sequence[Start | None] | Literal['previous'],
 ) -> Generator[tuple[tuple[Label, ...], SliceAnswer], None, None]:
     """The same, from slices or chains run independently and possibly elsewhere.
 
-    Under a carry or ``start='previous'`` each chain is one task, its slices
+    Where an axis carries, or under ``start='previous'``, each chain is one task, its slices
     run in order on one model; otherwise each slice is. Yielded in slice
     order, never completion order. A built model cannot cross a process, so
     each task builds its own. A task the spill holds every slice of is never
@@ -776,7 +839,7 @@ def _pooled(
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
     memo: dict[str, tuple[Any, Any]] = {}  # pyrefly: ignore[explicit-any] — a source beside its encoding
-    chained = bool(plan) or starts == 'previous'
+    chained = bool(carries) or starts == 'previous'
     tasks = _chains(slices) if chained else [[position] for position in range(len(slices))]
     futures = []
     for positions in tasks:
@@ -790,11 +853,12 @@ def _pooled(
                 if crosses
                 else dict(slices[position].sources),
                 slices[position].owns,
+                slices[position].chain,
             )
             for position in positions
         ]
         given = starts if starts == 'previous' else [starts[position] for position in positions]
-        futures.append(executor.submit(_run_chain, program, document, entries, crosses, solving, plan, given))
+        futures.append(executor.submit(_run_chain, program, document, entries, crosses, solving, carries, given))
     for positions, future in zip(tasks, futures, strict=True):
         if future is None:
             assert spill is not None, 'a task is skipped only where a spill holds every slice of it'
@@ -861,10 +925,10 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
 def _run_chain(
     program: Program,
     document: Spec,
-    entries: Sequence[tuple[tuple[Label, ...], dict[str, Any], int | None]],  # pyrefly: ignore[explicit-any] — what crossed to the worker
+    entries: Sequence[tuple[tuple[Label, ...], dict[str, Any], int | None, tuple[Label, ...]]],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    plan: Mapping[str, _CarryRule],
+    carries: Sequence[_Carry],
     starts: Sequence[Start | None] | Literal['previous'],
 ) -> list[SliceAnswer]:
     """One task's slices, start to finish, over plain data, as [`_serially`][] runs them; module-level so a remote executor can pickle it.
@@ -872,8 +936,8 @@ def _run_chain(
     A task of one slice is a chain of one, so a slice of an unchained sweep
     runs here too.
     """
-    slices = [Slice(key, _decode(encoded), owns) for key, encoded, owns in entries]
-    answers = [answer for _, answer in _serially(program, document, slices, call, plan, None, starts)]
+    slices = [Slice(key, _decode(encoded), owns, chain=chain) for key, encoded, owns, chain in entries]
+    answers = [answer for _, answer in _serially(program, document, slices, call, carries, None, starts)]
     if not encode_out:
         return answers
     return [
