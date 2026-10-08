@@ -25,7 +25,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.pieces import (
     PRESENT,
     CompiledExpression,
@@ -147,11 +147,11 @@ class Compiler:
 
         expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
         table = self.scope.data.parameters[param]
-        if table.select(pl.len()).collect().item() != expected:
+        if table.select(pl.len()).pipe(collected).item() != expected:
             return None
 
         position = self.scope.row_major(v.dims, self.scope.ordinal_of)
-        pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine=collect_engine())
+        pairs = table.select(position.alias('__at__'), pl.col('value')).pipe(collected)
         return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
 
     # ------------------------------------------------------------------
@@ -383,7 +383,7 @@ class Compiler:
             assert solution.no_duals is not None, 'a solve without duals says why'
             raise SpecsolveError(solution.no_duals)
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
-        frame = held.frame.select(*dims).with_columns(held.share(solution.dual).alias('cval'))
+        frame = held.valued(dims, solution.dual.alias('cval'))
         return Piece(dims, frame, 'const', presences=(Presence(_presence(held, dims, 'row'), dims),))
 
     def _read_divisor(self, divisor: Piece) -> Piece:
@@ -538,7 +538,7 @@ class Compiler:
         reachable = landed(table, a).unique()
         if not p.presences:
             total = math.prod(self.scope.data.cardinality[d] for d in fine)
-            reached = reachable.select(pl.len()).collect().item()
+            reached = reachable.select(pl.len()).pipe(collected).item()
             return () if reached == total else (Presence(reachable, fine),)
 
         def pulled(presence: Presence) -> Presence:

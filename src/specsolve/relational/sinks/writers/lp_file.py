@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, get_args
 import polars as pl
 from mathspec import program
 
+from specsolve.relational.collect import collected
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.writers.text import append_lines, chunk_key, digits, number
@@ -82,7 +83,7 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
 
         for domain, keyword in _LP_DOMAIN_SECTION.items():
             chosen = handoff.cols.lazy().with_row_index('col').filter(pl.col('vtype') == domain)
-            if chosen.select(pl.len()).collect().item() == 0:
+            if chosen.select(pl.len()).pipe(collected).item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
             append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
