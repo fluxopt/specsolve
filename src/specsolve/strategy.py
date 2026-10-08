@@ -6,6 +6,7 @@ driver above [`specsolve.api`][], built from the public verbs.
     scenario / sweep    ``EachCoordinate('scenario')``            independent
     myopic pathway      ``EachCoordinate('period')``              + ``carry``
     rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, into='t')``  + ``carry``
+    horizon per case    ``(EachCoordinate('scenario'), EachWindow(...))``  + ``carry``, one chain per scenario
 
 The axes are [`specsolve.axes`][] and what a fold returns is
 [`specsolve.sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
@@ -28,7 +29,18 @@ import polars as pl
 
 from specsolve.api import build, check
 from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
-from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
+from specsolve.axes import (
+    Axes,
+    Axis,
+    EachWindow,
+    HandBuilt,
+    Slice,
+    axis_manifest,
+    check_no_index_is_cut,
+    checked_axes,
+    cut_by,
+    sources_with_column,
+)
 from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
@@ -54,10 +66,11 @@ from specsolve.sweep import (
     MANIFEST_FILE,
     OWNED_FILE,
     WINDOWS_DIR,
+    KeyColumns,
     SliceAnswer,
     Spill,
     Sweep,
-    one_key_type,
+    key_label,
     scan_sweep,
 )
 
@@ -146,15 +159,15 @@ class _CarryRule:
         return picked
 
 
-def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windows: bool) -> tuple[Path, Axis] | None:
-    """Where the archive goes and the axis that re-runs it, or ``None`` for no archive."""
+def _archiving(archive: str | Path | None, axes: Axes | None, *, keep_windows: bool) -> tuple[Path, Axes] | None:
+    """Where the archive goes and the axes that re-run it, or ``None`` for no archive; *axes* is ``None`` for slices written by hand."""
     if keep_windows and archive is None:
         raise SpecsolveError(
             'keep_windows=True says what an archive keeps beside the answer, and there is no archive=. The '
             'sweep in memory reads its windows through per_window=True already. Pass archive=, or drop '
             'keep_windows.'
         )
-    if keep_windows and not isinstance(axis, EachWindow):
+    if keep_windows and not (axes is not None and isinstance(axes[-1], EachWindow)):
         raise SpecsolveError(
             "keep_windows=True keeps an EachWindow sweep's frames per window beside its answer, and this axis "
             'does not cut windows: its answer already is one frame per slice, which the archive holds. Drop '
@@ -162,7 +175,7 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windo
         )
     if archive is None:
         return None
-    if not isinstance(axis, Axis):
+    if axes is None:
         raise SpecsolveError(
             'archive= takes a sweep cut by EachCoordinate or EachWindow, which say how one set of sources '
             'was cut and so how the archive can be re-run. A hand-built list is a set of sources per '
@@ -170,13 +183,13 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windo
         )
     out = Path(archive)
     check_the_target(out)
-    return out, axis
+    return out, axes
 
 
 def solve_over(
     spec: Buildable,
     sources: Mapping[str, Source],
-    axis: Axis | HandBuilt,
+    axis: Axis | Axes | HandBuilt,
     *,
     carry: Mapping[str, str] | None = None,
     key_name: str | None = None,
@@ -201,16 +214,23 @@ def solve_over(
         sources: As [`build`][specsolve.api.build] takes them, every shape
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
-        axis: [`EachCoordinate`][], [`EachWindow`][], or a list of
-            ``(key, sources)`` written by hand.
+        axis: [`EachCoordinate`][], [`EachWindow`][], a tuple of them, outer
+            first, or a list of ``(key, sources)`` written by hand. A tuple
+            cuts with each axis in turn: every axis but the last is an
+            EachCoordinate, and the last may be windows. Its slices fall into
+            chains, one per combination of the outer keys, and the answer
+            carries one key column per axis.
         carry: ``{parameter: variable}``: one slice's answer copied into the
-            next slice's data. Where the two are over different dimensions, the
-            last coordinate the slice owns is handed on. The first slice takes
-            the parameter from *sources* as its seed.
+            next slice of its chain as data. Where the two are over different
+            dimensions, the last coordinate the slice owns is handed on. The
+            first slice of each chain takes the parameter from *sources* as
+            its seed.
         key_name: What to call the slice column; a class axis names its own,
             a hand-built list has to be told.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
-            slices in order on one model. A process pool must be ``spawn``
+            slices in order on one model. Under a ``carry`` or
+            ``start='previous'`` it runs the chains concurrently, each one in
+            order, and otherwise every slice. A process pool must be ``spawn``
             or ``forkserver`` — a forked worker hangs.
         workers_share_fs: Whether the executor's workers can read this
             process's paths. Decided for the stdlib pools; anything else is
@@ -256,10 +276,10 @@ def solve_over(
             earlier sweep is its answer, so each slice starts from the earlier
             slice of its key, and each window from the hours it covers. The
             word ``'previous'`` starts each slice from the answer of the one
-            before it: where the update kept the solver, the solver carries on
-            from where it ended, and elsewhere the answer is matched by the
-            slice model's own coordinates. The first slice, and one after a
-            slice that left no values, starts cold. Each slice is solved with
+            before it in its chain: where the update kept the solver, the
+            solver carries on from where it ended, and elsewhere the answer is
+            matched by the slice model's own coordinates. The first slice of
+            each chain, and one after a slice that left no values, starts cold. Each slice is solved with
             its basis, for a next slice the solver could not carry on into,
             whether or not *outputs* asks for it; the sweep keeps only what
             *outputs* asks for.
@@ -268,15 +288,17 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: Before a slice is taken: a carry that cannot line up,
-            has no seed, collapses a dimension the axis does not advance
-            along, or is asked together with an executor; a key that collides
-            with a column the frames carry; an axis the program does not
-            allow; a *spill_to* directory holding another sweep;
-            *keep_windows* without *archive* or on an axis that does not cut
-            windows; *outputs* that [`solve`][specsolve.api.Model.solve]
-            refuses; a *start* word other than ``'previous'``, or
-            ``'previous'`` with an executor —
+        SpecsolveError: Before a slice is taken: a tuple of axes with a window
+            outside another axis, or two axes over one dimension; a carry that
+            cannot line up, has no seed, collapses a dimension the axis does
+            not advance along, or is asked with an executor on a sweep of one
+            chain; a key that collides with a column the frames carry; an
+            axis the program does not allow; a *spill_to* directory holding
+            another sweep; *keep_windows* without *archive* or on an axis
+            that does not cut windows; *outputs* that
+            [`solve`][specsolve.api.Model.solve] refuses; a *start* word other
+            than ``'previous'``, or ``'previous'`` with an executor on a sweep
+            of one chain —
             each answerable from the declarations alone; keys of more than one
             type, or two keys of one text; a *start* table over an EachWindow
             sweep's local index alone, one that leaves a slice no row, or one
@@ -289,30 +311,34 @@ def solve_over(
             coordinate another has — that slice builds it empty — or a
             position the model counts, which every window restarts.
     """
-    if carry and executor is not None:
-        raise SpecsolveError(
-            'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
-            "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
-        )
     document = declared(spec)
     sources = _materialised(sources)
-    archiving = _archiving(archive, axis, keep_windows=keep_windows)
+    axes = checked_axes(cast('Axis | Axes', axis)) if _is_axes(axis) else None
+    archiving = _archiving(archive, axes, keep_windows=keep_windows)
     asked = checked_outputs(outputs)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in (carry or {}).items()}
-    key_name = _key_column(axis, key_name, program)
+    key_names = _key_columns(axes, key_name, program)
 
-    if isinstance(axis, Axis):
-        _check_the_carry(plan, axis, sources)
-        check_no_index_is_cut(program, sources, axis)
-        axis._check_the_program(program, sources)
-        slices, stitch = axis._slice(sources, key_name)
+    if axes is not None:
+        _check_the_carry(plan, axes[-1], sources)
+        for each in axes:
+            check_no_index_is_cut(program, sources, each)
+            each._check_the_program(program, sources)
+        slices, stitch = cut_by(axes, sources, key_names)
     else:
-        slices = [Slice(*entry) for entry in axis]
+        slices = [Slice((key,), named) for key, named in cast('HandBuilt', axis)]
         stitch = None
-        _check_the_carry(plan, axis, slices[0].sources if slices else {})
+        _check_the_carry(plan, None, slices[0].sources if slices else {})
     if not slices:
         raise DataError('the axis produced no slices')
+    one_chain = len({current.chain for current in slices}) == 1
+    if carry and executor is not None and one_chain:
+        raise SpecsolveError(
+            'carry and executor are mutually exclusive on a sweep of one chain: a carried value makes slice '
+            "i+1 depend on slice i's answer, so the slices cannot run concurrently, and an executor runs "
+            'chains concurrently, one per combination of the outer axes. Drop the executor, or drop the carry.'
+        )
     solving = {
         'solver_name': solver_name,
         'solver_options': dict(solver_options or {}) or None,
@@ -320,15 +346,14 @@ def solve_over(
         'outputs': asked,
     }
     keys = [current.key for current in slices]
-    key_dtype = one_key_type(keys, key_name)
-    starts = _slice_starts(start, axis, slices, key_name, program, concurrent=executor is not None)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
+    columns = KeyColumns.of(keys, key_names)
+    starts = _slice_starts(start, axes, slices, key_names, program, concurrent=executor is not None and one_chain)
+    spill = None if spill_to is None else Spill.opened(spill_to, columns, keys, stitch, asked)
     if executor is None:
         answered = _serially(program, document, slices, solving, plan, spill, starts)
     else:
-        assert starts != 'previous', "_slice_starts refuses start='previous' under an executor"
-        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
+        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, plan, spill, starts)
+    folded = Sweep._folded(columns, stitch, answered, spill, asked)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
     if archiving is not None:
@@ -339,11 +364,20 @@ def solve_over(
     return folded
 
 
+def _is_axes(axis: Axis | Axes | HandBuilt) -> bool:
+    """Whether *axis* is one axis or a tuple of axes, rather than slices written by hand.
+
+    A tuple holding an axis is a tuple of axes, so one that mixes in anything
+    else is refused by [`checked_axes`][] rather than read as slices.
+    """
+    return isinstance(axis, Axis) or (isinstance(axis, tuple) and any(isinstance(each, Axis) for each in axis))
+
+
 def _slice_starts(
     start: Sweep | Result | Start | Literal['previous'] | None,
-    axis: Axis | HandBuilt,
+    axes: Axes | None,
     slices: Sequence[Slice],
-    key_name: str,
+    key_names: Sequence[str],
     program: Program,
     *,
     concurrent: bool,
@@ -352,12 +386,14 @@ def _slice_starts(
 
     Every cut is taken and checked here, before a slice is built, so a start
     that cannot start a slice stops the sweep before anything is solved; it
-    also lets a slice solved in another process take its start as data. A
-    table without the sliced column reaches every slice whole.
+    also lets a slice solved in another process take its start as data. Each
+    axis cuts a table that carries its column, and a table without any
+    reaches every slice whole. *concurrent* says the slices would run
+    concurrently, as an executor runs a sweep of one chain.
 
     Raises:
         SpecsolveError: A word other than ``'previous'``; ``'previous'``
-            under an executor; a name
+            on slices that would run concurrently; a name
             [`refuse_unknown_start`][specsolve.sources.refuse_unknown_start]
             refuses; a table over an EachWindow sweep's local index alone; or
             a slice the cut leaves nothing.
@@ -369,13 +405,15 @@ def _slice_starts(
             raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
         if concurrent:
             raise SpecsolveError(
-                "start='previous' starts each slice from the one before it, so the slices cannot run "
-                'concurrently. Drop the executor, or pass another start.'
+                "start='previous' starts each slice from the one before it, so a sweep of one chain cannot run "
+                'concurrently: an executor runs chains concurrently, one per combination of the outer axes. Drop '
+                'the executor, or pass another start.'
             )
         return 'previous'
-    column = axis.dim if isinstance(axis, Axis) else key_name
-    tables = _start_tables(start, column)
+    columns = [each.dim for each in axes] if axes is not None else [key_names[-1]]
+    tables = _start_tables(start, columns[-1])
     refuse_unknown_start(cast('Start', tables), program)
+    axis = axes[-1] if axes is not None else None
     if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
         raise SpecsolveError(
             f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
@@ -385,33 +423,33 @@ def _slice_starts(
     starts: list[Start | None] = []
     empty: list[Label] = []
     for current in slices:
-        cut = current.cut or partial(_one_key, key_name, current.key)
+        cut = current.cut or partial(_one_key, key_names[-1], current.key[-1])
         given: dict[str, dict[str, Source]] = {}
         for reader, named in tables.items():
-            pieces = {name: _cut_one(obj, column, cut) for name, obj in named.items()}
+            pieces = {name: _cut_one(obj, cut) for name, obj in named.items()}
             if held := {name: piece for name, piece in pieces.items() if piece is not None}:
                 given[reader] = held
         if not given:
-            empty.append(current.key)
+            empty.append(key_label(current.key))
         starts.append(cast('Start', given))
     if empty:
         raise SpecsolveError(
-            f'start= gives the slices {empty} no row to start from: no table carries their {column!r}, and none '
+            f'start= gives the slices {empty} no row to start from: no table carries their {columns}, and none '
             f'reaches every slice. Give rows for them, or sweep them without start=.'
         )
     return starts
 
 
-def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFrame]) -> Source | None:
+def _cut_one(obj: Source, cut: Callable[[pl.LazyFrame], pl.LazyFrame]) -> Source | None:
     """*obj* as one slice takes it: a table cut, read into memory to cross a process, or ``None`` where the cut leaves no row.
 
     A shape that is not a table, such as one number, carries no column to cut
-    on and reaches the slice whole.
+    on and reaches the slice whole, as a table that carries no axis's column does.
     """
     table = as_frame(obj)
     if table is None:
         return obj
-    piece = (cut(table) if column in table.collect_schema().names() else table).collect(engine=collect_engine())
+    piece = cut(table).collect(engine=collect_engine())
     return piece if piece.height else None
 
 
@@ -447,7 +485,9 @@ def _over_the_local_index(tables: Mapping[str, Mapping[str, Source]], axis: Each
 
 
 def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
-    """*table*'s rows of the hand-built slice *key*, without the key column."""
+    """*table*'s rows of the hand-built slice *key*, without the key column; a table without it, whole."""
+    if key_name not in table.collect_schema().names():
+        return table
     return table.filter(pl.col(key_name) == key).drop(key_name)
 
 
@@ -464,7 +504,7 @@ def _archive_the_sweep(
     out: Path,
     spec: Spec,
     program: Program,
-    axis: Axis,
+    axes: Axes,
     carry: Mapping[str, str],
     sources: Mapping[str, Source],
     folded: Sweep,
@@ -477,13 +517,13 @@ def _archive_the_sweep(
     [`_uncut`][] and [`_spread_over_the_axis`][] give. A held sweep is spilled
     to scratch first, so the answer is always read off a spill.
     """
-    manifest = axis_manifest(axis)
+    manifest = axis_manifest(axes if len(axes) > 1 else axes[0])
     if carry:
         manifest['carry'] = dict(carry)
     tidied = numbered(program, tidy_sources(program, one_slice))
-    sliced = sources_with_column(sources, axis.dim)
-    cut = {name: _uncut(program, axis, name, table) for name, table in sliced.items()}
-    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, sliced), **cut}
+    sliced = {name: table for each in axes for name, table in sources_with_column(sources, each.dim).items()}
+    cut = {name: _uncut(program, axes, name, table) for name, table in sliced.items()}
+    held = {**tidied, **_spread_over_the_axis(program, axes[-1], sources, tidied), **cut}
     tables = {name: held[name] for name in sources}
     with beside(out) as scratch:
         spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
@@ -526,8 +566,8 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     return under
 
 
-def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
-    """A source the axis cuts, as its tidy columns with the axis column first.
+def _uncut(program: Program, axes: Axes, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
+    """A source the axes cut, as its tidy columns with each axis column it carries first, outer first.
 
     A window's local index is not a column of the uncut table: the axis
     column stands where it would be.
@@ -535,8 +575,10 @@ def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.L
     declared = (
         [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
     )
-    local = axis.into if isinstance(axis, EachWindow) else None
-    return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
+    local = axes[-1].into if isinstance(axes[-1], EachWindow) else None
+    held = table.collect_schema().names()
+    carried = [each.dim for each in axes if each.dim in held]
+    return table.select(list(dict.fromkeys([*carried, *(column for column in declared if column != local)])))
 
 
 def _spread_over_the_axis(
@@ -544,7 +586,6 @@ def _spread_over_the_axis(
     axis: Axis,
     sources: Mapping[str, Source],
     tidied: Mapping[str, pl.LazyFrame],
-    sliced: Mapping[str, pl.LazyFrame],
 ) -> dict[str, pl.LazyFrame]:
     """Each parameter given as one number over a window's local index, as a table over the axis.
 
@@ -560,7 +601,8 @@ def _spread_over_the_axis(
         for name, declared in program.parameters.items()
         if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
     ]
-    coordinates = pl.concat([table.select(axis.dim) for table in sliced.values()], how='vertical_relaxed')
+    windowed = sources_with_column(sources, axis.dim)
+    coordinates = pl.concat([table.select(axis.dim) for table in windowed.values()], how='vertical_relaxed')
     coordinates = coordinates.unique().sort(axis.dim)
     return {
         name: coordinates.join(tidied[name].drop(axis.into).unique(maintain_order=True), how='cross')
@@ -570,13 +612,13 @@ def _spread_over_the_axis(
 
 def _check_the_carry(
     plan: Mapping[str, _CarryRule],
-    axis: Axis | HandBuilt,
+    axis: Axis | None,
     first: Mapping[str, Source],
 ) -> None:
     """Refuse a carry with no seed, or one that collapses a dimension other than [`EachWindow.into`][].
 
     Reads no source: the seed is a key of *first*, and the owned dimension is
-    the axis's own.
+    that of *axis*, the last axis, or ``None`` for slices written by hand.
     """
     for parameter, rule in plan.items():
         if parameter not in first:
@@ -605,9 +647,11 @@ def _serially(
     plan: Mapping[str, _CarryRule],
     spill: Spill | None,
     starts: Sequence[Start | None] | Literal['previous'],
-) -> Generator[tuple[Label, SliceAnswer], None, None]:
+) -> Generator[tuple[tuple[Label, ...], SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
+    A ``carry`` and ``start='previous'`` follow each chain, so the first
+    slice of a chain takes its seed from its own sources and starts cold.
     Under ``start='previous'`` each slice starts from the answer before it:
     where the update kept the solver, it carries on from where it ended, and
     where it did not, from the basis each slice is solved with as well, which
@@ -627,6 +671,8 @@ def _serially(
     readers = ('primal', *(sorted(BASES) if 'basis' in asked else ()))
     try:
         for position, current in enumerate(slices):
+            if position and current.chain != slices[position - 1].chain:
+                previous = None
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
                 primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
@@ -684,26 +730,26 @@ def _carried(
     slices: Sequence[Slice],
     answer: SliceAnswer,
 ) -> dict[str, pl.DataFrame]:
-    """What the next slice starts from, read out of *primals*; nothing for the last slice, or with no plan."""
-    if not plan or position == len(slices) - 1:
+    """What the next slice starts from, read out of *primals*; nothing for the last slice of a chain, or with no plan."""
+    if not plan or position == len(slices) - 1 or slices[position + 1].chain != current.chain:
         return {}
     if not primals:
         raise SpecsolveError(
-            f'slice {current.key!r} ({position + 1} of {len(slices)}) terminated '
-            f'{answer.meta.termination_condition}, so slice {slices[position + 1].key!r} has no '
+            f'slice {key_label(current.key)!r} ({position + 1} of {len(slices)}) terminated '
+            f'{answer.meta.termination_condition}, so slice {key_label(slices[position + 1].key)!r} has no '
             f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
             f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
         )
-    return {p: rule.value_from(primals, p, current.key, current.owns) for p, rule in plan.items()}
+    return {p: rule.value_from(primals, p, key_label(current.key), current.owns) for p, rule in plan.items()}
 
 
 @contextmanager
-def _named_slice(key: Label, position: int, count: int) -> Generator[None, None, None]:
+def _named_slice(key: tuple[Label, ...], position: int, count: int) -> Generator[None, None, None]:
     """Whatever a slice raises leaves naming the slice, as a note, so the error stays the engine's own."""
     try:
         yield
     except Exception as exc:
-        exc.add_note(f'in slice {key!r} ({position + 1} of {count})')
+        exc.add_note(f'in slice {key_label(key)!r} ({position + 1} of {count})')
         raise
 
 
@@ -714,42 +760,64 @@ def _pooled(
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
+    plan: Mapping[str, _CarryRule],
     spill: Spill | None,
-    starts: Sequence[Start | None],
-) -> Generator[tuple[Label, SliceAnswer], None, None]:
-    """The same, from slices built independently and possibly elsewhere.
+    starts: Sequence[Start | None] | Literal['previous'],
+) -> Generator[tuple[tuple[Label, ...], SliceAnswer], None, None]:
+    """The same, from slices or chains run independently and possibly elsewhere.
 
-    Yielded in slice order, never completion order. A built model cannot cross
-    a process, so each slice builds its own. A slice the spill holds is never
-    submitted; one that comes back is written here, by the process that owns
-    the directory.
+    Under a carry or ``start='previous'`` each chain is one task, its slices
+    run in order on one model; otherwise each slice is. Yielded in slice
+    order, never completion order. A built model cannot cross a process, so
+    each task builds its own. A task the spill holds every slice of is never
+    submitted, and one that comes back is written here, by the process that
+    owns the directory: a chain the spill holds only part of runs whole again.
     """
     crosses = _crosses_a_process(executor)
     shared = _shares_filesystem(executor, workers_share_fs)
     memo: dict[str, tuple[Any, Any]] = {}  # pyrefly: ignore[explicit-any] — a source beside its encoding
-    futures = [
-        None
-        if spill is not None and spill.done(position)
-        else executor.submit(
-            _run_slice,
-            program,
-            document,
-            _encode(current.sources, memo, workers_share_fs=shared) if crosses else dict(current.sources),
-            crosses,
-            solving,
-            starts[position],
-        )
-        for position, current in enumerate(slices)
-    ]
-    for position, (current, future) in enumerate(zip(slices, futures, strict=True)):
-        if future is None:
-            assert spill is not None, 'a slice is skipped only where a spill holds it'
-            yield current.key, spill.read_back(position)
+    chained = bool(plan) or starts == 'previous'
+    tasks = _chains(slices) if chained else [[position] for position in range(len(slices))]
+    futures = []
+    for positions in tasks:
+        if spill is not None and all(spill.done(position) for position in positions):
+            futures.append(None)
             continue
-        with _named_slice(current.key, position, len(slices)):
-            answer = future.result()
-        answer = replace(answer, frames={kind: _decode(named) for kind, named in answer.frames.items()})
-        yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
+        entries = [
+            (
+                slices[position].key,
+                _encode(slices[position].sources, memo, workers_share_fs=shared)
+                if crosses
+                else dict(slices[position].sources),
+                slices[position].owns,
+            )
+            for position in positions
+        ]
+        given = starts if starts == 'previous' else [starts[position] for position in positions]
+        futures.append(executor.submit(_run_chain, program, document, entries, crosses, solving, plan, given))
+    for positions, future in zip(tasks, futures, strict=True):
+        if future is None:
+            assert spill is not None, 'a task is skipped only where a spill holds every slice of it'
+            for position in positions:
+                yield slices[position].key, spill.read_back(position)
+            continue
+        with _named_slice(slices[positions[0]].key, positions[0], len(slices)):
+            answers = future.result()
+        for position, answer in zip(positions, answers, strict=True):
+            key = slices[position].key
+            answer = replace(answer, frames={kind: _decode(named) for kind, named in answer.frames.items()})
+            yield key, spill.write(position, key, answer) if spill is not None else answer
+
+
+def _chains(slices: Sequence[Slice]) -> list[list[int]]:
+    """The positions of each chain's slices, in slice order; a chain's slices are consecutive, as the axes cut them."""
+    out: list[list[int]] = []
+    for position, current in enumerate(slices):
+        if out and slices[out[-1][-1]].chain == current.chain:
+            out[-1].append(position)
+        else:
+            out.append([position])
+    return out
 
 
 def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozenset[Output]) -> SliceAnswer:
@@ -790,36 +858,54 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
     return SliceAnswer(meta, metrics, frames, None, no_expressions)
 
 
-def _run_slice(
+def _run_chain(
     program: Program,
     document: Spec,
-    encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
+    entries: Sequence[tuple[tuple[Label, ...], dict[str, Any], int | None]],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    start: Start | None,
-) -> SliceAnswer:
-    """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
-    with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
-        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None), call['outputs'])
-        if not encode_out:
-            return answer
-        return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})
+    plan: Mapping[str, _CarryRule],
+    starts: Sequence[Start | None] | Literal['previous'],
+) -> list[SliceAnswer]:
+    """One task's slices, start to finish, over plain data, as [`_serially`][] runs them; module-level so a remote executor can pickle it.
+
+    A task of one slice is a chain of one, so a slice of an unchained sweep
+    runs here too.
+    """
+    slices = [Slice(key, _decode(encoded), owns) for key, encoded, owns in entries]
+    answers = [answer for _, answer in _serially(program, document, slices, call, plan, None, starts)]
+    if not encode_out:
+        return answers
+    return [
+        replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})
+        for answer in answers
+    ]
 
 
-def _key_column(
-    axis: Axis | HandBuilt,
-    key_name: str | None,
-    program: Program,
-) -> str:
-    """What to call the column holding the slice key; never a column the frames already carry."""
-    if key_name is None:
-        if not isinstance(axis, Axis):
+def _key_columns(axes: Axes | None, key_name: str | None, program: Program) -> tuple[str, ...]:
+    """What to call the columns holding the slice key, one per axis, outer first; never a column the frames already carry.
+
+    *axes* is ``None`` for slices written by hand.
+    """
+    if axes is None:
+        if key_name is None:
             raise SpecsolveError(
                 'a hand-built axis needs key_name=: a list of slices does not say what its keys are '
                 "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
-        key_name = axis._key_name()
+        return (_key_column(key_name, program),)
+    if key_name is not None and len(axes) > 1:
+        raise SpecsolveError(
+            f'key_name={key_name!r} names the key of one axis, and this sweep has {len(axes)}, each of which names '
+            f'its own key column: {[each._key_name() for each in axes]}. Drop key_name.'
+        )
+    names = (key_name,) if key_name is not None else tuple(each._key_name() for each in axes)
+    return tuple(_key_column(name, program) for name in names)
+
+
+def _key_column(key_name: str, program: Program) -> str:
+    """*key_name*, refused where it is a column the frames already carry."""
     refuse_reserved(key_name, f'key_name={key_name!r}')
     if key_name in program.dimensions:
         raise SpecsolveError(

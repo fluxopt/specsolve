@@ -2234,12 +2234,12 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
     rows of a name — a variable every row of which the slice masked — has no
     entry, which is what the spill writes for it."""
     index = sweep_module.slice_index(sweep, 'primal')['p']
-    assert list(index) == ['high', 'low', 'mid'], 'one entry per slice, keyed by its own key'
+    assert list(index) == [('high',), ('low',), ('mid',)], 'one entry per slice, keyed by its own key, one label per axis'
     assert all(sweep.key_name not in frame.columns for frame in index.values()), 'the key column is dropped'
 
     held = sweep._slices['primal']['p'].filter(pl.col(sweep.key_name) != 'low')
     short = replace(sweep, _slices={'primal': {'p': held}})
-    assert list(sweep_module.slice_index(short, 'primal')['p']) == ['high', 'mid'], 'a slice with no rows is left out'
+    assert list(sweep_module.slice_index(short, 'primal')['p']) == [('high',), ('mid',)], 'a slice with no rows is left out'
 
 
 def test_a_sweep_archive_carries_its_carry(tmp_path):

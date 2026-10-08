@@ -19,7 +19,7 @@ from mathspec.program import parameters_of
 
 from specsolve.api import build, load_result, scan_result
 from specsolve.archive_layout import ANSWER_DIR, AXIS_MEMBER, DIGESTS_MEMBER, SOURCES_DIR, SPEC_MEMBER, opened
-from specsolve.axes import axis_from
+from specsolve.axes import axis_from, keyed_slices
 from specsolve.errors import SpecsolveError
 from specsolve.inputs import lower
 from specsolve.relational.answer_layout import KINDS, METRICS_FILE, RUN, Metrics, digest_of, row_of, saved_frames
@@ -27,11 +27,11 @@ from specsolve.sweep import (
     MANIFEST_FILE,
     OWNED_FILE,
     WINDOWS_DIR,
+    KeyColumns,
     Spill,
     Sweep,
     opened_sweep,
     slice_index,
-    with_key,
 )
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from mathspec.program import Expression
 
     from specsolve.api import Model
-    from specsolve.axes import Axis
+    from specsolve.axes import Axes, Axis
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Result
 
@@ -103,7 +103,7 @@ class SweepArchive:
 
     spec: Spec
     sources: Mapping[str, Source]
-    axis: Axis
+    axis: Axis | Axes
     carry: Mapping[str, str]
     sweep: Sweep
     source_digests: pl.DataFrame
@@ -249,7 +249,9 @@ def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
     kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
     opened = opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
     answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
-    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
+    windows = Spill(
+        under / WINDOWS_DIR, KeyColumns(opened.key_names, tuple(opened.record.schema[n] for n in opened.key_names))
+    )
     return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
 
 
@@ -257,7 +259,7 @@ def _attach_sweep_readers(
     sweep: Sweep,
     spec: Spec,
     sources: Mapping[str, Source],
-    axis: Axis,
+    axis: Axis | Axes,
     carry: Mapping[str, str],
 ) -> Sweep:
     """*sweep* with an undeclared expression readable through [`Sweep.evaluate`][], over a sweep archive's own inputs.
@@ -269,11 +271,11 @@ def _attach_sweep_readers(
 
 
 def _per_slice(
-    sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis
-) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
+    sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis | Axes
+) -> Iterator[tuple[tuple[Label, ...], Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
     """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt from its cut of the sources."""
     primal, dual = slice_index(sweep, 'primal'), slice_index(sweep, 'dual')
-    for key, slice_sources in axis.slices(sources):
+    for key, slice_sources in keyed_slices(axis, sources):
         slice_primals = {name: by_key[key] for name, by_key in primal.items() if key in by_key}
         if not slice_primals:
             continue
@@ -296,17 +298,17 @@ def _sweep_evaluator(
     sweep: Sweep,
     spec: Spec,
     sources: Mapping[str, Source],
-    axis: Axis,
+    axis: Axis | Axes,
     carry: Mapping[str, str],
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
     carried = set(carry)
-    key_dtype = sweep.record.schema[sweep.key_name]
+    columns = KeyColumns(sweep.key_names, tuple(sweep.record.schema[name] for name in sweep.key_names))
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
         _refuse_carried(carried, [lower(spec, expression)])
         pieces = [
-            with_key(evaluate_one(expression), sweep.key_name, key, key_dtype)
+            columns.prepended(evaluate_one(expression), key)
             for key, evaluate_one in _per_slice(sweep, spec, sources, axis)
         ]
         if not pieces:
