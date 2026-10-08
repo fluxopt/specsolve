@@ -627,9 +627,18 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
         call()
 
 
-def test_a_start_table_solve_refuses_stops_the_sweep_before_a_slice_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ('start', 'match'),
+    [
+        pytest.param({'primal': {'tkae': TWO_ITEMS}}, "unknown variable 'tkae'", id='a-table-solve-refuses'),
+        pytest.param('prev', "takes 'previous' as a word", id='another-word'),
+    ],
+)
+def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
+    monkeypatch: pytest.MonkeyPatch, start: Any, match: str
+) -> None:
     from specsolve import strategy
 
     monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
-    with pytest.raises(SpecsolveError, match="unknown variable 'tkae'"):
-        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start={'primal': {'tkae': TWO_ITEMS}})
+    with pytest.raises(SpecsolveError, match=match):
+        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=start)
