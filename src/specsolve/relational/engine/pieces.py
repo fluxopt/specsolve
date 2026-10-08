@@ -153,11 +153,25 @@ class CompiledExpression:
     quads: tuple[Piece, ...] = ()
 
 
+def ordered_sum(column: str) -> pl.Expr:
+    """*column* added up in ascending order, so one set of numbers gives one sum to the last bit.
+
+    Floating-point addition is not associative, and the rows reaching a sum
+    come out of joins and group-bys in no fixed order. Summed as they come, a
+    model's costs and right-hand sides would differ in the last bit from one
+    build to the next, and so would its digest, which a saved answer is checked
+    against. A plain ``sum``, sorted first or not, adds in an order polars
+    chooses; a cumulative sum adds in row order. Zero where nothing is summed,
+    as ``sum`` gives.
+    """
+    return pl.col(column).sort().cum_sum().last().fill_null(0.0)
+
+
 def constant_scalar(p: Piece) -> pl.LazyFrame:
     """The const piece summed per coordinate: ``(dims…, cval)``."""
     if not p.dims:
-        return p.frame.select(pl.col('cval').sum())
-    return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
+        return p.frame.select(ordered_sum('cval'))
+    return p.frame.group_by(p.dims).agg(ordered_sum('cval'))
 
 
 def absence_restrictions(pieces: Sequence[Piece]) -> list[Presence]:

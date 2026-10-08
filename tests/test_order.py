@@ -16,31 +16,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.relational.engine.pieces import ordered_sum
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-#: Ports whose model moves from one build to the next, and why.
-MOVES = {
-    'osemosys_utopia': (
-        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit, '
-        'so an archive refuses an undeclared read as built from other data'
-    ),
-}
-
-
-@pytest.fixture
-def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dict[str, Any]:
-    """*port*, expected to fail where ``MOVES`` says its model moves."""
-    if reason := MOVES.get(port['name']):
-        request.applymarker(pytest.mark.xfail(reason=reason))
-    return port
 
 
 def _digest(port: dict[str, Any], given: Mapping[str, Any]) -> str:
@@ -59,14 +45,85 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
     }
 
 
-def test_the_same_sources_build_the_same_model(port_that_holds: dict[str, Any]) -> None:
-    given = sources(port_that_holds['name'])
-    assert _digest(port_that_holds, given) == _digest(port_that_holds, given)
+def test_the_same_sources_build_the_same_model(port: dict[str, Any]) -> None:
+    """``osemosys_utopia`` built a different model every time: a cost or a
+    right-hand side summed over rows in no fixed order differed in its last
+    bit, and an archive of it refused an undeclared read as built from other
+    data."""
+    given = sources(port['name'])
+    assert _digest(port, given) == _digest(port, given)
 
 
 @pytest.mark.parametrize('seed', [0, 1])
-def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], seed: int) -> None:
-    plain = _digest(port_that_holds, sources(port_that_holds['name']))
-    assert _digest(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
-        'shuffling the rows of a table built another model'
+def test_shuffled_tables_build_the_same_model(port: dict[str, Any], seed: int) -> None:
+    plain = _digest(port, sources(port['name']))
+    assert _digest(port, _shuffled(port, seed)) == plain, 'shuffling the rows of a table built another model'
+
+
+def test_a_sum_is_the_same_to_the_last_bit_whatever_order_its_rows_arrive_in() -> None:
+    """Enough rows and groups that polars' own ``sum`` differs from one shuffle to the next."""
+    rng = np.random.default_rng(0)
+    rows = 200_000
+    frame = pl.DataFrame(
+        {
+            'group': rng.integers(0, 5_000, rows),
+            'value': rng.uniform(-1e3, 1e3, rows) * 10.0 ** rng.integers(-6, 6, rows),
+        }
     )
+
+    def totals(rows: pl.DataFrame) -> pl.Series:
+        return rows.group_by('group').agg(ordered_sum('value')).sort('group').get_column('value')
+
+    plain = totals(frame)
+    for seed in range(3):
+        assert totals(frame.sample(fraction=1.0, shuffle=True, seed=seed)).equals(plain), (
+            'the same values, shuffled, summed to another total in some group'
+        )
+
+
+def _one_sum_over(expression: str, where: str) -> dict[str, Any]:
+    """A model with one variable and *expression* in its objective or its one constraint."""
+    spec: dict[str, Any] = {
+        'dimensions': {'item': {'dtype': 'int'}},
+        'parameters': {'weight': {'dims': ['item']}},
+        'variables': {'x': {'dims': [], 'bounds': {'lower': 0, 'upper': 1}}},
+        'objective': {'sense': 'minimize', 'expression': 'x'},
+    }
+    if where == 'objective':
+        spec['objective']['expression'] = expression
+    else:
+        spec['constraints'] = {'bound': {'dims': [], 'expression': expression}}
+    return spec
+
+
+@pytest.mark.parametrize(
+    ('expression', 'where'),
+    [
+        pytest.param('x + sum(weight)', 'objective', id='an-objective-constant'),
+        pytest.param('x >= sum(weight)', 'constraint', id='a-right-hand-side'),
+        pytest.param('x / sum(weight) <= 1', 'constraint', id='a-divisor'),
+    ],
+)
+def test_a_constant_summed_over_many_rows_builds_the_same_model_whatever_their_order(
+    expression: str, where: str
+) -> None:
+    """One sum over enough rows that adding them in another order moves its last bit."""
+    rng = np.random.default_rng(0)
+    items = 200_000
+    weights = pl.DataFrame(
+        {'item': range(items), 'value': rng.uniform(0.0, 1e3, items) * 10.0 ** rng.integers(-6, 6, items)}
+    )
+    spec = _one_sum_over(expression, where)
+
+    def digest(weight: pl.DataFrame) -> str:
+        with sps.build(spec, {'item': list(range(items)), 'weight': weight}) as model:
+            return model._model_digest()
+
+    assert digest(weights.sample(fraction=1.0, shuffle=True, seed=0)) == digest(weights), (
+        'the same weights, shuffled, built another model'
+    )
+
+
+def test_a_sum_of_nothing_is_zero_as_polars_sum_gives() -> None:
+    nothing = pl.DataFrame({'value': []}, schema={'value': pl.Float64})
+    assert nothing.select(ordered_sum('value')).item() == nothing.select(pl.col('value').sum()).item() == 0.0

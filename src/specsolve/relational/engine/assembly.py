@@ -20,7 +20,7 @@ from specsolve.relational import sinks
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.pieces import Piece, absence_restrictions
+from specsolve.relational.engine.pieces import Piece, absence_restrictions, ordered_sum
 from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
@@ -367,7 +367,7 @@ class Assembly:
                 f'objective constant part has dims {list(p.dims)} — the language refuses a '
                 f'variable-free part of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
+            self.obj_const += p.frame.select(ordered_sum('cval')).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
@@ -474,7 +474,7 @@ def _collapsed(
         repeated = _repeats_a_label(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
-    aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
+    aggregated = stacked.lazy().group_by(*keys).agg(ordered_sum('coeff'))
     if ordered:
         aggregated = aggregated.sort(*keys)
     summed = aggregated.pipe(collected)

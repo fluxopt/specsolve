@@ -42,6 +42,7 @@ from specsolve.relational.engine.pieces import (
     join_quad,
     map_pieces,
     negate,
+    ordered_sum,
     propagate_absence,
     refuse_a_piece_without_the_dims,
     region_over,
@@ -62,7 +63,7 @@ def _totalled(p: Piece) -> pl.LazyFrame:
 
     A null summand is a divisor's hole, so the total keeps it for the refusal.
     """
-    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
+    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(ordered_sum('cval')).alias('cval')
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
