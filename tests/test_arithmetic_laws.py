@@ -475,22 +475,19 @@ H = {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
 
 
 @pytest.mark.parametrize(
-    ('patch', 'data', 'at'),
+    ('patch', 'data'),
     [
-        pytest.param({'constraints.c.expression': 'x / d <= 10'}, ZERO_D, 'f=b', id='a-term'),
-        pytest.param({'constraints.c.expression': 'x * d / d <= 10'}, ZERO_D, 'f=b', id='a-term-zero-over-zero'),
-        pytest.param(
-            {'constraints.c.expression': 'x / (2 - d) <= 10'}, ZERO_D, 'f=a', id='a-divisor-that-adds-up-to-zero'
-        ),
+        pytest.param({'constraints.c.expression': 'x / d <= 10'}, ZERO_D, id='a-term'),
+        pytest.param({'constraints.c.expression': 'x * d / d <= 10'}, ZERO_D, id='a-term-zero-over-zero'),
+        pytest.param({'constraints.c.expression': 'x / (2 - d) <= 10'}, ZERO_D, id='a-divisor-that-adds-up-to-zero'),
         pytest.param(
             {'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'},
             ZERO_D | H,
-            'f=b',
             id='a-constant-side',
         ),
     ],
 )
-def test_a_zero_divisor_in_a_constraint_is_refused_on_both_lanes(patch, data, at):
+def test_a_zero_divisor_in_a_constraint_is_refused_on_both_lanes(patch, data):
     """A divisor row that is present and zero has no quotient to build, so it is refused, not solved (#1892).
 
     Both lanes divided by the zero and handed the solver an infinite or NaN
@@ -498,7 +495,6 @@ def test_a_zero_divisor_in_a_constraint_is_refused_on_both_lanes(patch, data, at
     """
     message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), data, match="parameter 'd' is used as a divisor")
     assert 'is zero at 1 ' in message, 'the message counts the one coordinate where the divisor is zero'
-    assert f'such as {at}.' in message, 'and names it'
 
 
 def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
@@ -515,10 +511,9 @@ def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
             'objective.expression': 'sum(x * d / d, over=f)',
         },
     )
-    zero_at_b = r"parameter 'd' is used as a divisor and is zero at 1 .*, such as f=b\."
-    with pytest.raises(DataError, match=zero_at_b):
+    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
         sps.build(spec, ZERO_D).close()
-    with pytest.raises(DataError, match=zero_at_b):
+    with pytest.raises(DataError, match="parameter 'd' is used as a divisor and is zero at 1 "):
         specsolve_linopy.build(schema_of(spec).expand(), ZERO_D)
 
 
@@ -548,10 +543,9 @@ SCALAR_ZERO_DATA = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index([
     ],
 )
 def test_a_zero_scalar_divisor_on_a_constant_side_is_refused_on_both_lanes(expression):
-    """A divisor with no dimensions is asked like any other, though no coordinate is left to name."""
+    """A divisor with no dimensions is asked like any other."""
     spec = override(DIVISOR_SPEC, **SCALAR_ZERO, **{'constraints.c.expression': expression})
-    message = both_lanes_refuse(spec, SCALAR_ZERO_DATA, match="parameter 'r' is used as a divisor and is zero")
-    assert 'such as' not in message, 'a divisor with no dimensions has no coordinate to name'
+    both_lanes_refuse(spec, SCALAR_ZERO_DATA, match="parameter 'r' is used as a divisor and is zero")
 
 
 def test_a_zero_scalar_divisor_in_the_objective_constant_is_refused():

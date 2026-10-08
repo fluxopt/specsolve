@@ -118,7 +118,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
 | a divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
-| a divisor that is zero where a constraint or the objective divides by it | names the parameter, how many coordinates, and one of them; a reported quotient by zero is absent instead |
+| a divisor that is zero where a constraint or the objective divides by it | the same; a reported quotient by zero is absent instead |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
 

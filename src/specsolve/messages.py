@@ -72,20 +72,11 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
-def zero_divisor_dims(dims_of: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
-    """The dims a zero divisor's coordinate is named over: each divisor's own in *dims_of*, in name order, once each.
-
-    Both lanes name the same coordinate by this order.
-    """
-    return tuple(dict.fromkeys(d for name in sorted(dims_of) for d in dims_of[name]))
-
-
-def zero_divisor_message(name: str, zeros: int, at: str) -> str:
-    """The message for a divisor parameter that is zero where the model divides by it, *at* one such coordinate."""
-    such_as = f', such as {at}' if at else ''
+def zero_divisor_message(name: str, zeros: int) -> str:
+    """The message for a divisor parameter that is zero where the model divides by it."""
     return (
         f"parameter '{name}' is used as a divisor and is zero at {zeros} of the "
-        f'coordinates the model divides at{such_as}. A quotient by zero has no value, so '
+        f'coordinates the model divides at. A quotient by zero has no value, so '
         f'there is no coefficient to build there.\n'
         f'  Supply a non-zero value, or mask the coordinates out with a where '
         f'that admits only a non-zero divisor.'

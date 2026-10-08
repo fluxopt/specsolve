@@ -352,7 +352,6 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         [p.frame for p in compiled.consts],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
-        compiler.scope.program,
         _reported_divisor_message,
     )
 

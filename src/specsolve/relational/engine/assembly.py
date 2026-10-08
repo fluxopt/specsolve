@@ -149,18 +149,16 @@ class Assembly:
         return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _matrix_share(
-        self, pieces: list[pl.LazyFrame], located: list[pl.LazyFrame], name: str, *expressions: program.Expression
+        self, pieces: list[pl.LazyFrame], name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
-
-        *located* are *pieces* before they dropped their dims, for a refusal to name a coordinate.
 
         Returns:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
         stacked = pl.concat(pieces).pipe(collected)
-        coverage.refuse_null_coefficients(stacked, located, name, self.program, *expressions)
+        coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
 
@@ -267,7 +265,6 @@ class Assembly:
             coverage.narrowed_to_rows(frame, pieces),
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
-            self.program,
         )
         coverage.refuse_short_constants(self.scope, frame, pieces, c, subject, self.measured.sparse)
         rows = coverage.constant_side(self.scope, frame, consts, c, subject)
@@ -278,11 +275,9 @@ class Assembly:
             return rows, None, None
 
         pieces = []
-        located: list[pl.LazyFrame] = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
         for p, sign in terms:
             placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
-            located += [placed, *self._with_coordinates(placed)]
             pieces.append(
                 placed.select(
                     'row',
@@ -291,7 +286,7 @@ class Assembly:
                 )
             )
         matrix, term_rows = (
-            self._matrix_share(pieces, located, subject, c.lhs, c.rhs)
+            self._matrix_share(pieces, subject, c.lhs, c.rhs)
             if pieces
             else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
         )
@@ -318,13 +313,16 @@ class Assembly:
         """
         if not quads:
             return None
-        located = [join_on(frame, p.frame, p.dims, 'inner') for p, _ in quads]
         pieces = [
-            placed.select('row', *_ordered_pair(), (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'))
-            for placed, (_, sign) in zip(located, quads, strict=True)
+            join_on(frame, p.frame, p.dims, 'inner').select(
+                'row',
+                *_ordered_pair(),
+                (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
+            )
+            for p, sign in quads
         ]
         stacked = pl.concat(pieces).pipe(collected)
-        coverage.refuse_null_coefficients(stacked, located, f"constraint '{name}'", self.program, c.lhs, c.rhs)
+        coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
         return share
 
@@ -365,10 +363,7 @@ class Assembly:
             return None
         comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
         coverage.refuse_null_constants(
-            [p.frame for p in comp.consts],
-            program.parameters_of(*coverage.divisors_of(o.expression)),
-            'objective',
-            self.program,
+            [p.frame for p in comp.consts], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )
         for p in comp.consts:
             assert not p.dims, (
@@ -384,26 +379,10 @@ class Assembly:
             p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
         ]
         stacked = pl.concat(pieces).pipe(collected)
-        coverage.refuse_null_coefficients(
-            stacked,
-            [f for p in comp.terms for f in self._with_coordinates(p.frame)],
-            'objective',
-            self.program,
-            o.expression,
-        )
+        coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
         return objective
-
-    def _with_coordinates(self, terms: pl.LazyFrame) -> list[pl.LazyFrame]:
-        """*terms* joined, once per variable, to the coordinates of the columns it holds.
-
-        A sum leaves its terms without the dims it summed over, and a refusal
-        reads them back here to name a coordinate.
-        """
-        return [
-            terms.join(v.frame, on='var_label', how='inner', suffix=' of the variable') for v in self.variables.values()
-        ]
 
     def _objective_quadratic(self, quads: tuple[Piece, ...], expression: program.Expression) -> pl.DataFrame | None:
         """The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
@@ -416,7 +395,7 @@ class Assembly:
             return None
         pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
         stacked = pl.concat(pieces).pipe(collected)
-        coverage.refuse_null_coefficients(stacked, [p.frame for p in quads], 'objective', self.program, expression)
+        coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
 

@@ -25,13 +25,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import (
-    coordinate_text,
-    sparse_divisor_message,
-    uncovered_constant_message,
-    zero_divisor_dims,
-    zero_divisor_message,
-)
+from specsolve.messages import sparse_divisor_message, uncovered_constant_message, zero_divisor_message
 from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
@@ -50,18 +44,10 @@ def divisors_of(*expressions: program.Expression) -> tuple[program.Expression, .
     return tuple(node.divisor for node in program.walk(*expressions) if isinstance(node, program.Divide))
 
 
-def refuse_null_coefficients(
-    stacked: pl.DataFrame,
-    located: Sequence[pl.LazyFrame],
-    subject: str,
-    prog: program.Program,
-    *expressions: program.Expression,
-) -> None:
+def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: program.Expression) -> None:
     """A null coefficient in *stacked* means a divisor had no value where the model divided, and a NaN a zero one.
 
     Asked before any cell collapses, since ``sum`` reads a null as zero.
-    *located* are the frames *stacked* came from, still holding their dims,
-    for naming a coordinate where a divisor is zero.
 
     Raises:
         DataError: Naming the divisor parameters of *expressions* and the
@@ -69,15 +55,13 @@ def refuse_null_coefficients(
     """
     coeff = stacked.get_column('coeff')
     divisors = program.parameters_of(*divisors_of(*expressions))
-    zeros = int(coeff.cast(pl.Float64).is_nan().sum())
-    _refuse_undefined(int(coeff.null_count()), zeros, divisors, subject, located, 'coeff', prog)
+    _refuse_undefined(int(coeff.null_count()), int(coeff.cast(pl.Float64).is_nan().sum()), divisors, subject)
 
 
 def refuse_null_constants(
     pieces: Sequence[pl.LazyFrame],
     divisors: Collection[str],
     subject: str,
-    prog: program.Program,
     message: Callable[[str, int], str] = sparse_divisor_message,
 ) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided, and a NaN a zero one.
@@ -100,7 +84,7 @@ def refuse_null_constants(
     )
     undefined = sum(int(count.item(0, 'null')) for count in counts)
     zeros = sum(int(count.item(0, 'nan')) for count in counts)
-    _refuse_undefined(undefined, zeros, divisors, subject, pieces, 'cval', prog, message)
+    _refuse_undefined(undefined, zeros, divisors, subject, message)
 
 
 def _refuse_undefined(
@@ -108,40 +92,17 @@ def _refuse_undefined(
     zeros: int,
     divisors: Collection[str],
     subject: str,
-    located: Sequence[pl.LazyFrame],
-    column: str,
-    prog: program.Program,
     message: Callable[[str, int], str] = sparse_divisor_message,
 ) -> None:
     """Refuse *undefined* quotients by a divisor with no value, then *zeros* by a zero one.
 
-    A zero divisor reaches here as a NaN in *column*
-    ([`join_mul`][specsolve.relational.engine.pieces.join_mul]).
+    A zero divisor reaches here as a NaN ([`join_mul`][specsolve.relational.engine.pieces.join_mul]).
     """
     names = ', '.join(sorted(divisors))
     if undefined:
         raise DataError(f'{subject}: {message(names, undefined)}')
     if zeros:
-        at = _a_zero_at(located, column, zero_divisor_dims({name: prog.parameters[name].dims for name in divisors}))
-        raise DataError(f'{subject}: {zero_divisor_message(names, zeros, at)}')
-
-
-def _a_zero_at(located: Sequence[pl.LazyFrame], column: str, dims: Sequence[str]) -> str:
-    """The first coordinate over *dims*, in label order, where a frame of *located* holds a NaN in *column*.
-
-    Read only on the way to a refusal, so it pays a second pass. A frame that
-    holds none of *dims* is skipped, and with no frame left ``''`` names no
-    coordinate.
-    """
-    for frame in located:
-        shown = [d for d in dims if d in frame.collect_schema().names()]
-        if not shown:
-            continue
-        first = frame.filter(pl.col(column).cast(pl.Float64).is_nan()).select(shown).sort(shown).head(1)
-        hit = first.pipe(collected)
-        if hit.height:
-            return coordinate_text(hit.row(0, named=True))
-    return ''
+        raise DataError(f'{subject}: {zero_divisor_message(names, zeros)}')
 
 
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.LazyFrame]:

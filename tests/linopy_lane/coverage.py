@@ -19,13 +19,7 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import (
-    coordinate_text,
-    sparse_divisor_message,
-    uncovered_constant_message,
-    zero_divisor_dims,
-    zero_divisor_message,
-)
+from specsolve.messages import sparse_divisor_message, uncovered_constant_message, zero_divisor_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
@@ -163,20 +157,14 @@ def check_divisors_cover(
                 missing = gaps_under(ctx.dataset[param], needed)
                 if missing:
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-            zero = xr.DataArray(evaluate(quotient.divisor)) == 0
-            if needed is not None:
-                zero = zero & needed
-            if zeros := int(zero.sum()):
-                at = _a_zero_at(zero, zero_divisor_dims({p: ctx.program.parameters[p].dims for p in params}))
-                raise DataError(f'{name}: {zero_divisor_message(", ".join(sorted(params)), zeros, at)}')
+            zeros = _zeros_under(evaluate(quotient.divisor), needed)
+            if zeros:
+                raise DataError(f'{name}: {zero_divisor_message(", ".join(sorted(params)), zeros)}')
 
 
-def _a_zero_at(zero: xr.DataArray, dims: tuple[str, ...]) -> str:
-    """The first coordinate over *dims*, in label order, where *zero* holds; ``''`` with none of them."""
-    shown = [d for d in dims if d in zero.dims]
-    if not shown:
-        return ''
-    folded = zero.any(dim=[d for d in zero.dims if d not in shown]).transpose(*shown)
-    series = folded.to_series()
-    first = series[series].index[0]
-    return coordinate_text(dict(zip(shown, first if len(shown) > 1 else (first,), strict=True)))
+def _zeros_under(divisor: Any, mask: Any) -> int:
+    """How many slots of *divisor* are zero where *mask* still admits the row."""
+    zero = xr.DataArray(divisor) == 0
+    if mask is not None:
+        zero = zero & mask
+    return int(zero.sum())
