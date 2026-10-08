@@ -19,7 +19,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
 - fix(engine): the same data builds the same model to the last bit, so its archive reads back ([#1896](https://github.com/fluxopt/specsolve/pull/1896))
-- perf(engine): exact sums cost a model whose constants hold one value per coordinate nothing, and a real sum half of what it did ([#1901](https://github.com/fluxopt/specsolve/pull/1901))
+- perf(engine): exact sums cost little where each constant holds one value per coordinate ([#1901](https://github.com/fluxopt/specsolve/pull/1901))
 
 ## 0.7.0 (2026-10-07)
 
