@@ -31,17 +31,18 @@ that evidence at the load; a subclass owns **the hand-off**:
 | | |
 |---|---|
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(handoff)` | `_run`, plus the refusal of a vector that does not span the model |
+| `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
 | `Solver.warm(ws)` | `_warm`, plus the refusal of a `WarmStart` from another solver or another shape |
 | `_load(handoff, batch_rows)` | hand the model over and hold what reads it back |
 | `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(handoff)` | solve what is loaded, and read it back |
+| `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
 | `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
 | `_warm(ws)` | set it on the loaded model, spans already checked |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last seven are a
+The first three are the family's and identical for everyone; the last eight are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over a `Handoff`
 and is given an answer.

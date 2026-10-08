@@ -19,6 +19,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational import sinks
+from specsolve.relational.answer_layout import BASES
 from specsolve.relational.engine import readback
 from specsolve.relational.engine.assembly import (
     Assembly,
@@ -31,16 +32,25 @@ from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
 from specsolve.relational.result import KEEPS, ConstraintRow, Diagnostics, Keep, Result, unknown_keep_message
+from specsolve.relational.sinks.solvers.base import BASIS, BASIS_STATUSES
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
+    import numpy as np
     from mathspec import program
     from polars._typing import PolarsDataType
 
     from specsolve.relational.answer_layout import Output
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
+
+
+def _statuses(codes: np.ndarray) -> pl.Series:
+    """Basis status codes as the series a frame is laid out from."""
+    import numpy as np
+
+    return pl.Series('value', np.asarray(BASIS_STATUSES)[codes], dtype=BASIS)
 
 
 def _no_built_model(doing: str) -> str:
@@ -207,7 +217,7 @@ class Engine:
         if kept == 'nothing':
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff)
+            answer = solver.run(handoff, basis=bool(outputs & BASES))
         return self._answered(answer, solver_name, kept, lower, outputs)
 
     def _answered(
@@ -327,6 +337,10 @@ class Engine:
                     if answer.activity is None
                     else self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
                 )
+            case 'variable_basis':
+                return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))
+            case 'constraint_basis':
+                return {} if answer.basis is None else self._per_constraint(_statuses(answer.basis.rows))
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
         """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""

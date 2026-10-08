@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
@@ -16,7 +16,7 @@ from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence, Sized
 
     import numpy as np
 
@@ -52,6 +52,29 @@ class WarmStart:
         return None
 
 
+#: A basis status in the one vocabulary every member reads its solver's into,
+#: each at the index that is its code. A row's bound is its right-hand side,
+#: so a binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``,
+#: and a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
+#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
+BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
+BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
+
+#: The status of a nonbasic row, by its sense.
+_ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
+
+#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
+BASIS = pl.Enum(BASIS_STATUSES)
+
+
+@dataclass(frozen=True)
+class Basis:
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
+
+    columns: np.ndarray[tuple[int], np.dtype[np.int8]]
+    rows: np.ndarray[tuple[int], np.dtype[np.int8]]
+
+
 @dataclass(frozen=True)
 class SolveAnswer:
     """What a solve concluded, and the vectors it left.
@@ -69,6 +92,9 @@ class SolveAnswer:
     #: A weight per row certifying that the constraints cannot all hold, in
     #: the sign convention of [`Solver.dual_ray`][], or ``None``.
     dual_ray: pl.Series | None = None
+    #: The basis the solve ended on, read only where [`Solver.run`][] was asked
+    #: for it, and ``None`` wherever the solve ended at no vertex.
+    basis: Basis | None = None
 
     @classmethod
     def unreadable(cls, status: SolveStatus, dual_ray: pl.Series | None = None) -> SolveAnswer:
@@ -213,20 +239,55 @@ class Solver(ABC):
     def _warm(self, ws: WarmStart) -> None:
         """Apply *ws* onto the loaded model. [`warm`][] has already checked its solver and spans."""
 
-    def run(self, handoff: Handoff) -> SolveAnswer:
-        """Solve what is loaded and read it back.
+    def run(self, handoff: Handoff, *, basis: bool = False) -> SolveAnswer:
+        """Solve what is loaded and read it back, with the [`Basis`][] it ended on where *basis* asks.
 
         Raises:
             SpecsolveError: A solver vector that does not span the model.
         """
         answer = self._run(handoff)
+        if basis and answer.primal is not None:
+            answer = replace(answer, basis=self._settled(handoff))
         self._check_span('primal', answer.primal, handoff.column_count)
         self._check_span('dual', answer.dual, handoff.row_count)
         self._check_span('activity', answer.activity, handoff.row_count)
         self._check_span('dual ray', answer.dual_ray, handoff.row_count)
         return answer
 
-    def _check_span(self, quantity: str, values: pl.Series | None, expected: int) -> None:
+    def _settled(self, handoff: Handoff) -> Basis | None:
+        """[`_basis`][] with each nonbasic status read against the model's bounds.
+
+        A member reads only basic or not, and which bound a column sits at: a
+        row's bound follows from its sense, since each row has one, and a
+        column at bounds that are equal is ``fixed`` whichever one the solver
+        names.
+        """
+        import numpy as np
+
+        read = self._basis()
+        if read is None:
+            return None
+        columns, rows = read
+        self._check_span('column basis', columns, handoff.column_count)
+        self._check_span('row basis', rows, handoff.row_count)
+        cols = handoff.dense_columns(np.inf)
+        columns = np.where(np.isin(columns, (AT_LOWER, AT_UPPER)) & (cols.lb == cols.ub), FIXED, columns)
+        bound = np.asarray([_ROW_BOUND[sense] for sense in SENSE_CODES], dtype=np.int8)
+        nonbasic = ~np.isin(rows, (BASIC, SUPERBASIC))
+        rows = np.where(nonbasic, bound[handoff.dense_rows(np.inf).sense], rows)
+        return Basis(columns.astype(np.int8), rows.astype(np.int8))
+
+    @abstractmethod
+    def _basis(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """The basis the last [`run`][] ended on as [`BASIS_STATUSES`][] codes, columns then rows.
+
+        Called only after a run that left a primal. ``None`` where it ended at
+        no vertex: a mixed-integer model, an interior-point run without
+        crossover. A nonbasic row may carry any nonbasic code, and a column at
+        equal bounds either bound's: [`_settled`][] reads both off the model.
+        """
+
+    def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:
         """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
@@ -305,6 +366,13 @@ def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], n
     for sense, code in SENSE_CODES.items():
         out[code] = spelling[sense]
     return out
+
+
+def basis_codes(native: Any, codes: Sequence[int]) -> np.ndarray[tuple[int], np.dtype[np.int8]]:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
+    """A solver's own basis statuses as [`BASIS_STATUSES`][] codes: *codes* indexed by each status."""
+    import numpy as np
+
+    return np.asarray(codes, dtype=np.int8)[np.asarray(native, dtype=np.int64)]
 
 
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type

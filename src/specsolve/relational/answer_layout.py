@@ -32,23 +32,41 @@ if TYPE_CHECKING:
 #: What an answer carries only where the solve asked for it with ``outputs=``,
 #: beside the primal, the duals and the declared expressions it always
 #: carries. ``activity`` is each constraint's left-hand side at the solution,
-#: ``reduced_cost`` each variable's reduced cost, and ``slack`` each
-#: constraint's distance to binding.
+#: ``reduced_cost`` each variable's reduced cost, ``slack`` each
+#: constraint's distance to binding, and ``variable_basis`` and
+#: ``constraint_basis`` the basis status the solve ended on.
 #: Each is named after its reader on a result and a sweep, and the directory
 #: its frames are saved under.
-Output = Literal['activity', 'reduced_cost', 'slack']
+Output = Literal['activity', 'reduced_cost', 'slack', 'variable_basis', 'constraint_basis']
 
 #: What an [`Output`][] holds one frame per.
 Per = Literal['variable', 'constraint']
 
 #: Every [`Output`][], and what it holds one frame per.
 OUTPUTS: Mapping[Output, Per] = MappingProxyType(
-    {'activity': 'constraint', 'reduced_cost': 'variable', 'slack': 'constraint'}
+    {
+        'activity': 'constraint',
+        'reduced_cost': 'variable',
+        'slack': 'constraint',
+        'variable_basis': 'variable',
+        'constraint_basis': 'constraint',
+    }
 )
 
 #: The kinds that exist exactly where the duals do. Where a solve left none,
 #: each carries the duals' reason.
 PRICED = frozenset({'dual', 'reduced_cost'})
+
+#: The [`OUTPUTS`][] that exist only where the solve ended on a basis. Where it
+#: did not, each carries [`NO_BASIS`][].
+BASES: frozenset[Output] = frozenset({'variable_basis', 'constraint_basis'})
+
+NO_BASIS = (
+    'the solve ended on no basis, so there is no basis status to read. Only an LP solved by simplex, or by '
+    'an interior-point method followed by crossover, ends on one: a mixed-integer model, a model with a '
+    'quadratic constraint, and an interior-point run with crossover off do not. Solve with crossover on — '
+    "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
+)
 
 #: Every kind of frame an answer can hold: the three every solve answers with,
 #: then the [`OUTPUTS`][]. Each is named after the reader it comes back

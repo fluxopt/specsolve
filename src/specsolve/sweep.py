@@ -20,9 +20,11 @@ from specsolve.axes import Stitch, bulleted
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.messages import no_model_behind_this_answer_message
 from specsolve.relational.answer_layout import (
+    BASES,
     KINDS,
     METRICS_FILE,
     METRICS_SCHEMA,
+    NO_BASIS,
     OUTPUTS,
     PRICED,
     RECORD_FILE,
@@ -389,7 +391,7 @@ class Sweep:
         held = answer[kind] if answer is not None else self._slices.get(kind, {})
         frame = held.get(name)
         if frame is None:
-            absent = self._absent.get(kind, {}).get(name) or (self._no_duals if kind in PRICED else None)
+            absent = self._absent.get(kind, {}).get(name) or _whole_kind_absent(kind, held, self._no_duals, self.record)
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.record))
         return frame if answer is not None else self._answered(frame, per_window=per_window)
 
@@ -516,6 +518,36 @@ class Sweep:
                 [`primal`][] raises.
         """
         return self._named('reduced_cost', name, per_window=per_window).pipe(collected)
+
+    def variable_basis(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One variable's basis status where every slice's solve ended.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.variable_basis`][specsolve.relational.result.Result.variable_basis]'s
+        words. Carried only where the sweep was asked for it with
+        ``outputs={'variable_basis'}``. A slice that ended on no basis
+        contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its variable basis, no
+                slice ended on a basis, or as [`primal`][] raises.
+        """
+        return self._named('variable_basis', name, per_window=per_window).pipe(collected)
+
+    def constraint_basis(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One constraint's basis status where every slice's solve ended.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.constraint_basis`][specsolve.relational.result.Result.constraint_basis]'s
+        words. Carried only where the sweep was asked for it with
+        ``outputs={'constraint_basis'}``. A slice that ended on no basis
+        contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its constraint basis,
+                no slice ended on a basis, or as [`primal`][] raises.
+        """
+        return self._named('constraint_basis', name, per_window=per_window).pipe(collected)
 
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
@@ -672,7 +704,9 @@ class Sweep:
                 else:
                     held[name] = frame
         if not held:
-            absent = (self._no_duals if kind in PRICED else None) or _none_answered(_LABELS[kind], left_out)
+            absent = _whole_kind_absent(kind, held, self._no_duals, self.record) or _none_answered(
+                _LABELS[kind], left_out
+            )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
         return tuple(sorted(held))
 
@@ -691,6 +725,15 @@ NO_WINDOWS = (
 
 #: Where an archive keeps a windowed sweep's per-window frames, under its ``answer/``.
 WINDOWS_DIR = 'windows'
+
+
+def _whole_kind_absent(kind: str, held: Mapping[str, object], no_duals: str | None, record: pl.DataFrame) -> str | None:
+    """Why no slice holds *kind*: the duals' reason for a priced kind, or [`NO_BASIS`][] where slices solved and none ended on a basis."""
+    if kind in PRICED:
+        return no_duals
+    if kind in BASES and not held and record['has_primal'].any():
+        return NO_BASIS
+    return None
 
 
 def _none_answered(kind: str, left_out: Mapping[str, str]) -> str | None:
