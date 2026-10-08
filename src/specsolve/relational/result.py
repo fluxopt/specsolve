@@ -31,6 +31,7 @@ from specsolve.relational.answer_layout import (
     not_requested_message,
     write_format,
     write_reasons,
+    write_spec,
     write_whole,
 )
 from specsolve.relational.collect import collected
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
     import xarray as xr
+    from mathspec import Spec
 
     from specsolve.relational.status import SolveStatus
 
@@ -396,9 +398,8 @@ class Result:
     #: Why there is no certificate — the status, or the solver setting that
     #: would have produced one. ``None`` whenever [`_dual_rays`][] holds it.
     _no_dual_ray: str | None = None
-    #: [`digest_of`][specsolve.relational.answer_layout.digest_of] the spec this
-    #: answered, or ``None`` for a solve run off a lowered program.
-    _spec_digest: str | None = None
+    #: The spec this answered, or ``None`` for a solve run off a lowered program.
+    _spec: Spec | None = None
     #: When the solver returned, in UTC.
     _solved_at: datetime | None = None
     #: The archive this answer was read back out of, as its record names it.
@@ -438,13 +439,13 @@ class Result:
         return self._objective
 
     @property
-    def spec_digest(self) -> str | None:
-        """Which spec this answered — a digest of the file, not its name.
+    def spec(self) -> Spec | None:
+        """The spec this answered, as written; ``None`` where the solve ran off a lowered program.
 
-        Two answers with one digest answered the same document, perhaps over
-        other data. ``None`` where the solve ran off a lowered program.
+        Two answers whose specs compare equal answered the same document,
+        perhaps over other data.
         """
-        return self._spec_digest
+        return self._spec
 
     @property
     def solved_at(self) -> datetime | None:
@@ -472,7 +473,6 @@ class Result:
             self.termination_condition,
             self.objective,
             has_primal=self.has_primal,
-            spec_digest=self._spec_digest,
             solved_at=self._solved_at,
             provenance=self._provenance,
         )._replace(specsolve_run=self._run)
@@ -786,7 +786,8 @@ class Result:
 
         ``record.parquet`` holds the
         [`Record`][specsolve.relational.answer_layout.Record], with a null
-        rather than ``nan`` objective where none was reached. Beside it are
+        rather than ``nan`` objective where none was reached, and
+        ``spec.yaml`` the [`spec`][] it answered. Beside them are
         ``primal/<name>.parquet`` per variable, ``dual/<name>.parquet`` per
         constraint where the duals are defined, ``expression/<name>.parquet``
         per named expression this data can evaluate, and
@@ -795,11 +796,11 @@ class Result:
         ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
         deliberately left out — one row per failed expression, one with an
         empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
-        record alone. The same model and data write the same bytes.
+        record and the spec alone. The same model and data write the same bytes.
 
         ``format.json`` stamps the layout, the specsolve that wrote it and the
         outputs the answer carries:
-        ``{"layout": 4, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
+        ``{"layout": 5, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
         layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
         to solve the model again and save it.
 
@@ -818,6 +819,7 @@ class Result:
         out = Path(directory)
         clear_the_answer(out)
         write_format(out, asked_for(self._outputs or {}))
+        write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
         write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:

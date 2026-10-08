@@ -46,11 +46,11 @@ from specsolve.relational.answer_layout import (
     Record,
     check_format,
     checked_outputs,
-    digest_of,
     installed,
     kinds_of,
     read_outputs,
     read_reasons,
+    read_spec,
     saved_frames,
     write_whole,
 )
@@ -207,8 +207,6 @@ class Model:
     def __init__(self, spec: Buildable, sources: Mapping[str, Source]) -> None:
         self._spec = declared(spec)
         self._program = lowered(self._spec)
-        #: The document's digest, which every answer carries.
-        self._spec_digest = digest_of(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
@@ -373,7 +371,7 @@ class Model:
                 outputs=asked,
                 start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
             ),
-            _spec_digest=self._spec_digest,
+            _spec=self._spec,
             _solved_at=datetime.now(UTC),
             _provenance=_provenance(solver_name, solver_options, record_options or ()),
         )
@@ -721,7 +719,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
         expressions,
         _no_duals=no_duals,
-        _spec_digest=record.spec_digest,
+        _spec=read_spec(out),
         _solved_at=record.solved_at,
         _run=record.specsolve_run,
         _provenance=record.provenance,

@@ -3,15 +3,15 @@
 Under a directory, ``<kind>/<name>`` for each of the [`KINDS`][] the answer
 carries: one file per name from a result, one per slice from a sweep, read
 back as one. Beside them, the [`Record`][] says how the solve terminated and
-the [`Metrics`][] what it took, one row of each per result or per slice, and
-``reasons.parquet`` says why a kind or a name is deliberately not there. An
-archive holds this layout under its own ``answer/``
+the [`Metrics`][] what it took, one row of each per result or per slice,
+``spec.yaml`` is the spec the answer came from, and ``reasons.parquet`` says
+why a kind or a name is deliberately not there. An archive holds this layout
+under its own ``answer/``
 ([`specsolve.archive_layout`][]).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -19,6 +19,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
+from mathspec import to_spec
 
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.relational.status import SolveStatus, status_of
@@ -252,29 +253,6 @@ def check_format(directory: Path) -> None:
         )
 
 
-#: How many hex characters of a sha256 a digest here keeps.
-_DIGEST_WIDTH = 16
-
-
-def digest_of_file(path: Path) -> str:
-    """A short, stable name for a file's bytes, read a chunk at a time."""
-    sha = hashlib.sha256()
-    with path.open('rb') as handle:
-        while chunk := handle.read(1 << 20):
-            sha.update(chunk)
-    return sha.hexdigest()[:_DIGEST_WIDTH]
-
-
-def digest_of(spec: Spec) -> str:
-    """A short, stable name for a spec — what two answers must share to be comparable.
-
-    Over the YAML *spec* round-trips to, which is what an archive writes as
-    ``spec.yaml``. The data is not in it: two scenarios of one spec share
-    this.
-    """
-    return hashlib.sha256(spec.to_yaml().encode()).hexdigest()[:_DIGEST_WIDTH]
-
-
 class Provenance(NamedTuple):
     """What produced an answer: the solver, the options it ran with, and the packages that built the model.
 
@@ -302,7 +280,7 @@ NO_PROVENANCE = Provenance()
 
 
 class Record(NamedTuple):
-    """How a solve terminated, what it reached, and which spec it answered.
+    """How a solve terminated, what it reached, and when.
 
     One row per solve, and the same columns whoever wrote them: a result
     writes one, a sweep one per slice, which [`slice_axis`][] and
@@ -319,9 +297,6 @@ class Record(NamedTuple):
     #: say: a run stopped at a limit before any incumbent is ``ok`` with
     #: nothing to read.
     has_primal: bool
-    #: A digest of the spec this answered, or ``None`` where the solve was run
-    #: off a lowered program. Null on disk, never an empty string.
-    spec_digest: str | None
     #: When the solver returned, in UTC, or ``None`` for a solve that carried
     #: no clock, such as a result built by hand.
     solved_at: datetime | None = None
@@ -351,7 +326,6 @@ class Record(NamedTuple):
         objective: float,
         *,
         has_primal: bool,
-        spec_digest: str | None,
         solved_at: datetime | None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
@@ -366,7 +340,6 @@ class Record(NamedTuple):
             termination_condition,
             objective if has_primal else None,
             has_primal,
-            spec_digest,
             solved_at,
             **provenance._asdict(),
         )
@@ -504,6 +477,8 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
 #: The three files beside the frames: how the solve terminated, what reaching
 #: it cost, and the reasons behind whatever is deliberately not there.
 RECORD_FILE = 'record.parquet'
+#: The spec an answer came from, as the YAML it round-trips to.
+SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
 
@@ -537,8 +512,21 @@ def clear_the_answer(directory: Path) -> None:
 
     for kind in KINDS:
         shutil.rmtree(directory / kind, ignore_errors=True)
-    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
+    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE):
         (directory / member).unlink(missing_ok=True)
+
+
+def write_spec(directory: Path, spec: Spec | None) -> None:
+    """*spec* as [`SPEC_FILE`][] in *directory*, or no file for an answer that came from no spec."""
+    if spec is not None:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / SPEC_FILE).write_text(spec.to_yaml())
+
+
+def read_spec(directory: Path) -> Spec | None:
+    """The spec [`write_spec`][] left in *directory*, or ``None`` where it left none."""
+    held = directory / SPEC_FILE
+    return to_spec(held) if held.is_file() else None
 
 
 def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:

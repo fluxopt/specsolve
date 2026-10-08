@@ -542,7 +542,6 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition',
         'objective',
         'has_primal',
-        'spec_digest',
         'solved_at',
         'specsolve_run',
         'slice_axis',
@@ -559,7 +558,6 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition': dispatch_solution.termination_condition,
         'objective': dispatch_solution.objective,
         'has_primal': dispatch_solution.has_primal,
-        'spec_digest': dispatch_solution.spec_digest,
         'solved_at': dispatch_solution.solved_at,
         'specsolve_run': None,
         'slice_axis': None,
@@ -593,6 +591,7 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
         'primal',
         'reasons.parquet',
         'record.parquet',
+        'spec.yaml',
     ], 'no dual/ — there are none to write, and reasons.parquet says so; no activity/, which was not asked for'
     assert [p.name for p in (out / 'expression').iterdir()] == ['twice.parquet'], 'the one that evaluated'
     assert pl.read_parquet(out / 'expression' / 'twice.parquet')['value'].to_list() == [4.0, 6.0], (

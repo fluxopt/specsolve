@@ -28,10 +28,10 @@ case/
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (specsolve_run, source, digest) — what each of them is
     catalog.parquet               (specsolve_run, path, …, column, dim) — what each file holds and over which dimensions
     answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
+    answer/spec.yaml              the spec the answer came from, as a saved answer holds it
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
 ```

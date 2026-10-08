@@ -23,7 +23,6 @@ from specsolve.api import build, load_result, scan_result
 from specsolve.archive_layout import (
     ANSWER_DIR,
     AXIS_MEMBER,
-    DIGESTS_MEMBER,
     INPUTS_LAYOUT,
     SOURCES_DIR,
     SPEC_MEMBER,
@@ -80,12 +79,6 @@ class ResultArchive:
             [`load_archive`][], the path to one from [`scan_archive`][],
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
-        source_digests: ``(specsolve_run, source, digest)``, one row per
-            source, so two archives of one spec name the input that moved. A
-            digest is of the tidy table's parquet bytes before
-            ``specsolve_run`` is added, so one table digests alike under two
-            names. Two polars versions may digest one table differently, and
-            reading an archive does not verify digests.
         metrics: What reaching the answer took, as one
             [`Metrics`][specsolve.relational.answer_layout.Metrics].
     """
@@ -93,7 +86,6 @@ class ResultArchive:
     spec: Spec
     sources: Mapping[str, Source]
     result: Result
-    source_digests: pl.DataFrame
     metrics: Metrics
 
 
@@ -117,7 +109,6 @@ class SweepArchive:
             disk from [`scan_archive`][]. ``per_window=True`` reads an
             EachWindow sweep's windows where ``keep_windows=True`` kept them,
             and is refused otherwise.
-        source_digests: As [`ResultArchive`][] holds it, of the uncut sources.
     """
 
     spec: Spec
@@ -125,7 +116,6 @@ class SweepArchive:
     axis: Axis
     carry: Mapping[str, str]
     sweep: Sweep
-    source_digests: pl.DataFrame
 
 
 @dataclass(frozen=True)
@@ -243,14 +233,13 @@ def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepAr
     inputs = _inputs(under, archive, whole=whole)
     _refuse_another_layout(under / ANSWER_DIR, archive)
     spec, sources = inputs.spec, inputs.sources
-    digests = pl.read_parquet(under / DIGESTS_MEMBER)
     saved = under / ANSWER_DIR
     if inputs.axis is None:
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return ResultArchive(spec, sources, answer, digests, metrics)
+        return ResultArchive(spec, sources, answer, metrics)
     answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis, inputs.carry)
-    return SweepArchive(spec, sources, inputs.axis, inputs.carry, answer, digests)
+    return SweepArchive(spec, sources, inputs.axis, inputs.carry, answer)
 
 
 def _refuse_other_inputs(under: Path, archive: Path) -> None:
