@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve.relational.answer_layout import Output, Write
+    from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
@@ -416,7 +416,7 @@ class Model:
         """
         taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        def answer(under: Path, write: Write) -> None:
+        def answer(under: Path, write: FrameWriter) -> None:
             answered._save(under, write)
             write(taken, under / METRICS_FILE)
 
