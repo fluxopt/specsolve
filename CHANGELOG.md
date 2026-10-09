@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- perf(archive): an archive writes each of its sources once rather than twice
+- perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
 - perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
 
 ## 0.8.0 (2026-10-09)
