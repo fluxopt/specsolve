@@ -1564,6 +1564,23 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
 
 
+def test_the_read_times_what_a_solve_attaches_after_the_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`test_read` took the engine's answer straight, so work `Model.solve` adds after it went unmeasured.
+
+    A digest computed on save moved from the engine into `Model.solve`, and
+    the read's memory fell to what a save without it costs (#1904).
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    args, kwargs = module.read_setup(module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {}), 'parquet')
+    model = args[0]
+    finished = model._finished
+    calls: list[object] = []
+    monkeypatch.setattr(model, '_finished', lambda *given: calls.append(given) or finished(*given))
+    module.read(*args, **kwargs)
+    assert len(calls) == 1, 'the answer passes once through the step a solve takes after the engine'
+
+
 @pytest.mark.parametrize(
     'case_name', [pytest.param(n, id=n) for n in sorted(CASES) if any(s.label == 'xs' for s in CASES[n].ladder)]
 )
