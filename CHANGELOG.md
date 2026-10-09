@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(howto): a process that builds many small models can make each build faster with one polars setting ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM))
+
 ## 0.8.0 (2026-10-09)
 
 New:
