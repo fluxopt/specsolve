@@ -246,15 +246,15 @@ def read(model: Any, answer: Any, into: str) -> Counts:
 
     ``frames`` collects every variable's primal and every constraint's dual;
     ``parquet`` is ``Result.save``. Both read the default answer, which holds
-    no optional output. The answer passes through ``Model._finished`` as a
+    no optional output. The answer passes through ``Model._with_origin`` as a
     solve's does, so what `solve` attaches is timed too; a checkout older than
     it reads the engine's answer as it is.
     """
     answered = model._engine._answered
     kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
     result = answered(answer, 'highs', *kept, None)
-    if (finished := getattr(model, '_finished', None)) is not None:
-        result = finished(result, 'highs', None, ())
+    if (with_origin := getattr(model, '_with_origin', None)) is not None:
+        result = with_origin(result, 'highs', None, ())
     if into == 'frames':
         for name in model._program.variables:
             result.primal(name)
