@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
 - perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
 - perf(writers): a model with quadratic constraints writes its LP file in about the time of one without them ([#1939](https://github.com/fluxopt/specsolve/pull/1939))
 - docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
