@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
@@ -153,8 +154,13 @@ ANSWER_LAYOUT = 4
 FORMAT_FILE = 'format.json'
 
 
+@cache
 def installed(distribution: str) -> str | None:
-    """The installed version of *distribution*, or ``None`` from a source tree nothing installed."""
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
+
+    Read once per process: every solve records three, and reading the
+    metadata costs more than a small model's warm solve.
+    """
     try:
         return version(distribution)
     except PackageNotFoundError:
