@@ -29,7 +29,6 @@ from specsolve.relational.answer_layout import (
     PRICED,
     RECORD_FILE,
     RECORD_SCHEMA,
-    RUN,
     Metrics,
     Record,
     check_format,
@@ -44,6 +43,7 @@ from specsolve.relational.answer_layout import (
     write_whole,
 )
 from specsolve.relational.collect import collected
+from specsolve.relational.names import RUN
 from specsolve.relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 
 if TYPE_CHECKING:
