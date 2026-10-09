@@ -29,10 +29,10 @@ small model does little work for each query it pays for.
 
 - **Below one million variables, in-memory builds faster.** A model of 10,000
   to 170,000 variables built in up to 32% less time, at the same peak memory
-  ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)).
+  ([#1920](https://github.com/fluxopt/specsolve/pull/1920)).
 - **Above one million variables, keep the default.** The streaming engine
   builds faster there, and it can hold less memory. At 10 million
   variables, in-memory took up to 35% more time and 36% more memory
-  ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)).
+  ([#1920](https://github.com/fluxopt/specsolve/pull/1920)).
 - **Around one million variables, the two are level.** Neither engine was
   faster in every repeat.
