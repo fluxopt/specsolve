@@ -49,17 +49,16 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
-    VALUE,
     Metrics,
     Record,
     checked_outputs,
     kinds_of,
-    refuse_reserved,
     write_format,
     write_reasons,
     write_whole,
 )
 from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE, refuse_reserved
 from specsolve.relational.result import Result
 from specsolve.sources import numbered, refuse_unknown_start, refuse_unknown_start_word, tidy_sources
 from specsolve.sweep import (
@@ -606,9 +605,7 @@ def _uncut(program: Program, axes: Axes, name: str, table: pl.LazyFrame) -> pl.L
     A window's local index is not a column of the uncut table: the axis
     column stands where it would be.
     """
-    declared = (
-        [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
-    )
+    declared = [*program.parameters[name].dims, VALUE] if name in program.parameters else program.relations[name].roles
     locals_ = {each.into for each in axes if isinstance(each, EachWindow)}
     held = table.collect_schema().names()
     carried = [each.dim for each in axes if each.dim in held]

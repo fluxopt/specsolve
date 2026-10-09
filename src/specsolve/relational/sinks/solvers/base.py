@@ -14,6 +14,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
+from specsolve.relational.names import VALUE
 from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
@@ -384,4 +385,4 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     """
     import numpy as np
 
-    return pl.Series('value', np.asarray(values, dtype=np.float64))
+    return pl.Series(VALUE, np.asarray(values, dtype=np.float64))

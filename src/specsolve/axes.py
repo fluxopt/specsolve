@@ -21,6 +21,7 @@ from mathspec import did_you_mean
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
 from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE
 from specsolve.sources import in_microseconds, least_value
 
 if TYPE_CHECKING:
@@ -103,10 +104,10 @@ class Stitch:
             raise SpecsolveError(why)
         columns = frame.collect_schema().names()
         dropped = (*self.keys, *self.locals)
-        rest = [column for column in columns if column not in (*self.outer, *dropped, 'value')]
+        rest = [column for column in columns if column not in (*self.outer, *dropped, VALUE)]
         on = [column for column in self.owned.columns if column not in self.dims]
         restored = frame.lazy().join(self.owned.lazy(), on=on, how='inner').drop(dropped)
-        stitched = restored.select(*self.outer, *self.dims, *rest, 'value').sort(*self.outer, *self.dims, *rest)
+        stitched = restored.select(*self.outer, *self.dims, *rest, VALUE).sort(*self.outer, *self.dims, *rest)
         return stitched if isinstance(frame, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 

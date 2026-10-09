@@ -760,3 +760,24 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
         sps.check(spec)
     assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'
     assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic horizon'
+
+
+@pytest.mark.parametrize(
+    ('edge', 'expected'),
+    [pytest.param("edge='wrap'", 7.0, id='wrap'), pytest.param('edge=0', 3.0, id='fill')],
+)
+def test_an_offset_with_no_dimensions_is_one_offset_for_every_position(edge: str, expected: float):
+    """A dimensionless int offset moves every position as the literal ``offset=1`` does (#1891).
+
+    The offset was joined to the rows on its keys, which are none, and polars
+    refused the join.
+    """
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'k': {'dims': [], 'dtype': 'int'}, 'p': {'dims': ['t']}},
+        'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
+        'constraints': {'c': {'dims': ['t'], 'expression': f'x >= shift(p, along=t, offset=k, {edge})'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+    }
+    with differential(spec, {'t': [1, 2, 3], 'k': 1, 'p': [1.0, 2.0, 4.0]}) as run:
+        assert run.oracle == pytest.approx(expected), 'each x holds the value one position before it, or the edge'
