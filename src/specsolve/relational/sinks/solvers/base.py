@@ -394,8 +394,7 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     """One quantity a solver produced, in its own index â€” every sink's read-back.
 
     A series rather than a ``(label, value)`` frame: the read-back takes a
-    declaration's share by slicing.
+    declaration's share by slicing. Built by polars from the solver's list or
+    array directly, since a detour through numpy converts a list twice.
     """
-    import numpy as np
-
-    return pl.Series(VALUE, np.asarray(values, dtype=np.float64))
+    return pl.Series(VALUE, values, dtype=pl.Float64)
