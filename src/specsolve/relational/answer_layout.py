@@ -19,7 +19,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
-import polars.selectors as cs
 from mathspec import to_spec
 
 from specsolve.errors import LayoutError, SpecsolveError
@@ -488,21 +487,39 @@ def read_spec(directory: Path) -> Spec | None:
     return to_spec(held) if held.is_file() else None
 
 
+#: How an answer's writer puts one frame at one path: [`write_whole`][], or
+#: the writer an archive hands it.
+type Write = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
+
+
+def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+    """*frame* at *path*, arriving whole: written beside it and renamed into place.
+
+    A lazy frame is sunk, so it streams to disk.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + '.part')
+    if isinstance(frame, pl.LazyFrame):
+        frame.sink_parquet(part)
+    else:
+        frame.write_parquet(part)
+    part.replace(path)
+
+
 def write_reasons(
-    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], run: str | None = None
+    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: Write = write_whole
 ) -> None:
-    """``(kind, name, reason)`` for what a solve could not produce, or no file at all.
+    """``(kind, name, reason)`` for what a solve could not produce, or no file at all, written with *write*.
 
     An empty *name* is the whole kind, which is how the duals are absent.
     *absent* is ``{kind: {name: reason}}``, one reason per name left out.
-    *run* is as [`write_whole`][] takes it.
     """
     rows = [] if no_duals is None else [{'kind': 'dual', 'name': '', 'reason': no_duals}]
     rows += [
         {'kind': kind, 'name': name, 'reason': why} for kind, names in absent.items() for name, why in names.items()
     ]
     if rows:
-        write_whole(pl.DataFrame(rows), directory / REASONS_FILE, run)
+        write(pl.DataFrame(rows), directory / REASONS_FILE)
 
 
 def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]]:
@@ -546,44 +563,3 @@ def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
         file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
         for file in sorted(under.glob('*.parquet'))
     }
-
-
-def with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
-
-    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
-    timestamp in a time zone becomes the same instant in UTC.
-    """
-    return frame.with_columns(
-        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
-        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
-        pl.lit(run, dtype=pl.String).alias(RUN),
-    )
-
-
-def copy_with_run(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*: a parquet file written with [`with_run`][], anything else copied.
-
-    Streamed, so a spilled answer larger than memory is copied too.
-    """
-    import shutil
-
-    if source.suffix != '.parquet':
-        shutil.copy2(source, target)
-        return
-    write_whole(pl.scan_parquet(source), target, run)
-
-
-def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path, run: str | None = None) -> None:
-    """*frame* at *path*, arriving whole: written beside it and renamed into place.
-
-    A lazy frame is sunk, so it streams to disk. With a *run*, the frame is
-    written as an archive holds it, [`with_run`][].
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    part = path.with_name(path.name + '.part')
-    if isinstance(frame, pl.LazyFrame):
-        (frame if run is None else with_run(frame, run)).sink_parquet(part)
-    else:
-        (frame if run is None else with_run(frame, run)).write_parquet(part)
-    part.replace(path)
