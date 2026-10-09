@@ -158,8 +158,7 @@ FORMAT_FILE = 'format.json'
 def installed(distribution: str) -> str | None:
     """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
 
-    Read once per process: every solve records three, and reading the
-    metadata costs more than a small model's warm solve.
+    Read once per process, as every solve records three.
     """
     try:
         return version(distribution)
