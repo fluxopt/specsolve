@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import gurobipy_loop, gurobipy_matrix, highspy_matrix, linopy, pyomo, specsolve
+from bench.arms import gurobipy_loop, gurobipy_matrix, highspy_matrix, linopy, pyomo, specsolve, specsolve_in_memory
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -62,6 +62,7 @@ Counts = dict[str, Any]
 #: Name to the module that speaks for it.
 ARMS: dict[str, ModuleType] = {
     'specsolve': specsolve,
+    'specsolve-in-memory': specsolve_in_memory,
     'linopy': linopy,
     'pyomo': pyomo,
     'gurobipy-loop': gurobipy_loop,
