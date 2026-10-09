@@ -27,6 +27,7 @@
 }
 /* The context libraries: each hue mixed into the surface, so they recede in either scheme. */
 .bench {
+  --p1: color-mix(in oklab, var(--s1) 45%, var(--surface));
   --p2: color-mix(in oklab, var(--s2) var(--mix), var(--surface));
   --p3: color-mix(in oklab, var(--s3) var(--mix), var(--surface));
   --p4: color-mix(in oklab, var(--s4) var(--mix), var(--surface));
