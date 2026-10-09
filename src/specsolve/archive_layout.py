@@ -272,7 +272,7 @@ def _declared_files(
             yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
-def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
     """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
