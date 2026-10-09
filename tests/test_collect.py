@@ -8,6 +8,7 @@ import pytest
 import specsolve as sps
 from specsolve.relational import collect
 from specsolve.relational.collect import collected
+from specsolve.relational.engine import assembly
 from specsolve.relational.engine.scope import Scope, ordinal
 
 
@@ -73,7 +74,11 @@ def test_a_coordinate_product_arrives_in_label_order():
 
 
 def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_frame_inputs):
-    """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857)."""
+    """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857).
+
+    The limit is 0, so the rest of the build is left to polars: a small one is in memory throughout.
+    """
+    monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
     engines = {}
     original = pl.LazyFrame.collect
 
@@ -117,11 +122,38 @@ def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispat
     )
 
 
-def test_a_model_over_the_limit_is_built_on_polars_choice(engines, monkeypatch, dispatch_yaml, dispatch_frame_inputs):
-    """Above `IN_MEMORY_COLUMNS` the streaming engine keeps the build's peak down, so polars chooses.
+@pytest.mark.parametrize(
+    ('limit', 'spec'),
+    [
+        pytest.param(0, 'dispatch', id='columns-over-the-limit'),
+        pytest.param(10, 'wide', id='rows-over-the-limit'),
+    ],
+)
+def test_a_model_over_the_limit_is_built_on_polars_choice(
+    engines, monkeypatch, limit, spec, dispatch_yaml, dispatch_frame_inputs
+):
+    """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses.
 
-    Reading the sources stays in memory at any size: each read holds one table whole.
+    A constraint over dims no variable spans counts too: four labels on each of
+    two dims reach 8 columns and 16 rows.
     """
-    monkeypatch.setattr(collect, 'IN_MEMORY_COLUMNS', 0)
-    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
+    if spec == 'dispatch':
+        sps.build(dispatch_yaml, dispatch_frame_inputs)
+    else:
+        labels = ['p', 'q', 'r', 's']
+        sps.build(
+            {
+                'dimensions': {'a': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
+                'parameters': {'c': {'dims': ['a', 'b']}},
+                'variables': {'x': {'dims': ['a']}, 'y': {'dims': ['b']}},
+                'constraints': {'cap': {'dims': ['a', 'b'], 'expression': 'x + y <= c'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y)'},
+            },
+            {
+                'a': labels,
+                'b': labels,
+                'c': pl.DataFrame({'a': [a for a in labels for _ in labels], 'b': labels * 4, 'value': 1.0}),
+            },
+        )
     assert 'auto' in engines, 'the build left its engine to polars'

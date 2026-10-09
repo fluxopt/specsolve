@@ -7,9 +7,10 @@ too.
 ## What specsolve does by itself
 
 specsolve reads and attaches every source on the in-memory engine. It then
-builds a model of at most 250,000 variable columns on the in-memory engine, and
-a larger model on polars' default engine. It counts the columns before it builds
-them, from the sizes of the dimensions each variable is declared over.
+builds a model of at most 250,000 columns and 250,000 rows on the in-memory
+engine, and a larger model on polars' default engine. It counts them before it
+builds them, from the sizes of the dimensions each variable and each constraint
+is declared over.
 
 The default engine is polars' streaming engine. It pays a fixed cost on every
 query, and a small model does little work for each query it pays for.
@@ -40,5 +41,5 @@ keeps the setting in the environment, so workers that a
 [parallel sweep](parallel.md) starts after it inherit it.
 
 The setting moves every query in the process onto the in-memory engine: a model
-above 250,000 columns, what specsolve reads after a build, such as an answer,
-and your own polars queries.
+above that size, what specsolve reads after a build, such as an answer, and your
+own polars queries.

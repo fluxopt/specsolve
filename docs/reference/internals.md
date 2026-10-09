@@ -93,9 +93,10 @@ Each entry says what the thing is, then the module it lives in.
   this polars has the streaming engine, the in-memory one otherwise. Inside
   `with in_memory():` every collect names the in-memory engine: reading and
   attaching the sources, the variable bounds, and the whole build of a model
-  that `is_small()`. `collected()` is the one way a frame is collected, on that
-  engine and with polars' join reordering off. `collect_engine()` is not the `Engine`
-  (`relational/collect.py`).
+  whose columns and rows each reach at most `IN_MEMORY_REACH`
+  (`relational/engine/assembly.py`). `collected()` is the one way a frame is
+  collected, on that engine and with polars' join reordering off.
+  `collect_engine()` is not the `Engine` (`relational/collect.py`).
 
 ## Sinks
 

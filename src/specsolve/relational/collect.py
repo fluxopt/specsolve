@@ -23,12 +23,9 @@ import polars as pl
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-__all__ = ['collect_engine', 'collected', 'collected_all', 'in_memory', 'is_small']
+__all__ = ['collect_engine', 'collected', 'collected_all', 'in_memory']
 
 _AS_WRITTEN = pl.QueryOptFlags(join_order=False)
-
-#: The most columns a model may have for its build to collect in memory.
-IN_MEMORY_COLUMNS = 250_000
 
 _in_memory: ContextVar[bool] = ContextVar('in_memory', default=False)
 
@@ -41,11 +38,6 @@ def collect_engine() -> Literal['auto', 'in-memory']:
     except BaseException:  # a refusal is a pyo3 panic, which is not an Exception
         return 'in-memory'
     return 'auto'
-
-
-def is_small(columns: int) -> bool:
-    """Whether a model of *columns* builds [`in_memory`][]: at most [`IN_MEMORY_COLUMNS`][]."""
-    return columns <= IN_MEMORY_COLUMNS
 
 
 @contextmanager

@@ -17,7 +17,7 @@ from mathspec import program
 from specsolve.errors import DataError
 from specsolve.messages import null_bounds_message
 from specsolve.relational import sinks
-from specsolve.relational.collect import collected, in_memory, is_small
+from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
 from specsolve.relational.engine.pieces import Piece, absence_restrictions
@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
     from specsolve.relational.engine.attaching import AttachedSources
 
+
+#: The most columns or rows a model may reach for its build to collect in memory.
+IN_MEMORY_REACH = 250_000
 
 #: The frames a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -116,11 +119,11 @@ class Assembly:
 
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
-        each half. A build whose [`_reach`][]
-        [`is_small`][] collects [`in_memory`][]. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks.
+        each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
+        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
+        [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
-        with in_memory(is_small(self._reach())):
+        with in_memory(self._reach() <= IN_MEMORY_REACH):
             cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
             sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
@@ -151,9 +154,16 @@ class Assembly:
         return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _reach(self) -> int:
-        """The columns the variables would have with no ``where``: an upper bound on the build's, known before it."""
+        """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
+
+        A constraint over dims no variable spans has more rows than there are
+        columns, so the rows count too.
+        """
         cardinality = self.attached.cardinality
-        return sum(math.prod(cardinality[d] for d in v.dims) for v in self.program.variables.values())
+        return max(
+            sum(math.prod(cardinality[d] for d in declared.dims) for declared in declarations.values())
+            for declarations in (self.program.variables, self.program.constraints)
+        )
 
     def _matrix_share(
         self, pieces: list[pl.LazyFrame], name: str, *expressions: program.Expression
