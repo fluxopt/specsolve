@@ -267,6 +267,7 @@ against each other. Publish a whole ladder or none of it.
 | | `lp` / `mps` | `highs` | `gurobi` | `xpress` |
 |---|---|---|---|---|
 | `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` | `sps.build(...)` then `Xpress(handoff)` |
+| `specsolve-in-memory` | as `specsolve`, inside `pl.Config(engine_affinity='in-memory')` | as `specsolve` | as `specsolve` | as `specsolve` |
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
