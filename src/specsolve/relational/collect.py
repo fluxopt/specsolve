@@ -50,13 +50,13 @@ def is_small(columns: int) -> bool:
 
 @contextmanager
 def in_memory(on: bool = True) -> Iterator[None]:
-    """Every collect in the block runs on the in-memory engine where *on*, and as before otherwise.
+    """Every collect in the block runs on the in-memory engine where *on*, and on [`collect_engine`][] otherwise.
 
     polars 2.0's streaming engine pays a fixed cost per query, which is most of
     a small model's build; what it buys is a lower peak on a large one. The
     choice is per thread, so each slice of a sweep makes its own.
     """
-    token = _in_memory.set(on or _in_memory.get())
+    token = _in_memory.set(on)
     try:
         yield
     finally:
