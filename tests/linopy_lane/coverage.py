@@ -15,15 +15,16 @@ from __future__ import annotations
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
+import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import sparse_divisor_message, uncovered_constant_message
+from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from tests.linopy_lane.where import EvaluationContext
 
@@ -119,9 +120,13 @@ def _under_regions(
 
 
 def check_divisors_cover(
-    name: str, expressions: tuple[program.Expression, ...], ctx: EvaluationContext, mask: Any
+    name: str,
+    expressions: tuple[program.Expression, ...],
+    ctx: EvaluationContext,
+    mask: Any,
+    evaluate: Callable[[program.Expression], Any],
 ) -> None:
-    """A divisor must have a value wherever this declaration divides by it.
+    """A divisor must have a value, and one that is not zero, wherever this declaration divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
     keyed to the coordinate product would refuse models that never touch the
@@ -133,7 +138,9 @@ def check_divisors_cover(
     Reached before :func:`~tests.linopy_lane.builder._eval`, the last moment the
     gap is visible: :func:`absence.coefficient` fills an uncovered slot with
     0.0 at the parameter leaf, and from there the division yields an infinity
-    and the row is masked out silently.
+    and the row is masked out silently. A zero the data holds is asked after
+    the gaps, of the divisor as *evaluate* reads it, so a divisor that adds up
+    to zero is found too.
     """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
@@ -150,3 +157,14 @@ def check_divisors_cover(
                 missing = gaps_under(ctx.dataset[param], needed)
                 if missing:
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
+            zeros = _zeros_under(evaluate(quotient.divisor), needed)
+            if zeros:
+                raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+
+
+def _zeros_under(divisor: Any, mask: Any) -> int:
+    """How many slots of *divisor* are zero where *mask* still admits the row."""
+    zero = xr.DataArray(divisor) == 0
+    if mask is not None:
+        zero = zero & mask
+    return int(zero.sum())

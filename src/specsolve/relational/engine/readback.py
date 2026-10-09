@@ -13,6 +13,7 @@ from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
+from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, InfeasibleSubsystem
 from specsolve.relational.sinks.handoff import SENSE_CODES
 from specsolve.relational.sinks.solvers.base import settled
@@ -70,15 +71,15 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     columns = model.handoff.cols
     bounds = pl.concat(
         [
-            pl.DataFrame({'var_label': indices, 'value': columns[column].gather(indices)}).select(
-                'var_label', pl.lit(side).alias('bound'), 'value'
+            pl.DataFrame({'var_label': indices, VALUE: columns[column].gather(indices)}).select(
+                'var_label', pl.lit(side).alias('bound'), VALUE
             )
             for side, column, indices in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
         ]
     )
     return InfeasibleSubsystem(
         constraints=_members(model, model.constraints, model.program.constraints, rows, 'row', ('sense', 'rhs')),
-        bounds=_members(model, model.variables, model.program.variables, bounds, 'var_label', ('bound', 'value')),
+        bounds=_members(model, model.variables, model.program.variables, bounds, 'var_label', ('bound', VALUE)),
     )
 
 
@@ -227,7 +228,7 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     ):
         reduced += summed(frame['col_l'], weights * x[index(frame['col_r'])])
         reduced += summed(frame['col_r'], weights * x[index(frame['col_l'])])
-    return pl.Series('value', reduced, dtype=pl.Float64)
+    return pl.Series(VALUE, reduced, dtype=pl.Float64)
 
 
 def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
@@ -245,7 +246,7 @@ def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
     slack = np.where(
         rows.sense == SENSE_CODES['<='], gap, np.where(rows.sense == SENSE_CODES['>='], -gap, -np.abs(gap))
     )
-    return pl.Series('value', slack, dtype=pl.Float64)
+    return pl.Series(VALUE, slack, dtype=pl.Float64)
 
 
 def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
@@ -295,15 +296,15 @@ def _aligned(
             f'answer. Re-solve rather than read.'
         )
     if not dims:
-        return stored['value'].rename(_SOLUTION)
+        return stored[VALUE].rename(_SOLUTION)
     order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
-    if joined['value'].null_count():
+    if joined[VALUE].null_count():
         raise SpecsolveError(
             f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
-    return joined['value'].rename(_SOLUTION)
+    return joined[VALUE].rename(_SOLUTION)
 
 
 def readers(
@@ -359,7 +360,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).pipe(collected)
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
@@ -392,7 +393,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     import numpy as np
 
     handoff = model.handoff
-    status = pl.col('value').cast(BASIS).to_physical()
+    status = pl.col(VALUE).cast(BASIS).to_physical()
     placed_columns = np.full(handoff.column_count, AT_LOWER, dtype=np.int8)
     placed = _place(placed_columns, model, model.variables, model.program.variables, columns, status)
     placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
@@ -414,7 +415,7 @@ def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.
 
     out = np.full(model.handoff.column_count, np.nan)
     _refuse_nothing_placed(
-        _place(out, model, model.variables, model.program.variables, values, pl.col('value').cast(pl.Float64))
+        _place(out, model, model.variables, model.program.variables, values, pl.col(VALUE).cast(pl.Float64))
     )
     return out
 
@@ -445,19 +446,19 @@ def _place(
     """
     import numpy as np
 
-    positions = pl.Series('value', np.arange(len(into), dtype=np.int64))
+    positions = pl.Series(VALUE, np.arange(len(into), dtype=np.int64))
     placed = 0
     for name, labelled in held.items():
         dims = list(declared[name].dims)
         before = previous.get(name)
-        if before is None or set(before.collect_schema().names()) != {*dims, 'value'}:
+        if before is None or set(before.collect_schema().names()) != {*dims, VALUE}:
             continue
         here = laid_out(model.attached, labelled, tuple(dims), positions).select(
-            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col('value').alias(_LABEL_ORDER)
+            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col(VALUE).alias(_LABEL_ORDER)
         )
         given = before.select(*(pl.col(dim).cast(pl.String) for dim in dims), value)
         found = (here.join(given, on=dims, how='inner') if dims else here.join(given, how='cross')).pipe(collected)
-        into[found[_LABEL_ORDER].to_numpy()] = found['value'].to_numpy()
+        into[found[_LABEL_ORDER].to_numpy()] = found[VALUE].to_numpy()
         placed += found.height
     return placed
 

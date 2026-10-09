@@ -35,13 +35,13 @@ from specsolve.relational.answer_layout import (
     ANSWER_LAYOUT,
     KINDS,
     METRICS_FILE,
-    RUN,
     Metrics,
     other_layout,
     row_of,
     saved_frames,
 )
 from specsolve.relational.collect import collected
+from specsolve.relational.names import RUN
 from specsolve.sweep import (
     MANIFEST_FILE,
     OWNED_FILE,

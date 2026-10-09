@@ -27,7 +27,6 @@ from specsolve.archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve.relational.answer_layout import (
     ANSWER_LAYOUT,
     METRICS_FILE,
-    RUN,
     Metrics,
     Output,
     Provenance,
@@ -35,6 +34,7 @@ from specsolve.relational.answer_layout import (
     read_reasons,
     write_reasons,
 )
+from specsolve.relational.names import RUN
 from specsolve.relational.sinks.solvers import SOLVERS
 from specsolve.sources import attachable, tidy_sources
 from tests.conftest import (

@@ -29,12 +29,11 @@ from specsolve.relational.answer_layout import (
     METRICS_FILE,
     OUTPUT_KINDS,
     RECORD_FILE,
-    RESERVED,
-    RUN,
     consolidated,
     write_format,
     write_whole,
 )
+from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
 if TYPE_CHECKING:
@@ -244,7 +243,7 @@ def _catalog(
 
 def _rows(head: tuple[object, ...], held: Path, dims: Mapping[str, str]) -> list[tuple[object, ...]]:
     """*head* once per column of labels *held* is written with, and once with no column where it has none."""
-    labels = [column for column in _columns(held) if column != 'value' and not column.startswith(RESERVED)]
+    labels = [column for column in _columns(held) if column != VALUE and not column.startswith(RESERVED_PREFIX)]
     return [(*head, column, dims.get(column)) for column in labels] or [(*head, None, None)]
 
 
@@ -304,7 +303,7 @@ def _stamped(source: Path, target: Path, run: str) -> None:
 
 
 def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][specsolve.relational.answer_layout.RUN] set to *run*.
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
     timestamp in a time zone becomes the same instant in UTC.

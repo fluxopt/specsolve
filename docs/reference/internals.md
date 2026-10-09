@@ -84,7 +84,8 @@ Each entry says what the thing is, then the module it lives in.
 
 **Coverage**
 : Whether data is there where a declaration reads it. A divisor and a
-  constant piece are refused at the last moment the gap can still be seen
+  constant piece are refused at the last moment the gap can still be seen,
+  and a value that is not finite at the same moment
   (`relational/engine/coverage.py`).
 
 **Collect engine**
@@ -148,7 +149,7 @@ Each entry says what the thing is, then the module it lives in.
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
   `Metrics` rows, `reasons.parquet` and the `format.json` stamp.
   `ANSWER_LAYOUT` is its version, and a change to it raises the number
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
@@ -161,7 +162,7 @@ Each entry says what the thing is, then the module it lives in.
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names
   that start with `specsolve_` are reserved for columns like it
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 ## Sweeps
 
