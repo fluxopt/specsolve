@@ -49,6 +49,13 @@ if TYPE_CHECKING:
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
 
+#: The handoff frames each output reads after the run. A last solve keeps only these.
+_READ_BY: dict[str, tuple[str, ...]] = {
+    'reduced_cost': ('obj', 'matrix', 'qmatrix'),
+    'basis': ('cols', 'rows'),
+    'slack': ('rows',),
+}
+
 
 def _statuses(codes: np.ndarray) -> pl.Series:
     """Basis status codes as the series a frame is laid out from."""
@@ -278,26 +285,18 @@ class Engine:
         return self._answered(answer, solver_name, lower, outputs)
 
     def _let_go(self, solver: sinks.Solver, outputs: frozenset[Output]) -> None:
-        """Drop the frames the answer of a last solve does not read, from the build and from *solver*.
+        """Drop what the answer of a last solve does not read, from *solver* and from the build.
 
-        The solver has its own copy of the model by now, so the build's
-        matrix, objective, columns and sets are a second copy. ``rows`` and
-        the quadratic objective stay, since the run reads them. The columns
-        stay where a basis is asked for, and the matrix and objective where a
-        reduced cost is.
+        The solver holds its own copy of the model by now, so the build keeps
+        only the frames an asked output reads ([`_READ_BY`][]). ``quad`` always
+        stays: the HiGHS run reads it to refuse a nonconvex objective.
         """
         solver.release()
         handoff = self._model.handoff
-        priced, based = 'reduced_cost' in outputs, 'basis' in outputs
-        kept = replace(
-            handoff,
-            cols=handoff.cols if based else handoff.cols.clear(),
-            obj=handoff.obj if priced else handoff.obj.clear(),
-            qmatrix=handoff.qmatrix if priced else handoff.qmatrix.clear(),
-            matrix=handoff.matrix if priced else handoff.matrix.clear(),
-            sos=handoff.sos.clear(),
-        )
-        self._built = replace(self._model, handoff=kept)
+        kept = {frame for kind in outputs for frame in _READ_BY.get(kind, ())}
+        frames = ('cols', 'obj', 'qmatrix', 'rows', 'matrix', 'sos')
+        dropped = {f: getattr(handoff, f).clear() for f in frames if f not in kept}
+        self._built = replace(self._model, handoff=replace(handoff, **dropped))
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str

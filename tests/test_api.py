@@ -1155,8 +1155,8 @@ def _held_at_the_run(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, int | bo
     [
         pytest.param((), set(), id='nothing-asked'),
         pytest.param(('reduced_cost',), {'matrix', 'obj'}, id='reduced-cost-keeps-matrix-and-objective'),
-        pytest.param(('basis',), {'cols'}, id='basis-keeps-columns'),
-        pytest.param(('slack', 'activity'), set(), id='slack-reads-rows-alone'),
+        pytest.param(('basis',), {'cols', 'rows'}, id='basis-keeps-columns-and-rows'),
+        pytest.param(('slack', 'activity'), {'rows'}, id='slack-keeps-rows-alone'),
     ],
 )
 def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
@@ -1165,7 +1165,7 @@ def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
     """``sps.solve`` closes its model after its one solve, so the build's copy of what the solver loaded goes first.
 
     The answer still reads what it needs: each output keeps the frames it is
-    computed from, and ``rows`` always stays.
+    computed from, and nothing else.
     """
     seen = _held_at_the_run(monkeypatch)
     with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs=outputs) as solved:
@@ -1175,8 +1175,7 @@ def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
     assert not held['solver holds coefficients'], (
         'nor does it keep the coefficients an update would compare against, since none follows'
     )
-    assert held['rows'] > 0, 'rows stay, since the run and slack read them'
-    for frame in ('matrix', 'obj', 'cols'):
+    for frame in ('matrix', 'obj', 'cols', 'rows'):
         assert (held[frame] > 0) == (frame in kept), f'{frame} is kept exactly where {outputs or "nothing"} reads it'
 
 
@@ -1188,4 +1187,4 @@ def test_a_model_kept_for_more_solves_keeps_its_build(dispatch_yaml, dispatch_fr
     (held,) = seen
     assert held['solver holds frames'], 'a held solver keeps the frames until an update asks for their digest'
     assert held['solver holds coefficients'], 'and the coefficients an update compares against'
-    assert all(held[frame] > 0 for frame in ('matrix', 'obj', 'cols')), 'the build stays whole'
+    assert all(held[frame] > 0 for frame in ('matrix', 'obj', 'cols', 'rows')), 'the build stays whole'
