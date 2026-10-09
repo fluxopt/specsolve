@@ -211,7 +211,9 @@ class Handoff:
 
         The question a loaded solver asks of a rebuilt model: may I keep what
         I hold and take the new numbers by value? Bounds, costs and right-hand
-        sides go in that way. The counts, the matrix, each row's comparison,
+        sides go in that way. The matrix's coefficients are the solver's own
+        question ([`keeps`][specsolve.relational.sinks.solvers.base.Solver.keeps]).
+        The counts, which column each matrix entry sits in, each row's comparison,
         each column's type, every SOS member, the quadratic objective's
         pattern and each quadratic *constraint* whole — coefficients and
         right-hand side — do not, so a model whose digest moved is loaded
@@ -232,7 +234,6 @@ class Handoff:
             self.rows.filter(pl.col('row') >= self.linear_row_count)['rhs'].to_numpy(),
             self.rows['sense'].to_physical().to_numpy(),
             self.matrix['col'].to_numpy(),
-            self.matrix['coeff'].to_numpy(),
             self.row_starts,
             *(self.sos[column].to_numpy() for column in self.sos.columns),
         ).digest()
