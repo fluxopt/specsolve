@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(benchmarks): the published benchmarks measure specsolve on polars' in-memory engine beside its default ([#1923](https://github.com/fluxopt/specsolve/pull/1923))
+
 - docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
 
 ## 0.8.0 (2026-10-09)
