@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM))
+- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
 
 ## 0.8.0 (2026-10-09)
 
