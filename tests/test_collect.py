@@ -122,6 +122,13 @@ def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispat
     )
 
 
+def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_frame_inputs):
+    """A block hands the engine back on exit, so the caller's own query after a small build is polars' choice."""
+    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    collected(pl.LazyFrame({'probe': [0]}))
+    assert engines[-1] == 'auto', 'the query after the build still named the in-memory engine'
+
+
 @pytest.mark.parametrize(
     ('limit', 'spec'),
     [
