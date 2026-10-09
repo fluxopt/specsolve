@@ -20,8 +20,15 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - refactor(api): keep= is gone, and a re-solve carries on from where the last solve ended unless start=None says otherwise ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
 - fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
 - feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
+- fix(data): a datetime dimension takes a date, a nanosecond or a pandas seconds column for the same instant ([#1908](https://github.com/fluxopt/specsolve/pull/1908))
 - docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
-- fix(archive): an archive reads back on any rebuild of its data, because the check compares the data's values rather than the built model ([#1904](https://github.com/fluxopt/specsolve/pull/1904))
+- fix(engine): an update whose coefficients moved only in their last bits keeps the loaded solver and its warm start ([#1906](https://github.com/fluxopt/specsolve/pull/1906))
+- fix(data): a value that is not finite, from a divisor that is zero or an infinite value times a variable, is refused rather than sent to the solver ([#1905](https://github.com/fluxopt/specsolve/pull/1905))
+- fix(engine): an expression that reads a variable with no dimensions reads its solved value, in a save and a sweep too ([#1903](https://github.com/fluxopt/specsolve/pull/1903))
+- fix(data): an int parameter can be given as one number, and a sum_back window or a shift offset may be a parameter with no dimensions ([#1907](https://github.com/fluxopt/specsolve/pull/1907))
+- docs(data): data given to a model must not change while the model or its answers are in use ([#1909](https://github.com/fluxopt/specsolve/pull/1909))
+- fix(archive): an archive is read as it was written, so one whose rebuild differs in its last bit reads back, and an answer no longer carries a model digest ([#1904](https://github.com/fluxopt/specsolve/pull/1904))
+- feat(api): an answer carries the spec it answered rather than a digest of it, and an archive no longer digests its sources ([#1913](https://github.com/fluxopt/specsolve/pull/1913))
 
 ## 0.7.0 (2026-10-07)
 

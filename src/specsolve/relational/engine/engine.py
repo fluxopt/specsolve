@@ -33,6 +33,7 @@ from specsolve.relational.engine.assembly import (
 from specsolve.relational.engine.attaching import attach
 from specsolve.relational.engine.compiler import Compiler, Solution
 from specsolve.relational.engine.scope import Scope
+from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, Diagnostics, Result
 from specsolve.relational.sinks.solvers.base import Basis
 
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
 
 def _statuses(codes: np.ndarray) -> pl.Series:
     """Basis status codes as the series a frame is laid out from."""
-    return pl.Series('value', BASIS_STATUSES, dtype=BASIS).gather(codes)
+    return pl.Series(VALUE, BASIS_STATUSES, dtype=BASIS).gather(codes)
 
 
 def _nothing_to_start_message(discrete: bool) -> str:
@@ -389,16 +390,6 @@ class Engine:
                 _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
             )
         return readback.infeasible_subsystem(self._model, found)
-
-    def contents(self) -> str:
-        """This build's digest: the built model whole, to the last bit ([`contents`][specsolve.relational.sinks.handoff.Handoff.contents]).
-
-        Raises:
-            SpecsolveError: Asked of an engine holding no built model.
-        """
-        if self._built is None:
-            raise SpecsolveError(_no_built_model('to digest'))
-        return self._model.handoff.contents
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""

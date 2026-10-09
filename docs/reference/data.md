@@ -63,7 +63,9 @@ each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
 **A datetime label is held in microseconds**, in the time zone it arrives in.
-A column must be in its index's time zone.
+A column must be in its index's time zone. Under a `dtype: datetime`
+dimension, a date is the microsecond its day starts on. The index
+`[date(2030, 1, 1)]` and a column of `datetime(2030, 1, 1)` hold the same label.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters. Which labels an axis has is data's to say, and that rule is
@@ -82,6 +84,21 @@ names; a bare relation holds each row at most once.
 **A coordinate has a value, or it has no row.** Attach refuses a row whose
 value is null or NaN. Polars and parquet write a hole as a null, pandas has
 only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
+
+**A number the model computes is finite.** A coefficient, a constant side and
+the objective constant each need a finite number, so the build refuses a value
+that is not finite wherever the model divides, or wherever a value multiplies a
+variable:
+
+| The model reads | The build |
+|---|---|
+| `x / d` or `h / d`, `d` zero | refuses it: there is no quotient |
+| `x * p`, `p` infinite | refuses it: there is no coefficient |
+| `h` on a constant side, `h` infinite | keeps it: `x <= inf` never binds |
+
+An infinite value in the data is accepted as a bound or on a constant side,
+where it is a limit that never binds. A reported quotient by zero is absent
+([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
 
 ### Refused
 
@@ -118,6 +135,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
 | a divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
+| a value that is not finite, from a divisor that is zero or an infinite value times a variable | names the declaration and how many |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
 
@@ -127,7 +145,10 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 |---|---|
 | an undeclared column in a table | ignored |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
+| a date under a `dtype: datetime` dimension | held as the microsecond its day starts on |
+| a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
 | a coordinate with no row | sparse variables; what a missing row means where it is read is [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` names the parameters that arrived short of their dims ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
+| an infinite value as a bound or on a constraint's constant side | a limit that never binds |
 | a value that is readable and wrong | bound as given |
 
 ### Stray labels
@@ -177,6 +198,15 @@ original did.
 **A built model takes new numbers with
 [`update`](api.md#specsolve.types.Model.update).** A sweep over slices of one
 dimension is [`solve_over`](sweeps.md). Both attach through the rules above.
+
+**Data given to a model must not change while the model or its answers are in
+use.** A model reads each source once, at `build` and at each `update`, and keeps
+what it read without a copy. A parquet path is read into memory then, so a file
+rewritten afterwards does not reach the model. A table over memory you still
+write into does: a polars frame made from a numpy array shares the array's
+memory, and writing into the array changes what an answer's
+[`evaluate`](api.md#specsolve.types.Result.evaluate) reads and what a save
+records. Change data through `update`, or pass a copy.
 
 **The [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
 attaches by these same rules, refusals included**, held to them by

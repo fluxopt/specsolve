@@ -3,15 +3,15 @@
 Under a directory, ``<kind>/<name>`` for each of the [`KINDS`][] the answer
 carries: one file per name from a result, one per slice from a sweep, read
 back as one. Beside them, the [`Record`][] says how the solve terminated and
-the [`Metrics`][] what it took, one row of each per result or per slice, and
-``reasons.parquet`` says why a kind or a name is deliberately not there. An
-archive holds this layout under its own ``answer/``
+the [`Metrics`][] what it took, one row of each per result or per slice,
+``spec.yaml`` is the spec the answer came from, and ``reasons.parquet`` says
+why a kind or a name is deliberately not there. An archive holds this layout
+under its own ``answer/``
 ([`specsolve.archive_layout`][]).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -19,14 +19,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
-import polars.selectors as cs
+from mathspec import to_spec
 
 from specsolve.errors import LayoutError, SpecsolveError
-from specsolve.relational.collect import collected
+from specsolve.relational.names import RUN
 from specsolve.relational.status import SolveStatus, status_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from mathspec import Spec
@@ -146,49 +146,6 @@ def not_requested_message(kind: str, name: str) -> str:
     )
 
 
-#: The prefix reserved, in any letter case, for the columns specsolve adds, so
-#: that no name a spec declares can collide with one.
-RESERVED = 'specsolve_'
-
-
-def refuse_reserved(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it starts with [`RESERVED`][] in any letter case.
-
-    Raises:
-        SpecsolveError: A name a column specsolve adds could collide with.
-    """
-    if name.casefold().startswith(RESERVED):
-        raise SpecsolveError(
-            f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
-            f'specsolve adds, so it could collide with one. Rename it.'
-        )
-
-
-#: The column that holds the numbers beside a declaration's dimensions, in a
-#: parameter's table and in every frame an answer comes back as. Besides the
-#: names under [`RESERVED`][], it is the one name a dimension may not take.
-VALUE = 'value'
-
-
-def refuse_value(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it is [`VALUE`][] in any letter case.
-
-    Raises:
-        SpecsolveError: A name the ``value`` column would collide with.
-    """
-    if name.casefold() == VALUE:
-        raise SpecsolveError(
-            f'{which} has the name of the column {VALUE!r}, which holds the numbers beside the dimensions '
-            f"in a parameter's table and in every frame an answer comes back as. Query engines read column "
-            f'names without case, so the two columns would collide in any letter case. Rename it.'
-        )
-
-
-#: The column an archive adds to every table it holds, naming the run the
-#: table came from. Read back, a frame comes without it.
-RUN = f'{RESERVED}run'
-
-
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
 ANSWER_LAYOUT = 5
@@ -254,54 +211,6 @@ def check_format(directory: Path) -> None:
         )
 
 
-#: How many hex characters of a sha256 a digest here keeps.
-_DIGEST_WIDTH = 16
-
-
-def digest_of_file(path: Path) -> str:
-    """A short, stable name for a file's bytes, read a chunk at a time."""
-    sha = hashlib.sha256()
-    with path.open('rb') as handle:
-        while chunk := handle.read(1 << 20):
-            sha.update(chunk)
-    return sha.hexdigest()[:_DIGEST_WIDTH]
-
-
-def digest_of(spec: Spec) -> str:
-    """A short, stable name for a spec — what two answers must share to be comparable.
-
-    Over the YAML *spec* round-trips to, which is what an archive writes as
-    ``spec.yaml``. The data is not in it: two scenarios of one spec share
-    this.
-    """
-    return hashlib.sha256(spec.to_yaml().encode()).hexdigest()[:_DIGEST_WIDTH]
-
-
-def digest_of_data(spec_digest: str, tables: Mapping[str, pl.LazyFrame], ordered: Collection[str]) -> str:
-    """A short, stable name for a spec and the data attached to it — what an answer and a rebuild must share.
-
-    Over the values the tables hold rather than anything computed from them,
-    so a rebuild on another machine or another polars version agrees. A
-    table's rows count in any order, except the tables *ordered* names: a
-    dimension's row order is its coordinate order. A label counts by its text,
-    whether it arrives as a string, a category or an enum member. A tidied
-    table holds no null, so none is told apart.
-    """
-    sha = hashlib.sha256(spec_digest.encode())
-    for name in sorted(tables):
-        table = tables[name].with_columns(cs.categorical().cast(pl.String), cs.enum().cast(pl.String)).pipe(collected)
-        if name not in ordered:
-            table = table.sort(table.columns)
-        sha.update(f'\x1e{name}\x1f{table.height}'.encode())
-        for column in table.iter_columns():
-            if column.dtype == pl.String:
-                sha.update(column.str.len_bytes().to_numpy().tobytes())
-                sha.update(column.str.join('').item().encode())
-            else:
-                sha.update(column.to_physical().to_numpy().tobytes())
-    return sha.hexdigest()[:_DIGEST_WIDTH]
-
-
 class Provenance(NamedTuple):
     """What produced an answer: the solver, the options it ran with, and the packages that built the model.
 
@@ -329,7 +238,7 @@ NO_PROVENANCE = Provenance()
 
 
 class Record(NamedTuple):
-    """How a solve terminated, what it reached, and which spec it answered.
+    """How a solve terminated, what it reached, and when.
 
     One row per solve, and the same columns whoever wrote them: a result
     writes one, a sweep one per slice, which [`slice_axis`][] and
@@ -346,9 +255,6 @@ class Record(NamedTuple):
     #: say: a run stopped at a limit before any incumbent is ``ok`` with
     #: nothing to read.
     has_primal: bool
-    #: A digest of the spec this answered, or ``None`` where the solve was run
-    #: off a lowered program. Null on disk, never an empty string.
-    spec_digest: str | None
     #: When the solver returned, in UTC, or ``None`` for a solve that carried
     #: no clock, such as a result built by hand.
     solved_at: datetime | None = None
@@ -358,10 +264,6 @@ class Record(NamedTuple):
     #: halves of its name. Null until the archive is written. Every other
     #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
-    #: A digest of the model this answered — the spec *and* the values of its
-    #: data ([`digest_of_data`][]), where [`spec_digest`][] is the document
-    #: alone. ``None`` for an answer that never held one.
-    model_digest: str | None = None
     #: What the sweep that solved this called its slices — ``scenario``,
     #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
     #: null for a single solve. Fixed names rather than a column named for the
@@ -382,9 +284,7 @@ class Record(NamedTuple):
         objective: float,
         *,
         has_primal: bool,
-        spec_digest: str | None,
         solved_at: datetime | None,
-        model_digest: str | None = None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes; each argument fills the column of its name.
@@ -398,9 +298,7 @@ class Record(NamedTuple):
             termination_condition,
             objective if has_primal else None,
             has_primal,
-            spec_digest,
             solved_at,
-            model_digest=model_digest,
             **provenance._asdict(),
         )
 
@@ -537,6 +435,8 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
 #: The three files beside the frames: how the solve terminated, what reaching
 #: it cost, and the reasons behind whatever is deliberately not there.
 RECORD_FILE = 'record.parquet'
+#: The spec an answer came from, as the YAML it round-trips to.
+SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
 
@@ -570,8 +470,21 @@ def clear_the_answer(directory: Path) -> None:
 
     for kind in KINDS:
         shutil.rmtree(directory / kind, ignore_errors=True)
-    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
+    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE):
         (directory / member).unlink(missing_ok=True)
+
+
+def write_spec(directory: Path, spec: Spec | None) -> None:
+    """*spec* as [`SPEC_FILE`][] in *directory*, or no file for an answer that came from no spec."""
+    if spec is not None:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / SPEC_FILE).write_text(spec.to_yaml())
+
+
+def read_spec(directory: Path) -> Spec | None:
+    """The spec [`write_spec`][] left in *directory*, or ``None`` where it left none."""
+    held = directory / SPEC_FILE
+    return to_spec(held) if held.is_file() else None
 
 
 def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:

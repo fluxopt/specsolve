@@ -14,6 +14,7 @@ import polars as pl
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
+from specsolve.relational.names import VALUE
 from specsolve.relational.sinks.handoff import SENSE_CODES
 
 if TYPE_CHECKING:
@@ -100,6 +101,8 @@ class Solver(ABC):
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
+        #: The matrix's coefficients as loaded, in entry order, for [`keeps`][].
+        self._coefficients = handoff.matrix['coeff'].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
@@ -143,8 +146,19 @@ class Solver(ABC):
         self._handoff = None
 
     def keeps(self, handoff: Handoff, solver_options: Mapping[str, Any] | None) -> bool:
-        """Whether this held solver may keep its load and take *handoff* by value."""
-        return self._options == dict(solver_options or {}) and self.structure() == handoff.structure
+        """Whether this held solver may keep its load and take *handoff* by value.
+
+        The same options and [`structure`][], and every matrix coefficient
+        within 1e-12 relative of the one loaded, which stays: a coefficient
+        summed over rows in another order moves in its last bits.
+        """
+        import numpy as np
+
+        return (
+            self._options == dict(solver_options or {})
+            and self.structure() == handoff.structure
+            and np.allclose(handoff.matrix['coeff'].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
+        )
 
     @classmethod
     def imported(cls) -> Any:
@@ -393,4 +407,4 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     """
     import numpy as np
 
-    return pl.Series('value', np.asarray(values, dtype=np.float64))
+    return pl.Series(VALUE, np.asarray(values, dtype=np.float64))

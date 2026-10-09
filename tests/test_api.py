@@ -543,10 +543,8 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition',
         'objective',
         'has_primal',
-        'spec_digest',
         'solved_at',
         'specsolve_run',
-        'model_digest',
         'slice_axis',
         'slice',
         'solver',
@@ -561,10 +559,8 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition': dispatch_solution.termination_condition,
         'objective': dispatch_solution.objective,
         'has_primal': dispatch_solution.has_primal,
-        'spec_digest': dispatch_solution.spec_digest,
         'solved_at': dispatch_solution.solved_at,
         'specsolve_run': None,
-        'model_digest': dispatch_solution.model_digest(),
         'slice_axis': None,
         'slice': None,
         **dispatch_solution.provenance._asdict(),
@@ -596,6 +592,7 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
         'primal',
         'reasons.parquet',
         'record.parquet',
+        'spec.yaml',
     ], 'no dual/ — there are none to write, and reasons.parquet says so; no activity/, which was not asked for'
     assert [p.name for p in (out / 'expression').iterdir()] == ['twice.parquet'], 'the one that evaluated'
     assert pl.read_parquet(out / 'expression' / 'twice.parquet')['value'].to_list() == [4.0, 6.0], (
@@ -784,6 +781,66 @@ def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expecte
     sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
     with sps.solve(SCALAR_SPEC, sources, outputs={'activity'}) as result:
         assert read(result).to_dicts() == [{'value': expected}], 'one row, holding the solver value'
+
+
+SCALAR_SOURCES = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
+
+
+def _masked_out(absence: str) -> dict:
+    """[`SCALAR_SPEC`][] with ``slack`` masked out under *absence*."""
+    slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'absence': absence}
+    return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
+
+
+def _saved(spec, sources, tmp_path):
+    with sps.solve(spec, sources) as result:
+        saved = result.save(tmp_path / 'answer')
+    with sps.load_result(saved) as loaded:
+        return loaded.evaluate('twice')
+
+
+def _swept(spec, sources, tmp_path):
+    return sps.solve_over(spec, sources, [(0, sources)], key_name='draw').evaluate('twice').drop('draw')
+
+
+def _evaluated(expression):
+    def read(spec, sources, tmp_path):
+        with sps.solve(spec, sources) as result:
+            return result.evaluate(expression)
+
+    return read
+
+
+@pytest.mark.parametrize(
+    ('spec', 'read', 'expected'),
+    [
+        pytest.param(SCALAR_SPEC, _evaluated('slack'), [{'value': 10.0}], id='bare'),
+        pytest.param(SCALAR_SPEC, _evaluated('2 * slack'), [{'value': 20.0}], id='arithmetic'),
+        pytest.param(
+            SCALAR_SPEC,
+            _evaluated({'dims': ['f'], 'expression': 'x + slack'}),
+            [{'f': 'a', 'value': 10.0}, {'f': 'b', 'value': 40.0}, {'f': 'c', 'value': 110.0}],
+            id='broadcast-over-a-dimension',
+        ),
+        pytest.param(SCALAR_SPEC, _evaluated('sum(x, over=f) - slack'), [{'value': 120.0}], id='the-rows-left-side'),
+        pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
+        pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
+        pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
+        pytest.param(_masked_out('zero'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-absence-zero'),
+        pytest.param(_masked_out('undefined'), _evaluated('2 * slack'), [], id='masked-out-absence-undefined'),
+    ],
+)
+def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate(spec, read, expected, tmp_path):
+    """A scalar variable reads through an expression as a dimensioned one does at one coordinate.
+
+    Each raised ``ColumnNotFoundError: "__unit__"`` (#1858): the reader keys a
+    variable with no dims on the empty product's marker column, and the
+    labelled frame dropped that column, keeping only ``var_label``.
+    """
+    spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
+    assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (
+        'the solved value, zero where absence reads zero, and no row where it is undefined'
+    )
 
 
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
@@ -1051,6 +1108,22 @@ def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_fra
         sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_frame_inputs)) as tidied,
     ):
         assert tidied.objective == pytest.approx(direct.objective, rel=1e-9), 'the tidy tables build the same model'
+
+
+def test_a_parquet_source_is_read_at_the_build_so_a_file_rewritten_afterwards_does_not_reach_the_model(
+    dispatch_yaml, dispatch_frame_inputs, tmp_path
+) -> None:
+    path = tmp_path / 'cost.parquet'
+    dispatch_frame_inputs['cost'].write_parquet(path)
+    with sps.build(dispatch_yaml, dispatch_frame_inputs | {'cost': str(path)}) as model:
+        dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(path)
+        with model.solve() as after, sps.solve(dispatch_yaml, dispatch_frame_inputs) as before:
+            assert after.objective == pytest.approx(before.objective, rel=1e-9), (
+                'the solve read the file as it was at the build'
+            )
+            assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
+                before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
+            ), 'and so does an expression read after the solve'
 
 
 def _held_at_the_run(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, int | bool]]:

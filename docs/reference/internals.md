@@ -84,7 +84,8 @@ Each entry says what the thing is, then the module it lives in.
 
 **Coverage**
 : Whether data is there where a declaration reads it. A divisor and a
-  constant piece are refused at the last moment the gap can still be seen
+  constant piece are refused at the last moment the gap can still be seen,
+  and a value that is not finite at the same moment
   (`relational/engine/coverage.py`).
 
 **Collect engine**
@@ -114,13 +115,11 @@ Each entry says what the thing is, then the module it lives in.
   one does not (`relational/sinks/capabilities.py`).
 
 **Structure digest**
-: A digest of everything a re-solve may not change: the counts, the matrix,
-  each row's comparison, each column's type and the sets. A loaded solver
-  keeps its model only while this digest stays the same. The **contents
-  digest** adds the numbers, and says whether two builds made one model to the
-  last bit (`relational/sinks/handoff.py`). A saved answer is checked against
-  the **data digest** instead, over the values of the data it was built from
-  (`relational/answer_layout.py`), which another machine reads the same.
+: A digest of everything a re-solve may not change: the counts, which column
+  each matrix entry sits in, each row's comparison, each column's type and the
+  sets. A loaded solver keeps its model only while this digest stays the same
+  and every matrix coefficient is within 1e-12 relative of the one it holds
+  (`relational/sinks/handoff.py`).
 
 **Warm start**
 : What a solve starts from instead of from scratch, laid onto the build by
@@ -151,20 +150,20 @@ Each entry says what the thing is, then the module it lives in.
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
   `Metrics` rows, `reasons.parquet` and the `format.json` stamp.
   `ANSWER_LAYOUT` is its version, and a change to it raises the number
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
   answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
   stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
-  `spec.yaml`, `sources/`, `sources.parquet` and `axis.json`, and a change to
-  any of them raises it. Any other change, `catalog.parquet` included, raises
+  `spec.yaml`, `sources/` and `axis.json`, and a change to any of them raises
+  it. Any other change, `catalog.parquet` included, raises
   `ANSWER_LAYOUT`. Reading an archive back is `archive.py`.
 
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names
   that start with `specsolve_` are reserved for columns like it
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 ## Sweeps
 

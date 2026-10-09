@@ -24,7 +24,6 @@ import math
 import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -47,12 +46,11 @@ from specsolve.relational.answer_layout import (
     Record,
     check_format,
     checked_outputs,
-    digest_of,
-    digest_of_data,
     installed,
     kinds_of,
     read_outputs,
     read_reasons,
+    read_spec,
     saved_frames,
     write_whole,
 )
@@ -209,8 +207,6 @@ class Model:
     def __init__(self, spec: Buildable, sources: Mapping[str, Source]) -> None:
         self._spec = declared(spec)
         self._program = lowered(self._spec)
-        #: The document's digest; the data's is [`_model_digest`][].
-        self._spec_digest = digest_of(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
@@ -381,7 +377,7 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        answered = replace(
+        answered = self._with_record_fields(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
@@ -390,14 +386,35 @@ class Model:
                 start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
                 last=last,
             ),
-            _spec_digest=self._spec_digest,
-            _model_digest=partial(digest_of_data, self._spec_digest, self._tidied, tuple(self._program.dimensions)),
-            _solved_at=datetime.now(UTC),
-            _provenance=_provenance(solver_name, solver_options, record_options or ()),
+            solver_name,
+            solver_options,
+            record_options or (),
         )
         if out is not None:
             self._archive(out, answered)
         return answered
+
+    def _with_record_fields(
+        self,
+        answer: Result,
+        solver_name: str,
+        solver_options: Mapping[str, object] | None,
+        record_options: Sequence[str],
+    ) -> Result:
+        """*answer* as [`solve`][] hands it back: the engine's, with what only this model knows of the solve.
+
+        That is the record fields for when the solve ended and its provenance,
+        and the spec a save writes beside them; the engine fills the status and
+        the objective. Every step between the engine and the caller lives here,
+        so the read benchmark, which builds an answer without a solver, pays
+        what a solve pays.
+        """
+        return replace(
+            answer,
+            _spec=self._spec,
+            _solved_at=datetime.now(UTC),
+            _provenance=_provenance(solver_name, solver_options, record_options),
+        )
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
         """*start*'s tables read against this build, as [`read_start`][specsolve.sources.read_start] reads them.
@@ -534,10 +551,6 @@ class Model:
         assert evaluate is not None, 'a model built from a spec as written lowers an ad-hoc expression'
         return evaluate
 
-    def _model_digest(self) -> str:
-        """Which model this build *is* — the document and the data attached to it now ([`digest_of_data`][])."""
-        return digest_of_data(self._spec_digest, self._tidied, self._program.dimensions)
-
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.
 
@@ -569,6 +582,9 @@ def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
             or a bare sequence — wherever the YAML declares none. The shapes a
             value may take, and what attaching refuses, are
             [the data contract](https://specsolve.readthedocs.io/en/latest/reference/data/).
+            Each is read once and kept without a copy, so it must not change
+            while the model or its answers are in use; change data through
+            [`Model.update`][].
 
     Returns:
         The built model.
@@ -735,9 +751,8 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
         expressions,
         _no_duals=no_duals,
-        _spec_digest=record.spec_digest,
+        _spec=read_spec(out),
         _solved_at=record.solved_at,
-        _model_digest=record.model_digest,
         _run=record.specsolve_run,
         _provenance=record.provenance,
     )

@@ -72,6 +72,16 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
+def non_finite_message(divisors: str, count: int) -> str:
+    """The message for values that are not finite, where the model divides by *divisors* or reads a value."""
+    by = f" where the model divides by '{divisors}'" if divisors else ''
+    return (
+        f'{count} value(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
+        f'and the model needs a finite number.\n'
+        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
+    )
+
+
 def null_bounds_message(name: str, rows: int) -> str:
     """The message for a bound parameter missing values at some coordinates."""
     return (

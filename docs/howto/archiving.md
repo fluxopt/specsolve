@@ -28,10 +28,10 @@ case/
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (specsolve_run, source, digest) — what each of them is
     catalog.parquet               (specsolve_run, path, …, column, dim) — what each file holds and over which dimensions
     answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
+    answer/spec.yaml              the spec the answer came from, as a saved answer holds it
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
 ```
@@ -103,6 +103,10 @@ case = sps.load_archive('case.zip')
 Pass `into=` when you want the extracted tree as well, to query it with an
 engine that reads parquet. A directory archive is read where it lies and
 refuses an `into=`.
+
+**An archive is read as it was written.** Nothing checks that its files are
+still the ones the solve wrote, so a file changed afterwards is read as it is
+now. To change an input, solve again and write a new archive.
 
 ## Read the spec and the data alone
 

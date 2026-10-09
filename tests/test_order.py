@@ -4,9 +4,8 @@ A source table's rows arrive in whatever order its writer chose, and polars
 promises no row order from a join or a group-by that was not asked for one. So
 each referenced model is built twice from the same sources, and again with the
 rows of every parameter and relation table shuffled, and each build must
-digest the same: matrix, bounds, costs and right-hand sides, bit for bit. A
-saved answer is checked against that digest, so one that moves refuses an
-archive whose data nothing changed.
+be the same: matrix, bounds, costs and right-hand sides, bit for bit. One
+that moves solves the same data to an answer that differs in its last bits.
 
 Dimension tables keep their order: a dimension's row order is its coordinate
 order, which ``shift`` reads.
@@ -16,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -29,8 +29,7 @@ if TYPE_CHECKING:
 #: Ports whose model moves from one build to the next, and why.
 MOVES = {
     'osemosys_utopia': (
-        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit, '
-        'so an archive refuses an undeclared read as built from other data'
+        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
     ),
 }
 
@@ -43,9 +42,28 @@ def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dic
     return port
 
 
-def _digest(port: dict[str, Any], given: Mapping[str, Any]) -> str:
+def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
+    """The built model to the last bit: what a re-solve may not change, then every number it may.
+
+    The objective is read through the dense cost vector, since ``obj`` carries
+    no order contract.
+    """
     with sps.build(expanded(port['spec']), given) as model:
-        return model._engine.contents()
+        handoff = model._engine._model.handoff
+        numbers = (
+            handoff.matrix['coeff'],
+            handoff.cols['lb'],
+            handoff.cols['ub'],
+            handoff.quad['coeff'],
+            handoff.rows['row'],
+            handoff.rows['rhs'],
+        )
+        return (
+            handoff.structure,
+            f'{handoff.objective_constant}'.encode(),
+            handoff._dense_cost().tobytes(),
+            *(column.to_numpy().tobytes() for column in numbers),
+        )
 
 
 def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
@@ -61,12 +79,60 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
 
 def test_the_same_sources_build_the_same_model(port_that_holds: dict[str, Any]) -> None:
     given = sources(port_that_holds['name'])
-    assert _digest(port_that_holds, given) == _digest(port_that_holds, given)
+    assert _built(port_that_holds, given) == _built(port_that_holds, given)
 
 
 @pytest.mark.parametrize('seed', [0, 1])
 def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], seed: int) -> None:
-    plain = _digest(port_that_holds, sources(port_that_holds['name']))
-    assert _digest(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
+    plain = _built(port_that_holds, sources(port_that_holds['name']))
+    assert _built(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
         'shuffling the rows of a table built another model'
     )
+
+
+def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
+    """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
+
+    The solver was kept only while every coefficient matched to the last bit,
+    so the same numbers in another row order loaded it again at every update
+    and lost the warm start.
+    """
+    rng = np.random.default_rng(0)
+    items, periods = 2_000, 50
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i', 't']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 1e6'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    cost = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods),
+            't': np.tile(np.arange(periods), items),
+            'value': rng.uniform(0.0, 1e3, items * periods) * 10.0 ** rng.integers(-6, 6, items * periods),
+        }
+    )
+    with sps.build(spec, {'i': list(range(items)), 't': list(range(periods)), 'cost': cost}) as model:
+        model.solve()
+        for seed in range(3):
+            model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
+        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
+
+
+def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
+    """Only a last-bit difference keeps the solver; a change the data made, however small, reaches it."""
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 10'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    cost = pl.DataFrame({'i': [0, 1, 2], 'value': [3.0, 4.0, 5.0]})
+    with sps.build(spec, {'i': [0, 1, 2], 'cost': cost}) as model:
+        model.solve()
+        model.update({'cost': cost.with_columns(pl.col('value') * (1 + 1e-9))}).solve()
+        assert model.diagnostics().loads == 2, (
+            'a coefficient moved by 1e-9 relative kept a solver that holds the old one'
+        )

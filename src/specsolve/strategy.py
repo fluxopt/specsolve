@@ -37,17 +37,16 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
-    VALUE,
     Metrics,
     Record,
     checked_outputs,
     kinds_of,
-    refuse_reserved,
     write_format,
     write_reasons,
     write_whole,
 )
 from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE, refuse_reserved
 from specsolve.relational.result import Result
 from specsolve.sources import numbered, refuse_unknown_start, refuse_unknown_start_word, tidy_sources
 from specsolve.sweep import (
@@ -319,12 +318,12 @@ def solve_over(
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
     starts = _slice_starts(start, axis, slices, key_name, program)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
+    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
     if executor is None:
         answered = _serially(program, document, slices, solving, plan, spill, starts)
     else:
         answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
+    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
     if archiving is not None:
@@ -522,9 +521,7 @@ def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.L
     A window's local index is not a column of the uncut table: the axis
     column stands where it would be.
     """
-    declared = (
-        [*program.parameters[name].dims, 'value'] if name in program.parameters else program.relations[name].roles
-    )
+    declared = [*program.parameters[name].dims, VALUE] if name in program.parameters else program.relations[name].roles
     local = axis.into if isinstance(axis, EachWindow) else None
     return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
 
@@ -725,7 +722,6 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
         result.termination_condition,
         result.objective,
         has_primal=result.has_primal,
-        spec_digest=result.spec_digest,
         solved_at=result.solved_at,
         provenance=result.provenance,
     )
