@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- perf(api): a solve reads the installed package versions it records once per process rather than every time
+- perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
 - perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
 - perf(archive): an archive writes its answer once rather than saving it and then copying it ([#1924](https://github.com/fluxopt/specsolve/pull/1924))
 - perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
