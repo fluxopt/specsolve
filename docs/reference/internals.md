@@ -149,7 +149,7 @@ Each entry says what the thing is, then the module it lives in.
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
   `Metrics` rows, `reasons.parquet` and the `format.json` stamp.
   `ANSWER_LAYOUT` is its version, and a change to it raises the number
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
@@ -162,7 +162,7 @@ Each entry says what the thing is, then the module it lives in.
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names
   that start with `specsolve_` are reserved for columns like it
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 ## Sweeps
 

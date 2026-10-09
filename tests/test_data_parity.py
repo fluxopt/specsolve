@@ -436,36 +436,76 @@ TEMPORAL_RELATION_SPEC = {
 }
 
 
-@pytest.mark.parametrize('library', ['pandas', 'polars', 'a parquet path'])
-def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, library):
-    """A relation's values are labels of the dimension it targets, canonicalised as those are.
-
-    Both members map to the same day, so that day's cap binds them together.
-    """
+def _days() -> list[Any]:
     import datetime
 
-    days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-    day_of = _tidy(g=['w', 's'], d=[days[0], days[0]])
-    if library == 'a parquet path':
-        day_of.write_parquet(tmp_path / 'day_of.parquet')
+    return [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
+
+
+def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lanes(tmp_path):
+    """Only a ``datetime`` dimension reads a date as the instant its day starts on; another keeps what it was given."""
+    days = _days()
+    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {}}}
     sources = {
         **_P_MAX,
-        'cap': _tidy(d=days, value=[3.0, 7.0]),
         'd': days,
         'g': ['w', 's'],
-        'day_of': {
-            'pandas': lambda: pd.DataFrame({'g': ['w', 's'], 'd': [days[0], days[0]]}),
-            'polars': lambda: day_of,
-            'a parquet path': lambda: str(tmp_path / 'day_of.parquet'),
-        }[library](),
+        'cap': _tidy(d=days, value=[3.0, 7.0]),
+        'day_of': _tidy(g=['w', 's'], d=[days[0], days[0]]),
     }
+    with differential(_written(tmp_path, spec), sources) as run:
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
+        assert run.result.dual('k')['d'].to_list() == days[:1], 'the day with members comes back as the date it was'
 
-    with sps.solve(path, sources) as run:
-        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
-    built = specsolve_linopy.build(path, sources)
-    built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
+
+def _spelled(spelling: str, columns: dict[str, list[Any]], path: Path) -> Any:
+    """*columns*, their ``d`` column of dates in *spelling*: the table a caller holds for the same instants."""
+    if spelling == 'pandas date':
+        return pd.DataFrame(columns)
+    if spelling == 'pandas datetime64':
+        return pd.DataFrame({**columns, 'd': pd.to_datetime(columns['d'])})
+    table = pl.DataFrame(columns)
+    if spelling == 'polars Date':
+        return table
+    nanoseconds = table.with_columns(pl.col('d').cast(pl.Datetime('ns')))
+    if spelling == 'polars Datetime ns':
+        return nanoseconds
+    nanoseconds.write_parquet(path)
+    return str(path)
+
+
+#: Five spellings of one day, as a caller holds them.
+_SPELLINGS = {
+    'pandas date': 'pandas-date',
+    'pandas datetime64': 'pandas-datetime64',
+    'polars Date': 'polars-date',
+    'polars Datetime ns': 'polars-datetime-ns',
+    'a parquet path': 'parquet-datetime-ns',
+}
+
+
+@pytest.mark.parametrize('column', list(_SPELLINGS), ids=[f'column-{i}' for i in _SPELLINGS.values()])
+@pytest.mark.parametrize('index', list(_SPELLINGS), ids=[f'index-{i}' for i in _SPELLINGS.values()])
+def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
+    """A relation's values and a parameter's labels are labels of the dimension, canonicalised as those are.
+
+    Both members map to the same day, so that day's cap binds them together.
+    A date and a midnight datetime are one instant, whichever spells the index
+    and whichever the columns (#1630). A date was compared with a datetime and
+    matched nothing, so it was refused as not a label of its dimension; and the
+    seconds `pd.to_datetime` gives a date reached polars, which reads no such
+    unit, as a bare `ValueError` naming nothing.
+    """
+    days = _days()
+    sources = {
+        **_P_MAX,
+        'd': _spelled(index, {'d': days}, tmp_path / 'd.parquet'),
+        'g': ['w', 's'],
+        'cap': _spelled(column, {'d': days, 'value': [3.0, 7.0]}, tmp_path / 'cap.parquet'),
+        'day_of': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'day_of.parquet'),
+    }
+    with differential(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources) as run:
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
 
 
 def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_path):
@@ -637,6 +677,7 @@ def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) ->
 _FINE = _instants('ns', nanoseconds=1)
 _EVEN = _instants('ns')
 _UTC = _instants('us', 'UTC')
+_DATES = _EVEN.cast(pl.Date)
 
 
 @pytest.mark.parametrize(
@@ -653,6 +694,12 @@ _UTC = _instants('us', 'UTC')
         ),
         pytest.param(
             _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
+        ),
+        pytest.param(
+            _temporal_sources(index=_DATES, cap=_DATES, day_of=_instants('ns', nanoseconds=3_600_000_000_000)),
+            "relation 'day_of'",
+            "not 'd' labels",
+            id='relation-past-midnight-of-a-date',
         ),
         pytest.param(
             _temporal_sources(index=_UTC, cap=_EVEN, day_of=_UTC),
