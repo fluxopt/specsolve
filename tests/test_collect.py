@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import polars as pl
+import pytest
 
 import specsolve as sps
+from specsolve.relational import collect
 from specsolve.relational.collect import collected
 from specsolve.relational.engine.scope import Scope, ordinal
 
@@ -84,3 +86,42 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
     assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
         f'every bounds collect names the in-memory engine: {engines}'
     )
+
+
+@pytest.fixture
+def engines(monkeypatch) -> list[str]:
+    """Every engine a collect names, in the order it named them, from after polars is probed for streaming."""
+    collect.collect_engine()
+    named: list[str] = []
+    one, many = pl.LazyFrame.collect, pl.collect_all
+
+    def recording(self, *args, engine='auto', **kwargs):
+        named.append(engine)
+        return one(self, *args, engine=engine, **kwargs)
+
+    def recording_all(frames, *args, engine='auto', **kwargs):
+        named.append(engine)
+        return many(frames, *args, engine=engine, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
+    monkeypatch.setattr(pl, 'collect_all', recording_all)
+    return named
+
+
+def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_frame_inputs):
+    """polars 2.0's streaming engine costs a fixed time per query, which is most of a small model's build."""
+    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    assert engines, 'the build collected something'
+    assert set(engines) == {'in-memory'}, (
+        f'{engines.count("auto")} of {len(engines)} collects left the engine to polars'
+    )
+
+
+def test_a_model_over_the_limit_is_built_on_polars_choice(engines, monkeypatch, dispatch_yaml, dispatch_frame_inputs):
+    """Above `IN_MEMORY_COLUMNS` the streaming engine keeps the build's peak down, so polars chooses.
+
+    Reading the sources stays in memory at any size: each read holds one table whole.
+    """
+    monkeypatch.setattr(collect, 'IN_MEMORY_COLUMNS', 0)
+    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    assert 'auto' in engines, 'the build left its engine to polars'

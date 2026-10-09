@@ -20,7 +20,7 @@ from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
 from specsolve.relational.answer_layout import BASIS_STATUSES
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.names import POSITION, VALUE
 from specsolve.relational.result import Start
 
@@ -73,32 +73,36 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             index; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
+
+    Each source is read on polars' in-memory engine, since every read holds
+    one table whole; the assumptions, which join over the dimensions, are not.
     """
     refuse_unknown_sources(program, data)
-    _check_relation_sources(program, data)
-    sources: dict[str, pl.LazyFrame] = {}
-    for dname, declared in program.dimensions.items():
-        if dname in data:
-            sources[dname] = _index(data[dname], dname, declared.dtype)
-    relations = {
-        name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
-    }
-    for dname in program.dimensions:
-        if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
-            raise DataError(_relation_needs_labels_message(dname, authors))
-    _check_relations_hold_labels(program, relations, sources)
-    sources |= relations
+    with in_memory():
+        _check_relation_sources(program, data)
+        sources: dict[str, pl.LazyFrame] = {}
+        for dname, declared in program.dimensions.items():
+            if dname in data:
+                sources[dname] = _index(data[dname], dname, declared.dtype)
+        relations = {
+            name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
+        }
+        for dname in program.dimensions:
+            if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
+                raise DataError(_relation_needs_labels_message(dname, authors))
+        _check_relations_hold_labels(program, relations, sources)
+        sources |= relations
 
-    for pname, pdef in program.parameters.items():
-        if pname not in data:
-            raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
-    for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        for pname, pdef in program.parameters.items():
+            if pname not in data:
+                raise DataError(_no_parameter_source_message(pname))
+            sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
+        for pname, pdef in program.parameters.items():
+            sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
 
-    for dname in program.dimensions:
-        if dname not in sources:
-            raise DataError(_no_index_source_message(dname))
+        for dname in program.dimensions:
+            if dname not in sources:
+                raise DataError(_no_index_source_message(dname))
 
     validate_assumptions(program, sources)
     return sources
