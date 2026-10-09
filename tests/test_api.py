@@ -1141,6 +1141,7 @@ def _held_at_the_run(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, int | bo
                 'cols': handoff.cols.height,
                 'rows': handoff.rows.height,
                 'solver holds frames': self._handoff is not None,
+                'solver holds coefficients': self._coefficients is not None,
             }
         )
         return run(self, handoff, **options)
@@ -1171,6 +1172,9 @@ def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
         assert solved.status == 'ok'
     (held,) = seen
     assert not held['solver holds frames'], 'the solver lets go of the frames it was loaded from'
+    assert not held['solver holds coefficients'], (
+        'nor does it keep the coefficients an update would compare against, since none follows'
+    )
     assert held['rows'] > 0, 'rows stay, since the run and slack read them'
     for frame in ('matrix', 'obj', 'cols'):
         assert (held[frame] > 0) == (frame in kept), f'{frame} is kept exactly where {outputs or "nothing"} reads it'
@@ -1183,4 +1187,5 @@ def test_a_model_kept_for_more_solves_keeps_its_build(dispatch_yaml, dispatch_fr
         model.solve()
     (held,) = seen
     assert held['solver holds frames'], 'a held solver keeps the frames until an update asks for their digest'
+    assert held['solver holds coefficients'], 'and the coefficients an update compares against'
     assert all(held[frame] > 0 for frame in ('matrix', 'obj', 'cols')), 'the build stays whole'
