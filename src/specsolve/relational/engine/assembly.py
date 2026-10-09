@@ -362,6 +362,9 @@ class Assembly:
         if o is None:
             return None
         comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
+        coverage.refuse_null_constants(
+            [p.frame for p in comp.consts], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
+        )
         for p in comp.consts:
             assert not p.dims, (
                 f'objective constant part has dims {list(p.dims)} — the language refuses a '

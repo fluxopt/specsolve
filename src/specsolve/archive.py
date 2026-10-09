@@ -23,7 +23,6 @@ from specsolve.api import build, load_result, scan_result
 from specsolve.archive_layout import (
     ANSWER_DIR,
     AXIS_MEMBER,
-    DIGESTS_MEMBER,
     INPUTS_LAYOUT,
     SOURCES_DIR,
     SPEC_MEMBER,
@@ -37,7 +36,6 @@ from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
     Metrics,
-    digest_of,
     other_layout,
     row_of,
     saved_frames,
@@ -56,12 +54,11 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping
 
     from mathspec import Spec
     from mathspec.program import Expression
 
-    from specsolve.api import Model
     from specsolve.axes import Axes, Axis
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.result import Result
@@ -82,12 +79,6 @@ class ResultArchive:
             [`load_archive`][], the path to one from [`scan_archive`][],
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
-        source_digests: ``(specsolve_run, source, digest)``, one row per
-            source, so two archives of one spec name the input that moved. A
-            digest is of the tidy table's parquet bytes before
-            ``specsolve_run`` is added, so one table digests alike under two
-            names. Two polars versions may digest one table differently, and
-            reading an archive does not verify digests.
         metrics: What reaching the answer took, as one
             [`Metrics`][specsolve.relational.answer_layout.Metrics].
     """
@@ -95,7 +86,6 @@ class ResultArchive:
     spec: Spec
     sources: Mapping[str, Source]
     result: Result
-    source_digests: pl.DataFrame
     metrics: Metrics
 
 
@@ -118,14 +108,12 @@ class SweepArchive:
             disk from [`scan_archive`][]. ``per_window=True`` reads an
             EachWindow sweep's windows where ``keep_windows=True`` kept them,
             and is refused otherwise.
-        source_digests: As [`ResultArchive`][] holds it, of the uncut sources.
     """
 
     spec: Spec
     sources: Mapping[str, Source]
     axis: Axis | Axes
     sweep: Sweep
-    source_digests: pl.DataFrame
 
 
 @dataclass(frozen=True)
@@ -241,16 +229,13 @@ def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepAr
     inputs = _inputs(under, archive, whole=whole)
     _refuse_another_layout(under / ANSWER_DIR, archive)
     spec, sources = inputs.spec, inputs.sources
-    digests = pl.read_parquet(under / DIGESTS_MEMBER)
     saved = under / ANSWER_DIR
     if inputs.axis is None:
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
-        _check_the_pairing(spec, [answer.spec_digest])
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return ResultArchive(spec, sources, answer, digests, metrics)
+        return ResultArchive(spec, sources, answer, metrics)
     answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
-    _check_the_pairing(spec, answer.record['spec_digest'].to_list())
-    return SweepArchive(spec, sources, inputs.axis, answer, digests)
+    return SweepArchive(spec, sources, inputs.axis, answer)
 
 
 def _refuse_other_inputs(under: Path, archive: Path) -> None:
@@ -280,46 +265,12 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
         )
 
 
-def _check_the_pairing(spec: Spec, answered: Sequence[str | None]) -> None:
-    """Refuse an archive whose answer came back from a different spec than the one beside it.
-
-    A ``None`` digest is not compared.
-    """
-    mine = digest_of(spec)
-    if others := sorted({other for other in answered if other is not None and other != mine}):
-        raise SpecsolveError(
-            f'this archive holds an answer that came back from a different spec: the answer carries '
-            f'{others} and the spec.yaml beside it digests to {mine}, so re-solving it would give another answer.'
-        )
-
-
-def _refuse_another_model(answer: Result, model: Model) -> None:
-    """Refuse a saved answer against a model built from other data than the one it answered.
-
-    The spec is compared where the pair is read; the data needs a build. An
-    answer carrying no digest is taken as given.
-
-    Raises:
-        SpecsolveError: Sources that build a model other than the answered one.
-    """
-    answered = answer.model_digest()
-    if answered is not None and answered != (rebuilt := model._model_digest()):
-        raise SpecsolveError(
-            f'this answer came back from another model: it answered the model digesting to {answered} '
-            f'and the spec and sources beside it build {rebuilt}. The document matched, so what differs '
-            f'is the data — and reading a quantity the file never named against other numbers would '
-            f'value it at an answer nobody solved for.\n'
-            f'  Read the answer against the data the solve ran on. An archive holds that pair, so one '
-            f'refused here has had a source replaced since it was written.'
-        )
-
-
 def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
     """*answer* with an undeclared expression readable through [`evaluate`][specsolve.relational.result.Result.evaluate].
 
     *spec* is rebuilt over *sources* at the first undeclared read, never
-    solved, and cached. A rebuild from other data than the solve ran on is
-    refused. *answer* comes back unchanged where the solve left no values.
+    solved, and cached. *answer* comes back unchanged where the solve left no
+    values.
     """
     if not answer._primals:
         return answer
@@ -336,9 +287,7 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
                 if no_duals is None and dual_frames
                 else None
             )
-            model = build(spec, sources)
-            _refuse_another_model(answer, model)
-            built.append(model._evaluator(primals, duals, no_duals))
+            built.append(build(spec, sources)._evaluator(primals, duals, no_duals))
         return built[0](written)
 
     return replace(answer, _evaluate=evaluate)
