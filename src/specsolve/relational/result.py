@@ -34,6 +34,7 @@ from specsolve.relational.answer_layout import (
     write_whole,
 )
 from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -104,10 +105,10 @@ def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
     if importlib.util.find_spec('xarray') is None:
         raise ModuleNotFoundError(_NEEDS_THE_EXTRA.format(module='xarray'))
 
-    dims = [column for column in frame.columns if column != 'value']
+    dims = [column for column in frame.columns if column != VALUE]
     if not dims:
-        return frame['value'].to_xarray().rename(name)
-    return frame.set_index(dims).to_xarray()['value'].rename(name)
+        return frame[VALUE].to_xarray().rename(name)
+    return frame.set_index(dims).to_xarray()[VALUE].rename(name)
 
 
 def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) -> xr.Dataset:
