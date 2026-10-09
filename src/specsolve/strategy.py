@@ -40,11 +40,9 @@ from specsolve.relational.answer_layout import (
     Metrics,
     Record,
     checked_outputs,
-    copy_with_run,
     kinds_of,
     write_format,
     write_reasons,
-    write_whole,
 )
 from specsolve.relational.collect import collected
 from specsolve.relational.names import VALUE, refuse_reserved
@@ -70,7 +68,7 @@ if TYPE_CHECKING:
 
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
-    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.answer_layout import Output, Write
     from specsolve.relational.result import Diagnostics, Start
 
 
@@ -480,8 +478,8 @@ def _archive_the_sweep(
         write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, spilled, keep_windows=keep_windows))
 
 
-def _the_answer(sweep: Sweep, under: Path, run: str, *, keep_windows: bool) -> None:
-    """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*, every table carrying *run*.
+def _the_answer(sweep: Sweep, under: Path, write: Write, *, keep_windows: bool) -> None:
+    """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*, each table written with *write*.
 
     One file per kind and name, as the readers return it, streamed from the
     spill; a name an EachWindow sweep cannot stitch has none, and
@@ -496,26 +494,26 @@ def _the_answer(sweep: Sweep, under: Path, run: str, *, keep_windows: bool) -> N
     write_format(under, sweep._outputs)
     manifest = json.loads((spill.directory / MANIFEST_FILE).read_text())
     (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
-    copy_with_run(spill.directory / KEYS_FILE, under / KEYS_FILE, run)
+    write(pl.scan_parquet(spill.directory / KEYS_FILE), under / KEYS_FILE)
     if keep_windows:
         (under / WINDOWS_DIR).mkdir()
-        copy_with_run(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE, run)
-    write_whole(sweep.record.drop(sweep.key_name), under / RECORD_FILE, run)
-    write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE, run)
+        write(pl.scan_parquet(spill.directory / OWNED_FILE), under / WINDOWS_DIR / OWNED_FILE)
+    write(sweep.record.drop(sweep.key_name), under / RECORD_FILE)
+    write(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
         for name, frame in sweep._slices.get(kind, {}).items():
             if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
-            write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet', run)
+            write(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
         if keep_windows and (spill.directory / kind).is_dir():
             shutil.copytree(
                 spill.directory / kind,
                 under / WINDOWS_DIR / kind,
-                copy_function=lambda source, target: copy_with_run(Path(source), Path(target), run),
+                copy_function=lambda source, target: write(pl.scan_parquet(source), Path(target)),
             )
-    write_reasons(under, sweep._no_duals, absent, run)
+    write_reasons(under, sweep._no_duals, absent, write)
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:

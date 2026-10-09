@@ -52,7 +52,6 @@ from specsolve.relational.answer_layout import (
     read_reasons,
     read_spec,
     saved_frames,
-    write_whole,
 )
 from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
@@ -65,7 +64,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.answer_layout import Output, Write
     from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
@@ -417,9 +416,9 @@ class Model:
         """
         taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        def answer(under: Path, run: str) -> None:
-            answered._save(under, run)
-            write_whole(taken, under / METRICS_FILE, run)
+        def answer(under: Path, write: Write) -> None:
+            answered._save(under, write)
+            write(taken, under / METRICS_FILE)
 
         write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
