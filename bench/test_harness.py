@@ -1574,9 +1574,9 @@ def test_the_read_times_what_a_solve_attaches_after_the_engine(monkeypatch: pyte
     case = CASES['dispatch']
     args, kwargs = module.read_setup(module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {}), 'parquet')
     model = args[0]
-    with_origin = model._with_origin
+    with_record = model._with_record
     calls: list[object] = []
-    monkeypatch.setattr(model, '_with_origin', lambda *given: calls.append(given) or with_origin(*given))
+    monkeypatch.setattr(model, '_with_record', lambda *given: calls.append(given) or with_record(*given))
     module.read(*args, **kwargs)
     assert len(calls) == 1, 'the answer passes once through the step a solve takes after the engine'
 

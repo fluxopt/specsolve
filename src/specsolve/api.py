@@ -365,7 +365,7 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        answered = self._with_origin(
+        answered = self._with_record(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
@@ -381,18 +381,19 @@ class Model:
             self._archive(out, answered)
         return answered
 
-    def _with_origin(
+    def _with_record(
         self,
         answer: Result,
         solver_name: str,
         solver_options: Mapping[str, object] | None,
         record_options: Sequence[str],
     ) -> Result:
-        """*answer* as [`solve`][] hands it back: the engine's, with where it came from attached.
+        """*answer* as [`solve`][] hands it back: the engine's, with the record fields only this model knows.
 
-        Every step between the engine and the caller lives here, so the read
-        benchmark, which builds an answer without a solver, pays what a solve
-        pays.
+        They are the spec, when the solve ended and its provenance; the engine
+        fills the status and the objective. Every step between the engine and
+        the caller lives here, so the read benchmark, which builds an answer
+        without a solver, pays what a solve pays.
         """
         return replace(
             answer,
