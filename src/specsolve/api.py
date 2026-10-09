@@ -365,7 +365,7 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        answered = self._with_record(
+        answered = self._with_record_fields(
             self._engine.solve(
                 solver_name,
                 solver_options=solver_options,
@@ -381,7 +381,7 @@ class Model:
             self._archive(out, answered)
         return answered
 
-    def _with_record(
+    def _with_record_fields(
         self,
         answer: Result,
         solver_name: str,
