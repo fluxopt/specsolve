@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 4.71 s on fleet/s, so the next rung projects to 47.1 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 5.22 s on fleet/s, so the next rung projects to 52.2 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 5.76 s on fleet/m, so the next rung projects to 57.6 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 5.82 s on fleet/m, so the next rung projects to 58.2 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -33,6 +33,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 7.4 s on fleet/m, so the next rung projects to 74 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 8.02 s on fleet/m, so the next rung projects to 80.2 s \u2014 over the 30 s budget"
  }
 ]
