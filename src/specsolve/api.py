@@ -31,7 +31,7 @@ import numpy as np
 import polars as pl
 from mathspec import advice
 
-from specsolve.archive_layout import beside, check_the_target, write_archive
+from specsolve.archive_layout import check_the_target, write_archive
 from specsolve.errors import (
     LayoutError,
     SpecsolveError,
@@ -415,11 +415,13 @@ class Model:
         The metrics row is written here, not by [`Result.save`][]: it spans the
         model's life, not one solve.
         """
-        with beside(out) as scratch:
-            answer = answered.save(scratch)
-            taken = self._engine.diagnostics().metrics()
-            write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
+        taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
+
+        def answer(under: Path, run: str) -> None:
+            answered._save(under, run)
+            write_whole(taken, under / METRICS_FILE, run)
+
+        write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

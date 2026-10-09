@@ -814,24 +814,27 @@ class Result:
         Raises:
             SpecsolveError: This result was closed.
         """
+        return self._save(Path(directory))
+
+    def _save(self, out: Path, run: str | None = None) -> Path:
+        """[`save`][], with *run* as [`write_whole`][specsolve.relational.answer_layout.write_whole] takes it, so an archive writes each file once."""
         import polars as pl
 
         primals = self._unclosed('the solution')
-        out = Path(directory)
         clear_the_answer(out)
         write_format(out, asked_for(self._outputs or {}))
         write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
-        write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
+        write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE, run)
         if not self._status.is_readable:
             return out
         for name, frame in primals.items():
-            write_whole(frame, out / 'primal' / f'{name}.parquet')
+            write_whole(frame, out / 'primal' / f'{name}.parquet', run)
         for name, frame in (self._duals or {}).items():
-            write_whole(frame, out / 'dual' / f'{name}.parquet')
+            write_whole(frame, out / 'dual' / f'{name}.parquet', run)
         for kind, frames in (self._outputs or {}).items():
             for name, frame in frames.items():
-                write_whole(frame, out / kind / f'{name}.parquet')
+                write_whole(frame, out / kind / f'{name}.parquet', run)
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
@@ -839,8 +842,8 @@ class Result:
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
                 continue
-            write_whole(frame, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, {'expression': no_expressions})
+            write_whole(frame, out / 'expression' / f'{name}.parquet', run)
+        write_reasons(out, self._no_duals, {'expression': no_expressions}, run)
         return out
 
     def close(self) -> None:

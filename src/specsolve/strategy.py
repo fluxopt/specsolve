@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import polars as pl
 
 from specsolve.api import build, check
-from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
+from specsolve.archive_layout import beside, check_the_target, write_archive
 from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
@@ -40,6 +40,7 @@ from specsolve.relational.answer_layout import (
     Metrics,
     Record,
     checked_outputs,
+    copy_with_run,
     kinds_of,
     write_format,
     write_reasons,
@@ -476,12 +477,11 @@ def _archive_the_sweep(
     tables = {name: held[name] for name in sources}
     with beside(out) as scratch:
         spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
-        answer = _the_answer(spilled, scratch / ANSWER_DIR, keep_windows=keep_windows)
-        write_archive(out, spec, tables, axis=manifest, answer=answer)
+        write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, spilled, keep_windows=keep_windows))
 
 
-def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
-    """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*.
+def _the_answer(sweep: Sweep, under: Path, run: str, *, keep_windows: bool) -> None:
+    """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*, every table carrying *run*.
 
     One file per kind and name, as the readers return it, streamed from the
     spill; a name an EachWindow sweep cannot stitch has none, and
@@ -496,23 +496,26 @@ def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
     write_format(under, sweep._outputs)
     manifest = json.loads((spill.directory / MANIFEST_FILE).read_text())
     (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
-    shutil.copyfile(spill.directory / KEYS_FILE, under / KEYS_FILE)
+    copy_with_run(spill.directory / KEYS_FILE, under / KEYS_FILE, run)
     if keep_windows:
         (under / WINDOWS_DIR).mkdir()
-        shutil.copyfile(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE)
-    write_whole(sweep.record.drop(sweep.key_name), under / RECORD_FILE)
-    write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE)
+        copy_with_run(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE, run)
+    write_whole(sweep.record.drop(sweep.key_name), under / RECORD_FILE, run)
+    write_whole(sweep.metrics.drop(sweep.key_name), under / METRICS_FILE, run)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
         for name, frame in sweep._slices.get(kind, {}).items():
             if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
-            write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
+            write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet', run)
         if keep_windows and (spill.directory / kind).is_dir():
-            shutil.copytree(spill.directory / kind, under / WINDOWS_DIR / kind)
-    write_reasons(under, sweep._no_duals, absent)
-    return under
+            shutil.copytree(
+                spill.directory / kind,
+                under / WINDOWS_DIR / kind,
+                copy_function=lambda source, target: copy_with_run(Path(source), Path(target), run),
+            )
+    write_reasons(under, sweep._no_duals, absent, run)
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
