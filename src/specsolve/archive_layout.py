@@ -127,9 +127,7 @@ def write_archive(
         write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         for name, table in tables.items():
-            member = tree / SOURCES_DIR / f'{name}.parquet'
-            table.sink_parquet(member, compression='zstd')
-            _stamped(member, member, run)
+            write_whole(_with_run(table, run), tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         _copy_the_answer(answer, tree / ANSWER_DIR, run)
