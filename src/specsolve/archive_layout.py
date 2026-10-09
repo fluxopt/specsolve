@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from mathspec import Spec
     from mathspec.program import Program
 
-    from specsolve.relational.answer_layout import Write
+    from specsolve.relational.answer_layout import FrameWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -94,7 +94,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, Write], None],
+    answer: Callable[[Path, FrameWriter], None],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -272,7 +272,7 @@ def _declared_files(
             yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
-def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
     """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A

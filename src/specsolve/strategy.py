@@ -43,6 +43,7 @@ from specsolve.relational.answer_layout import (
     kinds_of,
     write_format,
     write_reasons,
+    write_whole,
 )
 from specsolve.relational.collect import collected
 from specsolve.relational.names import VALUE, refuse_reserved
@@ -68,7 +69,7 @@ if TYPE_CHECKING:
 
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
-    from specsolve.relational.answer_layout import Output, Write
+    from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import Diagnostics, Start
 
 
@@ -324,7 +325,7 @@ def solve_over(
         answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if spill is not None:
-        write_reasons(spill.directory, folded._no_duals, folded._absent)
+        write_reasons(spill.directory, folded._no_duals, folded._absent, write_whole)
     if archiving is not None:
         out, cut = archiving
         _archive_the_sweep(
@@ -478,7 +479,7 @@ def _archive_the_sweep(
         write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, spilled, keep_windows=keep_windows))
 
 
-def _the_answer(sweep: Sweep, under: Path, write: Write, *, keep_windows: bool) -> None:
+def _the_answer(sweep: Sweep, under: Path, write: FrameWriter, *, keep_windows: bool) -> None:
     """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*, each table written with *write*.
 
     One file per kind and name, as the readers return it, streamed from the

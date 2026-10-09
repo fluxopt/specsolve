@@ -494,25 +494,11 @@ def read_spec(directory: Path) -> Spec | None:
 
 #: How an answer's writer puts one frame at one path: [`write_whole`][], or
 #: the writer an archive hands it.
-type Write = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
-
-
-def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-    """*frame* at *path*, arriving whole: written beside it and renamed into place.
-
-    A lazy frame is sunk, so it streams to disk.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    part = path.with_name(path.name + '.part')
-    if isinstance(frame, pl.LazyFrame):
-        frame.sink_parquet(part)
-    else:
-        frame.write_parquet(part)
-    part.replace(path)
+type FrameWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
 
 
 def write_reasons(
-    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: Write = write_whole
+    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: FrameWriter
 ) -> None:
     """``(kind, name, reason)`` for what a solve could not produce, or no file at all, written with *write*.
 
@@ -568,3 +554,17 @@ def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
         file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
         for file in sorted(under.glob('*.parquet'))
     }
+
+
+def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+    """*frame* at *path*, arriving whole: written beside it and renamed into place.
+
+    A lazy frame is sunk, so it streams to disk.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + '.part')
+    if isinstance(frame, pl.LazyFrame):
+        frame.sink_parquet(part)
+    else:
+        frame.write_parquet(part)
+    part.replace(path)

@@ -33,6 +33,7 @@ from specsolve.relational.answer_layout import (
     Record,
     read_reasons,
     write_reasons,
+    write_whole,
 )
 from specsolve.relational.names import RUN
 from specsolve.relational.sinks.solvers import SOLVERS
@@ -1309,7 +1310,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
     """A dual left out by name reads back under its name, never as the reason the whole kind is absent."""
-    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}})
+    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}}, write_whole)
     assert read_reasons(tmp_path) == (None, {'dual': {'cap_limit': 'not over the window'}}), (
         'the whole kind keeps its duals, and the one name left out keeps its reason'
     )
