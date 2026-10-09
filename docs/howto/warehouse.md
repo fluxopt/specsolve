@@ -250,13 +250,16 @@ answers.sort('solved_at').select('specsolve_run', 'slice', 'status', 'objective'
 ```
 
 **Check the spec before you read the numbers.** Every archive holds the spec
-it answered as `spec.yaml`. One distinct text across the directory is the claim
-that every run answered the same document:
+it answered as `spec.yaml`. Compare each in its canonical form, which writes
+one text for one spec however its file was ordered or spaced. One distinct
+text across the directory is the claim that every run answered the same spec:
 
 ```python
 from pathlib import Path
 
-specs = {path.read_text() for path in Path('runs').glob('*/spec.yaml')}
+from mathspec import to_spec
+
+specs = {to_spec(path).to_yaml(canonical=True) for path in Path('runs').glob('*/spec.yaml')}
 assert len(specs) == 1, 'one spec, or this compares nothing'
 ```
 
