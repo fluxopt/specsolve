@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed
+
 ## 0.8.0 (2026-10-09)
 
 New:
