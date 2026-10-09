@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from mathspec import Spec
     from mathspec.program import Program
 
-    from specsolve.relational.answer_layout import Write
+    from specsolve.relational.answer_layout import FrameWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -94,7 +94,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, Write], None],
+    answer: Callable[[Path, FrameWriter], None],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 

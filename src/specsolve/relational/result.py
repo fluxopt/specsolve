@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec import Spec
 
-    from specsolve.relational.answer_layout import Write
+    from specsolve.relational.answer_layout import FrameWriter
     from specsolve.relational.status import SolveStatus
 
 
@@ -815,9 +815,9 @@ class Result:
         Raises:
             SpecsolveError: This result was closed.
         """
-        return self._save(Path(directory))
+        return self._save(Path(directory), write_whole)
 
-    def _save(self, out: Path, write: Write = write_whole) -> Path:
+    def _save(self, out: Path, write: FrameWriter) -> Path:
         """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
         import polars as pl
 
