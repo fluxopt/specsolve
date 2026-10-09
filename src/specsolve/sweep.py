@@ -708,7 +708,7 @@ class Sweep:
             self._outputs,
             self.spec,
         )
-        write_reasons(spill.directory, self._no_duals, self._absent)
+        write_reasons(spill.directory, self._no_duals, self._absent, write_whole)
         for position, key in enumerate(self.keys):
             meta = Record(**self.record.drop(self.key_name).row(position, named=True))
             taken = Metrics(**self.metrics.select(Metrics._fields).row(position, named=True))

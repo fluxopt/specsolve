@@ -424,5 +424,5 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 
 
 def test_an_unsigned_integer_int64_cannot_hold_is_archived_as_it_arrived() -> None:
-    frame = _with_run(pl.DataFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run')
+    frame = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
     assert frame['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'
