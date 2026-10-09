@@ -20,6 +20,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
@@ -32,6 +33,8 @@ if TYPE_CHECKING:
 
     from mathspec import Spec
     from mathspec.program import Program
+
+    from specsolve.relational.answer_layout import Write
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -91,7 +94,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, str], object],
+    answer: Callable[[Path, Write], None],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -102,15 +105,18 @@ def write_archive(
         tables: The tidy table each source stands for, keyed as the file
             declares, each written as ``sources/<key>.parquet``.
         axis: The axis manifest, or ``None`` where the sources are not cut.
-        answer: Writes the answer into the directory it is given, in the
-            answer's own layout, every table carrying the
-            ``specsolve_run`` it is given.
+        answer: Lays the answer out in the directory it is given, writing
+            each table with the writer it is given, which adds the run.
 
     Returns:
         *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
+
+    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(frame.lazy(), run), path)
+
     staging = _staging_for(out)
     part = staging / out.name
     tree = staging / 'tree' if zipped else part
@@ -119,10 +125,10 @@ def write_archive(
         write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         for name, table in tables.items():
-            write_whole(table, tree / SOURCES_DIR / f'{name}.parquet', run)
+            write(table, tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
-        answer(tree / ANSWER_DIR, run)
+        answer(tree / ANSWER_DIR, write)
         _write_catalogs(lowered(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
@@ -264,6 +270,19 @@ def _declared_files(
     for kind, declared in answered.items():
         for name, declaration in declared.items():
             yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
+
+
+def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
+
+    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
+    timestamp in a time zone becomes the same instant in UTC.
+    """
+    return frame.with_columns(
+        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
+        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
+        pl.lit(run, dtype=pl.String).alias(RUN),
+    )
 
 
 def _pack(tree: Path, into: Path) -> None:
