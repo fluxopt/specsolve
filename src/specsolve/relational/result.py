@@ -801,7 +801,7 @@ class Result:
 
         ``format.json`` stamps the layout, the specsolve that wrote it and the
         outputs the answer carries:
-        ``{"layout": 5, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
+        ``{"layout": 4, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
         layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
         to solve the model again and save it.
 

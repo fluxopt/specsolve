@@ -148,7 +148,7 @@ def not_requested_message(kind: str, name: str) -> str:
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 5
+ANSWER_LAYOUT = 4
 FORMAT_FILE = 'format.json'
 
 

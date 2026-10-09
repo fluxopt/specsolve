@@ -54,7 +54,7 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 2
+INPUTS_LAYOUT = 1
 
 
 @contextmanager
