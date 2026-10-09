@@ -10,6 +10,7 @@ import json
 import math
 import shutil
 import zipfile
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
 from typing import TYPE_CHECKING
@@ -995,14 +996,14 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 
 #: The overlapping rolling horizon every archive test below solves.
 ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
+#: The same windows, handing the store's level on to the next.
+CARRIED = replace(ROLLING, carry={'soc_initial': 'soc'})
 
 
 def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: object) -> sps.types.Sweep:
     """The rolling horizon, archived to ``roll.zip`` with *archive*'s keywords."""
     sources = horizon_sources(12)
-    return sps.solve_over(
-        spec, sources, ROLLING, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip', **archive
-    )
+    return sps.solve_over(spec, sources, CARRIED, archive=tmp_path / 'roll.zip', **archive)
 
 
 @pytest.mark.parametrize(
@@ -1035,12 +1036,12 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
     sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}
-    runs = sps.solve_over(spec, sources, axis, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll.zip')
+    runs = sps.solve_over(spec, sources, replace(axis, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll.zip')
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
 
     differing = _attached_differently(spec, sources, archived)
     assert not differing, f'(window, source) pairs the archive attaches differently: {differing}'
-    again = sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+    again = sps.solve_over(archived.spec, archived.sources, archived.axis)
     assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, window for window'
     )
@@ -1072,7 +1073,7 @@ def test_a_rolling_horizon_archive_reads_back_its_answer(tmp_path: Path) -> None
     loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
     scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
 
-    assert loaded.axis == ROLLING
+    assert loaded.axis == CARRIED, 'the axis reads back with its carry'
     assert loaded.sweep.primal('soc').equals(runs.primal('soc')), 'the answer read whole'
     assert scanned.sweep.scan('soc').collect().equals(runs.primal('soc')), 'and read off disk'
 
@@ -1162,9 +1163,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_still_kept_them(
 def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
     """The answer, the windows and what each window owns all carry the run on disk, and no reader returns it."""
     out = tmp_path / 'nightly-2026-09-10.zip'
-    runs = sps.solve_over(
-        WINDOW, horizon_sources(12), ROLLING, carry={'soc_initial': 'soc'}, archive=out, keep_windows=True
-    )
+    runs = sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=out, keep_windows=True)
     loaded = sps.load_archive(out, tmp_path / 'out').sweep
     scanned = sps.scan_archive(out, tmp_path / 'out').sweep
     tables = sorted((tmp_path / 'out').rglob('*.parquet'))
@@ -1371,7 +1370,7 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sweep_sources, sps.EachCoordinate('scenario'), archive=runs / 'scenarios')
     window = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
-    sps.solve_over(WINDOW, horizon_sources(12), window, carry={'soc_initial': 'soc'}, archive=runs / 'rolling')
+    sps.solve_over(WINDOW, horizon_sources(12), replace(window, carry={'soc_initial': 'soc'}), archive=runs / 'rolling')
 
     files = sorted(runs.glob(f'*/{ANSWER_DIR}/{table}'))
     schemas = {file.parts[-3]: pl.read_parquet_schema(file) for file in files}
@@ -1657,7 +1656,7 @@ def test_load_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_i
     )
 
     inputs = sps.load_inputs(out)
-    assert (inputs.axis, inputs.carry) == (None, {}), 'an archive of one solve holds no axis and no carry'
+    assert inputs.axis is None, 'an archive of one solve holds no axis'
     with (
         sps.solve(inputs.spec, inputs.sources) as again,
         sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
@@ -1700,11 +1699,11 @@ def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_so
 def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
     from tests.test_strategy import WINDOW, horizon_sources
 
-    sps.solve_over(WINDOW, horizon_sources(12), ROLLING, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll')
+    sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=tmp_path / 'roll')
     archived = sps.load_archive(tmp_path / 'roll')
     inputs = sps.load_inputs(tmp_path / 'roll')
 
-    assert (inputs.axis, inputs.carry) == (archived.axis, archived.carry), 'the axis and carry the sweep ran with'
+    assert inputs.axis == archived.axis == CARRIED, 'the axis the sweep ran over, with its carry'
     unlike = [key for key in archived.sources if not inputs.sources[key].equals(archived.sources[key])]
     assert inputs.sources.keys() == archived.sources.keys(), 'one table per source the archive holds'
     assert not unlike, f'sources that differ from what load_archive gives back: {unlike}'

@@ -100,8 +100,7 @@ window takes `soc_initial` from the sources:
 rolling = sps.solve_over(
     'examples/rolling/horizon.yaml',
     hourly,
-    sps.EachWindow('hour', steps=3, lookahead=3, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('hour', steps=3, lookahead=3, into='t', carry={'soc_initial': 'soc'}),
 )
 
 print(rolling.record.select('hour_start', 'termination_condition', 'objective'))
@@ -159,13 +158,13 @@ pathway = {
 }
 ```
 
-`EachCoordinate('year')` solves once per period, in sorted order.
+`EachCoordinate('year')` solves once per period, in sorted order. Its
 `carry={'existing': 'total'}` copies the `total` each period ends with into
 the `existing` of the next:
 
 ```python exec="true" source="material-block" result="text" session="sweep"
 myopic = sps.solve_over(
-    'examples/myopic/pathway.yaml', pathway, sps.EachCoordinate('year'), carry={'existing': 'total'}
+    'examples/myopic/pathway.yaml', pathway, sps.EachCoordinate('year', carry={'existing': 'total'})
 )
 
 fleet = myopic.primal('build').join(myopic.primal('total'), on=['year', 'generator'], suffix='_total')
@@ -180,6 +179,6 @@ that stands in 2030 plus the 8.75 built in 2035 is the 75.0 that stands in
 
 | | |
 |---|---|
-| [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, `start=` and `spill_to=`, and how a sweep is read |
+| [Sweeps and rolling horizons](reference/sweeps.md) | every axis and its `carry`, `start=` and `spill_to=`, and how a sweep is read |
 | [Running a sweep in parallel](howto/parallel.md) | one slice per worker |
 | [Archiving a solve](howto/archiving.md) | the spec, its data and every slice kept as one archive |
