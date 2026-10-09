@@ -9,19 +9,22 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.8.0 (2026-10-09)
 
-A solve can now start from an earlier answer, and a re-solve carries on from
-where the last one ended. An answer can carry the reduced costs, the slacks and
-the basis on request, and an infeasible model names the rows that conflict. An
-answer carries its spec rather than a digest, and `load_inputs` reads the spec
-and the data back from an archive whose answer this version no longer reads.
+New:
+
+- Warm starts. Start a solve from an earlier answer, a basis or a table of
+  values. A re-solve now carries on from where the last solve ended.
+- More results on request: reduced costs, slacks and the basis, through
+  `outputs=`.
+- An infeasible model names the rows and bounds that conflict.
+- `load_inputs` reads the spec and the data out of an archive, even after a
+  later version stops reading its answer. This works for archives written by
+  0.8.0 or later.
 
 Breaks:
 
-- An answer, spill or archive written by 0.7.0 or earlier is refused: the
-  answer's layout is 4. An archive now also stamps its spec and sources with a
-  layout of their own, which is 1. An archive from 0.7.0 or earlier has no such
-  stamp, so `load_inputs` refuses it too, and its message names the files to
-  solve it again from.
+- Answers, spills and archives from 0.7.0 or earlier are refused. The answer
+  layout is now 4, and the new inputs layout is 1. The error names the files
+  to solve again from.
 - `keep=` and `Result.kept` are removed. A re-solve carries on from the last
   solve by default; `start=None` begins from nothing.
 - An answer carries the activity only when the solve passed
