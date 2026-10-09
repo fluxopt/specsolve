@@ -185,7 +185,7 @@ args = [
     { arg = "cases", default = "dispatch transport storage fleet" },
     { arg = "sizes", default = "xs s m l w1 w10 w100 w1000" },
     { arg = "sinks", default = "highs gurobi" },
-    { arg = "arms", default = "specsolve linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" },
+    { arg = "arms", default = "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" },
     { arg = "out", default = "bench/results/latest.json" },
     { arg = "builds", default = "5" },
     { arg = "memory", default = "16" },
