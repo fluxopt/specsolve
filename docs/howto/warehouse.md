@@ -34,7 +34,7 @@ base as a sweep of one slice, or declare the dimension in the spec.
 **Write a directory, not a `.zip`.** No query engine reads inside a zip. Unpack
 one with the `into=` of `load_archive` or `scan_archive`.
 
-## The four tables
+## The three tables
 
 An archive is a tree of parquet files, so a directory of archives is a table
 per glob. Nothing is loaded and no schema is maintained:
@@ -44,7 +44,6 @@ import polars as pl
 
 answers = pl.read_parquet('runs/*/answer/record.parquet')
 metrics = pl.read_parquet('runs/*/answer/metrics.parquet')
-inputs = pl.read_parquet('runs/*/sources.parquet')
 catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
@@ -52,14 +51,13 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 |---|---|---|
 | `answer/record.parquet` | solve, or sweep slice | how it terminated, what it reached, when, under what name, and on which solver and package versions |
 | `answer/metrics.parquet` | the same | what the build and its solves spent, and how big the model was |
-| `sources.parquet` | source per archive | what each input's table digests to |
 | `catalog.parquet` | column of labels of each file | what the file holds ([what a file holds](#what-a-file-holds)) |
 
 **Every row says which archive it came from.** `specsolve_run` is the
 archive's own name: `runs/base` writes `base`, and `runs/base.zip` writes the
 same. Every table in an archive carries it, so nothing has to read the paths.
 
-**These four tables have the same columns, whoever wrote them.** A single
+**These three tables have the same columns, whoever wrote them.** A single
 solve, an `EachCoordinate` sweep and an `EachWindow` sweep write one schema
 for each, so each glob reads as one table. A sweep writes one row per slice
 and names it in two text columns. `slice_axis` is the key name, such as
@@ -251,48 +249,36 @@ machines still order:
 answers.sort('solved_at').select('specsolve_run', 'slice', 'status', 'objective')
 ```
 
-**Check the digests before you read the numbers.** `spec_digest` is a digest of
-the spec an answer came back from. One distinct value across the table is the
-claim that every row answered the same document, and a null is a row that
-named none, so ask for both:
+**Check the spec before you read the numbers.** Every archive holds the spec
+it answered as `spec.yaml`. Compare each in its canonical form, which writes
+one text for one spec however its file was ordered or spaced. One distinct
+text across the directory is the claim that every run answered the same spec:
 
 ```python
-assert answers['spec_digest'].n_unique() == 1, 'one spec, or this compares nothing'
-assert answers['spec_digest'].null_count() == 0, 'and every row named the document it answered'
+from pathlib import Path
+
+from mathspec import to_spec
+
+specs = {to_spec(path).to_yaml(canonical=True) for path in Path('runs').glob('*/spec.yaml')}
+assert len(specs) == 1, 'one spec, or this compares nothing'
 ```
 
 ## Find which input changed between two runs
 
-`spec_digest` says two runs answered the same document and nothing about the
-numbers, so two runs of one spec over different data carry the same one.
-`sources.parquet` separates them, and names the input that moved:
+Two runs of one spec over different data hold the same `spec.yaml`. Their
+sources separate them. Compare each table, and the ones that differ are the
+inputs that moved:
 
 ```python
 base = sps.load_archive('runs/base')
 other = sps.load_archive('runs/peak')
 
-moved = base.source_digests.join(other.source_digests, on='source', suffix='_other').filter(
-    pl.col('digest') != pl.col('digest_other')
-)
-moved['source'].to_list()  # ['load']
+moved = [name for name in sorted(base.sources) if not base.sources[name].equals(other.sources[name])]
+moved  # ['load']
 ```
 
-**Across a whole directory it is a window rather than a join**,
-`specsolve_run` being on every row:
-
-```python
-inputs.sort('specsolve_run').with_columns(before=pl.col('digest').shift().over('source')).filter(
-    pl.col('before').is_not_null() & (pl.col('before') != pl.col('digest'))
-)
-```
-
-**The digest is of the table the solve read, before the run is stamped on**,
-so one table archived under two names digests alike. That table is the one
-under `sources/`, not the file you passed, and hashing the member does not give
-the row back, because the member also carries `specsolve_run`. Two archives of
-the same data written by different versions of polars can differ, and reading
-an archive does not verify the digests
-([the rule](../reference/api.md#specsolve.types.ResultArchive)).
+The tables are the ones the solve read, so a value compares exactly, whichever
+version of polars wrote either archive.
 
 ## See what the runs cost
 

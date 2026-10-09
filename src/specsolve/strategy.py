@@ -318,12 +318,12 @@ def solve_over(
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
     starts = _slice_starts(start, axis, slices, key_name, program)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked)
+    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
     if executor is None:
         answered = _serially(program, document, slices, solving, plan, spill, starts)
     else:
         answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked)
+    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if spill is not None:
         write_reasons(spill.directory, folded._no_duals, folded._absent)
     if archiving is not None:
@@ -722,7 +722,6 @@ def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozen
         result.termination_condition,
         result.objective,
         has_primal=result.has_primal,
-        spec_digest=result.spec_digest,
         solved_at=result.solved_at,
         provenance=result.provenance,
     )

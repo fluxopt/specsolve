@@ -156,8 +156,8 @@ Each entry says what the thing is, then the module it lives in.
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
   answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
   stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
-  `spec.yaml`, `sources/`, `sources.parquet` and `axis.json`, and a change to
-  any of them raises it. Any other change, `catalog.parquet` included, raises
+  `spec.yaml`, `sources/` and `axis.json`, and a change to any of them raises
+  it. Any other change, `catalog.parquet` included, raises
   `ANSWER_LAYOUT`. Reading an archive back is `archive.py`.
 
 **Run stamp**

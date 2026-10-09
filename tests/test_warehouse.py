@@ -189,7 +189,7 @@ def test_every_block_on_the_page_runs_but_the_ones_it_says_do_not(page: tuple[Pa
 
 def test_the_page_names_the_input_that_moved_between_two_runs(page: tuple[Path, dict[str, Any]]) -> None:
     _, namespace = page
-    assert namespace['moved']['source'].to_list() == ['load'], 'base and peak differ in their load alone'
+    assert namespace['moved'] == ['load'], 'base and peak differ in their load alone'
     assert namespace['sql_results'], 'the sql blocks ran'
 
 
@@ -204,7 +204,6 @@ STRICT = {
         'termination_condition': pl.String,
         'objective': pl.Float64,
         'has_primal': pl.Boolean,
-        'spec_digest': pl.String,
         'solved_at': pl.Datetime('us', 'UTC'),
         'specsolve_run': pl.String,
         'slice_axis': pl.String,
@@ -230,7 +229,6 @@ STRICT = {
         'slice_axis': pl.String,
         'slice': pl.String,
     },
-    'sources.parquet': {'specsolve_run': pl.String, 'source': pl.String, 'digest': pl.String},
     'catalog.parquet': {
         'specsolve_run': pl.String,
         'path': pl.String,

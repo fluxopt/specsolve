@@ -37,9 +37,11 @@ from specsolve.relational.answer_layout import (
     not_requested_message,
     read_outputs,
     read_reasons,
+    read_spec,
     row_of,
     write_format,
     write_reasons,
+    write_spec,
     write_whole,
 )
 from specsolve.relational.collect import collected
@@ -51,6 +53,7 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import xarray as xr
+    from mathspec import Spec
 
     from specsolve.inputs import Label
     from specsolve.relational.answer_layout import Output
@@ -153,7 +156,7 @@ class Spill:
     ``record/`` and ``metrics/`` the rows, which name their slice as text in
     ``slice_axis`` and ``slice``; ``keys.parquet`` holds the keys as their own
     type. ``sweep.json`` names the key, the keys and the outputs, so a
-    directory answers for one sweep. Every file lands whole. A slice's record file is written
+    directory answers for one sweep, and ``spec.yaml`` is the spec it answered. Every file lands whole. A slice's record file is written
     last and marks it done; ``sweep.json`` lands after the files a scan reads
     beside it and marks the directory stamped.
     """
@@ -172,6 +175,7 @@ class Spill:
         key_dtype: pl.DataType,
         stitch: Stitch | None,
         outputs: frozenset[Output],
+        spec: Spec | None,
     ) -> Spill:
         """The directory ready to take this sweep: stamped if it holds none, checked and never re-stamped if it does."""
         directory = Path(directory)
@@ -200,6 +204,7 @@ class Spill:
                 )
         else:
             write_format(directory, outputs)
+            write_spec(directory, spec)
             write_whole(pl.DataFrame([pl.Series(key_name, keys, dtype=key_dtype)]), directory / KEYS_FILE)
             if stitch is not None:
                 write_whole(stitch.owned, directory / OWNED_FILE)
@@ -286,6 +291,9 @@ class Sweep:
     #: moved a mask; under an executor every slice builds alone and every one
     #: loads. So a slow sweep says which slice, and which phase of it.
     metrics: pl.DataFrame
+    #: The spec every slice answered, as written; ``None`` only for a directory
+    #: written without one.
+    spec: Spec | None
     #: ``{kind: {name: frame}}``, every slice's frame of a name as one, keyed,
     #: in memory or scanned off disk; a kind no slice produced is absent.
     _slices: dict[str, dict[str, pl.LazyFrame]] = field(repr=False, default_factory=dict)
@@ -319,6 +327,7 @@ class Sweep:
         spill: Spill | None,
         key_dtype: pl.DataType,
         outputs: frozenset[Output],
+        spec: Spec,
     ) -> Sweep:
         """Every slice's answer absorbed, in the order they arrive.
 
@@ -355,6 +364,7 @@ class Sweep:
             key_name=key_name,
             record=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
             metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed),
+            spec=spec,
             _slices=slices,
             _no_duals=no_duals,
             _absent={'expression': no_expressions} if no_expressions else {},
@@ -690,7 +700,13 @@ class Sweep:
         """
         by_key = {kind: slice_index(self, kind) for kind in KINDS}
         spill = Spill.opened(
-            directory, self.key_name, self.keys, self.record[self.key_name].dtype, self._stitch, self._outputs
+            directory,
+            self.key_name,
+            self.keys,
+            self.record[self.key_name].dtype,
+            self._stitch,
+            self._outputs,
+            self.spec,
         )
         write_reasons(spill.directory, self._no_duals, self._absent)
         for position, key in enumerate(self.keys):
@@ -846,6 +862,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
         key_name=key_name,
         record=_rekeyed(consolidated(under, RECORD_FILE), keys),
         metrics=_rekeyed(consolidated(under, METRICS_FILE), keys),
+        spec=read_spec(under),
         _no_duals=no_duals,
         _absent=absent,
         _outputs=read_outputs(under),
