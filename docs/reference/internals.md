@@ -115,9 +115,10 @@ Each entry says what the thing is, then the module it lives in.
   one does not (`relational/sinks/capabilities.py`).
 
 **Structure digest**
-: A digest of everything a re-solve may not change: the counts, the matrix,
-  each row's comparison, each column's type and the sets. A loaded solver
-  keeps its model only while this digest stays the same
+: A digest of everything a re-solve may not change: the counts, which column
+  each matrix entry sits in, each row's comparison, each column's type and the
+  sets. A loaded solver keeps its model only while this digest stays the same
+  and every matrix coefficient is within 1e-12 relative of the one it holds
   (`relational/sinks/handoff.py`).
 
 **Warm start**
