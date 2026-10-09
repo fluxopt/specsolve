@@ -211,7 +211,9 @@ class Handoff:
 
         The question a loaded solver asks of a rebuilt model: may I keep what
         I hold and take the new numbers by value? Bounds, costs and right-hand
-        sides go in that way. The counts, the matrix, each row's comparison,
+        sides go in that way. The matrix's coefficients are the solver's own
+        question ([`keeps`][specsolve.relational.sinks.solvers.base.Solver.keeps]).
+        The counts, which column each matrix entry sits in, each row's comparison,
         each column's type, every SOS member, the quadratic objective's
         pattern and each quadratic *constraint* whole — coefficients and
         right-hand side — do not, so a model whose digest moved is loaded
@@ -232,7 +234,6 @@ class Handoff:
             self.rows.filter(pl.col('row') >= self.linear_row_count)['rhs'].to_numpy(),
             self.rows['sense'].to_physical().to_numpy(),
             self.matrix['col'].to_numpy(),
-            self.matrix['coeff'].to_numpy(),
             self.row_starts,
             *(self.sos[column].to_numpy() for column in self.sos.columns),
         ).digest()
@@ -243,8 +244,8 @@ class Handoff:
 
         The question a saved answer asks of a model rebuilt later: is this the
         model I answered? So it covers what [`structure`][] leaves out — the
-        bounds, costs and right-hand sides a re-solve may push — since a pushed
-        number is a different answer over the same matrix.
+        matrix's coefficients, and the bounds, costs and right-hand sides a
+        re-solve may push — since a pushed number is a different answer.
 
         Over the built model rather than the sources, so two source mappings a
         build cannot tell apart agree here. A source whose rows moved builds a
@@ -254,6 +255,7 @@ class Handoff:
         """
         return _digest(
             self.structure + f'{self.objective_constant}'.encode(),
+            self.matrix['coeff'].to_numpy(),
             self.cols['lb'].to_numpy(),
             self.cols['ub'].to_numpy(),
             self._dense_cost(),
