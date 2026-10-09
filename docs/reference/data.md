@@ -85,6 +85,21 @@ names; a bare relation holds each row at most once.
 value is null or NaN. Polars and parquet write a hole as a null, pandas has
 only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 
+**A number the model computes is finite.** A coefficient, a constant side and
+the objective constant each need a finite number, so the build refuses a value
+that is not finite wherever the model divides, or wherever a value multiplies a
+variable:
+
+| The model reads | The build |
+|---|---|
+| `x / d` or `h / d`, `d` zero | refuses it: there is no quotient |
+| `x * p`, `p` infinite | refuses it: there is no coefficient |
+| `h` on a constant side, `h` infinite | keeps it: `x <= inf` never binds |
+
+An infinite value in the data is accepted as a bound or on a constant side,
+where it is a limit that never binds. A reported quotient by zero is absent
+([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
+
 ### Refused
 
 | What arrives | What the message says |
@@ -120,6 +135,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
 | a divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
+| a value that is not finite, from a divisor that is zero or an infinite value times a variable | names the declaration and how many |
 | a comparison's whole constant side with no value where the row is built | the same, naming the constraint |
 | a bound parameter with no value where the variable exists | names both models the two repairs build |
 
@@ -132,6 +148,7 @@ only NaN, and `None` in a pandas column is NaN by the time either lane sees it.
 | a date under a `dtype: datetime` dimension | held as the microsecond its day starts on |
 | a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
 | a coordinate with no row | sparse variables; what a missing row means where it is read is [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/). `diagnostics().sparse_parameters` names the parameters that arrived short of their dims ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
+| an infinite value as a bound or on a constraint's constant side | a limit that never binds |
 | a value that is readable and wrong | bound as given |
 
 ### Stray labels

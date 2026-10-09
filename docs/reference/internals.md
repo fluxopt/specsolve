@@ -84,7 +84,8 @@ Each entry says what the thing is, then the module it lives in.
 
 **Coverage**
 : Whether data is there where a declaration reads it. A divisor and a
-  constant piece are refused at the last moment the gap can still be seen
+  constant piece are refused at the last moment the gap can still be seen,
+  and a value that is not finite at the same moment
   (`relational/engine/coverage.py`).
 
 **Collect engine**
@@ -114,11 +115,11 @@ Each entry says what the thing is, then the module it lives in.
   one does not (`relational/sinks/capabilities.py`).
 
 **Structure digest**
-: A digest of everything a re-solve may not change: the counts, the matrix,
-  each row's comparison, each column's type and the sets. A loaded solver
-  keeps its model only while this digest stays the same. The **contents
-  digest** adds the numbers, and says whether a saved answer belongs to a
-  rebuilt model (`relational/sinks/handoff.py`).
+: A digest of everything a re-solve may not change: the counts, which column
+  each matrix entry sits in, each row's comparison, each column's type and the
+  sets. A loaded solver keeps its model only while this digest stays the same
+  and every matrix coefficient is within 1e-12 relative of the one it holds
+  (`relational/sinks/handoff.py`).
 
 **Warm start**
 : What a solve starts from instead of from scratch, laid onto the build by
@@ -155,8 +156,8 @@ Each entry says what the thing is, then the module it lives in.
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
   answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
   stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
-  `spec.yaml`, `sources/`, `sources.parquet` and `axis.json`, and a change to
-  any of them raises it. Any other change, `catalog.parquet` included, raises
+  `spec.yaml`, `sources/` and `axis.json`, and a change to any of them raises
+  it. Any other change, `catalog.parquet` included, raises
   `ANSWER_LAYOUT`. Reading an archive back is `archive.py`.
 
 **Run stamp**

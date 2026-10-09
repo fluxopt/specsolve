@@ -262,10 +262,8 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
         'termination_condition',
         'objective',
         'has_primal',
-        'spec_digest',
         'solved_at',
         'specsolve_run',
-        'model_digest',
         'slice_axis',
         'slice',
         'solver',
@@ -1390,8 +1388,9 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
         'owned.parquet',
         'primal',
         'record',
+        'spec.yaml',
         'sweep.json',
-    ], 'the three kinds, the record, the manifest, the keys, the layout it is in, and the way back'
+    ], 'the three kinds, the record, the spec, the manifest, the keys, the layout it is in, and the way back'
     assert sorted(p.name for p in (out / 'expression').iterdir()) == ['spend', 'window_spend'], (
         'every declared expression the slices evaluated'
     )

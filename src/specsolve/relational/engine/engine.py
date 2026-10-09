@@ -306,7 +306,6 @@ class Engine:
         Takes the answer rather than the solver, so that a benchmark can time
         reading one back without a solve; every vector must span this build.
         """
-        handoff = self._model.handoff
         assert answer.primal is not None or not answer.status.is_readable, (
             'a readable status must come with a primal vector'
         )
@@ -335,7 +334,6 @@ class Engine:
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
-            _model_digest=lambda: handoff.contents,
         )
 
     def infeasible_subsystem(self) -> InfeasibleSubsystem:
@@ -362,16 +360,6 @@ class Engine:
                 _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
             )
         return readback.infeasible_subsystem(self._model, found)
-
-    def contents(self) -> str:
-        """This build's digest — what a saved answer is checked against.
-
-        Raises:
-            SpecsolveError: Asked of an engine holding no built model.
-        """
-        if self._built is None:
-            raise SpecsolveError(_no_built_model('to digest'))
-        return self._model.handoff.contents
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
