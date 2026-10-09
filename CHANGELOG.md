@@ -9,6 +9,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 - perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
 - perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
+- docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
 
 ## 0.8.0 (2026-10-09)
 
