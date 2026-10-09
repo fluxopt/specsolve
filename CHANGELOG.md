@@ -11,29 +11,18 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 New:
 
-- Warm starts. Start a solve from an earlier answer, a basis or a table of
-  values. A re-solve now carries on from where the last solve ended.
-- More results on request: reduced costs, slacks and the basis, through
-  `outputs=`.
-- An infeasible model names the rows and bounds that conflict.
-- `load_inputs` reads the spec and the data out of an archive, even after a
-  later version stops reading its answer. This works for archives written by
-  0.8.0 or later.
+- Warm starts from an earlier answer, a basis or values. A re-solve carries on by default.
+- Reduced costs, slacks and the basis, through `outputs=`.
+- An infeasible model names the conflicting rows.
+- `load_inputs` reads the spec and data from an archive whose answer is too old.
 
 Breaks:
 
-- Answers, spills and archives from 0.7.0 or earlier are refused. The answer
-  layout is now 4, and the new inputs layout is 1. The error names the files
-  to solve again from.
-- `keep=` and `Result.kept` are removed. A re-solve carries on from the last
-  solve by default; `start=None` begins from nothing.
-- An answer carries the activity only when the solve passed
-  `outputs={'activity'}`.
-- `Result.model_digest()`, `Result.spec_digest`, `source_digests` on an archive,
-  the record's `model_digest` and `spec_digest` columns and an archive's
-  `sources.parquet` are removed. An answer and a sweep carry the `spec`.
-- A dimension called `value` is refused when the spec loads, and a printed
-  coordinate names its dimensions: `p[t=1, g=gas]`.
+- Files from 0.7.0 or earlier are refused.
+- `keep=` and `Result.kept` are gone. Use `start=None` to start cold.
+- Activity is saved only with `outputs={'activity'}`.
+- The digests are gone. An answer carries its `spec`.
+- A dimension called `value` is refused.
 
 Solving:
 
