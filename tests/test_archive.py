@@ -1108,9 +1108,13 @@ def test_a_rolling_horizon_archive_refuses_the_windows_it_did_not_keep(
         refused(sweep, tmp_path / 'resaved')
 
 
-def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: Path) -> None:
-    """`keep_windows=True` writes the per-window frames too, so `per_window=True` reads off the archive."""
-    runs = _rolling(tmp_path, keep_windows=True)
+@pytest.mark.parametrize('spilled', [pytest.param(False, id='held'), pytest.param(True, id='spilled')])
+def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(spilled: bool, tmp_path: Path) -> None:
+    """`keep_windows=True` writes the per-window frames too, so `per_window=True` reads off the archive.
+
+    A held sweep writes its windows from memory, a spilled one copies them off the spill.
+    """
+    runs = _rolling(tmp_path, keep_windows=True, **({'spill_to': tmp_path / 'spill'} if spilled else {}))
     loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
     scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
 
