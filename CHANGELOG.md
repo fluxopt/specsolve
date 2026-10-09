@@ -17,6 +17,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 - docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
 - feat(api): a sweep can be cut by several axes at once, each carrying its own state, such as a rolling horizon per scenario ([#1888](https://github.com/fluxopt/specsolve/pull/1888))
+- feat(api): a window can hold windows of its own, such as a myopic pathway with foresight whose decades each roll through their hours ([#1890](https://github.com/fluxopt/specsolve/pull/1890))
 
 ## 0.8.0 (2026-10-09)
 

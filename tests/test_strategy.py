@@ -898,9 +898,11 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
     slices, _ = axis._slice(horizon_sources(periods), 'snapshot_start')
-    assert [current.owns for current in slices] == expected, 'which is what each slice records owning'
+    assert [current.owns for current in slices] == [(block,) for block in expected], (
+        'which is what each slice records owning, one count per axis'
+    )
     for current in slices:
-        assert current.owns <= len(current.sources['t']), 'no window owns more coordinates than it holds'
+        assert current.owns[0] <= len(current.sources['t']), 'no window owns more coordinates than it holds'
 
 
 def test_a_block_list_that_stops_short_of_the_axis_is_refused():

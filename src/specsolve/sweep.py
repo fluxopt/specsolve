@@ -198,7 +198,14 @@ def sweep_manifest(
     return {
         'key_names': list(columns.names),
         'keys': [key_text(key) for key in keys],
-        'stitch': None if stitch is None else {'local': stitch.local, 'dim': stitch.dim, 'outer': list(stitch.outer)},
+        'stitch': None
+        if stitch is None
+        else {
+            'locals': list(stitch.locals),
+            'dims': list(stitch.dims),
+            'keys': list(stitch.keys),
+            'outer': list(stitch.outer),
+        },
         'outputs': sorted(outputs),
     }
 
@@ -331,8 +338,9 @@ class Sweep:
     rows included.
 
     A sweep cut by several axes carries one key column per axis, outer first,
-    in every frame and in [`record`][]; an EachWindow last axis is stitched
-    within each combination of the outer keys.
+    in every frame and in [`record`][]. The answer drops the key column of
+    every EachWindow axis and stands each window's coordinates over the
+    dimension it sliced, keeping only what every window owns.
     """
 
     #: The key columns, one per axis, outer first; [`key_name`][] is the last.
@@ -507,7 +515,7 @@ class Sweep:
         """
         if per_window or self._stitch is None:
             return frame
-        return self._stitch.restore(frame, self.key_name)
+        return self._stitch.restore(frame)
 
     def _unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame*, as the slices produced it, has no answer; ``None`` where it has one.
@@ -954,9 +962,10 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
         _stitch=None
         if stitch is None
         else Stitch(
-            stitch['local'],
-            stitch['dim'],
+            tuple(stitch['locals']),
+            tuple(stitch['dims']),
             pl.DataFrame() if owned is None else pl.read_parquet(owned).drop(RUN, strict=False),
+            tuple(stitch['keys']),
             tuple(stitch['outer']),
         ),
     )
