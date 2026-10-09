@@ -238,32 +238,6 @@ class Handoff:
             *(self.sos[column].to_numpy() for column in self.sos.columns),
         ).digest()
 
-    @cached_property
-    def contents(self) -> str:
-        """A digest of the built model **whole** — the numbers included.
-
-        The question a saved answer asks of a model rebuilt later: is this the
-        model I answered? So it covers what [`structure`][] leaves out — the
-        matrix's coefficients, and the bounds, costs and right-hand sides a
-        re-solve may push — since a pushed number is a different answer.
-
-        Over the built model rather than the sources, so two source mappings a
-        build cannot tell apart agree here. A source whose rows moved builds a
-        different label order and so digests differently. The objective is
-        read through the dense cost vector, since ``obj`` carries no order
-        contract and hashed in place would call one model two.
-        """
-        return _digest(
-            self.structure + f'{self.objective_constant}'.encode(),
-            self.matrix['coeff'].to_numpy(),
-            self.cols['lb'].to_numpy(),
-            self.cols['ub'].to_numpy(),
-            self._dense_cost(),
-            self.quad['coeff'].to_numpy(),
-            self.rows['row'].to_numpy(),
-            self.rows['rhs'].to_numpy(),
-        ).hexdigest()
-
     def sets(self) -> Iterator[tuple[int, pl.Series, pl.Series]]:
         """Each special-ordered set: its type, member columns, and weights, in ``(set, weight)`` order.
 

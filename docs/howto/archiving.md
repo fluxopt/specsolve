@@ -104,6 +104,10 @@ Pass `into=` when you want the extracted tree as well, to query it with an
 engine that reads parquet. A directory archive is read where it lies and
 refuses an `into=`.
 
+**An archive is read as it was written.** Nothing checks that its files are
+still the ones the solve wrote, so a file changed afterwards is read as it is
+now. To change an input, solve again and write a new archive.
+
 ## Read the spec and the data alone
 
 **`load_inputs` reads the spec and the data, and never opens `answer/`.** The

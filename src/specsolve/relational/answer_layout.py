@@ -147,7 +147,7 @@ def not_requested_message(kind: str, name: str) -> str:
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 4
+ANSWER_LAYOUT = 5
 FORMAT_FILE = 'format.json'
 
 
@@ -289,10 +289,6 @@ class Record(NamedTuple):
     #: halves of its name. Null until the archive is written. Every other
     #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
-    #: A digest of the model this answered — the spec *and* its data, where
-    #: [`spec_digest`][] is the document alone. ``None`` for an answer that
-    #: never held one.
-    model_digest: str | None = None
     #: What the sweep that solved this called its slices — ``scenario``,
     #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
     #: null for a single solve. Fixed names rather than a column named for the
@@ -315,7 +311,6 @@ class Record(NamedTuple):
         has_primal: bool,
         spec_digest: str | None,
         solved_at: datetime | None,
-        model_digest: str | None = None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes; each argument fills the column of its name.
@@ -331,7 +326,6 @@ class Record(NamedTuple):
             has_primal,
             spec_digest,
             solved_at,
-            model_digest=model_digest,
             **provenance._asdict(),
         )
 

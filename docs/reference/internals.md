@@ -118,9 +118,8 @@ Each entry says what the thing is, then the module it lives in.
 : A digest of everything a re-solve may not change: the counts, which column
   each matrix entry sits in, each row's comparison, each column's type and the
   sets. A loaded solver keeps its model only while this digest stays the same
-  and every matrix coefficient is within 1e-12 relative of the one it holds. The **contents
-  digest** adds the numbers, and says whether a saved answer belongs to a
-  rebuilt model (`relational/sinks/handoff.py`).
+  and every matrix coefficient is within 1e-12 relative of the one it holds
+  (`relational/sinks/handoff.py`).
 
 **Warm start**
 : What a solve starts from instead of from scratch, laid onto the build by
