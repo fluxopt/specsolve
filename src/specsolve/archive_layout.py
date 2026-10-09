@@ -14,7 +14,6 @@ import json
 import shutil
 import tempfile
 import zipfile
-from contextlib import contextmanager
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -49,22 +48,6 @@ ANSWER_DIR = 'answer'
 #: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
 INPUTS_LAYOUT = 1
-
-
-@contextmanager
-def beside(out: Path) -> Iterator[Path]:
-    """A scratch directory beside *out*, gone when the block ends, where an answer is laid out before it is packed.
-
-    It is one level down in a directory of its own, as a staged archive is in
-    ``_staging_for``'s: a directory of archives is read as
-    ``<parent>/*/<member>`` while one of them is written, and a scratch
-    ``answer/`` directly under the parent matches that glob.
-    """
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=out.parent, prefix=out.name + '.') as holder:
-        scratch = Path(holder) / 'scratch'
-        scratch.mkdir()
-        yield scratch
 
 
 def check_the_target(out: Path) -> None:
