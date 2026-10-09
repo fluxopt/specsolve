@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import polars as pl
 
 from specsolve.api import build, check
-from specsolve.archive_layout import ANSWER_DIR, beside, check_the_target, write_archive
+from specsolve.archive_layout import check_the_target, write_archive
 from specsolve.axes import (
     Axes,
     Axis,
@@ -71,7 +71,7 @@ from specsolve.sweep import (
     Spill,
     Sweep,
     key_label,
-    scan_sweep,
+    sweep_manifest,
 )
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ if TYPE_CHECKING:
 
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source
-    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import Diagnostics, Start
 
 
@@ -395,7 +395,7 @@ def solve_over(
         answered = _pooled(executor, workers_share_fs, program, document, slices, solving, carries, spill, starts)
     folded = Sweep._folded(columns, stitch, answered, spill, asked, document)
     if spill is not None:
-        write_reasons(spill.directory, folded._no_duals, folded._absent)
+        write_reasons(spill.directory, folded._no_duals, folded._absent, write_whole)
     if archiving is not None:
         out, cut = archiving
         _archive_the_sweep(out, document, program, cut, sources, folded, slices[0].sources, keep_windows)
@@ -543,8 +543,7 @@ def _archive_the_sweep(
     """Write the sweep's question and its answer to *out*.
 
     Each source's tidy table comes from *one_slice*, except the ones
-    [`_uncut`][] and [`_spread_over_the_axis`][] give. A held sweep is spilled
-    to scratch first, so the answer is always read off a spill.
+    [`_uncut`][] and [`_spread_over_the_axis`][] give.
     """
     manifest = axis_manifest(axes if len(axes) > 1 else axes[0])
     tidied = numbered(program, tidy_sources(program, one_slice))
@@ -552,45 +551,57 @@ def _archive_the_sweep(
     cut = {name: _uncut(program, axes, name, table) for name, table in sliced.items()}
     held = {**tidied, **_spread_over_the_axis(program, axes[-1], sources, tidied), **cut}
     tables = {name: held[name] for name in sources}
-    with beside(out) as scratch:
-        spilled = folded if folded._spill is not None else scan_sweep(folded.save(scratch / 'slices'))
-        answer = _the_answer(spilled, scratch / ANSWER_DIR, keep_windows=keep_windows)
-        write_archive(out, spec, tables, axis=manifest, answer=answer)
+    write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, folded, keep_windows=keep_windows))
 
 
-def _the_answer(sweep: Sweep, under: Path, *, keep_windows: bool) -> Path:
-    """The ``answer/`` an archive holds for a spilled *sweep*, laid out under *under*.
+def _the_answer(sweep: Sweep, under: Path, write: FrameWriter, *, keep_windows: bool) -> None:
+    """The ``answer/`` an archive holds for *sweep*, laid out under *under*, each table written with *write*.
 
-    One file per kind and name, as the readers return it, streamed from the
-    spill; a name an EachWindow sweep cannot stitch has none, and
-    ``reasons.parquet`` says why. The record and metrics take a single solve's
-    columns, so ``keys.parquet`` beside them gives the keys their type back.
+    One file per kind and name, as the readers return it; a name an
+    EachWindow sweep cannot stitch has none, and ``reasons.parquet`` says
+    why. The record and metrics take a single solve's columns, so
+    ``keys.parquet`` beside them gives the keys their type back.
     ``sweep.json`` records *keep_windows*: a zip holds files only, so an empty
     ``windows/`` is not there to say so. What each window owns is kept in
-    ``windows/`` beside them, the answer being stitched already.
+    ``windows/`` beside them, the answer being stitched already: copied off
+    the spill where the sweep has one, so a sweep too large to hold streams,
+    and written from memory where it is held.
     """
-    spill = sweep._spill
-    assert spill is not None, 'the answer is read off a spill, so a sweep too large to hold is never held'
     write_format(under, sweep._outputs)
-    manifest = json.loads((spill.directory / MANIFEST_FILE).read_text())
+    manifest = sweep_manifest(sweep._key_columns(), sweep._key_rows(), sweep._stitch, sweep._outputs)
     (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
-    shutil.copyfile(spill.directory / KEYS_FILE, under / KEYS_FILE)
-    if keep_windows:
-        (under / WINDOWS_DIR).mkdir()
-        shutil.copyfile(spill.directory / OWNED_FILE, under / WINDOWS_DIR / OWNED_FILE)
-    write_whole(sweep.record.drop(sweep.key_names), under / RECORD_FILE)
-    write_whole(sweep.metrics.drop(sweep.key_names), under / METRICS_FILE)
+    write(sweep.record.select(sweep.key_names), under / KEYS_FILE)
+    write(sweep.record.drop(sweep.key_names), under / RECORD_FILE)
+    write(sweep.metrics.drop(sweep.key_names), under / METRICS_FILE)
     absent = {kind: dict(names) for kind, names in sweep._absent.items()}
     for kind in KINDS:
         for name, frame in sweep._slices.get(kind, {}).items():
             if why := sweep._unstitchable(frame):
                 absent.setdefault(kind, {})[name] = why
                 continue
-            write_whole(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
-        if keep_windows and (spill.directory / kind).is_dir():
-            shutil.copytree(spill.directory / kind, under / WINDOWS_DIR / kind)
-    write_reasons(under, sweep._no_duals, absent)
-    return under
+            write(sweep._answered(frame, per_window=False), under / kind / f'{name}.parquet')
+    write_reasons(under, sweep._no_duals, absent, write)
+    if keep_windows:
+        _the_windows(sweep, under / WINDOWS_DIR, write)
+
+
+def _the_windows(sweep: Sweep, under: Path, write: FrameWriter) -> None:
+    """What each window owns, and its frames as the spill lays them out, under *under*, each table written with *write*."""
+    assert sweep._stitch is not None, 'only an EachWindow sweep keeps its windows'
+    under.mkdir()
+    write(sweep._stitch.owned, under / OWNED_FILE)
+    if sweep._spill is None:
+        windows = Spill(under, sweep._key_columns())
+        for position, key, frames in sweep._frames_by_slice():
+            windows.write_frames(position, key, frames, write)
+        return
+    for kind in KINDS:
+        if (sweep._spill.directory / kind).is_dir():
+            shutil.copytree(
+                sweep._spill.directory / kind,
+                under / kind,
+                copy_function=lambda source, target: write(pl.scan_parquet(source), Path(target)),
+            )
 
 
 def _uncut(program: Program, axes: Axes, name: str, table: pl.LazyFrame) -> pl.LazyFrame:

@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from mathspec import Spec
 
     from specsolve.inputs import Label
-    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import Start
 
 
@@ -191,6 +191,18 @@ def _one_slice_per_text(keys: Sequence[tuple[Label, ...]]) -> None:
         )
 
 
+def sweep_manifest(
+    columns: KeyColumns, keys: Sequence[tuple[Label, ...]], stitch: Stitch | None, outputs: frozenset[Output]
+) -> dict[str, object]:
+    """What ``sweep.json`` names: the key columns, the keys as text, the stitch and the outputs."""
+    return {
+        'key_names': list(columns.names),
+        'keys': [key_text(key) for key in keys],
+        'stitch': None if stitch is None else {'local': stitch.local, 'dim': stitch.dim, 'outer': list(stitch.outer)},
+        'outputs': sorted(outputs),
+    }
+
+
 @dataclass(frozen=True)
 class Spill:
     """A sweep's answers on disk instead of in memory, one file per slice and name.
@@ -220,14 +232,7 @@ class Spill:
     ) -> Spill:
         """The directory ready to take this sweep: stamped if it holds none, checked and never re-stamped if it does."""
         directory = Path(directory)
-        manifest: dict[str, object] = {
-            'key_names': list(columns.names),
-            'keys': [key_text(key) for key in keys],
-            'stitch': None
-            if stitch is None
-            else {'local': stitch.local, 'dim': stitch.dim, 'outer': list(stitch.outer)},
-            'outputs': sorted(outputs),
-        }
+        manifest = sweep_manifest(columns, keys, stitch, outputs)
         record = directory / MANIFEST_FILE
         if record.exists():
             check_format(directory)
@@ -264,12 +269,22 @@ class Spill:
     def write(self, position: int, key: tuple[Label, ...], answer: SliceAnswer) -> SliceAnswer:
         """*answer*'s frames and record on disk, and the answer with the frames released."""
         answer = answer.sliced(self.columns, key)
-        for kind, produced in answer.frames.items():
-            for name, frame in produced.items():
-                write_whole(self.columns.prepended(frame, key), self._file(kind, position, name))
+        self.write_frames(position, key, answer.frames, write_whole)
         write_whole(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
         write_whole(pl.DataFrame([answer.meta._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
         return replace(answer, frames={})
+
+    def write_frames(
+        self,
+        position: int,
+        key: tuple[Label, ...],
+        frames: Mapping[str, Mapping[str, pl.DataFrame]],
+        write: FrameWriter,
+    ) -> None:
+        """*frames*, ``{kind: {name: frame}}``, as slice *position*'s files, keyed by *key*, each written with *write*."""
+        for kind, produced in frames.items():
+            for name, frame in produced.items():
+                write(self.columns.prepended(frame, key), self._file(kind, position, name))
 
     def read_back(self, position: int) -> SliceAnswer:
         """A done slice's record, with no frames."""
@@ -758,21 +773,33 @@ class Sweep:
             SpecsolveError: The sweep was read off an archive written without
                 its windows.
         """
-        by_key = {kind: slice_index(self, kind) for kind in KINDS}
-        keys = self._key_rows()
-        columns = KeyColumns(self.key_names, tuple(self.record.schema[name] for name in self.key_names))
-        spill = Spill.opened(directory, columns, keys, self._stitch, self._outputs, self.spec)
-        write_reasons(spill.directory, self._no_duals, self._absent)
-        for position, key in enumerate(keys):
+        by_slice = self._frames_by_slice()
+        spill = Spill.opened(directory, self._key_columns(), self._key_rows(), self._stitch, self._outputs, self.spec)
+        write_reasons(spill.directory, self._no_duals, self._absent, write_whole)
+        for position, key, frames in by_slice:
             meta = Record(**self.record.drop(self.key_names).row(position, named=True))
             taken = Metrics(**self.metrics.select(Metrics._fields).row(position, named=True))
-            frames = {
-                kind: {name: keyed[key] for name, keyed in names.items() if key in keyed}
-                for kind, names in by_key.items()
-            }
-            answer = SliceAnswer(meta, taken, frames)
-            spill.write(position, key, answer)
+            spill.write(position, key, SliceAnswer(meta, taken, frames))
         return spill.directory
+
+    def _key_columns(self) -> KeyColumns:
+        """The key columns and their types, as the record holds them."""
+        return KeyColumns(self.key_names, tuple(self.record.schema[name] for name in self.key_names))
+
+    def _frames_by_slice(self) -> list[tuple[int, tuple[Label, ...], dict[str, dict[str, pl.DataFrame]]]]:
+        """``(position, key, {kind: {name: frame}})`` per slice, the key columns dropped; a slice with no rows of a name lacks it."""
+        by_key = {kind: slice_index(self, kind) for kind in KINDS}
+        return [
+            (
+                position,
+                key,
+                {
+                    kind: {name: keyed[key] for name, keyed in names.items() if key in keyed}
+                    for kind, names in by_key.items()
+                },
+            )
+            for position, key in enumerate(self._key_rows())
+        ]
 
     def _names_held(self, kind: str, *, per_window: bool) -> tuple[str, ...]:
         """Every name of *kind* there is an answer for, sorted; none at all is refused.
@@ -894,7 +921,7 @@ def scan_sweep(directory: str | Path) -> Sweep:
 
 def _spill_of(sweep: Sweep, under: Path) -> Spill:
     """The spill under *under*, keyed as *sweep*'s record is."""
-    return Spill(under, KeyColumns(sweep.key_names, tuple(sweep.record.schema[name] for name in sweep.key_names)))
+    return Spill(under, sweep._key_columns())
 
 
 def opened_sweep(under: Path, owned: Path | None) -> Sweep:
