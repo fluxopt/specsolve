@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.19 s on fleet/s, so the next rung projects to 31.9 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 3.46 s on fleet/s, so the next rung projects to 34.6 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve took 0.963 GB on fleet/m, so the next rung projects to 19.3 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve took 0.967 GB on fleet/m, so the next rung projects to 19.3 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 0.972 GB on fleet/m, so the next rung projects to 19.4 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 0.974 GB on fleet/m, so the next rung projects to 19.5 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -45,6 +45,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "gurobipy-loop took 0.838 GB on fleet/m, so the next rung projects to 16.8 GB \u2014 over the 16 GB budget"
+  "reason": "gurobipy-loop took 0.847 GB on fleet/m, so the next rung projects to 16.9 GB \u2014 over the 16 GB budget"
  }
 ]
