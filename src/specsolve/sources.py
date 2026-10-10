@@ -20,7 +20,7 @@ from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
 from specsolve.relational.answer_layout import BASIS_STATUSES
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.names import POSITION, VALUE
 from specsolve.relational.result import Start
 
@@ -75,6 +75,19 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             method's conditions on its breakpoints among them.
     """
     refuse_unknown_sources(program, data)
+    sources = _read(program, data)
+    validate_assumptions(program, sources)
+    return sources
+
+
+@in_memory()
+def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+    """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
+
+    [`validate_assumptions`][] runs
+    after it. It attaches in memory too, and checks each assumption over the
+    dimensions on the default engine.
+    """
     _check_relation_sources(program, data)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
@@ -100,7 +113,6 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
         if dname not in sources:
             raise DataError(_no_index_source_message(dname))
 
-    validate_assumptions(program, sources)
     return sources
 
 

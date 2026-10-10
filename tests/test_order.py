@@ -20,13 +20,14 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.relational.engine import assembly
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: Ports whose model moves from one build to the next, and why.
+#: Ports whose model moves when the rows of a table are shuffled, and why.
 MOVES = {
     'osemosys_utopia': (
         'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
@@ -77,9 +78,21 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
     }
 
 
-def test_the_same_sources_build_the_same_model(port_that_holds: dict[str, Any]) -> None:
-    given = sources(port_that_holds['name'])
-    assert _built(port_that_holds, given) == _built(port_that_holds, given)
+@pytest.mark.parametrize('above_the_limit', [False, True], ids=['below-the-limit', 'above-the-limit'])
+def test_the_same_sources_build_the_same_model(
+    port: dict[str, Any], above_the_limit: bool, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Every port holds below `IN_MEMORY_REACH`, a ``MOVES`` one included: there the build runs in memory.
+
+    Above it the build is left to polars' streaming engine, which sums the same
+    rows of osemosys_utopia in another order from one build to the next.
+    """
+    if above_the_limit:
+        monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
+        if reason := MOVES.get(port['name']):
+            request.applymarker(pytest.mark.xfail(reason=reason, strict=True))
+    given = sources(port['name'])
+    assert _built(port, given) == _built(port, given)
 
 
 @pytest.mark.parametrize('seed', [0, 1])

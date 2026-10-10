@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a model with at most 250,000 columns and 250,000 rows builds on polars' in-memory engine, a fifth faster at the smallest sizes ([#1930](https://github.com/fluxopt/specsolve/pull/1930))
 - perf(engine): a model whose bounds are given for every coordinate in build order builds faster ([#1933](https://github.com/fluxopt/specsolve/pull/1933))
 - perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
 - perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
