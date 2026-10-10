@@ -28,7 +28,6 @@ import importlib
 import json
 import resource
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -116,7 +115,7 @@ class _Clock:
 
 
 class _Built:
-    """A built model's size, and the sha256 of the LP file it writes as its fingerprint."""
+    """A built model's size, and a digest of the model to the last bit as its fingerprint."""
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
@@ -124,10 +123,21 @@ class _Built:
         self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
 
     def fingerprint(self) -> str:
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / 'model.lp'
-            self.model.write(path)
-            return hashlib.sha256(path.read_bytes()).hexdigest()
+        """The fields ``tests/test_order.py`` holds two builds of one model to, digested."""
+        handoff = self.model._engine._model.handoff
+        digest = hashlib.sha256(handoff.structure)
+        digest.update(f'{handoff.objective_constant}'.encode())
+        digest.update(handoff._dense_cost().tobytes())
+        for frame, column in (
+            ('matrix', 'coeff'),
+            ('cols', 'lb'),
+            ('cols', 'ub'),
+            ('quad', 'coeff'),
+            ('rows', 'row'),
+            ('rows', 'rhs'),
+        ):
+            digest.update(getattr(handoff, frame)[column].to_numpy().tobytes())
+        return digest.hexdigest()
 
 
 class _Solved:

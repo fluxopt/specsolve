@@ -1707,8 +1707,8 @@ def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
 def test_an_ab_of_a_checkout_against_itself_builds_one_model() -> None:
     [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=2)
     assert row.error is None, row.error
-    assert row.base[0]['fingerprint'] == row.head[0]['fingerprint'], 'one checkout built two different LP files'
-    assert row.base[1]['fingerprint'] is None, 'only the first round writes the LP file, off the clock'
+    assert row.base[0]['fingerprint'] == row.head[0]['fingerprint'], 'one checkout built two different models'
+    assert row.base[1]['fingerprint'] is None, 'only the first round digests the model, off the clock'
     assert row.verdict == 'no change'
 
 

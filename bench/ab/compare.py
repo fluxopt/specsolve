@@ -8,8 +8,8 @@ installed. Each round starts one worker process per side, with that checkout's
 ``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
 alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
 measurement is a fresh process instead, so its peak resident memory is the
-cell's own. The first round also fingerprints what each side produced: the LP
-file a build writes, or a solve's status and objective. Two different
+cell's own. The first round also fingerprints what each side produced: a digest
+of the built model to the last bit, or a solve's status and objective. Two different
 fingerprints fail the cell however fast it is.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
