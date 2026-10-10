@@ -20,6 +20,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.relational.engine import assembly
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
@@ -77,12 +78,19 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
     }
 
 
-def test_the_same_sources_build_the_same_model(port: dict[str, Any]) -> None:
-    """Every port holds here, a ``MOVES`` one included: a small model is built in memory, in one order each time.
+@pytest.mark.parametrize('above_the_limit', [False, True], ids=['below-the-limit', 'above-the-limit'])
+def test_the_same_sources_build_the_same_model(
+    port: dict[str, Any], above_the_limit: bool, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Every port holds below `IN_MEMORY_REACH`, a ``MOVES`` one included: there the build runs in memory.
 
-    On the streaming engine osemosys_utopia summed the same rows in another
-    order from one build to the next, so two builds of it differed in a last bit.
+    Above it the build is left to polars' streaming engine, which sums the same
+    rows of osemosys_utopia in another order from one build to the next.
     """
+    if above_the_limit:
+        monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
+        if reason := MOVES.get(port['name']):
+            request.applymarker(pytest.mark.xfail(reason=reason, strict=True))
     given = sources(port['name'])
     assert _built(port, given) == _built(port, given)
 

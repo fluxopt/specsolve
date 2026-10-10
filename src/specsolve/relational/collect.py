@@ -44,9 +44,8 @@ def collect_engine() -> Literal['auto', 'in-memory']:
 def in_memory(on: bool = True) -> Iterator[None]:
     """Every collect in the block runs on the in-memory engine where *on*, and on [`collect_engine`][] otherwise.
 
-    polars 2.0's streaming engine pays a fixed cost per query, which is most of
-    a small model's build; what it buys is a lower peak on a large one. The
-    choice is per thread, so each slice of a sweep makes its own.
+    The choice is per thread, so each slice of a sweep makes its own, and the
+    engine before the block is restored on exit.
     """
     token = _in_memory.set(on)
     try:

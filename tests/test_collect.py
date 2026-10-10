@@ -129,38 +129,49 @@ def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml,
     assert engines[-1] == 'auto', 'the query after the build still named the in-memory engine'
 
 
+def _build_wide() -> None:
+    """A constraint over dims no variable spans: four labels on each of two dims reach 8 columns and 16 rows."""
+    labels = ['p', 'q', 'r', 's']
+    sps.build(
+        {
+            'dimensions': {'a': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
+            'parameters': {'c': {'dims': ['a', 'b']}},
+            'variables': {'x': {'dims': ['a']}, 'y': {'dims': ['b']}},
+            'constraints': {'cap': {'dims': ['a', 'b'], 'expression': 'x + y <= c'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y)'},
+        },
+        {
+            'a': labels,
+            'b': labels,
+            'c': pl.DataFrame({'a': [a for a in labels for _ in labels], 'b': labels * 4, 'value': 1.0}),
+        },
+    )
+
+
 @pytest.mark.parametrize(
-    ('limit', 'spec'),
+    ('limit', 'spec', 'left_to_polars'),
     [
-        pytest.param(0, 'dispatch', id='columns-over-the-limit'),
-        pytest.param(10, 'wide', id='rows-over-the-limit'),
+        pytest.param(0, 'dispatch', True, id='columns-over-the-limit'),
+        pytest.param(15, 'wide', True, id='rows-over-the-limit'),
+        pytest.param(16, 'wide', False, id='rows-at-the-limit'),
     ],
 )
-def test_a_model_over_the_limit_is_built_on_polars_choice(
-    engines, monkeypatch, limit, spec, dispatch_yaml, dispatch_frame_inputs
+def test_the_reach_against_the_limit_decides_the_build_engine(
+    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_frame_inputs
 ):
-    """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses.
+    """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses; at it, memory.
 
-    A constraint over dims no variable spans counts too: four labels on each of
-    two dims reach 8 columns and 16 rows.
+    A constraint over dims no variable spans counts too: its 16 rows reach past
+    a limit of 15 where its 8 columns do not.
     """
     monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
     if spec == 'dispatch':
         sps.build(dispatch_yaml, dispatch_frame_inputs)
     else:
-        labels = ['p', 'q', 'r', 's']
-        sps.build(
-            {
-                'dimensions': {'a': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
-                'parameters': {'c': {'dims': ['a', 'b']}},
-                'variables': {'x': {'dims': ['a']}, 'y': {'dims': ['b']}},
-                'constraints': {'cap': {'dims': ['a', 'b'], 'expression': 'x + y <= c'}},
-                'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y)'},
-            },
-            {
-                'a': labels,
-                'b': labels,
-                'c': pl.DataFrame({'a': [a for a in labels for _ in labels], 'b': labels * 4, 'value': 1.0}),
-            },
+        _build_wide()
+    if left_to_polars:
+        assert 'auto' in engines, 'the build left its engine to polars'
+    else:
+        assert set(engines) == {'in-memory'}, (
+            f'{engines.count("auto")} of {len(engines)} collects left the engine to polars at the limit'
         )
-    assert 'auto' in engines, 'the build left its engine to polars'
