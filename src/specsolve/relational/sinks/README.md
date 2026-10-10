@@ -74,10 +74,11 @@ release being what keeps an updated build at one model's peak. What a diff would
 need is exactly what is not kept.
 
 A **last solve** keeps no second copy through the run. `sps.solve` closes its
-model after one solve, so before the run `release()` drops the solver's
-reference to its frames without hashing them, and the engine keeps only the
-frames an asked output reads: `cols` and `rows` for a basis, `rows` for a
-slack, and the objective and matrix for a reduced cost.
+model after one solve. So before the run, `release()` drops the solver's
+reference to its frames without hashing them, and HiGHS also drops the vectors
+it diffs an update against. The engine keeps only the frames an asked output
+reads: `cols` and `rows` for a basis, `rows` for a slack, and the objective and
+matrix for a reduced cost.
 
 `handoff.py` is what both read. Neither family imports the other and no member
 imports a sibling — `tests/test_architecture.py` reads all of that off the

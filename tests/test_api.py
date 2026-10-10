@@ -1142,6 +1142,9 @@ def _held_at_the_run(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, int | bo
                 'rows': handoff.rows.height,
                 'solver holds frames': self._handoff is not None,
                 'solver holds coefficients': self._coefficients is not None,
+                'solver holds vectors': any(
+                    getattr(self, held, None) is not None for held in ('_column_vectors', '_row_vectors')
+                ),
             }
         )
         return run(self, handoff, **options)
@@ -1165,7 +1168,8 @@ def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
     """``sps.solve`` closes its model after its one solve, so the build's copy of what the solver loaded goes first.
 
     The answer still reads what it needs: each output keeps the frames it is
-    computed from, and nothing else.
+    computed from, and nothing else. The HiGHS solver's column and row vectors,
+    which only an update diffs against, go too.
     """
     seen = _held_at_the_run(monkeypatch)
     with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs=outputs) as solved:
@@ -1175,6 +1179,7 @@ def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
     assert not held['solver holds coefficients'], (
         'nor does it keep the coefficients an update would compare against, since none follows'
     )
+    assert not held['solver holds vectors'], 'nor the column and row vectors an update diffs against'
     for frame in ('matrix', 'obj', 'cols', 'rows'):
         assert (held[frame] > 0) == (frame in kept), f'{frame} is kept exactly where {outputs or "nothing"} reads it'
 
@@ -1187,4 +1192,5 @@ def test_a_model_kept_for_more_solves_keeps_its_build(dispatch_yaml, dispatch_fr
     (held,) = seen
     assert held['solver holds frames'], 'a held solver keeps the frames until an update asks for their digest'
     assert held['solver holds coefficients'], 'and the coefficients an update compares against'
+    assert held['solver holds vectors'], 'and the column and row vectors an update diffs against'
     assert all(held[frame] > 0 for frame in ('matrix', 'obj', 'cols', 'rows')), 'the build stays whole'

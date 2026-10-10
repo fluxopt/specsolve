@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import warnings
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -287,15 +287,16 @@ class Engine:
     def _let_go(self, solver: sinks.Solver, outputs: frozenset[Output]) -> None:
         """Drop what the answer of a last solve does not read, from *solver* and from the build.
 
-        The solver holds its own copy of the model by now, so the build keeps
-        only the frames an asked output reads ([`_READ_BY`][]). ``quad`` always
-        stays: the HiGHS run reads it to refuse a nonconvex objective.
+        The solver holds its own copy of the model by now, so the build keeps,
+        of the handoff's frames, only those an asked output reads
+        ([`_READ_BY`][]). ``quad`` always stays: the HiGHS run reads it to
+        refuse a nonconvex objective.
         """
         solver.release()
         handoff = self._model.handoff
-        kept = {frame for kind in outputs for frame in _READ_BY.get(kind, ())}
-        frames = ('cols', 'obj', 'qmatrix', 'rows', 'matrix', 'sos')
-        dropped = {f: getattr(handoff, f).clear() for f in frames if f not in kept}
+        kept = {'quad', *(frame for kind in outputs for frame in _READ_BY.get(kind, ()))}
+        frames = [f.name for f in fields(handoff) if isinstance(getattr(handoff, f.name), pl.DataFrame)]
+        dropped = {frame: getattr(handoff, frame).clear() for frame in frames if frame not in kept}
         self._built = replace(self._model, handoff=replace(handoff, **dropped))
 
     def _matched_start(
