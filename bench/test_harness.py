@@ -1751,10 +1751,11 @@ def test_a_cell_that_fails_leaves_the_worker_to_measure_the_next() -> None:
         worker.close()
 
 
-def test_a_memory_run_takes_each_peak_in_its_own_process() -> None:
+def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
     [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, memory=True)
     assert row.error is None, row.error
-    assert row.base[0]['peak_mb'] > 0
+    assert row.metric == 'peak_mb', 'a memory run judges the peak, not the clock'
+    assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
 
 
 def test_two_different_models_fail_however_fast() -> None:

@@ -743,9 +743,9 @@ measures every cell in it, so a round's two processes fall in that round only
 and the rounds stay independent, as the sign test needs. Nothing is
 installed, and the worker refuses to run if it imported `specsolve` from
 anywhere else. The base is the PR's own base branch, so a stacked PR proves its
-own change. A claim about memory takes `--memory`: a fresh process per
-measurement, so its peak is the cell's own, at the cost of a second of imports
-each time.
+own change. A claim about memory takes `--memory`: the verdict is on the
+peak resident memory of a fresh process per measurement, at the cost of a second
+of imports each time.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
 may assume: the dimension count, terms per row, a term over fewer dimensions, a

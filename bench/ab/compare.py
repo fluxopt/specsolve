@@ -7,15 +7,15 @@ Each ref is checked out with ``git worktree add --detach``; nothing is
 installed. Each round starts one worker process per side, with that checkout's
 ``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
 alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
-measurement is a fresh process instead, so its peak resident memory is the
-cell's own. The first round also fingerprints what each side produced: a digest
+measurement is a fresh process instead, and the verdict is on its peak
+resident memory. The first round also fingerprints what each side produced: a digest
 of the built model to the last bit, or a solve's status and objective. Two different
 fingerprints fail the cell however fast it is.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
 is *faster* or *slower* where enough rounds agree, which takes at least six
 rounds, and *no change* otherwise. The change printed is the median of the
-paired ratios. The exit status is 1 where any cell is slower, differs or fails.
+paired ratios. The exit status is 1 where any cell is slower (or higher, with ``--memory``), differs or fails.
 
 The table goes to stdout and ``--out`` in markdown, ready for a PR's
 ``<details>``. Measure on an idle machine: the load averages before and after
@@ -62,10 +62,13 @@ class Row:
     base: list[dict[str, Any]] = field(default_factory=list)
     head: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    #: What the verdict is on: ``seconds``, or ``peak_mb`` for a claim about memory.
+    metric: str = 'seconds'
 
     @property
     def ratios(self) -> list[float]:
-        return [h['seconds'] / b['seconds'] for b, h in zip(self.base, self.head, strict=True) if b['seconds'] > 0]
+        m = self.metric
+        return [h[m] / b[m] for b, h in zip(self.base, self.head, strict=True) if b[m] > 0]
 
     @property
     def verdict(self) -> str:
@@ -75,7 +78,8 @@ class Row:
             return 'differs'
         if self.base[0]['calls'] == 0 and self.head[0]['calls'] == 0:
             return 'not reached'
-        return verdict(self.ratios)
+        said = verdict(self.ratios)
+        return {'faster': 'lower', 'slower': 'higher'}.get(said, said) if self.metric == 'peak_mb' else said
 
 
 def verdict(ratios: list[float]) -> str:
@@ -177,10 +181,10 @@ def compare(
     Each round starts one fresh worker per side and runs every cell in it, so
     what a process brings to its timings falls in one round and the rounds stay
     independent, as the sign test needs. With *memory*, every measurement gets
-    a fresh process instead, so that its peak is the cell's own.
+    a fresh process instead, and the verdict is on its peak resident memory.
     """
     trees = {'base': base, 'head': head}
-    rows = {c: Row(c) for c in cells}
+    rows = {c: Row(c, metric='peak_mb' if memory else 'seconds') for c in cells}
     for i in range(rounds):
         workers = {} if memory else {side: Worker(tree, op=op, focus=focus) for side, tree in trees.items()}
         try:
@@ -228,27 +232,27 @@ def _ask(
 
 def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = False) -> str:
     """The rows as markdown, with *header* lines above, and below them a count of verdicts and how many chance alone gives."""
-    lines = [*header, '', '| cell | columns | rows | base ms | head ms | change | head faster in | verdict | peak MB |']
-    lines.append('|---|--:|--:|--:|--:|--:|--:|---|--:|')
+    unit, scale = ('MB', 1.0) if memory else ('ms', 1e3)
+    lines = [*header, '', f'| cell | columns | rows | base {unit} | head {unit} | change | head lower in | verdict |']
+    lines.append('|---|--:|--:|--:|--:|--:|--:|---|')
     for r in rows:
         if r.error:
-            lines.append(f'| `{r.cell}` | | | | | | | error: {r.error} | |')
+            lines.append(f'| `{r.cell}` | | | | | | | error: {r.error} |')
             continue
-        b, h = r.base[0], r.head[0]
+        b = r.base[0]
         change = statistics.median(r.ratios) - 1 if r.ratios else 0.0
         lines.append(
             f'| `{r.cell}` | {b["columns"] or ""} | {b["rows"] or ""} '
-            f'| {statistics.median(x["seconds"] for x in r.base) * 1e3:.3g} '
-            f'| {statistics.median(x["seconds"] for x in r.head) * 1e3:.3g} '
-            f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict} '
-            + (f'| {b["peak_mb"]:.0f} → {h["peak_mb"]:.0f} |' if memory else '| |')
+            f'| {statistics.median(x[r.metric] for x in r.base) * scale:.3g} '
+            f'| {statistics.median(x[r.metric] for x in r.head) * scale:.3g} '
+            f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict} |'
         )
     counts = {v: sum(r.verdict == v for r in rows) for v in dict.fromkeys(r.verdict for r in rows)}
     rate = chance(rounds)
     lines += [
         '',
         ', '.join(f'{n} {v}' for v, n in counts.items())
-        + f'. With nothing changed, a cell reads faster or slower {rate:.1%} of the time at {rounds} rounds: '
+        + f'. With nothing changed, a cell reads {"lower or higher" if memory else "faster or slower"} {rate:.1%} of the time at {rounds} rounds: '
         f'about {rate * len(rows):.1f} of these {len(rows)}. Re-run a lone verdict with `-k` and more rounds.',
     ]
     return '\n'.join(lines)
@@ -262,7 +266,9 @@ def main() -> None:
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')
-    parser.add_argument('--memory', action='store_true', help='a fresh process per measurement, for its peak')
+    parser.add_argument(
+        '--memory', action='store_true', help='the verdict on peak memory, a fresh process per measurement'
+    )
     parser.add_argument('-k', dest='select', help='only the cells whose id contains this')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--i-know-another-is-running', dest='shared', action='store_true')
@@ -295,12 +301,16 @@ def _run(args: argparse.Namespace) -> None:
         rows = compare(selected, base, head, rounds=args.rounds, op=args.op, focus=args.focus, memory=args.memory)
     after = os.getloadavg()
 
-    clock = f'`{args.focus}`, summed over its calls' if args.focus else f'`sps.{args.op}` wall time'
+    if args.memory:
+        counted = f'the peak resident memory of a fresh process that ran `sps.{args.op}` twice'
+    elif args.focus:
+        counted = f'`{args.focus}`, summed over its calls, warm, a fresh process per side per round'
+    else:
+        counted = f'`sps.{args.op}` wall time, warm, a fresh process per side per round'
     header = [
         f'A/B: base `{args.base}` (`{base_sha[:8]}`) against head `{args.head}` (`{head_sha[:8]}`).',
-        f'What is counted: {clock}, warm, '
-        + ('a fresh process per measurement, ' if args.memory else 'a fresh process per side per round, ')
-        + f'{args.rounds} rounds per side, ABBA. Times are medians; the change is the median paired ratio.',
+        f'What is counted: {counted}; {args.rounds} rounds per side, ABBA. '
+        'The values are medians; the change is the median paired ratio.',
         f'Machine: {os.cpu_count()} cores, {platform.python_version()}, polars {pl.__version__}; '
         f'load average {before[0]:.2f} before, {after[0]:.2f} after.',
     ]
@@ -308,7 +318,7 @@ def _run(args: argparse.Namespace) -> None:
     print(report)
     if args.out:
         args.out.write_text(report + '\n')
-    sys.exit(any(r.verdict in ('slower', 'differs', 'error') for r in rows))
+    sys.exit(any(r.verdict in ('slower', 'higher', 'differs', 'error') for r in rows))
 
 
 if __name__ == '__main__':
