@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 1.81 GB on dispatch/m, so the next rung projects to 36.2 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 1.82 GB on dispatch/m, so the next rung projects to 36.3 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,6 +21,18 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 4.68 s on dispatch/m, so the next rung projects to 46.8 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 5.39 s on dispatch/m, so the next rung projects to 53.9 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 3.06 s on dispatch/m, so the next rung projects to 30.6 s \u2014 over the 30 s budget"
  }
 ]
