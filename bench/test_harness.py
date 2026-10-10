@@ -652,7 +652,7 @@ def test_no_budget_measures_everything() -> None:
 @pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
-    """Every arm but `specsolve` is a model somebody typed twice.
+    """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
 
     A transposed index builds a different model that benchmarks perfectly, so
     the `xs` rung of each case is solved both ways and the objectives compared.
@@ -1652,3 +1652,18 @@ def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
         _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter, 'shape')
     )
     assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'
+
+
+@pytest.mark.parametrize('verb', ['build_and_emit', 'build_only', 'objective'])
+def test_the_in_memory_arm_runs_on_the_in_memory_engine_and_leaves_the_default(
+    verb: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The timed rounds of every arm share one process, so the affinity is the arm's call and no other arm's."""
+    from bench.arms import specsolve, specsolve_in_memory
+
+    seen: list[str | None] = []
+    monkeypatch.setattr(specsolve, verb, lambda *args: seen.append(os.environ.get('POLARS_ENGINE_AFFINITY')))
+    monkeypatch.delenv('POLARS_ENGINE_AFFINITY', raising=False)
+    getattr(specsolve_in_memory, verb)(*(('highs', None) if verb == 'build_and_emit' else (None,)))
+    assert seen == ['in-memory'], f'the {verb} ran on affinity {seen}, not on in-memory'
+    assert 'POLARS_ENGINE_AFFINITY' not in os.environ, 'the arm left its affinity on the process for the next arm'

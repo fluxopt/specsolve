@@ -33,6 +33,7 @@ from specsolve.relational.answer_layout import (
     Record,
     read_reasons,
     write_reasons,
+    write_whole,
 )
 from specsolve.relational.names import RUN
 from specsolve.relational.sinks.solvers import SOLVERS
@@ -622,6 +623,34 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     assert RUN not in set(catalog['column']), 'the run on every file holds no labels, so the catalog lists it nowhere'
 
 
+@pytest.mark.parametrize('sweep', [pytest.param(False, id='solve'), pytest.param(True, id='sweep')])
+def test_every_parquet_file_an_archive_holds_carries_the_run(sweep: bool, tmp_path: Path) -> None:
+    """Every writer of an archived answer adds the run itself, so the files the catalog leaves out need a check too.
+
+    An integer ``p`` leaves the duals out, which writes ``reasons.parquet``,
+    and ``activity`` is an output, so both are among the files checked.
+    """
+    integer = {**_CATALOGED, 'variables': {'p': {**_CATALOGED['variables']['p'], 'domain': 'integer'}}}
+    out, sources = tmp_path / 'case', _cataloged_sources(50.0)
+    if sweep:
+        load = pl.concat([sources['load'].with_columns(scenario=pl.lit(name)) for name in ('low', 'high')])
+        sps.solve_over(
+            to_spec(integer),
+            {**sources, 'load': load},
+            sps.EachCoordinate('scenario'),
+            archive=out,
+            outputs={'activity'},
+        )
+    else:
+        _archived(to_spec(integer), sources, out, frozenset({'activity'}))
+    held = {path.relative_to(out).as_posix() for path in out.rglob('*.parquet')}
+
+    assert {f'{ANSWER_DIR}/reasons.parquet', f'{ANSWER_DIR}/activity/load.parquet'} <= held, (
+        'the case writes the two files the catalog test does not reach'
+    )
+    assert not [path for path in held if RUN not in pl.read_parquet_schema(out / path)], 'a file without the run'
+
+
 def _labels_of(held: Path) -> set[str]:
     """The columns of a frame's file that hold labels: neither the value nor one specsolve adds."""
     return {column for column in _columns_of(held) if column != 'value' and not column.startswith('specsolve_')}
@@ -1079,9 +1108,13 @@ def test_a_rolling_horizon_archive_refuses_the_windows_it_did_not_keep(
         refused(sweep, tmp_path / 'resaved')
 
 
-def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(tmp_path: Path) -> None:
-    """`keep_windows=True` writes the per-window frames too, so `per_window=True` reads off the archive."""
-    runs = _rolling(tmp_path, keep_windows=True)
+@pytest.mark.parametrize('spilled', [pytest.param(False, id='held'), pytest.param(True, id='spilled')])
+def test_a_rolling_horizon_archived_with_its_windows_reads_them_back(spilled: bool, tmp_path: Path) -> None:
+    """`keep_windows=True` writes the per-window frames too, so `per_window=True` reads off the archive.
+
+    A held sweep writes its windows from memory, a spilled one copies them off the spill.
+    """
+    runs = _rolling(tmp_path, keep_windows=True, **({'spill_to': tmp_path / 'spill'} if spilled else {}))
     loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
     scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
 
@@ -1281,7 +1314,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
     """A dual left out by name reads back under its name, never as the reason the whole kind is absent."""
-    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}})
+    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}}, write_whole)
     assert read_reasons(tmp_path) == (None, {'dual': {'cap_limit': 'not over the window'}}), (
         'the whole kind keeps its duals, and the one name left out keeps its reason'
     )

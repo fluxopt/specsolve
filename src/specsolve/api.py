@@ -31,7 +31,7 @@ import numpy as np
 import polars as pl
 from mathspec import advice
 
-from specsolve.archive_layout import beside, check_the_target, write_archive
+from specsolve.archive_layout import check_the_target, write_archive
 from specsolve.errors import (
     LayoutError,
     SpecsolveError,
@@ -52,7 +52,6 @@ from specsolve.relational.answer_layout import (
     read_reasons,
     read_spec,
     saved_frames,
-    write_whole,
 )
 from specsolve.relational.collect import collected
 from specsolve.relational.engine.engine import Engine, expression_readers
@@ -65,7 +64,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve.relational.answer_layout import Output
+    from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
@@ -430,11 +429,13 @@ class Model:
         The metrics row is written here, not by [`Result.save`][]: it spans the
         model's life, not one solve.
         """
-        with beside(out) as scratch:
-            answer = answered.save(scratch)
-            taken = self._engine.diagnostics().metrics()
-            write_whole(pl.DataFrame([taken._asdict()], schema_overrides=METRICS_SCHEMA), answer / METRICS_FILE)
-            write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
+        taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
+
+        def answer(under: Path, write: FrameWriter) -> None:
+            answered._save(under, write)
+            write(taken, under / METRICS_FILE)
+
+        write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

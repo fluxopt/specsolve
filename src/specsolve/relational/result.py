@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec import Spec
 
+    from specsolve.relational.answer_layout import FrameWriter
     from specsolve.relational.status import SolveStatus
 
 
@@ -801,7 +802,7 @@ class Result:
 
         ``format.json`` stamps the layout, the specsolve that wrote it and the
         outputs the answer carries:
-        ``{"layout": 5, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
+        ``{"layout": 4, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
         layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
         to solve the model again and save it.
 
@@ -814,24 +815,27 @@ class Result:
         Raises:
             SpecsolveError: This result was closed.
         """
+        return self._save(Path(directory), write_whole)
+
+    def _save(self, out: Path, write: FrameWriter) -> Path:
+        """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
         import polars as pl
 
         primals = self._unclosed('the solution')
-        out = Path(directory)
         clear_the_answer(out)
         write_format(out, asked_for(self._outputs or {}))
         write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
-        write_whole(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
+        write(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
         for name, frame in primals.items():
-            write_whole(frame, out / 'primal' / f'{name}.parquet')
+            write(frame, out / 'primal' / f'{name}.parquet')
         for name, frame in (self._duals or {}).items():
-            write_whole(frame, out / 'dual' / f'{name}.parquet')
+            write(frame, out / 'dual' / f'{name}.parquet')
         for kind, frames in (self._outputs or {}).items():
             for name, frame in frames.items():
-                write_whole(frame, out / kind / f'{name}.parquet')
+                write(frame, out / kind / f'{name}.parquet')
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
@@ -839,8 +843,8 @@ class Result:
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
                 continue
-            write_whole(frame, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, {'expression': no_expressions})
+            write(frame, out / 'expression' / f'{name}.parquet')
+        write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
         return out
 
     def close(self) -> None:

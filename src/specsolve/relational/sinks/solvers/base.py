@@ -410,6 +410,4 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     A series rather than a ``(label, value)`` frame: the read-back takes a
     declaration's share by slicing.
     """
-    import numpy as np
-
-    return pl.Series(VALUE, np.asarray(values, dtype=np.float64))
+    return pl.Series(VALUE, values, dtype=pl.Float64)

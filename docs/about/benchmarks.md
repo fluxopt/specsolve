@@ -53,9 +53,9 @@ fleet
     "refused": "refused",
     "highlight": "specsolve",
     "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
-    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
-    "ink": ["var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--floor)", "var(--floor)"],
-    "paint": ["var(--s1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--floor)", "var(--floor)"]
+    "domain": ["specsolve", "specsolve-in-memory", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -73,6 +73,9 @@ against the size of the model.
   `highspy-matrix` on HiGHS. Nobody writes a model this way. It is the limit a
   modelling library can approach, so its distance from specsolve is what
   specsolve's modelling layer costs.
+- **The pale violet line is specsolve on polars' in-memory engine.** specsolve
+  runs on polars' default engine everywhere else on this page. The
+  [how-to for small models](../howto/small-models.md) says when to switch.
 - **The line is the median of the rounds, and the band is the middle half of
   them.** The band runs from the first quartile to the third. Two lines whose
   bands overlap are two numbers this run cannot tell apart.

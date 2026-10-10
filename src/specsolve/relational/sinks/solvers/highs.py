@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import numpy as np
     import polars as pl
 
-    from specsolve.relational.sinks.handoff import Handoff, RowVectors
+    from specsolve.relational.sinks.handoff import ColumnVectors, Handoff, RowVectors
 
 
 #: HiGHS model status -> termination condition, copied from linopy's
@@ -62,8 +62,8 @@ _CONDITION_OF_HIGHS_STATUS = {
 _IIS_IRREDUCIBLE = 3
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
-    """The populated `highspy.Highs`.
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, ColumnVectors, RowVectors]:
+    """The populated `highspy.Highs`, and the column and row vectors it was loaded with.
 
     ``iis_strategy`` leads the caller's options: the default checks bounds
     alone, and on a conflict between rows it returns an empty subsystem with
@@ -94,7 +94,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         h.setOptionValue(option, value)
 
     cols = handoff.dense_columns(inf)
-    rlb, rub = _row_bounds(handoff.dense_rows(inf), inf)
+    rows = handoff.dense_rows(inf)
+    rlb, rub = _row_bounds(rows, inf)
     sense = highspy.ObjSense.kMaximize if handoff.objective_sense == 'maximize' else highspy.ObjSense.kMinimize
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
@@ -125,7 +126,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         'the model',
     )
     _pass_hessian(h, handoff)
-    return h
+    return h, cols, rows
 
 
 def _integrality(cols: Any) -> Any:
@@ -180,6 +181,9 @@ class Highs(Solver):
 
     #: The loaded model. ``close`` drops it.
     _handle: Any
+    #: The column and row vectors the loaded model holds now, so [`push`][] sends only what moved.
+    _column_vectors: ColumnVectors
+    _row_vectors: RowVectors
 
     requires = ('highspy',)
     recorded_options = frozenset(
@@ -209,28 +213,31 @@ class Highs(Solver):
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
         """Load in one call — *batch_rows* is the family's parameter and this member has no batches."""
         del batch_rows
-        self._handle = _built(handoff, self._options)
+        self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options)
 
     @property
     def handle(self) -> Any:
         return self._handle
 
     def push(self, handoff: Handoff) -> None:
+        """Send only the entries that differ from what the model holds: HiGHS spends its time per entry sent, moved or not."""
         import highspy
         import numpy as np
 
         inf = highspy.kHighsInf
-        cols = handoff.dense_columns(inf)
-        columns = np.arange(handoff.column_count, dtype=np.int32)
-        _loaded(self._handle, self._handle.changeColsCost(handoff.column_count, columns, cols.cost), 'new costs')
-        _loaded(
-            self._handle, self._handle.changeColsBounds(handoff.column_count, columns, cols.lb, cols.ub), 'new bounds'
-        )
+        h = self._handle
+        cols, was = handoff.dense_columns(inf), self._column_vectors
+        rows, had = handoff.dense_rows(inf), self._row_vectors
 
-        rows = np.arange(handoff.row_count, dtype=np.int32)
-        rlb, rub = _row_bounds(handoff.dense_rows(inf), inf)
-        _loaded(self._handle, self._handle.changeRowsBounds(handoff.row_count, rows, rlb, rub), 'new right-hand sides')
-        _pass_hessian(self._handle, handoff)
+        cost = np.flatnonzero(cols.cost != was.cost).astype(np.int32)
+        _loaded(h, h.changeColsCost(len(cost), cost, cols.cost[cost]), 'new costs')
+        bounds = np.flatnonzero((cols.lb != was.lb) | (cols.ub != was.ub)).astype(np.int32)
+        _loaded(h, h.changeColsBounds(len(bounds), bounds, cols.lb[bounds], cols.ub[bounds]), 'new bounds')
+        moved = np.flatnonzero((rows.sense != had.sense) | (rows.rhs != had.rhs)).astype(np.int32)
+        lower, upper = _row_bounds(rows, inf)
+        _loaded(h, h.changeRowsBounds(len(moved), moved, lower[moved], upper[moved]), 'new right-hand sides')
+        self._column_vectors, self._row_vectors = cols, rows
+        _pass_hessian(h, handoff)
 
     def _basis(self) -> tuple[Any, Any] | None:
         """``getBasis``, where it is valid; its statuses are ``kLower``, ``kBasic``, ``kUpper``, ``kZero``, ``kNonbasic``."""
