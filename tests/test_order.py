@@ -26,7 +26,7 @@ from tests.conftest import port_sources as sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: Ports whose model moves from one build to the next, and why.
+#: Ports whose model moves when the rows of a table are shuffled, and why.
 MOVES = {
     'osemosys_utopia': (
         'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
@@ -77,9 +77,14 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
     }
 
 
-def test_the_same_sources_build_the_same_model(port_that_holds: dict[str, Any]) -> None:
-    given = sources(port_that_holds['name'])
-    assert _built(port_that_holds, given) == _built(port_that_holds, given)
+def test_the_same_sources_build_the_same_model(port: dict[str, Any]) -> None:
+    """Every port holds here, a ``MOVES`` one included: a small model is built in memory, in one order each time.
+
+    On the streaming engine osemosys_utopia summed the same rows in another
+    order from one build to the next, so two builds of it differed in a last bit.
+    """
+    given = sources(port['name'])
+    assert _built(port, given) == _built(port, given)
 
 
 @pytest.mark.parametrize('seed', [0, 1])
