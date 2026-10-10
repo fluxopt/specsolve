@@ -22,13 +22,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 import yaml
 
 from bench import conftest as harness
 from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, checkouts, compare, verdict
+from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -1736,7 +1737,7 @@ def test_an_ab_refuses_to_measure_a_checkout_it_did_not_import(tmp_path: Path) -
     worker = Worker(tmp_path, op='build', focus=None)
     try:
         with pytest.raises(RuntimeError, match='not from the checkout under test'):
-            worker.ask('grid-baseline-tiny', fingerprint=False)
+            worker.ask('grid-baseline-tiny', fingerprint=None)
     finally:
         worker.close()
 
@@ -1745,8 +1746,8 @@ def test_a_cell_that_fails_leaves_the_worker_to_measure_the_next() -> None:
     worker = Worker(AB_ROOT, op='build', focus=None)
     try:
         with pytest.raises(RuntimeError, match='KeyError'):
-            worker.ask('grid-no-such-shape-tiny', fingerprint=False)
-        assert worker.ask('grid-baseline-tiny', fingerprint=False)['seconds'] > 0
+            worker.ask('grid-no-such-shape-tiny', fingerprint=None)
+        assert worker.ask('grid-baseline-tiny', fingerprint=None)['seconds'] > 0
     finally:
         worker.close()
 
@@ -1759,11 +1760,32 @@ def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
 
 
 def test_two_different_models_fail_however_fast() -> None:
-    def run(seconds: float, fingerprint: str | None) -> dict[str, Any]:
-        return {'seconds': seconds, 'calls': None, 'fingerprint': fingerprint}
+    def run(seconds: float) -> dict[str, Any]:
+        return {'seconds': seconds, 'calls': None, 'fingerprint': None}
 
-    row = Row('c', base=[run(1.0, 'a')] + [run(1.0, None)] * 5, head=[run(0.5, 'b')] + [run(0.5, None)] * 5)
+    row = Row('c', base=[run(1.0)] * 6, head=[run(0.5)] * 6, model='different')
     assert row.verdict == 'differs'
+    row.model = 'last bits'
+    assert row.verdict == 'faster', 'a sum in another order is the same model, and keeps its verdict'
+
+
+@pytest.mark.parametrize(
+    ('change', 'same'),
+    [
+        pytest.param(lambda n: {**n, 'cost': np.nextafter(n['cost'], np.inf)}, True, id='every cost one ulp up'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'] * (1 + 1e-9)}, False, id='a cost moved by a part in a billion'),
+        pytest.param(lambda n: {**n, 'rows.row': n['rows.row'] + 1}, False, id='an integer moved by one'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'][:-1]}, False, id='one cost fewer'),
+        pytest.param(lambda n: {k: v for k, v in n.items() if k != 'cost'}, False, id='a field missing'),
+    ],
+)
+def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
+    tmp_path: Path, change: Any, same: bool
+) -> None:
+    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rows.row': np.arange(3)}
+    np.savez(tmp_path / 'base.npz', **numbers)
+    np.savez(tmp_path / 'head.npz', **change(numbers))
+    assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same
 
 
 def test_the_checkouts_are_removed_after_the_run() -> None:

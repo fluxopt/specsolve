@@ -8,9 +8,11 @@ installed. Each round starts one worker process per side, with that checkout's
 ``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
 alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
 measurement is a fresh process instead, and the verdict is on its peak
-resident memory. The first round also fingerprints what each side produced: a digest
-of the built model to the last bit, or a solve's status and objective. Two different
-fingerprints fail the cell however fast it is.
+resident memory. The first round also saves what each side produced: the built
+model's numbers, or a solve's status and objective. Where the two differ beyond
+the last bits, the cell *differs* and fails however fast it is. Where floats
+differ only within ``LAST_BITS``, the sums ran in another order: the cell keeps
+its verdict, marked *last bits*.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
 is *faster* or *slower* where enough rounds agree, which takes at least six
@@ -39,6 +41,7 @@ from math import comb
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -53,6 +56,9 @@ ROOT = Path(__file__).resolve().parents[2]
 #: The two-sided significance of the sign test a verdict rests on.
 ALPHA = 0.05
 
+#: The relative difference within which two floats are one number summed in another order.
+LAST_BITS = 1e-12
+
 
 @dataclass
 class Row:
@@ -64,6 +70,8 @@ class Row:
     error: str | None = None
     #: What the verdict is on: ``seconds``, or ``peak_mb`` for a claim about memory.
     metric: str = 'seconds'
+    #: Whether both sides built one model: ``same``, ``last bits`` where some numbers differ within [`LAST_BITS`][], or ``different``.
+    model: str = 'same'
 
     @property
     def ratios(self) -> list[float]:
@@ -74,7 +82,7 @@ class Row:
     def verdict(self) -> str:
         if self.error:
             return 'error'
-        if self.base[0]['fingerprint'] != self.head[0]['fingerprint']:
+        if self.model == 'different':
             return 'differs'
         if self.base[0]['calls'] == 0 and self.head[0]['calls'] == 0:
             return 'not reached'
@@ -137,11 +145,12 @@ class Worker:
             command, cwd=ROOT, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr, text=True
         )
 
-    def ask(self, cell_id: str, *, fingerprint: bool) -> dict[str, Any]:
+    def ask(self, cell_id: str, *, fingerprint: Path | None) -> dict[str, Any]:
         """One measurement of *cell_id*; raises with the cell's error, or the worker's last words where it died."""
         assert self.process.stdin and self.process.stdout
         try:
-            self.process.stdin.write(json.dumps({'cell': cell_id, 'fingerprint': fingerprint}) + '\n')
+            request = {'cell': cell_id, 'fingerprint': None if fingerprint is None else str(fingerprint)}
+            self.process.stdin.write(json.dumps(request) + '\n')
             self.process.stdin.flush()
         except BrokenPipeError:
             pass
@@ -185,23 +194,58 @@ def compare(
     """
     trees = {'base': base, 'head': head}
     rows = {c: Row(c, metric='peak_mb' if memory else 'seconds') for c in cells}
+    with tempfile.TemporaryDirectory(prefix='ab-numbers-') as numbers:
+        _rounds(rows, trees, Path(numbers), rounds=rounds, op=op, focus=focus, memory=memory)
+    return list(rows.values())
+
+
+def _rounds(
+    rows: dict[str, Row],
+    trees: dict[str, Path],
+    numbers: Path,
+    *,
+    rounds: int,
+    op: str,
+    focus: str | None,
+    memory: bool,
+) -> None:
+    """[`compare`][]'s rounds, the first saving each side's numbers under *numbers* and judging the model by them."""
     for i in range(rounds):
         workers = {} if memory else {side: Worker(tree, op=op, focus=focus) for side, tree in trees.items()}
         try:
             for row in rows.values():
                 if row.error:
                     continue
+                saved = {side: numbers / f'{row.cell}-{side}.npz' for side in trees} if i == 0 else {}
                 try:
                     for side in ('base', 'head') if i % 2 == 0 else ('head', 'base'):
-                        getattr(row, side).append(_ask(workers, trees, side, row.cell, op, focus, first=i == 0))
+                        getattr(row, side).append(_ask(workers, trees, side, row.cell, op, focus, saved.get(side)))
                 except RuntimeError as e:
                     row.error = str(e)
+                if saved and not row.error and row.base[0]['fingerprint'] != row.head[0]['fingerprint']:
+                    row.model = 'last bits' if same_model(saved['base'], saved['head']) else 'different'
                 if i == rounds - 1:
                     print(f'{row.cell:40} {row.verdict}', file=sys.stderr)
         finally:
             for w in workers.values():
                 w.close()
-    return list(rows.values())
+
+
+def same_model(base: Path, head: Path) -> bool:
+    """Whether two saved sets of numbers are one model: every name and shape alike, floats within [`LAST_BITS`][], the rest equal."""
+    with np.load(base) as a, np.load(head) as b:
+        if sorted(a.files) != sorted(b.files):
+            return False
+        for name in a.files:
+            x, y = a[name], b[name]
+            if x.shape != y.shape:
+                return False
+            if np.issubdtype(x.dtype, np.floating):
+                if not np.allclose(x, y, rtol=LAST_BITS, atol=0.0, equal_nan=True):
+                    return False
+            elif not np.array_equal(x, y):
+                return False
+    return True
 
 
 def _ask(
@@ -211,8 +255,7 @@ def _ask(
     cell_id: str,
     op: str,
     focus: str | None,
-    *,
-    first: bool,
+    fingerprint: Path | None,
 ) -> dict[str, Any]:
     """One measurement on *side*: in its worker for the round, or in a process of its own where there is none.
 
@@ -221,13 +264,13 @@ def _ask(
     if side not in workers:
         own = Worker(trees[side], op=op, focus=focus)
         try:
-            return own.ask(cell_id, fingerprint=first)
+            return own.ask(cell_id, fingerprint=fingerprint)
         finally:
             own.close()
     if not workers[side].alive:
         workers[side].close()
         workers[side] = Worker(trees[side], op=op, focus=focus)
-    return workers[side].ask(cell_id, fingerprint=first)
+    return workers[side].ask(cell_id, fingerprint=fingerprint)
 
 
 def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = False) -> str:
@@ -245,7 +288,8 @@ def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = Fal
             f'| `{r.cell}` | {b["columns"] or ""} | {b["rows"] or ""} '
             f'| {statistics.median(x[r.metric] for x in r.base) * scale:.3g} '
             f'| {statistics.median(x[r.metric] for x in r.head) * scale:.3g} '
-            f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict} |'
+            f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict}'
+            + (' · last bits |' if r.model == 'last bits' else ' |')
         )
     counts = {v: sum(r.verdict == v for r in rows) for v in dict.fromkeys(r.verdict for r in rows)}
     rate = chance(rounds)

@@ -2,10 +2,11 @@
 
     python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method]
 
-Each request is a JSON line ``{"cell": <id>, "fingerprint": <bool>}``, and each
+Each request is a JSON line ``{"cell": <id>, "fingerprint": <path or null>}``, and each
 answer one JSON line: the seconds, the peak resident memory of the process, the
-model's size and, where asked, what the build or the solve produced, to compare
-across the two checkouts. The first request for a cell builds it once off the
+model's size and, where asked, a digest of what the build or the solve
+produced. The numbers behind the digest are saved at the path, so that two
+digests that differ can be compared number by number. The first request for a cell builds it once off the
 clock, so every timed build is a warm one.
 
 Runs under whichever ``specsolve`` is first on ``PYTHONPATH``, which is how
@@ -31,6 +32,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 import specsolve as sps
 from bench.ab.grid import Cell, cell
@@ -59,7 +62,9 @@ def main() -> None:
         print(json.dumps(record), flush=True)
 
 
-def _measure(target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fingerprint: bool) -> dict[str, Any]:
+def _measure(
+    target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fingerprint: str | None
+) -> dict[str, Any]:
     """One timed run of *target*, after a run off the clock the first time this process sees it."""
     if target.id not in warm:
         run(target)
@@ -75,7 +80,7 @@ def _measure(target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fi
         'total_seconds': seconds,
         'peak_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         **out.sizes,
-        'fingerprint': out.fingerprint() if fingerprint else None,
+        'fingerprint': _saved(out.numbers(), fingerprint) if fingerprint else None,
     }
 
 
@@ -115,40 +120,51 @@ class _Clock:
 
 
 class _Built:
-    """A built model's size, and a digest of the model to the last bit as its fingerprint."""
+    """A built model's size, and its numbers as its fingerprint."""
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
         diagnostics = model.diagnostics()
         self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
 
-    def fingerprint(self) -> str:
-        """The fields ``tests/test_order.py`` holds two builds of one model to, digested."""
+    def numbers(self) -> dict[str, np.ndarray]:
+        """The fields ``tests/test_order.py`` holds two builds of one model to."""
         handoff = self.model._engine._model.handoff
-        digest = hashlib.sha256(handoff.structure)
-        digest.update(f'{handoff.objective_constant}'.encode())
-        digest.update(handoff._dense_cost().tobytes())
-        for frame, column in (
+        fields = (
             ('matrix', 'coeff'),
             ('cols', 'lb'),
             ('cols', 'ub'),
             ('quad', 'coeff'),
             ('rows', 'row'),
             ('rows', 'rhs'),
-        ):
-            digest.update(getattr(handoff, frame)[column].to_numpy().tobytes())
-        return digest.hexdigest()
+        )
+        return {
+            'structure': np.frombuffer(handoff.structure, dtype=np.uint8),
+            'objective_constant': np.array([handoff.objective_constant], dtype=np.float64),
+            'cost': handoff._dense_cost(),
+            **{f'{frame}.{column}': getattr(handoff, frame)[column].to_numpy() for frame, column in fields},
+        }
 
 
 class _Solved:
-    """A solve's status and objective, to nine significant digits, as its fingerprint."""
+    """A solve's status and objective as its fingerprint."""
 
     def __init__(self, result: sps.Result) -> None:
         self.result = result
         self.sizes = {'columns': None, 'rows': None}
 
-    def fingerprint(self) -> str:
-        return f'{self.result.status} {self.result.objective:.9g}'
+    def numbers(self) -> dict[str, np.ndarray]:
+        return {'status': np.array([self.result.status]), 'objective': np.array([self.result.objective])}
+
+
+def _saved(numbers: dict[str, np.ndarray], path: str) -> str:
+    """*numbers* saved at *path*, and their digest."""
+    np.savez(path, **numbers)
+    digest = hashlib.sha256()
+    for name, array in numbers.items():
+        digest.update(name.encode())
+        digest.update(np.ascontiguousarray(array).tobytes())
+    return digest.hexdigest()
 
 
 def _build(target: Cell) -> _Built:
