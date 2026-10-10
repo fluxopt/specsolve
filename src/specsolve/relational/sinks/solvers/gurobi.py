@@ -161,7 +161,7 @@ class Gurobi(Solver):
             'VBasis', solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
         )
         rows = solver_codes(basis.rows, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -1, FIXED: -1, SUPERBASIC: -1})
-        self._m.setAttr('CBasis', rows[: self._m.NumConstrs])
+        self._m.setAttr('CBasis', rows)
         self._m.update()
 
     def _start(self, values: Any) -> None:
@@ -292,9 +292,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
         sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
         rhs=rows.rhs[: linear.height],
-        qobj_coo=(
-            (quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())) if quad.height else None
-        ),
+        qobj_coo=(quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())),
     )
     m.update()
     return m

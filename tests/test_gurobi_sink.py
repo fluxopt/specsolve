@@ -275,6 +275,22 @@ def test_a_model_with_no_set_and_no_quadratic_row_never_reads_the_variable_list(
         assert loaded.handle.NumVars == model._engine._model.handoff.column_count
 
 
+def test_a_push_into_a_linear_model_leaves_the_objective_to_the_costs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``setMObjective`` rebuilds the whole objective, which on a large model
+    costs more than setting the costs, so a model with no quadratic part never calls it."""
+    from specsolve.relational.sinks.solvers import gurobi as sink
+
+    def refused(*args: Any) -> None:
+        raise AssertionError('a push into a linear model rebuilt the objective')
+
+    monkeypatch.setattr(sink, '_set_quadratic', refused)
+    with sps.build(*CASES['LP']) as model:
+        model.solve(solver_name='gurobi').close()
+        model.update(CASES['LP'][1])
+        model.solve(solver_name='gurobi').close()
+        assert model.diagnostics().loads == 1, 'nothing moved, so the second solve pushed into the loaded model'
+
+
 def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
     """Gurobi refuses ``FarkasDual`` on a model with a quadratic row, asked or not, and the sink says ``None``."""
     spec = {

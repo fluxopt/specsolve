@@ -237,6 +237,29 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             assert again != pytest.approx(first, rel=SEARCHED), 'and the answer really did move'
 
 
+def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
+    """The digest rule's other half: the linear rows of a model that has a
+    quadratic one take a new right-hand side by value, and Gurobi is handed
+    one per linear row — it refuses a vector that also spans the quadratic tail."""
+    capped = spec(
+        parameters={'floor': {'dims': []}, 'limit': {'dims': []}},
+        constraints={**SPEC['constraints'], 'cap': {'dims': [], 'expression': 'sum(p, over=g) <= limit'}},
+        objective={'sense': 'maximize', 'expression': 'sum(p + q, over=g)'},
+    )
+    loose = {**SOURCES, 'limit': pl.DataFrame({'value': [9.0]})}
+    tight = {**SOURCES, 'limit': pl.DataFrame({'value': [7.0]})}
+    with sps.build(capped, loose) as model:
+        model.solve(solver_name='gurobi').close()
+        model.update(tight)
+        pushed = model.solve(solver_name='gurobi')
+        assert model.diagnostics().loads == 1, 'only a linear right-hand side moved, so it is pushed'
+        with sps.solve(capped, tight, solver_name='gurobi') as fresh:
+            assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
+                'a pushed right-hand side answers what a fresh build answers'
+            )
+        pushed.close()
+
+
 def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
