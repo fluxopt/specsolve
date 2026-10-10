@@ -8,6 +8,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
+- perf(writers): a model with quadratic constraints writes its LP file in about the time of one without them ([#1939](https://github.com/fluxopt/specsolve/pull/1939))
+- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
 - fix(data): a null label in an index or a parameter is refused at load rather than building a wrong model or crashing ([#1935](https://github.com/fluxopt/specsolve/pull/1935))
 - perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
 - perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
