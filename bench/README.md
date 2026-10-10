@@ -41,7 +41,8 @@ whose fingerprint no longer describes it.
 
 The committed `results/latest-<sink>-<case>.json` are the provenance of the
 tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-37986780225, on `a19f71c9`, which finished four cases of eight. The other four
+38044086533, on `7bf01147`, which finished four cases of eight. That commit
+merges five open performance pull requests for measurement (#1938). The other four
 were killed by the watchdog above 25 GB, at a rung that did not fit:
 `transport/w100` and `storage/w1000`, on both sinks. What it left committed is
 `highs` and `gurobi` for `dispatch` and `fleet`; the page has no table for the
@@ -53,7 +54,7 @@ selects `test_emit` and `test_rebuild`. The windows and the read-back are
 measured where their history is kept — CodSpeed, below. The sweep and the fresh
 process, which CodSpeed does not run, are measured by anyone who runs
 `pytest bench` without the `-k`. Spending the box's hours on cells no table
-renders would lengthen a run that took 2 h 7 min the last time (37986780225).
+renders would lengthen a run that took 1 h 41 min the last time (38044086533).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
