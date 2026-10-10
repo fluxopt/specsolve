@@ -203,9 +203,8 @@ Listed so that a claim with no table under it is visible as one.
   that took under a gigabyte. Where the projection comes in under 16 GB the run
   starts a rung that does not fit, and `bench/memory-watchdog.sh` kills the
   case to save the box. Four cases died that way on this run:
-  `transport/w100` on `highs` at 24.3 GB, `storage/w1000` on `highs` at
-  24.9 GB, `transport/w100` on `gurobi` at 25.2 GB, `storage/w1000` on
-  `gurobi` at 26.5 GB. A killed case writes no
+  `transport/w100` on `highs` at 25.5 GB and on `gurobi` at 26.4 GB, and
+  `storage/w1000` on `highs` at 26.1 GB and on `gurobi` at 27.8 GB. A killed case writes no
   file, so each loses every rung it had already measured, its rows in the
   marginal table above included
   ([#1498](https://github.com/fluxopt/specsolve/issues/1498)). The last `highs`
