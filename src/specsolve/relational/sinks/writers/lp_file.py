@@ -75,8 +75,8 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
         f.write(b'\ns.t.\n\n')
         for block in handoff.row_blocks(EMIT_BUDGET):
             append_lines(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
-        for row, pairs in handoff.quadratic_blocks():
-            append_lines(_quadratic_row_lines(handoff, row, pairs), f)
+        if handoff.qmatrix.height:
+            append_lines(_quadratic_row_lines(handoff), f)
 
         f.write(b'\nbounds\n')
         append_lines(bounds, f)
@@ -95,20 +95,42 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
-    """One quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``.
+def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
+    """Every quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``, one sorted stream.
 
-    Not doubled: the format divides only the objective's bracket by two.
+    A line's key is ``(row, part, at)``: ``part`` orders header, linear terms,
+    bracket, pairs and footer within a row, and ``at`` orders lines within a
+    part — a term by its column, a pair by its place in ``qmatrix``, which
+    arrives ordered. Not doubled: the format divides only the objective's
+    bracket by two.
     """
-    entries = handoff.matrix_block(row, row + 1)
-    header = pl.LazyFrame({'line': [f'c{row}:']})
-    linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
-    opened = pl.LazyFrame({'line': ['+ [']})
-    quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
-    closed = (
-        handoff.rows.lazy().filter(pl.col('row') == row).select(pl.concat_str(pl.lit('] '), _footer()).alias('line'))
+    lo = handoff.linear_row_count
+
+    def _keyed(frame: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
+        return frame.select(
+            pl.col('row').cast(pl.Int64),
+            pl.lit(part, dtype=pl.Int64).alias('part'),
+            at.cast(pl.Int64).alias('at'),
+            line.alias('line'),
+        )
+
+    rows = handoff.rows.lazy().filter(pl.col('row') >= lo)
+    entries = handoff.matrix_block(lo, handoff.row_count).lazy()
+    pairs = handoff.qmatrix.lazy().with_row_index('at')
+    zero = pl.lit(0)
+    return (
+        pl.concat(
+            [
+                _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col('row')), pl.lit(':'))),
+                _keyed(entries, 1, pl.col('col'), _term(pl.col('coeff'), pl.col('col'))),
+                _keyed(rows, 2, zero, pl.lit('+ [')),
+                _keyed(pairs, 3, pl.col('at'), _pair(pl.col('coeff'))),
+                _keyed(rows, 4, zero, pl.concat_str(pl.lit('] '), _footer())),
+            ]
+        )
+        .sort('row', 'part', 'at')
+        .select('line')
     )
-    return pl.concat([header, linear, opened, quadratic, closed])
 
 
 def _quadratic_terms(handoff: Handoff) -> pl.LazyFrame:
