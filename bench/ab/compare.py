@@ -238,8 +238,8 @@ def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = Fal
         change = statistics.median(r.ratios) - 1 if r.ratios else 0.0
         lines.append(
             f'| `{r.cell}` | {b["columns"] or ""} | {b["rows"] or ""} '
-            f'| {statistics.median(x["seconds"] for x in r.base) * 1e3:.1f} '
-            f'| {statistics.median(x["seconds"] for x in r.head) * 1e3:.1f} '
+            f'| {statistics.median(x["seconds"] for x in r.base) * 1e3:.3g} '
+            f'| {statistics.median(x["seconds"] for x in r.head) * 1e3:.3g} '
             f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict} '
             + (f'| {b["peak_mb"]:.0f} → {h["peak_mb"]:.0f} |' if memory else '| |')
         )
