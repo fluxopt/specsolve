@@ -72,20 +72,6 @@ def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
-def test_block_boundaries_do_not_move_the_answer() -> None:
-    """``batch_rows=1`` forces one block per row, so every CSR view is built at
-    a boundary — where an off-by-one in ``indptr`` shifts coefficients into the
-    neighbouring row rather than dropping them."""
-    with sps.build(*CASES['LP']) as model:
-        whole = model.solve(solver_name='gurobi')
-        tables = model._engine._model.handoff
-        with Gurobi(tables, batch_rows=1) as sink:
-            ragged = sink.run(tables)
-        assert ragged.objective == pytest.approx(whole.objective)
-        held = model._engine._model.variables['p']
-        assert held.share(ragged.primal).to_list() == pytest.approx(whole.primal('p')['value'].to_list())
-
-
 # ---------------------------------------------------------------------------
 # what the sink says when there is nothing to read
 # ---------------------------------------------------------------------------
@@ -219,12 +205,14 @@ def test_close_disposes_a_model_the_caller_still_holds() -> None:
             _ = m.NumVars
 
 
-def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize('step', ['_loaded', '_completed'], ids=['before-the-model', 'after-the-model'])
+def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPatch, step: str) -> None:
     """An environment started for a load that raises is disposed before the error leaves.
 
     Otherwise a model the sink refuses part way — a bad option value, a
     matrix Gurobi rejects — would hold a licence until the collector found the
-    half-built model.
+    half-built model. The load fails either before the model exists or while
+    the SOS and quadratic rows go onto it.
     """
     from specsolve.relational.sinks.solvers import gurobi as sink
 
@@ -237,7 +225,7 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
             super().dispose()
 
     monkeypatch.setattr(gurobipy, 'Env', Env)
-    monkeypatch.setattr(sink, '_filled', lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
+    monkeypatch.setattr(sink, step, lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
     with sps.build(*CASES['MIP']) as model:
         try:
             Gurobi(model._engine._model.handoff)

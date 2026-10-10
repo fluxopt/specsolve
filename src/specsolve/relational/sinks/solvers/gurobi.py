@@ -26,7 +26,7 @@ from specsolve.relational.sinks.solvers.base import (
 from specsolve.relational.status import SolveStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
 
     import polars as pl
 
@@ -66,22 +66,18 @@ _LINOPY_DIVERGENCES = {
 class Gurobi(Solver):
     """Gurobi, holding one model at ``.handle``, a `gurobipy.Model`.
 
-    ``batch_rows`` is a nonzero budget that splits the matrix across calls;
-    ``None`` is one call. ``close``, or leaving a ``with``, releases the model
-    and its environment.
+    The model loads in one call, so ``batch_rows`` has no effect. ``close``, or
+    leaving a ``with``, releases the model and its environment.
     """
 
-    #: The loaded model, the handles that read it back, and the environment.
-    #: ``close`` drops them.
+    #: The loaded model and its environment. ``close`` drops them.
     _m: Any
+    _env: Any
+    #: The columns as one ``MVar``, or ``None`` until [`_mvar`][] is asked.
     _x: Any
-    _blocks: list[Any]
     #: [`_released`][] over the model and its environment, bound to this
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
-    #: The quadratic constraints, in row order, after every linear one.
-    _qrows: list[Any]
-    _env: Any
 
     requires = ('gurobipy', 'scipy.sparse')
     recorded_options = frozenset(
@@ -113,8 +109,21 @@ class Gurobi(Solver):
     )
 
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
-        self._m, self._x, self._blocks, self._qrows, self._env = _built(handoff, batch_rows, self._options)
+        """Load in one call — *batch_rows* is the family's parameter and this member has no batches."""
+        del batch_rows
+        self._m, self._x, self._env = _built(handoff, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
+
+    def _mvar(self) -> Any:
+        """The columns as one ``MVar``, read off the model on first need.
+
+        Only a quadratic objective, a quadratic row and an SOS take one.
+        ``getVars`` makes one Python object per column, which costs more than
+        the whole load of a large linear model, so nothing else asks.
+        """
+        if self._x is None:
+            self._x = _gurobipy().MVar.fromlist(self._m.getVars())
+        return self._x
 
     def dual_ray(self) -> pl.Series | None:
         """``FarkasDual``, negated to the contract's sign, or ``None``.
@@ -125,13 +134,12 @@ class Gurobi(Solver):
         import numpy as np
 
         gurobipy = _gurobipy()
-        if self._qrows:
+        if self._m.NumQConstrs:
             return None
         try:
-            slices = [block.FarkasDual for block in self._blocks]
+            values = np.asarray(self._m.getAttr('FarkasDual'), dtype=np.float64)
         except (AttributeError, gurobipy.GurobiError):
             return None
-        values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
         return solver_vector(-values)
 
     @property
@@ -139,16 +147,15 @@ class Gurobi(Solver):
         return self._m
 
     def push(self, handoff: Handoff) -> None:
-        """Whole vectors, one call per block."""
+        """Whole vectors, one call each."""
         gurobipy = _gurobipy()
         cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
-        self._x.LB, self._x.UB, self._x.Obj = cols.lb, cols.ub, cols.cost
-
-        rhs = handoff.dense_rows(gurobipy.GRB.INFINITY).rhs
-        for block, rows in self._per_block(rhs):
-            block.RHS = rows
+        for attribute, values in (('LB', cols.lb), ('UB', cols.ub), ('Obj', cols.cost)):
+            self._m.setAttr(attribute, values)
+        self._m.setAttr('RHS', handoff.dense_rows(gurobipy.GRB.INFINITY).rhs[: self._m.NumConstrs])
         self._m.ObjCon = handoff.objective_constant
-        _set_quadratic(self._m, self._x, handoff, cols.cost)
+        if handoff.quad.height:
+            _set_quadratic(self._m, self._mvar(), handoff, cols.cost)
         self._m.update()
 
     def _basis(self) -> tuple[Any, Any] | None:
@@ -157,19 +164,19 @@ class Gurobi(Solver):
 
         gurobipy = _gurobipy()
         try:
-            columns = np.asarray(self._x.VBasis, dtype=np.int64)
-            slices = [np.asarray(block.CBasis, dtype=np.int64) for block in self._blocks]
+            columns = np.asarray(self._m.getAttr('VBasis'), dtype=np.int64)
+            rows = np.asarray(self._m.getAttr('CBasis'), dtype=np.int64)
         except (AttributeError, gurobipy.GurobiError):
             return None
-        rows = np.concatenate(slices) if slices else np.empty(0, dtype=np.int64)
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
     def _warm(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
-        self._x.VBasis = solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
+        self._m.setAttr(
+            'VBasis', solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
+        )
         rows = solver_codes(basis.rows, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -1, FIXED: -1, SUPERBASIC: -1})
-        for block, part in self._per_block(rows):
-            block.CBasis = part
+        self._m.setAttr('CBasis', rows[: self._m.NumConstrs])
         self._m.update()
 
     def _start(self, values: Any) -> None:
@@ -177,21 +184,13 @@ class Gurobi(Solver):
         import numpy as np
 
         given = np.where(np.isnan(values), _gurobipy().GRB.UNDEFINED, values)
-        if self._m.IsMIP:
-            self._x.Start = given
-        else:
-            self._x.PStart = given
+        self._m.setAttr('Start' if self._m.IsMIP else 'PStart', given)
         self._m.update()
-
-    def _per_block(self, vector: Any) -> Iterator[tuple[Any, Any]]:
-        """Each linear constraint block with its slice of a row vector. The blocks ascend by row."""
-        at = 0
-        for block in self._blocks:
-            yield block, vector[at : at + block.shape[0]]
-            at += block.shape[0]
 
     def _run(self, handoff: Handoff) -> SolveAnswer:
         """The one ``GurobiError`` translated is a caller's ``QCPDual`` on a nonconvex quadratic constraint."""
+        import numpy as np
+
         gurobipy = _gurobipy()
         try:
             self._m.optimize()
@@ -210,16 +209,16 @@ class Gurobi(Solver):
         return SolveAnswer(
             status,
             self._m.ObjVal,
-            solver_vector(self._x.X),
-            _duals(self._blocks, self._qrows),
-            _activity(self._blocks, self._qrows),
+            solver_vector(np.asarray(self._m.getAttr('X'), dtype=np.float64)),
+            _duals(self._m),
+            _activity(self._m),
         )
 
     def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``computeIIS``, kept only where Gurobi reports it minimal.
 
         A search a limit stops leaves a set that is not, or nothing readable.
-        Read back per block and per quadratic row, in row order.
+        The quadratic rows follow the linear ones.
         """
         import numpy as np
 
@@ -230,13 +229,11 @@ class Gurobi(Solver):
                 return None
         except (AttributeError, gurobipy.GurobiError):
             return None
-        slices = [np.asarray(block.IISConstr, dtype=bool) for block in self._blocks]
-        slices += [np.asarray([row.IISQConstr], dtype=bool) for row in self._qrows]
-        rows = np.concatenate(slices) if slices else np.empty(0, dtype=bool)
+        rows = np.concatenate([_flags(self._m, 'IISConstr'), _flags(self._m, 'IISQConstr')])
         return InfeasibleSubsystemIndices(
             np.flatnonzero(rows),
-            np.flatnonzero(np.asarray(self._x.IISLB, dtype=bool)),
-            np.flatnonzero(np.asarray(self._x.IISUB, dtype=bool)),
+            np.flatnonzero(_flags(self._m, 'IISLB')),
+            np.flatnonzero(_flags(self._m, 'IISUB')),
         )
 
     def forget(self) -> None:
@@ -247,8 +244,6 @@ class Gurobi(Solver):
         """Release the model and the licence its environment holds."""
         self._release()
         self._m = self._x = self._env = None
-        self._blocks = []
-        self._qrows = []
 
 
 def _released(m: Any, environment: Any) -> None:
@@ -257,12 +252,8 @@ def _released(m: Any, environment: Any) -> None:
     environment.dispose()
 
 
-def _built(
-    handoff: Handoff,
-    batch_rows: int | None,
-    solver_options: Mapping[str, Any] | None,
-) -> tuple[Any, Any, list[Any], list[Any], Any]:
-    """The model, the handles to read it back, and the environment to release.
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any, Any]:
+    """The model, its columns as an ``MVar`` if the load needed one, and the environment to release.
 
     Options go on the environment, since a licence parameter such as
     ``WLSAccessID`` can only be set before an environment starts. ``OutputFlag``
@@ -270,45 +261,69 @@ def _built(
     """
     gurobipy = _gurobipy()
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
-    m = gurobipy.Model(env=environment)
+    m = None
     try:
-        return m, *_filled(m, handoff, batch_rows, gurobipy), environment
+        m = _loaded(handoff, environment, gurobipy)
+        return m, _completed(m, handoff, gurobipy), environment
     except BaseException:
-        _released(m, environment)
+        if m is not None:
+            m.dispose()
+        environment.dispose()
         raise
 
 
-def _filled(m: Any, handoff: Handoff, batch_rows: int | None, gurobipy: Any) -> tuple[Any, list[Any], list[Any]]:
-    """Everything [`_built`][] loads after the environment exists."""
+def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
+    """Columns, linear rows and the objective in one ``loadModel`` call.
+
+    ``loadModel`` reads the matrix by column, so the linear rows' CSR is
+    transposed here. Its ``qobj_coo`` takes each pair's coefficient whole, as
+    [`quad`][specsolve.relational.sinks.handoff.Handoff.quad] holds it.
+    """
     import numpy as np
     import scipy.sparse
 
     cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
-    discrete: dict[str, Any] = {'vtype': np.where(cols.integral, 'I', 'C')} if cols.integral.any() else {}
-    x = m.addMVar(handoff.column_count, lb=cols.lb, ub=cols.ub, obj=cols.cost, **discrete)
-
     rows = handoff.dense_rows(gurobipy.GRB.INFINITY)
-    spelling = _spelled(gurobipy)
-    blocks = []
-    for chunk in handoff.row_blocks(batch_rows):
-        entries = chunk.entries
-        block = scipy.sparse.csr_matrix(
-            (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(chunk.starts, entries.height)),
-            shape=(chunk.height, handoff.column_count),
-        )
-        blocks.append(m.addMConstr(block, x, spelling[rows.sense[chunk.lo : chunk.hi]], rows.rhs[chunk.lo : chunk.hi]))
-
-    _add_sets(m, x, handoff, gurobipy)
-    quadratic = _add_quadratic_rows(m, x, handoff, rows, spelling)
-    if handoff.objective_sense == 'maximize':
-        m.ModelSense = gurobipy.GRB.MAXIMIZE
-    m.ObjCon = handoff.objective_constant
-    _set_quadratic(m, x, handoff, cols.cost)
+    (linear,) = handoff.row_blocks(None)
+    entries = linear.entries
+    matrix = scipy.sparse.csr_matrix(
+        (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(linear.starts, entries.height)),
+        shape=(linear.height, handoff.column_count),
+    ).tocsc()
+    quad = handoff.quad
+    m = gurobipy.loadModel(
+        env=environment,
+        numvars=handoff.column_count,
+        numconstrs=linear.height,
+        modelsense=gurobipy.GRB.MAXIMIZE if handoff.objective_sense == 'maximize' else gurobipy.GRB.MINIMIZE,
+        objcon=handoff.objective_constant,
+        obj=cols.cost,
+        lb=cols.lb,
+        ub=cols.ub,
+        vtype=np.where(cols.integral, 'I', 'C') if cols.integral.any() else None,
+        constr_csc=(matrix.data, matrix.indices, matrix.indptr),
+        sense=_spelled(gurobipy)[rows.sense[: linear.height]],
+        rhs=rows.rhs[: linear.height],
+        qobj_coo=(
+            (quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())) if quad.height else None
+        ),
+    )
     m.update()
-    return x, blocks, quadratic
+    return m
 
 
-def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spelling: Any) -> list[Any]:
+def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> Any:
+    """What ``loadModel`` cannot take: the SOS and the quadratic rows. Returns the ``MVar`` they needed, or ``None``."""
+    if not handoff.sos.height and not handoff.qmatrix.height:
+        return None
+    x = gurobipy.MVar.fromlist(m.getVars())
+    _add_sets(m, x, handoff, gurobipy)
+    _add_quadratic_rows(m, x, handoff, handoff.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
+    m.update()
+    return x
+
+
+def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spelling: Any) -> None:
     """Every quadratic constraint, one ``addMQConstr`` call each.
 
     A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
@@ -317,7 +332,6 @@ def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spel
     import numpy as np
     import scipy.sparse
 
-    added = []
     for row, pairs in handoff.quadratic_blocks():
         quadratic = scipy.sparse.csr_matrix(
             (pairs['coeff'].to_numpy(), (pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy())),
@@ -326,8 +340,7 @@ def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spel
         entries = handoff.matrix_block(row, row + 1)
         linear = np.zeros(handoff.column_count, dtype=np.float64)
         linear[entries['col'].to_numpy()] = entries['coeff'].to_numpy()
-        added.append(m.addMQConstr(quadratic, linear, spelling[rows.sense[row]], float(rows.rhs[row]), x, x, x))
-    return added
+        m.addMQConstr(quadratic, linear, spelling[rows.sense[row]], float(rows.rhs[row]), x, x, x)
 
 
 def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
@@ -339,8 +352,6 @@ def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
     """
     import scipy.sparse
 
-    if not handoff.quad.height:
-        return
     pairs = scipy.sparse.csr_matrix(
         (
             handoff.quad['coeff'].to_numpy(),
@@ -353,8 +364,6 @@ def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
 
 def _add_sets(m: Any, x: Any, handoff: Handoff, gurobipy: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each."""
-    if not handoff.sos.height:
-        return
     order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
     columns = x.tolist()
     for set_type, cols, weights in handoff.sets():
@@ -392,7 +401,14 @@ def _wording(code: int) -> str:
     return names.get(code, str(code))
 
 
-def _activity(blocks: list[Any], qrows: list[Any]) -> pl.Series:
+def _flags(m: Any, attribute: str) -> Any:
+    """One per-element attribute over every element of its kind, as booleans."""
+    import numpy as np
+
+    return np.asarray(m.getAttr(attribute), dtype=bool)
+
+
+def _activity(m: Any) -> pl.Series:
     r"""Each row's left-hand side at the solution, in row order.
 
     Gurobi exposes only ``Slack``, which is ``rhs - activity`` for every sense.
@@ -401,13 +417,13 @@ def _activity(blocks: list[Any], qrows: list[Any]) -> pl.Series:
     """
     import numpy as np
 
-    slices = [block.RHS - block.Slack for block in blocks]
-    slices += [np.asarray([row.QCRHS - row.QCSlack], dtype=np.float64) for row in qrows]
-    values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
-    return solver_vector(values)
+    def side(rhs: str, slack: str) -> Any:
+        return np.asarray(m.getAttr(rhs), dtype=np.float64) - np.asarray(m.getAttr(slack), dtype=np.float64)
+
+    return solver_vector(np.concatenate([side('RHS', 'Slack'), side('QCRHS', 'QCSlack')]))
 
 
-def _duals(blocks: list[Any], qrows: list[Any]) -> pl.Series | None:
+def _duals(m: Any) -> pl.Series | None:
     """Shadow prices in row order, or ``None`` where Gurobi refuses them.
 
     Gurobi refuses ``Pi`` on a mixed-integer model, and ``QCPi`` unless
@@ -417,9 +433,7 @@ def _duals(blocks: list[Any], qrows: list[Any]) -> pl.Series | None:
 
     gurobipy = _gurobipy()
     try:
-        slices = [block.Pi for block in blocks]
-        slices += [np.asarray([row.QCPi], dtype=np.float64) for row in qrows]
+        values = [np.asarray(m.getAttr(attribute), dtype=np.float64) for attribute in ('Pi', 'QCPi')]
     except (AttributeError, gurobipy.GurobiError):
         return None
-    values = np.concatenate(slices) if slices else np.empty(0, dtype=np.float64)
-    return solver_vector(values)
+    return solver_vector(np.concatenate(values))

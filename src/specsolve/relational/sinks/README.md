@@ -133,8 +133,9 @@ though the fifth stream were never there.
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
 the three arrays and `xpress.py` hands `addRows` the same triple a block
-already is. `gurobi.py` is the exception — its matrix API takes a matrix
-*object*, which is what the `[gurobi]` extra's scipy is for.
+already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
+column, so it transposes the CSR first, which is what the `[gurobi]` extra's
+scipy is for.
 
 The rest of what separates them is each library's own spelling, and the two
 places it bites are worth naming because neither is a choice:
