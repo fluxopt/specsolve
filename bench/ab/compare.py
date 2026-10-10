@@ -1,15 +1,16 @@
 """Is the new code faster than the old? An A/B of two git refs over every cell of the grid.
 
     pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above]
-        [--rounds 6] [--op build|solve] [--focus module:Class.method] [-k <substring>] [--out ab.md]
+        [--rounds 6] [--op build|solve] [--focus module:Class.method] [--memory] [-k <substring>] [--out ab.md]
 
-Each ref is checked out with ``git worktree add --detach`` and measured in a
-fresh process with that checkout's ``src`` first on ``PYTHONPATH``; nothing is
-installed. Every cell is measured ``--rounds`` times per side, the sides
-alternating ABBA so a drift in the machine falls on both. The first round also
-fingerprints what each side produced: the LP file a build writes, or a solve's
-status and objective. Two different fingerprints fail the cell however fast it
-is.
+Each ref is checked out with ``git worktree add --detach``; nothing is
+installed. Each round starts one worker process per side, with that checkout's
+``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
+alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
+measurement is a fresh process instead, so its peak resident memory is the
+cell's own. The first round also fingerprints what each side produced: the LP
+file a build writes, or a solve's status and objective. Two different
+fingerprints fail the cell however fast it is.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
 is *faster* or *slower* where enough rounds agree, which takes at least six
@@ -24,6 +25,7 @@ are printed in its header.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import platform
@@ -118,40 +120,113 @@ def _git(*args: str) -> str:
     return subprocess.run(['git', *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def measure(cell_id: str, tree: Path, *, op: str, focus: str | None, fingerprint: bool) -> dict[str, Any]:
-    """One worker run of *cell_id* against the ``specsolve`` in *tree*; raises with its stderr where it fails."""
-    command = [sys.executable, '-m', 'bench.ab.worker', cell_id, '--tree', str(tree), '--op', op]
-    if focus:
-        command += ['--focus', focus]
-    if fingerprint:
-        command.append('--fingerprint')
-    env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(tree / 'src'), str(ROOT)])}
-    done = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
-    if done.returncode:
-        raise RuntimeError(done.stderr.strip().splitlines()[-1] if done.stderr.strip() else f'exit {done.returncode}')
-    return json.loads(done.stdout.strip().splitlines()[-1])
+class Worker:
+    """A worker process measuring cells against the ``specsolve`` in *tree*, until closed."""
+
+    def __init__(self, tree: Path, *, op: str, focus: str | None) -> None:
+        command = [sys.executable, '-m', 'bench.ab.worker', '--tree', str(tree), '--op', op]
+        if focus:
+            command += ['--focus', focus]
+        env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(tree / 'src'), str(ROOT)])}
+        self.stderr = tempfile.TemporaryFile(mode='w+')  # noqa: SIM115 — closed in close(), with the process
+        self.process = subprocess.Popen(
+            command, cwd=ROOT, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr, text=True
+        )
+
+    def ask(self, cell_id: str, *, fingerprint: bool) -> dict[str, Any]:
+        """One measurement of *cell_id*; raises with the cell's error, or the worker's last words where it died."""
+        assert self.process.stdin and self.process.stdout
+        try:
+            self.process.stdin.write(json.dumps({'cell': cell_id, 'fingerprint': fingerprint}) + '\n')
+            self.process.stdin.flush()
+        except BrokenPipeError:
+            pass
+        line = self.process.stdout.readline()
+        if not line:
+            self.process.wait()
+            self.stderr.seek(0)
+            said = self.stderr.read().strip().splitlines()
+            raise RuntimeError(said[-1] if said else f'the worker exited {self.process.returncode}')
+        answer = json.loads(line)
+        if 'error' in answer:
+            raise RuntimeError(answer['error'])
+        return answer
+
+    @property
+    def alive(self) -> bool:
+        return self.process.poll() is None
+
+    def close(self) -> None:
+        with contextlib.suppress(BrokenPipeError):
+            self.process.communicate()
+        self.stderr.close()
 
 
 def compare(
-    cells: list[str], base: Path, head: Path, *, rounds: int, op: str = 'build', focus: str | None = None
+    cells: list[str],
+    base: Path,
+    head: Path,
+    *,
+    rounds: int,
+    op: str = 'build',
+    focus: str | None = None,
+    memory: bool = False,
 ) -> list[Row]:
-    """Every cell of *cells* measured *rounds* times on each side, ABBA, the first round fingerprinted."""
-    rows = []
-    for cell_id in cells:
-        row = Row(cell_id)
+    """Every cell of *cells* measured *rounds* times on each side, ABBA, the first round fingerprinted.
+
+    Each round starts one fresh worker per side and runs every cell in it, so
+    what a process brings to its timings falls in one round and the rounds stay
+    independent, as the sign test needs. With *memory*, every measurement gets
+    a fresh process instead, so that its peak is the cell's own.
+    """
+    trees = {'base': base, 'head': head}
+    rows = {c: Row(c) for c in cells}
+    for i in range(rounds):
+        workers = {} if memory else {side: Worker(tree, op=op, focus=focus) for side, tree in trees.items()}
         try:
-            for i in range(rounds):
-                sides = [('base', base), ('head', head)]
-                for name, tree in sides if i % 2 == 0 else reversed(sides):
-                    getattr(row, name).append(measure(cell_id, tree, op=op, focus=focus, fingerprint=i == 0))
-        except RuntimeError as e:
-            row.error = str(e)
-        rows.append(row)
-        print(f'{cell_id:40} {row.verdict}', file=sys.stderr)
-    return rows
+            for row in rows.values():
+                if row.error:
+                    continue
+                try:
+                    for side in ('base', 'head') if i % 2 == 0 else ('head', 'base'):
+                        getattr(row, side).append(_ask(workers, trees, side, row.cell, op, focus, first=i == 0))
+                except RuntimeError as e:
+                    row.error = str(e)
+                if i == rounds - 1:
+                    print(f'{row.cell:40} {row.verdict}', file=sys.stderr)
+        finally:
+            for w in workers.values():
+                w.close()
+    return list(rows.values())
 
 
-def table(rows: list[Row], header: list[str], rounds: int) -> str:
+def _ask(
+    workers: dict[str, Worker],
+    trees: dict[str, Path],
+    side: str,
+    cell_id: str,
+    op: str,
+    focus: str | None,
+    *,
+    first: bool,
+) -> dict[str, Any]:
+    """One measurement on *side*: in its worker for the round, or in a process of its own where there is none.
+
+    A worker that died on a cell is replaced, so the cells after it are still measured.
+    """
+    if side not in workers:
+        own = Worker(trees[side], op=op, focus=focus)
+        try:
+            return own.ask(cell_id, fingerprint=first)
+        finally:
+            own.close()
+    if not workers[side].alive:
+        workers[side].close()
+        workers[side] = Worker(trees[side], op=op, focus=focus)
+    return workers[side].ask(cell_id, fingerprint=first)
+
+
+def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = False) -> str:
     """The rows as markdown, with *header* lines above, and below them a count of verdicts and how many chance alone gives."""
     lines = [*header, '', '| cell | columns | rows | base ms | head ms | change | head faster in | verdict | peak MB |']
     lines.append('|---|--:|--:|--:|--:|--:|--:|---|--:|')
@@ -166,7 +241,7 @@ def table(rows: list[Row], header: list[str], rounds: int) -> str:
             f'| {statistics.median(x["seconds"] for x in r.base) * 1e3:.1f} '
             f'| {statistics.median(x["seconds"] for x in r.head) * 1e3:.1f} '
             f'| {change:+.1%} | {sum(x < 1 for x in r.ratios)}/{len(r.ratios)} | {r.verdict} '
-            f'| {b["peak_mb"]:.0f} → {h["peak_mb"]:.0f} |'
+            + (f'| {b["peak_mb"]:.0f} → {h["peak_mb"]:.0f} |' if memory else '| |')
         )
     counts = {v: sum(r.verdict == v for r in rows) for v in dict.fromkeys(r.verdict for r in rows)}
     rate = chance(rounds)
@@ -187,6 +262,7 @@ def main() -> None:
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')
+    parser.add_argument('--memory', action='store_true', help='a fresh process per measurement, for its peak')
     parser.add_argument('-k', dest='select', help='only the cells whose id contains this')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--i-know-another-is-running', dest='shared', action='store_true')
@@ -216,18 +292,19 @@ def _run(args: argparse.Namespace) -> None:
         cell(c)
     before = os.getloadavg()
     with checkouts(args.base, args.head) as ((base_sha, base), (head_sha, head)):
-        rows = compare(selected, base, head, rounds=args.rounds, op=args.op, focus=args.focus)
+        rows = compare(selected, base, head, rounds=args.rounds, op=args.op, focus=args.focus, memory=args.memory)
     after = os.getloadavg()
 
     clock = f'`{args.focus}`, summed over its calls' if args.focus else f'`sps.{args.op}` wall time'
     header = [
         f'A/B: base `{args.base}` (`{base_sha[:8]}`) against head `{args.head}` (`{head_sha[:8]}`).',
-        f'What is counted: {clock}, the fastest of three after one warm-up, a fresh process per measurement, '
-        f'{args.rounds} rounds per side, ABBA. Times are medians; the change is the median paired ratio.',
+        f'What is counted: {clock}, warm, '
+        + ('a fresh process per measurement, ' if args.memory else 'a fresh process per side per round, ')
+        + f'{args.rounds} rounds per side, ABBA. Times are medians; the change is the median paired ratio.',
         f'Machine: {os.cpu_count()} cores, {platform.python_version()}, polars {pl.__version__}; '
         f'load average {before[0]:.2f} before, {after[0]:.2f} after.',
     ]
-    report = table(rows, header, args.rounds)
+    report = table(rows, header, args.rounds, memory=args.memory)
     print(report)
     if args.out:
         args.out.write_text(report + '\n')

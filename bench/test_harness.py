@@ -28,7 +28,7 @@ import yaml
 from bench import conftest as harness
 from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
-from bench.ab.compare import Row, checkouts, compare, measure, verdict
+from bench.ab.compare import Row, Worker, checkouts, compare, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -1733,8 +1733,28 @@ def test_a_focus_on_a_name_the_checkout_lacks_is_an_error() -> None:
 
 def test_an_ab_refuses_to_measure_a_checkout_it_did_not_import(tmp_path: Path) -> None:
     """With the tree's `src` missing, the installed specsolve would answer for it and both sides would agree."""
-    with pytest.raises(RuntimeError, match='not from the checkout under test'):
-        measure('grid-baseline-tiny', tmp_path, op='build', focus=None, fingerprint=False)
+    worker = Worker(tmp_path, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='not from the checkout under test'):
+            worker.ask('grid-baseline-tiny', fingerprint=False)
+    finally:
+        worker.close()
+
+
+def test_a_cell_that_fails_leaves_the_worker_to_measure_the_next() -> None:
+    worker = Worker(AB_ROOT, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='KeyError'):
+            worker.ask('grid-no-such-shape-tiny', fingerprint=False)
+        assert worker.ask('grid-baseline-tiny', fingerprint=False)['seconds'] > 0
+    finally:
+        worker.close()
+
+
+def test_a_memory_run_takes_each_peak_in_its_own_process() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, memory=True)
+    assert row.error is None, row.error
+    assert row.base[0]['peak_mb'] > 0
 
 
 def test_two_different_models_fail_however_fast() -> None:

@@ -737,11 +737,15 @@ pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, whe
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```
 
-Each ref is checked out as a detached worktree, and each measurement is a fresh
-process with that checkout's `src/` first on `PYTHONPATH`. Nothing is
+Each ref is checked out as a detached worktree. Each round starts one worker
+process per side, with that checkout's `src/` first on `PYTHONPATH`, and
+measures every cell in it, so a round's two processes fall in that round only
+and the rounds stay independent, as the sign test needs. Nothing is
 installed, and the worker refuses to run if it imported `specsolve` from
 anywhere else. The base is the PR's own base branch, so a stacked PR proves its
-own change.
+own change. A claim about memory takes `--memory`: a fresh process per
+measurement, so its peak is the cell's own, at the cost of a second of imports
+each time.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
 may assume: the dimension count, terms per row, a term over fewer dimensions, a
@@ -753,8 +757,8 @@ put the model either side of 250,000 columns. The ladder's own cases at `s`
 come after the grid.
 
 **A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
-Six rounds is the least that can pass, and `compare` refuses fewer. Each side
-is the fastest of three builds after a warm-up, and the sides alternate ABBA.
+Six rounds is the least that can pass, and `compare` refuses fewer. Every
+timed build is warm, and the sides alternate ABBA.
 The first round also writes each side's LP file, or a solve's objective. Two
 different fingerprints fail the cell, so a speed-up that changes the model is
 caught. With `--focus`, the clock counts only the time inside that function,

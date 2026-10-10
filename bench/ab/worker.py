@@ -1,10 +1,16 @@
-"""One measurement: a cell built (or solved) once to warm up, then the fastest of ``REPEATS`` on the clock.
+"""A process that measures cells for one checkout, one request per line on stdin.
 
-    python -m bench.ab.worker <cell-id> --tree <checkout> [--op solve] [--focus module:Class.method] [--fingerprint]
+    python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method]
+
+Each request is a JSON line ``{"cell": <id>, "fingerprint": <bool>}``, and each
+answer one JSON line: the seconds, the peak resident memory of the process, the
+model's size and, where asked, what the build or the solve produced, to compare
+across the two checkouts. The first request for a cell builds it once off the
+clock, so every timed build is a warm one.
 
 Runs under whichever ``specsolve`` is first on ``PYTHONPATH``, which is how
 [`bench.ab.compare`][] points it at one checkout or the other, and refuses to
-run where that is not the checkout named by ``--tree``. Prints one JSON line.
+start where that is not the checkout named by ``--tree``.
 
 ``--focus`` puts the clock on one function instead of the whole build: the
 seconds spent inside it, summed over its calls and counting nested calls once.
@@ -21,6 +27,7 @@ import hashlib
 import importlib
 import json
 import resource
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -29,47 +36,48 @@ from typing import Any
 import specsolve as sps
 from bench.ab.grid import Cell, cell
 
-#: Builds on the clock per process, after the warm-up; the fastest is kept.
-REPEATS = 3
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('cell')
     parser.add_argument('--tree', type=Path, required=True)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus')
-    parser.add_argument('--fingerprint', action='store_true')
     args = parser.parse_args()
 
     loaded = Path(sps.__file__).resolve()
     if not loaded.is_relative_to(args.tree.resolve()):
         raise SystemExit(f'specsolve was imported from {loaded}, not from the checkout under test {args.tree}')
 
-    target = cell(args.cell)
     run = _build if args.op == 'build' else _solve
     clock = _Clock(args.focus) if args.focus else None
-    run(target)
-    best, calls, total = float('inf'), None, 0.0
-    for _ in range(REPEATS):
-        if clock:
-            clock.reset()
-        start = time.perf_counter()
-        out = run(target)
-        seconds = time.perf_counter() - start
-        timed = clock.seconds if clock else seconds
-        if timed < best:
-            best, total = timed, seconds
-            calls = clock.calls if clock else None
-    record: dict[str, Any] = {
-        'seconds': best,
-        'calls': calls,
-        'total_seconds': total,
+    warm: set[str] = set()
+    for line in sys.stdin:
+        request = json.loads(line)
+        try:
+            record = _measure(cell(request['cell']), run, clock, warm, fingerprint=request['fingerprint'])
+        except Exception as e:  # one cell that fails must not end the run of every cell after it
+            record = {'error': f'{type(e).__name__}: {e}'.splitlines()[0]}
+        print(json.dumps(record), flush=True)
+
+
+def _measure(target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fingerprint: bool) -> dict[str, Any]:
+    """One timed run of *target*, after a run off the clock the first time this process sees it."""
+    if target.id not in warm:
+        run(target)
+        warm.add(target.id)
+    if clock:
+        clock.reset()
+    start = time.perf_counter()
+    out = run(target)
+    seconds = time.perf_counter() - start
+    return {
+        'seconds': clock.seconds if clock else seconds,
+        'calls': clock.calls if clock else None,
+        'total_seconds': seconds,
         'peak_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         **out.sizes,
-        'fingerprint': out.fingerprint() if args.fingerprint else None,
+        'fingerprint': out.fingerprint() if fingerprint else None,
     }
-    print(json.dumps(record))
 
 
 class _Clock:
