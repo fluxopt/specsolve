@@ -165,7 +165,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
     Raises:
         DataError: A table with no column named after the dimension, labels
-            no frame can be made of, or a label held twice.
+            no frame can be made of, a null label, or a label held twice.
     """
     given = as_frame(source, (dim,))
     table = given if given is not None else _labels_frame(dim, source, dtype)
@@ -178,8 +178,19 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     labels = in_microseconds(
         table.select(dim).pipe(collected), f"index for dimension '{dim}'", (dim,) if dtype == 'datetime' else ()
     )
+    _check_labels_are_present(dim, labels[dim])
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
+
+
+def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
+    """Refuse an index holding a null: a coordinate is a label, and a null names none."""
+    if not (nulls := labels.null_count()):
+        return
+    raise DataError(
+        f"index for dimension '{dim}' holds a null label ({nulls} row(s)). A coordinate is a label, and a "
+        'null names none. Drop it: polars .drop_nulls(), pandas .dropna().'
+    )
 
 
 def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
