@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs(benchmarks): the published benchmarks are re-measured with the five open performance changes merged in ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM))
+- docs(benchmarks): the published benchmarks are re-measured with the five open performance changes merged in ([#1941](https://github.com/fluxopt/specsolve/pull/1941))
 - docs(benchmarks): the published benchmarks are re-measured after 0.8.0 ([#1934](https://github.com/fluxopt/specsolve/pull/1934))
 - perf(engine): a model loads into Gurobi in a sixth to a third of the time, and a quadratic constraint no longer slows with the column count ([#1942](https://github.com/fluxopt/specsolve/pull/1942))
 - perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
