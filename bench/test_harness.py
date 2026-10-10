@@ -22,12 +22,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 import yaml
 
 from bench import conftest as harness
 from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
+from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
+from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
@@ -1679,3 +1682,126 @@ def test_the_in_memory_arm_runs_on_the_in_memory_engine_and_leaves_the_default(
     getattr(specsolve_in_memory, verb)(*(('highs', None) if verb == 'build_and_emit' else (None,)))
     assert seen == ['in-memory'], f'the {verb} ran on affinity {seen}, not on in-memory'
     assert 'POLARS_ENGINE_AFFINITY' not in os.environ, 'the arm left its affinity on the process for the next arm'
+
+
+# ---------------------------------------------------------------------------
+# the A/B: two checkouts, one grid
+# ---------------------------------------------------------------------------
+
+AB_ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.mark.parametrize(
+    ('ratios', 'expected'),
+    [
+        pytest.param([0.9] * 6, 'faster', id='six of six faster'),
+        pytest.param([1.1] * 6, 'slower', id='six of six slower'),
+        pytest.param([0.9] * 5 + [1.1], 'no change', id='five of six is chance at 5%'),
+        pytest.param([0.5] * 5, 'no change', id='five rounds can never pass'),
+        pytest.param([0.9] * 9 + [1.1], 'faster', id='nine of ten'),
+    ],
+)
+def test_an_ab_verdict_is_a_two_sided_sign_test(ratios: list[float], expected: str) -> None:
+    assert verdict(ratios) == expected
+
+
+@pytest.mark.parametrize('name', list(SHAPES))
+def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
+    """A shape the language refuses would read as an error on both sides and prove nothing."""
+    import specsolve as sps
+
+    shape = SHAPES[name]
+    model = sps.build(spec(shape), tables(shape, 24))
+    assert model.diagnostics().columns > 0
+    if not shape.quadratic:
+        assert sps.solve(spec(shape), tables(shape, 24), 'highs').status == 'ok'
+
+
+def test_an_ab_of_a_checkout_against_itself_builds_one_model() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=2)
+    assert row.error is None, row.error
+    assert row.base[0]['fingerprint'] == row.head[0]['fingerprint'], 'one checkout built two different models'
+    assert row.base[1]['fingerprint'] is None, 'only the first round digests the model, off the clock'
+    assert row.verdict == 'no change'
+
+
+def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
+    reached, missed = compare(
+        ['grid-baseline-tiny', 'grid-bounds-none-tiny'],
+        AB_ROOT,
+        AB_ROOT,
+        rounds=1,
+        focus='specsolve.relational.engine.compiler:Compiler._aligned_bound',
+    )
+    assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
+    assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'
+    assert missed.verdict == 'not reached', 'a model with no bound table never calls it'
+
+
+def test_a_focus_on_a_name_the_checkout_lacks_is_an_error() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, focus='specsolve.api:no_such_function')
+    assert row.verdict == 'error'
+    assert 'no such function' in (row.error or '')
+
+
+def test_an_ab_refuses_to_measure_a_checkout_it_did_not_import(tmp_path: Path) -> None:
+    """With the tree's `src` missing, the installed specsolve would answer for it and both sides would agree."""
+    worker = Worker(tmp_path, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='not from the checkout under test'):
+            worker.ask('grid-baseline-tiny', fingerprint=None)
+    finally:
+        worker.close()
+
+
+def test_a_cell_that_fails_leaves_the_worker_to_measure_the_next() -> None:
+    worker = Worker(AB_ROOT, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='KeyError'):
+            worker.ask('grid-no-such-shape-tiny', fingerprint=None)
+        assert worker.ask('grid-baseline-tiny', fingerprint=None)['seconds'] > 0
+    finally:
+        worker.close()
+
+
+def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, memory=True)
+    assert row.error is None, row.error
+    assert row.metric == 'peak_mb', 'a memory run judges the peak, not the clock'
+    assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
+
+
+def test_two_different_models_fail_however_fast() -> None:
+    def run(seconds: float) -> dict[str, Any]:
+        return {'seconds': seconds, 'calls': None, 'fingerprint': None}
+
+    row = Row('c', base=[run(1.0)] * 6, head=[run(0.5)] * 6, model='different')
+    assert row.verdict == 'differs'
+    row.model = 'last bits'
+    assert row.verdict == 'faster', 'a sum in another order is the same model, and keeps its verdict'
+
+
+@pytest.mark.parametrize(
+    ('change', 'same'),
+    [
+        pytest.param(lambda n: {**n, 'cost': np.nextafter(n['cost'], np.inf)}, True, id='every cost one ulp up'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'] * (1 + 1e-9)}, False, id='a cost moved by a part in a billion'),
+        pytest.param(lambda n: {**n, 'rows.row': n['rows.row'] + 1}, False, id='an integer moved by one'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'][:-1]}, False, id='one cost fewer'),
+        pytest.param(lambda n: {k: v for k, v in n.items() if k != 'cost'}, False, id='a field missing'),
+    ],
+)
+def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
+    tmp_path: Path, change: Any, same: bool
+) -> None:
+    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rows.row': np.arange(3)}
+    np.savez(tmp_path / 'base.npz', **numbers)
+    np.savez(tmp_path / 'head.npz', **change(numbers))
+    assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same
+
+
+def test_the_checkouts_are_removed_after_the_run() -> None:
+    with checkouts('HEAD', 'HEAD') as trees:
+        paths = [path for _, path in trees]
+        assert all((path / 'src' / 'specsolve').is_dir() for path in paths)
+    assert not any(path.exists() for path in paths), 'a worktree left behind holds a gigabyte and a branch lock'
