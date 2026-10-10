@@ -283,3 +283,34 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     assert lp.stat().st_size > 4_000_000, 'sections too small for the buffer boundary to be crossed'
     assert sum(1 for line in lines[objective + 1 : at[2]] if line.startswith(('+', '-'))) == variables
     assert sum(1 for line in lines[bounds + 1 : at[4]] if ' <= x' in line) == variables
+
+
+def test_quadratic_rows_keep_their_order_and_their_parts_in_place(tmp_path: Path) -> None:
+    """The quadratic rows are one sorted stream, so its key decides every line's place.
+
+    Two rows with a product and two linear terms each, then a row with no
+    linear term and two squares: a key that sorted on the wrong part would put
+    a term inside a bracket, a pair outside one, or one row's lines in another.
+    """
+    schema = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'floor': {'dims': []}},
+        'variables': {
+            'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+            'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {
+            'coupled': {'dims': ['g'], 'expression': 'p * q + q + p >= floor'},
+            'squares': {'dims': [], 'expression': 'sum(p * p, over=g) <= 40'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
+    }
+    lp = tmp_path / 'model.lp'
+    sps.write(schema, {'g': ['a', 'b'], 'floor': pl.DataFrame({'value': [4.0]})}, lp)
+
+    constraints = lp.read_text().split('s.t.\n\n')[1].split('\n\nbounds')[0]
+    assert constraints.splitlines() == [
+        'c0:', '+1.0 x0', '+1.0 x2', '+ [', '+1.0 x0 * x2', '] >= 4.0',
+        'c1:', '+1.0 x1', '+1.0 x3', '+ [', '+1.0 x1 * x3', '] >= 4.0',
+        'c2:', '+ [', '+1.0 x0 ^ 2', '+1.0 x1 ^ 2', '] <= 40.0',
+    ], 'each row is header, linear terms by column, bracketed pairs, then its footer, in row order'  # fmt: skip
