@@ -281,6 +281,12 @@ def test_a_nonconvex_objective_is_refused_at_the_solve_and_still_writes(tmp_path
     assert '-2.0 x0 ^ 2' in path.read_text(), 'the writer has no opinion about curvature'
 
 
+def test_a_one_shot_solve_refuses_a_nonconvex_objective_in_the_same_words():
+    """``sps.solve`` lets go of the build before the run, and the refusal reads the quadratic part off it."""
+    with pytest.raises(SpecsolveError, match='not positive semidefinite'):
+        sps.solve(spec('-sum(p * p, over=g)'), SOURCES)
+
+
 def test_a_moved_quadratic_coefficient_is_pushed_rather_than_reloaded():
     """A second `passHessian` replaces `Q` and leaves the LP standing, so the
     *pattern* is structure and the values are not. Both halves: the answer

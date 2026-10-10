@@ -479,6 +479,11 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   leading dims leaves the survivors a *rectangle*, so only the masked suffix is
   materialised. That guarded shortcut must reach the integers the general path
   would have. Nothing else about a build can move an index.
+- **A block over the whole product is addressed, not joined.** Its rows are
+  the row-major rule itself, so a term of a constraint with no mask computes
+  its row from its own coordinate. An `Enum` dimension's ordinal is its
+  physical code, and a dimension of consecutive integers is its own ordinal
+  less its first label.
 - **The same order comes back.** `primal` / `dual` / `save` read the label
   table, which was numbered in that order, and the LP sink writes it.
 

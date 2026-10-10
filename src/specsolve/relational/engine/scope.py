@@ -112,11 +112,13 @@ class Scope:
         """A *dim* value column as that dimension's ordinal.
 
         Attaching encodes an ``Enum`` in ordinal order, so its physical code is the
-        ordinal.
+        ordinal, and a run of consecutive integers is its own ordinal less its first.
         """
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
+        if (first := self.data.consecutive.get(dim)) is not None:
+            return column.cast(pl.Int64) - first
         labels = self.data.dimensions[dim].select('val').pipe(collected)['val']
         return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
 

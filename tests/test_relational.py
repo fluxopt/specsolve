@@ -38,6 +38,7 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
+from specsolve.relational.engine.assembly import _sorted
 from specsolve.relational.engine.compiler import Compiler
 from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.scope import Scope
@@ -588,6 +589,38 @@ class TestTheLabelSpace:
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
         assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
+
+    @pytest.mark.parametrize(
+        'labels',
+        [
+            pytest.param([2, 0, 1], id='rotated'),
+            pytest.param([3, 2, 1], id='descending'),
+        ],
+    )
+    def test_an_integer_dimension_out_of_ascending_order_keeps_each_row_on_its_label(self, labels):
+        """Integer labels that are a run only once sorted are not a run.
+
+        A constraint over the whole of a dimension computes each term's row from
+        the label when the labels are consecutive ascending integers. A set of
+        labels that only sorts into a run must still be placed by its declared
+        order, or each ``x`` lands on the row of another label's ``cap``.
+        """
+        spec = {
+            'dimensions': {'t': {'dtype': 'int'}},
+            'parameters': {'cap': {'dims': ['t']}},
+            'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+            'constraints': {'k': {'dims': ['t'], 'expression': 'x <= cap'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+        }
+        cap = {label: 10.0 * label + 1.0 for label in labels}
+        data = {'t': labels, 'cap': pl.DataFrame({'t': list(cap), 'value': list(cap.values())})}
+
+        with sps.solve(spec, data) as result:
+            x = by_coord(result, 'x', 't')
+
+        assert list(x) == labels, 'read-back follows declaration order'
+        for label, bound in cap.items():
+            assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 
     def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
         """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
@@ -1470,6 +1503,37 @@ class TestThePositionalHandoff:
             got = result.primal('p').sort('t', 'n')['value'].to_list()
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
+    @pytest.mark.parametrize(
+        ('bound', 'scatters'),
+        [
+            pytest.param(SHUFFLED_BOUND.sort('t', 'n'), False, id='in-build-order'),
+            pytest.param(SHUFFLED_BOUND, True, id='shuffled'),
+        ],
+    )
+    def test_a_bound_already_in_build_order_is_attached_without_a_scatter(self, bound, scatters, monkeypatch):
+        """A dense bound whose rows already ascend in position is attached as it stands.
+
+        Only a table out of build order pays for the scatter into position. Both
+        give each coordinate its own bound.
+        """
+        from specsolve.relational.engine import compiler as compiler_module
+
+        real = compiler_module._scattered
+        calls = []
+
+        def spy(at, values, size):
+            calls.append(size)
+            return real(at, values, size)
+
+        monkeypatch.setattr(compiler_module, '_scattered', spy)
+        data = DENSE_BOUND_INDEX | {'avail': bound, 'cost': FLAT_COST}
+
+        with sps.solve(DENSE_BOUND_SPEC, data) as result:
+            got = result.primal('p').sort('t', 'n')['value'].to_list()
+
+        assert bool(calls) is scatters, f'a scatter ran {len(calls)} times; expected one only for a shuffled table'
+        assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
+
     def test_a_mask_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
         """Both ways position stops meaning the coordinate, refused by the gate.
 
@@ -1684,3 +1748,21 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
     with pytest.raises(DataError, match='is missing columns'):
         sps.build(Spec(**NETWORK), {'cap': wide})
+
+
+@pytest.mark.parametrize(
+    'largest',
+    [
+        pytest.param(2**20, id='the keys fit one integer'),
+        pytest.param(2**31 - 1, id='three keys overflow one integer'),
+    ],
+)
+def test_a_share_sorts_into_key_order_whether_or_not_its_keys_fit_one_integer(largest: int) -> None:
+    """Three solver indices near 2^31 have no common base under 2^63, so that share sorts on its columns."""
+    rng = np.random.default_rng(0)
+    share = pl.DataFrame(
+        {key: rng.integers(0, largest, 1_000) for key in ('row', 'col_l', 'col_r')} | {'coeff': rng.random(1_000)}
+    )
+    assert _sorted(share, ('row', 'col_l', 'col_r')).equals(share.sort('row', 'col_l', 'col_r')), (
+        'the share comes back in (row, col_l, col_r) order'
+    )

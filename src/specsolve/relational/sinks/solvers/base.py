@@ -101,8 +101,9 @@ class Solver(ABC):
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The matrix's coefficients as loaded, in entry order, for [`keeps`][].
-        self._coefficients = handoff.matrix['coeff'].to_numpy()
+        #: The matrix's coefficients as loaded, in entry order, for [`keeps`][];
+        #: ``None`` once [`release`][] drops them.
+        self._coefficients: np.ndarray | None = handoff.matrix['coeff'].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
@@ -131,10 +132,22 @@ class Solver(ABC):
     def structure(self) -> bytes:
         """The loaded model's digest, read off its frames once, after which the frames are let go."""
         if self._structure is None:
-            assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
+            assert self._handoff is not None, (
+                'a solver holds the handoff it loaded until its digest replaces it or release() drops it'
+            )
             self._structure = self._handoff.structure
             self._handoff = None
         return self._structure
+
+    def release(self) -> None:
+        """Let go of what this solver was loaded from, for a model that will not be loaded again.
+
+        The frames and the coefficients [`keeps`][] compares both go, and
+        nothing is hashed, so neither [`structure`][] nor [`keeps`][] can be
+        asked afterwards.
+        """
+        self._handoff = None
+        self._coefficients = None
 
     def keeps(self, handoff: Handoff, solver_options: Mapping[str, Any] | None) -> bool:
         """Whether this held solver may keep its load and take *handoff* by value.
@@ -145,6 +158,7 @@ class Solver(ABC):
         """
         import numpy as np
 
+        assert self._coefficients is not None, 'a released solver is never asked whether it keeps its load'
         return (
             self._options == dict(solver_options or {})
             and self.structure() == handoff.structure
