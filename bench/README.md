@@ -748,10 +748,14 @@ peak resident memory of a fresh process per measurement, at the cost of a second
 of imports each time.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
-may assume: the dimension count, terms per row, a term over fewer dimensions, a
-`where` on the row or on a variable, parameter rows sorted, shuffled or
-reversed, a dimension's own labels shuffled, `int` or `str` labels, four kinds
-of upper bound, a wrapped `shift`, and a quadratic row. Each cell moves one axis
+may assume: the dimension count, terms per row, a term over fewer dimensions,
+parameter rows sorted, shuffled or reversed, a dimension's own labels shuffled,
+`int` or `str` labels, four kinds of upper bound, a wrapped `shift`, a
+quadratic row, a binary or integer variable, a sum through a relation into a
+coarser dimension, a row that sums one dimension away, and seven masks: on the
+row (one that keeps every row, half, 1%, or a relation's label), on a variable
+(half, or where a sparse parameter has a row), and on both. `milp` combines a
+binary variable, a relation's mask and a grouped sum. Each cell moves one axis
 from the baseline, and `worst` moves all of them. The sizes `below` and `above`
 put the model either side of 250,000 columns. The ladder's own cases come after
 the grid, at each size of the run that is also one of their rungs: `s` or `l`. Last come the 43 referenced
