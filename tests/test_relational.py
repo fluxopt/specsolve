@@ -761,6 +761,27 @@ class TestTheLabelSpace:
         assert "'zz'" in str(exc.value), 'the refusal must name the offending label'
         assert 'typo' in str(exc.value)
 
+    @pytest.mark.parametrize(
+        ('name', 'labels'),
+        [
+            pytest.param('cost', [None, 'b'], id='a cost leading with a null'),
+            pytest.param('cap', [None, 'b'], id='a bound leading with a null'),
+            pytest.param('cap', ['b', None], id='a bound ending with a null'),
+        ],
+    )
+    def test_a_null_label_is_refused(self, name, labels):
+        """A null label is refused like any label the dimension does not have.
+
+        It used to pass the known-label check, which skipped nulls: a null cost
+        label joined nothing and the model solved to 10.0 with no error, and a
+        null bound label failed deep in the build with an ``IndexError``.
+        """
+        table = pl.DataFrame({'f': labels, 'value': [1.0, 2.0]}, schema={'f': pl.String, 'value': pl.Float64})
+        data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
+        with pytest.raises(DataError) as exc:
+            sps.solve(LABEL_SPEC, {**data, name: table})
+        assert 'None' in str(exc.value), 'the refusal must name the null as the offending label'
+
     def test_a_missing_row_is_still_only_sparse(self):
         """The distinction the refusal above rests on. A row that is *absent* is
         ordinary — it reads as a zero coefficient (the data-attachment rules) — and
