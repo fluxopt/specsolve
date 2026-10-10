@@ -724,6 +724,51 @@ So: `rss` for the comparison we publish, the memray peak for the regressions we
 chase. Both come out of the same run — the choice is which column a table reads,
 and `--benchmark-memory-compare-fail` is what turns the second into a gate.
 
+## Proving a speed-up: `ab/`
+
+*Is this change faster, and is it faster everywhere?* A perf PR answers with an
+A/B of its base and its head over one grid of models:
+
+```bash
+pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
+pixi run -e bench ab perf/ordering perf/bounds \
+    --focus specsolve.relational.engine.compiler:Compiler._aligned_bound  # one function
+pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
+pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
+```
+
+Each ref is checked out as a detached worktree, and each measurement is a fresh
+process with that checkout's `src/` first on `PYTHONPATH`. Nothing is
+installed, and the worker refuses to run if it imported `specsolve` from
+anywhere else. The base is the PR's own base branch, so a stacked PR proves its
+own change.
+
+**The grid** (`ab/grid.py`) is one model with an axis for each thing a change
+may assume: the dimension count, terms per row, a term over fewer dimensions, a
+`where` on the row or on a variable, parameter rows sorted, shuffled or
+reversed, a dimension's own labels shuffled, `int` or `str` labels, four kinds
+of upper bound, a wrapped `shift`, and a quadratic row. Each cell moves one axis
+from the baseline, and `worst` moves all of them. The sizes `below` and `above`
+put the model either side of 250,000 columns. The ladder's own cases at `s`
+come after the grid.
+
+**A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
+Six rounds is the least that can pass, and `compare` refuses fewer. Each side
+is the fastest of three builds after a warm-up, and the sides alternate ABBA.
+The first round also writes each side's LP file, or a solve's objective. Two
+different fingerprints fail the cell, so a speed-up that changes the model is
+caught. With `--focus`, the clock counts only the time inside that function,
+and a cell that never calls it reads *not reached*. The run exits 1 on any
+cell that is *slower*, *differs* or fails.
+
+At six rounds a cell reads *faster* or *slower* by chance 3.1% of the time, and
+the report prints how many such cells to expect. Re-run a lone verdict with
+`-k` and more `--rounds` before you believe it. The run takes the machine lock
+that `pytest bench` takes, and refuses a busy machine.
+
+Paste the table into the PR's `<details>` with its header: the header names
+both commits, what the clock counts, and the machine.
+
 ## The same suite, a third instrument: CodSpeed
 
 `bench/` is a plain `pytest-benchmark` suite, so the fixture its tests ask for
@@ -847,5 +892,6 @@ every consumer whichever of the two the case has.
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
 | `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
+| `ab/` | the A/B of two refs over a grid of models: does this change make the code faster, and does it build the same model |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
 | `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one attachment, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |
