@@ -485,7 +485,7 @@ def _collapsed(
         probes = stacked.select(_in_key_order(keys).all().alias('#ordered'), tied.any().alias('#repeated'))
         in_order, repeated = probes.row(0)
         if not in_order:
-            stacked = stacked.sort(*keys)
+            stacked = _sorted(stacked, keys)
             repeated = stacked.select(tied.any()).item()
     else:
         assert space is not None and len(keys) == 1, 'an unordered probe counts one dense integer key'
@@ -498,6 +498,21 @@ def _collapsed(
     summed = aggregated.pipe(collected)
     share = _pruned(summed)
     return share, dropped or share.height != summed.height
+
+
+def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
+    """*stacked* sorted by *keys*, on one integer that orders as they do where one can hold them all.
+
+    The keys are labels, never negative, so each is a digit in a base one past
+    its largest value.
+    """
+    largest = stacked.select(pl.col(k).max() for k in keys).row(0)
+    if math.prod(value + 1 for value in largest) >= 2**63:
+        return stacked.sort(*keys)
+    position: pl.Expr = pl.lit(0, dtype=pl.Int64)
+    for key, value in zip(keys, largest, strict=True):
+        position = position * (value + 1) + pl.col(key).cast(pl.Int64)
+    return stacked.sort(position)
 
 
 def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:

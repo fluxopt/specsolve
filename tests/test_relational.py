@@ -38,6 +38,7 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
+from specsolve.relational.engine.assembly import _sorted
 from specsolve.relational.engine.compiler import Compiler
 from specsolve.relational.engine.engine import Engine
 from specsolve.relational.engine.scope import Scope
@@ -1716,3 +1717,21 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
     with pytest.raises(DataError, match='is missing columns'):
         sps.build(Spec(**NETWORK), {'cap': wide})
+
+
+@pytest.mark.parametrize(
+    'largest',
+    [
+        pytest.param(2**20, id='the keys fit one integer'),
+        pytest.param(2**31 - 1, id='three keys overflow one integer'),
+    ],
+)
+def test_a_share_sorts_into_key_order_whether_or_not_its_keys_fit_one_integer(largest: int) -> None:
+    """Three solver indices near 2^31 have no common base under 2^63, so that share sorts on its columns."""
+    rng = np.random.default_rng(0)
+    share = pl.DataFrame(
+        {key: rng.integers(0, largest, 1_000) for key in ('row', 'col_l', 'col_r')} | {'coeff': rng.random(1_000)}
+    )
+    assert _sorted(share, ('row', 'col_l', 'col_r')).equals(share.sort('row', 'col_l', 'col_r')), (
+        'the share comes back in (row, col_l, col_r) order'
+    )
