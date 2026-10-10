@@ -100,28 +100,41 @@ SHAPES: dict[str, Shape] = {
 
 @dataclass(frozen=True)
 class Cell:
-    """One model at one size, named by its ``id``: ``grid-<shape>-<size>`` or ``case-<case>-<size>``."""
+    """One model at one size, named by its ``id``: ``grid-<shape>-<size>``, ``case-<case>-<size>`` or ``port-<name>``."""
 
     id: str
     #: The spec, as ``sps.build`` takes it.
-    spec: dict | Path
-    #: Parameter and dimension names to parquet paths.
-    sources: dict[str, str]
+    spec: object
+    #: Parameter and dimension names to parquet paths, or to tables for a port.
+    sources: dict[str, object]
     #: Whether HiGHS can solve it; it takes no quadratic constraint.
     solvable: bool = True
 
 
 def ids(sizes: list[str]) -> list[str]:
-    """Every cell's id: each grid shape at each of *sizes*, then each ladder case at those of *sizes* it has."""
+    """Every cell's id: each grid shape at each of *sizes*, each ladder case at those of *sizes* it has, then every port.
+
+    A port is a referenced model of ``examples/ports`` at its published size,
+    and has no size of its own.
+    """
+    from tools.constructs import REFERENCES
+
     rungs = {name: {shape.label for shape in CASES[name].ladder} for name in LADDER}
-    return [f'grid-{name}-{size}' for name in SHAPES for size in sizes] + [
-        f'case-{name}-{size}' for name in LADDER for size in sizes if size in rungs[name]
-    ]
+    return (
+        [f'grid-{name}-{size}' for name in SHAPES for size in sizes]
+        + [f'case-{name}-{size}' for name in LADDER for size in sizes if size in rungs[name]]
+        + [f'port-{name}' for name in sorted(REFERENCES)]
+    )
 
 
 def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
     """The cell *cell_id* names, its tables written to parquet under *cache* on first use."""
     kind, rest = cell_id.split('-', 1)
+    if kind == 'port':
+        from tests.conftest import port_sources, port_spec
+        from tests.fixtures import expanded
+
+        return Cell(cell_id, expanded(port_spec(rest)), port_sources(rest))
     name, size = rest.rsplit('-', 1)
     if kind == 'case':
         case = CASES[name]
