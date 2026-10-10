@@ -140,7 +140,8 @@ class Compiler:
 
         Position lines up only for a dense parameter over the variable's
         unmasked dims, in order. Height stands in for density because
-        duplicates are refused at the door.
+        duplicates are refused at the door, so a parameter whose rows already
+        ascend in position is attached as it stands.
         """
         declaration = self.scope.program.parameters[param]
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
@@ -153,7 +154,10 @@ class Compiler:
 
         position = self.scope.row_major(v.dims, self.scope.ordinal_of)
         pairs = table.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
-        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
+        at, values = pairs.get_column('__at__'), pairs.get_column(VALUE)
+        if not at.is_sorted():
+            values = pl.Series(_scattered(at, values, expected))
+        return frame.with_columns(values.alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → pieces

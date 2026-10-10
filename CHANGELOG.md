@@ -7,6 +7,9 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a model whose bounds are given for every coordinate in build order builds faster ([#1933](https://github.com/fluxopt/specsolve/pull/1933))
+- perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
+- perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
 - docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
 - fix(data): a null label in an index or a parameter is refused at load rather than building a wrong model or crashing ([#1935](https://github.com/fluxopt/specsolve/pull/1935))
 - perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
