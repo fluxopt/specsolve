@@ -1503,6 +1503,37 @@ class TestThePositionalHandoff:
             got = result.primal('p').sort('t', 'n')['value'].to_list()
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
+    @pytest.mark.parametrize(
+        ('bound', 'scatters'),
+        [
+            pytest.param(SHUFFLED_BOUND.sort('t', 'n'), False, id='in-build-order'),
+            pytest.param(SHUFFLED_BOUND, True, id='shuffled'),
+        ],
+    )
+    def test_a_bound_already_in_build_order_is_attached_without_a_scatter(self, bound, scatters, monkeypatch):
+        """A dense bound whose rows already ascend in position is attached as it stands.
+
+        Only a table out of build order pays for the scatter into position. Both
+        give each coordinate its own bound.
+        """
+        from specsolve.relational.engine import compiler as compiler_module
+
+        real = compiler_module._scattered
+        calls = []
+
+        def spy(at, values, size):
+            calls.append(size)
+            return real(at, values, size)
+
+        monkeypatch.setattr(compiler_module, '_scattered', spy)
+        data = DENSE_BOUND_INDEX | {'avail': bound, 'cost': FLAT_COST}
+
+        with sps.solve(DENSE_BOUND_SPEC, data) as result:
+            got = result.primal('p').sort('t', 'n')['value'].to_list()
+
+        assert bool(calls) is scatters, f'a scatter ran {len(calls)} times; expected one only for a shuffled table'
+        assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
+
     def test_a_mask_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
         """Both ways position stops meaning the coordinate, refused by the gate.
 
