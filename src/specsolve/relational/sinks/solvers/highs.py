@@ -215,6 +215,11 @@ class Highs(Solver):
         del batch_rows
         self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options)
 
+    def release(self) -> None:
+        """Also let go of the vectors [`push`][] diffs against, since a released solver takes no update."""
+        super().release()
+        del self._column_vectors, self._row_vectors
+
     @property
     def handle(self) -> Any:
         return self._handle

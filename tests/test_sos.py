@@ -497,3 +497,22 @@ def _without_the_set() -> dict[str, Any]:
         'cost': {'dims': ['snapshot', 'generator'], 'expression': 'op_cost == sum(lam * bp_y, over=bp)'},
     }
     return raw
+
+
+def test_a_one_shot_solve_lets_go_of_the_sets_before_the_solver_runs(monkeypatch):
+    """The solver holds the sets once loaded, so ``sps.solve`` drops the build's copy before the run."""
+    pytest.importorskip('gurobipy', reason='the native SOS path needs the [gurobi] extra')
+    from specsolve.relational.sinks.solvers.base import Solver
+
+    members: list[int] = []
+    run = Solver.run
+
+    def recorded(self: Solver, handoff: Any, **options: Any) -> Any:
+        members.append(handoff.sos.height)
+        return run(self, handoff, **options)
+
+    monkeypatch.setattr(Solver, 'run', recorded)
+    assert sps.solve(spec(1), DATA, 'gurobi').objective == pytest.approx(best(1)), (
+        'the answer is the same optimum with the build let go'
+    )
+    assert members == [0], 'the run is handed no set members: the solver already holds them'

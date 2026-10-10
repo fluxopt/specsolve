@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import warnings
 from contextlib import contextmanager
+from dataclasses import fields, replace
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -47,6 +48,13 @@ if TYPE_CHECKING:
     from specsolve.relational.result import InfeasibleSubsystem
     from specsolve.relational.sinks.solvers.base import SolveAnswer
     from specsolve.relational.status import SolveStatus
+
+#: The handoff frames each output reads after the run. A last solve keeps only these.
+_READ_BY: dict[str, tuple[str, ...]] = {
+    'reduced_cost': ('obj', 'matrix', 'qmatrix'),
+    'basis': ('cols', 'rows'),
+    'slack': ('rows',),
+}
 
 
 def _statuses(codes: np.ndarray) -> pl.Series:
@@ -218,6 +226,7 @@ class Engine:
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None = None,
         outputs: frozenset[Output] = frozenset(),
         start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
+        last: bool = False,
     ) -> Result:
         """Hand the built model to a solver and solve it.
 
@@ -245,6 +254,10 @@ class Engine:
                 ([`matched_basis`][specsolve.relational.engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
                 ([`matched_values`][specsolve.relational.engine.readback.matched_values]).
+            last: Whether the caller closes this engine after this solve. The
+                build then lets go of what the answer does not read before the
+                solver runs ([`_let_go`][]), so the solver's run does not share
+                the process with a second copy of the model.
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -260,6 +273,8 @@ class Engine:
             solver.warm(matched)
         elif matched is not None:
             solver.start(matched)
+        if last:
+            self._let_go(solver, outputs)
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:
@@ -268,6 +283,21 @@ class Engine:
             answer = solver.run(handoff, basis='basis' in outputs)
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
+
+    def _let_go(self, solver: sinks.Solver, outputs: frozenset[Output]) -> None:
+        """Drop what the answer of a last solve does not read, from *solver* and from the build.
+
+        The solver holds its own copy of the model by now, so the build keeps,
+        of the handoff's frames, only those an asked output reads
+        ([`_READ_BY`][]). ``quad`` always stays: the HiGHS run reads it to
+        refuse a nonconvex objective.
+        """
+        solver.release()
+        handoff = self._model.handoff
+        kept = {'quad', *(frame for kind in outputs for frame in _READ_BY.get(kind, ()))}
+        frames = [f.name for f in fields(handoff) if isinstance(getattr(handoff, f.name), pl.DataFrame)]
+        dropped = {frame: getattr(handoff, frame).clear() for frame in frames if frame not in kept}
+        self._built = replace(self._model, handoff=replace(handoff, **dropped))
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
