@@ -79,7 +79,8 @@ Only the rows are mechanical.
 discouraged — `refuse_to_overwrite_the_provenance` in `conftest.py` compares the
 rungs asked for against the ones `pixi run ladder` defines and stops the session
 before anything is measured. Narrower sinks or libraries are fine, and the
-scheduled run uses both; leaving out *rungs* is what makes a run a smoke test.
+published run takes one sink at a time; leaving out *rungs* is what makes a run
+a smoke test.
 
 Worth knowing while poking at the task: **`pixi run ladder --help` does not
 print help.** Pixi forwards unknown arguments to the task, so that starts a
