@@ -73,8 +73,6 @@ class Gurobi(Solver):
     #: The loaded model and its environment. ``close`` drops them.
     _m: Any
     _env: Any
-    #: The columns as one ``MVar``, or ``None`` until [`_mvar`][] is asked.
-    _x: Any
     #: [`_released`][] over the model and its environment, bound to this
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
@@ -111,19 +109,8 @@ class Gurobi(Solver):
     def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
         """Load in one call — *batch_rows* is the family's parameter and this member has no batches."""
         del batch_rows
-        self._m, self._x, self._env = _built(handoff, self._options)
+        self._m, self._env = _built(handoff, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
-
-    def _mvar(self) -> Any:
-        """The columns as one ``MVar``, read off the model on first need.
-
-        Only a quadratic objective, a quadratic row and an SOS take one.
-        ``getVars`` makes one Python object per column, which costs more than
-        the whole load of a large linear model, so nothing else asks.
-        """
-        if self._x is None:
-            self._x = _gurobipy().MVar.fromlist(self._m.getVars())
-        return self._x
 
     def dual_ray(self) -> pl.Series | None:
         """``FarkasDual``, negated to the contract's sign, or ``None``.
@@ -155,7 +142,7 @@ class Gurobi(Solver):
         self._m.setAttr('RHS', handoff.dense_rows(gurobipy.GRB.INFINITY).rhs[: self._m.NumConstrs])
         self._m.ObjCon = handoff.objective_constant
         if handoff.quad.height:
-            _set_quadratic(self._m, self._mvar(), handoff, cols.cost)
+            _set_quadratic(self._m, handoff, cols.cost)
         self._m.update()
 
     def _basis(self) -> tuple[Any, Any] | None:
@@ -243,7 +230,7 @@ class Gurobi(Solver):
     def close(self) -> None:
         """Release the model and the licence its environment holds."""
         self._release()
-        self._m = self._x = self._env = None
+        self._m = self._env = None
 
 
 def _released(m: Any, environment: Any) -> None:
@@ -252,8 +239,8 @@ def _released(m: Any, environment: Any) -> None:
     environment.dispose()
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any, Any]:
-    """The model, its columns as an ``MVar`` if the load needed one, and the environment to release.
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any]:
+    """The model and the environment to release.
 
     Options go on the environment, since a licence parameter such as
     ``WLSAccessID`` can only be set before an environment starts. ``OutputFlag``
@@ -264,7 +251,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
     m = None
     try:
         m = _loaded(handoff, environment, gurobipy)
-        return m, _completed(m, handoff, gurobipy), environment
+        _completed(m, handoff, gurobipy)
+        return m, environment
     except BaseException:
         if m is not None:
             m.dispose()
@@ -277,7 +265,9 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
 
     ``loadModel`` reads the matrix by column, so the linear rows' CSR is
     transposed here. Its ``qobj_coo`` takes each pair's coefficient whole, as
-    [`quad`][specsolve.relational.sinks.handoff.Handoff.quad] holds it.
+    [`quad`][specsolve.relational.sinks.handoff.Handoff.quad] holds it. The
+    senses go in as bytes, which ``loadModel`` would otherwise convert one
+    character at a time.
     """
     import numpy as np
     import scipy.sparse
@@ -302,7 +292,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         ub=cols.ub,
         vtype=np.where(cols.integral, 'I', 'C') if cols.integral.any() else None,
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
-        sense=_spelled(gurobipy)[rows.sense[: linear.height]],
+        sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
         rhs=rows.rhs[: linear.height],
         qobj_coo=(
             (quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())) if quad.height else None
@@ -312,38 +302,48 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
     return m
 
 
-def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> Any:
-    """What ``loadModel`` cannot take: the SOS and the quadratic rows. Returns the ``MVar`` they needed, or ``None``."""
+def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> None:
+    """What ``loadModel`` cannot take: the SOS and the quadratic rows, over the model's own ``Var`` list."""
     if not handoff.sos.height and not handoff.qmatrix.height:
-        return None
-    x = gurobipy.MVar.fromlist(m.getVars())
-    _add_sets(m, x, handoff, gurobipy)
-    _add_quadratic_rows(m, x, handoff, handoff.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
+        return
+    columns = m.getVars()
+    _add_sets(m, columns, handoff, gurobipy)
+    _add_quadratic_rows(m, columns, handoff, handoff.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
     m.update()
-    return x
 
 
-def _add_quadratic_rows(m: Any, x: Any, handoff: Handoff, rows: RowVectors, spelling: Any) -> None:
-    """Every quadratic constraint, one ``addMQConstr`` call each.
+def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowVectors, spelling: Any) -> None:
+    """Every quadratic constraint, one ``addMQConstr`` call each, over only the columns it holds.
 
     A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
-    and its linear entries from the matrix at the same row label.
+    and its linear entries from the matrix at the same row label. A matrix or
+    vector as wide as the model would cost each row time in the column count.
     """
     import numpy as np
     import scipy.sparse
 
     for row, pairs in handoff.quadratic_blocks():
-        quadratic = scipy.sparse.csr_matrix(
-            (pairs['coeff'].to_numpy(), (pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy())),
-            shape=(handoff.column_count, handoff.column_count),
+        held, at = np.unique(
+            np.concatenate([pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy()]), return_inverse=True
         )
+        quadratic = scipy.sparse.csr_matrix(
+            (pairs['coeff'].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
+        )
+        on = [columns[col] for col in held]
         entries = handoff.matrix_block(row, row + 1)
-        linear = np.zeros(handoff.column_count, dtype=np.float64)
-        linear[entries['col'].to_numpy()] = entries['coeff'].to_numpy()
-        m.addMQConstr(quadratic, linear, spelling[rows.sense[row]], float(rows.rhs[row]), x, x, x)
+        linear = [columns[col] for col in entries['col']]
+        m.addMQConstr(
+            quadratic,
+            entries['coeff'].to_numpy() if linear else None,
+            spelling[rows.sense[row]],
+            float(rows.rhs[row]),
+            on,
+            on,
+            linear or None,
+        )
 
 
-def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
+def _set_quadratic(m: Any, handoff: Handoff, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
     ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` unhalved, so
@@ -359,13 +359,12 @@ def _set_quadratic(m: Any, x: Any, handoff: Handoff, cost: Any) -> None:
         ),
         shape=(handoff.column_count, handoff.column_count),
     )
-    m.setMObjective(pairs, cost, handoff.objective_constant, x, x, x)
+    m.setMObjective(pairs, cost, handoff.objective_constant)
 
 
-def _add_sets(m: Any, x: Any, handoff: Handoff, gurobipy: Any) -> None:
+def _add_sets(m: Any, columns: list[Any], handoff: Handoff, gurobipy: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each."""
     order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
-    columns = x.tolist()
     for set_type, cols, weights in handoff.sets():
         m.addSOS(order[set_type], [columns[at] for at in cols], weights.to_list())
 
