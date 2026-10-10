@@ -236,6 +236,66 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
     )
 
 
+def test_a_load_that_fails_after_the_model_exists_frees_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A model loaded before the failure is freed too, not left to the collector with the licence it holds."""
+    from specsolve.relational.sinks.solvers import gurobi as sink
+
+    loaded: list[Any] = []
+    real_loaded = sink._loaded
+
+    def keep(*args: Any) -> Any:
+        loaded.append(real_loaded(*args))
+        return loaded[-1]
+
+    monkeypatch.setattr(sink, '_loaded', keep)
+    monkeypatch.setattr(sink, '_completed', lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
+    with sps.build(*CASES['MIP']) as model, pytest.raises(RuntimeError):
+        Gurobi(model._engine._model.handoff)
+    with pytest.raises(gurobipy.GurobiError, match='freed'):
+        loaded[0].getAttr('NumVars')
+
+
+def test_a_model_with_no_set_and_no_quadratic_row_never_reads_the_variable_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only an SOS and a quadratic row need Gurobi's ``Var`` objects.
+
+    ``getVars`` makes one Python object per column, which on a large linear
+    model costs more than the whole load, so such a model never reaches the
+    step that reads it.
+    """
+    from specsolve.relational.sinks.solvers import gurobi as sink
+
+    def refused(*args: Any) -> None:
+        raise AssertionError('a linear model reached the step that reads the variable list')
+
+    monkeypatch.setattr(sink, '_add_sets', refused)
+    monkeypatch.setattr(sink, '_add_quadratic_rows', refused)
+    with sps.build(*CASES['MIP']) as model, Gurobi(model._engine._model.handoff) as loaded:
+        assert loaded.handle.NumVars == model._engine._model.handoff.column_count
+
+
+def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
+    """Gurobi refuses ``FarkasDual`` on a model with a quadratic row, asked or not, and the sink says ``None``."""
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'variables': {
+            'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}},
+            'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}},
+        },
+        'constraints': {
+            'cap': {'dims': [], 'expression': 'sum(p, over=g) >= 5'},
+            'coupled': {'dims': ['g'], 'expression': 'p * q <= 1'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
+    }
+    with sps.build(spec, {'g': ['a', 'b']}) as model:
+        tables = model._engine._model.handoff
+        with Gurobi(tables, solver_options={'InfUnbdInfo': 1}) as sink:
+            assert sink.run(tables).status.termination_condition == 'infeasible'
+            assert sink.dual_ray() is None
+
+
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
     which makes the build seam a complete hand-off rather than a model plus a

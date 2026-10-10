@@ -115,14 +115,12 @@ class Gurobi(Solver):
     def dual_ray(self) -> pl.Series | None:
         """``FarkasDual``, negated to the contract's sign, or ``None``.
 
-        Gurobi computes it only under ``solver_options={'InfUnbdInfo': 1}``.
-        A model with a quadratic row has none.
+        Gurobi computes it only under ``solver_options={'InfUnbdInfo': 1}``,
+        and never for a model with a quadratic row.
         """
         import numpy as np
 
         gurobipy = _gurobipy()
-        if self._m.NumQConstrs:
-            return None
         try:
             values = np.asarray(self._m.getAttr('FarkasDual'), dtype=np.float64)
         except (AttributeError, gurobipy.GurobiError):
