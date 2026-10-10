@@ -8,6 +8,15 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
+- perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
+- perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
+- perf(archive): a sweep held in memory is archived without first being saved to scratch ([#1929](https://github.com/fluxopt/specsolve/pull/1929))
+- perf(archive): an archive writes its answer once rather than saving it and then copying it ([#1924](https://github.com/fluxopt/specsolve/pull/1924))
+- perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
+- perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
+- docs(benchmarks): the published benchmarks measure specsolve on polars' in-memory engine beside its default ([#1923](https://github.com/fluxopt/specsolve/pull/1923))
+
+- docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
 
 ## 0.8.0 (2026-10-09)
 

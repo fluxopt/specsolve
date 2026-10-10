@@ -184,6 +184,29 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
             assert updated.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
 
 
+@pytest.mark.parametrize('rung', [rung for rung in RUNGS if rung.values[0].keeps_the_solver])
+def test_an_update_and_its_undoing_answer_on_one_loaded_solver(dispatch_yaml, rung, solver_name):
+    """There and back: the second update restores the numbers the model was loaded with.
+
+    A sink that sends only what moved compares against what it holds, so one
+    that forgot the first push would find nothing to send on the way back.
+    """
+    spec, given = _case(rung, dispatch_yaml)
+    variables = list(to_spec(spec).program.variables)
+
+    def answer(result: Any) -> tuple[float, list[list[tuple[Any, ...]]]]:
+        return result.objective, [result.primal(name).rows() for name in variables]
+
+    with sps.build(spec, given) as model:
+        first = answer(model.solve(solver_name=solver_name))
+        moved = answer(model.update(rung.change).solve(solver_name=solver_name))
+        back = answer(model.update({name: given[name] for name in rung.change}).solve(solver_name=solver_name))
+
+        assert moved != first, 'the rung has to move the answer, or the way back proves nothing'
+        assert back == first, 'the solver kept a number the second update took back'
+        assert model.diagnostics().loads == 1, 'each update moved only numbers, so the solver stayed loaded'
+
+
 # ---------------------------------------------------------------------------
 # the same oracle, over models nobody here wrote
 # ---------------------------------------------------------------------------

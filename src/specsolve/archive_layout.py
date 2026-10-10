@@ -14,7 +14,6 @@ import json
 import shutil
 import tempfile
 import zipfile
-from contextlib import contextmanager
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -24,23 +23,17 @@ import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
-from specsolve.relational.answer_layout import (
-    FORMAT_FILE,
-    METRICS_FILE,
-    OUTPUT_KINDS,
-    RECORD_FILE,
-    consolidated,
-    write_format,
-    write_whole,
-)
+from specsolve.relational.answer_layout import FORMAT_FILE, OUTPUT_KINDS, write_format, write_whole
 from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
+
+    from specsolve.relational.answer_layout import FrameWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -55,22 +48,6 @@ ANSWER_DIR = 'answer'
 #: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
 INPUTS_LAYOUT = 1
-
-
-@contextmanager
-def beside(out: Path) -> Iterator[Path]:
-    """A scratch directory beside *out*, gone when the block ends, where an answer is laid out before it is packed.
-
-    It is one level down in a directory of its own, as a staged archive is in
-    ``_staging_for``'s: a directory of archives is read as
-    ``<parent>/*/<member>`` while one of them is written, and a scratch
-    ``answer/`` directly under the parent matches that glob.
-    """
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=out.parent, prefix=out.name + '.') as holder:
-        scratch = Path(holder) / 'scratch'
-        scratch.mkdir()
-        yield scratch
 
 
 def check_the_target(out: Path) -> None:
@@ -100,7 +77,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Path,
+    answer: Callable[[Path, FrameWriter], None],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -111,14 +88,18 @@ def write_archive(
         tables: The tidy table each source stands for, keyed as the file
             declares, each written as ``sources/<key>.parquet``.
         axis: The axis manifest, or ``None`` where the sources are not cut.
-        answer: A directory in the answer's own layout; its record and
-            metrics land as one file each.
+        answer: Lays the answer out in the directory it is given, writing
+            each table with the writer it is given, which adds the run.
 
     Returns:
         *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
+
+    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(frame.lazy(), run), path)
+
     staging = _staging_for(out)
     part = staging / out.name
     tree = staging / 'tree' if zipped else part
@@ -127,12 +108,10 @@ def write_archive(
         write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
         for name, table in tables.items():
-            member = tree / SOURCES_DIR / f'{name}.parquet'
-            table.sink_parquet(member, compression='zstd')
-            _stamped(member, member, run)
+            write(table, tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
-        _copy_the_answer(answer, tree / ANSWER_DIR, run)
+        answer(tree / ANSWER_DIR, write)
         _write_catalogs(lowered(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
@@ -276,33 +255,7 @@ def _declared_files(
             yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
-def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
-    """*answer*'s layout under *into*, its record and metrics as one file each, every table stamped with *run*."""
-    consolidating = (RECORD_FILE, METRICS_FILE)
-    apart = {*consolidating, *(file.removesuffix('.parquet') for file in consolidating)}
-    shutil.copytree(
-        answer,
-        into,
-        ignore=lambda at, names: apart & set(names) if Path(at) == answer else set(),
-        copy_function=lambda source, target: _stamped(Path(source), Path(target), run),
-    )
-    for file in consolidating:
-        _with_run(consolidated(answer, file), run).write_parquet(into / file, compression='zstd')
-
-
-def _stamped(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*; anything else copied.
-
-    Streamed, so a spilled answer larger than memory is stamped too, and
-    landed through a part file, so *target* may be *source*.
-    """
-    if source.suffix != '.parquet':
-        shutil.copy2(source, target)
-        return
-    write_whole(_with_run(pl.scan_parquet(source), run), target)
-
-
-def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
+def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
     """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A

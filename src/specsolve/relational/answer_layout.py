@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
@@ -152,8 +153,12 @@ ANSWER_LAYOUT = 4
 FORMAT_FILE = 'format.json'
 
 
+@cache
 def installed(distribution: str) -> str | None:
-    """The installed version of *distribution*, or ``None`` from a source tree nothing installed."""
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
+
+    Read once per process, as every solve records three.
+    """
     try:
         return version(distribution)
     except PackageNotFoundError:
@@ -487,8 +492,15 @@ def read_spec(directory: Path) -> Spec | None:
     return to_spec(held) if held.is_file() else None
 
 
-def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:
-    """``(kind, name, reason)`` for what a solve could not produce, or no file at all.
+#: How an answer's writer puts one frame at one path: [`write_whole`][], or
+#: the writer an archive hands it.
+type FrameWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
+
+
+def write_reasons(
+    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: FrameWriter
+) -> None:
+    """``(kind, name, reason)`` for what a solve could not produce, or no file at all, written with *write*.
 
     An empty *name* is the whole kind, which is how the duals are absent.
     *absent* is ``{kind: {name: reason}}``, one reason per name left out.
@@ -498,7 +510,7 @@ def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Ma
         {'kind': kind, 'name': name, 'reason': why} for kind, names in absent.items() for name, why in names.items()
     ]
     if rows:
-        write_whole(pl.DataFrame(rows), directory / REASONS_FILE)
+        write(pl.DataFrame(rows), directory / REASONS_FILE)
 
 
 def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]]:
