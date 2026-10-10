@@ -504,8 +504,7 @@ def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
     """*stacked* sorted by *keys*, on one integer that orders as they do where one can hold them all.
 
     The keys are labels, never negative, so each is a digit in a base one past
-    its largest value. A sort on several columns encodes each row first, and
-    a sort on one integer does not.
+    its largest value.
     """
     largest = stacked.select(pl.col(k).max() for k in keys).row(0)
     if math.prod(value + 1 for value in largest) >= 2**63:
