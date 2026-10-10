@@ -589,6 +589,38 @@ class TestTheLabelSpace:
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
         assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
 
+    @pytest.mark.parametrize(
+        'labels',
+        [
+            pytest.param([2, 0, 1], id='rotated'),
+            pytest.param([3, 2, 1], id='descending'),
+        ],
+    )
+    def test_an_integer_dimension_out_of_ascending_order_keeps_each_row_on_its_label(self, labels):
+        """Integer labels that are a run only once sorted are not a run.
+
+        A constraint over the whole of a dimension computes each term's row from
+        the label when the labels are consecutive ascending integers. A set of
+        labels that only sorts into a run must still be placed by its declared
+        order, or each ``x`` lands on the row of another label's ``cap``.
+        """
+        spec = {
+            'dimensions': {'t': {'dtype': 'int'}},
+            'parameters': {'cap': {'dims': ['t']}},
+            'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+            'constraints': {'k': {'dims': ['t'], 'expression': 'x <= cap'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+        }
+        cap = {label: 10.0 * label + 1.0 for label in labels}
+        data = {'t': labels, 'cap': pl.DataFrame({'t': list(cap), 'value': list(cap.values())})}
+
+        with sps.solve(spec, data) as result:
+            x = by_coord(result, 'x', 't')
+
+        assert list(x) == labels, 'read-back follows declaration order'
+        for label, bound in cap.items():
+            assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
+
     def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
         """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
         (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""

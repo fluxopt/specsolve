@@ -112,13 +112,15 @@ class Scope:
         """A *dim* value column as that dimension's ordinal.
 
         Attaching encodes an ``Enum`` in ordinal order, so its physical code is the
-        ordinal.
+        ordinal, and a run of consecutive integers is its own ordinal less its first.
         """
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
-        labels = self.data.dimensions[dim].select('val').pipe(collected)['val']
-        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
+        if (first := self.data.consecutive.get(dim)) is not None:
+            return column.cast(pl.Int64) - first
+        ordinals = self.data.dimensions[dim].pipe(collected)
+        return column.replace_strict(ordinals.get_column('val'), ordinals.get_column('ord'), return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dim in *want*, saying the same thing.
