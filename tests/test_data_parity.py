@@ -625,6 +625,28 @@ def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: 
     assert ('.select(' in message) == ('.select(' in rewrite), 'and no rewrite for a shape that was not given'
 
 
+@pytest.mark.parametrize(
+    'index',
+    [
+        pytest.param([None, 'a', 'c'], id='a-bare-sequence-leading-with-a-null'),
+        pytest.param(_tidy(f=['a', None, 'c']), id='a-table-with-a-null-inside'),
+    ],
+)
+def test_an_index_holding_a_null_label_is_refused(spec_path: Path, index: Any):
+    """A null in an index is refused at load, before it can become a coordinate.
+
+    It was read as a label: a string dimension failed with polars' own ``TypeError``
+    on the null category, and an integer one built a coordinate labelled null.
+    """
+    sources = {
+        'f': index,
+        'cost': _tidy(f=['a', 'c'], value=[1.0, 3.0]),
+        'cap': _tidy(f=['a', 'c'], value=[5.0, 5.0]),
+    }
+    with pytest.raises(DataError, match="index for dimension 'f' holds a null label"):
+        sps.build(spec_path, sources).close()
+
+
 #: A temporal dimension whose index bounds a variable.
 TEMPORAL_BOUND_SPEC = {
     'dimensions': {'t': {'dtype': 'datetime'}},
