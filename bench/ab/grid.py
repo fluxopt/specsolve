@@ -30,8 +30,8 @@ OTHER_DIMS = {'d1': 4, 'd2': 3}
 #: Total columns of the model at each size. ``below`` and ``above`` straddle 250,000 columns.
 SIZES = {'tiny': 24, 's': 24_000, 'below': 240_000, 'above': 260_000, 'l': 1_200_000}
 
-#: The ladder cases the grid is run beside, at their own size labels: ``s`` is 100,000 variables or about it.
-LADDER = {'dispatch': 's', 'nodal': 's', 'transport': 's', 'storage': 's', 'fleet': 's', 'profiled': 's'}
+#: The ladder cases the grid is run beside, at each size of a run that is also a rung of theirs: ``s`` or ``l``.
+LADDER = ('dispatch', 'nodal', 'transport', 'storage', 'fleet', 'profiled')
 
 
 @dataclass(frozen=True)
@@ -112,9 +112,10 @@ class Cell:
 
 
 def ids(sizes: list[str]) -> list[str]:
-    """Every cell's id: each grid shape at each of *sizes*, then the ladder cases."""
+    """Every cell's id: each grid shape at each of *sizes*, then each ladder case at those of *sizes* it has."""
+    rungs = {name: {shape.label for shape in CASES[name].ladder} for name in LADDER}
     return [f'grid-{name}-{size}' for name in SHAPES for size in sizes] + [
-        f'case-{name}-{size}' for name, size in LADDER.items()
+        f'case-{name}-{size}' for name in LADDER for size in sizes if size in rungs[name]
     ]
 
 

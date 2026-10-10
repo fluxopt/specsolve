@@ -753,8 +753,8 @@ may assume: the dimension count, terms per row, a term over fewer dimensions, a
 reversed, a dimension's own labels shuffled, `int` or `str` labels, four kinds
 of upper bound, a wrapped `shift`, and a quadratic row. Each cell moves one axis
 from the baseline, and `worst` moves all of them. The sizes `below` and `above`
-put the model either side of 250,000 columns. The ladder's own cases at `s`
-come after the grid.
+put the model either side of 250,000 columns. The ladder's own cases come after
+the grid, at each size of the run that is also one of their rungs: `s` or `l`.
 
 **A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
 Six rounds is the least that can pass, and `compare` refuses fewer. Every
