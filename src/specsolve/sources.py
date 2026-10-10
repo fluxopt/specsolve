@@ -177,7 +177,7 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
     Raises:
         DataError: A table with no column named after the dimension, labels
-            no frame can be made of, or a label held twice.
+            no frame can be made of, a null label, or a label held twice.
     """
     given = as_frame(source, (dim,))
     table = given if given is not None else _labels_frame(dim, source, dtype)
@@ -190,8 +190,19 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     labels = in_microseconds(
         table.select(dim).pipe(collected), f"index for dimension '{dim}'", (dim,) if dtype == 'datetime' else ()
     )
+    _check_labels_are_present(dim, labels[dim])
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
+
+
+def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
+    """Refuse an index holding a null: a coordinate is a label, and a null names none."""
+    if not (nulls := labels.null_count()):
+        return
+    raise DataError(
+        f"index for dimension '{dim}' holds a null label ({nulls} row(s)). A coordinate is a label, and a "
+        'null names none. Drop it: polars .drop_nulls(), pandas .dropna().'
+    )
 
 
 def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
@@ -718,12 +729,12 @@ def _check_one_row_per_coordinate(
         _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
     answers = frame.select(
         pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
-        *(pl.col(d).is_in(labels.implode()).all().alias(f'#known {d}') for d, labels in known.items()),
+        *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
     ).row(0, named=True)
 
     for d, labels in known.items():
         if not answers[f'#known {d}']:
-            strangers = frame.filter(~pl.col(d).is_in(labels.implode())).select(pl.col(d).unique())[d].to_list()
+            strangers = frame.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
             raise DataError(
@@ -747,6 +758,11 @@ def _check_one_row_per_coordinate(
         f'It holds one value per coordinate, so which value applies is undefined — '
         f'aggregate the source to one row per {list(p.dims)} before attaching it.'
     )
+
+
+def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
+    """Whether each row's *dim* is one of *labels*: false for a null, which ``is_in`` leaves null and ``all`` skips."""
+    return pl.col(dim).is_in(labels.implode()).fill_null(False)
 
 
 def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame, kind: str) -> None:
