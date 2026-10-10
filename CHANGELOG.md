@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(benchmarks): the published benchmarks are re-measured on polars 2.0, and the transport model is dropped until a run measures it ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM))
 - perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
 - perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
 - perf(archive): a sweep held in memory is archived without first being saved to scratch ([#1929](https://github.com/fluxopt/specsolve/pull/1929))

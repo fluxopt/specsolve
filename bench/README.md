@@ -41,13 +41,11 @@ whose fingerprint no longer describes it.
 
 The committed `results/latest-<sink>-<case>.json` are the provenance of the
 tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-34818523523, on `8d27e88b`, which finished one case of eight. Every failure
-whose log survives is one of two: a `test_window` cell whose verb was still a
-closure `isolate=True` could not ship to its child (fixed since, #1617), or
-`storage`/`gurobi` killed by the watchdog with `gurobipy-matrix` at `w1000`
-reaching 26 GB. What it left committed is `highs` for `dispatch` and `fleet`,
-and `gurobi` for `dispatch`, `fleet` and `transport`; the page has no table for
-the rest until a run completes. `results.records` still reads the pre-pytest
+37986780225, on `a19f71c9`, which finished four cases of eight. The other four
+were killed by the watchdog above 24 GB, at a rung that did not fit:
+`transport/w100` and `storage/w1000`, on both sinks. What it left committed is
+`highs` and `gurobi` for `dispatch` and `fleet`; the page has no table for the
+rest until a run completes. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -55,7 +53,7 @@ selects `test_emit` and `test_rebuild`. The windows and the read-back are
 measured where their history is kept — CodSpeed, below. The sweep and the fresh
 process, which CodSpeed does not run, are measured by anyone who runs
 `pytest bench` without the `-k`. Spending the box's hours on cells no table
-renders would lengthen a run that took 2 h 23 min the last time (34818523523).
+renders would lengthen a run that took 2 h 7 min the last time (37986780225).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`

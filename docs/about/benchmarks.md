@@ -82,7 +82,9 @@ against the size of the model.
 - **Grown by length adds snapshots; grown by width adds entities.** Both reach
   the same sizes, so switching holds the size and changes only the shape that
   got there. `transport` is the model where this matters: its bus-by-generator
-  join grows with width and never with length.
+  join grows with width and never with length. No case on this run reached a
+  width rung, so the width view is empty for the reason
+  [below](#not-measured-yet).
 - **Log–log gives every size equal room, and the slope is the scaling order.**
   A line that rises one decade per decade grows in step with the model.
   Linear–linear draws the gap at the largest size at its real size and puts the
@@ -111,18 +113,20 @@ best-of-nine beside a neighbour's best-of-forty. The median beats
 the fastest round because a cell whose nine rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
-([#1850](https://github.com/fluxopt/specsolve/pull/1850)) 14 published cells have a mean
-above 1.10x their median, the worst at 3.41x: `dispatch/xs` on pyomo, on the
-`highs` [sink](../reference/glossary.md#how-it-runs). In 13 of them one round
-is the cause. The first round of an `xs` cell on specsolve, linopy or pyomo is
-the slowest of the nine, at 1.9 to 22.6 times the median of the other eight,
-so the median does not move. The fourteenth is `transport/s` on gurobipy-loop,
-whose rounds take either 457 to 492 ms or 635 to 661 ms.
+([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)) 15 published cells have a mean
+above 1.10x their median, the worst at 3.00x: `dispatch/xs` on pyomo, on the
+`highs` [sink](../reference/glossary.md#how-it-runs). In 11 of them the first
+round is the slowest of the nine, at 1.6 to 18.9 times the median of the other
+eight, so the median does not move. The other four are matrix-floor and
+gurobipy-loop cells at `xs` and `s` whose rounds fall into two groups, the slow
+one about twice the fast one: `dispatch/xs` on gurobipy-loop takes either 23 to
+26 ms or 48 to 49 ms.
 
-The median flipped one cell on this run, in specsolve's favour:
-`transport/w1` on the `gurobi` sink, against gurobipy-loop. specsolve's
-fastest round is the slower one, 41.4 ms against 37.3 ms, and its median is the
-faster, 43.0 ms against 47.4 ms.
+The median flipped two cells on this run, both against specsolve:
+`dispatch/xs` and `dispatch/s` on the `highs` sink, against linopy. On each,
+specsolve's fastest round is the faster one, 28.0 ms against 28.4 ms and 40.7 ms
+against 44.7 ms, and its median is the slower, 39.9 ms against 29.1 ms and
+56.3 ms against 46.4 ms.
 
 ## How to reproduce it
 
@@ -149,31 +153,29 @@ and the chart rows into `benchmarks.json`.
 
 ### Marginal cost per model
 
-Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +10.8 ms on specsolve and +2.1 ms on linopy and +11.2 ms on pyomo and +4.8 ms on gurobipy-loop and +0.8 ms on gurobipy-matrix and +0.7 ms on highspy-matrix.
+Build only, repeated in one process. **first** is the first recorded round and **steady** the best of the rounds after it, so the pair is what a rolling horizon pays for its second window against its first. The harness warms up before it records, so neither column carries the one-time import cost: the median gap between them is +11.8 ms on specsolve and +1.7 ms on linopy and +5.1 ms on pyomo and +1.2 ms on gurobipy-loop and +9.4 ms on gurobipy-matrix and +2.4 ms on highspy-matrix.
 
 **Read down a column, not across the row.** The build is not the same work in every library — one that defers materialising its coefficients to its writer spends almost nothing here and pays it at the seam — so these columns carry no ratios. The tables above measure to a common artifact and are where a comparison belongs.
 
 | case | vars | specsolve: first | specsolve: steady | linopy: first | linopy: steady | pyomo: first | pyomo: steady | gurobipy-loop: first | gurobipy-loop: steady | gurobipy-matrix: first | gurobipy-matrix: steady | highspy-matrix: first | highspy-matrix: steady |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| dispatch | 10k | 23.5 ms | **18.1 ms** | 28.0 ms | 25.9 ms | 37.8 ms | 35.4 ms | 33.8 ms | 32.0 ms | 13.6 ms | 13.3 ms | 4.5 ms | 4.3 ms |
-| fleet | 12k | 69.8 ms | **67.1 ms** | 169.4 ms | 167.5 ms | 32.9 ms | 30.0 ms | 56.6 ms | 56.6 ms | 18.3 ms | 18.1 ms | 5.6 ms | 5.0 ms |
-| dispatch | 100k | 22.2 ms | **21.6 ms** | 28.9 ms | 27.8 ms | 227.6 ms | 224.3 ms | 195.2 ms | 190.4 ms | 73.7 ms | 70.7 ms | 8.0 ms | 7.3 ms |
-| fleet | 120k | 78.4 ms | **76.7 ms** | 170.6 ms | 168.6 ms | 774.0 ms | 755.0 ms | 792.6 ms | 778.8 ms | 131.4 ms | 130.1 ms | 10.1 ms | 9.7 ms |
-| dispatch | 1M | 83.9 ms | **60.6 ms** | 39.6 ms | 37.1 ms | 4320.8 ms | 4256.2 ms | 2439.7 ms | 2458.6 ms | 731.3 ms | 754.7 ms | 70.6 ms | 70.0 ms |
-| fleet | 1.2M | 187.0 ms | **170.9 ms** | 193.6 ms | 192.4 ms | 5806.0 ms | 5765.0 ms | 7420.8 ms | 7398.7 ms | 1410.3 ms | 1429.9 ms | 104.1 ms | 102.9 ms |
-| dispatch | 10M | 449.0 ms | **421.7 ms** | 171.1 ms | 165.0 ms | — | — | 26922.4 ms | 26303.8 ms | 8264.5 ms | 8216.7 ms | 916.5 ms | 819.6 ms |
-| fleet | 12M | 1311.0 ms | **1273.8 ms** | 459.8 ms | 453.6 ms | — | — | — | — | 14611.3 ms | 14575.0 ms | 1428.1 ms | 1414.3 ms |
+| dispatch | 10k | 39.9 ms | **32.1 ms** | 30.6 ms | 28.8 ms | 35.8 ms | 33.8 ms | 27.2 ms | 26.0 ms | 29.2 ms | 15.2 ms | 10.1 ms | 6.3 ms |
+| fleet | 12k | 133.6 ms | **130.5 ms** | 221.7 ms | 191.0 ms | 39.2 ms | 37.3 ms | 102.6 ms | 72.5 ms | 24.4 ms | 22.8 ms | 8.0 ms | 7.2 ms |
+| dispatch | 100k | 49.0 ms | **39.9 ms** | 30.0 ms | 29.1 ms | 271.4 ms | 263.2 ms | 195.7 ms | 223.6 ms | 85.2 ms | 80.5 ms | 9.2 ms | 8.5 ms |
+| fleet | 120k | 188.0 ms | **160.9 ms** | 193.8 ms | 192.2 ms | 726.0 ms | 729.0 ms | 837.8 ms | 836.2 ms | 150.3 ms | 156.3 ms | 12.5 ms | 12.1 ms |
+| dispatch | 1M | 138.6 ms | **124.1 ms** | 39.7 ms | 37.9 ms | 4688.5 ms | 4678.1 ms | 2550.6 ms | 2551.3 ms | 820.5 ms | 824.0 ms | 56.9 ms | 32.4 ms |
+| fleet | 1.2M | 324.1 ms | **307.5 ms** | 217.5 ms | 217.1 ms | 5849.2 ms | 5814.5 ms | 8317.3 ms | 8272.3 ms | 1681.1 ms | 1650.7 ms | 127.0 ms | 126.0 ms |
+| dispatch | 10M | 487.5 ms | **485.9 ms** | 156.2 ms | 148.9 ms | — | — | 27235.1 ms | 27306.0 ms | 8841.1 ms | 8728.3 ms | 792.4 ms | 753.7 ms |
+| fleet | 12M | 1776.4 ms | **1743.1 ms** | 528.0 ms | 526.7 ms | — | — | — | — | 16855.1 ms | 16815.2 ms | 1423.1 ms | 1395.6 ms |
 
 <!-- bench:/marginal -->
 
 ## The same size, reached by widening
 
 This table renders from `highs` rungs of `storage` and `transport`, and no run
-has published it: both cases are killed on that sink before they write a file,
-for the reason [below](#not-measured-yet). The committed results hold
-`transport` through `gurobi` only, in [the charts](#benchmark-charts),
-and `storage` through neither sink. `bench.report` drops a fragment it cannot
-render rather than blanking the fence, so the fence stays empty until
+has published it: both cases are killed on both sinks before they write a file,
+for the reason [below](#not-measured-yet). `bench.report` drops a fragment it
+cannot render rather than blanking the fence, so the fence stays empty until
 `pixi run ladder` brings those rungs back.
 
 <!-- bench:sweeps -->
@@ -197,13 +199,13 @@ Listed so that a claim with no table under it is visible as one.
   one back.
 - **Sizes past `l`.** `xl` and `2xl` exist in the harness and no run
   publishes them.
-- **`storage` is absent from every table, and `transport` from the `highs`
-  ones.** The memory budget projects the next rung off a `w10` or `w100` cell
+- **`storage` and `transport` are absent from every table.** The memory budget projects the next rung off a `w10` or `w100` cell
   that took under a gigabyte. Where the projection comes in under 16 GB the run
   starts a rung that does not fit, and `bench/memory-watchdog.sh` kills the
-  case to save the box. Three cases died that way on this run:
-  `transport/w100` on `highs` at 24.6 GB, `storage/w1000` on `highs` at
-  26.3 GB, `storage/w1000` on `gurobi` at 23.9 GB. A killed case writes no
+  case to save the box. Four cases died that way on this run:
+  `transport/w100` on `highs` at 24.3 GB, `storage/w1000` on `highs` at
+  24.9 GB, `transport/w100` on `gurobi` at 25.2 GB, `storage/w1000` on
+  `gurobi` at 26.5 GB. A killed case writes no
   file, so each loses every rung it had already measured, its rows in the
   marginal table above included
   ([#1498](https://github.com/fluxopt/specsolve/issues/1498)). The last `highs`
