@@ -13,6 +13,7 @@ import subprocess
 import sys
 import textwrap
 from dataclasses import replace
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -1123,3 +1124,67 @@ def test_a_parquet_source_is_read_at_the_build_so_a_file_rewritten_afterwards_do
             assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
                 before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
             ), 'and so does an expression read after the solve'
+
+
+def _held_at_the_run(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, int | bool]]:
+    """What each solver's run is handed, and whether the solver still holds the frames it was loaded from."""
+    from specsolve.relational.sinks.solvers.base import Solver
+
+    seen: list[dict[str, int | bool]] = []
+    run = Solver.run
+
+    def recorded(self: Solver, handoff: Any, **options: Any) -> Any:
+        seen.append(
+            {
+                'matrix': handoff.matrix.height,
+                'obj': handoff.obj.height,
+                'cols': handoff.cols.height,
+                'rows': handoff.rows.height,
+                'solver holds frames': self._handoff is not None,
+                'solver holds coefficients': self._coefficients is not None,
+            }
+        )
+        return run(self, handoff, **options)
+
+    monkeypatch.setattr(Solver, 'run', recorded)
+    return seen
+
+
+@pytest.mark.parametrize(
+    ('outputs', 'kept'),
+    [
+        pytest.param((), set(), id='nothing-asked'),
+        pytest.param(('reduced_cost',), {'matrix', 'obj'}, id='reduced-cost-keeps-matrix-and-objective'),
+        pytest.param(('basis',), {'cols', 'rows'}, id='basis-keeps-columns-and-rows'),
+        pytest.param(('slack', 'activity'), {'rows'}, id='slack-keeps-rows-alone'),
+    ],
+)
+def test_a_one_shot_solve_lets_go_of_the_build_before_the_solver_runs(
+    dispatch_yaml, dispatch_frame_inputs, monkeypatch, outputs, kept
+) -> None:
+    """``sps.solve`` closes its model after its one solve, so the build's copy of what the solver loaded goes first.
+
+    The answer still reads what it needs: each output keeps the frames it is
+    computed from, and nothing else.
+    """
+    seen = _held_at_the_run(monkeypatch)
+    with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs=outputs) as solved:
+        assert solved.status == 'ok'
+    (held,) = seen
+    assert not held['solver holds frames'], 'the solver lets go of the frames it was loaded from'
+    assert not held['solver holds coefficients'], (
+        'nor does it keep the coefficients an update would compare against, since none follows'
+    )
+    for frame in ('matrix', 'obj', 'cols', 'rows'):
+        assert (held[frame] > 0) == (frame in kept), f'{frame} is kept exactly where {outputs or "nothing"} reads it'
+
+
+def test_a_model_kept_for_more_solves_keeps_its_build(dispatch_yaml, dispatch_frame_inputs, monkeypatch) -> None:
+    """``Model.solve`` lets go of nothing: a later write, ``row()`` or update reads the build."""
+    seen = _held_at_the_run(monkeypatch)
+    with sps.build(dispatch_yaml, dispatch_frame_inputs) as model:
+        model.solve()
+    (held,) = seen
+    assert held['solver holds frames'], 'a held solver keeps the frames until an update asks for their digest'
+    assert held['solver holds coefficients'], 'and the coefficients an update compares against'
+    assert all(held[frame] > 0 for frame in ('matrix', 'obj', 'cols', 'rows')), 'the build stays whole'

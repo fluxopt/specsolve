@@ -352,6 +352,20 @@ class Model:
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
+        return self._solve(solver_name, solver_options, record_options, archive, outputs, start, last=False)
+
+    def _solve(
+        self,
+        solver_name: str,
+        solver_options: Mapping[str, object] | None,
+        record_options: Sequence[str] | None,
+        archive: str | Path | None,
+        outputs: Iterable[Output],
+        start: Result | Start | Literal['previous'] | None,
+        *,
+        last: bool,
+    ) -> Result:
+        """[`solve`][], where *last* says the model is closed after it, as [`Engine.solve`][specsolve.relational.engine.engine.Engine.solve] takes it."""
         out = None if archive is None else Path(archive)
         if out is not None:
             check_the_target(out)
@@ -369,6 +383,7 @@ class Model:
                 lower=self._lower,
                 outputs=asked,
                 start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
+                last=last,
             ),
             solver_name,
             solver_options,
@@ -610,7 +625,9 @@ def solve(
 
     Returns:
         The solution. It owns its frames; the model and the solver are
-        released before this returns.
+        released before this returns. The build's own copy of the model is
+        let go before the solver runs, so it is not held beside the solver's
+        through the run.
 
     Raises:
         SpecsolveError: A solver name nothing serves, or *outputs* that
@@ -621,14 +638,7 @@ def solve(
     checked_outputs(outputs)
     model = build(spec, sources)
     try:
-        return model.solve(
-            solver_name,
-            solver_options=solver_options,
-            record_options=record_options,
-            archive=archive,
-            outputs=outputs,
-            start=start,
-        )
+        return model._solve(solver_name, solver_options, record_options, archive, outputs, start, last=True)
     finally:
         model.close()
 
