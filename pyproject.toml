@@ -203,7 +203,7 @@ description = "One sink of the published ladder, a process per case"
 args = [{ arg = "sink" }, { arg = "cases", default = "dispatch transport storage fleet" }]
 # `bash -c` because the pixi shell has no `for`.
 # `--builds` only on highs, because `test_rebuild` does not vary by sink.
-cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do pixi run -e bench ladder "$case" "$sizes" "{{ sink }}" "specsolve linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || lost="$lost $case"; done; [ -z "$lost" ] || { echo "cases that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do pixi run -e bench ladder "$case" "$sizes" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || lost="$lost $case"; done; [ -z "$lost" ] || { echo "cases that did not finish:$lost"; exit 1; }' '''
 
 [tool.pixi.feature.bench.tasks.ladder-smoke]
 description = "One rung, to prove the machinery rather than to measure anything"
