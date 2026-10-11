@@ -1,7 +1,8 @@
 # Sweeps and rolling horizons
 
 This page is the reference for `solve_over`: the axes it takes, the `Sweep` it
-returns, and the `carry`, `executor`, `spill_to=` and `archive=` keywords.
+returns, an axis's `carry`, and the `executor`, `spill_to=` and `archive=`
+keywords.
 
 `solve_over` runs one [model](glossary.md#the-chain) once per slice and folds
 the answers together. A slice is one set of [sources](glossary.md#how-it-runs)
@@ -29,8 +30,7 @@ is not asked whether it can be cut that way, and its answer is keyed by slice.
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 ```
@@ -75,8 +75,7 @@ sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that wa
 ```
 
 Solved as a list, the slices key by `key_name=`, and the answer is keyed by
-slice. Two axes compose as a comprehension over the slices of one, each
-sliced again by the other.
+slice. Two axes compose as a tuple ([below](#several-axes)).
 
 **Sources cross a slice in every shape `build` takes.** A parameter or a
 relation whose table carries the axis is filtered, as a table or as a parquet
@@ -88,6 +87,48 @@ reads as absent. A table carrying the axis that is short of a coordinate
 another table has raises a `SpecsolveWarning` before a slice is taken, naming
 both tables. That slice builds the source empty. An absent row is
 how a model masks, so the gap is reported rather than refused.
+
+## Several axes
+
+A tuple of axes cuts the sources with each axis in turn, outer first. An
+axis's `carry` chains its own slices. The slices that share the keys of every
+axis outside the outermost one that carries are a **chain**: they run in
+order, and `start='previous'` follows them. A rolling horizon per scenario is
+one call:
+
+```python
+sweep = sps.solve_over(
+    'window.yaml',
+    sources,
+    (
+        sps.EachCoordinate('scenario'),
+        sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
+    ),
+)
+sweep.key_names  # ('scenario', 'snapshot_start')
+sweep.primal('soc')  # (scenario, snapshot, value)
+```
+
+| Rule | |
+|---|---|
+| **each chain answers as its own sweep would** | The answer for one scenario equals `solve_over` on that scenario's sources alone, with the same carry and start. |
+| **every axis but the last is an `EachCoordinate`** | The last axis may be windows. A window outside another axis is refused before a slice is taken, and so are two axes over one dimension. |
+| **one key column per axis** | `sweep.key_names` names them outer first, and `sweep.key_name` is the last. Every frame and `sweep.record` carry them all, and `sweep.keys` holds one tuple of labels per slice. On disk, `slice_axis` and `slice` join the names and the labels with `/`, as `scenario/snapshot_start` and `high/0`. |
+| **the windows stitch within each chain** | The answer of a windowed last axis is over the dimension it cut, beside the outer key columns. Per window, it carries every key column and the local index. |
+| **each axis carries its own state** | An axis's carry reaches the slices of its next label. Under an axis inside it, the value is what the last inner slice holds, and it reaches every inner slice of the next label: a period hands the next period the fleet its last window ended with. An inner carry starts again from its seed at each outer label. |
+| **an executor runs the chains concurrently** | Where an axis carries, each chain is one task, run in order on one model, and `'previous'` carries on along it. Otherwise each slice is one task. |
+| **a start is cut by every axis** | Each axis cuts a table that carries its column, and a table that carries none reaches every slice whole. An earlier sweep over the same axes starts each slice from its own rows. |
+| **a tuple of axes spills and archives** | `spill_to=` resumes it, and `load_archive` gives the tuple back as `archive.axis`. |
+| **`key_name=` is refused with a tuple** | Each axis names its own key column. |
+
+The window rule, refused:
+
+```text
+SpecsolveError: EachWindow('snapshot') is outside another axis, and windows can only be
+the last axis: a window is stitched back over 'snapshot', and an axis inside it would cut
+each window again. Put the windows last, so each combination of the outer keys is one
+horizon.
+```
 
 ## Reading a sweep
 
@@ -175,7 +216,7 @@ with `per_window=True` for a windowed sweep.
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` drops `snapshot` and re-indexes to `into`. Per window, the key column `snapshot_start` holds where each window began. |
 | **a hand-built axis names its own key** | A plain list cannot say what its keys are labels *of*, so it must pass `key_name='draw'`. `key_name` overrides the derived name on any axis. It is refused when it collides with a column the tables already carry: a dimension the spec declares, `value`, or a column of `record` or `metrics`, such as `status`, `objective`, `solves` or `loads`. A name that starts with `specsolve_`, in any letter case, is refused too, as that prefix is reserved. |
 | **`sweep.metrics` says what each slice took** | One [`Metrics`](api.md#specsolve.types.Metrics) per slice, keyed like `record`. Each row is that slice's own share, so `solves` is `1`. [`Sweep.metrics`](api.md#specsolve.types.Sweep.metrics) says what `loads` means under a serial fold and under `executor=`. In an **archive** the table carries `specsolve_run` too, so a warehouse of them says which run a slice's cost belongs to. |
-| **on disk, the slice is two text columns** | `record` and `metrics` in memory start with the key column, in the key's own type, so they join to the frames. On disk they do not: `slice_axis` holds the key name and `slice` the key as text, and both are null for a single solve. So every `record.parquet` and `metrics.parquet` has the same columns, from a solve or from any sweep. A key therefore names one slice by its text: two keys of one text, such as a repeated key, are refused before a slice is taken, and so is a key that the sweep's one key type would rewrite, such as `True` among integers. |
+| **on disk, the slice is two text columns** | `record` and `metrics` in memory start with the key columns, each in its key's own type, so they join to the frames. On disk they do not: `slice_axis` holds the key name and `slice` the key as text, each joined by `/` over several axes, and both are null for a single solve. So every `record.parquet` and `metrics.parquet` has the same columns, from a solve or from any sweep. A key therefore names one slice by its text: two keys of one text, such as a repeated key, are refused before a slice is taken, and so is a key that the sweep's one key type would rewrite, such as `True` among integers. |
 | **a slice that fails says which slice** | The error is the engine's own, with a note on it: `in slice 'bad' (3 of 3)`. |
 | **a sweep's memory grows with its answer, unless it is spilled** | The models are released as the fold goes; the tables accumulate. `spill_to=` writes them out instead ([below](#spilling-a-sweep-to-disk)), and `save` writes a held sweep out the same way, after the fact. |
 
@@ -198,7 +239,7 @@ sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, th
 | **one file per slice and name** | `<kind>/<name>/<position>.parquet`, per window, with the slice key a column of each, one type across every file a sweep writes. `record/` and `metrics/` hold the record, one row per slice, which names its slice in `slice_axis` and `slice`; `sweep.record` and `sweep.metrics` stay in memory. An **archive** holds those two as one file each, `record.parquet` and `metrics.parquet`. |
 | **every file lands whole** | A file is written beside its final name and renamed into place. The record file is written last and marks a slice done, so a slice interrupted part way is solved again rather than read back short. |
 | **an interrupted sweep resumes** | Run the same call at the same directory. A slice already there is read back, and under a `carry` its state is read off its file. Only the unfinished slices are built. |
-| **a directory holds one sweep** | `sweep.json` records the key name and the keys, and `keys.parquet` holds the keys in their own type. A different sweep pointed at the directory is refused. Changed data or a changed spec is not detected, so delete the directory to solve again. |
+| **a directory holds one sweep** | `sweep.json` records the key names and the keys, and `keys.parquet` holds the keys in their own types. A different sweep pointed at the directory is refused. Changed data or a changed spec is not detected, so delete the directory to solve again. |
 | **the parent writes** | Under `executor=` a worker's answer crosses back to the parent, which writes it. |
 
 ## Archiving a sweep
@@ -228,22 +269,22 @@ sweep = sps.solve_over(
 ```text
 SpecsolveError: this archive holds the answer only, because it was written without
 keep_windows=True, so it has no per-window frames to read. Solving again from the
-archived spec and sources restores them: load_archive gives both, with the axis
-and the carry, so sps.solve_over(archive.spec, archive.sources, archive.axis,
-carry=archive.carry) runs the sweep again.
+archived spec and sources restores them: load_archive gives both, with the axis and
+its carry, so sps.solve_over(archive.spec, archive.sources, archive.axis) runs the
+sweep again.
 ```
 
 ## Carrying state between slices
 
-`carry` copies one slice's answer into the next slice's data, as a mapping
-`{parameter: variable}`.
+An axis's `carry` copies one slice's answer into the next slice's data, as a
+mapping `{parameter: variable}`. Both `EachCoordinate` and `EachWindow` take
+it; a hand-built list carries nothing.
 
 ```python
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 ```
 
@@ -255,13 +296,14 @@ keeping 24, not label 47 of the 48 it solved.
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
 | **the two declarations say what is copied** | The carry collapses the one dimension the *variable* has and the *parameter* does not. Every other dimension rides along. `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward. `total` over `(generator)` into `existing` over `(generator)` drops nothing, so the whole frame moves. |
-| **the collapsed dimension has to be the one the axis advances along** | It is `EachWindow`'s `into`. Any other dimension has no last-owned row to read, so the carry is refused and the error names the YAML: reduce that dimension in a derived variable, where the typesetter prints it and the oracle checks it. A carry under `EachCoordinate` or a hand-built axis therefore collapses nothing. |
+| **the collapsed dimension has to be the one the axis advances along** | It is `EachWindow`'s `into`. Any other dimension has no last-owned row to read, so the carry is refused and the error names the YAML: reduce that dimension in a derived variable, where the typesetter prints it and the oracle checks it. A carry on `EachCoordinate` therefore collapses nothing. |
 | **a carried value is a boundary condition, never a pin** | The parameter supplies the state *entering* the window, as `soc == soc_initial + charge * 0.9 - discharge` does at `t == 0`. Writing `soc == soc_initial` there replaces the first row's dynamics instead of seeding them, which leaves its `charge` and `discharge` tied to nothing — the window gets free energy at every seam, and the sweep comes out cheaper than full foresight. |
 | **the first slice needs a seed** | `carry` supplies the parameter from the second slice on. The first slice takes it from `sources`, and a sweep whose sources lack it is refused before a slice is taken. |
-| **a carry is checked before anything is read** | The dims come from the YAML and the axis is an argument, so a carry that cannot line up raises before the axis has scanned a source: collapsing two dimensions at once, a parameter over more dimensions than the variable, a dimension the axis does not advance along, no seed. `check` cannot answer this, because `carry` is an argument to the call, not part of the spec. |
+| **a carry is checked before anything is read** | The dims come from the YAML and the axis is an argument, so a carry that cannot line up raises before the axis has scanned a source: collapsing two dimensions at once, a parameter over more dimensions than the variable, a dimension the axis does not advance along, no seed. `check` cannot answer this, because `carry` is an argument to the axis, not part of the spec. |
 | **the last slice carries nothing** | There is no next slice to read it. |
 | **a slice that leaves nothing to carry stops the sweep** | An infeasible window has no level to hand forward. The error names the slice, how it terminated, and the slice left waiting. A sweep without a carry records the slice in `record` and goes on. |
-| **`carry` excludes `executor`** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. |
+| **one axis carries a parameter** | Two axes that both write one parameter are refused before a slice is taken: a slice would take two values for it. |
+| **`carry` excludes `executor` on a sweep of one chain** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. A sweep over [several axes](#several-axes) runs its chains concurrently instead. |
 
 ## Starting slices
 
@@ -279,7 +321,7 @@ cold = sps.solve_over('dispatch.yaml', sources, axis, start=None)
 |---|---|
 | **a table over the sliced dimension gives each slice its rows** | `EachCoordinate('scenario')` gives each slice the rows of its scenario. `EachWindow` gives each window the rows of the coordinates it covers, lookahead included, over its local index. A hand-built axis cuts on its key column. |
 | **an earlier sweep is its answer** | Each slice starts from the earlier slice of its key, and each window from the answer over the coordinates it covers. An archive written without `keep_windows=True` starts a sweep too. |
-| **`'previous'`, the default, carries each slice on from the one before it** | As [`solve`](api.md#specsolve.types.Model.solve) does, on the model the sweep updates in place. A slice whose update loads the solver again, the first slice, and every slice under an `executor` begin from nothing. `start=None` begins every slice from nothing. |
+| **`'previous'`, the default, carries each slice on from the one before it** | As [`solve`](api.md#specsolve.types.Model.solve) does, on the model the sweep updates in place. A slice whose update loads the solver again, the first slice, and the first slice of each task under an `executor` begin from nothing: every slice is a task, or every chain where an axis carries ([several axes](#several-axes)). `start=None` begins every slice from nothing. |
 | **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused: it says nothing about which coordinates it means. So is a table `solve` refuses. |
 | **a slice its start leaves no row starts from nothing** | A table short of a slice's key, or an earlier sweep whose slice left no values, warns and starts that slice from nothing. The answer is the same; only the time it takes changes. |
 | **a start reaches every executor** | Each slice's cut is taken before the slice is sent, so a slice solved in another process takes it as data. |
@@ -318,8 +360,8 @@ than the table. Only `scan_parquet` is a reference.
 | | |
 |---|---|
 | **a partition is a filter on the sources** | Not a narrower index: the containment check refuses parameter rows outside the declared coordinates, so the axis rewrites the rows and the index they are over in one mapping. |
-| **one model, updated per slice** | A serial sweep builds once and [updates](api.md#specsolve.types.Model.update), and a slice whose structure matches the last keeps the loaded solver. A sweep under `executor=` builds per slice, because a built model does not cross a process. The loaded solver holds Gurobi's environment, so a [remote Gurobi](api.md#specsolve.types.Model.solve), such as Instant Cloud, opens one session for a serial sweep. It opens a new one at each slice where `sweep.metrics` counts a load, and at every slice under `executor=`. |
-| **each slice carries on from the one before, unless `start=` says otherwise** | As [`solve`](api.md#specsolve.types.Model.solve) does. Consecutive slices differ by one step, so there is something to carry; whether that pays is a fact about the *model*. Under `executor=` every slice is a first solve. |
+| **one model, updated per slice** | A serial sweep builds once and [updates](api.md#specsolve.types.Model.update), and a slice whose structure matches the last keeps the loaded solver. A sweep under `executor=` builds per task, a slice or a chain, because a built model does not cross a process. The loaded solver holds Gurobi's environment, so a [remote Gurobi](api.md#specsolve.types.Model.solve), such as Instant Cloud, opens one session for a serial sweep. It opens a new one at each slice where `sweep.metrics` counts a load, and at every slice under `executor=`. |
+| **each slice carries on from the one before, unless `start=` says otherwise** | As [`solve`](api.md#specsolve.types.Model.solve) does. Consecutive slices differ by one step, so there is something to carry; whether that pays is a fact about the *model*. Under `executor=` the first slice of every task is a first solve. |
 | **the model is asked before it is sliced** | The plan says what each axis can bear. [`EachWindow`](api.md#specsolve.EachWindow) says what a window refuses, and reads an offset the data decides off the data. `EachCoordinate` is not asked: the spec must not declare the column it slices, so the model never sees the axis. |
 | **the spec is parsed once** | `solve_over` validates it up front, so a spec outside the language fails before the data is touched. Every worker is handed the lowered [program](glossary.md#the-chain), in this process or across one, and none reads the YAML or lowers it again. |
 | **a slice is total** | A slice says what the *whole* model attaches, not what changed since the one before it. The class axes always do; a hand-built list has to keep the rule. |

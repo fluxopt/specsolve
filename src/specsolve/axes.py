@@ -1,9 +1,10 @@
-"""How a sweep cuts its sources into slices: one per coordinate, or one per window.
+"""How a sweep cuts its sources into slices: one per coordinate, or one per window, or one per combination of several axes.
 
 A partition filters the sources, rows and index together: the containment
 check refuses parameter rows outside a narrowed index. An [`EachWindow`][]
 axis also says how each window's frames are stitched back over the dimension
-it cut.
+it cut. A tuple of axes cuts with each in turn, outer first, and its slices
+fall into chains: the slices that share every outer key.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import polars as pl
 import polars.selectors as cs
@@ -34,30 +35,38 @@ if TYPE_CHECKING:
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and what it owns.
 
-    ``owns`` counts the coordinates of the re-indexed dimension this slice
-    keeps, the rest being lookahead, or is ``None`` where the axis re-indexed
-    nothing; a ``carry`` reads the seam off it.
+    ``key`` holds one label per axis, outer first. ``owns`` counts the coordinates of the re-indexed
+    dimension this slice keeps, the rest being lookahead, or is ``None`` where
+    the axis re-indexed nothing; a ``carry`` reads the seam off it.
     """
 
-    key: Label
+    key: tuple[Label, ...]
     sources: Mapping[str, Source]
     owns: int | None = None
-    #: How this slice cuts a table that carries the sliced dimension, as it
-    #: cut its sources; ``None`` for a slice written by hand.
+    #: How this slice cuts a table as it cut its sources: each axis cuts the
+    #: table where it carries that axis's column, and passes it through where
+    #: it does not; ``None`` for a slice written by hand.
     cut: Callable[[pl.LazyFrame], pl.LazyFrame] | None = None
+    #: The keys of the axes outside the outermost one that chains its slices,
+    #: which the slices that run in order after one another share; set by the
+    #: sweep, which knows which axes chain.
+    chain: tuple[Label, ...] = ()
 
 
 @dataclass(frozen=True)
 class Stitch:
     """The way from a windowed sweep's frames to its answer over the dimension it sliced.
 
-    ``owned`` is ``(key, local, dim)`` for the coordinates each window owns;
-    the lookahead rows are not in it.
+    ``owned`` is ``(*outer, key, local, dim)`` for the coordinates each window
+    owns; the lookahead rows are not in it.
     """
 
     local: str
     dim: str
     owned: pl.DataFrame
+    #: The key columns of the axes outside the windows, outer first, which
+    #: the answer keeps.
+    outer: tuple[str, ...] = ()
 
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
@@ -85,9 +94,9 @@ class Stitch:
             raise SpecsolveError(why)
         columns = frame.collect_schema().names()
         keys = [key_name, self.local]
-        rest = [column for column in columns if column not in (*keys, VALUE)]
-        restored = frame.lazy().join(self.owned.lazy(), on=keys, how='inner').drop(keys)
-        stitched = restored.select(self.dim, *rest, VALUE).sort(self.dim, *rest)
+        rest = [column for column in columns if column not in (*self.outer, *keys, VALUE)]
+        restored = frame.lazy().join(self.owned.lazy(), on=[*self.outer, *keys], how='inner').drop(keys)
+        stitched = restored.select(*self.outer, self.dim, *rest, VALUE).sort(*self.outer, self.dim, *rest)
         return stitched if isinstance(frame, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
@@ -102,18 +111,29 @@ class EachCoordinate:
     Parameters and relations carrying *dim* are filtered to one coordinate and
     the column dropped, so the model never mentions it; a *dim* the spec
     declares is refused, and so is an index that carries it. Every other
-    source passes through untouched. Slices run in sorted coordinate order,
-    which is the order a ``carry`` chains them in.
+    source passes through untouched. Slices run in sorted coordinate order.
+
+    ``carry={parameter: variable}`` chains them in that order: each slice's
+    answer is copied into the next slice's data, and the first takes the
+    parameter from the sources as its seed. Under an axis inside this one,
+    the value handed on is the last inner slice's, and it reaches every inner
+    slice of the next coordinate.
     """
 
     dim: str
+    #: ``{parameter: variable}`` handed from each slice to the next; empty for
+    #: slices that do not depend on one another.
+    carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'carry', dict(self.carry))
 
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
 
         For building one slice alone: ``sps.build(spec, axis.slices(sources)[3][1])``.
         """
-        return [(current.key, current.sources) for current in self._slice(sources, self._key_name())[0]]
+        return [(current.key[-1], current.sources) for current in self._slice(sources, self._key_name())[0]]
 
     def _key_name(self) -> str:
         return self.dim
@@ -135,7 +155,8 @@ class EachCoordinate:
         out: list[Slice] = []
         for key in coordinates:
             cut = partial(_one_coordinate, self.dim, key)
-            out.append(Slice(key, {**sources, **{name: cut(table) for name, table in carrying.items()}}, cut=cut))
+            filtered = {name: cut(table) for name, table in carrying.items()}
+            out.append(Slice((key,), {**sources, **filtered}, cut=partial(_where_carried, self.dim, cut)))
         return out, None
 
 
@@ -158,22 +179,31 @@ class EachWindow:
     ahead; and a ``position()`` the model counts warns, since every window
     restarts it. What the rows read *behind* is the rolling-horizon seed, met
     by the edge policy, and is not refused.
+
+    ``carry={parameter: variable}`` chains the windows in order: each window's
+    answer is copied into the next window's data. Where the two are over
+    different dimensions, the dropped one is *into*, and the last coordinate
+    the window owns is handed on. The first window takes the parameter from
+    the sources as its seed.
     """
 
     dim: str
     steps: int | Sequence[int] = field(kw_only=True)
     lookahead: int = field(kw_only=True)
     into: str = field(kw_only=True)
+    #: ``{parameter: variable}`` handed from each window to the next; empty for
+    #: windows that do not depend on one another.
+    carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
 
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
 
         For building one window alone: ``sps.build(spec, axis.slices(sources)[37][1])``.
         The pairs carry no ownership: solved as a list, the slices need
-        ``key_name=``, the answer is keyed by slice rather than stitched, and a
-        ``carry`` cannot collapse a dimension.
+        ``key_name=``, the answer is keyed by slice rather than stitched, and
+        nothing is carried between them.
         """
-        return [(current.key, current.sources) for current in self._slice(sources, self._key_name())[0]]
+        return [(current.key[-1], current.sources) for current in self._slice(sources, self._key_name())[0]]
 
     def __post_init__(self) -> None:
         blocks = [self.steps] if isinstance(self.steps, int) else list(self.steps)
@@ -187,6 +217,7 @@ class EachWindow:
             )
         if not isinstance(self.steps, int):
             object.__setattr__(self, 'steps', tuple(blocks))
+        object.__setattr__(self, 'carry', dict(self.carry))
         if not self.into:
             raise ValueError('into must name the local index the spec declares — it has no default')
         if self.into == self.dim:
@@ -249,7 +280,8 @@ class EachWindow:
             window = coordinates[start : start + owns + self.lookahead]
             cut = partial(_one_window, self.dim, self.into, window)
             filtered = {name: cut(table) for name, table in carrying.items()}
-            out.append(Slice(window[0], {**sources, **filtered, self.into: range(len(window))}, owns, cut))
+            tolerant = partial(_where_carried, self.dim, cut)
+            out.append(Slice((window[0],), {**sources, **filtered, self.into: range(len(window))}, owns, tolerant))
             owned.extend(
                 {key_name: window[0], self.into: position, self.dim: coordinate}
                 for position, coordinate in enumerate(window[:owns])
@@ -291,6 +323,89 @@ Axis = EachCoordinate | EachWindow
 #: this beside an [`Axis`][].
 type HandBuilt = Sequence[tuple[Label, Mapping[str, Source]]]
 
+#: Several axes, outer first, which cut the sources with each in turn: every
+#: [`EachCoordinate`][] but the last, which may also be an [`EachWindow`][].
+type Axes = tuple[Axis, ...]
+
+
+def checked_axes(axis: Axis | Axes) -> Axes:
+    """*axis* as the axes it cuts with, outer first; one axis is a tuple of one.
+
+    Raises:
+        SpecsolveError: One that is not an axis, a window outside another
+            axis, or two axes over one dimension.
+    """
+    axes = axis if isinstance(axis, tuple) else (axis,)
+    if odd := [repr(each) for each in axes if not isinstance(each, (EachCoordinate, EachWindow))]:
+        raise SpecsolveError(
+            f'a tuple of axes takes EachCoordinate and EachWindow, outer first, and {", ".join(odd)} is neither. '
+            f'A hand-built list of slices is passed alone, as axis=.'
+        )
+    if outside := [each.dim for each in axes[:-1] if isinstance(each, EachWindow)]:
+        raise SpecsolveError(
+            f'EachWindow({outside[0]!r}) is outside another axis, and windows can only be the last axis: a '
+            f'window is stitched back over {outside[0]!r}, and an axis inside it would cut each window again. '
+            f'Put the windows last, so each combination of the outer keys is one horizon.'
+        )
+    dims = [each.dim for each in axes]
+    if repeated := sorted({dim for dim in dims if dims.count(dim) > 1}):
+        raise SpecsolveError(
+            f'two axes cut {repeated[0]!r}, so the inner one would find the column already dropped by the outer '
+            f'one. Cut each dimension once.'
+        )
+    return axes
+
+
+def cut_by(axes: Axes, sources: Mapping[str, Source], key_names: Sequence[str]) -> tuple[list[Slice], Stitch | None]:
+    """Every slice *axes* cut *sources* into, outer first, and the [`Stitch`][] of a sweep whose last axis is windows.
+
+    Each outer slice is cut again by the axes inside it, so the coordinates
+    and the windows of an inner axis are the ones that outer slice holds. A
+    slice's key prepends the outer keys to its own, and its cut applies each
+    axis in turn.
+    """
+    first, *inner = axes
+    if not inner:
+        return first._slice(sources, key_names[0])
+    out: list[Slice] = []
+    owned: list[pl.DataFrame] = []
+    stitch: Stitch | None = None
+    for outer in first._slice(sources, key_names[0])[0]:
+        slices, stitch = cut_by(tuple(inner), outer.sources, key_names[1:])
+        out.extend(
+            Slice((*outer.key, *each.key), each.sources, each.owns, partial(_in_turn, outer.cut, each.cut))
+            for each in slices
+        )
+        if stitch is not None:
+            owned.append(stitch.owned.select(pl.lit(outer.key[0]).alias(key_names[0]), pl.all()))
+    if stitch is None:
+        return out, None
+    return out, Stitch(stitch.local, stitch.dim, pl.concat(owned), (key_names[0], *stitch.outer))
+
+
+def keyed_slices(
+    axis: Axis | Axes, sources: Mapping[str, Source]
+) -> list[tuple[tuple[Label, ...], Mapping[str, Source]]]:
+    """Each slice *axis* cuts *sources* into, as its key, one label per axis outer first, and its sources."""
+    axes = axis if isinstance(axis, tuple) else (axis,)
+    slices, _ = cut_by(axes, sources, [each._key_name() for each in axes])
+    return [(current.key, current.sources) for current in slices]
+
+
+def _in_turn(
+    outer: Callable[[pl.LazyFrame], pl.LazyFrame] | None,
+    inner: Callable[[pl.LazyFrame], pl.LazyFrame] | None,
+    table: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """*table* cut by the outer axis, then by the axes inside it; a class axis always has a cut."""
+    assert outer is not None and inner is not None, 'every slice an axis cuts carries its cut'
+    return inner(outer(table))
+
+
+def _where_carried(dim: str, cut: Callable[[pl.LazyFrame], pl.LazyFrame], table: pl.LazyFrame) -> pl.LazyFrame:
+    """*table* cut where it carries *dim*, and whole where it does not, as a slice takes a source that lacks the axis."""
+    return cut(table) if dim in table.collect_schema().names() else table
+
 
 def check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis: Axis) -> None:
     """Refuse an index of a dimension other than the axis's own that carries the axis column.
@@ -312,19 +427,34 @@ def check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis:
         )
 
 
-def axis_manifest(axis: Axis) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — the archive's own JSON
+def axis_manifest(axis: Axis | Axes) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — the archive's own JSON
     """*axis* as the JSON an archive carries, read back by [`axis_from`][]."""
+    if isinstance(axis, tuple):
+        return {'each': 'axes', 'axes': [axis_manifest(each) for each in axis]}
+    carry = {'carry': dict(axis.carry)} if axis.carry else {}
     if isinstance(axis, EachCoordinate):
-        return {'each': 'coordinate', 'dim': axis.dim}
+        return {'each': 'coordinate', 'dim': axis.dim, **carry}
     steps = axis.steps if isinstance(axis.steps, int) else list(axis.steps)
-    return {'each': 'window', 'dim': axis.dim, 'steps': steps, 'lookahead': axis.lookahead, 'into': axis.into}
+    return {
+        'each': 'window',
+        'dim': axis.dim,
+        'steps': steps,
+        'lookahead': axis.lookahead,
+        'into': axis.into,
+        **carry,
+    }
 
 
-def axis_from(manifest: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — the archive's own JSON
+def axis_from(manifest: Mapping[str, Any]) -> Axis | Axes:  # pyrefly: ignore[explicit-any] — the archive's own JSON
     """The axis [`axis_manifest`][] wrote."""
+    if manifest['each'] == 'axes':
+        return tuple(cast('Axis', axis_from(each)) for each in manifest['axes'])
+    carry = manifest.get('carry', {})
     if manifest['each'] == 'coordinate':
-        return EachCoordinate(manifest['dim'])
-    return EachWindow(manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'])
+        return EachCoordinate(manifest['dim'], carry=carry)
+    return EachWindow(
+        manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'], carry=carry
+    )
 
 
 def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

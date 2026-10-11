@@ -5,6 +5,10 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
+## Upcoming version
+
+- feat(api): a sweep can be cut by several axes at once, each carrying its own state, such as a rolling horizon per scenario ([#1888](https://github.com/fluxopt/specsolve/pull/1888))
+
 ## 0.8.1 (2026-10-11)
 
 **Faster everywhere, nothing to change on your side.** Model files, archives

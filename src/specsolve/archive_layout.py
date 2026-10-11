@@ -16,7 +16,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.selectors as cs
@@ -47,7 +47,7 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 1
+INPUTS_LAYOUT = 2
 
 
 def check_the_target(out: Path) -> None:
@@ -180,16 +180,17 @@ def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, o
 
 
 def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
-    """The dimension of each column a sweep adds to its files: the axis column, and the key naming each slice.
+    """The dimension of each column a sweep adds to its files: each axis column, and the key naming each slice by it.
 
     A window's answer and cut sources hold the axis column where the spec
     declares the local index. Empty for a single solve.
     """
     if axis is None:
         return {}
-    dim = str(axis['dim'])
-    key = json.loads((tree / ANSWER_DIR / MANIFEST_FILE).read_text())['key_name']
-    return {dim: dim, key: dim}
+    each = cast('list[Mapping[str, object]]', axis['axes']) if axis['each'] == 'axes' else [axis]
+    dims = [str(one['dim']) for one in each]
+    keys = json.loads((tree / ANSWER_DIR / MANIFEST_FILE).read_text())['key_names']
+    return {**{dim: dim for dim in dims}, **dict(zip(keys, dims, strict=True))}
 
 
 def _catalog(

@@ -87,8 +87,7 @@ def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
     return sps.solve_over(
         MODEL,
         SOURCES,
-        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t', carry={'soc_initial': 'soc'}),
     )
 
 

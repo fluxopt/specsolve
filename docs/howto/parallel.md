@@ -54,5 +54,7 @@ sweep.primal('p')  # (scenario, snapshot, generator, value)
 sweep.metrics  # one row per slice; every slice loaded its own solver
 ```
 
-A sweep with a `carry` cannot run in parallel, because each slice reads the
-one before it.
+A sweep of one chain with a `carry` cannot run in parallel, because each
+slice reads the one before it. A sweep over
+[several axes](../reference/sweeps.md#several-axes) runs its chains in
+parallel instead.
