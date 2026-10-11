@@ -87,8 +87,8 @@ dev = [
     "pyarrow>=16",
     "typst>=0.15.0",
     "pyomo>=6.7",
-    # The test oracle. Master: linopy's v1 arithmetic convention is in no release yet (#463).
-    "linopy @ git+https://github.com/PyPSA/linopy@master",
+    # The test oracle. Exact: 0.10.0 is the first release with linopy's v1 arithmetic convention (#463).
+    "linopy==0.10.0",
     "xarray>=2024.2.0",
     "pandas>=2.2",
 ]
@@ -103,8 +103,6 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # `choices` on a task argument arrived in 0.65.
 requires-pixi = ">=0.65"
-
-# There is no pixi.lock: a lock would pin the test oracle's linopy branch to one commit.
 
 [tool.pixi.dependencies]
 python = "3.12.*"
@@ -177,6 +175,7 @@ density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --be
 declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep, dense and masked" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
 plot = { cmd = "python -m bench.plot", description = "The chart page's rows" }
+ab = { cmd = "python -m bench.ab.compare", description = "A/B of two git refs over the grid in bench/ab: ab <base> <head> [--focus module:Class.method] [-k cell]" }
 table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
 
 [tool.pixi.feature.bench.tasks.ladder]
@@ -191,7 +190,7 @@ args = [
     { arg = "memory", default = "16" },
 ]
 cmd = """
-pytest bench --benchmark-memory --builds {{ builds }} -k "test_emit or test_rebuild" \
+pytest bench --benchmark-memory --builds {{ builds }} -k "test_emit or test_rebuild or test_fresh" \
   --cases {{ cases }} \
   --sizes {{ sizes }} --sinks {{ sinks }} --arms {{ arms }} \
   --budget 30 --memory-budget {{ memory }} --benchmark-memory-repeats 1 \
@@ -199,11 +198,11 @@ pytest bench --benchmark-memory --builds {{ builds }} -k "test_emit or test_rebu
 """
 
 [tool.pixi.feature.bench.tasks.ladder-ci]
-description = "One sink of the published ladder, a process per case"
+description = "One sink of the published ladder, a process per case and ladder"
 args = [{ arg = "sink" }, { arg = "cases", default = "dispatch transport storage fleet" }]
 # `bash -c` because the pixi shell has no `for`.
 # `--builds` only on highs, because `test_rebuild` does not vary by sink.
-cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do pixi run -e bench ladder "$case" "$sizes" "{{ sink }}" "specsolve linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "bench/results/latest-{{ sink }}-$case.json" "$builds" "$memory" || lost="$lost $case"; done; [ -z "$lost" ] || { echo "cases that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-xs s m l w1 w10 w100 w1000}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
 
 [tool.pixi.feature.bench.tasks.ladder-smoke]
 description = "One rung, to prove the machinery rather than to measure anything"

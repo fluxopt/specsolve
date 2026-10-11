@@ -2,7 +2,7 @@
 
 A minimum output that is a share of a capacity still being decided: two variables multiplied, and one constant to take them apart.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **21700.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **21700.0**, matched to `rtol=1e-09`.
 
 [Unit commitment](pypsa_unit_commitment.md) holds capacity fixed, so
 `p >= p_min_pu * p_nom * status` is a parameter against a variable and stays

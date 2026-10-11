@@ -210,9 +210,7 @@ class Highs(Solver):
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
     )
 
-    def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
-        """Load in one call — *batch_rows* is the family's parameter and this member has no batches."""
-        del batch_rows
+    def _load(self, handoff: Handoff) -> None:
         self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options)
 
     @property

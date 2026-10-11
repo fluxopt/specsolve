@@ -66,22 +66,6 @@ def test_every_port_reaches_its_reference_optimum_on_xpress(port: dict[str, Any]
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
-@pytest.mark.parametrize('batch_rows', [None, 1, 2, 10_000], ids=lambda n: f'batch-{n}')
-def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None:
-    """The matrix goes in a block at a time, and a block is a slice of rows.
-
-    A boundary that dropped or repeated a row's entries would still solve, so
-    the budget is varied against a fixed answer rather than asserted about.
-    """
-    spec, data = CASES['LP']
-    with sps.build(spec, data) as model:
-        tables = model._engine._model.handoff
-        reference = model.solve().objective
-    problem = Xpress(tables, batch_rows=batch_rows).handle
-    problem.optimize()
-    assert float(problem.attributes.objval) == pytest.approx(reference), f'batch_rows={batch_rows} moved the answer'
-
-
 def test_an_infeasible_solve_reports_both_axes_in_xpress_wording() -> None:
     assert_infeasible_reports_both_axes('xpress')
 

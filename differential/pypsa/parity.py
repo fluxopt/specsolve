@@ -11,7 +11,7 @@ it needs a checkout of that repository at the tag `pypsa-parity.yml` names. No
 pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
-        --with "$(grep -o 'linopy @ git+[^"]*' pyproject.toml)" \
+        --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
         --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=2.0" \
         python differential/pypsa/parity.py ../mathspec
 

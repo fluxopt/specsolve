@@ -2,7 +2,7 @@
 
 A row of data that is present pins its variable; a row that is absent leaves it free.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **49900.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **49900.0**, matched to `rtol=1e-09`.
 
 `p_set` pins a dispatch, `p_nom_set` pins a capacity, and each equality exists
 only where the table has a row: the must-run unit, the pre-committed schedule,
@@ -234,7 +234,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom_extendable=True,
             p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
             p_nom_set=tables['p_nom_set'].set_index('generator')['value'].reindex(generators.index, fill_value=np.nan),

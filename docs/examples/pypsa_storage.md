@@ -2,7 +2,7 @@
 
 [Ramp limits](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **15253.178322993519**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **15253.178322993519**, matched to `rtol=1e-09`.
 
 Non-cyclic: the horizon starts at `soc_initial` and its end is free.
 [Cyclic storage](pypsa_cyclic_storage.md) closes that loop, kept separate so
@@ -341,7 +341,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
             ramp_limit_up=tables['ramp_limit_up'].set_index('generator')['value'],
@@ -350,8 +350,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Link',
             links.index,
-            bus0=links['link_from'],
-            bus1=links['link_to'],
+            bus0=tables['link_from'].set_index('link')['bus'],
+            bus1=tables['link_to'].set_index('link')['bus'],
             p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,
@@ -360,7 +360,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'StorageUnit',
             storages.index,
-            bus=storages['storage_bus'],
+            bus=tables['storage_bus'].set_index('storage')['bus'],
             p_nom=p_nom,
             max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
             state_of_charge_initial=tables['soc_initial'].set_index('storage')['value'],
