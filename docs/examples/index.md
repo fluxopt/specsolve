@@ -13,7 +13,6 @@ shows the YAML, the same model as math, and its data.
 | [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
 | [storage](storage.md) | Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear. |
 | [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
-| [piecewise](piecewise.md) | Per-generator convex cost curves, expanded into a λ-formulation. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
 | [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next. |

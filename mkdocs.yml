@@ -47,7 +47,6 @@ nav:
               - dispatch: examples/dispatch.md
               - storage: examples/storage.md
               - transport: examples/transport.md
-              - piecewise: examples/piecewise.md
               - monthly budget: examples/monthly_budget.md
               - multi-period: examples/multi_period.md
               - seasons: examples/seasons.md

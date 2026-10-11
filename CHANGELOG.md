@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs: the examples keep one piecewise page, and the four variants leave the gallery ([#1976](https://github.com/fluxopt/specsolve/pull/1976))
+- docs: the piecewise examples leave the gallery, which showcases the engine rather than the language ([#1976](https://github.com/fluxopt/specsolve/pull/1976))
 - docs: the start-up table is shaded like the benchmark charts' own table ([#1974](https://github.com/fluxopt/specsolve/pull/1974))
 - docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))
 - docs: the benchmarks page shows what a script that solves one model pays, as one small table ([#1971](https://github.com/fluxopt/specsolve/pull/1971))
