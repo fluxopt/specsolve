@@ -188,6 +188,11 @@ def _digest(shape: Shape) -> str:
     return hashlib.sha256(source.encode()).hexdigest()[:12]
 
 
+def per_label(shape: Shape) -> int:
+    """The columns of *shape* for each label of its first dimension, short of a broadcast or a mask."""
+    return shape.terms * int(np.prod([OTHER_DIMS[d] for d in _dims(shape)[1:]]))
+
+
 def _dims(shape: Shape) -> list[str]:
     return ['d0', *list(OTHER_DIMS)[: shape.dims - 1]]
 
@@ -263,8 +268,7 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
     """Every source [`spec`][] of *shape* reads, at about *columns* columns, from a fixed seed."""
     rng = np.random.default_rng(1931)
     dims = _dims(shape)
-    rest = int(np.prod([OTHER_DIMS[d] for d in dims[1:]]))
-    n0 = max(2, columns // (shape.terms * rest))
+    n0 = max(2, columns // per_label(shape))
 
     first = np.arange(n0)
     index: dict[str, np.ndarray] = {

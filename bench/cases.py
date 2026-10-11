@@ -19,6 +19,9 @@ Each case stresses a different SQL shape:
                with its model YAML generated per rung (``_declarations_spec``).
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
+``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``): a binary
+               variable, a row mask on a relation's label and a sum through a
+               relation, over three dimensions, the first counting snapshots.
 
 A rung label counts variables per snapshot across all of a case's
 declarations. ``nominal_variables`` is the full coordinate product; what
@@ -580,6 +583,29 @@ def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
 # --------------------------------------------------------------------------
 
 
+def _milp_spec(shape: Shape) -> str:
+    """The grid's ``milp`` shape as YAML, which no rung changes."""
+    import yaml
+
+    from bench.ab.grid import SHAPES, spec
+
+    del shape
+    return yaml.safe_dump(spec(SHAPES['milp']), sort_keys=False)
+
+
+def _milp_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of ``milp``: the grid's tables, ``snapshot`` labels on its first dimension."""
+    from bench.ab.grid import SHAPES, per_label, tables
+
+    milp = SHAPES['milp']
+    paths = {}
+    for name, frame in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
+        path = (dest / f'{name}.parquet').absolute()
+        frame.write_parquet(path)
+        paths[name] = str(path)
+    return paths
+
+
 def _ladder(
     sizes: dict[str, int],
     snapshots: Sequence[int],
@@ -722,6 +748,12 @@ CASES: dict[str, Case] = {
             *_width_ladder({'generator': 100, 'bus': 20, 'line': 40}, snapshots=70, per_snapshot=140),
         ),
         write=_transport_data,
+    ),
+    'milp': Case(
+        name='milp',
+        ladder=_ladder({}, (400, 4_000, 40_000, 400_000), per_snapshot=24),
+        write=_milp_data,
+        generate_spec=_milp_spec,
     ),
     'storage': Case(
         name='storage',
