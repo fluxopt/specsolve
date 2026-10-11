@@ -19,7 +19,8 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve.errors import DataError, position_out_of_range_message, short_groups_message
+from specsolve.errors import DataError
+from specsolve.messages import position_out_of_range_message, short_groups_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.operators import _grouped, operator_at
 

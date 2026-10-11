@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from bench.arms import Counts
 
 #: Every sink pyomo can hand a model to.
-SINKS = ('lp', 'highs', 'gurobi')
+SINKS = ('lp', 'mps', 'highs', 'gurobi')
 
 #: What has to be importable for this arm to run; an absent library skips the cell.
 REQUIRES = ('pyomo',)
@@ -69,8 +69,8 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
     """Build the model and hand it over — an LP file, or a populated solver; nothing calls ``solve``."""
     with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
         m = _built(prepared)
-        if sink == 'lp':
-            m.write(str(Path(tmp) / 'model.lp'))
+        if sink in ('lp', 'mps'):
+            m.write(str(Path(tmp) / f'model.{sink}'))
         else:
             _handle = _persistent(sink)
             _handle.set_instance(m)

@@ -181,7 +181,7 @@
   mask-image: url("icons/split.svg");
 }
 
-.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/about/benchmarks-scaling.html"])::before {
+.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/about/benchmarks/"])::before {
   content: "";
   mask-image: url("icons/speedometer.svg");
 }

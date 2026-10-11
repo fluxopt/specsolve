@@ -36,8 +36,7 @@ formula the file wrote.
 
 The export reads what the engine built. It is not part of the engine, so it
 sits outside `relational/` in `specsolve/linopy.py`, and it imports linopy only
-when it is called. The extra names the same linopy as the oracle, the `master`
-branch, so a release to PyPI needs a published linopy first.
+when it is called. The extra names the same linopy as the oracle, 0.10.0.
 
 linopy has no quadratic constraint and no constant in its objective, and it
 drops a constraint row that has no term. The export refuses a model that would
@@ -171,9 +170,9 @@ The modeling API is what a reader arriving from linopy misses first. Two
 pages replace it. The tutorial [Change a model](../change.md) covers the
 loops: `update` for new numbers, a longer table for more rows, a patched `dict`
 for new math. The how-to [Fixing, relaxing and removing](../howto/fix-relax-remove.md)
-aims the same loops at `fix`, `relax` and `remove_constraints`. Neither replaces
-the *debugging*: an IIS. A built row is read with
-[`row`](../reference/api.md#specsolve.Model.row), in linopy's own form.
+aims the same loops at `fix`, `relax` and `remove_constraints`. A built row is
+read with [`row`](../reference/api.md#specsolve.types.Model.row), in linopy's
+own form, and an IIS with [`infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem).
 
 Where linopy is ahead, and why none of it is a ceiling question, is
 [the roadmap](roadmap.md#honest-snapshot). What is *owed* to linopy rather than

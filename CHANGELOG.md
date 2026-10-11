@@ -7,12 +7,156 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(sweep): a spilled or scanned sweep's readers read the name they are asked for instead of refusing ([#1830](https://github.com/fluxopt/specsolve/pull/1830))
-- refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
-- refactor(archive): Record, Metrics and Provenance are imported from specsolve.relational.answer_layout, which an archive's own layout nests ([#1823](https://github.com/fluxopt/specsolve/pull/1823))
-- feat(api): a written LP or MPS file can name each variable and constraint by its declaration and coordinate ([#1795](https://github.com/fluxopt/specsolve/pull/1795))
-- feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#1793](https://github.com/fluxopt/specsolve/pull/1793))
 - feat(api): a built model can be handed to linopy with its declared names and dimensions ([#1797](https://github.com/fluxopt/specsolve/pull/1797))
+- feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#1793](https://github.com/fluxopt/specsolve/pull/1793))
+- feat(api): a written LP or MPS file can name each variable and constraint by its declaration and coordinate ([#1795](https://github.com/fluxopt/specsolve/pull/1795))
+- docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))
+- docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
+- docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
+- perf(engine): a model with at most 250,000 columns and 250,000 rows builds on polars' in-memory engine, a fifth faster at the smallest sizes ([#1930](https://github.com/fluxopt/specsolve/pull/1930))
+- docs(benchmarks): the published benchmarks are re-measured after 0.8.0 ([#1934](https://github.com/fluxopt/specsolve/pull/1934))
+- perf(engine): a model loads into Gurobi in a sixth to a third of the time, and a quadratic constraint no longer slows with the column count ([#1942](https://github.com/fluxopt/specsolve/pull/1942))
+- perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
+- perf(writers): a model with quadratic constraints writes its LP file in about the time of one without them ([#1939](https://github.com/fluxopt/specsolve/pull/1939))
+- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
+- fix(data): a null label in an index or a parameter is refused at load rather than building a wrong model or crashing ([#1935](https://github.com/fluxopt/specsolve/pull/1935))
+- perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
+- perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
+- perf(archive): a sweep held in memory is archived without first being saved to scratch ([#1929](https://github.com/fluxopt/specsolve/pull/1929))
+- perf(archive): an archive writes its answer once rather than saving it and then copying it ([#1924](https://github.com/fluxopt/specsolve/pull/1924))
+- perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
+- perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
+- docs(benchmarks): the published benchmarks measure specsolve on polars' in-memory engine beside its default ([#1923](https://github.com/fluxopt/specsolve/pull/1923))
+
+- docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
+
+## 0.8.0 (2026-10-09)
+
+New:
+
+- Warm starts from an earlier answer, a basis or values. A re-solve carries on by default.
+- Reduced costs, slacks and the basis, through `outputs=`.
+- An infeasible model names the conflicting rows.
+- `load_inputs` reads the spec and data from an archive whose answer is too old.
+
+Breaks:
+
+- Files from 0.7.0 or earlier are refused.
+- `keep=` and `Result.kept` are gone. Use `start=None` to start cold.
+- Activity is saved only with `outputs={'activity'}`.
+- The digests are gone. An answer carries its `spec`.
+- A dimension called `value` is refused.
+
+Solving:
+
+- feat(api): a solve or a sweep can start from tables of values and basis statuses, and a sweep from an earlier sweep or from the slice before it ([#1882](https://github.com/fluxopt/specsolve/pull/1882))
+- feat(api): an LP solve can start from an earlier answer's basis, matched by coordinate, so a model that gained a cut starts from where it was ([#1877](https://github.com/fluxopt/specsolve/pull/1877))
+- feat(api): a mixed-integer solve can start from values, an earlier answer's or any source a parameter takes, matched by coordinate ([#1878](https://github.com/fluxopt/specsolve/pull/1878))
+- refactor(api): keep= is gone, and a re-solve carries on from where the last solve ended unless start=None says otherwise ([#1884](https://github.com/fluxopt/specsolve/pull/1884))
+- perf(highs): handing a basis to HiGHS takes milliseconds rather than a second at a million columns ([#1885](https://github.com/fluxopt/specsolve/pull/1885))
+- fix(engine): an update whose coefficients moved only in their last bits keeps the loaded solver and its warm start ([#1906](https://github.com/fluxopt/specsolve/pull/1906))
+
+Reading an answer:
+
+- feat(api): a model with no solution names the rows and bounds that conflict ([#1880](https://github.com/fluxopt/specsolve/pull/1880))
+- feat(api): every answer holds an optional output only when outputs= asks for it, and a sweep can hold the activity too ([#1865](https://github.com/fluxopt/specsolve/pull/1865))
+- feat(api): a solve or a sweep asked for outputs={'reduced_cost'} reads each variable's reduced cost, with the same sign on every solver ([#1856](https://github.com/fluxopt/specsolve/pull/1856))
+- feat(api): a solve or a sweep asked for outputs={'slack'} reads how far each constraint is from binding ([#1868](https://github.com/fluxopt/specsolve/pull/1868))
+- feat(api): a solve or a sweep asked for outputs={'basis'} reads the basis it ended on, in the same words on every solver ([#1876](https://github.com/fluxopt/specsolve/pull/1876))
+- fix(engine): an expression that reads a variable with no dimensions reads its solved value, in a save and a sweep too ([#1903](https://github.com/fluxopt/specsolve/pull/1903))
+
+Archives:
+
+- feat(api): an answer carries the spec it answered rather than a digest of it, and an archive no longer digests its sources ([#1913](https://github.com/fluxopt/specsolve/pull/1913))
+- fix(archive): an archive is read as it was written, so one whose rebuild differs in its last bit reads back, and an answer no longer carries a model digest ([#1904](https://github.com/fluxopt/specsolve/pull/1904))
+- feat(archive): load_inputs reads the spec and the data back from an archive whose answer this version no longer reads ([#1883](https://github.com/fluxopt/specsolve/pull/1883))
+
+Data:
+
+- fix(api): a dimension called value is refused when the spec loads, and every printed coordinate names its dimensions ([#1887](https://github.com/fluxopt/specsolve/pull/1887))
+- fix(data): a datetime dimension takes a date, a nanosecond or a pandas seconds column for the same instant ([#1908](https://github.com/fluxopt/specsolve/pull/1908))
+- fix(data): a value that is not finite, from a divisor that is zero or an infinite value times a variable, is refused rather than sent to the solver ([#1905](https://github.com/fluxopt/specsolve/pull/1905))
+- fix(data): an int parameter can be given as one number, and a sum_back window or a shift offset may be a parameter with no dimensions ([#1907](https://github.com/fluxopt/specsolve/pull/1907))
+- docs(data): data given to a model must not change while the model or its answers are in use ([#1909](https://github.com/fluxopt/specsolve/pull/1909))
+
+Examples:
+
+- docs(examples): the special-ordered sets example says HiGHS refuses a set and names the way past it, rather than that it rewrites the set ([#1900](https://github.com/fluxopt/specsolve/pull/1900))
+
+## 0.7.0 (2026-10-07)
+
+specsolve now requires polars 2.0. An environment that must stay on polars 1.x
+keeps 0.6.2.
+
+- feat(deps): specsolve runs on polars 2.0 and requires it ([#1857](https://github.com/fluxopt/specsolve/pull/1857))
+
+## 0.6.2 (2026-10-07)
+
+- fix(archive): a sweep being archived is invisible to a reader of its directory until it lands ([#1873](https://github.com/fluxopt/specsolve/pull/1873))
+- docs(benchmarks): the benchmark page is one page in the site's theme, built on a published table of measurements ([#1851](https://github.com/fluxopt/specsolve/pull/1851), [#1855](https://github.com/fluxopt/specsolve/pull/1855), [#1860](https://github.com/fluxopt/specsolve/pull/1860), [#1862](https://github.com/fluxopt/specsolve/pull/1862))
+
+## 0.6.1 (2026-10-06)
+
+specsolve now requires polars below 2.0. On polars 2.0.0, a row's dual can come
+back empty, and a model can take about nine times the memory. Nothing else
+changes.
+
+- fix(deps): specsolve installs a polars older than 2.0, on which a row's dual can come back empty and a model can take nine times the memory ([#1852](https://github.com/fluxopt/specsolve/pull/1852))
+- docs: the published benchmarks are re-measured on specsolve 0.6.0 ([#1850](https://github.com/fluxopt/specsolve/pull/1850))
+
+## 0.6.0 (2026-10-05)
+
+Breaks:
+
+- An archive, spill or saved result written by 0.5.0 is refused: the layout is 3.
+- `catalog.parquet` has no `dim_position`.
+- `owned.parquet` is at `answer/windows/`, and only with `keep_windows=True`.
+
+The pull requests since 0.5.0:
+
+- fix(data): a datetime label is held in microseconds whatever unit it arrives in ([#1839](https://github.com/fluxopt/specsolve/pull/1839))
+- feat(archive): an archive writes every column as a type that parquet readers agree on ([#1835](https://github.com/fluxopt/specsolve/pull/1835))
+- fix(archive): an archive's catalog describes each file as it is written, and kept windows have a catalog of their own ([#1838](https://github.com/fluxopt/specsolve/pull/1838))
+- fix(sweep): a sweep over a datetime axis in nanoseconds or milliseconds solves rather than crashing in its first slice ([#1848](https://github.com/fluxopt/specsolve/pull/1848))
+
+## 0.5.0 (2026-10-03)
+
+The top level of `specsolve` now holds only what you call. What a call returns
+is in `specsolve.types`, and what it raises is in `specsolve.errors`. Any other
+name under `specsolve.` is internal. A spilled sweep now reads like one held in
+memory. This release breaks imports, one class name, one attribute and one
+method. Nothing on disk changed: archives, spills and saved results written by
+0.4.0 read back.
+
+Breaks:
+
+- `Model`, `Result`, `Sweep`, `ResultArchive` and `SweepArchive` are imported
+  from `specsolve.types`, and so are the rows they hold: `Record`,
+  `Provenance`, `Metrics`, `Diagnostics` and `ConstraintRow`. Write
+  `sps.types.Result` for `sps.Result`. `specsolve.relational.parquet` is
+  removed.
+- Every error and `SpecsolveWarning` is imported from `specsolve.errors`.
+  Write `sps.errors.DataError` for `sps.DataError`.
+- `SolveArchive` is now `ResultArchive`. What an archive holds is
+  `archive.result` for one solve and `archive.sweep` for a sweep; `.answer` is
+  removed.
+- `Model.evaluator` is private. An archive and a sweep still evaluate an
+  expression the file never named.
+
+New:
+
+- On a spilled or scanned sweep, `primal`, `dual`, `evaluate`, `to_pandas`,
+  `to_dataarray`, `to_dataset` and `save` read the name they are asked for
+  instead of refusing. `sweep.scan(name)` returns the same frame, not yet read.
+- The reference has an internal glossary: the names the code uses for its own
+  parts, for anyone reading `src/`.
+
+The pull requests since 0.4.0:
+
+- refactor(archive): Record, Metrics and Provenance are imported from specsolve.relational.answer_layout, which an archive's own layout nests ([#1823](https://github.com/fluxopt/specsolve/pull/1823))
+- refactor(archive): an archive of one solve is a ResultArchive read through .result, and a sweep archive is read through .sweep ([#1828](https://github.com/fluxopt/specsolve/pull/1828))
+- feat(sweep): a spilled or scanned sweep's readers read the name they are asked for instead of refusing ([#1830](https://github.com/fluxopt/specsolve/pull/1830))
+- refactor(api): what a call returns is imported from specsolve.types, and what it raises from specsolve.errors ([#1833](https://github.com/fluxopt/specsolve/pull/1833))
 
 ## 0.4.0 (2026-10-03)
 

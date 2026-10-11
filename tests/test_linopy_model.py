@@ -151,7 +151,7 @@ def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any) -> 
     signs = {'<=': '<=', '>=': '>=', '==': '='}
     with sps.build(spec, data) as model:
         m = model.to_linopy()
-        result = model.solve()
+        result = model.solve(outputs={'activity'})
         for constraint, declared in model._program.constraints.items():
             coordinates = (
                 list(result.activity(constraint).drop('value').iter_rows(named=True)) if declared.dims else [{}]
@@ -164,7 +164,9 @@ def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any) -> 
                 expected = {
                     (
                         t['variable'],
-                        tuple(_label(v) for v in t['coordinate'].split(', ')) if t['coordinate'] else (),
+                        tuple(_label(v.split('=', 1)[1]) for v in t['coordinate'].split(', '))
+                        if t['coordinate']
+                        else (),
                     ): t['coefficient']
                     for t in row.terms.iter_rows(named=True)
                 }

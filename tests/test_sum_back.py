@@ -457,3 +457,31 @@ def test_a_window_wider_than_the_axis_counts_each_position_once():
         assert run.result.objective == pytest.approx(float(len(UNITS) * len(PERIODS))), (
             'a window at least as wide as the axis holds every position on, once'
         )
+
+
+#: A width with no dimensions: one count the whole axis shares, as OSeMOSYS
+#: storage reads its daily time brackets.
+SCALAR_WIDTH = {
+    'dimensions': {'t': {'dtype': 'int'}},
+    'parameters': {'w': {'dims': [], 'dtype': 'int'}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
+    'constraints': {'c': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w) >= 1'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
+}
+
+
+@pytest.mark.parametrize(
+    'width',
+    [pytest.param(2, id='one-number'), pytest.param(pl.DataFrame({'value': [2]}), id='one-row-table')],
+)
+def test_a_width_with_no_dimensions_is_one_window_for_every_position(width):
+    """A dimensionless int width reads as the literal ``window=2`` does (#1891).
+
+    One number was widened to float on the way in, so an ``int`` declaration
+    refused it. A one-row table attached, and then the width was joined to the
+    rows on its keys, which are none, and polars refused the join.
+    """
+    with differential(SCALAR_WIDTH, {'t': [1, 2, 3], 'w': width}) as run:
+        assert run.oracle == pytest.approx(2.0), (
+            'x[1] and x[3] cover every two-wide window, as a literal width of 2 does'
+        )

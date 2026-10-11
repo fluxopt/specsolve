@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_spill``: PyPSA's own storage spillage. See docs/examples/index.md.
 
@@ -62,7 +62,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=generators['gen_bus'],
+        bus=tables['gen_bus'].set_index('generator')['bus'],
         p_nom=tables['p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )
@@ -71,7 +71,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'StorageUnit',
         storages.index,
-        bus=storages['storage_bus'],
+        bus=tables['storage_bus'].set_index('storage')['bus'],
         p_nom=p_nom,
         max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
         state_of_charge_initial=tables['soc_initial'].set_index('storage')['value'],
