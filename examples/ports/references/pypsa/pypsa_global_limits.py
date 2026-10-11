@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_global_limits``: PyPSA's own global constraints. See docs/examples/index.md.
 
@@ -90,13 +90,15 @@ def build(
     n.add('Carrier', tables['carrier']['carrier'])
     n.add('Carrier', 'DC')
 
-    generators: pd.DataFrame = tables['generator'].set_index('generator')
+    generators: pd.DataFrame = (
+        tables['generator'].set_index('generator').join(tables['gen_placement'].set_index('generator'))
+    )
     p_max_pu: pd.DataFrame = tables['p_max_pu'].pivot(index='snapshot', columns='generator', values='value')
     n.add(
         'Generator',
         generators.index,
-        bus=generators['gen_bus'],
-        carrier=generators['gen_carrier'],
+        bus=generators['bus'],
+        carrier=generators['carrier'],
         p_nom_extendable=True,
         p_max_pu=p_max_pu[generators.index],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
@@ -107,8 +109,8 @@ def build(
     n.add(
         'Link',
         links.index,
-        bus0=links['link_from'],
-        bus1=links['link_to'],
+        bus0=tables['link_from'].set_index('link')['bus'],
+        bus1=tables['link_to'].set_index('link')['bus'],
         carrier='DC',
         p_nom_extendable=True,
         length=tables['link_length'].set_index('link')['value'],

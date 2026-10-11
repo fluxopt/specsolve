@@ -2,7 +2,7 @@
 
 Three futures over one network: the fleet is built before anyone knows which arrives, and dispatched after.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **33940.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **33940.0**, matched to `rtol=1e-09`.
 
 `n.set_scenarios` makes a network stochastic by adding one dimension to some
 variables and not others:

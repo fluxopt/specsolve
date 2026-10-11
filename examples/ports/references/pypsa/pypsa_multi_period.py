@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_multi_period``: PyPSA's own multi-period investment. See docs/examples/index.md.
 
@@ -67,7 +67,11 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n = pypsa.Network()
     snapshots: pd.DataFrame = tables['snapshot']
     periods = list(tables['period']['period'])
-    n.set_snapshots(pd.MultiIndex.from_arrays([snapshots['period_of'], snapshots['snapshot']]))
+    n.set_snapshots(
+        pd.MultiIndex.from_arrays(
+            [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+        )
+    )
     n.investment_periods = periods
     n.investment_period_weightings['years'] = 10
     n.investment_period_weightings['objective'] = tables['period_weight'].set_index('period')['value']

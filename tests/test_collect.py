@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import polars as pl
+import pytest
 
 import specsolve as sps
+from specsolve.relational import collect
 from specsolve.relational.collect import collected
+from specsolve.relational.engine import assembly
 from specsolve.relational.engine.scope import Scope, ordinal
 
 
@@ -71,7 +74,11 @@ def test_a_coordinate_product_arrives_in_label_order():
 
 
 def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_frame_inputs):
-    """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857)."""
+    """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857).
+
+    The limit is 0, so the rest of the build is left to polars: a small one is in memory throughout.
+    """
+    monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
     engines = {}
     original = pl.LazyFrame.collect
 
@@ -84,3 +91,87 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
     assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
         f'every bounds collect names the in-memory engine: {engines}'
     )
+
+
+@pytest.fixture
+def engines(monkeypatch) -> list[str]:
+    """Every engine a collect names, in the order it named them, from after polars is probed for streaming."""
+    collect.collect_engine()
+    named: list[str] = []
+    one, many = pl.LazyFrame.collect, pl.collect_all
+
+    def recording(self, *args, engine='auto', **kwargs):
+        named.append(engine)
+        return one(self, *args, engine=engine, **kwargs)
+
+    def recording_all(frames, *args, engine='auto', **kwargs):
+        named.append(engine)
+        return many(frames, *args, engine=engine, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
+    monkeypatch.setattr(pl, 'collect_all', recording_all)
+    return named
+
+
+def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_frame_inputs):
+    """polars 2.0's streaming engine costs a fixed time per query, which is most of a small model's build."""
+    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    assert engines, 'the build collected something'
+    assert set(engines) == {'in-memory'}, (
+        f'{engines.count("auto")} of {len(engines)} collects left the engine to polars'
+    )
+
+
+def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_frame_inputs):
+    """A block hands the engine back on exit, so the caller's own query after a small build is polars' choice."""
+    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    collected(pl.LazyFrame({'probe': [0]}))
+    assert engines[-1] == 'auto', 'the query after the build still named the in-memory engine'
+
+
+def _build_wide() -> None:
+    """A constraint over dims no variable spans: four labels on each of two dims reach 8 columns and 16 rows."""
+    labels = ['p', 'q', 'r', 's']
+    sps.build(
+        {
+            'dimensions': {'a': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
+            'parameters': {'c': {'dims': ['a', 'b']}},
+            'variables': {'x': {'dims': ['a']}, 'y': {'dims': ['b']}},
+            'constraints': {'cap': {'dims': ['a', 'b'], 'expression': 'x + y <= c'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y)'},
+        },
+        {
+            'a': labels,
+            'b': labels,
+            'c': pl.DataFrame({'a': [a for a in labels for _ in labels], 'b': labels * 4, 'value': 1.0}),
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ('limit', 'spec', 'left_to_polars'),
+    [
+        pytest.param(0, 'dispatch', True, id='columns-over-the-limit'),
+        pytest.param(15, 'wide', True, id='rows-over-the-limit'),
+        pytest.param(16, 'wide', False, id='rows-at-the-limit'),
+    ],
+)
+def test_the_reach_against_the_limit_decides_the_build_engine(
+    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_frame_inputs
+):
+    """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses; at it, memory.
+
+    A constraint over dims no variable spans counts too: its 16 rows reach past
+    a limit of 15 where its 8 columns do not.
+    """
+    monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
+    if spec == 'dispatch':
+        sps.build(dispatch_yaml, dispatch_frame_inputs)
+    else:
+        _build_wide()
+    if left_to_polars:
+        assert 'auto' in engines, 'the build left its engine to polars'
+    else:
+        assert set(engines) == {'in-memory'}, (
+            f'{engines.count("auto")} of {len(engines)} collects left the engine to polars at the limit'
+        )

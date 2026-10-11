@@ -2,7 +2,7 @@
 
 A network: generators sit on buses, lines connect buses, and power balances at every bus.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **4400**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **4400**, matched to `rtol=1e-09`.
 
 ## The problem
 

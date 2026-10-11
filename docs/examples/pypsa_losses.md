@@ -2,7 +2,7 @@
 
 The loss on a line is `r · s²`. PyPSA approximates it from below with a fan of tangents.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **24114.237385131008**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **24114.237385131008**, matched to `rtol=1e-09`.
 
 For each segment *k* PyPSA takes the point `p_k = k/segments · s_nom`, draws the
 tangent to the loss curve there, and adds it once for each sign of the flow.
@@ -306,8 +306,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Line',
             lines.index,
-            bus0=lines['from'],
-            bus1=lines['to'],
+            bus0=tables['from'].set_index('line')['bus'],
+            bus1=tables['to'].set_index('line')['bus'],
             r=tables['r'].set_index('line')['value'],
             x=tables['x'].set_index('line')['value'],
             s_nom=tables['s_nom'].set_index('line')['value'],
@@ -317,7 +317,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )

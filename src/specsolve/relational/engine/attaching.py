@@ -9,9 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected, in_memory
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -26,6 +27,9 @@ class AttachedSources:
     ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
     ``(val, ord)``; ``relations`` hold no row for a key that maps nowhere.
     ``cardinality`` and ``parameter_rows`` are cached frame heights.
+    ``consecutive`` maps each dimension whose labels are the integers
+    ``first, first + 1, …`` in that order to ``first``, so that a label less
+    ``first`` is its ordinal.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
@@ -33,6 +37,7 @@ class AttachedSources:
     relations: Mapping[str, pl.LazyFrame]
     cardinality: Mapping[str, int]
     parameter_rows: Mapping[str, int]
+    consecutive: Mapping[str, int]
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
@@ -43,11 +48,13 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     """Shape the door's frames into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every frame that
-    carries the dimension is re-encoded against it.
+    carries the dimension is re-encoded against it. Each frame is read
+    [`in_memory`][], since every read holds one table whole.
     """
-    dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
-    relations = {name: sources[name].pipe(collected) for name in program.relations}
-    parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+    with in_memory():
+        dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
+        relations = {name: sources[name].pipe(collected) for name in program.relations}
+        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
@@ -67,7 +74,17 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         relations={name: f.lazy() for name, f in relations.items()},
         cardinality={d: f.height for d, f in dimensions.items()},
         parameter_rows={name: f.height for name, f in parameters.items()},
+        consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
     )
+
+
+def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
+    """The first label of a dimension whose labels are consecutive ascending integers, else ``None``."""
+    labels = dimension.get_column('val')
+    if not labels.dtype.is_integer() or labels.is_empty():
+        return None
+    first = int(labels[0])
+    return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
 
 
 def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
