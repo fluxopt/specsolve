@@ -829,23 +829,34 @@ class Result:
         write(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
-        for name, frame in primals.items():
-            write(frame, out / 'primal' / f'{name}.parquet')
-        for name, frame in (self._duals or {}).items():
-            write(frame, out / 'dual' / f'{name}.parquet')
-        for kind, frames in (self._outputs or {}).items():
-            for name, frame in frames.items():
-                write(frame, out / kind / f'{name}.parquet')
+        answered, no_expressions = self._answered(primals)
+        for kind, name, frame in answered:
+            write(frame, out / kind / f'{name}.parquet')
+        write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
+        return out
+
+    def _answered(
+        self, primals: Mapping[str, pl.LazyFrame | pl.DataFrame]
+    ) -> tuple[list[tuple[str, str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
+        """Every ``(kind, name, frame)`` a readable solve answered with, and why an expression is not.
+
+        The one enumeration of an answer: [`save`][] writes it as files and
+        `specsolve.record` as rows, so the two cannot hold different frames.
+        """
+        answered: list[tuple[str, str, pl.LazyFrame | pl.DataFrame]] = [
+            ('primal', name, frame) for name, frame in primals.items()
+        ]
+        answered += [('dual', name, frame) for name, frame in (self._duals or {}).items()]
+        answered += [
+            (kind, name, frame) for kind, frames in (self._outputs or {}).items() for name, frame in frames.items()
+        ]
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
-                frame = reader()
+                answered.append(('expression', name, reader()))
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
-                continue
-            write(frame, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
-        return out
+        return answered, no_expressions
 
     def close(self) -> None:
         """Release this result's frames, and its hold on the build's label frames, early. Optional.
