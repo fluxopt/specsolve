@@ -1,0 +1,3620 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 15.3.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.15",
+        "python_version": "3.12.15",
+        "python_build": [
+            "main",
+            "Oct  6 2026 23:50:18"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.15.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.3964 GHz",
+            "hz_actual_friendly": "2.3964 GHz",
+            "hz_advertised": [
+                2396398000,
+                0
+            ],
+            "hz_actual": [
+                2396398000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "specsolve": "0.0.1.dev1+gd1d3797c8",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "2.0.0",
+            "pandas": "3.0.6",
+            "numpy": "2.5.4",
+            "pyarrow": "26.0.0",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            1.2080078125,
+            1.40478515625,
+            1.29150390625
+        ]
+    },
+    "commit_info": {
+        "id": "d1d3797c8cfc0e59318d986c5dffc9e25f7d1caa",
+        "time": "2026-10-11T10:23:12Z",
+        "author_time": "2026-10-11T10:22:53Z",
+        "dirty": true,
+        "project": "specsolve",
+        "branch": "chore/release-0.8.1"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[storage-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-xs-specsolve-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "storage-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        122442919
+                    ],
+                    "allocations": [
+                        72901
+                    ],
+                    "total_bytes": [
+                        249963817
+                    ],
+                    "rss_bytes": [
+                        248623104
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.0019494440000471513,
+                    "build": 0.03699743200013472
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.043381864999901154,
+                "max": 0.0770148760000211,
+                "mean": 0.05471573455553072,
+                "stddev": 0.011170141431325116,
+                "rounds": 9,
+                "median": 0.05210964899993087,
+                "iqr": 0.013529265500039855,
+                "q1": 0.047146351249978125,
+                "q3": 0.06067561675001798,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.043381864999901154,
+                "hd15iqr": 0.0770148760000211,
+                "ops": 18.276278443910957,
+                "total": 0.49244161099977646,
+                "data": [
+                    0.0770148760000211,
+                    0.06703363900010118,
+                    0.043381864999901154,
+                    0.043728118999979415,
+                    0.0536068599999453,
+                    0.048285761999977694,
+                    0.0487245649999295,
+                    0.05210964899993087,
+                    0.05855627599999025
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "storage-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        124672414
+                    ],
+                    "allocations": [
+                        72937
+                    ],
+                    "total_bytes": [
+                        252388932
+                    ],
+                    "rss_bytes": [
+                        248668160
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.0009454589999222662,
+                    "build": 0.02684378599997217
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05012611200004358,
+                "max": 0.06536017200005517,
+                "mean": 0.05819170366670631,
+                "stddev": 0.005155330558330192,
+                "rounds": 9,
+                "median": 0.06103126299990436,
+                "iqr": 0.007646109000120305,
+                "q1": 0.05397934775004387,
+                "q3": 0.061625456750164176,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.05012611200004358,
+                "hd15iqr": 0.06536017200005517,
+                "ops": 17.184580223454397,
+                "total": 0.5237253330003568,
+                "data": [
+                    0.061160839999956806,
+                    0.052458044000104564,
+                    0.06103126299990436,
+                    0.05448644900002364,
+                    0.061480633000201124,
+                    0.06205992800005333,
+                    0.06536017200005517,
+                    0.05556189200001427,
+                    0.05012611200004358
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-xs-linopy-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "storage-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1114666438
+                    ],
+                    "allocations": [
+                        253693
+                    ],
+                    "total_bytes": [
+                        1355259629
+                    ],
+                    "rss_bytes": [
+                        259899392
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09371859599991694,
+                "max": 0.48589837600002284,
+                "mean": 0.14241595166666027,
+                "stddev": 0.12914786335153383,
+                "rounds": 9,
+                "median": 0.09622320900007253,
+                "iqr": 0.009943143500038332,
+                "q1": 0.09544263650002449,
+                "q3": 0.10538578000006282,
+                "iqr_outliers": 2,
+                "stddev_outliers": 1,
+                "outliers": "1;2",
+                "ld15iqr": 0.09371859599991694,
+                "hd15iqr": 0.12403883199999655,
+                "ops": 7.021685340000443,
+                "total": 1.2817435649999425,
+                "data": [
+                    0.48589837600002284,
+                    0.12403883199999655,
+                    0.0963172009999198,
+                    0.09568044899992856,
+                    0.09916809600008492,
+                    0.09622320900007253,
+                    0.09553587000004882,
+                    0.09516293599995151,
+                    0.09371859599991694
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-xs-pyomo-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "storage-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1111328577
+                    ],
+                    "allocations": [
+                        2245162
+                    ],
+                    "total_bytes": [
+                        1343466530
+                    ],
+                    "rss_bytes": [
+                        229376000
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.28108278600007,
+                "max": 1.109025126000006,
+                "mean": 0.3842503825555165,
+                "stddev": 0.2720417909587184,
+                "rounds": 9,
+                "median": 0.296397608999996,
+                "iqr": 0.01888794649994452,
+                "q1": 0.28547224549998873,
+                "q3": 0.30436019199993325,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.28108278600007,
+                "hd15iqr": 1.109025126000006,
+                "ops": 2.602469757738029,
+                "total": 3.4582534429996485,
+                "data": [
+                    1.109025126000006,
+                    0.2995077749999382,
+                    0.2980815419998635,
+                    0.296397608999996,
+                    0.3189174429999184,
+                    0.28108278600007,
+                    0.28665559299997767,
+                    0.286663365999857,
+                    0.2819222030000219
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "storage-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        98875456
+                    ],
+                    "allocations": [
+                        32869
+                    ],
+                    "total_bytes": [
+                        144625854
+                    ],
+                    "rss_bytes": [
+                        209915904
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.009892010999919876,
+                "max": 0.015614184000014575,
+                "mean": 0.011017704555544898,
+                "stddev": 0.001820643896656674,
+                "rounds": 9,
+                "median": 0.010366467999801898,
+                "iqr": 0.0006265837498062865,
+                "q1": 0.010180629000046792,
+                "q3": 0.010807212749853079,
+                "iqr_outliers": 2,
+                "stddev_outliers": 1,
+                "outliers": "1;2",
+                "ld15iqr": 0.009892010999919876,
+                "hd15iqr": 0.011904920999995738,
+                "ops": 90.76300739038498,
+                "total": 0.09915934099990409,
+                "data": [
+                    0.015614184000014575,
+                    0.010361831000182065,
+                    0.010263181000027544,
+                    0.010366467999801898,
+                    0.011904920999995738,
+                    0.010382462000052328,
+                    0.009892010999919876,
+                    0.010441309999805526,
+                    0.009932973000104539
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-s-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-s-specsolve-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "storage-s-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        147633659
+                    ],
+                    "allocations": [
+                        72914
+                    ],
+                    "total_bytes": [
+                        277725186
+                    ],
+                    "rss_bytes": [
+                        273489920
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000,
+                "phase_seconds": {
+                    "attach": 0.0017253759999675822,
+                    "build": 0.037554732999979024
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.061727455000209375,
+                "max": 0.0996852079999826,
+                "mean": 0.08113244822220622,
+                "stddev": 0.010927935016547494,
+                "rounds": 9,
+                "median": 0.08127150500013158,
+                "iqr": 0.01433071750017234,
+                "q1": 0.07335055399983048,
+                "q3": 0.08768127150000282,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.061727455000209375,
+                "hd15iqr": 0.0996852079999826,
+                "ops": 12.325524767367943,
+                "total": 0.730192033999856,
+                "data": [
+                    0.0996852079999826,
+                    0.07364520699979948,
+                    0.08127150500013158,
+                    0.08120759799999178,
+                    0.08429667399991558,
+                    0.08847514499984754,
+                    0.07246659499992347,
+                    0.08741664700005458,
+                    0.061727455000209375
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-s-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-s-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "storage-s-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        135576242
+                    ],
+                    "allocations": [
+                        72944
+                    ],
+                    "total_bytes": [
+                        265863373
+                    ],
+                    "rss_bytes": [
+                        271716352
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000,
+                "phase_seconds": {
+                    "attach": 0.002002014000026975,
+                    "build": 0.04804431799993836
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06669213400004992,
+                "max": 0.09376417399994352,
+                "mean": 0.07849605055551162,
+                "stddev": 0.008237330315302266,
+                "rounds": 9,
+                "median": 0.07573194799988414,
+                "iqr": 0.011266191999879993,
+                "q1": 0.07383603925001125,
+                "q3": 0.08510223124989125,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.06669213400004992,
+                "hd15iqr": 0.09376417399994352,
+                "ops": 12.739494444918728,
+                "total": 0.7064644549996046,
+                "data": [
+                    0.0862429339999835,
+                    0.07378894299995409,
+                    0.07757859699995606,
+                    0.0847219969998605,
+                    0.0740919899999426,
+                    0.09376417399994352,
+                    0.06669213400004992,
+                    0.07385173800003031,
+                    0.07573194799988414
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-s-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-s-linopy-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "storage-s-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1134571770
+                    ],
+                    "allocations": [
+                        253705
+                    ],
+                    "total_bytes": [
+                        1410534481
+                    ],
+                    "rss_bytes": [
+                        272650240
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.11491091500010953,
+                "max": 0.14957422199995563,
+                "mean": 0.12075923066671142,
+                "stddev": 0.010863958998627202,
+                "rounds": 9,
+                "median": 0.11719822899999599,
+                "iqr": 0.001518076500076404,
+                "q1": 0.11678118674996085,
+                "q3": 0.11829926325003726,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.11491091500010953,
+                "hd15iqr": 0.14957422199995563,
+                "ops": 8.280940467068252,
+                "total": 1.0868330760004028,
+                "data": [
+                    0.11802972600003159,
+                    0.11491091500010953,
+                    0.11719822899999599,
+                    0.14957422199995563,
+                    0.1171152050001183,
+                    0.11660114699998303,
+                    0.11910787500005426,
+                    0.11745455700020102,
+                    0.11684119999995346
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-s-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-s-pyomo-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "storage-s-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1246766889
+                    ],
+                    "allocations": [
+                        21715255
+                    ],
+                    "total_bytes": [
+                        4502339678
+                    ],
+                    "rss_bytes": [
+                        369352704
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.119375610999896,
+                "max": 3.3032883589999074,
+                "mean": 3.1881199172222145,
+                "stddev": 0.05687537607711797,
+                "rounds": 9,
+                "median": 3.1694123790000504,
+                "iqr": 0.07208623749994558,
+                "q1": 3.146639357500021,
+                "q3": 3.2187255949999667,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 3.119375610999896,
+                "hd15iqr": 3.3032883589999074,
+                "ops": 0.31366448752382337,
+                "total": 28.69307925499993,
+                "data": [
+                    3.3032883589999074,
+                    3.2073324350001258,
+                    3.146967739000047,
+                    3.2315476189999117,
+                    3.214451586999985,
+                    3.1456542129999434,
+                    3.1694123790000504,
+                    3.155049313000063,
+                    3.119375610999896
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-s-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-s-highspy-matrix-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "storage-s-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        113929544
+                    ],
+                    "allocations": [
+                        32885
+                    ],
+                    "total_bytes": [
+                        170927650
+                    ],
+                    "rss_bytes": [
+                        223760384
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.012451206999912756,
+                "max": 0.023575949999894874,
+                "mean": 0.017766032333282864,
+                "stddev": 0.004931121003077635,
+                "rounds": 9,
+                "median": 0.014537768000081996,
+                "iqr": 0.009153223500106833,
+                "q1": 0.013779765999856863,
+                "q3": 0.022932989499963696,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.012451206999912756,
+                "hd15iqr": 0.023575949999894874,
+                "ops": 56.28718788981382,
+                "total": 0.15989429099954577,
+                "data": [
+                    0.014537768000081996,
+                    0.013940966999825832,
+                    0.014074367999910464,
+                    0.023575949999894874,
+                    0.012451206999912756,
+                    0.022727458999952432,
+                    0.013296162999949956,
+                    0.023549580999997488,
+                    0.021740828000019974
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-m-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-m-specsolve-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "storage-m-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        439907171
+                    ],
+                    "allocations": [
+                        72985
+                    ],
+                    "total_bytes": [
+                        593898598
+                    ],
+                    "rss_bytes": [
+                        514154496
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000,
+                "phase_seconds": {
+                    "attach": 0.0010948940000616858,
+                    "build": 0.18886764099988795
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2533561469999768,
+                "max": 0.3443636869999409,
+                "mean": 0.300421413555518,
+                "stddev": 0.0278073067378419,
+                "rounds": 9,
+                "median": 0.3047744809998676,
+                "iqr": 0.03004113200000802,
+                "q1": 0.2857771242499325,
+                "q3": 0.31581825624994053,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.2533561469999768,
+                "hd15iqr": 0.3443636869999409,
+                "ops": 3.328657528652496,
+                "total": 2.703792721999662,
+                "data": [
+                    0.3443636869999409,
+                    0.3047744809998676,
+                    0.26483218100020167,
+                    0.2533561469999768,
+                    0.32060404899993955,
+                    0.3101640720001342,
+                    0.31422299199994086,
+                    0.2987163409998175,
+                    0.2927587719998428
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-m-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-m-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "storage-m-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        445150922
+                    ],
+                    "allocations": [
+                        72976
+                    ],
+                    "total_bytes": [
+                        599336265
+                    ],
+                    "rss_bytes": [
+                        502202368
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000,
+                "phase_seconds": {
+                    "attach": 0.002039932000116096,
+                    "build": 0.17112772699988454
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2698101690000385,
+                "max": 0.355223831000103,
+                "mean": 0.2960270316667043,
+                "stddev": 0.02736476969579195,
+                "rounds": 9,
+                "median": 0.298742109999921,
+                "iqr": 0.03239021874998116,
+                "q1": 0.27320071275005375,
+                "q3": 0.3055909315000349,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.2698101690000385,
+                "hd15iqr": 0.355223831000103,
+                "ops": 3.378069882232566,
+                "total": 2.664243285000339,
+                "data": [
+                    0.355223831000103,
+                    0.298742109999921,
+                    0.27259125000000495,
+                    0.3025480979999884,
+                    0.3147194320001745,
+                    0.2698101690000385,
+                    0.27340386700007,
+                    0.29929011800004446,
+                    0.27791440999999395
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-m-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-m-linopy-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "storage-m-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1333647770
+                    ],
+                    "allocations": [
+                        253742
+                    ],
+                    "total_bytes": [
+                        1955612211
+                    ],
+                    "rss_bytes": [
+                        483127296
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.31800328200006334,
+                "max": 0.3311393330000101,
+                "mean": 0.3224602563332913,
+                "stddev": 0.004506020492011021,
+                "rounds": 9,
+                "median": 0.3206594639998457,
+                "iqr": 0.005496111500178813,
+                "q1": 0.3193508874998656,
+                "q3": 0.32484699900004443,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.31800328200006334,
+                "hd15iqr": 0.3311393330000101,
+                "ops": 3.1011573685732334,
+                "total": 2.9021423069996217,
+                "data": [
+                    0.321558431999847,
+                    0.3202324100000169,
+                    0.319473121999863,
+                    0.3189841839998735,
+                    0.3206594639998457,
+                    0.31800328200006334,
+                    0.32364795800003776,
+                    0.32844412200006445,
+                    0.3311393330000101
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-m-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-m-highspy-matrix-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "storage-m-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        264516576
+                    ],
+                    "allocations": [
+                        32886
+                    ],
+                    "total_bytes": [
+                        432478656
+                    ],
+                    "rss_bytes": [
+                        375799808
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.10630832100014231,
+                "max": 0.13672263099988413,
+                "mean": 0.11433874544445644,
+                "stddev": 0.011211129467666048,
+                "rounds": 9,
+                "median": 0.10854874500000733,
+                "iqr": 0.00921685674990158,
+                "q1": 0.10818050675004542,
+                "q3": 0.117397363499947,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.10630832100014231,
+                "hd15iqr": 0.13672263099988413,
+                "ops": 8.745941685058813,
+                "total": 1.029048709000108,
+                "data": [
+                    0.10854874500000733,
+                    0.13672263099988413,
+                    0.13064579100000628,
+                    0.1090065070000037,
+                    0.10820239200006654,
+                    0.10811485099998208,
+                    0.10630832100014231,
+                    0.1085182500000883,
+                    0.11298122099992725
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-l-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-l-specsolve-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "storage-l-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3340630867
+                    ],
+                    "allocations": [
+                        73125
+                    ],
+                    "total_bytes": [
+                        3733685245
+                    ],
+                    "rss_bytes": [
+                        1972936704
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": 16000000,
+                "live_fraction": 1.0,
+                "variables": 10000000,
+                "phase_seconds": {
+                    "attach": 0.0023171199998159864,
+                    "build": 1.1389938820000225
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.9135057469998173,
+                "max": 2.0451620459998594,
+                "mean": 1.9995977252222272,
+                "stddev": 0.046559993903787136,
+                "rounds": 9,
+                "median": 2.0077751759999956,
+                "iqr": 0.0726938802499717,
+                "q1": 1.9670682777501156,
+                "q3": 2.0397621580000873,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.9135057469998173,
+                "hd15iqr": 2.0451620459998594,
+                "ops": 0.5001005889266372,
+                "total": 17.996379527000045,
+                "data": [
+                    2.0029865429999063,
+                    2.0077751759999956,
+                    2.0451620459998594,
+                    1.9744276660001105,
+                    2.0450804530000823,
+                    1.9449901130001308,
+                    2.037989393000089,
+                    1.9135057469998173,
+                    2.0244623900000533
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-l-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-l-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "storage-l-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3383623034
+                    ],
+                    "allocations": [
+                        73030
+                    ],
+                    "total_bytes": [
+                        3776871152
+                    ],
+                    "rss_bytes": [
+                        1938767872
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": 16000000,
+                "live_fraction": 1.0,
+                "variables": 10000000,
+                "phase_seconds": {
+                    "attach": 0.001413665000200126,
+                    "build": 1.2213427140000022
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.10994408400029,
+                "max": 2.317287372999999,
+                "mean": 2.1897696547776935,
+                "stddev": 0.06704763640094522,
+                "rounds": 9,
+                "median": 2.1777337069997884,
+                "iqr": 0.07842705575012587,
+                "q1": 2.1444821899998487,
+                "q3": 2.2229092457499746,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 2.10994408400029,
+                "hd15iqr": 2.317287372999999,
+                "ops": 0.45666903722872193,
+                "total": 19.70792689299924,
+                "data": [
+                    2.317287372999999,
+                    2.15081307499986,
+                    2.1777337069997884,
+                    2.2079905870000403,
+                    2.194592330999967,
+                    2.2676652219997777,
+                    2.156410978999702,
+                    2.10994408400029,
+                    2.125489534999815
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-l-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-l-linopy-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "storage-l-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3324448834
+                    ],
+                    "allocations": [
+                        253831
+                    ],
+                    "total_bytes": [
+                        7379690893
+                    ],
+                    "rss_bytes": [
+                        2440257536
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.5912523270003476,
+                "max": 2.625792668000031,
+                "mean": 2.6055630097777995,
+                "stddev": 0.011160056946475599,
+                "rounds": 9,
+                "median": 2.6058616640002583,
+                "iqr": 0.01785836524993556,
+                "q1": 2.5951861930000177,
+                "q3": 2.6130445582499533,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 2.5912523270003476,
+                "hd15iqr": 2.625792668000031,
+                "ops": 0.38379421117330004,
+                "total": 23.450067088000196,
+                "data": [
+                    2.6123817319999034,
+                    2.604462169999806,
+                    2.615033037000103,
+                    2.625792668000031,
+                    2.6061362099999315,
+                    2.6058616640002583,
+                    2.593348533999688,
+                    2.5957987460001277,
+                    2.5912523270003476
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[storage-l-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[storage-l-highspy-matrix-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "storage-l-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1782979600
+                    ],
+                    "allocations": [
+                        32893
+                    ],
+                    "total_bytes": [
+                        3059088602
+                    ],
+                    "rss_bytes": [
+                        1810501632
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": 16000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.1268641900001057,
+                "max": 1.1392712520000714,
+                "mean": 1.1345193541111864,
+                "stddev": 0.004323749012647604,
+                "rounds": 9,
+                "median": 1.1349391169997034,
+                "iqr": 0.006888537750000978,
+                "q1": 1.1318124535000607,
+                "q3": 1.1387009912500616,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 1.1268641900001057,
+                "hd15iqr": 1.1392712520000714,
+                "ops": 0.8814305338875664,
+                "total": 10.210674187000677,
+                "data": [
+                    1.1385448930000166,
+                    1.1391692860001967,
+                    1.1293957840002804,
+                    1.1349391169997034,
+                    1.1268641900001057,
+                    1.1326180099999874,
+                    1.1392712520000714,
+                    1.1352189899998848,
+                    1.1346526650004307
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[storage-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[storage-xs-specsolve-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "storage-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.002703332999772101,
+                    "build": 0.042437838999831,
+                    "first_window": 0.4037991309996869
+                },
+                "process_rss_bytes": 2759118848
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4744927789997746,
+                "max": 0.539680110000063,
+                "mean": 0.4968480958888601,
+                "stddev": 0.020132507607128796,
+                "rounds": 9,
+                "median": 0.4935662080001748,
+                "iqr": 0.01898600999959399,
+                "q1": 0.4845491377501503,
+                "q3": 0.5035351477497443,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.4744927789997746,
+                "hd15iqr": 0.539680110000063,
+                "ops": 2.0126875966204567,
+                "total": 4.471632862999741,
+                "data": [
+                    0.47962544999973034,
+                    0.49610577400017064,
+                    0.4864827979999973,
+                    0.4744927789997746,
+                    0.4861903670002903,
+                    0.4935662080001748,
+                    0.5161637699998209,
+                    0.49932560699971873,
+                    0.539680110000063
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[storage-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[storage-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "storage-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.0011580300001696742,
+                    "build": 0.01888955200001874,
+                    "first_window": 0.3746752209999613
+                },
+                "process_rss_bytes": 2759118848
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4681866240002819,
+                "max": 0.4956446770002003,
+                "mean": 0.4879706170000241,
+                "stddev": 0.00830104048351583,
+                "rounds": 9,
+                "median": 0.489392652999868,
+                "iqr": 0.007775588750291718,
+                "q1": 0.4856301339997344,
+                "q3": 0.49340572275002614,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.4846182729997963,
+                "hd15iqr": 0.4956446770002003,
+                "ops": 2.0493037186293344,
+                "total": 4.391735553000217,
+                "data": [
+                    0.4956446770002003,
+                    0.489392652999868,
+                    0.4846182729997963,
+                    0.49431783299996823,
+                    0.49310168600004545,
+                    0.4884294480002609,
+                    0.492076938000082,
+                    0.4859674209997138,
+                    0.4681866240002819
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[storage-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[storage-xs-linopy-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "storage-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165354
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "first_window": 0.8123520610001833
+                },
+                "process_rss_bytes": 2759118848
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9578282329998729,
+                "max": 1.017570120000073,
+                "mean": 0.9956627564444918,
+                "stddev": 0.021073565710605056,
+                "rounds": 9,
+                "median": 1.0056629139999131,
+                "iqr": 0.028449012749774738,
+                "q1": 0.9833406505002813,
+                "q3": 1.011789663250056,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.9578282329998729,
+                "hd15iqr": 1.017570120000073,
+                "ops": 1.004356137183434,
+                "total": 8.960964808000426,
+                "data": [
+                    0.9882702940003583,
+                    0.9578282329998729,
+                    0.9685517200000504,
+                    1.017570120000073,
+                    0.9898318320001636,
+                    1.0121826130002773,
+                    1.0056629139999131,
+                    1.0094084019997354,
+                    1.0116586799999823
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[storage-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[storage-xs-pyomo-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "storage-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "first_window": 0.6468950100002075
+                },
+                "process_rss_bytes": 2759118848
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.7969135620000998,
+                "max": 0.8507340840001234,
+                "mean": 0.8150443766665679,
+                "stddev": 0.01886801752212368,
+                "rounds": 9,
+                "median": 0.8055475329997535,
+                "iqr": 0.027681566999831375,
+                "q1": 0.8006402009999647,
+                "q3": 0.8283217679997961,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.7969135620000998,
+                "hd15iqr": 0.8507340840001234,
+                "ops": 1.2269270589779149,
+                "total": 7.335399389999111,
+                "data": [
+                    0.8371286249998775,
+                    0.7986694349997379,
+                    0.8148527989997092,
+                    0.8253861489997689,
+                    0.8507340840001234,
+                    0.7969135620000998,
+                    0.8012971230000403,
+                    0.8048700800000006,
+                    0.8055475329997535
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[storage-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[storage-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "storage-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "first_window": 0.2189521620002779
+                },
+                "process_rss_bytes": 2759118848
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2926395619997493,
+                "max": 0.34843401599982826,
+                "mean": 0.3153580358887969,
+                "stddev": 0.019944884328477477,
+                "rounds": 9,
+                "median": 0.3191555929997776,
+                "iqr": 0.03226416725010495,
+                "q1": 0.2963999394997927,
+                "q3": 0.32866410674989766,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.2926395619997493,
+                "hd15iqr": 0.34843401599982826,
+                "ops": 3.1709989478518468,
+                "total": 2.8382223229991723,
+                "data": [
+                    0.34843401599982826,
+                    0.3191555929997776,
+                    0.3244617280001876,
+                    0.2954504080003062,
+                    0.3000907069999812,
+                    0.32669128399993497,
+                    0.2926395619997493,
+                    0.3345825749997857,
+                    0.29671644999962155
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-specsolve]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve"
+            },
+            "param": "storage-xs-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        80357
+                    ],
+                    "allocations": [
+                        572
+                    ],
+                    "total_bytes": [
+                        316022
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.0020950440002707182,
+                    "build": 0.033643535999999585
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04571623999981966,
+                "max": 0.05390358800013928,
+                "mean": 0.05009195020002153,
+                "stddev": 0.0029836457835428196,
+                "rounds": 5,
+                "median": 0.05012248599996383,
+                "iqr": 0.0034658572500347873,
+                "q1": 0.0484885887500468,
+                "q3": 0.05195444600008159,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.04571623999981966,
+                "hd15iqr": 0.05390358800013928,
+                "ops": 19.963287434546125,
+                "total": 0.25045975100010764,
+                "data": [
+                    0.04571623999981966,
+                    0.05012248599996383,
+                    0.05130473200006236,
+                    0.049412705000122514,
+                    0.05390358800013928
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-specsolve-in-memory]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "storage-xs-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        81507
+                    ],
+                    "allocations": [
+                        593
+                    ],
+                    "total_bytes": [
+                        332601
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000,
+                "phase_seconds": {
+                    "attach": 0.001942494999639166,
+                    "build": 0.03481257099974755
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05166721099976712,
+                "max": 0.07019307199971081,
+                "mean": 0.05819947059999322,
+                "stddev": 0.007548670073199924,
+                "rounds": 5,
+                "median": 0.05675266100024601,
+                "iqr": 0.010561807499811948,
+                "q1": 0.05209578500011958,
+                "q3": 0.06265759249993152,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.05166721099976712,
+                "hd15iqr": 0.07019307199971081,
+                "ops": 17.182286878054807,
+                "total": 0.2909973529999661,
+                "data": [
+                    0.05675266100024601,
+                    0.05166721099976712,
+                    0.07019307199971081,
+                    0.05223864300023706,
+                    0.060145766000005096
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-linopy]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "linopy"
+            },
+            "param": "storage-xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        541292
+                    ],
+                    "allocations": [
+                        22431
+                    ],
+                    "total_bytes": [
+                        4327649
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09105347100012295,
+                "max": 0.10825940900031128,
+                "mean": 0.09556156540011215,
+                "stddev": 0.007157672203223344,
+                "rounds": 5,
+                "median": 0.0930692340002679,
+                "iqr": 0.0053237637503116275,
+                "q1": 0.09178687049984546,
+                "q3": 0.09711063425015709,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.09105347100012295,
+                "hd15iqr": 0.10825940900031128,
+                "ops": 10.464458130348149,
+                "total": 0.4778078270005608,
+                "data": [
+                    0.0930692340002679,
+                    0.10825940900031128,
+                    0.09105347100012295,
+                    0.0933943760001057,
+                    0.09203133699975297
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-pyomo]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "pyomo"
+            },
+            "param": "storage-xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        515564
+                    ],
+                    "allocations": [
+                        21486
+                    ],
+                    "total_bytes": [
+                        2924265
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.03998615600039557,
+                "max": 0.04081054200014478,
+                "mean": 0.04046418020016063,
+                "stddev": 0.00033217078235337605,
+                "rounds": 5,
+                "median": 0.04046555000013541,
+                "iqr": 0.000514210749997801,
+                "q1": 0.04023947675011641,
+                "q3": 0.04075368750011421,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.03998615600039557,
+                "hd15iqr": 0.04081054200014478,
+                "ops": 24.713215368589882,
+                "total": 0.20232090100080313,
+                "data": [
+                    0.04032391700002336,
+                    0.03998615600039557,
+                    0.04046555000013541,
+                    0.04073473600010402,
+                    0.04081054200014478
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-gurobipy-loop]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "storage-xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2105686
+                    ],
+                    "allocations": [
+                        15034
+                    ],
+                    "total_bytes": [
+                        6089585
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05287742699965747,
+                "max": 0.05503108999982942,
+                "mean": 0.05385580719994323,
+                "stddev": 0.000787375866496298,
+                "rounds": 5,
+                "median": 0.053870698000082484,
+                "iqr": 0.0009038060001103077,
+                "q1": 0.053349094499935745,
+                "q3": 0.05425290050004605,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.05287742699965747,
+                "hd15iqr": 0.05503108999982942,
+                "ops": 18.56809974618771,
+                "total": 0.26927903599971614,
+                "data": [
+                    0.05287742699965747,
+                    0.053993504000118264,
+                    0.0535063170000285,
+                    0.053870698000082484,
+                    0.05503108999982942
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "storage-xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2056444
+                    ],
+                    "allocations": [
+                        2604
+                    ],
+                    "total_bytes": [
+                        6656390
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.020975422999981674,
+                "max": 0.03883164199987732,
+                "mean": 0.025320811399978993,
+                "stddev": 0.007604434661118556,
+                "rounds": 5,
+                "median": 0.021903994000240345,
+                "iqr": 0.005841597749622451,
+                "q1": 0.021389958500094508,
+                "q3": 0.02723155624971696,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.020975422999981674,
+                "hd15iqr": 0.03883164199987732,
+                "ops": 39.493205182233204,
+                "total": 0.12660405699989496,
+                "data": [
+                    0.020975422999981674,
+                    0.03883164199987732,
+                    0.02152813700013212,
+                    0.023364860999663506,
+                    0.021903994000240345
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-xs-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-xs-highspy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "xs",
+                "arm": "highspy-matrix"
+            },
+            "param": "storage-xs-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1738741
+                    ],
+                    "allocations": [
+                        1709
+                    ],
+                    "total_bytes": [
+                        3364106
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2100,
+                "nonzeros": 16000,
+                "live_fraction": 1.0,
+                "variables": 10000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.010189289999743778,
+                "max": 0.01333225799999127,
+                "mean": 0.011522231399976591,
+                "stddev": 0.0013263980344654662,
+                "rounds": 5,
+                "median": 0.011612238999987312,
+                "iqr": 0.0022148805001052096,
+                "q1": 0.010261766999974498,
+                "q3": 0.012476647500079707,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.010189289999743778,
+                "hd15iqr": 0.01333225799999127,
+                "ops": 86.78874475668243,
+                "total": 0.05761115699988295,
+                "data": [
+                    0.010285926000051404,
+                    0.010189289999743778,
+                    0.011612238999987312,
+                    0.01333225799999127,
+                    0.012191444000109186
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-specsolve]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "specsolve"
+            },
+            "param": "storage-s-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        404384
+                    ],
+                    "allocations": [
+                        573
+                    ],
+                    "total_bytes": [
+                        854879
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000,
+                "phase_seconds": {
+                    "attach": 0.0011861719999615161,
+                    "build": 0.038919165000152134
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05008419900013905,
+                "max": 0.07516653400034556,
+                "mean": 0.06384665200012023,
+                "stddev": 0.009869871791261023,
+                "rounds": 5,
+                "median": 0.0677809389999311,
+                "iqr": 0.014173848250152332,
+                "q1": 0.05589501300005395,
+                "q3": 0.07006886125020628,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.05008419900013905,
+                "hd15iqr": 0.07516653400034556,
+                "ops": 15.662528396917615,
+                "total": 0.31923326000060115,
+                "data": [
+                    0.07516653400034556,
+                    0.05008419900013905,
+                    0.06836963700015986,
+                    0.0677809389999311,
+                    0.05783195100002558
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-specsolve-in-memory]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "storage-s-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        405534
+                    ],
+                    "allocations": [
+                        594
+                    ],
+                    "total_bytes": [
+                        871458
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000,
+                "phase_seconds": {
+                    "attach": 0.0009569660001034208,
+                    "build": 0.047283318000154395
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.058768566000253486,
+                "max": 0.09026627000002918,
+                "mean": 0.07146803760006151,
+                "stddev": 0.01328783688652813,
+                "rounds": 5,
+                "median": 0.067308975999822,
+                "iqr": 0.02180252600021504,
+                "q1": 0.06060173250000389,
+                "q3": 0.08240425850021893,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.058768566000253486,
+                "hd15iqr": 0.09026627000002918,
+                "ops": 13.992268902023683,
+                "total": 0.35734018800030753,
+                "data": [
+                    0.09026627000002918,
+                    0.07978358800028218,
+                    0.058768566000253486,
+                    0.06121278799992069,
+                    0.067308975999822
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-linopy]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "linopy"
+            },
+            "param": "storage-s-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        5241292
+                    ],
+                    "allocations": [
+                        22453
+                    ],
+                    "total_bytes": [
+                        24088393
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0943238649997511,
+                "max": 0.09636066000030041,
+                "mean": 0.09489327060000505,
+                "stddev": 0.0008564028014152906,
+                "rounds": 5,
+                "median": 0.09452615000009246,
+                "iqr": 0.0009599022500879073,
+                "q1": 0.09432649374991797,
+                "q3": 0.09528639600000588,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.0943238649997511,
+                "hd15iqr": 0.09636066000030041,
+                "ops": 10.538155062809551,
+                "total": 0.47446635300002526,
+                "data": [
+                    0.09636066000030041,
+                    0.0949283079999077,
+                    0.09452615000009246,
+                    0.0943273699999736,
+                    0.0943238649997511
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-pyomo]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "pyomo"
+            },
+            "param": "storage-s-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4192772
+                    ],
+                    "allocations": [
+                        21533
+                    ],
+                    "total_bytes": [
+                        12470137
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6421106319999126,
+                "max": 0.660083676999875,
+                "mean": 0.653253603399935,
+                "stddev": 0.007534841412720462,
+                "rounds": 5,
+                "median": 0.6562698170000658,
+                "iqr": 0.011713652999787882,
+                "q1": 0.6473439212500125,
+                "q3": 0.6590575742498004,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.6421106319999126,
+                "hd15iqr": 0.660083676999875,
+                "ops": 1.5307990568982441,
+                "total": 3.2662680169996747,
+                "data": [
+                    0.660083676999875,
+                    0.6490883510000458,
+                    0.6562698170000658,
+                    0.6587155399997755,
+                    0.6421106319999126
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-gurobipy-loop]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "gurobipy-loop"
+            },
+            "param": "storage-s-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        20344797
+                    ],
+                    "allocations": [
+                        146604
+                    ],
+                    "total_bytes": [
+                        60999527
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5285840470000949,
+                "max": 0.5699729840002874,
+                "mean": 0.5458952404001138,
+                "stddev": 0.017675808018884562,
+                "rounds": 5,
+                "median": 0.5407550970003285,
+                "iqr": 0.029978845749951688,
+                "q1": 0.5311417337500188,
+                "q3": 0.5611205794999705,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.5285840470000949,
+                "hd15iqr": 0.5699729840002874,
+                "ops": 1.83185330443081,
+                "total": 2.729476202000569,
+                "data": [
+                    0.5319942959999935,
+                    0.5285840470000949,
+                    0.5699729840002874,
+                    0.5581697779998649,
+                    0.5407550970003285
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-gurobipy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "storage-s-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        18950892
+                    ],
+                    "allocations": [
+                        21634
+                    ],
+                    "total_bytes": [
+                        62500498
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.10532701199963412,
+                "max": 0.11244058600004792,
+                "mean": 0.1087845917998493,
+                "stddev": 0.0031582790717990398,
+                "rounds": 5,
+                "median": 0.10828868499993405,
+                "iqr": 0.0057875740003510145,
+                "q1": 0.10602716624964614,
+                "q3": 0.11181474024999716,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.10532701199963412,
+                "hd15iqr": 0.11244058600004792,
+                "ops": 9.19247830464705,
+                "total": 0.5439229589992465,
+                "data": [
+                    0.10532701199963412,
+                    0.10626055099965015,
+                    0.11160612499998024,
+                    0.11244058600004792,
+                    0.10828868499993405
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-s-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-s-highspy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "s",
+                "arm": "highspy-matrix"
+            },
+            "param": "storage-s-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        16797541
+                    ],
+                    "allocations": [
+                        1736
+                    ],
+                    "total_bytes": [
+                        29670614
+                    ]
+                },
+                "columns": 100000,
+                "rows": 21000,
+                "nonzeros": 160000,
+                "live_fraction": 1.0,
+                "variables": 100000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.013016267999773845,
+                "max": 0.023176512999725674,
+                "mean": 0.015435133399932965,
+                "stddev": 0.004342877522366927,
+                "rounds": 5,
+                "median": 0.013507911000033346,
+                "iqr": 0.0029953839998597687,
+                "q1": 0.013329521250057041,
+                "q3": 0.01632490524991681,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.013016267999773845,
+                "hd15iqr": 0.023176512999725674,
+                "ops": 64.78725995360318,
+                "total": 0.07717566699966483,
+                "data": [
+                    0.014041035999980522,
+                    0.023176512999725674,
+                    0.013016267999773845,
+                    0.01343393900015144,
+                    0.013507911000033346
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-specsolve]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "specsolve"
+            },
+            "param": "storage-m-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3428480
+                    ],
+                    "allocations": [
+                        577
+                    ],
+                    "total_bytes": [
+                        5106187
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000,
+                "phase_seconds": {
+                    "attach": 0.001171880000129022,
+                    "build": 0.18311868899991168
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.20083329199997024,
+                "max": 0.23108253800000966,
+                "mean": 0.2190513312000803,
+                "stddev": 0.011848767591033793,
+                "rounds": 5,
+                "median": 0.21885590200008664,
+                "iqr": 0.016082091000271248,
+                "q1": 0.2126302797499875,
+                "q3": 0.22871237075025874,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.20083329199997024,
+                "hd15iqr": 0.23108253800000966,
+                "ops": 4.56514002686706,
+                "total": 1.0952566560004016,
+                "data": [
+                    0.22792231500034177,
+                    0.21656260899999324,
+                    0.23108253800000966,
+                    0.21885590200008664,
+                    0.20083329199997024
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-specsolve-in-memory]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "storage-m-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3429534
+                    ],
+                    "allocations": [
+                        595
+                    ],
+                    "total_bytes": [
+                        5122670
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000,
+                "phase_seconds": {
+                    "attach": 0.003103728000041883,
+                    "build": 0.20485878199997387
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.18806297699984498,
+                "max": 0.24117743399983738,
+                "mean": 0.21988894639998763,
+                "stddev": 0.02084423620452959,
+                "rounds": 5,
+                "median": 0.2295984860002136,
+                "iqr": 0.027398498999673393,
+                "q1": 0.2051829900001394,
+                "q3": 0.2325814889998128,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.18806297699984498,
+                "hd15iqr": 0.24117743399983738,
+                "ops": 4.547750200144014,
+                "total": 1.099444731999938,
+                "data": [
+                    0.18806297699984498,
+                    0.21088966100023754,
+                    0.2297161739998046,
+                    0.2295984860002136,
+                    0.24117743399983738
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-linopy]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "linopy"
+            },
+            "param": "storage-m-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        52221292
+                    ],
+                    "allocations": [
+                        22483
+                    ],
+                    "total_bytes": [
+                        215696363
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.11549134300003061,
+                "max": 0.11833973600005265,
+                "mean": 0.11705087859991181,
+                "stddev": 0.0011982007560501164,
+                "rounds": 5,
+                "median": 0.1170848499996282,
+                "iqr": 0.002062209250198066,
+                "q1": 0.11607470424985422,
+                "q3": 0.11813691350005229,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.11549134300003061,
+                "hd15iqr": 0.11833973600005265,
+                "ops": 8.543293411902278,
+                "total": 0.5852543929995591,
+                "data": [
+                    0.1170848499996282,
+                    0.11626915799979542,
+                    0.11549134300003061,
+                    0.11833973600005265,
+                    0.11806930600005217
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-pyomo]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "pyomo"
+            },
+            "param": "storage-m-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        374715844
+                    ],
+                    "allocations": [
+                        21877
+                    ],
+                    "total_bytes": [
+                        467216043
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 5.867607687000145,
+                "max": 5.930921067999861,
+                "mean": 5.894444780599952,
+                "stddev": 0.028194923525214893,
+                "rounds": 5,
+                "median": 5.884936798999661,
+                "iqr": 0.05001148900009866,
+                "q1": 5.8705947307499855,
+                "q3": 5.920606219750084,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 5.867607687000145,
+                "hd15iqr": 5.930921067999861,
+                "ops": 0.16965126270946548,
+                "total": 29.472223902999758,
+                "data": [
+                    5.867607687000145,
+                    5.871590411999932,
+                    5.930921067999861,
+                    5.884936798999661,
+                    5.917167937000158
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-gurobipy-loop]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "gurobipy-loop"
+            },
+            "param": "storage-m-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        420263970
+                    ],
+                    "allocations": [
+                        1461237
+                    ],
+                    "total_bytes": [
+                        858588785
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 5.758134622999933,
+                "max": 5.806754542999897,
+                "mean": 5.780312499999946,
+                "stddev": 0.020424714192660995,
+                "rounds": 5,
+                "median": 5.778927285999998,
+                "iqr": 0.035187990000054015,
+                "q1": 5.762171918749914,
+                "q3": 5.797359908749968,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 5.758134622999933,
+                "hd15iqr": 5.806754542999897,
+                "ops": 0.17300102719360058,
+                "total": 28.901562499999727,
+                "data": [
+                    5.763517683999908,
+                    5.806754542999897,
+                    5.758134622999933,
+                    5.794228363999991,
+                    5.778927285999998
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-gurobipy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "storage-m-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        329589149
+                    ],
+                    "allocations": [
+                        210917
+                    ],
+                    "total_bytes": [
+                        760899313
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.1108424250001008,
+                "max": 1.1458364149998488,
+                "mean": 1.128603262999968,
+                "stddev": 0.01507802773119171,
+                "rounds": 5,
+                "median": 1.1289592769999217,
+                "iqr": 0.02702196099971843,
+                "q1": 1.115090698750123,
+                "q3": 1.1421126597498414,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.1108424250001008,
+                "hd15iqr": 1.1458364149998488,
+                "ops": 0.8860509558884982,
+                "total": 5.643016314999841,
+                "data": [
+                    1.1289592769999217,
+                    1.140871407999839,
+                    1.1108424250001008,
+                    1.1458364149998488,
+                    1.1165067900001304
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-m-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-m-highspy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "m",
+                "arm": "highspy-matrix"
+            },
+            "param": "storage-m-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        167385541
+                    ],
+                    "allocations": [
+                        1737
+                    ],
+                    "total_bytes": [
+                        291222588
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 210000,
+                "nonzeros": 1600000,
+                "live_fraction": 1.0,
+                "variables": 1000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.10733555599972533,
+                "max": 0.11014010099961524,
+                "mean": 0.10911021999991136,
+                "stddev": 0.0011590491576638422,
+                "rounds": 5,
+                "median": 0.10924432900037573,
+                "iqr": 0.0017398502500327595,
+                "q1": 0.10837619974984136,
+                "q3": 0.11011604999987412,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.10733555599972533,
+                "hd15iqr": 0.11014010099961524,
+                "ops": 9.165044301082084,
+                "total": 0.5455510999995568,
+                "data": [
+                    0.10872308099988004,
+                    0.10924432900037573,
+                    0.11014010099961524,
+                    0.10733555599972533,
+                    0.11010803299996041
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-l-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-l-specsolve]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "specsolve"
+            },
+            "param": "storage-l-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        58834368
+                    ],
+                    "allocations": [
+                        586
+                    ],
+                    "total_bytes": [
+                        72864978
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000,
+                "phase_seconds": {
+                    "attach": 0.0025130959998023172,
+                    "build": 1.030245210999965
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.0631607129998883,
+                "max": 1.2065238899999713,
+                "mean": 1.1212835877999168,
+                "stddev": 0.05666283533248299,
+                "rounds": 5,
+                "median": 1.1069954139998117,
+                "iqr": 0.08222067725012039,
+                "q1": 1.0787519574998896,
+                "q3": 1.16097263475001,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.0631607129998883,
+                "hd15iqr": 1.2065238899999713,
+                "ops": 0.8918350459067285,
+                "total": 5.606417938999584,
+                "data": [
+                    1.2065238899999713,
+                    1.08394903899989,
+                    1.145788883000023,
+                    1.1069954139998117,
+                    1.0631607129998883
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-l-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-l-specsolve-in-memory]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "storage-l-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        33669534
+                    ],
+                    "allocations": [
+                        599
+                    ],
+                    "total_bytes": [
+                        47715437
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000,
+                "phase_seconds": {
+                    "attach": 0.0015121139999791922,
+                    "build": 1.3488209590000224
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.288618986000074,
+                "max": 1.4037525700000515,
+                "mean": 1.3696532940000907,
+                "stddev": 0.046185879983067946,
+                "rounds": 5,
+                "median": 1.388578121000137,
+                "iqr": 0.03648962124998434,
+                "q1": 1.3560454312500951,
+                "q3": 1.3925350525000795,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 1.3785209130001022,
+                "hd15iqr": 1.4037525700000515,
+                "ops": 0.7301117767398542,
+                "total": 6.848266470000453,
+                "data": [
+                    1.3785209130001022,
+                    1.288618986000074,
+                    1.388578121000137,
+                    1.4037525700000515,
+                    1.3887958800000888
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-l-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-l-linopy]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "linopy"
+            },
+            "param": "storage-l-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        522021292
+                    ],
+                    "allocations": [
+                        22569
+                    ],
+                    "total_bytes": [
+                        2110754029
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.40352300000040486,
+                "max": 0.4149768480001512,
+                "mean": 0.408402334800121,
+                "stddev": 0.00463770800462944,
+                "rounds": 5,
+                "median": 0.40901879900002314,
+                "iqr": 0.0070993802499970116,
+                "q1": 0.4041976760000807,
+                "q3": 0.41129705625007773,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.40352300000040486,
+                "hd15iqr": 0.4149768480001512,
+                "ops": 2.448565825387401,
+                "total": 2.042011674000605,
+                "data": [
+                    0.4149768480001512,
+                    0.41007045900005323,
+                    0.40901879900002314,
+                    0.40442256799997267,
+                    0.40352300000040486
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-l-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-l-gurobipy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "storage-l-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3933557290
+                    ],
+                    "allocations": [
+                        2103364
+                    ],
+                    "total_bytes": [
+                        8332858465
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": 16000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 11.105838204000065,
+                "max": 11.192238301999623,
+                "mean": 11.142026468199855,
+                "stddev": 0.040335687564074095,
+                "rounds": 5,
+                "median": 11.128994476000116,
+                "iqr": 0.07470434224990186,
+                "q1": 11.106055401749813,
+                "q3": 11.180759743999715,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 11.105838204000065,
+                "hd15iqr": 11.192238301999623,
+                "ops": 0.08975028042287207,
+                "total": 55.71013234099928,
+                "data": [
+                    11.105838204000065,
+                    11.128994476000116,
+                    11.10612780099973,
+                    11.192238301999623,
+                    11.176933557999746
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[storage-l-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[storage-l-highspy-matrix]",
+            "params": {
+                "case_name": "storage",
+                "size": "l",
+                "arm": "highspy-matrix"
+            },
+            "param": "storage-l-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1673265541
+                    ],
+                    "allocations": [
+                        1736
+                    ],
+                    "total_bytes": [
+                        2905249510
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2100000,
+                "nonzeros": 16000000,
+                "live_fraction": 1.0,
+                "variables": 10000000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.132902151000053,
+                "max": 1.1506570659998943,
+                "mean": 1.1420590282000376,
+                "stddev": 0.00691431090249509,
+                "rounds": 5,
+                "median": 1.1444590549999702,
+                "iqr": 0.009847160999811422,
+                "q1": 1.136375147500189,
+                "q3": 1.1462223085000005,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.132902151000053,
+                "hd15iqr": 1.1506570659998943,
+                "ops": 0.8756114835640919,
+                "total": 5.710295141000188,
+                "data": [
+                    1.1375328130002345,
+                    1.1506570659998943,
+                    1.1444590549999702,
+                    1.132902151000053,
+                    1.144744056000036
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-10-11T11:15:36.425315+00:00",
+    "version": "5.3.0"
+}
