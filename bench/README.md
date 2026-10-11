@@ -39,15 +39,14 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/latest-<sink>-<case>.json` are the provenance of the
-tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-34818523523, on `8d27e88b`, which finished one case of eight. Every failure
-whose log survives is one of two: a `test_window` cell whose verb was still a
-closure `isolate=True` could not ship to its child (fixed since, #1617), or
-`storage`/`gurobi` killed by the watchdog with `gurobipy-matrix` at `w1000`
-reaching 26 GB. What it left committed is `highs` for `dispatch` and `fleet`,
-and `gurobi` for `dispatch`, `fleet` and `transport`; the page has no table for
-the rest until a run completes. `results.records` still reads the pre-pytest
+The committed `results/latest-<sink>-<case>.json`, and a
+`latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
+the provenance of the tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+37986780225, on `a19f71c9`, which finished four cases of eight. The other four
+were killed by the watchdog above 25 GB, at a rung that did not fit:
+`transport/w100` and `storage/w1000`, on both sinks. What it left committed is
+`highs` and `gurobi` for `dispatch` and `fleet`; the page has no table for the
+rest until a run completes. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -55,7 +54,7 @@ selects `test_emit` and `test_rebuild`. The windows and the read-back are
 measured where their history is kept — CodSpeed, below. The sweep and the fresh
 process, which CodSpeed does not run, are measured by anyone who runs
 `pytest bench` without the `-k`. Spending the box's hours on cells no table
-renders would lengthen a run that took 2 h 23 min the last time (34818523523).
+renders would lengthen a run that took 2 h 7 min the last time (37986780225).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -105,8 +104,11 @@ OS in between — so that 14.26 GB cell wants about 28 GB of machine on top of
 whatever the finished cases are still holding. The published numbers need
 **64 GB and a dedicated CPU rather than a burst one**, with nothing else on the
 box. `bench/memory-watchdog.sh` is the backstop for a cell that outgrows even
-that: it kills the case, where the harness' own budget can only decline the
-*next* rung and so cannot see the one it is inside.
+that: it kills the process the cell is in, where the harness' own budget can
+only decline the *next* rung and so cannot see the one it is inside. A killed
+process writes no file, so `ladder-ci` runs each ladder of a case in a process
+and a file of its own (`bench/published.py`): a kill on the width rungs keeps
+the case's size rungs.
 
 **A platform change re-baselines the page.** The committed results were taken on
 the dedicated Linux `x86_64` box, eight cores of an AMD EPYC, so a run anywhere
@@ -647,7 +649,8 @@ the child loads before its clock imports a modelling library, which
 mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
 `2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
 worth knowing, and never under CodSpeed, whose instruments do not follow a
-child process. Its phase is `fresh`.
+child process. Its phase is `fresh`, and `bench.report` renders it as the page's
+`fresh` table, beside the warm ones.
 
 ## The warm-start payoff
 
@@ -797,8 +800,8 @@ freezes every version it runs on, git commits included:
 uv run --locked bench/reproduce.py
 ```
 
-**Why it exists.** `pixi.lock` is not committed, and two of the libraries here
-install from git — specsolve itself, and linopy from `master`, a branch that moves.
+**Why it exists.** `pixi.lock` is not committed, and specsolve itself installs
+from git.
 Before the lock, "the versions that produced this number" existed only inside a
 results file, after the fact, in a form nobody could install. `--locked` refuses
 to run if the resolution has drifted, `test_the_lock_pins_every_library...`

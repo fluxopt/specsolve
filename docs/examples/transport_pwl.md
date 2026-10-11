@@ -2,7 +2,7 @@
 
 GAMS model library `trnspwl`: the same shipping problem, but a big consignment is cheaper per unit — cost grows as `sqrt(x)`, not linearly.
 
-> **✔ Verified against linopy 0.9.0's own `add_piecewise_formulation`** — objective **8.786852757777865**, matched to `rtol=1e-09`.
+> **✔ Verified against linopy 0.10.0's own `add_piecewise_formulation`** — objective **8.786852757777865**, matched to `rtol=1e-09`.
 
 Every other reference is independent of specsolve because it is a different
 program; this one is also independent of *the construct under test*.

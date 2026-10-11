@@ -204,16 +204,22 @@ def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) ->
 
 
 def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
-    """One per sink and case, as `ladder-ci` writes them."""
-    published = harness.published_results()
+    """One per sink, case and ladder, as `ladder-ci` writes them."""
+    published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
-    assert len(published) == 8, 'four cases through two sinks'
-    assert {p.name for p in published} == {
-        f'latest-{sink}-{case}.json'
-        for sink in ('highs', 'gurobi')
-        for case in ('dispatch', 'transport', 'storage', 'fleet')
-    }, 'the names the published run writes, sink by case'
-    assert not any(p.name == 'latest.json' for p in published), 'no run has written that name since ladder-ci'
+    assert sorted(published) == sorted(
+        [
+            f'latest-{sink}-{case}.json'
+            for sink in ('highs', 'gurobi')
+            for case in ('dispatch', 'transport', 'storage', 'fleet')
+        ]
+        + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
+    ), 'every case through both sinks, and a file of its own for each width ladder'
+    assert published['latest-highs-transport.json'] == {'xs', 's', 'm', 'l'}, 'the size file holds no width rung'
+    assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
+        'the width file holds only width rungs'
+    )
+    assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
 
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
@@ -225,9 +231,8 @@ def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
 def test_narrower_sinks_still_write_the_provenance() -> None:
     """The scheduled run takes one sink per job, and each half is still the
     published run; leaving out rungs is what makes a smoke test."""
-    whole = sorted(harness.published_rungs())
-    for published in sorted(harness.published_results()):
-        harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
+    for published, rungs in sorted(harness.published_results().items()):
+        harness.refuse_to_overwrite_the_provenance(_config(sorted(rungs), str(published)))
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +340,41 @@ def test_the_ci_ladder_measures_every_published_arm() -> None:
     assert asked == published, f'ladder-ci measures {asked} and the published ladder is {published}'
 
 
+def test_a_ladder_the_box_cannot_hold_loses_only_its_own_file() -> None:
+    """Each file is its own process, so a kill on `storage`'s width rungs keeps
+    its size rungs and every case after it.
+
+    Run with a `pixi` stub that reads its stdin dry, as a real process may: the
+    file list reaches the loop on a descriptor of its own, so a ladder that
+    reads stdin cannot swallow the files still to run.
+    """
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
+    script = cmd.split("bash -c '", 1)[1].rsplit("' ", 1)[0]
+    script = script.replace('{{ sink }}', 'highs').replace('{{ cases }}', 'transport storage fleet')
+    script = script.replace('bash bench/memory-watchdog.sh &', 'true &')
+    stub = 'pixi() { cat > /dev/null; echo "$9"; [[ "$9" != *storage-width* ]]; }; '
+    ran = subprocess.run(
+        ['bash', '-c', stub + script],
+        capture_output=True,
+        text=True,
+        env={**os.environ, 'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}'},
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    assert ran.stdout.split('\n')[:-2] == [
+        'bench/results/latest-highs-transport.json',
+        'bench/results/latest-highs-transport-width.json',
+        'bench/results/latest-highs-storage.json',
+        'bench/results/latest-highs-storage-width.json',
+        'bench/results/latest-highs-fleet.json',
+    ], f'every file in turn, the killed one included and none after it lost: {ran.stdout!r} {ran.stderr!r}'
+    assert ran.returncode == 1, 'the ladder still fails'
+    assert ran.stdout.splitlines()[-1] == 'files that did not finish: bench/results/latest-highs-storage-width.json', (
+        'and names the one file it lost'
+    )
+
+
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     """A dead case must not end the loop; the ladder still fails once it has
     taken what it can."""
@@ -422,14 +462,6 @@ def test_the_lock_pins_every_library_an_arm_needs() -> None:
                 f'the {name} arm needs {required}, which bench/reproduce.py.lock does not pin — '
                 f're-run `uv lock --script bench/reproduce.py`'
             )
-
-
-def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
-    """linopy is installed from `master`, which only a commit can pin."""
-    locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
-    assert 'git = "https://github.com/PyPSA/linopy?rev=master#' in locked, (
-        'the lock has to name the linopy commit, not the branch'
-    )
 
 
 def _locked_commit(package: dict[str, Any]) -> str:
@@ -998,6 +1030,33 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
+def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
+    """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
+
+    `report.load` keeps it apart, and `report.fresh` renders one row per case and sink.
+    """
+    build = _timing('specsolve', phase='emit', sink='highs', size='xs', wall_seconds=0.03)
+    started = [
+        _timing('specsolve', phase='fresh', sink='highs', size='xs', wall_seconds=1.2),
+        _timing('linopy', phase='fresh', sink='highs', size='xs', wall_seconds=1.9),
+    ]
+    path = tmp_path / 'latest.jsonl'
+    path.write_text('\n'.join(json.dumps(r) for r in (build, *started)))
+    _run, _gates, timings, _loop, fresh = report.load(path)
+    assert [r['phase'] for r in timings] == ['emit'], 'the build tables never see a fresh-process wall'
+    assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
+
+    table = report.fresh(report.best(fresh))
+    assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is a column'
+    assert '| dispatch | highs | 1k | 1.20 s | 1.90 s |' in table, 'one row per case and sink, launch to exit'
+    assert '÷' not in table, 'no ratio column, as in the per-model tables'
+
+
+def test_a_run_without_a_fresh_process_renders_no_fresh_table() -> None:
+    """`report.main` drops an empty fragment, so the page keeps its fence rather than an empty table."""
+    assert report.fresh({}) == '', 'no measurement, no table'
+
+
 def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     """A number divided by itself is not a comparison, and a column of 1.00x
     reads like one."""
@@ -1509,7 +1568,7 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
 
     path = tmp_path / 'latest.jsonl'
     path.write_text('\n'.join(json.dumps(r) for r in (build, window)))
-    _run, _gates, timings, _loop = report.load(path)
+    _run, _gates, timings, _loop, _started = report.load(path)
     published = report.best(timings)
     assert published[('dispatch', 'm', 'lp', 'specsolve')]['wall_seconds'] == 1.0, (
         'the table publishes the build, not the faster window measured against it'

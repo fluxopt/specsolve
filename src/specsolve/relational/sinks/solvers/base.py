@@ -91,12 +91,11 @@ class Solver(ABC):
     def __init__(
         self,
         handoff: Handoff,
-        batch_rows: int | None = None,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
         #: The options the model was loaded with.
         self._options = dict(solver_options or {})
-        self._load(handoff, batch_rows)
+        self._load(handoff)
         #: The loaded frames, until [`structure`][] replaces them with their digest.
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
@@ -173,7 +172,7 @@ class Solver(ABC):
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
-    def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
+    def _load(self, handoff: Handoff) -> None:
         """Hand *handoff* to the solver and hold whatever reads it back. Called by ``__init__``."""
 
     @abstractmethod

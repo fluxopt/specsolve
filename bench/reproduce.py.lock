@@ -12,12 +12,12 @@ resolution-markers = [
 
 [manifest]
 requirements = [
-    { name = "linopy", git = "https://github.com/PyPSA/linopy?rev=master" },
+    { name = "linopy", specifier = "==0.10.0" },
     { name = "pyarrow", specifier = ">=16" },
     { name = "pyomo", specifier = ">=6.7" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-benchmem", specifier = ">=0.5" },
-    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=276d5da471" },
+    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=a19f71c93" },
 ]
 
 [[package]]
@@ -252,8 +252,8 @@ wheels = [
 
 [[package]]
 name = "linopy"
-version = "0.9.1.post1.dev48+gf665a2605"
-source = { git = "https://github.com/PyPSA/linopy?rev=master#f665a260500e5ec83eda5e037454978fff06d466" }
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bottleneck" },
     { name = "dask" },
@@ -266,6 +266,10 @@ dependencies = [
     { name = "toolz" },
     { name = "tqdm" },
     { name = "xarray" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/ef/da63a87cc78d7c8108e154904556f28acdec375e35c53f1f921cfe37426b/linopy-0.10.0.tar.gz", hash = "sha256:71ecb6c888fb2c9f12ea6736c2a594a879edb0e72a5db808ad978c948ac976e0", size = 1724337, upload-time = "2026-10-10T12:35:37.703Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/3f/efaf0032dac7d6d0512a98f329315c449ec5a533a647867c24af54f5e8b6/linopy-0.10.0-py3-none-any.whl", hash = "sha256:9f22b6df039aad0fd3c26299c6cf3c957e4b20d88842069e4338800d9114e132", size = 274915, upload-time = "2026-10-10T12:35:35.476Z" },
 ]
 
 [[package]]
@@ -1081,8 +1085,8 @@ wheels = [
 
 [[package]]
 name = "specsolve"
-version = "0.8.0"
-source = { git = "https://github.com/fluxopt/specsolve?rev=276d5da471#276d5da47182fb99c3b41f7d4133b2a8c0fe642f" }
+version = "0.8.1.dev7+ga19f71c93"
+source = { git = "https://github.com/fluxopt/specsolve?rev=a19f71c93#a19f71c93698dbb9353dc16403c5405b80fc320e" }
 dependencies = [
     { name = "highspy" },
     { name = "mathspec" },

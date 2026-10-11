@@ -2,7 +2,7 @@
 
 A unit that has started must stay on; one that has stopped must stay off.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **32750.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **32750.0**, matched to `rtol=1e-09`.
 
 [Unit commitment](pypsa_unit_commitment.md) takes the status and the two
 transition variables and stops there. A unit may start and stop in consecutive

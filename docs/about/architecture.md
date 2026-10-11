@@ -88,7 +88,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
-        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -535,8 +535,8 @@ solver is a module named for it and a line in `SOLVERS`, and nothing above it
 changes. Members share the projection of `cols` and `obj` onto the solver's
 column index, which lives on `Handoff`. So two solvers cannot drift into loading
 different models. They never share hand-off code, for two reasons. The
-currencies differ: HiGHS and Xpress take the three CSR arrays, gurobipy a matrix
-object. And an optional package must stay off the import path of a caller who
+currencies differ: HiGHS and Xpress take the three CSR arrays, gurobipy the
+three CSC arrays. And an optional package must stay off the import path of a caller who
 does not use it.
 
 ### Quadratic objectives at the sink
