@@ -79,6 +79,7 @@ Everything below is the first one, in the order it runs.
 | `pixi run docs-build` | the site. A dead cross-link or an anchor that no longer resolves — see *the docs* below. |
 | `pixi run docs-test` | a page's math reached the reader as literal backticks. Needs the docs environment, which is why it is not in `test`. |
 | `pixi run test-floors` | the engine reached for something it does not declare. |
+| `pixi run test-pyodide` | a wheel of the tree does not install, solve or sweep in Pyodide, the browser's Python. Its polars has no streaming engine and no parquet. |
 
 Every one of them runs the same way locally as it does in CI, because the
 command is the task and the task is defined once, in `pyproject.toml`.
