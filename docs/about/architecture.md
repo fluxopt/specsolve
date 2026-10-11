@@ -88,7 +88,7 @@ flowchart TB
         end
         ENG --> TABLES["sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
-        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
