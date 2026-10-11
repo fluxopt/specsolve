@@ -14,10 +14,6 @@ shows the YAML, the same model as math, and its data.
 | [storage](storage.md) | Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear. |
 | [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
 | [piecewise](piecewise.md) | Per-generator convex cost curves, expanded into a λ-formulation. |
-| [piecewise segment lines](piecewise_lp.md) | A piecewise-linear cost curve stated as **the lines its segments lie on** — [piecewise](piecewise.md) with one line changed, and the only method that declares no auxiliary variable at all. |
-| [piecewise curves of differing length](piecewise_ragged.md) | Per-generator cost curves of **different lengths**, each as long as its own data. |
-| [piecewise conversion](piecewise_conversion.md) | Converters whose flows share one curve, where **how many flows** is data. |
-| [special-ordered sets](sos.md) | A piecewise-linear cost curve stated as a **special-ordered set** — [piecewise](piecewise.md) with one line changed, handed to the solver as a set it branches on itself. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
 | [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next. |

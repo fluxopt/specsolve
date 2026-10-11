@@ -221,7 +221,10 @@ convex hull is exact for a convex curve under minimisation, so the model stays
 a pure LP. `method: adjacency`, the default, adds segment binaries and
 adjacency constraints instead, and the model becomes a MILP that is still
 inside the relational subset. `method: sos2` states the same restriction as a
-[set](sos.md) and leaves the binaries to whichever sink needs them.
+special-ordered set and leaves the binaries to whichever sink needs them.
+`method: lp` states the curve as the lines its segments lie on, with no
+weights at all
+([methods](https://mathspec.readthedocs.io/en/latest/reference/language/piecewise/)).
 
 ---
 
