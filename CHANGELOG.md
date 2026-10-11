@@ -7,7 +7,28 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.8.1 (2026-10-11)
 
-Models build, load into a solver and re-solve faster, and a null label is refused when the data loads. Model files, archives and imports from 0.8.0 still work.
+**Faster everywhere, nothing to change on your side.** Model files, archives
+and code from 0.8.0 work as before.
+
+- **Small models build and solve about 40% faster than on 0.8.0.** On the 43
+  reference models, `sps.solve` is a median 39% faster end to end, and none is
+  slower or builds a different model. Up to 250,000 columns and rows,
+  specsolve picks polars' in-memory engine by itself.
+- **Faster than linopy at every size we publish.** Build and hand-off to the
+  solver: a median 1.5× at 10k variables, 2.2× at 1M and 10M.
+- **Gurobi loads a model in a sixth to a third of the time.** With quadratic
+  constraints over 1M columns, it loads 70× faster.
+- **Warm re-solves on HiGHS send only what changed.** At 1M columns the
+  hand-off drops from 324 ms to 38 ms when only the right-hand side moves.
+- **LP files with quadratic constraints write about 780× faster.** 5,000
+  quadratic rows take 0.04 s instead of 29 s.
+- **Leaner archives and read-back.** Sources and answers are written once, and
+  results read back faster after every solve.
+- **Fix: a null label is refused at load.** Before, it built a wrong model or
+  crashed.
+
+The benchmark page is re-measured for this release, and `storage` and
+`transport` are on it again ([#1950](https://github.com/fluxopt/specsolve/pull/1950)).
 
 Building and solving:
 
@@ -38,6 +59,7 @@ Docs and benchmarks:
 - docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919), [#1934](https://github.com/fluxopt/specsolve/pull/1934))
 - docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
 - docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
+- docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
 
 ## 0.8.0 (2026-10-09)
 

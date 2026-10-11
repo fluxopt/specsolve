@@ -1,0 +1,98 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 1.96 GB on transport/m, so the next rung projects to 39.3 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve-in-memory",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve-in-memory took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "highspy-matrix",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "highspy-matrix took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "pyomo took 6.21 s on transport/m, so the next rung projects to 62.1 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 4.76 s on transport/m, so the next rung projects to 47.6 s \u2014 over the 30 s budget"
+ }
+]

@@ -41,12 +41,12 @@ whose fingerprint no longer describes it.
 
 The committed `results/latest-<sink>-<case>.json`, and a
 `latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
-the provenance of the tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-37986780225, on `a19f71c9`, which finished four cases of eight. The other four
-were killed by the watchdog above 25 GB, at a rung that did not fit:
-`transport/w100` and `storage/w1000`, on both sinks. What it left committed is
-`highs` and `gurobi` for `dispatch` and `fleet`; the page has no table for the
-rest until a run completes. `results.records` still reads the pre-pytest
+the provenance of the tables `docs/about/benchmarks.md` publishes *today*:
+Published benchmark run 38132473910, on `d1d3797c`. It finished the size ladder
+of all four cases on both sinks. The watchdog killed both width ladders above
+25 GB, at a rung that did not fit: `transport/w100` and `storage/w1000`, on both
+sinks, so no `-width.json` is committed and the page has no width table until a
+run completes one. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
