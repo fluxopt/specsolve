@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
 - perf(engine): a model with at most 250,000 columns and 250,000 rows builds on polars' in-memory engine, a fifth faster at the smallest sizes ([#1930](https://github.com/fluxopt/specsolve/pull/1930))
 - docs(benchmarks): the published benchmarks are re-measured after 0.8.0 ([#1934](https://github.com/fluxopt/specsolve/pull/1934))
 - perf(engine): a model loads into Gurobi in a sixth to a third of the time, and a quadratic constraint no longer slows with the column count ([#1942](https://github.com/fluxopt/specsolve/pull/1942))
