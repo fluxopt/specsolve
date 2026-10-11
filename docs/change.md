@@ -1,6 +1,6 @@
 # Change a model
 
-The dispatch model from [Run a model](run.md), changed three ways, cheapest
+The dispatch model from [Your first model](run.md), changed three ways, cheapest
 first. Every block is a function of a **spec** (the YAML, as a `dict`) and its
 **sources**, so blocks re-run in any order mean the same thing.
 

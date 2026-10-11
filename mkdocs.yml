@@ -19,7 +19,7 @@ validation:
 nav:
   - Home: index.md
   - Tutorials:
-      - Run a model: run.md
+      - Your first model: run.md
       - Tables in, tables out: tables.md
       - Change a model: change.md
       - Sweep a model: sweep.md

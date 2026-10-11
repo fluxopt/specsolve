@@ -1,6 +1,6 @@
 # Tables in, tables out
 
-The dispatch model from [Run a model](run.md), fed from parquet files and
+The dispatch model from [Your first model](run.md), fed from parquet files and
 read back as tables. The last two steps keep the solve as an **archive**
 ([glossary](reference/glossary.md#the-chain)), a directory that holds the
 spec and parquet files, and query it.

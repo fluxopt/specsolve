@@ -13,7 +13,7 @@ keep the solver loaded for quick updates and warm starts.**
 
 --8<-- "README.md:badges"
 
-[Run a model](run.md){ .md-button .md-button--primary }
+[Your first model](run.md){ .md-button .md-button--primary }
 [Browse the examples](examples/index.md){ .md-button }
 
 </div>
@@ -175,7 +175,7 @@ call.
 
 ## Where to next
 
-- [Run a model](run.md): a file and your tables to an answer, in five steps.
+- [Your first model](run.md): a file and your tables to an answer.
 - [Your data](howto/data.md): from the files an instance arrives in to one
   table per parameter, and [what attaching refuses](reference/data.md).
 - [Python API](reference/api.md): attach, build, solve and read back, and
