@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.12 s on storage/s, so the next rung projects to 31.2 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 3.3 s on storage/s, so the next rung projects to 33 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve took 2.74 GB on storage/xs, so the next rung projects to 54.9 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve-in-memory took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve-in-memory took 2.74 GB on storage/xs, so the next rung projects to 54.9 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -45,7 +45,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 2.74 GB on storage/xs, so the next rung projects to 54.9 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -57,7 +57,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 2.74 GB on storage/xs, so the next rung projects to 54.9 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -69,7 +69,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "highspy-matrix took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+  "reason": "highspy-matrix took 2.74 GB on storage/xs, so the next rung projects to 54.9 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -81,7 +81,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 5.87 s on storage/m, so the next rung projects to 58.7 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 5.94 s on storage/m, so the next rung projects to 59.4 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -93,6 +93,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 5.76 s on storage/m, so the next rung projects to 57.6 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 5.92 s on storage/m, so the next rung projects to 59.2 s \u2014 over the 30 s budget"
  }
 ]
