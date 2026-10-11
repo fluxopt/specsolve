@@ -379,6 +379,47 @@ inherits the last one's garbage, and on the gurobi sink that is a million
 decided by which one the median fell on (#1288). What a round measures is one
 build.
 
+## Reading the published numbers
+
+### Why the median
+
+Every published number is the median of nine rounds. Every measurement gets
+the same nine, pinned rather than calibrated by duration, so no cell is a
+best-of-nine beside a neighbour's best-of-forty. The median beats
+the fastest round because a cell whose nine rounds all ran slow has no clean
+round to pick. It beats the mean because one slow round moves a mean and
+leaves a median where it was. On this run
+([#1952](https://github.com/fluxopt/specsolve/pull/1952)) 31 of 160 published
+cells have a mean above 1.10x their median, the worst at 3.03x: `dispatch/xs` on
+pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In 23 of
+them the first round is the slowest of the nine, at 1.9 to 19.4 times the median
+of the other eight, so the median does not move. The other eight are
+matrix-floor and gurobipy-loop cells from `xs` to `m` whose rounds fall into two
+groups, the slow one up to about twice the fast one: `storage/s` on
+gurobipy-matrix on the `gurobi` sink takes either 32 to 33 ms or 56 to 60 ms.
+
+The median decides specsolve against another library in three cells on this
+run, all against gurobipy-loop at `xs` on the `gurobi` sink. At `transport/xs`
+and `storage/xs` specsolve's fastest round is the faster one, 47.1 ms against
+48.0 ms and 51.1 ms against 52.4 ms, and its median is the slower, 58.8 ms
+against 51.7 ms and 55.5 ms against 54.7 ms. At `dispatch/xs` it is the other
+way round: 25.3 ms against 24.3 ms fastest, 31.4 ms against 34.6 ms median. No
+cell flips against linopy.
+
+### Peak memory
+
+**Peak carries an allocator cost that only the polars arms pay.** polars
+ships its own jemalloc settings, so a peak measured through it holds pages
+freed and not yet returned. An arm on the system allocator never enters
+jemalloc. Our peak moves 12–27% with the decay clock on and off, where
+linopy's does not move at three digits
+([#896](https://github.com/fluxopt/specsolve/issues/896)). It runs against us and
+is left in.
+
+**memray never times anything.** Its tracker slows an allocation-heavy
+engine several-fold and overcounts reserved arenas. Peak RSS is the metric;
+memray is for attribution.
+
 ## Why it is built this way
 
 **One process per measurement.** Peak RSS is a property of a process: a second

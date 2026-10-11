@@ -1,53 +1,74 @@
-# Relationship to linopy
+# Coming from linopy
 
-Everything about [linopy](https://github.com/PyPSA/linopy) in one place, for a
-reader who arrives from linopy or PyPSA. There are two separate
-relationships:
+For a reader who writes models in [linopy](https://github.com/PyPSA/linopy).
+specsolve solves the same models, and borrows linopy's names where it can. The
+difference is where the math lives: in a YAML file you check and diff, not in
+the Python that builds it.
 
-| | What | Where it matters |
-|---|---|---|
-| **Not a dependency** | nothing in the package imports it | packaging |
-| **The oracle** | how we know the answers are right | testing |
+## The same model
 
-## 1. It is not a dependency
+The dispatch model of [Your first model](../run.md), written both ways. Both
+reach the same objective and the same prices, and `tests/test_ports.py` holds
+them to it.
 
-`sps.solve`, `sps.build`, `sps.write` and `sps.check` go YAML → polars → HiGHS
-or file, and import nothing from linopy, xarray or pandas. The bare-install job
-runs the whole suite with none of the three present. No install of specsolve
-brings linopy: it is a test dependency, in the `dev` group.
+=== "linopy"
 
-The `to_pandas` / `to_dataarray` bridges out of a
-[result](../reference/glossary.md#the-chain) need pandas and xarray, which the
-caller installs.
+    <!-- The fence includes the model from examples/ports/references/linopy/dispatch.py. -->
+    <!-- doctest: skip -->
+    ```python
+    --8<-- "examples/ports/references/linopy/dispatch.py:model"
+    ```
 
-**Nothing a bare install can reach names linopy, including a traceback.** The
-public exception tree is rooted at `SpecsolveError`, with no alias
-([#389](https://github.com/fluxopt/specsolve/issues/389)).
+=== "specsolve"
 
-## 2. It is the oracle
+    <!-- The fence includes examples/dispatch.yaml, which the suite solves. -->
+    <!-- doctest: skip -->
+    ```yaml
+    --8<-- "examples/dispatch.yaml"
+    ```
 
-The test suite builds every file a second time as a `linopy.Model`, and
-compares the two builds. [Verification](../development/verification.md#the-oracle)
-says how, and what the oracle cannot catch.
+    ```python
+    result = sps.solve('dispatch.yaml', sources)
+    ```
 
-## Parts of linopy not taken
+## What maps to what
 
-specsolve does not take array operations (`merge`, `reindex`, `stack`), the Python
-modeling API, or the solver layer. The first is data prep
-([the limits](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#what-the-language-will-not-express)).
-The second is [hard rule 5](../development/architecture.md#hard-rules): the spec is the file
-you review and diff. The third is
-[#106](https://github.com/fluxopt/specsolve/issues/106), where specsolve adopts
-linopy's *design* for declared solver capabilities without adopting its code.
+| linopy | specsolve |
+|---|---|
+| `add_variables(lower, upper, coords, mask)` | `variables:` with `dims`, `bounds` and `where` |
+| `add_constraints(lhs == rhs)` | `constraints:` with an `expression` |
+| `add_objective(expr)` | `objective:` |
+| `coords` from pandas indexes | `sources`: one table per parameter, and the labels of each dimension ([the data contract](../reference/data.md)) |
+| `m.solve()` | [`sps.solve`](../reference/api.md#specsolve.solve), or `sps.build` and `model.solve()` to solve again |
+| `p.solution`, `con.dual` | `result.primal('p')`, `result.dual('power_balance')`, as polars tables |
+| an xarray answer | `result.to_dataarray('p')` ([pandas or xarray](../howto/pandas-xarray.md)) |
+| `fix`, `relax`, `remove_constraints` | data and spec edits ([fixing, relaxing and removing](../howto/fix-relax-remove.md)) |
+| a constraint's rows | [`model.row`](../reference/api.md#specsolve.types.Model.row) |
+| `compute_infeasibilities` | [`model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem) |
 
-The modeling API is what a reader arriving from linopy misses first. Two
-pages replace it. The tutorial [Change it and solve again](../change.md)
-covers `update` for new numbers and a longer table for more rows. The how-to
-[Fixing, relaxing and removing](../howto/fix-relax-remove.md) aims the same
-loops at `fix`, `relax` and `remove_constraints`. A built row is read with [`row`](../reference/api.md#specsolve.types.Model.row), in linopy's
-own form, and an IIS with [`infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem).
+Solve statuses take linopy's names: `status` and `termination_condition`, with
+`is_ok` as the rollup.
 
-Where linopy is ahead, and why none of it is a ceiling question, is
-[the roadmap](roadmap.md#honest-snapshot). What is *owed* to linopy rather than
-merely true of it is [prior art and credit](prior-art.md). The same page credits
-Calliope, whose math language this surface is derived from.
+## What is different
+
+- **The model is a file.** There is no Python API that builds math.
+  `sps.check` validates the file with no data, so a model can be reviewed and
+  checked in CI before any data exists.
+- **Data is attached by name, and a missing row is a missing coordinate.**
+  A model holds only the rows that exist, which is what keeps a sparse model
+  small.
+- **linopy is not a dependency.** No install of specsolve brings it. The test
+  suite builds every file a second time in linopy and compares the two
+  ([verification](../development/verification.md#the-oracle)).
+- **Some of linopy is not taken**: array operations such as `merge` and
+  `reindex` are data preparation, and the solver layer is specsolve's own
+  ([#106](https://github.com/fluxopt/specsolve/issues/106)).
+
+## Where linopy is ahead
+
+- **Solver breadth**: twelve solvers against specsolve's three, plus the LP
+  and MPS files.
+- **Verbs on the model**: `fix` and `relax` are methods there, and edits to the
+  data or the spec here.
+- **Labelled answers**: linopy answers in xarray; specsolve answers in tables,
+  and `to_dataarray` bridges.
