@@ -46,8 +46,6 @@ table with both as columns. `series.reset_index()` is the whole change.
 **An `xr.DataArray` is refused.** Pass `array.to_series().reset_index()`.
 `Result.to_dataarray()` is the way back out.
 
-**Nothing on this path imports pandas, xarray or linopy on your behalf.**
-
 ## Where coordinates come from
 
 **Each dimension's index is resolved before any parameter loads**, from a key
@@ -68,8 +66,8 @@ dimension, a date is the microsecond its day starts on. The index
 `[date(2030, 1, 1)]` and a column of `datetime(2030, 1, 1)` hold the same label.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
-parameters. Which labels an axis has is data's to say, and that rule is
-[the language's](https://mathspec.readthedocs.io/en/latest/reference/language/dimensions/).
+parameters, so a misspelled label, such as `{'wind': 1.0, 'gsa': 2.0}` for
+`gas`, is refused by name rather than read as a new generator.
 
 **A relation goes under
 [its own name](https://mathspec.readthedocs.io/en/latest/reference/language/relations/#the-data-contract)**,
@@ -151,17 +149,6 @@ where it is a limit that never binds. A reported quotient by zero is absent
 | an infinite value as a bound or on a constraint's constant side | a limit that never binds |
 | a value that is readable and wrong | bound as given |
 
-### Stray labels
-
-**The index is what makes a stray label a stray.**
-
-```python
-cost = {'wind': 1.0, 'gsa': 2.0}  # 'gas' misspelled — refused by name
-```
-
-A dimension whose labels came from the parameters would read `gsa` as a third
-generator.
-
 ## The tables a solve reads
 
 **[`sps.tidy(spec, sources)`](api.md#specsolve.tidy) returns the tables a solve
@@ -207,8 +194,3 @@ write into does: a polars frame made from a numpy array shares the array's
 memory, and writing into the array changes what an answer's
 [`evaluate`](api.md#specsolve.types.Result.evaluate) reads and what a save
 records. Change data through `update`, or pass a copy.
-
-**The [linopy lane](../development/verification.md#the-oracle)
-attaches by these same rules, refusals included**, held to them by
-`tests/test_data_parity.py`. The same malformed source gets the same verdict,
-and where one defect has one repair, the same message.

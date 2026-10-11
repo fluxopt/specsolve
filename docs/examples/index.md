@@ -1,18 +1,8 @@
 # Examples
 
-This page lists every model in the repository, which constructs each
-exercises and whether an outside optimum checks its answer, so you can decide
-whether the language can say yours.
-
-Three questions:
-**[can it say my model?](#can-it-say-my-model)** ·
-**[is it readable?](#every-model)** ·
-**[does it get the right answer?](#does-it-get-the-right-answer)** The first
-and the third are the two tables on this page. The second is each model page,
-where the file sits beside the same model written on another stack.
-
-Every page starts from data in the shape
-[preparing the data](../howto/data.md) produces.
+Every model in the repository, the constructs each one uses, and whether an
+outside optimum checks its answer. Use it to find a model like yours. Each
+page shows the YAML, the same model as math, and its data.
 
 ## Every model
 
@@ -78,18 +68,6 @@ Every page starts from data in the shape
 | [stochastic scenarios](pypsa_stochastic.md) | Three futures over one network: the fleet is built before anyone knows which arrives, and dispatched after. |
 | [CVaR risk preference](pypsa_cvar.md) | The same three futures as [the stochastic model](pypsa_stochastic.md), planned against the tail as well as the expectation. |
 <!-- catalogue:end -->
-
-The three blocks on this page are generated. The catalogue comes from the site
-nav and each page's opening line. The constructs matrix comes from each
-model's resolved plan rather than its YAML text. The reference table comes
-from `examples/ports/references.json`, the file the tests assert against.
-`pixi run python -m tools.constructs` regenerates all three, and a test fails
-if any is stale.
-
-Every page also carries the model **as math**, typeset from the file the
-engine builds by `pixi run python -m tools.gallery_math` and gated the same
-way. A model with a symbol table in `examples/symbols/` is typeset in the
-notation of its own prose.
 
 ## Can it say my model?
 
@@ -159,14 +137,9 @@ combination with others.
 ## Does it get the right answer?
 
 **✔ means the optimum did not come from specsolve.** It came from a figure
-published with the model or from a reference implementation hand-written on
-another stack. The provenance column says which. Every model on this page runs
-in the test suite, so a test alone distinguishes nothing. The badge marks the
-one check that catches a shared misreading, the differential suite's
-[blind spot](../development/verification.md#the-oracle): both
-[lanes](../reference/glossary.md#how-it-runs) agreeing on a meaning the
-modeller did not intend. This table is the evidence behind
-[the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/#how-a-new-construct-enters).
+published with the model, or from a reference implementation on another stack.
+The reference column says which. [Verification](../development/verification.md)
+says why this is the check that counts.
 
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |
@@ -221,72 +194,7 @@ modeller did not intend. This table is the evidence behind
 <!-- references:end -->
 
 **A `duals` tick means the shadow prices are checked too**, against the
-reference's own. For the PyPSA models that is `buses_t.marginal_price`, the
-nodal price. A dual vector is where two implementations most often disagree
-quietly: which side of a constraint the price belongs to, and what sign an
-inequality carries. [Dantzig transport](transport_dantzig.md) is checked
-because both of its constraints are inequalities pointing opposite ways. A
-MILP has no dual solution, and specsolve does not invent one; those are the `·`
-rows.
+reference's own. A MILP has no duals; those are the `·` rows.
 
 Adding a port is four files and five rules:
 [CONTRIBUTING.md](https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md#adding-a-ported-model).
-
-## PyPSA, one feature at a time
-
-**[The PyPSA ladder](pypsa_ladder.md) is the conformance instrument.** It
-holds sixteen networks, each carrying what the one below it did not. Each
-is solved through PyPSA and through specsolve and compared four ways: the
-objective, the constraint and variable names, the size of the model handed to
-the solver, and every constraint's dual. A difference needs a recorded reason
-or the run is red. The numbers are there.
-
-**The PyPSA pages above are the gallery.** Each shows one idiom, held by a
-test to an optimum that did not come from specsolve. A page shows how something
-is *said*; the ladder shows that it is said *exactly*. What could not be said
-is a row in [the ledger](#ledger--what-a-port-could-not-say).
-
-The first pages grow one network a feature at a time: a transport model, then
-[ramp limits](pypsa_ramp.md) on a widened instance, storage, a
-[cyclic horizon](pypsa_cyclic_storage.md) that deletes a clause rather than
-adding one, [KVL](pypsa_kvl.md) (Kirchhoff's voltage law) with the cycle
-basis as a parameter, and [AC-DC](pypsa_ac_dc.md) with two load-bearing
-coordinates on one dimension. Each page says what it shows.
-
-## Ledger — what a port could not say
-
-Each row feeds [the roadmap](../about/roadmap.md) with the verdict
-[AGENTS.md](https://github.com/fluxopt/specsolve/blob/main/AGENTS.md) asks for:
-macro, primitive, formulation, or refused.
-
-| Port | What could not be said | Worked around by | Verdict |
-|---|---|---|---|
-| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
-| Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
-
-[Minimum up and down times](pypsa_min_up_down.md) says `min_up_time` as
-`sum_back(start_up, along=snapshot, window=min_up_time)`, each generator's own
-width read off the column.
-
-Two rows from 33 ports is the current rate.
-
-### Shapes still without a witness
-
-The language can say each of these; no *outside* model in the corpus has yet
-been found to need it. Each row is a standing request, not a gap:
-
-| Shape | Where it was looked for |
-|---|---|
-| one axis grouped several ways, all of them load-bearing | OSeMOSYS UTOPIA declares three maps out of its timeslice, but they feed only storage constraints and the instance builds none |
-| a chain whose coarse end carries a constraint | PyPSA's `ac-dc-meshed` has a country per bus and nothing constrains a country; GAMSLIB `alum` composes three such chains and its shipped scenario switches two of them off |
-| a group that carries its own constraint and appears nowhere else | GAMSLIB `mexls` is exactly this, and its optimum is published only in a book with no reachable text |
-| a partial map whose null membership moves an optimum | `reserves` exercises it, but that model is ours and was built to |
-| opposite-sign legs onto one dimension, plus a second hop a constraint reads | an airline fleet-assignment text has it; the data and both optima are not obtainable |
-
-A model that needs one of these is worth more to the corpus than one that
-exercises a shape already covered.
-
-**The TSP row is narrower than it reads.** The DFJ
-(Dantzig–Fulkerson–Johnson) subtour rows written out in full *are* sayable,
-and [the TSP page](tsp_mtz.md) draws the line between that and lazy
-generation.

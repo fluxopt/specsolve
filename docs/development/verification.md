@@ -104,3 +104,27 @@ writes Benders decomposition as a loop over three specs, and
 `tests/test_benders_example.py` checks that it reaches the optimum of the
 monolith. It shows that an algorithm the language does not contain can be
 written over the specs it does.
+
+## What a port could not say
+
+Each row is a verdict for the roadmap: macro, primitive, formulation, or
+refused.
+
+| Port | What could not be said | Worked around by | Verdict |
+|---|---|---|---|
+| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
+| Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](../examples/tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
+
+### Shapes still without a witness
+
+The language can say each of these, and no outside model in the corpus has yet
+needed one. A model that does is worth more to the corpus than one that uses a
+shape already covered.
+
+| Shape | Where it was looked for |
+|---|---|
+| one axis grouped several ways, all of them load-bearing | OSeMOSYS UTOPIA declares three maps out of its timeslice, but they feed only storage constraints and the instance builds none |
+| a chain whose coarse end carries a constraint | PyPSA's `ac-dc-meshed` has a country per bus and nothing constrains a country; GAMSLIB `alum` composes three such chains and its shipped scenario switches two of them off |
+| a group that carries its own constraint and appears nowhere else | GAMSLIB `mexls` is exactly this, and its optimum is published only in a book with no reachable text |
+| a partial map whose null membership moves an optimum | `reserves` exercises it, but that model is ours and was built to |
+| opposite-sign legs onto one dimension, plus a second hop a constraint reads | an airline fleet-assignment text has it; the data and both optima are not obtainable |
