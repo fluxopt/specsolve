@@ -1,83 +1,203 @@
 """The answer's layout on disk: what a result and a sweep write, the rows they record, and the writer that lands a file whole.
 
-Under a directory, ``<kind>/<name>`` for each of the three kinds a solve
-answers with — primals, duals, named expressions: one file per name from a
-result, one per slice from a sweep, read back as one. Beside them, the
-[`Record`][] says how the solve terminated and the [`Metrics`][] what it
-took, one row of each per result or per slice. A saved result also holds
-``activity/<name>`` for every constraint, and ``reasons.parquet`` saying why
-a kind or a name is deliberately not there. An archive holds this layout
-under its own ``answer/`` ([`specsolve.archive_layout`][]).
+Under a directory, ``<kind>/<name>`` for each of the [`KINDS`][] the answer
+carries: one file per name from a result, one per slice from a sweep, read
+back as one. Beside them, the [`Record`][] says how the solve terminated and
+the [`Metrics`][] what it took, one row of each per result or per slice,
+``spec.yaml`` is the spec the answer came from, and ``reasons.parquet`` says
+why a kind or a name is deliberately not there. An archive holds this layout
+under its own ``answer/``
+([`specsolve.archive_layout`][]).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime
+from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_type_hints
 
 import polars as pl
+from mathspec import to_spec
 
 from specsolve.errors import LayoutError, SpecsolveError
+from specsolve.relational.names import RUN
 from specsolve.relational.status import SolveStatus, status_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from mathspec import Spec
 
-#: The three kinds of frame a solve answers with, named after the reader each
-#: comes back through, and each the directory its frames are saved under.
-KINDS = ('primal', 'dual', 'expression')
+#: What an answer carries only where the solve asked for it with ``outputs=``,
+#: beside the primal, the duals and the declared expressions it always
+#: carries. ``activity`` is each constraint's left-hand side at the solution,
+#: ``reduced_cost`` each variable's reduced cost, ``slack`` each
+#: constraint's distance to binding, and ``basis`` the basis status the solve
+#: ended on, of each variable and each constraint.
+Output = Literal['activity', 'reduced_cost', 'slack', 'basis']
 
-#: The directory a saved result keeps each constraint's activity under,
-#: beside the [`KINDS`][]; a sweep saves none.
-ACTIVITY = 'activity'
+#: Every [`Output`][], in the order a message lists them.
+OUTPUTS: tuple[Output, ...] = get_args(Output)
 
-#: The prefix reserved, in any letter case, for the columns specsolve adds, so
-#: that no name a spec declares can collide with one.
-RESERVED = 'specsolve_'
+#: What a kind of frame holds one frame per.
+Per = Literal['variable', 'constraint']
 
 
-def refuse_reserved(name: str, which: str) -> None:
-    """Refuse *name*, which *which* describes, where it starts with [`RESERVED`][] in any letter case.
+class OutputKind(NamedTuple):
+    """What one kind of frame an [`Output`][] carries is."""
+
+    #: The output that asks for it.
+    output: Output
+    #: What it holds one frame per.
+    per: Per
+
+
+#: Each kind of frame the [`OUTPUTS`][] carry, named after the reader it comes
+#: back through: ``basis`` carries two, ``variable_basis`` and
+#: ``constraint_basis``, and every other output one, of its own name.
+OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
+    {
+        'activity': OutputKind('activity', 'constraint'),
+        'reduced_cost': OutputKind('reduced_cost', 'variable'),
+        'slack': OutputKind('slack', 'constraint'),
+        'variable_basis': OutputKind('basis', 'variable'),
+        'constraint_basis': OutputKind('basis', 'constraint'),
+    }
+)
+
+#: The kinds that exist exactly where the duals do. Where a solve left none,
+#: each carries the duals' reason.
+PRICED = frozenset({'dual', 'reduced_cost'})
+
+#: The kinds ``basis`` carries, which exist only where the solve ended on a
+#: basis. Where it did not, each carries [`NO_BASIS`][].
+BASES = frozenset(kind for kind, carried in OUTPUT_KINDS.items() if carried.output == 'basis')
+
+NO_BASIS = (
+    'the solve ended on no basis, so there is no basis status to read. Only an LP solved by simplex, or by '
+    'an interior-point method followed by crossover, ends on one: a mixed-integer model, a model with a '
+    'quadratic constraint, and an interior-point run with crossover off do not. Solve with crossover on — '
+    "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
+)
+
+#: A basis status in the one vocabulary every solver's is read into, each at
+#: the index that is its code. A row's bound is its right-hand side, so a
+#: binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``, and
+#: a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
+#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
+BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
+BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
+
+#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
+BASIS = pl.Enum(BASIS_STATUSES)
+
+#: Every kind of frame an answer can hold: the three every solve answers with,
+#: then the [`OUTPUT_KINDS`][]. Each is named after the reader it comes back
+#: through.
+KINDS = ('primal', 'dual', 'expression', *OUTPUT_KINDS)
+
+
+def is_output(name: str) -> TypeGuard[Output]:
+    """Whether *name* is one of the [`OUTPUTS`][]."""
+    return name in OUTPUTS
+
+
+def checked_outputs(outputs: Iterable[str]) -> frozenset[Output]:
+    """*outputs* as a set, once each is checked to be one of [`OUTPUTS`][].
 
     Raises:
-        SpecsolveError: A name a column specsolve adds could collide with.
+        SpecsolveError: One string rather than a collection of them, or a name
+            that is not an output.
     """
-    if name.casefold().startswith(RESERVED):
+    if isinstance(outputs, str):
         raise SpecsolveError(
-            f'{which} starts with {RESERVED!r}, which is reserved in any letter case for the columns '
-            f'specsolve adds, so it could collide with one. Rename it.'
+            f'outputs={outputs!r} is one string, which would name each of its letters. '
+            f'Pass a set: outputs={{{outputs!r}}}.'
         )
+    asked = frozenset(outputs)
+    if unknown := sorted(name for name in asked if not is_output(name)):
+        raise SpecsolveError(
+            f'outputs names {", ".join(map(repr, unknown))}, and an answer carries only '
+            f'{", ".join(map(repr, OUTPUTS))} on request. The primal, the duals and the declared '
+            f'expressions are carried always and are not named here.'
+        )
+    return frozenset(filter(is_output, asked))
 
 
-#: The column an archive adds to every table it holds, naming the run the
-#: table came from. Read back, a frame comes without it.
-RUN = f'{RESERVED}run'
+def kinds_of(outputs: Iterable[Output]) -> tuple[str, ...]:
+    """Each of the [`OUTPUT_KINDS`][] *outputs* carry."""
+    return tuple(kind for kind, carried in OUTPUT_KINDS.items() if carried.output in outputs)
 
 
-#: The layout a result, a sweep and an archive write to disk. A change to
-#: any of them raises it. Compared, never branched on.
-LAYOUT = 3
+def asked_for(kinds: Iterable[str]) -> frozenset[Output]:
+    """The [`OUTPUTS`][] that carry *kinds*, each one of the [`OUTPUT_KINDS`][]."""
+    return frozenset(OUTPUT_KINDS[kind].output for kind in kinds)
+
+
+def not_requested_message(kind: str, name: str) -> str:
+    """Why an answer refuses *kind*, one of the [`OUTPUT_KINDS`][], of *name*: the solve did not ask for it."""
+    return (
+        f"cannot read the {kind.replace('_', ' ')} of '{name}': the solve was not asked for it, so this "
+        f'answer does not carry it. An answer carries the primal, the duals and the declared expressions, '
+        f"and anything else only on request. Solve again with outputs={{'{OUTPUT_KINDS[kind].output}'}}."
+    )
+
+
+#: The layout a result and a sweep write to disk, and an archive under its
+#: ``answer/``. A change to any of them raises it. Compared, never branched on.
+ANSWER_LAYOUT = 4
 FORMAT_FILE = 'format.json'
 
 
+@cache
 def installed(distribution: str) -> str | None:
-    """The installed version of *distribution*, or ``None`` from a source tree nothing installed."""
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
+
+    Read once per process, as every solve records three.
+    """
     try:
         return version(distribution)
     except PackageNotFoundError:
         return None
 
 
-def write_format(directory: Path) -> None:
-    """Stamp *directory* with the layout its contents are in, and the specsolve version that wrote them."""
+def write_format(directory: Path, outputs: Iterable[Output] | None = None, layout: int = ANSWER_LAYOUT) -> None:
+    """Stamp *directory* with the layout its contents are in, the specsolve version that wrote them, and the [`OUTPUTS`][] an answer carries.
+
+    An archive's own stamp, over its spec and its data, names no *outputs*.
+    """
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / FORMAT_FILE).write_text(json.dumps({'layout': LAYOUT, 'specsolve': installed('specsolve')}))
+    stamp: dict[str, object] = {'layout': layout, 'specsolve': installed('specsolve')}
+    if outputs is not None:
+        stamp['outputs'] = sorted(outputs)
+    (directory / FORMAT_FILE).write_text(json.dumps(stamp))
+
+
+def read_outputs(directory: Path) -> frozenset[Output]:
+    """The [`OUTPUTS`][] the answer under *directory* carries, as its stamp names them. Called after [`check_format`][].
+
+    A name this package has no output for is dropped rather than refused: a
+    later specsolve added it, it has no reader here, and the rest of the
+    answer is in this layout.
+    """
+    return frozenset(name for name in json.loads((directory / FORMAT_FILE).read_text())['outputs'] if is_output(name))
+
+
+def other_layout(directory: Path, layout: int = ANSWER_LAYOUT) -> str | None:
+    """How *directory*'s stamp differs from *layout*, as a refusal names it, or ``None`` where it does not."""
+    file = directory / FORMAT_FILE
+    stamp = json.loads(file.read_text()) if file.is_file() else {}
+    found = stamp.get('layout')
+    if found == layout:
+        return None
+    writer = stamp.get('specsolve')
+    which = f'in layout {found}' if found is not None else 'with no layout stamp'
+    by = f', written by specsolve {writer},' if writer else ''
+    return f'{which}{by}'
 
 
 def check_format(directory: Path) -> None:
@@ -88,42 +208,12 @@ def check_format(directory: Path) -> None:
     Raises:
         LayoutError: A missing stamp, or one that is not this package's.
     """
-    file = directory / FORMAT_FILE
-    stamp = json.loads(file.read_text()) if file.is_file() else {}
-    found = stamp.get('layout')
-    if found != LAYOUT:
-        writer = stamp.get('specsolve')
-        which = f'in layout {found}' if found is not None else 'with no layout stamp'
-        by = f', written by specsolve {writer},' if writer else ''
+    if (other := other_layout(directory)) is not None:
         raise LayoutError(
-            f'{str(directory)!r} holds a saved answer {which}{by} and this package reads layout '
-            f'{LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
-            f'the model again and save it. An archive that archive= wrote still holds the model and '
-            f'the data to do that with.'
+            f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
+            f'{ANSWER_LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
+            f'the model again and save it.'
         )
-
-
-#: How many hex characters of a sha256 a digest here keeps.
-_DIGEST_WIDTH = 16
-
-
-def digest_of_file(path: Path) -> str:
-    """A short, stable name for a file's bytes, read a chunk at a time."""
-    sha = hashlib.sha256()
-    with path.open('rb') as handle:
-        while chunk := handle.read(1 << 20):
-            sha.update(chunk)
-    return sha.hexdigest()[:_DIGEST_WIDTH]
-
-
-def digest_of(spec: Spec) -> str:
-    """A short, stable name for a spec — what two answers must share to be comparable.
-
-    Over the YAML *spec* round-trips to, which is what an archive writes as
-    ``spec.yaml``. The data is not in it: two scenarios of one spec share
-    this.
-    """
-    return hashlib.sha256(spec.to_yaml().encode()).hexdigest()[:_DIGEST_WIDTH]
 
 
 class Provenance(NamedTuple):
@@ -153,7 +243,7 @@ NO_PROVENANCE = Provenance()
 
 
 class Record(NamedTuple):
-    """How a solve terminated, what it reached, and which spec it answered.
+    """How a solve terminated, what it reached, and when.
 
     One row per solve, and the same columns whoever wrote them: a result
     writes one, a sweep one per slice, which [`slice_axis`][] and
@@ -170,9 +260,6 @@ class Record(NamedTuple):
     #: say: a run stopped at a limit before any incumbent is ``ok`` with
     #: nothing to read.
     has_primal: bool
-    #: A digest of the spec this answered, or ``None`` where the solve was run
-    #: off a lowered program. Null on disk, never an empty string.
-    spec_digest: str | None
     #: When the solver returned, in UTC, or ``None`` for a solve that carried
     #: no clock, such as a result built by hand.
     solved_at: datetime | None = None
@@ -182,10 +269,6 @@ class Record(NamedTuple):
     #: halves of its name. Null until the archive is written. Every other
     #: table the archive holds carries the same column, ``specsolve_run``.
     specsolve_run: str | None = None
-    #: A digest of the model this answered — the spec *and* its data, where
-    #: [`spec_digest`][] is the document alone. ``None`` for an answer that
-    #: never held one.
-    model_digest: str | None = None
     #: What the sweep that solved this called its slices — ``scenario``,
     #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
     #: null for a single solve. Fixed names rather than a column named for the
@@ -206,9 +289,7 @@ class Record(NamedTuple):
         objective: float,
         *,
         has_primal: bool,
-        spec_digest: str | None,
         solved_at: datetime | None,
-        model_digest: str | None = None,
         provenance: Provenance = NO_PROVENANCE,
     ) -> Record:
         """The row a solve that terminated this way writes; each argument fills the column of its name.
@@ -222,9 +303,7 @@ class Record(NamedTuple):
             termination_condition,
             objective if has_primal else None,
             has_primal,
-            spec_digest,
             solved_at,
-            model_digest=model_digest,
             **provenance._asdict(),
         )
 
@@ -361,6 +440,8 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
 #: The three files beside the frames: how the solve terminated, what reaching
 #: it cost, and the reasons behind whatever is deliberately not there.
 RECORD_FILE = 'record.parquet'
+#: The spec an answer came from, as the YAML it round-trips to.
+SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
 
@@ -392,14 +473,34 @@ def clear_the_answer(directory: Path) -> None:
     """Remove what a saved answer holds, leaving anything else in *directory* alone."""
     import shutil
 
-    for kind in (*KINDS, ACTIVITY):
+    for kind in KINDS:
         shutil.rmtree(directory / kind, ignore_errors=True)
-    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE):
+    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE):
         (directory / member).unlink(missing_ok=True)
 
 
-def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]]) -> None:
-    """``(kind, name, reason)`` for what a solve could not produce, or no file at all.
+def write_spec(directory: Path, spec: Spec | None) -> None:
+    """*spec* as [`SPEC_FILE`][] in *directory*, or no file for an answer that came from no spec."""
+    if spec is not None:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / SPEC_FILE).write_text(spec.to_yaml())
+
+
+def read_spec(directory: Path) -> Spec | None:
+    """The spec [`write_spec`][] left in *directory*, or ``None`` where it left none."""
+    held = directory / SPEC_FILE
+    return to_spec(held) if held.is_file() else None
+
+
+#: How an answer's writer puts one frame at one path: [`write_whole`][], or
+#: the writer an archive hands it.
+type FrameWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
+
+
+def write_reasons(
+    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: FrameWriter
+) -> None:
+    """``(kind, name, reason)`` for what a solve could not produce, or no file at all, written with *write*.
 
     An empty *name* is the whole kind, which is how the duals are absent.
     *absent* is ``{kind: {name: reason}}``, one reason per name left out.
@@ -409,7 +510,7 @@ def write_reasons(directory: Path, no_duals: str | None, absent: Mapping[str, Ma
         {'kind': kind, 'name': name, 'reason': why} for kind, names in absent.items() for name, why in names.items()
     ]
     if rows:
-        write_whole(pl.DataFrame(rows), directory / REASONS_FILE)
+        write(pl.DataFrame(rows), directory / REASONS_FILE)
 
 
 def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]]:

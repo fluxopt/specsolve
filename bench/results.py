@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 BENCHMEM = 'benchmem'
 
 
-def _nominal(case: str | None, size: str | None) -> int | None:
+def nominal(case: str | None, size: str | None) -> int | None:
     """The rung's declared width, looked up from (case, rung) rather than read from the run."""
     try:
         return CASES[case].shape(size).nominal_variables  # pyrefly: ignore[bad-argument-type]
@@ -129,7 +129,7 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
             'case': params.get('case_name'),
             'size': params.get('size'),
             'arm': params.get('arm'),
-            'nominal_variables': _nominal(params.get('case_name'), params.get('size')),
+            'nominal_variables': nominal(params.get('case_name'), params.get('size')),
         }
         if b['name'].startswith('test_rebuild'):
             series = stats.get('data') or []

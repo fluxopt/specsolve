@@ -39,15 +39,14 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/latest-<sink>-<case>.json` are the provenance of the
-tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-34818523523, on `8d27e88b`, which finished one case of eight. Every failure
-whose log survives is one of two: a `test_window` cell whose verb was still a
-closure `isolate=True` could not ship to its child (fixed since, #1617), or
-`storage`/`gurobi` killed by the watchdog with `gurobipy-matrix` at `w1000`
-reaching 26 GB. What it left committed is `highs` for `dispatch` and `fleet`,
-and `gurobi` for `dispatch`, `fleet` and `transport`; the page has no table for
-the rest until a run completes. `results.records` still reads the pre-pytest
+The committed `results/latest-<sink>-<case>.json`, and a
+`latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
+the provenance of the tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+37986780225, on `a19f71c9`, which finished four cases of eight. The other four
+were killed by the watchdog above 25 GB, at a rung that did not fit:
+`transport/w100` and `storage/w1000`, on both sinks. What it left committed is
+`highs` and `gurobi` for `dispatch` and `fleet`; the page has no table for the
+rest until a run completes. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -55,7 +54,7 @@ selects `test_emit` and `test_rebuild`. The windows and the read-back are
 measured where their history is kept — CodSpeed, below. The sweep and the fresh
 process, which CodSpeed does not run, are measured by anyone who runs
 `pytest bench` without the `-k`. Spending the box's hours on cells no table
-renders would lengthen a run that took 2 h 23 min the last time (34818523523).
+renders would lengthen a run that took 2 h 7 min the last time (37986780225).
 
 **The readers take the directory, not a list of names.** `bench.report` and
 `bench.tidy` default to `bench/results` and read every file in it, `.jsonl`
@@ -68,16 +67,19 @@ A bare `pytest bench` is **not** the committed ladder: `--sizes` defaults to
 Narrowing the run and then committing the file leaves the published tables with
 no provenance, and nothing about the file looks wrong afterwards.
 
-**`bench.plot` rewrites one line of `docs/about/benchmarks-scaling.html`** — the
-`const DATA = {...};` literal — and nothing else. The page is a tracked source
-file, so its markup and prose are reviewed in the diff like any other code and
-only the measurements inside it are mechanical.
+**`bench.plot` writes `docs/about/benchmarks.json`** — one row per
+model, sink, ladder, rung and library — and nothing else. The page that draws
+them, `docs/about/benchmarks.md`, is a tracked source file: its prose, and the
+JSON spec that says which field each chart draws, are reviewed in the diff like
+any other code, and so is `docs/javascripts/benchmarks.js`, which draws them.
+Only the rows are mechanical.
 
 **A short run pointed at the committed results is refused**, not merely
 discouraged — `refuse_to_overwrite_the_provenance` in `conftest.py` compares the
 rungs asked for against the ones `pixi run ladder` defines and stops the session
 before anything is measured. Narrower sinks or libraries are fine, and the
-scheduled run uses both; leaving out *rungs* is what makes a run a smoke test.
+published run takes one sink at a time; leaving out *rungs* is what makes a run
+a smoke test.
 
 Worth knowing while poking at the task: **`pixi run ladder --help` does not
 print help.** Pixi forwards unknown arguments to the task, so that starts a
@@ -102,8 +104,11 @@ OS in between — so that 14.26 GB cell wants about 28 GB of machine on top of
 whatever the finished cases are still holding. The published numbers need
 **64 GB and a dedicated CPU rather than a burst one**, with nothing else on the
 box. `bench/memory-watchdog.sh` is the backstop for a cell that outgrows even
-that: it kills the case, where the harness' own budget can only decline the
-*next* rung and so cannot see the one it is inside.
+that: it kills the process the cell is in, where the harness' own budget can
+only decline the *next* rung and so cannot see the one it is inside. A killed
+process writes no file, so `ladder-ci` runs each ladder of a case in a process
+and a file of its own (`bench/published.py`): a kill on the width rungs keeps
+the case's size rungs.
 
 **A platform change re-baselines the page.** The committed results were taken on
 the dedicated Linux `x86_64` box, eight cores of an AMD EPYC, so a run anywhere
@@ -228,7 +233,7 @@ results-<sink>-<case>-<run id>/     uploaded as each case finishes
 published-benchmark-<run id>/       only if the run reaches the end
   bench/results/…
   docs/about/benchmarks.md           tables already rewritten
-  docs/about/benchmarks-scaling.html chart data already rewritten
+  docs/about/benchmarks.json chart rows already rewritten
 ```
 
 **The per-case artifacts exist because a dying runner skips every step it has
@@ -265,6 +270,7 @@ against each other. Publish a whole ladder or none of it.
 | | `lp` / `mps` | `highs` | `gurobi` | `xpress` |
 |---|---|---|---|---|
 | `specsolve` | `sps.build(...)` then `model.write(...)` | `sps.build(...)` then `Highs(handoff)` | `sps.build(...)` then `Gurobi(handoff)` | `sps.build(...)` then `Xpress(handoff)` |
+| `specsolve-in-memory` | as `specsolve`, inside `pl.Config(engine_affinity='in-memory')` | as `specsolve` | as `specsolve` | as `specsolve` |
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
@@ -470,7 +476,8 @@ verdict off the SQL"), not to cover the language:
 | `transport` | three `sum(by=)` joins per row | the mapping-table path, where the linopy lane must materialise a bus x generator product |
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no linopy cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
-| `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP — the only case whose `vtype` stream is not all-continuous, so integrality reaches every sink at scale |
+| `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP of the comparison, so integrality reaches every sink at scale |
+| `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a relation's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
 technologies, and a technology only generates at a node where it is installed:
@@ -581,7 +588,7 @@ parametrized by what the window moves:
 | `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
 | `one` | updates the first declared parameter alone, as `update` is usually called | push |
 | `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
-| `cold` | re-attaches the same sources under `keep='nothing'` | load |
+| `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
 `one` costs a whole rebuild all the same — `update` re-reads every source — so
@@ -589,10 +596,9 @@ it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix moves, so every such update loads the solver
 again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
-name one; the other cases skip it. `keep='progress'`
-differs from the default only in what the solver remembers, which moves the
-solve and not anything timed here; `bench/warm_payoff.py` is where a carried
-basis is weighed.
+name one; the other cases skip it. A `start=` changes only what the solver
+begins from, which moves the solve and not anything timed here;
+`bench/warm_payoff.py` is where a carried basis is weighed.
 
 The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
@@ -619,7 +625,8 @@ runs `pytest bench -k test_sweep`.
 ## Reading an answer back
 
 `test_read` prices what a solve costs after the solver returns: the answer laid
-out against the build as a `Result`, then every value read back — `frames`
+out against the build as a `Result`, with what `solve` attaches to it
+(`Model._with_record_fields`), then every value read back — `frames`
 collects each variable's primal and each constraint's dual and activity,
 `parquet` is `Result.save`. The answer is built before the clock rather than
 solved for (`read_setup`): every column and row zero, reported optimal, and no
@@ -643,7 +650,8 @@ the child loads before its clock imports a modelling library, which
 mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
 `2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
 worth knowing, and never under CodSpeed, whose instruments do not follow a
-child process. Its phase is `fresh`.
+child process. Its phase is `fresh`, and `bench.report` renders it as the page's
+`fresh` table, beside the warm ones.
 
 ## The warm-start payoff
 
@@ -721,6 +729,64 @@ So: `rss` for the comparison we publish, the memray peak for the regressions we
 chase. Both come out of the same run — the choice is which column a table reads,
 and `--benchmark-memory-compare-fail` is what turns the second into a gate.
 
+## Proving a speed-up: `ab/`
+
+*Is this change faster, and is it faster everywhere?* A perf PR answers with an
+A/B of its base and its head over one grid of models:
+
+```bash
+pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
+pixi run -e bench ab perf/ordering perf/bounds \
+    --focus specsolve.relational.engine.compiler:Compiler._aligned_bound  # one function
+pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
+pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
+```
+
+Each ref is checked out as a detached worktree. Each round starts one worker
+process per side, with that checkout's `src/` first on `PYTHONPATH`, and
+measures every cell in it, so a round's two processes fall in that round only
+and the rounds stay independent, as the sign test needs. Nothing is
+installed, and the worker refuses to run if it imported `specsolve` from
+anywhere else. The base is the PR's own base branch, so a stacked PR proves its
+own change. A claim about memory takes `--memory`: the verdict is on the
+peak resident memory of a fresh process per measurement, at the cost of a second
+of imports each time.
+
+**The grid** (`ab/grid.py`) is one model with an axis for each thing a change
+may assume: the dimension count, terms per row, a term over fewer dimensions,
+parameter rows sorted, shuffled or reversed, a dimension's own labels shuffled,
+`int` or `str` labels, four kinds of upper bound, a wrapped `shift`, a
+quadratic row, a binary or integer variable, a binary that switches a variable
+on and off (`p <= ub * u`), a sum through a relation into a coarser dimension, a row that sums one dimension away, and seven masks: on the
+row (one that keeps every row, half, 1%, or a relation's label), on a variable
+(half, or where a sparse parameter has a row), and on both. `milp` combines a
+binary that switches `p`, a relation's mask and a grouped sum. The names follow
+the ladder's: dimensions `snapshot`, `node` and `tech`, dispatch `p`, status `u`. Each cell moves one axis
+from the baseline, and `worst` moves all of them. The sizes `below` and `above`
+put the model either side of 250,000 columns. The ladder's own cases come after
+the grid, at each size of the run that is also one of their rungs: `s` or `l`. Last come the 43 referenced
+models of `examples/ports` as `port-<name>`, at their published size: real
+formulations, as a check on a grid this harness chose.
+
+**A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
+Six rounds is the least that can pass, and `compare` refuses fewer. Every
+timed build is warm, and the sides alternate ABBA.
+The first round also saves each side's built model, or a solve's objective. A
+difference beyond the last bits fails the cell as *differs*, so a speed-up that
+changes the model is caught. Floats that differ only within `LAST_BITS` are
+one number summed in another order: the cell keeps its verdict, marked *last
+bits*. With `--focus`, the clock counts only the time inside that function,
+and a cell that never calls it reads *not reached*. The run exits 1 on any
+cell that is *slower*, *differs* or fails.
+
+At six rounds a cell reads *faster* or *slower* by chance 3.1% of the time, and
+the report prints how many such cells to expect. Re-run a lone verdict with
+`-k` and more `--rounds` before you believe it. The run takes the machine lock
+that `pytest bench` takes, and refuses a busy machine.
+
+Paste the table into the PR's `<details>` with its header: the header names
+both commits, what the clock counts, and the machine.
+
 ## The same suite, a third instrument: CodSpeed
 
 `bench/` is a plain `pytest-benchmark` suite, so the fixture its tests ask for
@@ -793,8 +859,8 @@ freezes every version it runs on, git commits included:
 uv run --locked bench/reproduce.py
 ```
 
-**Why it exists.** `pixi.lock` is not committed, and two of the libraries here
-install from git — specsolve itself, and linopy from `master`, a branch that moves.
+**Why it exists.** `pixi.lock` is not committed, and specsolve itself installs
+from git.
 Before the lock, "the versions that produced this number" existed only inside a
 results file, after the fact, in a form nobody could install. `--locked` refuses
 to run if the resolution has drifted, `test_the_lock_pins_every_library...`
@@ -844,5 +910,6 @@ every consumer whichever of the two the case has.
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
 | `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
+| `ab/` | the A/B of two refs over a grid of models: does this change make the code faster, and does it build the same model |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
 | `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one attachment, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

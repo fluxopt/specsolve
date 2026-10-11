@@ -179,7 +179,7 @@ def test_window(
     updates one parameter alone, which costs a whole rebuild all the same;
     ``coefficient`` updates the case's parameter inside the matrix, which moves
     the digest and loads the solver again, so only a case that names one has
-    it; and ``cold`` re-attaches the same data under ``keep='nothing'``. An arm carries
+    it; and ``cold`` re-attaches the same data after dropping the loaded solver. An arm carries
     between windows whatever its library has a verb for: specsolve updates and
     loads, linopy builds a new model. Each arm's `window_setup`
     runs untracked in the spawned child before every sample (#1617). An arm

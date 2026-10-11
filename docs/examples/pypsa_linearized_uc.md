@@ -2,7 +2,7 @@
 
 A unit may be committed by a third. PyPSA ships this as a mode, not as a debugging convenience.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **5540.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **5540.0**, matched to `rtol=1e-09`.
 
 [Unit commitment](pypsa_unit_commitment.md) is a MILP. Its linear relaxation
 keeps every constraint where it is and declares the status and the two

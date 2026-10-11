@@ -180,6 +180,6 @@ that stands in 2030 plus the 8.75 built in 2035 is the 75.0 that stands in
 
 | | |
 |---|---|
-| [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, `keep` and `spill_to=`, and how a sweep is read |
+| [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, `start=` and `spill_to=`, and how a sweep is read |
 | [Running a sweep in parallel](howto/parallel.md) | one slice per worker |
 | [Archiving a solve](howto/archiving.md) | the spec, its data and every slice kept as one archive |

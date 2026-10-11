@@ -297,7 +297,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -305,7 +305,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'StorageUnit',
             storages.index,
-            bus=storages['storage_bus'],
+            bus=tables['storage_bus'].set_index('storage')['bus'],
             p_nom=p_nom,
             max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
             cyclic_state_of_charge=tables['cyclic'].set_index('storage')['value'],

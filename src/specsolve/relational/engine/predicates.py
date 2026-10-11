@@ -15,6 +15,7 @@ from mathspec import program
 
 from specsolve.errors import DataError
 from specsolve.messages import position_out_of_range_message, short_groups_message
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
 from specsolve.relational.engine.scope import join_on
 from specsolve.relational.engine.shifts import translate_rows
@@ -299,7 +300,7 @@ def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> No
     """
     assert p.partition is not None
     needed = p.position + 1 if p.position >= 0 else -p.position
-    sizes = grouping.table.select(*grouping.key, GROUP_SIZE).unique().collect()
+    sizes = grouping.table.select(*grouping.key, GROUP_SIZE).unique().pipe(collected)
     named = (row[0] if len(grouping.key) == 1 else row[:-1] for row in sizes.iter_rows() if row[-1] < needed)
     if short := sorted(str(group) for group in named):
         raise DataError(short_groups_message(p.name, p.partition.name, p.op, p.position, short))

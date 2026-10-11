@@ -56,8 +56,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Answer**
 : What came back, whichever verb asked: a `Result` for one solve, a
   [`Sweep`](#sweeps) for a sweep. `Result.save` writes one as a directory —
-  `record.parquet` for how it terminated, then `primal/`, `dual/`,
-  `activity/` and `expression/` — and an archive holds that directory as
+  `record.parquet` for how it terminated, `spec.yaml` for the spec it
+  answered, then `primal/`, `dual/`,
+  `expression/` and a directory for each output the solve asked for with
+  `outputs=`, such as `activity/` — and an archive holds that directory as
   `answer/`. The archive of a sweep holds its answer at the same paths, one
   file per name.
 
@@ -67,12 +69,6 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   It reads back as a `ResultArchive`, or a `SweepArchive` where the sources were
   cut. Every table it holds carries `specsolve_run`, the archive's own name,
   stamped when it is written. Never "artifact".
-
-**Digest**
-: A hash that says whether two things are the same input. `spec_digest` names
-  the document an answer came from, and an archive whose answer names another
-  is refused; `archive.source_digests` names each data member, so two archives
-  of one spec say which input moved.
 
 ## The verbs
 
@@ -183,10 +179,13 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   part), `qmatrix` (the constraints') and `sos`. Handing it over is the phase
   the metrics clock as `handoff_seconds`.
 
-**keep**
-: How much of a session `model.solve` carries to the next solve: `solver`
-  (default), `progress` (its work too) or `nothing`
-  ([`Model.solve`](api.md#specsolve.types.Model.solve)).
+**start** · **previous**
+: What a solve begins from: `'previous'`, the default, carries on from the
+  solve before, `None` begins from nothing, and an earlier answer or tables
+  under `primal`, `variable_basis` and `constraint_basis` are matched by
+  coordinate. A start changes how soon the solver reaches the optimum, never
+  the optimum ([warm-starting](../howto/warm-start.md)). Never "prior". Unlike
+  a [carry](#sweeps), it changes no data.
 
 ## Sweeps
 

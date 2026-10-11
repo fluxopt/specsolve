@@ -2,7 +2,7 @@
 
 Least-cost generation against a load profile — the smallest model that is still a model.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **10500**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **10500**, matched to `rtol=1e-09`.
 
 ## The problem
 

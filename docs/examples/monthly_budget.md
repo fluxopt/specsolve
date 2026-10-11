@@ -4,7 +4,7 @@ A cap on what each technology may generate per calendar month — an aggregate
 over a *coarser grouping of time*, written with the same operator that places
 a generator on a bus.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **9500**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **9500**, matched to `rtol=1e-09`.
 
 ## The problem
 

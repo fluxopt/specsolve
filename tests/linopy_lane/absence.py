@@ -60,8 +60,8 @@ def coefficient(parameter: Any) -> Any:
 def divisor(value: Any) -> Any:
     """A divisor as a read takes it: absent where it is zero, since a reported quotient by zero has no value (#1776).
 
-    A build keeps the plain divisor. There it is data, and the relational
-    engine leaves a build's divisor as it is.
+    A build keeps the plain divisor: a zero in it is refused before the build
+    divides (`check_divisors_cover`), as the relational engine refuses it.
     """
     if hasattr(value, 'where'):
         return value.where(value != 0)

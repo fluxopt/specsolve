@@ -4,7 +4,7 @@ One `Link`, one input bus, several output buses, each output derated by its
 own efficiency — PyPSA's spelling for a CHP plant, an electrolyser with waste
 heat, any conversion with more than one product.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **1100**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **1100**, matched to `rtol=1e-09`.
 
 **The schema varies, not the network.** PyPSA holds the relation wide: `bus0`,
 `bus1`, `bus2`, `efficiency`, `efficiency2`, and an empty `bus2` where a link
@@ -222,7 +222,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['gen_p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )

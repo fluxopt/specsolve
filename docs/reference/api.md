@@ -92,6 +92,10 @@ A [manifest](../howto/manifest.md) holds the arguments of `solve` and
     options:
       heading_level: 4
 
+::: specsolve.types.InfeasibleSubsystem
+    options:
+      heading_level: 4
+
 ::: specsolve.types.Sweep
     options:
       heading_level: 4
@@ -101,6 +105,10 @@ A [manifest](../howto/manifest.md) holds the arguments of `solve` and
       heading_level: 4
 
 ::: specsolve.types.SweepArchive
+    options:
+      heading_level: 4
+
+::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4
 
@@ -131,9 +139,21 @@ it, what the build and its solves took, and what a slice of a sweep took.
     options:
       heading_level: 4
 
+::: specsolve.types.Output
+    options:
+      heading_level: 4
+
+::: specsolve.types.Start
+    options:
+      heading_level: 4
+
 ### Read an answer back
 
 ::: specsolve.load_archive
+    options:
+      heading_level: 4
+
+::: specsolve.load_inputs
     options:
       heading_level: 4
 
@@ -231,12 +251,13 @@ declared name cannot collide with one. Case does not tell two columns apart:
 SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
 covers dimensions, relations and their columns, parameters, variables,
 constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
-with the prefix is refused too.
+with the prefix is refused too, and so is a dimension called `value`, which
+would collide with the column that holds a parameter's numbers.
 
 ```
 variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
-letter case for the columns specsolve adds, so a declared name cannot collide
-with one. Rename it.
+letter case for the columns specsolve adds, so it could collide with one.
+Rename it.
 ```
 
 ### What each sink takes

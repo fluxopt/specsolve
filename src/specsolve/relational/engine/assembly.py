@@ -17,7 +17,7 @@ from mathspec import program
 from specsolve.errors import DataError
 from specsolve.messages import null_bounds_message
 from specsolve.relational import sinks
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
 from specsolve.relational.engine.pieces import Piece, absence_restrictions
@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
     from specsolve.relational.engine.attaching import AttachedSources
 
+
+#: The most columns or rows a model may reach for its build to collect in memory.
+IN_MEMORY_REACH = 250_000
 
 #: The frames a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -117,13 +120,15 @@ class Assembly:
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks.
+        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
+        [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
-        cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
-        sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
-        ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-        built = [self._build_constraint(name, c) for name, c in ordered]
-        objective = self._build_objective(self.program.objective)
+        with in_memory(self._reach() <= IN_MEMORY_REACH):
+            cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
+            sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
+            ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
+            built = [self._build_constraint(name, c) for name, c in ordered]
+            objective = self._build_objective(self.program.objective)
 
         stacked = labels.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
         matrix_starts = _row_starts(stacked, self.n_rows)
@@ -148,6 +153,18 @@ class Assembly:
         )
         return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
+    def _reach(self) -> int:
+        """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
+
+        A constraint over dims no variable spans has more rows than there are
+        columns, so the rows count too.
+        """
+        cardinality = self.attached.cardinality
+        return max(
+            sum(math.prod(cardinality[d] for d in declared.dims) for declared in declarations.values())
+            for declarations in (self.program.variables, self.program.constraints)
+        )
+
     def _matrix_share(
         self, pieces: list[pl.LazyFrame], name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
@@ -157,7 +174,7 @@ class Assembly:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
@@ -170,19 +187,21 @@ class Assembly:
         """One variable's labelled frame, and its share of ``cols``.
 
         The share leaves in label order: ``cols`` carries no ``col``, so a row's
-        position is its solver column index.
+        position is its solver column index. The bounds are collected in memory:
+        they are parameters looked up onto labels already in memory, and polars
+        2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
+        than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
         labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
         self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
 
-        bounded = labels.in_position_order(
-            self.compiler.bounds(labelled.lazy(), name, v)
-            .select('var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64))
-            .collect(engine=collect_engine()),
-            'var_label',
-        )
+        with in_memory():
+            bounds = self.compiler.bounds(labelled.lazy(), name, v).select(
+                'var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
+            )
+            bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
@@ -216,7 +235,7 @@ class Assembly:
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES['col']).alias('col'),
-        ).collect(engine=collect_engine())
+        ).pipe(collected)
 
         position = pl.col('#set position')
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
@@ -273,8 +292,12 @@ class Assembly:
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
+        dense = c.where is None and not restrictions
         for p, sign in terms:
-            placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
+            if dense and set(p.dims) == set(c.dims):
+                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+            else:
+                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             pieces.append(
                 placed.select(
                     'row',
@@ -300,6 +323,17 @@ class Assembly:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
 
+    def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
+        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+
+        Such a block numbers its rows row-major over the declared ordinals
+        ([`labels.frame`][specsolve.relational.engine.labels.frame]), so a term
+        computes its row from its own coordinate rather than joining the block.
+        The door admits no label outside its dimension, so every coordinate a
+        term carries is a row of the block, as the join would find.
+        """
+        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
+
     def _quadratic_share(
         self, frame: pl.LazyFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
     ) -> pl.DataFrame | None:
@@ -318,7 +352,7 @@ class Assembly:
             )
             for p, sign in quads
         ]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
         return share
@@ -359,12 +393,15 @@ class Assembly:
         if o is None:
             return None
         comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
+        coverage.refuse_null_constants(
+            [p.frame for p in comp.consts], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
+        )
         for p in comp.consts:
             assert not p.dims, (
                 f'objective constant part has dims {list(p.dims)} — the language refuses a '
                 f'variable-free part of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col('cval').sum()).collect().item() or 0.0
+            self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
@@ -372,7 +409,7 @@ class Assembly:
         pieces = [
             p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
         ]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
@@ -388,7 +425,7 @@ class Assembly:
         if not quads:
             return None
         pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
-        stacked = pl.concat(pieces).collect(engine=collect_engine())
+        stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
@@ -464,7 +501,7 @@ def _collapsed(
         probes = stacked.select(_in_key_order(keys).all().alias('#ordered'), tied.any().alias('#repeated'))
         in_order, repeated = probes.row(0)
         if not in_order:
-            stacked = stacked.sort(*keys)
+            stacked = _sorted(stacked, keys)
             repeated = stacked.select(tied.any()).item()
     else:
         assert space is not None and len(keys) == 1, 'an unordered probe counts one dense integer key'
@@ -474,9 +511,24 @@ def _collapsed(
     aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
     if ordered:
         aggregated = aggregated.sort(*keys)
-    collected = aggregated.collect(engine=collect_engine())
-    share = _pruned(collected)
-    return share, dropped or share.height != collected.height
+    summed = aggregated.pipe(collected)
+    share = _pruned(summed)
+    return share, dropped or share.height != summed.height
+
+
+def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
+    """*stacked* sorted by *keys*, on one integer that orders as they do where one can hold them all.
+
+    The keys are labels, never negative, so each is a digit in a base one past
+    its largest value.
+    """
+    largest = stacked.select(pl.col(k).max() for k in keys).row(0)
+    if math.prod(value + 1 for value in largest) >= 2**63:
+        return stacked.sort(*keys)
+    position: pl.Expr = pl.lit(0, dtype=pl.Int64)
+    for key, value in zip(keys, largest, strict=True):
+        position = position * (value + 1) + pl.col(key).cast(pl.Int64)
+    return stacked.sort(position)
 
 
 def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:

@@ -9,10 +9,44 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import polars as pl
 from mathspec import did_you_mean
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
+
+#: How a datetime label prints: without the ``.000000`` that polars casts a
+#: whole second to.
+_DATETIME = '%Y-%m-%d %H:%M:%S%.f'
+
+
+def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
+    """``t=1, g=gas`` per row of a frame holding the columns *schema* names, in its order.
+
+    The one way specsolve writes a coordinate, in a printed row and in a
+    refusal alike. A missing label writes ``null``, and an empty *schema*
+    writes ``''``.
+    """
+    parts: list[pl.Expr] = []
+    for at, (dim, dtype) in enumerate(schema.items()):
+        label = pl.col(dim)
+        if isinstance(dtype, pl.Datetime):
+            label = label.dt.to_string(_DATETIME + ('%:z' if dtype.time_zone else ''))
+        parts += [pl.lit(f'{", " if at else ""}{dim}='), label.cast(pl.String).fill_null('null')]
+    return pl.concat_str(parts) if parts else pl.lit('')
+
+
+def coordinate_text(coordinate: Mapping[str, object]) -> str:
+    """One coordinate, ``dim: label`` in dim order, as [`coordinate_expr`][] writes it."""
+    if not coordinate:
+        return ''
+    frame = pl.DataFrame([dict(coordinate)])
+    return frame.select(coordinate_expr(frame.schema)).item()
+
+
+def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> str:
+    """Coordinates as a refusal lists them: ``f=b; f=c``."""
+    return '; '.join(coordinate_text(dict(zip(dims, row, strict=True))) for row in rows)
 
 
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
@@ -35,6 +69,16 @@ def sparse_divisor_message(name: str, missing: int) -> str:
         f'coefficient everywhere else, and zero is not a divisor: the term '
         f'would drop and the constraint would silently stop constraining.\n'
         f'  Supply the missing rows, or mask the coordinates out with a where.'
+    )
+
+
+def non_finite_message(divisors: str, count: int) -> str:
+    """The message for values that are not finite, where the model divides by *divisors* or reads a value."""
+    by = f" where the model divides by '{divisors}'" if divisors else ''
+    return (
+        f'{count} value(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
+        f'and the model needs a finite number.\n'
+        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
     )
 
 

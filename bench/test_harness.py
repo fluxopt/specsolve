@@ -23,13 +23,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-import polars as pl
 import pytest
 import yaml
 
 from bench import conftest as harness
-from bench import floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
+from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
+from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
@@ -43,8 +44,6 @@ from bench.conftest import (
 )
 from bench.test_ladder import RELOADS, _fresh
 from specsolve.relational.engine.engine import Engine
-from specsolve.relational.engine.labels import Labelled
-from specsolve.relational.sinks.solvers.base import WarmStart
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -141,9 +140,14 @@ def _timing(arm: str, **over: Any) -> dict[str, Any]:
     } | over
 
 
-def _plotted() -> dict[str, Any]:
-    """One rung of a panel line, in the shape `plot.series` emits."""
-    return {'wall': 1.0, 'lo': 0.9, 'hi': 1.1, 'peak': 0.5, 'vars': 1000}
+def _measured(arm: str, *sizes: str) -> list[dict[str, Any]]:
+    """One `transport` measurement on HiGHS per rung, the panel the ceiling tests plot."""
+    return [_timing(arm, case='transport', sink='highs', size=size) for size in sizes]
+
+
+def _refused(records: list[dict[str, Any]], library: str) -> dict[str, str]:
+    """The chart page's refusals for *library*, by rung."""
+    return {r['rung']: r['refused'] for r in plot.rows(records) if r['library'] == library and 'refused' in r}
 
 
 def _ceiling_record(ladder: str, size: str, **over: Any) -> dict[str, Any]:
@@ -203,16 +207,22 @@ def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) ->
 
 
 def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
-    """One per sink and case, as `ladder-ci` writes them."""
-    published = harness.published_results()
+    """One per sink, case and ladder, as `ladder-ci` writes them."""
+    published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
-    assert len(published) == 8, 'four cases through two sinks'
-    assert {p.name for p in published} == {
-        f'latest-{sink}-{case}.json'
-        for sink in ('highs', 'gurobi')
-        for case in ('dispatch', 'transport', 'storage', 'fleet')
-    }, 'the names the published run writes, sink by case'
-    assert not any(p.name == 'latest.json' for p in published), 'no run has written that name since ladder-ci'
+    assert sorted(published) == sorted(
+        [
+            f'latest-{sink}-{case}.json'
+            for sink in ('highs', 'gurobi')
+            for case in ('dispatch', 'transport', 'storage', 'fleet')
+        ]
+        + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
+    ), 'every case through both sinks, and a file of its own for each width ladder'
+    assert published['latest-highs-transport.json'] == {'xs', 's', 'm', 'l'}, 'the size file holds no width rung'
+    assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
+        'the width file holds only width rungs'
+    )
+    assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
 
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
@@ -224,9 +234,8 @@ def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
 def test_narrower_sinks_still_write_the_provenance() -> None:
     """The scheduled run takes one sink per job, and each half is still the
     published run; leaving out rungs is what makes a smoke test."""
-    whole = sorted(harness.published_rungs())
-    for published in sorted(harness.published_results()):
-        harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
+    for published, rungs in sorted(harness.published_results().items()):
+        harness.refuse_to_overwrite_the_provenance(_config(sorted(rungs), str(published)))
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +331,53 @@ def test_the_ci_ladder_covers_every_published_case() -> None:
     assert asked == published, f'ladder-ci runs {asked} and the published ladder is {published}'
 
 
+def test_the_ci_ladder_measures_every_published_arm() -> None:
+    """`ladder-ci` hands `ladder` its arms positionally, so the arm list exists
+    twice. Run 37986780225 took no `specsolve-in-memory` cell, and the page
+    described a line it had no data for."""
+
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'arms').split()
+    asked = tasks['ladder-ci']['cmd'].split('"{{ sink }}" "', 1)[1].split('"', 1)[0].split()
+    assert asked == published, f'ladder-ci measures {asked} and the published ladder is {published}'
+
+
+def test_a_ladder_the_box_cannot_hold_loses_only_its_own_file() -> None:
+    """Each file is its own process, so a kill on `storage`'s width rungs keeps
+    its size rungs and every case after it.
+
+    Run with a `pixi` stub that reads its stdin dry, as a real process may: the
+    file list reaches the loop on a descriptor of its own, so a ladder that
+    reads stdin cannot swallow the files still to run.
+    """
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
+    script = cmd.split("bash -c '", 1)[1].rsplit("' ", 1)[0]
+    script = script.replace('{{ sink }}', 'highs').replace('{{ cases }}', 'transport storage fleet')
+    script = script.replace('bash bench/memory-watchdog.sh &', 'true &')
+    stub = 'pixi() { cat > /dev/null; echo "$9"; [[ "$9" != *storage-width* ]]; }; '
+    ran = subprocess.run(
+        ['bash', '-c', stub + script],
+        capture_output=True,
+        text=True,
+        env={**os.environ, 'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}'},
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    assert ran.stdout.split('\n')[:-2] == [
+        'bench/results/latest-highs-transport.json',
+        'bench/results/latest-highs-transport-width.json',
+        'bench/results/latest-highs-storage.json',
+        'bench/results/latest-highs-storage-width.json',
+        'bench/results/latest-highs-fleet.json',
+    ], f'every file in turn, the killed one included and none after it lost: {ran.stdout!r} {ran.stderr!r}'
+    assert ran.returncode == 1, 'the ladder still fails'
+    assert ran.stdout.splitlines()[-1] == 'files that did not finish: bench/results/latest-highs-storage-width.json', (
+        'and names the one file it lost'
+    )
+
+
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     """A dead case must not end the loop; the ladder still fails once it has
     taken what it can."""
@@ -409,14 +465,6 @@ def test_the_lock_pins_every_library_an_arm_needs() -> None:
                 f'the {name} arm needs {required}, which bench/reproduce.py.lock does not pin — '
                 f're-run `uv lock --script bench/reproduce.py`'
             )
-
-
-def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
-    """linopy is installed from `master`, which only a commit can pin."""
-    locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
-    assert 'git = "https://github.com/PyPSA/linopy?rev=master#' in locked, (
-        'the lock has to name the linopy commit, not the branch'
-    )
 
 
 def _locked_commit(package: dict[str, Any]) -> str:
@@ -620,15 +668,11 @@ def test_both_renderers_read_the_same_bound() -> None:
     """The table and the chart print the same cell through one function."""
     ceiling = _ceiling_record('size', 'm', stopped_by='memory')
     report.CEILINGS[:] = [ceiling]
-    taken = {
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')},
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
-    }
+    records = [*_measured('linopy', 'xs', 's'), *_measured('specsolve', 'xs', 's', 'm', 'l'), ceiling]
 
-    charted = plot.panels(taken, [ceiling])['transport — highs — length']['series']['linopy']['bound']
     tabled = report.over_budget('transport', 'l', 'highs', 'linopy')
     assert tabled == '>6 GB', 'the table names the budget that fired'
-    assert charted == [None, None, None, tabled], 'and the chart says the same thing at the same rungs'
+    assert _refused(records, 'linopy') == {'l': tabled}, 'and the chart says the same thing at the same rung'
 
 
 def test_a_ceiling_is_per_sink() -> None:
@@ -655,7 +699,7 @@ def test_no_budget_measures_everything() -> None:
 @pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
-    """Every arm but `specsolve` is a model somebody typed twice.
+    """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
 
     A transposed index builds a different model that benchmarks perfectly, so
     the `xs` rung of each case is solved both ways and the objectives compared.
@@ -989,6 +1033,33 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
+def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
+    """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
+
+    `report.load` keeps it apart, and `report.fresh` renders one row per case and sink.
+    """
+    build = _timing('specsolve', phase='emit', sink='highs', size='xs', wall_seconds=0.03)
+    started = [
+        _timing('specsolve', phase='fresh', sink='highs', size='xs', wall_seconds=1.2),
+        _timing('linopy', phase='fresh', sink='highs', size='xs', wall_seconds=1.9),
+    ]
+    path = tmp_path / 'latest.jsonl'
+    path.write_text('\n'.join(json.dumps(r) for r in (build, *started)))
+    _run, _gates, timings, _loop, fresh = report.load(path)
+    assert [r['phase'] for r in timings] == ['emit'], 'the build tables never see a fresh-process wall'
+    assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
+
+    table = report.fresh(report.best(fresh))
+    assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is a column'
+    assert '| dispatch | highs | 1k | 1.20 s | 1.90 s |' in table, 'one row per case and sink, launch to exit'
+    assert '÷' not in table, 'no ratio column, as in the per-model tables'
+
+
+def test_a_run_without_a_fresh_process_renders_no_fresh_table() -> None:
+    """`report.main` drops an empty fragment, so the page keeps its fence rather than an empty table."""
+    assert report.fresh({}) == '', 'no measurement, no table'
+
+
 def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     """A number divided by itself is not a comparison, and a column of 1.00x
     reads like one."""
@@ -997,17 +1068,18 @@ def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     assert '\u00f7' not in table, 'nothing to divide against, so no ratio column at all'
 
 
-def test_a_measurement_without_a_peak_is_skipped_rather_than_divided(tmp_path: Path) -> None:
+def test_a_measurement_without_a_peak_is_skipped_rather_than_divided() -> None:
     """`peak_rss_bytes` is `None` for a run taken without `benchmem(isolate=True)`."""
-    path = tmp_path / 'results.jsonl'
-    records = [_timing('specsolve'), _timing('linopy', size='l', peak_rss_bytes=None)]
-    path.write_text('\n'.join(json.dumps(r) for r in records))
-
-    taken = plot.series(path)
-    assert 'l' not in taken.get(('dispatch', 'lp', 'linopy'), {}), (
-        'a record with no peak cannot be plotted, so it is dropped'
+    rows = plot.rows([_timing('specsolve'), _timing('linopy', size='l', peak_rss_bytes=None)])
+    assert [(r['library'], r['rung']) for r in rows] == [('specsolve', 'm')], (
+        'a record with no peak cannot be plotted, so it is dropped and the records around it are not'
     )
-    assert 'm' in taken[('dispatch', 'lp', 'specsolve')], 'and the records around it still are'
+
+
+def test_a_rung_neither_ladder_plots_is_left_out() -> None:
+    """The chart page draws two ladders; a rung outside both has no axis to sit on."""
+    rows = plot.rows([_timing('specsolve'), _timing('specsolve', size='xl')])
+    assert [r['rung'] for r in rows] == ['m'], 'only the rung a ladder carries becomes a row'
 
 
 def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None:
@@ -1016,39 +1088,51 @@ def test_a_ceiling_from_the_width_ladder_does_not_bound_the_size_panel() -> None
     The width record is second, so a key without the ladder in it would also
     lose the size ceiling.
     """
-    taken = {
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('xs', 's', 'm', 'l')},
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's', 'm')},
-    }
-    ceilings = [_ceiling_record('size', 'm'), _ceiling_record('width', 'w100')]
-
-    panel = plot.panels(taken, ceilings)['transport — highs — length']
-    assert panel['series']['linopy']['bound'] == [None, None, None, '>30 s'], (
+    records = [
+        *_measured('specsolve', 'xs', 's', 'm', 'l'),
+        *_measured('linopy', 'xs', 's', 'm'),
+        _ceiling_record('size', 'm'),
+        _ceiling_record('width', 'w100'),
+    ]
+    assert _refused(records, 'linopy') == {'l': '>30 s'}, (
         'the size ceiling still bounds the rung above it, and the width one says nothing here'
     )
 
 
 def test_a_width_panel_is_bounded_by_its_own_ladders_ceiling() -> None:
     """The other half of the pair above: a width ceiling bounds the width panel and nothing else."""
-    taken = {
-        ('transport', 'highs', 'specsolve'): {r: _plotted() for r in ('w1', 'w10', 'w100', 'w1000')},
-        ('transport', 'highs', 'linopy'): {r: _plotted() for r in ('w1', 'w10')},
-    }
-    panels = plot.panels(taken, [_ceiling_record('width', 'w10')])
+    records = [
+        *_measured('specsolve', 'w1', 'w10', 'w100', 'w1000'),
+        *_measured('linopy', 'w1', 'w10'),
+        _ceiling_record('width', 'w10'),
+    ]
 
-    assert list(panels) == ['transport — highs — width'], 'no size panel, nothing having been measured on that ladder'
-    bound = panels['transport — highs — width']['series']['linopy']['bound']
-    assert bound == [None, None, '>30 s', '>30 s'], 'the rungs past the ceiling say what stopped the climb'
+    assert {r['ladder'] for r in plot.rows(records)} == {'width'}, (
+        'no length row, nothing having been measured on that ladder'
+    )
+    assert _refused(records, 'linopy') == {'w100': '>30 s', 'w1000': '>30 s'}, (
+        'the rungs past the ceiling say what stopped the climb'
+    )
+
+
+def test_a_rung_measured_past_a_ceiling_is_a_measurement_not_a_refusal() -> None:
+    """Two result files can disagree: one stopped at `s`, a later one reached `m`.
+
+    The cell is one row, and the number wins over the budget.
+    """
+    records = [
+        *_measured('specsolve', 'xs', 's', 'm', 'l'),
+        *_measured('linopy', 'xs', 's', 'm'),
+        _ceiling_record('size', 's'),
+    ]
+    assert _refused(records, 'linopy') == {'l': '>30 s'}, 'only the rung nothing measured is refused'
 
 
 def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
-    """`series` drops a measurement taken without a peak, so a ceiling can name
+    """`rows` drops a measurement taken without a peak, so a ceiling can name
     a rung the axis does not hold."""
-    taken = {('transport', 'highs', 'linopy'): {r: _plotted() for r in ('xs', 's')}}
-    ceilings = [_ceiling_record('size', 'm')]
-
-    panel = plot.panels(taken, ceilings)['transport — highs — length']
-    assert panel['series']['linopy']['bound'] == [None, None], 'no rung is above one the axis does not carry'
+    records = [*_measured('linopy', 'xs', 's'), _ceiling_record('size', 'm')]
+    assert _refused(records, 'linopy') == {}, 'no rung is above one the axis does not carry'
 
 
 @pytest.mark.parametrize(
@@ -1250,36 +1334,24 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
 
 
-def test_a_spliced_basis_reproduces_the_cold_answer() -> None:
-    """A carried basis may move the route and never the optimum."""
+def test_a_started_master_reproduces_the_cold_answer() -> None:
+    """A start may move the route and never the optimum."""
     run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
-    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the splice would go unexercised'
+    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the start would go unexercised'
     for i, step in enumerate(run.steps):
         assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
-            f'step {i}: a carried basis moved the answer'
+            f'step {i}: a start moved the answer'
         )
 
 
-def test_the_splice_shifts_a_later_declarations_rows() -> None:
-    """`feasibility_cut` follows `optimality_cut`, so a row gained by the first
-    moves every row of the second."""
-    was = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 2), 'feasibility_cut': Labelled(pl.LazyFrame(), 2, 2)}
-    now = {'optimality_cut': Labelled(pl.LazyFrame(), 0, 3), 'feasibility_cut': Labelled(pl.LazyFrame(), 3, 2)}
-    previous = WarmStart(
-        solver='highs',
-        column_statuses=np.zeros(4, dtype=np.int8),
-        row_statuses=np.array([10, 11, 20, 21], dtype=np.int8),
-        column_values=None,
-    )
-    order = ['optimality_cut', 'feasibility_cut']
-
-    carried = warm_payoff.spliced(previous, was, now, order, 5).row_statuses
-    assert list(carried) == [10, 11, warm_payoff.BASIC, 20, 21], (
-        'the second declaration keeps its own statuses at its new start, and the gained row starts basic'
-    )
-    assert list(warm_payoff.prefixed(previous, 5).row_statuses) == [10, 11, 20, 21, warm_payoff.BASIC], (
-        'the prefix carry is the mistake this splice exists to avoid; it must stay measurably different'
-    )
+def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
+    """A method moves the route and what the answer carries, never the optimum."""
+    rows = crossover.measured('dispatch', '2xs')
+    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
+    simplex = rows[0][2]
+    for method, _, objective, duals in rows:
+        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
+        assert duals, f'{method} left no duals, which an LP solved to optimality has'
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
@@ -1499,13 +1571,13 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
 
     path = tmp_path / 'latest.jsonl'
     path.write_text('\n'.join(json.dumps(r) for r in (build, window)))
-    _run, _gates, timings, _loop = report.load(path)
+    _run, _gates, timings, _loop, _started = report.load(path)
     published = report.best(timings)
     assert published[('dispatch', 'm', 'lp', 'specsolve')]['wall_seconds'] == 1.0, (
         'the table publishes the build, not the faster window measured against it'
     )
-    plotted = plot.series(path)[('dispatch', 'lp', 'specsolve')]['m']
-    assert plotted['wall'] == 1.0, 'and the chart page plots the build, not the window that shares its key'
+    (plotted,) = plot.rows([build, window])
+    assert plotted['wall_s'] == 1.0, 'and the chart page plots the build, not the window that shares its key'
 
     rows = list(tidy.measurements([build, window], 'run'))
     assert sorted({row['phase'] for row in rows}) == ['emit', 'window'], (
@@ -1564,6 +1636,23 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'
+
+
+def test_the_read_times_what_a_solve_attaches_after_the_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`test_read` took the engine's answer straight, so work `Model.solve` adds after it went unmeasured.
+
+    A digest computed on save moved from the engine into `Model.solve`, and
+    the read's memory fell to what a save without it costs (#1904).
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    args, kwargs = module.read_setup(module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {}), 'parquet')
+    model = args[0]
+    with_record_fields = model._with_record_fields
+    calls: list[object] = []
+    monkeypatch.setattr(model, '_with_record_fields', lambda *given: calls.append(given) or with_record_fields(*given))
+    module.read(*args, **kwargs)
+    assert len(calls) == 1, 'the answer passes once through the step a solve takes after the engine'
 
 
 @pytest.mark.parametrize(
@@ -1637,3 +1726,141 @@ def test_a_window_under_codspeed_starts_every_call_from_its_setup() -> None:
         _CallsTwice(), request, module.window, setup=partial(module.window_setup, 'highs', prepared, shorter, 'shape')
     )
     assert counts['reloaded'], 'the measured call is a window onto the full rung, as the setup built it'
+
+
+@pytest.mark.parametrize('verb', ['build_and_emit', 'build_only', 'objective'])
+def test_the_in_memory_arm_runs_on_the_in_memory_engine_and_leaves_the_default(
+    verb: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The timed rounds of every arm share one process, so the affinity is the arm's call and no other arm's."""
+    from bench.arms import specsolve, specsolve_in_memory
+
+    seen: list[str | None] = []
+    monkeypatch.setattr(specsolve, verb, lambda *args: seen.append(os.environ.get('POLARS_ENGINE_AFFINITY')))
+    monkeypatch.delenv('POLARS_ENGINE_AFFINITY', raising=False)
+    getattr(specsolve_in_memory, verb)(*(('highs', None) if verb == 'build_and_emit' else (None,)))
+    assert seen == ['in-memory'], f'the {verb} ran on affinity {seen}, not on in-memory'
+    assert 'POLARS_ENGINE_AFFINITY' not in os.environ, 'the arm left its affinity on the process for the next arm'
+
+
+# ---------------------------------------------------------------------------
+# the A/B: two checkouts, one grid
+# ---------------------------------------------------------------------------
+
+AB_ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.mark.parametrize(
+    ('ratios', 'expected'),
+    [
+        pytest.param([0.9] * 6, 'faster', id='six of six faster'),
+        pytest.param([1.1] * 6, 'slower', id='six of six slower'),
+        pytest.param([0.9] * 5 + [1.1], 'no change', id='five of six is chance at 5%'),
+        pytest.param([0.5] * 5, 'no change', id='five rounds can never pass'),
+        pytest.param([0.9] * 9 + [1.1], 'faster', id='nine of ten'),
+    ],
+)
+def test_an_ab_verdict_is_a_two_sided_sign_test(ratios: list[float], expected: str) -> None:
+    assert verdict(ratios) == expected
+
+
+@pytest.mark.parametrize('name', list(SHAPES))
+def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
+    """A shape the language refuses would read as an error on both sides and prove nothing."""
+    import specsolve as sps
+
+    shape = SHAPES[name]
+    model = sps.build(spec(shape), tables(shape, 24))
+    assert model.diagnostics().columns > 0
+    if not shape.quadratic:
+        assert sps.solve(spec(shape), tables(shape, 24), 'highs').status == 'ok'
+
+
+def test_an_ab_of_a_checkout_against_itself_builds_one_model() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=2)
+    assert row.error is None, row.error
+    assert row.base[0]['fingerprint'] == row.head[0]['fingerprint'], 'one checkout built two different models'
+    assert row.base[1]['fingerprint'] is None, 'only the first round digests the model, off the clock'
+    assert row.verdict == 'no change'
+
+
+def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
+    reached, missed = compare(
+        ['grid-baseline-tiny', 'grid-bounds-none-tiny'],
+        AB_ROOT,
+        AB_ROOT,
+        rounds=1,
+        focus='specsolve.relational.engine.compiler:Compiler._aligned_bound',
+    )
+    assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
+    assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'
+    assert missed.verdict == 'not reached', 'a model with no bound table never calls it'
+
+
+def test_a_focus_on_a_name_the_checkout_lacks_is_an_error() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, focus='specsolve.api:no_such_function')
+    assert row.verdict == 'error'
+    assert 'no such function' in (row.error or '')
+
+
+def test_an_ab_refuses_to_measure_a_checkout_it_did_not_import(tmp_path: Path) -> None:
+    """With the tree's `src` missing, the installed specsolve would answer for it and both sides would agree."""
+    worker = Worker(tmp_path, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='not from the checkout under test'):
+            worker.ask('grid-baseline-tiny', fingerprint=None)
+    finally:
+        worker.close()
+
+
+def test_a_cell_that_fails_leaves_the_worker_to_measure_the_next() -> None:
+    worker = Worker(AB_ROOT, op='build', focus=None)
+    try:
+        with pytest.raises(RuntimeError, match='KeyError'):
+            worker.ask('grid-no-such-shape-tiny', fingerprint=None)
+        assert worker.ask('grid-baseline-tiny', fingerprint=None)['seconds'] > 0
+    finally:
+        worker.close()
+
+
+def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, memory=True)
+    assert row.error is None, row.error
+    assert row.metric == 'peak_mb', 'a memory run judges the peak, not the clock'
+    assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
+
+
+def test_two_different_models_fail_however_fast() -> None:
+    def run(seconds: float) -> dict[str, Any]:
+        return {'seconds': seconds, 'calls': None, 'fingerprint': None}
+
+    row = Row('c', base=[run(1.0)] * 6, head=[run(0.5)] * 6, model='different')
+    assert row.verdict == 'differs'
+    row.model = 'last bits'
+    assert row.verdict == 'faster', 'a sum in another order is the same model, and keeps its verdict'
+
+
+@pytest.mark.parametrize(
+    ('change', 'same'),
+    [
+        pytest.param(lambda n: {**n, 'cost': np.nextafter(n['cost'], np.inf)}, True, id='every cost one ulp up'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'] * (1 + 1e-9)}, False, id='a cost moved by a part in a billion'),
+        pytest.param(lambda n: {**n, 'rows.row': n['rows.row'] + 1}, False, id='an integer moved by one'),
+        pytest.param(lambda n: {**n, 'cost': n['cost'][:-1]}, False, id='one cost fewer'),
+        pytest.param(lambda n: {k: v for k, v in n.items() if k != 'cost'}, False, id='a field missing'),
+    ],
+)
+def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
+    tmp_path: Path, change: Any, same: bool
+) -> None:
+    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rows.row': np.arange(3)}
+    np.savez(tmp_path / 'base.npz', **numbers)
+    np.savez(tmp_path / 'head.npz', **change(numbers))
+    assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same
+
+
+def test_the_checkouts_are_removed_after_the_run() -> None:
+    with checkouts('HEAD', 'HEAD') as trees:
+        paths = [path for _, path in trees]
+        assert all((path / 'src' / 'specsolve').is_dir() for path in paths)
+    assert not any(path.exists() for path in paths), 'a worktree left behind holds a gigabyte and a branch lock'

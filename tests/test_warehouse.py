@@ -189,7 +189,7 @@ def test_every_block_on_the_page_runs_but_the_ones_it_says_do_not(page: tuple[Pa
 
 def test_the_page_names_the_input_that_moved_between_two_runs(page: tuple[Path, dict[str, Any]]) -> None:
     _, namespace = page
-    assert namespace['moved']['source'].to_list() == ['load'], 'base and peak differ in their load alone'
+    assert namespace['moved'] == ['load'], 'base and peak differ in their load alone'
     assert namespace['sql_results'], 'the sql blocks ran'
 
 
@@ -204,10 +204,8 @@ STRICT = {
         'termination_condition': pl.String,
         'objective': pl.Float64,
         'has_primal': pl.Boolean,
-        'spec_digest': pl.String,
         'solved_at': pl.Datetime('us', 'UTC'),
         'specsolve_run': pl.String,
-        'model_digest': pl.String,
         'slice_axis': pl.String,
         'slice': pl.String,
         'solver': pl.String,
@@ -231,7 +229,6 @@ STRICT = {
         'slice_axis': pl.String,
         'slice': pl.String,
     },
-    'sources.parquet': {'specsolve_run': pl.String, 'source': pl.String, 'digest': pl.String},
     'catalog.parquet': {
         'specsolve_run': pl.String,
         'path': pl.String,
@@ -427,5 +424,5 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 
 
 def test_an_unsigned_integer_int64_cannot_hold_is_archived_as_it_arrived() -> None:
-    frame = _with_run(pl.DataFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run')
+    frame = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
     assert frame['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'

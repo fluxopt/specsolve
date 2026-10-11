@@ -24,7 +24,7 @@ if 'semantics' not in getattr(linopy.options, '_defaults', {}):
         f'linopy {linopy.__version__} has no options["semantics"], so it cannot speak the v1 '
         f'arithmetic convention this package is written against. The oracle would silently '
         f'measure against the legacy convention instead. Install the pin in pyproject.toml '
-        f'(the dev group: PyPSA/linopy@master) — `pixi install`.'
+        f'(the dev group: linopy 0.10.0) — `pixi install`.'
     )
 from tests import linopy_lane as specsolve_linopy  # noqa: E402  — must follow the guard above
 from tests.linopy_lane import builder, loader, operators, where  # noqa: E402

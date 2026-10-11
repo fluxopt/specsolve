@@ -2,7 +2,7 @@
 
 A generator's dispatch reduced over every snapshot and bounded: a contracted delivery, a reservoir's season.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **21400.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **21400.0**, matched to `rtol=1e-09`.
 
 Every other bound in the corpus holds *within* one snapshot. `e_sum_min` and
 `e_sum_max` hold across all of them at once, which is how a fuel allowance, a
@@ -205,7 +205,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
             e_sum_max=e_sum_max,

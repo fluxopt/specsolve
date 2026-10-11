@@ -478,6 +478,24 @@ def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
         sps.check(spec)
 
 
+@pytest.mark.parametrize('name', ['value', 'Value', 'VALUE'], ids=str)
+def test_a_dimension_named_value_is_refused_at_load(name):
+    """A parameter's table and every answer frame hold a dimension's labels beside a column named `value`.
+
+    So a dimension of that name cannot be told apart from the numbers. Query
+    engines read column names without case, so `Value` collides as well.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^dimension '{name}' has the name of the column 'value'"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
@@ -524,10 +542,8 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition',
         'objective',
         'has_primal',
-        'spec_digest',
         'solved_at',
         'specsolve_run',
-        'model_digest',
         'slice_axis',
         'slice',
         'solver',
@@ -542,10 +558,8 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
         'termination_condition': dispatch_solution.termination_condition,
         'objective': dispatch_solution.objective,
         'has_primal': dispatch_solution.has_primal,
-        'spec_digest': dispatch_solution.spec_digest,
         'solved_at': dispatch_solution.solved_at,
         'specsolve_run': None,
-        'model_digest': dispatch_solution.model_digest(),
         'slice_axis': None,
         'slice': None,
         **dispatch_solution.provenance._asdict(),
@@ -572,26 +586,29 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
         with pytest.raises(sps.errors.SpecsolveError, match='integer'):
             result.to_dataset(kind='dual')
     assert sorted(p.name for p in out.iterdir()) == [
-        'activity',
         'expression',
         'format.json',
         'primal',
         'reasons.parquet',
         'record.parquet',
-    ], 'no dual/ — there are none to write, and reasons.parquet is where that is said'
+        'spec.yaml',
+    ], 'no dual/ — there are none to write, and reasons.parquet says so; no activity/, which was not asked for'
     assert [p.name for p in (out / 'expression').iterdir()] == ['twice.parquet'], 'the one that evaluated'
     assert pl.read_parquet(out / 'expression' / 'twice.parquet')['value'].to_list() == [4.0, 6.0], (
         'twice the integer dispatch that meets 1.5 and 2.5'
     )
 
 
-def test_a_saved_solution_carries_the_activities(dispatch_solution, dispatch_yaml, tmp_path):
-    """A saved answer carries each row's left-hand side."""
-    out = dispatch_solution.save(tmp_path / 'solution')
-    constraints = set(sps.check(dispatch_yaml).constraints)
-    assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
-    for name in constraints:
-        assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(dispatch_solution.activity(name))
+def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+    """An answer asked for its activities saves each row's left-hand side, and loads it back."""
+    with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs={'activity'}) as solution:
+        out = solution.save(tmp_path / 'solution')
+        constraints = set(sps.check(dispatch_yaml).constraints)
+        assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
+        loaded = sps.load_result(out)
+        for name in constraints:
+            assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(solution.activity(name))
+            assert loaded.activity(name).equals(solution.activity(name))
 
 
 def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
@@ -635,7 +652,6 @@ def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_solution, dis
         assert loaded.primal(name).equals(dispatch_solution.primal(name))
     for name in program.constraints:
         assert loaded.dual(name).equals(dispatch_solution.dual(name))
-        assert loaded.activity(name).equals(dispatch_solution.activity(name))
 
 
 def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
@@ -730,6 +746,100 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
 
         written = [(result.save(tmp_path / f'solution{i}') / 'primal' / 'p.parquet').read_bytes() for i in range(3)]
         assert len(set(written)) == 1, 'the same solution writes the same bytes'
+
+
+SCALAR_SPEC = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'variables': {
+        'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
+        'slack': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'budget_row': {'dims': [], 'expression': 'sum(x, over=f) - slack <= budget'}},
+    'expressions': {'price': {'dims': [], 'expression': 'dual(budget_row)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('read', 'expected'),
+    [
+        pytest.param(lambda r: r.primal('slack'), 10.0, id='primal'),
+        pytest.param(lambda r: r.dual('budget_row'), 2.0, id='dual'),
+        pytest.param(lambda r: r.activity('budget_row'), 120.0, id='activity'),
+        pytest.param(lambda r: r.evaluate('price'), 2.0, id='an-expression-reading-the-dual'),
+    ],
+)
+def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expected):
+    """A product over no dimensions has one coordinate, so every reader returns one row.
+
+    On polars 2.0 each came back empty and the expression read 0.0: the reader
+    selected the declaration's dims first, which with none is a frame with no
+    columns, and polars gives that no rows.
+    """
+    sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
+    with sps.solve(SCALAR_SPEC, sources, outputs={'activity'}) as result:
+        assert read(result).to_dicts() == [{'value': expected}], 'one row, holding the solver value'
+
+
+SCALAR_SOURCES = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
+
+
+def _masked_out(absence: str) -> dict:
+    """[`SCALAR_SPEC`][] with ``slack`` masked out under *absence*."""
+    slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'absence': absence}
+    return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
+
+
+def _saved(spec, sources, tmp_path):
+    with sps.solve(spec, sources) as result:
+        saved = result.save(tmp_path / 'answer')
+    with sps.load_result(saved) as loaded:
+        return loaded.evaluate('twice')
+
+
+def _swept(spec, sources, tmp_path):
+    return sps.solve_over(spec, sources, [(0, sources)], key_name='draw').evaluate('twice').drop('draw')
+
+
+def _evaluated(expression):
+    def read(spec, sources, tmp_path):
+        with sps.solve(spec, sources) as result:
+            return result.evaluate(expression)
+
+    return read
+
+
+@pytest.mark.parametrize(
+    ('spec', 'read', 'expected'),
+    [
+        pytest.param(SCALAR_SPEC, _evaluated('slack'), [{'value': 10.0}], id='bare'),
+        pytest.param(SCALAR_SPEC, _evaluated('2 * slack'), [{'value': 20.0}], id='arithmetic'),
+        pytest.param(
+            SCALAR_SPEC,
+            _evaluated({'dims': ['f'], 'expression': 'x + slack'}),
+            [{'f': 'a', 'value': 10.0}, {'f': 'b', 'value': 40.0}, {'f': 'c', 'value': 110.0}],
+            id='broadcast-over-a-dimension',
+        ),
+        pytest.param(SCALAR_SPEC, _evaluated('sum(x, over=f) - slack'), [{'value': 120.0}], id='the-rows-left-side'),
+        pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
+        pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
+        pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
+        pytest.param(_masked_out('zero'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-absence-zero'),
+        pytest.param(_masked_out('undefined'), _evaluated('2 * slack'), [], id='masked-out-absence-undefined'),
+    ],
+)
+def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate(spec, read, expected, tmp_path):
+    """A scalar variable reads through an expression as a dimensioned one does at one coordinate.
+
+    Each raised ``ColumnNotFoundError: "__unit__"`` (#1858): the reader keys a
+    variable with no dims on the empty product's marker column, and the
+    labelled frame dropped that column, keeping only ``var_label``.
+    """
+    spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
+    assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (
+        'the solved value, zero where absence reads zero, and no row where it is undefined'
+    )
 
 
 def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
@@ -997,3 +1107,19 @@ def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_fra
         sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_frame_inputs)) as tidied,
     ):
         assert tidied.objective == pytest.approx(direct.objective, rel=1e-9), 'the tidy tables build the same model'
+
+
+def test_a_parquet_source_is_read_at_the_build_so_a_file_rewritten_afterwards_does_not_reach_the_model(
+    dispatch_yaml, dispatch_frame_inputs, tmp_path
+) -> None:
+    path = tmp_path / 'cost.parquet'
+    dispatch_frame_inputs['cost'].write_parquet(path)
+    with sps.build(dispatch_yaml, dispatch_frame_inputs | {'cost': str(path)}) as model:
+        dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(path)
+        with model.solve() as after, sps.solve(dispatch_yaml, dispatch_frame_inputs) as before:
+            assert after.objective == pytest.approx(before.objective, rel=1e-9), (
+                'the solve read the file as it was at the build'
+            )
+            assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
+                before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
+            ), 'and so does an expression read after the solve'
