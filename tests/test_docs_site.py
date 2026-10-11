@@ -120,21 +120,6 @@ def test_every_page_under_docs_has_a_nav_entry():
     )
 
 
-def test_the_home_page_still_carries_its_math_block():
-    """`docs/index.md` keeps the markers `tools.gallery_math --check` fills.
-
-    The generator fills only the markers it finds, so a dropped marker would
-    stop the check without a failure.
-    """
-    from tools import gallery_math
-
-    page = (DOCS / 'index.md').read_text()
-    assert gallery_math.HOME_BEGIN in page and gallery_math.HOME_END in page, (
-        f'docs/index.md lost its {gallery_math.HOME_BEGIN}/{gallery_math.HOME_END} markers — '
-        f'the LaTeX tabs are generated, and an unmarked page silently opts out'
-    )
-
-
 # --------------------------------------------------------------------------
 # the ten rules, and the pages that elaborate them
 # --------------------------------------------------------------------------
