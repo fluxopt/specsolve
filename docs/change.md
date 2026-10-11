@@ -1,11 +1,8 @@
 # Change it and solve again
 
-Ask the model from [Your data](tables.md) a series of what-if questions, and
-let the solver keep its model between them. You change numbers first, and
-then the length of the horizon.
-
-Every block on this page runs from the `examples/` folder of the repository.
-We start from the sources of the last tutorial:
+Ask the model from [Your data](tables.md) what-if questions, and let the
+solver keep its model between them. Every block runs from the `examples/`
+folder. We start from the sources of the last tutorial:
 
 ```python exec="true" source="material-block" session="change" workdir="examples"
 import polars as pl
@@ -25,21 +22,20 @@ sources = {
 
 ## Build once
 
-[`solve`](reference/api.md#run-a-spec) builds a model and throws it away.
-[`build`](reference/api.md#run-a-spec) keeps it, so you can solve it more
-than once:
+[`build`](reference/api.md#run-a-spec) keeps the model that `solve` throws
+away, so you can solve it more than once:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
 model = sps.build('dispatch.yaml', sources)
 print(model.solve().objective)
 ```
 
-The answer is the 10500 of the first two tutorials.
+The answer is 10500, as before.
 
 ## New numbers
 
-How much would more wind save? `update` puts new numbers on the model that
-the solver holds, and `solve` answers again. We try four wind capacities:
+How much would more wind save? `update` puts new numbers on the model the
+solver holds. We try four wind capacities:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
 rows = []
@@ -50,8 +46,8 @@ for wind in (80.0, 120.0, 160.0, 200.0):
 print(pl.DataFrame(rows))
 ```
 
-Each step of 40 saves less than the one before. With more wind, more of it is
-left over in the snapshots where the load is low.
+Each step of 40 saves less than the one before, because more of the wind is
+left over when the load is low.
 
 `diagnostics` counts what the model did:
 
@@ -60,8 +56,7 @@ after_numbers = model.diagnostics()
 print(f'{after_numbers.loads} load, {after_numbers.solves} solves')
 ```
 
-The solver loaded the model once and solved it five times. An update changes
-only the numbers, so the solver keeps what it has. The answer is always the
+The solver loaded the model once and solved it five times. The answer is the
 one a new `solve` gives:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
@@ -71,8 +66,8 @@ print(fresh.objective)
 
 ## A longer horizon
 
-Now solve two days instead of one. The `snapshot` labels and the `load` both
-grow to eight rows. We put the capacity back to the data, too:
+Now solve two days. The `snapshot` labels and the `load` grow to eight rows,
+and the capacity goes back to the data:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
 two_days = pl.DataFrame({'snapshot': range(8), 'value': 2 * load['value'].to_list()})
@@ -84,12 +79,11 @@ print(longer.objective)
 print(f'{after_rows.loads} loads, {after_rows.solves} solves')
 ```
 
-Two days cost twice one day. The model was loaded a second time: new
-snapshots add new columns, and the solver has to start again.
+Two days cost twice one day. New snapshots add new columns, so the solver
+loaded the model a second time.
 [Making a loop of solves faster](howto/warm-start.md#start-from-an-earlier-answer) starts the new solve from an earlier answer.
 
 ## Next
 
-You have changed the numbers and the size of your model without writing it
-again. In [the next tutorial](commitment.md) you change the model itself:
+In [the next tutorial](commitment.md) you change the model itself:
 generators that are either on or off.
