@@ -424,14 +424,6 @@ def test_the_lock_pins_every_library_an_arm_needs() -> None:
             )
 
 
-def test_the_lock_freezes_the_branch_linopy_moves_on() -> None:
-    """linopy is installed from `master`, which only a commit can pin."""
-    locked = (Path(__file__).resolve().parent / 'reproduce.py.lock').read_text()
-    assert 'git = "https://github.com/PyPSA/linopy?rev=master#' in locked, (
-        'the lock has to name the linopy commit, not the branch'
-    )
-
-
 def _locked_commit(package: dict[str, Any]) -> str:
     """The commit a locked git install resolves to, empty for one from an index."""
     return str(package.get('source', {}).get('git', '')).partition('#')[2]

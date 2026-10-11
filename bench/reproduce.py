@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "specsolve[gurobi] @ git+https://github.com/fluxopt/specsolve@276d5da471",
-#   "linopy @ git+https://github.com/PyPSA/linopy@master",
+#   "linopy==0.10.0",
 #   "pyomo>=6.7",
 #   "pytest==9.1.1",
 #   "pytest-benchmem>=0.5",
