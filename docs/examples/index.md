@@ -163,7 +163,7 @@ published with the model or from a reference implementation hand-written on
 another stack. The provenance column says which. Every model on this page runs
 in the test suite, so a test alone distinguishes nothing. The badge marks the
 one check that catches a shared misreading, the differential suite's
-[blind spot](../about/linopy.md#2-it-is-the-oracle): both
+[blind spot](../about/linopy.md#3-it-is-the-oracle): both
 [lanes](../reference/glossary.md#how-it-runs) agreeing on a meaning the
 modeller did not intend. This table is the evidence behind
 [the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/#how-a-new-construct-enters).

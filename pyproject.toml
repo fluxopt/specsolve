@@ -42,6 +42,11 @@ xpress = [
 pyomo = [
     "pyomo>=6.8",
 ]
+linopy = [
+    "linopy==0.10.0",
+    "xarray>=2024.2.0",
+    "pandas>=2.2",
+]
 
 [project.urls]
 Documentation = "https://specsolve.readthedocs.io"
