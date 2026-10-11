@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import re
 import tempfile
 import time
 from pathlib import Path
@@ -23,6 +22,7 @@ import pytest
 
 from bench.arms import ARMS
 from bench.cases import CASES
+from bench.published import files, ladder_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -89,14 +89,6 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
         config.option.benchmark_min_rounds = MIN_ROUNDS
-
-
-#: How a rung label says which ladder it belongs to.
-_LADDERS = (
-    ('width', re.compile(r'w\d+$')),
-    ('density', re.compile(r'd\d+$')),
-    ('declarations', re.compile(r'n\d+$')),
-)
 
 
 #: Machine-global, so a run from another worktree is refused too (#705).
@@ -180,18 +172,14 @@ def _ladder_defaults() -> dict[str, str]:
     return {a['arg']: a['default'] for a in task['args'] if 'default' in a}
 
 
-def published_rungs() -> set[str]:
-    """The rungs `pixi run ladder` takes."""
-    return set(_ladder_defaults()['sizes'].split())
-
-
-def published_results() -> set[Path]:
-    """The result files the published run writes — one per sink and case, derived from the task."""
+def published_results() -> dict[Path, set[str]]:
+    """The result files the published run writes, to the rungs each holds — derived from the task."""
     defaults = _ladder_defaults()
     return {
-        (Path.cwd() / f'bench/results/latest-{sink}-{case}.json').resolve()
+        (Path.cwd() / path).resolve(): set(rungs)
         for sink in defaults['sinks'].split()
         for case in defaults['cases'].split()
+        for path, rungs in files(sink, case, defaults['sizes'].split()).items()
     }
 
 
@@ -208,9 +196,10 @@ def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
     destination = next(
         (arg.split('=', 1)[1] for arg in config.invocation_params.args if arg.startswith('--benchmark-json=')), None
     )
-    if not destination or Path(destination).resolve() not in published_results():
+    rungs = published_results().get(Path(destination).resolve()) if destination else None
+    if rungs is None:
         return
-    missing = published_rungs() - set(config.getoption('--sizes'))
+    missing = rungs - set(config.getoption('--sizes'))
     if missing:
         raise pytest.UsageError(
             f'this run leaves out {sorted(missing)}, so it cannot write {destination} — the published '
@@ -430,11 +419,6 @@ class Ceiling:
 def _seconds(value: float) -> str:
     """Seconds at a precision that survives both ends: a 0.013 s rung and a 4000 s projection."""
     return f'{value:.3g} s'
-
-
-def ladder_of(size: str) -> str:
-    """Which ladder a rung belongs to — its own, or the size one; the budget decides each separately."""
-    return next((name for name, pattern in _LADDERS if pattern.match(size)), 'size')
 
 
 def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:

@@ -204,16 +204,22 @@ def test_a_short_run_pointed_anywhere_else_is_nobody_business(tmp_path: Path) ->
 
 
 def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
-    """One per sink and case, as `ladder-ci` writes them."""
-    published = harness.published_results()
+    """One per sink, case and ladder, as `ladder-ci` writes them."""
+    published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
-    assert len(published) == 8, 'four cases through two sinks'
-    assert {p.name for p in published} == {
-        f'latest-{sink}-{case}.json'
-        for sink in ('highs', 'gurobi')
-        for case in ('dispatch', 'transport', 'storage', 'fleet')
-    }, 'the names the published run writes, sink by case'
-    assert not any(p.name == 'latest.json' for p in published), 'no run has written that name since ladder-ci'
+    assert sorted(published) == sorted(
+        [
+            f'latest-{sink}-{case}.json'
+            for sink in ('highs', 'gurobi')
+            for case in ('dispatch', 'transport', 'storage', 'fleet')
+        ]
+        + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
+    ), 'every case through both sinks, and a file of its own for each width ladder'
+    assert published['latest-highs-transport.json'] == {'xs', 's', 'm', 'l'}, 'the size file holds no width rung'
+    assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
+        'the width file holds only width rungs'
+    )
+    assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
 
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
@@ -225,9 +231,8 @@ def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
 def test_narrower_sinks_still_write_the_provenance() -> None:
     """The scheduled run takes one sink per job, and each half is still the
     published run; leaving out rungs is what makes a smoke test."""
-    whole = sorted(harness.published_rungs())
-    for published in sorted(harness.published_results()):
-        harness.refuse_to_overwrite_the_provenance(_config(whole, str(published)))
+    for published, rungs in sorted(harness.published_results().items()):
+        harness.refuse_to_overwrite_the_provenance(_config(sorted(rungs), str(published)))
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +338,41 @@ def test_the_ci_ladder_measures_every_published_arm() -> None:
     published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'arms').split()
     asked = tasks['ladder-ci']['cmd'].split('"{{ sink }}" "', 1)[1].split('"', 1)[0].split()
     assert asked == published, f'ladder-ci measures {asked} and the published ladder is {published}'
+
+
+def test_a_ladder_the_box_cannot_hold_loses_only_its_own_file() -> None:
+    """Each file is its own process, so a kill on `storage`'s width rungs keeps
+    its size rungs and every case after it.
+
+    Run with a `pixi` stub that reads its stdin dry, as a real process may: the
+    file list reaches the loop on a descriptor of its own, so a ladder that
+    reads stdin cannot swallow the files still to run.
+    """
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    cmd = tasks['tool']['pixi']['feature']['bench']['tasks']['ladder-ci']['cmd']
+    script = cmd.split("bash -c '", 1)[1].rsplit("' ", 1)[0]
+    script = script.replace('{{ sink }}', 'highs').replace('{{ cases }}', 'transport storage fleet')
+    script = script.replace('bash bench/memory-watchdog.sh &', 'true &')
+    stub = 'pixi() { cat > /dev/null; echo "$9"; [[ "$9" != *storage-width* ]]; }; '
+    ran = subprocess.run(
+        ['bash', '-c', stub + script],
+        capture_output=True,
+        text=True,
+        env={**os.environ, 'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}'},
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    assert ran.stdout.split('\n')[:-2] == [
+        'bench/results/latest-highs-transport.json',
+        'bench/results/latest-highs-transport-width.json',
+        'bench/results/latest-highs-storage.json',
+        'bench/results/latest-highs-storage-width.json',
+        'bench/results/latest-highs-fleet.json',
+    ], f'every file in turn, the killed one included and none after it lost: {ran.stdout!r} {ran.stderr!r}'
+    assert ran.returncode == 1, 'the ladder still fails'
+    assert ran.stdout.splitlines()[-1] == 'files that did not finish: bench/results/latest-highs-storage-width.json', (
+        'and names the one file it lost'
+    )
 
 
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:

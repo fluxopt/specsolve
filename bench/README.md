@@ -39,8 +39,9 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/latest-<sink>-<case>.json` are the provenance of the
-tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+The committed `results/latest-<sink>-<case>.json`, and a
+`latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
+the provenance of the tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
 37986780225, on `a19f71c9`, which finished four cases of eight. The other four
 were killed by the watchdog above 25 GB, at a rung that did not fit:
 `transport/w100` and `storage/w1000`, on both sinks. What it left committed is
@@ -103,8 +104,11 @@ OS in between — so that 14.26 GB cell wants about 28 GB of machine on top of
 whatever the finished cases are still holding. The published numbers need
 **64 GB and a dedicated CPU rather than a burst one**, with nothing else on the
 box. `bench/memory-watchdog.sh` is the backstop for a cell that outgrows even
-that: it kills the case, where the harness' own budget can only decline the
-*next* rung and so cannot see the one it is inside.
+that: it kills the process the cell is in, where the harness' own budget can
+only decline the *next* rung and so cannot see the one it is inside. A killed
+process writes no file, so `ladder-ci` runs each ladder of a case in a process
+and a file of its own (`bench/published.py`): a kill on the width rungs keeps
+the case's size rungs.
 
 **A platform change re-baselines the page.** The committed results were taken on
 the dedicated Linux `x86_64` box, eight cores of an AMD EPYC, so a run anywhere
