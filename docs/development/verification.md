@@ -154,7 +154,6 @@ construct, or every combination.
 | [sos](../examples/sos.md) | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | **✓** | · |
 | [storage](../examples/storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](../examples/transport.md) | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [walkthrough](../examples/walkthrough.md) | · | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
 | [facility_location](../examples/facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | · | **✓** | · | · | **✓** |
 | [genx_piecewise_fuel](../examples/genx_piecewise_fuel.md) | **✔** 2341.82 | **✓** | · | · | · | **✓** | **✓** | **✓** | · | · | · |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | **✔** 29446.9 | **✓** | · | · | · | · | · | **✓** | · | · | · |
