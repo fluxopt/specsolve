@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): a built model can be handed to pyomo as a ConcreteModel indexed by its labels ([#1793](https://github.com/fluxopt/specsolve/pull/1793))
 - feat(api): a written LP or MPS file can name each variable and constraint by its declaration and coordinate ([#1795](https://github.com/fluxopt/specsolve/pull/1795))
 - perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
 - docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))

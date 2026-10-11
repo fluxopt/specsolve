@@ -15,7 +15,7 @@ from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
 from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, InfeasibleSubsystem
-from specsolve.relational.sinks.handoff import SENSE_CODES
+from specsolve.relational.sinks.handoff import SENSE_CODES, Declared, Run, SetRun
 from specsolve.relational.sinks.solvers.base import settled
 from specsolve.relational.sinks.writers.text import Names
 
@@ -248,6 +248,26 @@ def _refuse_a_shared_name(frame: pl.DataFrame, name: str, dims: tuple[str, ...],
         'A name keeps letters, digits and !"#$%&\'.;?@`{|}~ from a label and writes any other character '
         'as _. Relabel one of the two, or write the file without names.'
     )
+
+
+def declared(model: BuiltModel) -> Declared:
+    """Which declaration, at which coordinate, owns each column, row and set.
+
+    Each declaration's frame arrives in label order, and the build keeps them
+    in the order it took them, which is the order of their runs.
+    """
+    variables = [_run(name, owned, model.program.variables[name].dims) for name, owned in model.variables.items()]
+    constraints = [_run(name, owned, model.program.constraints[name].dims) for name, owned in model.constraints.items()]
+    sets = [
+        SetRun(name, s.variable, model.program.variables[s.variable].dims.index(s.along), s.sos_type)
+        for name, s in model.program.sos.items()
+    ]
+    return Declared(variables, constraints, sets)
+
+
+def _run(name: str, owned: labels.Labelled, dims: tuple[str, ...]) -> Run:
+    """One declaration's run, its coordinates the label frame's dim columns."""
+    return Run(name, owned.start, owned.height, dims, owned.frame.select(dims).pipe(collected))
 
 
 def laid_out(
