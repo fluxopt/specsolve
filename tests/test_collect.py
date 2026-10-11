@@ -95,21 +95,20 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
 
 @pytest.fixture
 def engines(monkeypatch) -> list[str]:
-    """Every engine a collect names, in the order it named them, from after polars is probed for streaming."""
-    collect.collect_engine()
+    """Every engine a collect of specsolve's names, in the order it named them.
+
+    The engine is read where specsolve picks it rather than off polars' own
+    ``collect``: polars 1.x runs an eager ``DataFrame.select`` as a lazy collect
+    that names no engine, and in memory whatever it names.
+    """
     named: list[str] = []
-    one, many = pl.LazyFrame.collect, pl.collect_all
+    original = collect._engine
 
-    def recording(self, *args, engine='auto', **kwargs):
-        named.append(engine)
-        return one(self, *args, engine=engine, **kwargs)
+    def recording() -> str:
+        named.append(original())
+        return named[-1]
 
-    def recording_all(frames, *args, engine='auto', **kwargs):
-        named.append(engine)
-        return many(frames, *args, engine=engine, **kwargs)
-
-    monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
-    monkeypatch.setattr(pl, 'collect_all', recording_all)
+    monkeypatch.setattr(collect, '_engine', recording)
     return named
 
 
