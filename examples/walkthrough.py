@@ -1,6 +1,6 @@
 """The whole architecture, one model, one stage at a time — run it and read.
 
-docs/about/architecture.md describes the pipeline; this script executes it one
+docs/development/architecture.md describes the pipeline; this script executes it one
 stage at a time and prints the artifact each stage produces, through the same
 entry points ``sps.solve`` takes internally.
 
@@ -77,7 +77,7 @@ def main() -> None:
         solution(engine)
     refusals()
 
-    print(f'\n{_dim("docs/about/architecture.md has the rules these stages enforce.")}')
+    print(f'\n{_dim("docs/development/architecture.md has the rules these stages enforce.")}')
 
 
 def validated_model() -> Spec:

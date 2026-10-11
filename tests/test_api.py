@@ -913,7 +913,7 @@ def test_a_bridge_out_names_the_package_to_install(dispatch_solution, absent, br
 def test_no_operator_registry_on_this_package():
     """The operator set is closed, so both lanes accept the same language.
 
-    See docs/about/architecture.md, "The expressive ceiling".
+    See docs/development/architecture.md, "The expressive ceiling".
     """
     assert not hasattr(sps, 'register')
 

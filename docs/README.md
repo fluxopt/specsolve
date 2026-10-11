@@ -6,10 +6,11 @@ view. Start at [your first model](run.md).
 
 **The nav and the tree are arranged by what a page is for**, the four kinds
 of [Diátaxis](https://diataxis.fr): tutorials (`run.md`, `tables.md`,
-`change.md`, `commitment.md` and `sweep.md`, at the root), how-to guides (`howto/`), reference
-(`reference/`, and the model pages in `examples/`) and explanation
-(`about/`). The rules each kind
-has to meet are
+`change.md`, `commitment.md` and `sweep.md`, at the root), how-to guides
+(`howto/`), reference (`reference/`, and the model pages in `examples/`) and
+explanation (`about/`). A fifth section, Development (`development/`), holds
+what a user does not need: how the package is built, and the PyPSA pages that
+prove it works, which stay in `examples/`. The rules each kind has to meet are
 [the docs-writing skill](https://github.com/fluxopt/specsolve/blob/main/.claude/skills/docs-writing/SKILL.md).
 The language is a dependency documented with itself, so the nav links out to
 mathspec.

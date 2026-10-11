@@ -66,7 +66,7 @@ Drop any one line and the rest can hold. Read the terms of a row with
 HiGHS can find no IIS where integer variables cause the conflict. Solve with
 `gurobi` or `xpress`, or add a slack to the row, minimise it, and read where
 it is nonzero, as the
-[feasibility model](../about/decomposition.md#when-the-subproblem-is-infeasible)
+[feasibility model](../development/decomposition.md#when-the-subproblem-is-infeasible)
 does.
 
 ## 5. When the number is wrong and the rows look right
