@@ -86,13 +86,15 @@ HiGHS.
 
 <!-- bench:fresh -->
 
-| launch to exit | dispatch (10k variables) | fleet (12k variables) | storage (10k variables) | transport (9.8k variables) |
-|---|---|---|---|---|
-| specsolve | 0.49 s | 0.57 s | 0.51 s | 0.51 s |
-| specsolve-in-memory | 0.49 s | 0.54 s | 0.49 s | 0.50 s |
-| linopy | 1.04 s | 1.20 s | 1.06 s | 1.04 s |
-| pyomo | 0.72 s | 1.05 s | 0.88 s | 0.84 s |
-| highspy-matrix | 0.34 s | 0.35 s | 0.34 s | 0.34 s |
+<div class="bench"><div class="bench-table"><table class="bench-heat">
+<thead><tr><th>launch to exit</th><th>dispatch<br>10k variables</th><th>fleet<br>12k variables</th><th>storage<br>10k variables</th><th>transport<br>9.8k variables</th></tr></thead>
+<tbody>
+<tr><td>specsolve</td><td class="own">0.49 s</td><td class="own">0.57 s</td><td class="own">0.51 s</td><td class="own">0.51 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="1.006">0.49 s · 1.0x</td><td data-ratio="0.945">0.54 s · 0.9x</td><td data-ratio="0.959">0.49 s · 1.0x</td><td data-ratio="0.994">0.50 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.118">1.04 s · 2.1x</td><td data-ratio="2.112">1.20 s · 2.1x</td><td data-ratio="2.076">1.06 s · 2.1x</td><td data-ratio="2.038">1.04 s · 2.0x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.468">0.72 s · 1.5x</td><td data-ratio="1.859">1.05 s · 1.9x</td><td data-ratio="1.718">0.88 s · 1.7x</td><td data-ratio="1.652">0.84 s · 1.7x</td></tr>
+<tr><td>highspy-matrix</td><td data-ratio="0.701">0.34 s · 0.7x</td><td data-ratio="0.614">0.35 s · 0.6x</td><td data-ratio="0.655">0.34 s · 0.7x</td><td data-ratio="0.673">0.34 s · 0.7x</td></tr>
+</tbody></table></div></div>
 
 <!-- bench:/fresh -->
 
