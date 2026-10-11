@@ -149,6 +149,19 @@ JSON stays the archive because it keeps the rounds.
 `pixi run refresh` re-takes the numbers, writes the tables into their fences
 and the chart rows into `benchmarks.json`.
 
+## A script that solves one model
+
+The tables above are what a process pays once it is running. A script that
+imports a library and solves one model also pays the interpreter, the import,
+and whatever the library loads the first time it builds. linopy's arrays are
+xarray's, and xarray imports `dask.array` on the first array it makes, so
+linopy's first model costs more than its import alone. This table times a new
+process from launch to exit at `xs`, the rung where starting is a share of the
+cost. A run that did not take it leaves the table out.
+
+<!-- bench:fresh -->
+<!-- bench:/fresh -->
+
 ## First model against every model after it
 
 <!-- bench:marginal -->

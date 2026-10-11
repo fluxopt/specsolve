@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))
+- docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
 - docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
 - perf(engine): a model with at most 250,000 columns and 250,000 rows builds on polars' in-memory engine, a fifth faster at the smallest sizes ([#1930](https://github.com/fluxopt/specsolve/pull/1930))
 - docs(benchmarks): the published benchmarks are re-measured after 0.8.0 ([#1934](https://github.com/fluxopt/specsolve/pull/1934))
