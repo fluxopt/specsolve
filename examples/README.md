@@ -32,6 +32,7 @@ reference implementation. This directory is the source; that is the guided tour.
 | `multi_period.yaml` | capacity decided once per investment period and binding at every snapshot in it (`at()`) |
 | `reserves.yaml` | energy and reserves co-optimized on a two-bus grid: every many-to-many shape at once — a pair set reified as a dimension whose legs are relations, and weighted membership left as data (`relations:`, `at()`) |
 | `walkthrough.yaml` | the spec `walkthrough.py` prints every pipeline stage for |
+| `tutorial/` | the model the tutorials grow from `dispatch.yaml`: on-off generators (`commitment.yaml`), then a battery (`storage.yaml`), and the data all their steps share |
 | `rolling/` | a storage schedule solved a window at a time, and what the lookahead buys (`solve_over`, `EachWindow`) |
 | `myopic/` | an investment pathway over periods of typical days, each inheriting the last one's fleet (`solve_over`, `carry`) |
 | `benders/` | the problem split in two and reassembled, checked against the monolith it decomposes |
