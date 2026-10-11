@@ -223,7 +223,7 @@ def test_a_pair_supplied_twice_is_refused():
     """The key is the pair, so a second row for one pair is what "single-valued" refuses."""
     sources = _inputs()
     sources['zone_of'] = pl.concat([ZONE_OF, ZONE_OF.head(1)])
-    with pytest.raises(DataError, match=r"maps 1 key\(s\) more than once: generator='g1', period=1"):
+    with pytest.raises(DataError, match=r'maps 1 key\(s\) more than once: generator=g1, period=1'):
         sps.solve(SPEC, sources)
 
 

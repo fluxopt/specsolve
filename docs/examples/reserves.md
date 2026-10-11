@@ -5,7 +5,7 @@ market, tranche) triples, reserve zones overlap, and one line dangles. The
 model exists to prove a claim — every many-to-many shape the language covers,
 in one instance, each one load-bearing.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **915**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **915**, matched to `rtol=1e-09`.
 
 ## The problem
 

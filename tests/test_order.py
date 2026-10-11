@@ -1,0 +1,151 @@
+"""Row order carries no meaning: the same data builds the same model.
+
+A source table's rows arrive in whatever order its writer chose, and polars
+promises no row order from a join or a group-by that was not asked for one. So
+each referenced model is built twice from the same sources, and again with the
+rows of every parameter and relation table shuffled, and each build must
+be the same: matrix, bounds, costs and right-hand sides, bit for bit. One
+that moves solves the same data to an answer that differs in its last bits.
+
+Dimension tables keep their order: a dimension's row order is its coordinate
+order, which ``shift`` reads.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+import polars as pl
+import pytest
+
+import specsolve as sps
+from specsolve.relational.engine import assembly
+from tests.conftest import expanded
+from tests.conftest import port_sources as sources
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+#: Ports whose model moves when the rows of a table are shuffled, and why.
+MOVES = {
+    'osemosys_utopia': (
+        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
+    ),
+}
+
+
+@pytest.fixture
+def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dict[str, Any]:
+    """*port*, expected to fail where ``MOVES`` says its model moves."""
+    if reason := MOVES.get(port['name']):
+        request.applymarker(pytest.mark.xfail(reason=reason))
+    return port
+
+
+def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
+    """The built model to the last bit: what a re-solve may not change, then every number it may.
+
+    The objective is read through the dense cost vector, since ``obj`` carries
+    no order contract.
+    """
+    with sps.build(expanded(port['spec']), given) as model:
+        handoff = model._engine._model.handoff
+        numbers = (
+            handoff.matrix['coeff'],
+            handoff.cols['lb'],
+            handoff.cols['ub'],
+            handoff.quad['coeff'],
+            handoff.rows['row'],
+            handoff.rows['rhs'],
+        )
+        return (
+            handoff.structure,
+            f'{handoff.objective_constant}'.encode(),
+            handoff._dense_cost().tobytes(),
+            *(column.to_numpy().tobytes() for column in numbers),
+        )
+
+
+def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
+    """*port*'s sources with the rows of every table but a dimension's shuffled."""
+    dimensions = sps.check(expanded(port['spec'])).dimensions
+    return {
+        name: table.sample(fraction=1.0, shuffle=True, seed=seed)
+        if isinstance(table, pl.DataFrame) and name not in dimensions
+        else table
+        for name, table in sources(port['name']).items()
+    }
+
+
+@pytest.mark.parametrize('above_the_limit', [False, True], ids=['below-the-limit', 'above-the-limit'])
+def test_the_same_sources_build_the_same_model(
+    port: dict[str, Any], above_the_limit: bool, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Every port holds below `IN_MEMORY_REACH`, a ``MOVES`` one included: there the build runs in memory.
+
+    Above it the build is left to polars' streaming engine, which sums the same
+    rows of osemosys_utopia in another order from one build to the next.
+    """
+    if above_the_limit:
+        monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
+        if reason := MOVES.get(port['name']):
+            request.applymarker(pytest.mark.xfail(reason=reason, strict=True))
+    given = sources(port['name'])
+    assert _built(port, given) == _built(port, given)
+
+
+@pytest.mark.parametrize('seed', [0, 1])
+def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], seed: int) -> None:
+    plain = _built(port_that_holds, sources(port_that_holds['name']))
+    assert _built(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
+        'shuffling the rows of a table built another model'
+    )
+
+
+def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
+    """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
+
+    The solver was kept only while every coefficient matched to the last bit,
+    so the same numbers in another row order loaded it again at every update
+    and lost the warm start.
+    """
+    rng = np.random.default_rng(0)
+    items, periods = 2_000, 50
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i', 't']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 1e6'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    cost = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods),
+            't': np.tile(np.arange(periods), items),
+            'value': rng.uniform(0.0, 1e3, items * periods) * 10.0 ** rng.integers(-6, 6, items * periods),
+        }
+    )
+    with sps.build(spec, {'i': list(range(items)), 't': list(range(periods)), 'cost': cost}) as model:
+        model.solve()
+        for seed in range(3):
+            model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
+        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
+
+
+def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
+    """Only a last-bit difference keeps the solver; a change the data made, however small, reaches it."""
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 10'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    cost = pl.DataFrame({'i': [0, 1, 2], 'value': [3.0, 4.0, 5.0]})
+    with sps.build(spec, {'i': [0, 1, 2], 'cost': cost}) as model:
+        model.solve()
+        model.update({'cost': cost.with_columns(pl.col('value') * (1 + 1e-9))}).solve()
+        assert model.diagnostics().loads == 2, (
+            'a coefficient moved by 1e-9 relative kept a solver that holds the old one'
+        )

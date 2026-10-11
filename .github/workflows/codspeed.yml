@@ -84,8 +84,8 @@ jobs:
           restore-keys: pixi-codspeed-macro-${{ runner.os }}-
       - run: pixi install -e codspeed
 
-      # m and l: #520 showed overhead reading -5..-10% at m amortizes to ±4% at l.
+      # 2xs, where a fixed cost per query shows first; m and l: #520 showed overhead reading -5..-10% at m amortizes to ±4% at l.
       - uses: CodSpeedHQ/action@v5
         with:
           mode: walltime
-          run: pixi run -e codspeed pytest bench --sizes m l --codspeed
+          run: pixi run -e codspeed pytest bench --sizes 2xs m l --codspeed

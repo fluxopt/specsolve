@@ -41,7 +41,7 @@ def test_the_probe_sees_the_refusal(polars_without_streaming):
 def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
     polars_without_streaming, dispatch_yaml, dispatch_frame_inputs
 ):
-    result = sps.solve(dispatch_yaml, dispatch_frame_inputs)
+    result = sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs={'activity'})
     assert result.termination_condition == 'optimal'
     assert result.primal('p')['value'].sum() == pytest.approx(result.activity('power_balance')['value'].sum()), (
         'the primals and the activities were read back through the same engine and agree'
@@ -49,6 +49,6 @@ def test_a_solve_and_its_readers_fall_back_to_the_in_memory_engine(
     assert (result.dual('power_balance')['value'] > 0).all(), 'every snapshot has a price'
 
 
-def test_the_streaming_engine_is_used_where_polars_has_one():
+def test_polars_chooses_the_engine_where_it_has_streaming():
     collect.collect_engine.cache_clear()
-    assert collect.collect_engine() == 'streaming', 'the polars this suite runs on has the streaming engine'
+    assert collect.collect_engine() == 'auto', 'the polars this suite runs on has the streaming engine'

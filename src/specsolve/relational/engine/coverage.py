@@ -12,6 +12,9 @@ a divisor under a constant     a null value in the piece            before [`con
 a constant piece the row sees  a null after the join onto the rows  on the rows pass itself
 a constant piece summed away   a coordinate the parameter lacks     of the parameter, the piece no longer showing it
 =============================  ===================================  ==========================================
+
+A coefficient that is not finite, from a divisor that is zero or a value that
+is infinite, has no reading either. It is asked at the same two moments.
 """
 
 from __future__ import annotations
@@ -21,8 +24,9 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import DataError, sparse_divisor_message, uncovered_constant_message
-from specsolve.relational.collect import collect_engine
+from specsolve.errors import DataError
+from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
 from specsolve.relational.engine.predicates import masked
 from specsolve.relational.engine.scope import join_on
@@ -43,16 +47,17 @@ def divisors_of(*expressions: program.Expression) -> tuple[program.Expression, .
 def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: program.Expression) -> None:
     """A null coefficient in *stacked* means a divisor had no value where the model divided.
 
+    One that is not finite has no number to build either.
+
     Asked before any cell collapses, since ``sum`` reads a null as zero.
 
     Raises:
         DataError: Naming the divisor parameters of *expressions* and the
             count of undefined entries.
     """
-    undefined = int(stacked.get_column('coeff').null_count())
-    if undefined:
-        params = sorted(program.parameters_of(*divisors_of(*expressions)))
-        raise DataError(f'{subject}: {sparse_divisor_message(", ".join(params), undefined)}')
+    coeff = stacked.get_column('coeff')
+    divisors = program.parameters_of(*divisors_of(*expressions))
+    _refuse_undefined(int(coeff.null_count()), int(coeff.is_finite().not_().sum()), divisors, subject)
 
 
 def refuse_null_constants(
@@ -63,6 +68,8 @@ def refuse_null_constants(
 ) -> None:
     """A null value in a constant *piece* means a divisor had no value where the model divided.
 
+    One that is not finite has no number to build either.
+
     Asked before [`constant_scalar`][pieces.constant_scalar] sums the piece,
     which reads a null as zero. *pieces* are narrowed by the caller to the
     coordinates the declaration builds. *message* words it for the position.
@@ -72,10 +79,33 @@ def refuse_null_constants(
     """
     if not divisors:
         return
-    counts = pl.collect_all([piece.select(pl.col('cval').null_count()) for piece in pieces])
-    undefined = sum(int(count.item()) for count in counts)
+    cval = pl.col('cval')
+    counts = collected_all(
+        [
+            piece.select(
+                cval.null_count().alias('null'), cval.cast(pl.Float64).is_finite().not_().sum().alias('non_finite')
+            )
+            for piece in pieces
+        ]
+    )
+    undefined = sum(int(count.item(0, 'null')) for count in counts)
+    non_finite = sum(int(count.item(0, 'non_finite')) for count in counts)
+    _refuse_undefined(undefined, non_finite, divisors, subject, message)
+
+
+def _refuse_undefined(
+    undefined: int,
+    non_finite: int,
+    divisors: Collection[str],
+    subject: str,
+    message: Callable[[str, int], str] = sparse_divisor_message,
+) -> None:
+    """Refuse *undefined* quotients by a divisor with no value, then *non_finite* values."""
+    names = ', '.join(sorted(divisors))
     if undefined:
-        raise DataError(f'{subject}: {message(", ".join(sorted(divisors)), undefined)}')
+        raise DataError(f'{subject}: {message(names, undefined)}')
+    if non_finite:
+        raise DataError(f'{subject}: {non_finite_message(names, non_finite)}')
 
 
 def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.LazyFrame]:
@@ -131,7 +161,7 @@ def constant_side(
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *([uncovered.alias(gap_column)] if uncovered is not None else []),
-    ).collect(engine=collect_engine())
+    ).pipe(collected)
     if uncovered is None:
         return built
     gaps = int(built.get_column(gap_column).sum())
@@ -186,4 +216,4 @@ def _uncovered_coordinates(
     keys = built.select(*shared).unique() if shared else built.select('row').head(1)
     needed = join_on(keys, masked(scope, summed, None).select(*summed), (), 'cross') if summed else keys
     holes = needed.join(scope.data.parameters[param].select(*dims), on=list(dims), how='anti')
-    return int(holes.select(pl.len()).collect().item())
+    return int(holes.select(pl.len()).pipe(collected).item())

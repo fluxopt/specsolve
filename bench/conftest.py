@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import re
 import tempfile
 import time
 from pathlib import Path
@@ -23,11 +22,16 @@ import pytest
 
 from bench.arms import ARMS
 from bench.cases import CASES
+from bench.published import files, ladder_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from bench.cases import Shape
+
+
+#: Every destination `--sinks` can name.
+SINKS = ('lp', 'mps', 'highs', 'gurobi', 'xpress')
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -39,11 +43,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         '--sinks',
         nargs='+',
         default=['lp', 'highs'],
-        choices=('lp', 'highs', 'gurobi'),
+        choices=SINKS,
         help='where each built model goes. `lp` and `highs` by default: the LP file is the '
         "artifact fewest callers want, and it is not the same comparison — HiGHS's own model "
         'is resident in both arms and narrows the gap. `gurobi` is opt-in because it needs the '
-        '[gurobi] extra, and it is measured against linopy the same way, through `to_gurobipy()`.',
+        '[gurobi] extra, and it is measured against linopy the same way, through `to_gurobipy()`. '
+        '`mps` is the other file format, and `xpress` the third solver, which only specsolve '
+        'reaches; its bundled Community licence limits the solve, and nothing here solves.',
     )
     g.addoption('--builds', type=int, default=5, help='rebuilds per process in the first-vs-steady pass; 0 skips it')
     g.addoption(
@@ -83,14 +89,6 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
         config.option.benchmark_min_rounds = MIN_ROUNDS
-
-
-#: How a rung label says which ladder it belongs to.
-_LADDERS = (
-    ('width', re.compile(r'w\d+$')),
-    ('density', re.compile(r'd\d+$')),
-    ('declarations', re.compile(r'n\d+$')),
-)
 
 
 #: Machine-global, so a run from another worktree is refused too (#705).
@@ -174,18 +172,14 @@ def _ladder_defaults() -> dict[str, str]:
     return {a['arg']: a['default'] for a in task['args'] if 'default' in a}
 
 
-def published_rungs() -> set[str]:
-    """The rungs `pixi run ladder` takes."""
-    return set(_ladder_defaults()['sizes'].split())
-
-
-def published_results() -> set[Path]:
-    """The result files the published run writes — one per sink and case, derived from the task."""
+def published_results() -> dict[Path, set[str]]:
+    """The result files the published run writes, to the rungs each holds — derived from the task."""
     defaults = _ladder_defaults()
     return {
-        (Path.cwd() / f'bench/results/latest-{sink}-{case}.json').resolve()
+        (Path.cwd() / path).resolve(): set(rungs)
         for sink in defaults['sinks'].split()
         for case in defaults['cases'].split()
+        for path, rungs in files(sink, case, defaults['sizes'].split()).items()
     }
 
 
@@ -202,9 +196,10 @@ def refuse_to_overwrite_the_provenance(config: pytest.Config) -> None:
     destination = next(
         (arg.split('=', 1)[1] for arg in config.invocation_params.args if arg.startswith('--benchmark-json=')), None
     )
-    if not destination or Path(destination).resolve() not in published_results():
+    rungs = published_results().get(Path(destination).resolve()) if destination else None
+    if rungs is None:
         return
-    missing = published_rungs() - set(config.getoption('--sizes'))
+    missing = rungs - set(config.getoption('--sizes'))
     if missing:
         raise pytest.UsageError(
             f'this run leaves out {sorted(missing)}, so it cannot write {destination} — the published '
@@ -287,14 +282,22 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize('sink', metafunc.config.getoption('--sinks'))
 
 
+#: What CodSpeed does not run. `test_rebuild`, because its instruments ignore
+#: rounds in pedantic mode; `test_sweep`, because it solves, and the memory
+#: instrument tracks the solver's own allocations — `commitment` swept at `s` ran
+#: that 20-minute job out on its own; `test_fresh`, because its work happens in a
+#: child process that no instrument follows.
+NOT_UNDER_CODSPEED = ('test_rebuild', 'test_sweep', 'test_fresh')
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Deselect `test_rebuild` under CodSpeed, whose instruments ignore rounds in pedantic mode."""
+    """Deselect `NOT_UNDER_CODSPEED` under CodSpeed."""
     if not getattr(config.option, 'codspeed', False):
         return
-    dropped = [i for i in items if i.name.startswith('test_rebuild')]
+    dropped = [i for i in items if i.name.startswith(NOT_UNDER_CODSPEED)]
     if dropped:
         config.hook.pytest_deselected(items=dropped)
-        items[:] = [i for i in items if not i.name.startswith('test_rebuild')]
+        items[:] = [i for i in items if not i.name.startswith(NOT_UNDER_CODSPEED)]
 
 
 @pytest.fixture(scope='session')
@@ -416,11 +419,6 @@ class Ceiling:
 def _seconds(value: float) -> str:
     """Seconds at a precision that survives both ends: a 0.013 s rung and a 4000 s projection."""
     return f'{value:.3g} s'
-
-
-def ladder_of(size: str) -> str:
-    """Which ladder a rung belongs to — its own, or the size one; the budget decides each separately."""
-    return next((name for name, pattern in _LADDERS if pattern.match(size)), 'size')
 
 
 def _growth(case_name: str, size: str, selected: Sequence[str]) -> float:

@@ -589,6 +589,38 @@ class TestTheLabelSpace:
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
         assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
 
+    @pytest.mark.parametrize(
+        'labels',
+        [
+            pytest.param([2, 0, 1], id='rotated'),
+            pytest.param([3, 2, 1], id='descending'),
+        ],
+    )
+    def test_an_integer_dimension_out_of_ascending_order_keeps_each_row_on_its_label(self, labels):
+        """Integer labels that are a run only once sorted are not a run.
+
+        A constraint over the whole of a dimension computes each term's row from
+        the label when the labels are consecutive ascending integers. A set of
+        labels that only sorts into a run must still be placed by its declared
+        order, or each ``x`` lands on the row of another label's ``cap``.
+        """
+        spec = {
+            'dimensions': {'t': {'dtype': 'int'}},
+            'parameters': {'cap': {'dims': ['t']}},
+            'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+            'constraints': {'k': {'dims': ['t'], 'expression': 'x <= cap'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+        }
+        cap = {label: 10.0 * label + 1.0 for label in labels}
+        data = {'t': labels, 'cap': pl.DataFrame({'t': list(cap), 'value': list(cap.values())})}
+
+        with sps.solve(spec, data) as result:
+            x = by_coord(result, 'x', 't')
+
+        assert list(x) == labels, 'read-back follows declaration order'
+        for label, bound in cap.items():
+            assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
+
     def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
         """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
         (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
@@ -759,6 +791,27 @@ class TestTheLabelSpace:
             sps.solve(LABEL_SPEC, {'f': ['a', 'b'], **typo})
         assert "'zz'" in str(exc.value), 'the refusal must name the offending label'
         assert 'typo' in str(exc.value)
+
+    @pytest.mark.parametrize(
+        ('name', 'labels'),
+        [
+            pytest.param('cost', [None, 'b'], id='a cost leading with a null'),
+            pytest.param('cap', [None, 'b'], id='a bound leading with a null'),
+            pytest.param('cap', ['b', None], id='a bound ending with a null'),
+        ],
+    )
+    def test_a_null_label_is_refused(self, name, labels):
+        """A null label is refused like any label the dimension does not have.
+
+        It used to pass the known-label check, which skipped nulls: a null cost
+        label joined nothing and the model solved to 10.0 with no error, and a
+        null bound label failed deep in the build with an ``IndexError``.
+        """
+        table = pl.DataFrame({'f': labels, 'value': [1.0, 2.0]}, schema={'f': pl.String, 'value': pl.Float64})
+        data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
+        with pytest.raises(DataError) as exc:
+            sps.solve(LABEL_SPEC, {**data, name: table})
+        assert 'None' in str(exc.value), 'the refusal must name the null as the offending label'
 
     def test_a_missing_row_is_still_only_sparse(self):
         """The distinction the refusal above rests on. A row that is *absent* is
@@ -1239,13 +1292,10 @@ class TestThePositionalHandoff:
         with sps.build(spec, sources) as model:
             primal = pl.Series('value', np.arange(model._engine._model.handoff.column_count, dtype=np.float64))
             dual = pl.Series('value', np.arange(model._engine._model.handoff.row_count, dtype=np.float64))
-            primals, duals, activities, _ = model._engine._read_back(primal, dual, dual, None)
+            primals, duals, _ = model._engine._read_back(primal, dual, None)
             assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
             assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
             assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
-            assert activities['meet'].collect()['value'].to_list() == list(range(len(dual))), (
-                'activity not in label order'
-            )
 
     @pytest.mark.parametrize('length', [2, 5], ids=['short', 'long'])
     def test_a_solver_vector_that_does_not_span_the_model_is_refused(self, monkeypatch, length):

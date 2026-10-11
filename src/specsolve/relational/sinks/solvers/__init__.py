@@ -72,4 +72,4 @@ def loaded(
             held.push(handoff)
             return held
         held.close()
-    return wanted(handoff, None, solver_options)
+    return wanted(handoff, solver_options)

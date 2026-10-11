@@ -49,11 +49,12 @@ if TYPE_CHECKING:
 
 
 def _spec() -> dict[str, Any]:
-    """The law model, with a season over ``t``, a relation that leaves a snapshot out, and a per-``f`` lead."""
+    """The law model, with a season over ``t``, a relation that leaves a snapshot out, a per-``f`` lead, and a variable ``z`` with no dimensions."""
     spec = law_spec('x <= 100', dims=['f', 't'])
     spec['dimensions']['s'] = {'dtype': 'str'}
     spec['parameters']['lead'] = {'dims': ['f'], 'dtype': 'int'}
     spec['relations'] = {'season_of': {'key': 't', 'values': 's'}, 'tariff_of': {'key': 't', 'values': 's'}}
+    spec['variables']['z'] = {'dims': [], 'bounds': {'lower': 0, 'upper': 1}}
     return spec
 
 
@@ -130,6 +131,9 @@ def test_a_rewrite_that_must_not_change_the_meaning_does_not_change_the_value(ag
 
 OPERATORS = [
     pytest.param('sum(x)', id='sum-over-every-dim'),
+    pytest.param('2 * z', id='a-variable-with-no-dimensions'),
+    pytest.param('x + z', id='a-variable-with-no-dimensions-beside-one-with-two'),
+    pytest.param('sum(x) - z', id='a-variable-with-no-dimensions-beside-a-full-sum'),
     pytest.param('sum(y)', id='sum-over-every-dim-of-a-masked-variable'),
     pytest.param('sum(x * y, over=t)', id='sum-of-a-product-of-two-variables'),
     pytest.param('x * w - y', id='subtract-a-masked-variable'),

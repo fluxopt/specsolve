@@ -2,7 +2,7 @@
 
 Converters whose flows share one curve, where **how many flows** is data.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **5990**, matched to `rtol=1e-06`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **5990**, matched to `rtol=1e-06`.
 
 ## The problem
 
@@ -241,7 +241,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
         ``tables`` is the same mapping the specsolve call attaches as ``sources``.
         """
-        flows: pd.DataFrame = tables['flow'].set_index('flow')
+        flows: pd.DataFrame = tables['flow'].set_index('flow').join(tables['converter_of'].set_index('flow'))
         times = pd.Index(tables['time']['time'], name='time')
         present = tables['bp_present'].set_index(['converter', 'bp'])['value']
         runs_to = {c: int(present[c].sum()) for c in present.index.get_level_values('converter').unique()}
@@ -249,7 +249,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m = linopy.Model()
         rate = m.add_variables(lower=0, coords=[pd.Index(flows.index, name='flow'), times], name='rate')
 
-        for converter, members in flows.groupby('converter_of'):
+        for converter, members in flows.groupby('converter'):
             pairs = [
                 (rate.sel(flow=flow, drop=True), linopy.breakpoints(curve_of(tables, flow, runs_to[converter])))
                 for flow in members.index

@@ -17,8 +17,15 @@ result.dual('power_balance')
 
 ## Reference
 
-Every public name, rendered from its docstring. The [glossary](glossary.md)
-defines *model*, *result*, *sink* and the other house terms the entries use.
+Every public name, rendered from its docstring. Three modules hold them:
+
+- `specsolve` holds what you call;
+- `specsolve.types` holds what a call hands back;
+- `specsolve.errors` holds what a call raises or warns.
+
+Any other name under `specsolve.` is internal, and any release can change it.
+The [glossary](glossary.md) defines *model*, *result*, *sink* and the other
+house terms the entries use.
 
 ### Run a spec
 
@@ -64,52 +71,72 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
 
 ### What comes back
 
-::: specsolve.Model
+::: specsolve.types.Model
     options:
       heading_level: 4
 
-::: specsolve.relational.result.ConstraintRow
+::: specsolve.types.ConstraintRow
     options:
       heading_level: 4
 
-::: specsolve.Result
+::: specsolve.types.Result
     options:
       heading_level: 4
 
-::: specsolve.Sweep
+::: specsolve.types.InfeasibleSubsystem
+    options:
+      heading_level: 4
+
+::: specsolve.types.Sweep
+    options:
+      heading_level: 4
+
+::: specsolve.types.ResultArchive
+    options:
+      heading_level: 4
+
+::: specsolve.types.SweepArchive
+    options:
+      heading_level: 4
+
+::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4
 
 The rows and frames those hand back: how a solve terminated, what produced
 it, what the build and its solves took, and what a slice of a sweep took.
 
-::: specsolve.relational.result.Diagnostics
+::: specsolve.types.Diagnostics
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Record
+::: specsolve.types.Record
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Provenance
+::: specsolve.types.Provenance
     options:
       heading_level: 4
 
-::: specsolve.relational.answer_layout.Metrics
+::: specsolve.types.Metrics
     options:
       heading_level: 4
 
-### Carry an answer
-
-::: specsolve.ResultArchive
+::: specsolve.types.Output
     options:
       heading_level: 4
 
-::: specsolve.SweepArchive
+::: specsolve.types.Start
     options:
       heading_level: 4
+
+### Read an answer back
 
 ::: specsolve.load_archive
+    options:
+      heading_level: 4
+
+::: specsolve.load_inputs
     options:
       heading_level: 4
 
@@ -141,37 +168,37 @@ message names the rewrite. `LanguageError`, with `SchemaError` and
 `DimensionError`, is a fault in the spec, and is the language's own:
 [which error you get](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#which-error-you-get).
 
-::: specsolve.SpecsolveError
+::: specsolve.errors.SpecsolveError
     options:
       heading_level: 4
 
-::: specsolve.LanguageError
+::: specsolve.errors.LanguageError
     options:
       heading_level: 4
 
-::: specsolve.SchemaError
+::: specsolve.errors.SchemaError
     options:
       heading_level: 4
 
-::: specsolve.DimensionError
+::: specsolve.errors.DimensionError
     options:
       heading_level: 4
 
 The rest are specsolve's:
 
-::: specsolve.DataError
+::: specsolve.errors.DataError
     options:
       heading_level: 4
 
-::: specsolve.LayoutError
+::: specsolve.errors.LayoutError
     options:
       heading_level: 4
 
-::: specsolve.NoSolutionError
+::: specsolve.errors.NoSolutionError
     options:
       heading_level: 4
 
-::: specsolve.SpecsolveWarning
+::: specsolve.errors.SpecsolveWarning
     options:
       heading_level: 4
 
@@ -207,12 +234,13 @@ declared name cannot collide with one. Case does not tell two columns apart:
 SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
 covers dimensions, relations and their columns, parameters, variables,
 constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
-with the prefix is refused too.
+with the prefix is refused too, and so is a dimension called `value`, which
+would collide with the column that holds a parameter's numbers.
 
 ```
 variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
-letter case for the columns specsolve adds, so a declared name cannot collide
-with one. Rename it.
+letter case for the columns specsolve adds, so it could collide with one.
+Rename it.
 ```
 
 ### What each sink takes

@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.errors import SpecsolveError
+from specsolve.messages import unknown_name_message
 from specsolve.relational.sinks.capabilities import Capabilities
 
 if TYPE_CHECKING:

@@ -1,7 +1,7 @@
 # Reading an answer into pandas or xarray
 
 How to hand an answer to code that works in pandas or xarray. A
-[result](../reference/api.md#specsolve.Result) reads as polars tables, and the
+[result](../reference/api.md#specsolve.types.Result) reads as polars tables, and the
 bridges below convert one name at a time. specsolve installs neither library,
 so install the one you need:
 
@@ -28,7 +28,7 @@ print(result.to_pandas('p').head(3))
 2         1      wind   80.0
 ```
 
-The table has the shape [`primal`](../reference/api.md#specsolve.Result.primal)
+The table has the shape [`primal`](../reference/api.md#specsolve.types.Result.primal)
 gives: one column per dimension, a `value` column, and one row per coordinate
 the model built. `kind='dual'` reads a constraint's duals, and
 `kind='expression'` a named expression:
@@ -65,7 +65,7 @@ Coordinates:
 The array is dense over the variable's dimensions. A coordinate that a
 `where:` removed comes back `NaN`. A label that no row holds is not on the
 axis: solar has no capacity, so `p` has no `solar` column.
-[`to_dataarray`](../reference/api.md#specsolve.Result.to_dataarray) takes
+[`to_dataarray`](../reference/api.md#specsolve.types.Result.to_dataarray) takes
 `kind=` as `to_pandas` does.
 
 ## Every variable as one xarray dataset

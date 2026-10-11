@@ -240,7 +240,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
 
     with pytest.raises(DataError, match='needs at least two breakpoints') as refusal:
         sps.build(expanded(ragged), _per_unit_points(short=True, mask=mask))
-    assert "unit='b'" in str(refusal.value), 'the refusal names the curve that is short, not the block'
+    assert 'unit=b' in str(refusal.value), 'the refusal names the curve that is short, not the block'
 
 
 def test_values_past_the_mask_are_not_part_of_the_curve():
@@ -372,7 +372,7 @@ def test_each_curve_of_a_frame_is_checked_on_its_own():
 
     with pytest.raises(DataError, match='exact only for a convex curve') as refusal:
         sps.build(expanded(pyyaml.safe_load(PER_UNIT_SPEC)), _per_unit(convex, concave))
-    assert "unit='b'" in str(refusal.value), 'the refusal names the curve that bends the wrong way'
+    assert 'unit=b' in str(refusal.value), 'the refusal names the curve that bends the wrong way'
 
 
 def test_a_curve_bound_to_a_path_is_checked_like_one_in_memory(tmp_path):

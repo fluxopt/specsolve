@@ -126,6 +126,11 @@ def _terms(body: Any) -> dict[str, float]:
     return {v.name: c for v, c in zip(repn.linear_vars, repn.linear_coefs, strict=True)}
 
 
+def _labels(coordinate: str) -> str:
+    """``snapshot=1, generator=wind`` as pyomo prints an index, ``1,wind``."""
+    return ','.join(part.split('=', 1)[1] for part in coordinate.split(', '))
+
+
 @pytest.mark.parametrize(('spec', 'data', 'rename'), LINEAR)
 def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any, rename: Any) -> None:
     """Rows against [`Model.row`][], which finds a row by its coordinate and not by position.
@@ -135,7 +140,7 @@ def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any, ren
     """
     with sps.build(spec, data) as model:
         m = model.to_pyomo(rename)
-        result = model.solve()
+        result = model.solve(outputs={'activity'})
         for constraint, declared in model._program.constraints.items():
             built = result.activity(constraint).drop('value')
             coordinates = list(built.iter_rows()) if declared.dims else [()]
@@ -144,7 +149,7 @@ def test_every_row_holds_the_terms_the_built_row_holds(spec: Any, data: Any, ren
             for coordinate in coordinates:
                 row = model.row(constraint, **dict(zip(declared.dims, coordinate, strict=True)))
                 expected = {
-                    f'{_named(m, rename, "variables", t["variable"]).name}[{t["coordinate"].replace(", ", ",")}]'
+                    f'{_named(m, rename, "variables", t["variable"]).name}[{_labels(t["coordinate"])}]'
                     if t['coordinate']
                     else _named(m, rename, 'variables', t['variable']).name: t['coefficient']
                     for t in row.terms.iter_rows(named=True)

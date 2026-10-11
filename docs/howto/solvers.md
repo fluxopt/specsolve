@@ -14,7 +14,7 @@ import specsolve as sps
 
 try:
     sps.solve('examples/dispatch.yaml', {}, solver_name='cplex')
-except sps.SpecsolveError as exc:
+except sps.errors.SpecsolveError as exc:
     print(exc)
 ```
 
@@ -34,7 +34,7 @@ A name the build knows, but whose package is not installed, raises
 ## Name it in the call
 
 `solver_name=` goes on [`solve`](../reference/api.md#specsolve.solve),
-[`Model.solve`](../reference/api.md#specsolve.Model.solve) and
+[`Model.solve`](../reference/api.md#specsolve.types.Model.solve) and
 [`solve_over`](../reference/sweeps.md):
 
 ```python

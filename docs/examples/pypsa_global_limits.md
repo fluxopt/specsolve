@@ -2,7 +2,7 @@
 
 Limits that hold over a whole set at once: an energy total, a capacity at one bus, and the built network measured twice.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **127211.66666666666**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **127211.66666666666**, matched to `rtol=1e-09`.
 
 Every other bound in this corpus belongs to a component. A *global* limit
 belongs to a set PyPSA selects by an attribute: all generators burning gas, all
@@ -335,13 +335,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add('Carrier', tables['carrier']['carrier'])
         n.add('Carrier', 'DC')
 
-        generators: pd.DataFrame = tables['generator'].set_index('generator')
+        generators: pd.DataFrame = (
+            tables['generator'].set_index('generator').join(tables['gen_placement'].set_index('generator'))
+        )
         p_max_pu: pd.DataFrame = tables['p_max_pu'].pivot(index='snapshot', columns='generator', values='value')
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
-            carrier=generators['gen_carrier'],
+            bus=generators['bus'],
+            carrier=generators['carrier'],
             p_nom_extendable=True,
             p_max_pu=p_max_pu[generators.index],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
@@ -352,8 +354,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Link',
             links.index,
-            bus0=links['link_from'],
-            bus1=links['link_to'],
+            bus0=tables['link_from'].set_index('link')['bus'],
+            bus1=tables['link_to'].set_index('link')['bus'],
             carrier='DC',
             p_nom_extendable=True,
             length=tables['link_length'].set_index('link')['value'],

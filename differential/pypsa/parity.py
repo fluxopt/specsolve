@@ -11,8 +11,8 @@ it needs a checkout of that repository at the tag `pypsa-parity.yml` names. No
 pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
-        --with "$(grep -o 'linopy @ git+[^"]*' pyproject.toml)" \
-        --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=1.30" \
+        --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
+        --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=2.0" \
         python differential/pypsa/parity.py ../mathspec
 
 Per rung, from the same network:
@@ -401,7 +401,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     """
     try:
         result.dual(next(iter(declared.constraints)))
-    except sps.SpecsolveError as error:
+    except sps.errors.SpecsolveError as error:
         return {
             'compared': 0,
             'skipped': str(error).splitlines()[0][:120],
@@ -829,7 +829,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
         sources = prepared(spec, tables)
         full = sps.build(spec, sources)
     except (
-        sps.DataError,
+        sps.errors.DataError,
         TypeError,
         KeyError,
         ValueError,
@@ -845,7 +845,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
     same_model(stem, full, model)
     declared = mathspec.to_spec(cut)
     committed(stem, spec.name, declared, cut_sources)
-    result = model.solve(solver_name='highs')
+    result = model.solve(solver_name='highs', outputs={'activity'})
     assert result.is_ok, f'{stem}: specsolve did not solve — {result.termination_condition}'
     if bug is None:
         n = solved(stem, n)

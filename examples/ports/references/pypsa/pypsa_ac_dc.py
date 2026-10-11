@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_ac_dc``: PyPSA's own meshed AC-DC example. See docs/examples/index.md.
 
@@ -73,7 +73,11 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     for name, rate in co2.items():
         n.add('Carrier', name, co2_emissions=rate)
 
-    generators = tables['generator'].set_index('generator')
+    generators = (
+        tables['generator']
+        .set_index('generator')
+        .join([tables['gen_bus'].set_index('generator'), tables['gen_carrier'].set_index('generator')])
+    )
     p_max_pu = _wide(tables['p_max_pu'], 'generator')
     for g, row in generators.iterrows():
         n.add(
@@ -90,8 +94,10 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
             p_max_pu=p_max_pu[g],
         )
 
-    for line, ends in tables['line'].set_index('line').iterrows():
-        bus0, bus1 = ends['line_from'], ends['line_to']
+    bus0_of = tables['line_from'].set_index('line')['bus']
+    bus1_of = tables['line_to'].set_index('line')['bus']
+    for line in tables['line']['line']:
+        bus0, bus1 = bus0_of[line], bus1_of[line]
         n.add(
             'Line',
             line,
@@ -104,8 +110,10 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
             capital_cost=_series(tables['line_capital_cost'], 'line')[line],
         )
 
-    for link, ends in tables['link'].set_index('link').iterrows():
-        bus0, bus1 = ends['link_from'], ends['link_to']
+    bus0_of = tables['link_from'].set_index('link')['bus']
+    bus1_of = tables['link_to'].set_index('link')['bus']
+    for link in tables['link']['link']:
+        bus0, bus1 = bus0_of[link], bus1_of[link]
         n.add(
             'Link',
             link,

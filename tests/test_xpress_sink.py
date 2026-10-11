@@ -66,22 +66,6 @@ def test_every_port_reaches_its_reference_optimum_on_xpress(port: dict[str, Any]
         assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
-@pytest.mark.parametrize('batch_rows', [None, 1, 2, 10_000], ids=lambda n: f'batch-{n}')
-def test_block_boundaries_do_not_move_the_answer(batch_rows: int | None) -> None:
-    """The matrix goes in a block at a time, and a block is a slice of rows.
-
-    A boundary that dropped or repeated a row's entries would still solve, so
-    the budget is varied against a fixed answer rather than asserted about.
-    """
-    spec, data = CASES['LP']
-    with sps.build(spec, data) as model:
-        tables = model._engine._model.handoff
-        reference = model.solve().objective
-    problem = Xpress(tables, batch_rows=batch_rows).handle
-    problem.optimize()
-    assert float(problem.attributes.objval) == pytest.approx(reference), f'batch_rows={batch_rows} moved the answer'
-
-
 def test_an_infeasible_solve_reports_both_axes_in_xpress_wording() -> None:
     assert_infeasible_reports_both_axes('xpress')
 
@@ -191,7 +175,7 @@ def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
     at 0 against caps of 10 and 20, so activity and rhs differ by the whole of
     each bound.
     """
-    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress') as solution:
+    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress', outputs={'activity'}) as solution:
         assert solution.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
             'activity is the row value at the solution, not the bound it was compared against'
         )
@@ -224,3 +208,31 @@ def test_the_missing_extra_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not Xpress.is_available()
     with pytest.raises(ModuleNotFoundError, match=r'\[xpress\] extra'):
         sps.solve(*CASES['LP'], solver_name='xpress')
+
+
+def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
+    """A basis read from Xpress and loaded back is the one Xpress holds, row by row and column by column.
+
+    Which side of its slack a nonbasic row names is not observable here: Xpress
+    puts the slack at its one finite bound on load, whichever side it was given.
+    """
+    from tests.test_basis import SPEC
+
+    with sps.build(SPEC, {}) as model:
+        tables = model._engine._model.handoff
+    first = Xpress(tables)
+    try:
+        basis = first.run(tables, basis=True).basis
+        native_rows, native_columns = first._p.getBasis()
+    finally:
+        first.close()
+    assert basis is not None
+
+    fresh = Xpress(tables)
+    try:
+        fresh.warm(basis)
+        loaded_rows, loaded_columns = fresh._p.getBasis()
+    finally:
+        fresh.close()
+    assert list(loaded_rows) == list(native_rows), 'the rows go back in the statuses they were read in'
+    assert list(loaded_columns) == list(native_columns), 'and the columns'

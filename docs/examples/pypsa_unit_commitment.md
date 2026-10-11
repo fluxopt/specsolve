@@ -2,7 +2,7 @@
 
 Which generators are *on*, not just how much they produce — a binary per generator per snapshot, with start-up and shut-down charges.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **24900**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **24900**, matched to `rtol=1e-09`.
 
 **Integrality enters here.** Every model above is a continuous LP; this one
 carries a binary status. One bus and no network: a model that fails to match

@@ -25,7 +25,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.relational.collect import collect_engine
+from specsolve.relational.collect import collected
 from specsolve.relational.engine.pieces import (
     PRESENT,
     CompiledExpression,
@@ -50,6 +50,7 @@ from specsolve.relational.engine.predicates import Carrier, compile_predicate, f
 from specsolve.relational.engine.relations import landed, mapping, walk_join
 from specsolve.relational.engine.scope import UNIT, Scope
 from specsolve.relational.engine.shifts import translate_piece, window_piece
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -147,12 +148,12 @@ class Compiler:
 
         expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
         table = self.scope.data.parameters[param]
-        if table.select(pl.len()).collect().item() != expected:
+        if table.select(pl.len()).pipe(collected).item() != expected:
             return None
 
         position = self.scope.row_major(v.dims, self.scope.ordinal_of)
-        pairs = table.select(position.alias('__at__'), pl.col('value')).collect(engine=collect_engine())
-        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs['value'], expected)))
+        pairs = table.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
+        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
 
     # ------------------------------------------------------------------
     # expressions → pieces
@@ -338,7 +339,7 @@ class Compiler:
     def _parameter_piece(self, name: str) -> Piece:
         """A parameter as a constant part, keyed by its declared dims."""
         dims = self.scope.program.parameters[name].dims
-        frame = self.scope.data.parameters[name].select(*dims, pl.col('value').cast(pl.Float64).alias('cval'))
+        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
         return Piece(dims, frame, 'const', parameters=frozenset({name}))
 
     def _variable_piece(self, name: str) -> Piece:
@@ -383,7 +384,7 @@ class Compiler:
             assert solution.no_duals is not None, 'a solve without duals says why'
             raise SpecsolveError(solution.no_duals)
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
-        frame = held.frame.select(*dims).with_columns(held.share(solution.dual).alias('cval'))
+        frame = held.valued(dims, solution.dual.alias('cval'))
         return Piece(dims, frame, 'const', presences=(Presence(_presence(held, dims, 'row'), dims),))
 
     def _read_divisor(self, divisor: Piece) -> Piece:
@@ -538,7 +539,7 @@ class Compiler:
         reachable = landed(table, a).unique()
         if not p.presences:
             total = math.prod(self.scope.data.cardinality[d] for d in fine)
-            reached = reachable.select(pl.len()).collect().item()
+            reached = reachable.select(pl.len()).pipe(collected).item()
             return () if reached == total else (Presence(reachable, fine),)
 
         def pulled(presence: Presence) -> Presence:

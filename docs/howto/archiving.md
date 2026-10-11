@@ -23,14 +23,15 @@ parameter as its dims and `value`, a relation as its columns:
 
 ```text
 case/
+    format.json                   the layout the spec and the sources are in
     spec.yaml
     sources/cost.parquet
     sources/load.parquet
     …
-    sources.parquet               (specsolve_run, source, digest) — what each of them is
-    catalog.parquet               (specsolve_run, path, …) — what each file holds and over which dimensions
+    catalog.parquet               (specsolve_run, path, …, column, dim) — what each file holds and over which dimensions
     answer/record.parquet      how it terminated, what it reached, when, under what name, and on what
     answer/metrics.parquet        what the build and its solves took
+    answer/spec.yaml              the spec the answer came from, as a saved answer holds it
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
 ```
@@ -44,6 +45,23 @@ sps.solve('dispatch.yaml', sources, archive='case.zip')
 
 **`sps.solve`, `model.solve` and `sps.solve_over` take `archive=`.** Nothing
 else writes one.
+
+**An answer holds what you ask for.** Every answer holds the primal, the duals
+and the declared expressions. Anything else is an output, and only a solve that
+asks for it holds it, live, saved and archived alike:
+
+```python
+sps.solve('dispatch.yaml', sources, outputs={'activity'}, archive='case')
+```
+
+This adds `answer/activity/<name>.parquet`, each constraint's left-hand side.
+`outputs={'reduced_cost'}` adds `answer/reduced_cost/<name>.parquet`, each
+variable's reduced cost, `outputs={'slack'}` adds
+`answer/slack/<name>.parquet`, each constraint's distance to binding, and
+`outputs={'basis'}` adds `answer/variable_basis/` and
+`answer/constraint_basis/`, the basis status the solve ended on.
+A reader of an output the solve did not ask for refuses, and the message names
+the `outputs=` to solve with.
 
 **The record says what produced the answer.** `answer/record.parquet` names
 the solver, its version and the options it ran with, and the specsolve and
@@ -86,6 +104,36 @@ Pass `into=` when you want the extracted tree as well, to query it with an
 engine that reads parquet. A directory archive is read where it lies and
 refuses an `into=`.
 
+**An archive is read as it was written.** Nothing checks that its files are
+still the ones the solve wrote, so a file changed afterwards is read as it is
+now. To change an input, solve again and write a new archive.
+
+## Read the spec and the data alone
+
+**`load_inputs` reads the spec and the data, and never opens `answer/`.** The
+archive stamps the answer and the inputs with two separate layout numbers. A
+release that changes how the answer is laid out makes `load_archive` refuse an
+archive that an earlier release wrote. `load_inputs` still reads that archive,
+so you can solve it again:
+
+```python
+inputs = sps.load_inputs('case/')
+
+sps.solve(inputs.spec, inputs.sources)  # the same question, asked again
+```
+
+A sweep archive also gives back the axis and the carry it ran with:
+
+```python
+inputs = sps.load_inputs('roll/')
+
+sps.solve_over(inputs.spec, inputs.sources, inputs.axis, carry=inputs.carry)
+```
+
+When the spec and the sources are in an earlier layout too, both readers refuse
+the archive. The message names the files to read by hand: `spec.yaml` with
+`mathspec.to_spec`, and each `sources/<key>.parquet` passed as its path.
+
 ## Read one too big to hold
 
 **`scan_archive` reads nothing until asked.** The sources come back as paths,
@@ -113,7 +161,7 @@ keep.
 
 `metrics` is a `Metrics`: how big the model was, how many solves the clocks
 cover, and wall-clock seconds in each phase, as one value
-([the attributes](../reference/api.md#specsolve.relational.answer_layout.Metrics)).
+([the attributes](../reference/api.md#specsolve.types.Metrics)).
 
 ```python
 case = sps.load_archive('case/')
@@ -175,7 +223,9 @@ Each slice cuts from the archive the tables it attached.
 
 **Keep the windows where you will read them per window.** `keep_windows=True`
 also writes each window's frames, lookahead rows included, under
-`answer/windows/`. Then `per_window=True` reads off the archive:
+`answer/windows/`, with `owned.parquet` for what each window owns and
+`catalog.parquet` for what each of these files holds. Then `per_window=True`
+reads off the archive:
 
 ```python
 sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/', keep_windows=True)

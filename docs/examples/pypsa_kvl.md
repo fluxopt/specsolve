@@ -2,7 +2,7 @@
 
 Passive AC lines: flow is decided by physics, not chosen.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **17000**, matched to `rtol=1e-09`, nodal prices and line flows included.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **17000**, matched to `rtol=1e-09`, nodal prices and line flows included.
 
 Every model above moves power over `Link` objects, whose flow is a decision
 variable. A `Line` is passive: around every independent cycle of the network,
@@ -229,15 +229,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Line',
             lines.index,
-            bus0=lines['line_from'],
-            bus1=lines['line_to'],
+            bus0=tables['line_from'].set_index('line')['bus'],
+            bus1=tables['line_to'].set_index('line')['bus'],
             x=tables['reactance'].set_index('line')['value'],
             r=0.0,
             s_nom=tables['s_nom'].set_index('line')['value'],

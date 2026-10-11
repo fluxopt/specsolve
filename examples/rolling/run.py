@@ -67,7 +67,7 @@ SOURCES = {
 }
 
 
-def full_foresight() -> sps.Sweep:
+def full_foresight() -> sps.types.Sweep:
     """One window over the whole horizon — the answer rolling is measured against."""
     return sps.solve_over(
         MODEL,
@@ -76,7 +76,7 @@ def full_foresight() -> sps.Sweep:
     )
 
 
-def rolling(steps: int, lookahead: int) -> sps.Sweep:
+def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
     """Windows keeping *steps* coordinates and seeing *lookahead* beyond them.
 
     The carry names no coordinate: `soc` is over `(t)` and `soc_initial` over
@@ -92,7 +92,7 @@ def rolling(steps: int, lookahead: int) -> sps.Sweep:
     )
 
 
-def cost_of(sweep: sps.Sweep) -> float:
+def cost_of(sweep: sps.types.Sweep) -> float:
     """What the schedule cost, summed over the snapshots each window owns.
 
     A window objective covers its lookahead too, so summing them double-counts.

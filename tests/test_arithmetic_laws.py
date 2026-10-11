@@ -18,9 +18,9 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.conftest import law_data, law_spec, override
+from tests.conftest import law_data, law_spec, override, schema_of
 from tests.differential import RTOL, both_lanes_refuse, differential
-from tests.oracle import pd
+from tests.oracle import pd, specsolve_linopy
 
 # ---------------------------------------------------------------------------
 # the fixture: `x` total, `y` absent at f=b, `w` a dense coefficient
@@ -466,6 +466,114 @@ def test_a_sparse_divisor_has_an_escape(patch, expected):
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )
+
+
+#: ``d`` has a row at every coordinate, and the row at ``b`` is zero.
+ZERO_D = {'f': ['a', 'b'], 'd': pd.Series([2.0, 0.0], index=pd.Index(['a', 'b'], name='f'))}
+#: ``h`` for the cases that divide on the constant side: 10 everywhere, or 0 at ``b``.
+H = {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
+H_ZERO_AT_B = {'h': pd.Series([10.0, 0.0], index=pd.Index(['a', 'b'], name='f'))}
+WITH_H = {'parameters.h': {'dims': ['f']}}
+#: ``r`` has no dimensions, and is zero.
+SCALAR_R = {'parameters.r': {'dims': []}}
+ZERO_R = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f')), 'r': 0.0}
+
+
+@pytest.mark.parametrize(
+    'expression',
+    [
+        pytest.param('x / d <= 10', id='a-term'),
+        pytest.param('x * d / d <= 10', id='a-term-zero-over-zero'),
+        pytest.param('x / (2 - d) <= 10', id='a-divisor-that-adds-up-to-zero'),
+    ],
+)
+def test_a_zero_divisor_under_a_variable_is_refused_on_both_lanes(expression):
+    """A zero divisor under a variable leaves no coefficient, so it is refused, not solved (#1892).
+
+    Both lanes handed the solver an infinite or NaN coefficient with no error:
+    `x * r / r >= 1` reported `infeasible`.
+    """
+    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': expression})
+    message = both_lanes_refuse(spec, ZERO_D, match="where the model divides by 'd'")
+    assert '1 value(s) are not finite' in message, 'the message counts the one coordinate the zero reaches'
+
+
+def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
+    """The report's own model: `sum(x * d / d)` with `d` zero at `b` solved `optimal` with a NaN objective (#1892)."""
+    spec = override(
+        DIVISOR_SPEC,
+        **{
+            'variables.x.bounds.lower': 1,
+            'constraints.c.expression': 'x <= 10',
+            'objective.sense': 'minimize',
+            'objective.expression': 'sum(x * d / d, over=f)',
+        },
+    )
+    with pytest.raises(DataError, match=r"1 value\(s\) are not finite where the model divides by 'd'"):
+        sps.build(spec, ZERO_D).close()
+    with pytest.raises(DataError, match=r"1 value\(s\) are not finite where the model divides by 'd'"):
+        specsolve_linopy.build(schema_of(spec).expand(), ZERO_D)
+
+
+def test_an_infinite_value_as_a_coefficient_is_refused():
+    """A cost of ``inf`` reached the solver as a coefficient, and the solve reported optimal at 0.0.
+
+    Only the relational lane is asked: the linopy lane checks a zero divisor alone.
+    """
+    spec = override(DIVISOR_SPEC, **{'objective.expression': 'sum(x * d, over=f)'})
+    data = {'f': ['a', 'b'], 'd': pd.Series([2.0, float('inf')], index=pd.Index(['a', 'b'], name='f'))}
+    with pytest.raises(DataError, match=r'objective: 1 value\(s\) are not finite: a divisor is zero there'):
+        sps.build(spec, data).close()
+
+
+@pytest.mark.parametrize(
+    ('patch', 'data'),
+    [
+        pytest.param({**WITH_H, 'constraints.c.expression': 'x <= h / d'}, ZERO_D | H, id='a-constant-over-zero'),
+        pytest.param({**WITH_H, 'constraints.c.expression': 'x <= h / d'}, ZERO_D | H_ZERO_AT_B, id='zero-over-zero'),
+        pytest.param({**SCALAR_R, 'constraints.c.expression': 'x <= 10 / r'}, ZERO_R, id='no-dimensions'),
+    ],
+)
+def test_a_zero_divisor_on_a_constant_side_is_refused_on_both_lanes(patch, data):
+    """`h / 0` is infinite and `0 / 0` is NaN; neither is a number the row can hold (#1892)."""
+    message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), data, match='value\\(s\\) are not finite')
+    assert message.startswith("constraint 'c'"), 'the refusal names the constraint'
+
+
+def test_an_infinite_value_on_a_constant_side_is_a_limit_that_never_binds():
+    """`x <= inf` holds for every `x`: data such as PyPSA's `e_sum_max` holds `inf` to mean "no limit".
+
+    Each lane is solved on its own rather than through `differential`: the
+    linopy lane drops a row whose limit is infinite and the relational lane
+    keeps it, so their row counts differ while their answers agree.
+    """
+    spec = override(DIVISOR_SPEC, **WITH_H, **{'constraints.c.expression': 'x <= h'})
+    data = ZERO_D | {'h': pd.Series([5.0, float('inf')], index=pd.Index(['a', 'b'], name='f'))}
+    with sps.solve(spec, data) as result:
+        assert result.objective == pytest.approx(105.0, rel=RTOL), 'the infinite row never binds on the relational lane'
+    linopy_model = specsolve_linopy.build(schema_of(spec).expand(), data)
+    linopy_model.solve(solver_name='highs', output_flag=False)
+    assert float(linopy_model.objective.value) == pytest.approx(105.0, rel=RTOL), 'nor on the linopy lane'
+
+
+def test_a_zero_divisor_in_the_objective_constant_is_refused():
+    """`sum(x) + 5 / r` would report an infinite objective. The linopy lane refuses any objective constant (#894)."""
+    spec = override(DIVISOR_SPEC, **SCALAR_R, **{'objective.expression': 'sum(x, over=f) + 5 / r'})
+    with pytest.raises(DataError, match=r"objective: 1 value\(s\) are not finite where the model divides by 'r'"):
+        sps.build(spec, ZERO_R).close()
+
+
+@pytest.mark.parametrize(
+    'patch',
+    [
+        pytest.param({'constraints.c.where': 'd != 0'}, id='mask-the-row'),
+        pytest.param({'variables.x.where': 'd != 0'}, id='mask-the-variable'),
+    ],
+)
+def test_a_zero_divisor_has_the_escape_a_sparse_one_has(patch):
+    """The refusal is keyed to the quotients built, so a mask that removes the zero lifts it."""
+    with differential(override(DIVISOR_SPEC, **patch), ZERO_D, lp=True) as run:
+        assert run.oracle > 0, 'the masked model builds and solves on both lanes'
 
 
 #: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent

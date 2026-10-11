@@ -84,13 +84,19 @@ Each entry says what the thing is, then the module it lives in.
 
 **Coverage**
 : Whether data is there where a declaration reads it. A divisor and a
-  constant piece are refused at the last moment the gap can still be seen
+  constant piece are refused at the last moment the gap can still be seen,
+  and a value that is not finite at the same moment
   (`relational/engine/coverage.py`).
 
 **Collect engine**
-: Which polars engine materialises a frame: the streaming one where this
-  polars has it, the in-memory one otherwise. `collect_engine()` is not the
-  `Engine` (`relational/collect.py`).
+: Which polars engine materialises a frame: polars' own `auto` choice where
+  this polars has the streaming engine, the in-memory one otherwise. Inside
+  `with in_memory():` every collect names the in-memory engine: reading and
+  attaching the sources, the variable bounds, and the whole build of a model
+  whose columns and rows each reach at most `IN_MEMORY_REACH`
+  (`relational/engine/assembly.py`). `collected()` is the one way a frame is
+  collected, on that engine and with polars' join reordering off.
+  `collect_engine()` is not the `Engine` (`relational/collect.py`).
 
 ## Sinks
 
@@ -111,40 +117,55 @@ Each entry says what the thing is, then the module it lives in.
   one does not (`relational/sinks/capabilities.py`).
 
 **Structure digest**
-: A digest of everything a re-solve may not change: the counts, the matrix,
-  each row's comparison, each column's type and the sets. A loaded solver
-  keeps its model only while this digest stays the same. The **contents
-  digest** adds the numbers, and says whether a saved answer belongs to a
-  rebuilt model (`relational/sinks/handoff.py`).
+: A digest of everything a re-solve may not change: the counts, which column
+  each matrix entry sits in, each row's comparison, each column's type and the
+  sets. A loaded solver keeps its model only while this digest stays the same
+  and every matrix coefficient is within 1e-12 relative of the one it holds
+  (`relational/sinks/handoff.py`).
 
 **Warm start**
-: A basis or an incumbent read out of one solve and set on the next. No
-  caller uses it yet ([#382](https://github.com/fluxopt/specsolve/issues/382);
+: What a solve starts from instead of from scratch, laid onto the build by
+  coordinate, so a model that gained or lost rows or columns takes it too: a
+  basis or values for an LP, values for a mixed-integer model. `solve(start=)` is its
+  caller (`relational/engine/readback.py`,
   `relational/sinks/solvers/base.py`).
 
 ## Answers on disk
 
 **Kind**
-: One of the three frames a solve answers with, `primal`, `dual` and
-  `expression`, named after the reader each comes back through. Each kind is
-  also the directory its frames are saved under. A saved result also holds
-  `activity/` (`relational/answer_layout.py`).
+: One of the frames an answer holds, named after the reader it comes back
+  through: `primal`, `dual` and `expression` always, and each output the solve
+  asked for with `outputs=`, such as `activity`. Each kind is also the
+  directory its frames are saved under (`relational/answer_layout.py`).
+
+**Output**
+: What an answer holds only on request, named in `outputs=`. Each carries
+  one kind, of its own name, except `basis`, which carries `variable_basis`
+  and `constraint_basis`. `OUTPUT_KINDS` is the one table: each kind, the
+  output that asks for it, and whether it holds a frame per variable or per
+  constraint. The readers, `kind=`, the fold, the spill,
+  the archive and its catalog all read it. `format.json` names the outputs an answer holds, so a reader tells "not
+  asked for" from "not defined", and a new output adds no `ANSWER_LAYOUT` bump
+  (`relational/answer_layout.py`).
 
 **Answer layout**
 : What a result and a sweep write: `<kind>/<name>.parquet`, the `Record` and
-  `Metrics` rows, `reasons.parquet` and the `format.json` stamp. `LAYOUT` is
-  its version, and a change to it raises the number
-  (`relational/answer_layout.py`).
+  `Metrics` rows, `reasons.parquet` and the `format.json` stamp.
+  `ANSWER_LAYOUT` is its version, and a change to it raises the number
+  (`relational/names.py`).
 
 **Archive layout**
 : What an archive holds: `spec.yaml`, `sources/`, `catalog.parquet`, the
-  answer layout under `answer/`, and `axis.json` for a sweep
-  (`archive_layout.py`). Reading an archive back is `archive.py`.
+  answer layout under `answer/`, `axis.json` for a sweep, and a `format.json`
+  stamp of its own (`archive_layout.py`). `INPUTS_LAYOUT` is the version of
+  `spec.yaml`, `sources/` and `axis.json`, and a change to any of them raises
+  it. Any other change, `catalog.parquet` included, raises
+  `ANSWER_LAYOUT`. Reading an archive back is `archive.py`.
 
 **Run stamp**
 : The `specsolve_run` column an archive adds to every table it holds. Names
   that start with `specsolve_` are reserved for columns like it
-  (`relational/answer_layout.py`).
+  (`relational/names.py`).
 
 ## Sweeps
 

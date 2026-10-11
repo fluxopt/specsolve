@@ -142,7 +142,7 @@ def test_every_named_row_holds_the_terms_the_built_row_holds(spec: Any, data: An
     """
     with sps.build(spec, data) as model:
         model.write(tmp_path / f'model{suffix}', names=True)
-        result = model.solve()
+        result = model.solve(outputs={'activity'})
         expected = {}
         for constraint, declared in model._program.constraints.items():
             built_at = result.activity(constraint).drop('value')
@@ -150,10 +150,15 @@ def test_every_named_row_holds_the_terms_the_built_row_holds(spec: Any, data: An
                 built = model.row(constraint, **coordinate)
                 label = ','.join(str(coordinate[d]) for d in declared.dims)
                 expected[f'{constraint}({label})'] = {
-                    f'{t["variable"]}({t["coordinate"].replace(", ", ",")})': t['coefficient']
+                    f'{t["variable"]}({_labels(t["coordinate"])})': t['coefficient']
                     for t in built.terms.iter_rows(named=True)
                 }
     assert _rows_by_name(tmp_path / f'model{suffix}') == expected, 'a row name labels another row, or its terms'
+
+
+def _labels(coordinate: str) -> str:
+    """``snapshot=1, generator=wind`` as a named file spells it, ``1,wind``."""
+    return ','.join(part.split('=', 1)[1] for part in coordinate.split(', ')) if coordinate else ''
 
 
 def test_a_quadratic_constraint_declared_first_keeps_its_names(tmp_path: Path) -> None:
