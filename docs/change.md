@@ -86,7 +86,7 @@ print(f'{after_rows.loads} loads, {after_rows.solves} solves')
 
 Two days cost twice one day. The model was loaded a second time: new
 snapshots add new columns, and the solver has to start again.
-[Warm-starting a re-solve](howto/warm-start.md#start-from-an-earlier-answer) starts the new solve from an earlier answer.
+[Making a loop of solves faster](howto/warm-start.md#start-from-an-earlier-answer) starts the new solve from an earlier answer.
 
 ## Next
 
