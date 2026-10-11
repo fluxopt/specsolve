@@ -20,7 +20,7 @@ nav:
   - Home: index.md
   - Tutorials:
       - Your first model: run.md
-      - Tables in, tables out: tables.md
+      - Your data: tables.md
       - Change a model: change.md
       - Sweep a model: sweep.md
   - How-to guides:

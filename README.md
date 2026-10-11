@@ -27,7 +27,7 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
 - **Tables in, tables out.** Pass any Arrow table, such as polars, pandas or
   DuckDB, or a parquet path. Results come back as tables, and an archive keeps
   the spec, its data and its results as parquet, ready for queries, plots or
-  BI. [Tables in, tables out →](https://specsolve.readthedocs.io/en/latest/tables/)
+  BI. [Your data →](https://specsolve.readthedocs.io/en/latest/tables/)
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same spec. Each window is
   checked against how the model couples before it runs. [Sweep a model →](https://specsolve.readthedocs.io/en/latest/sweep/)

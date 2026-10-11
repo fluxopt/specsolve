@@ -1,86 +1,83 @@
-# Tables in, tables out
+# Your data
 
-The dispatch model from [Your first model](run.md), fed from parquet files and
-read back as tables. The last two steps keep the solve as an **archive**
-([glossary](reference/glossary.md#the-chain)), a directory that holds the
-spec and parquet files, and query it.
+Attach the model from [Your first model](run.md) to data that comes in files,
+and keep what a solve produces. The model does not change. Only the data does.
 
-Every block on this page runs when the site is built, and what you see under it
-is what it printed on this commit. A block that raises fails the build. The
-files go to a temporary directory, `work`.
+Every block on this page runs from the `examples/` folder of the repository,
+where the model and the data are.
 
-```python exec="true" source="material-block" session="tables"
-import tempfile
-from pathlib import Path
+## The files
 
+The data is two CSV files in `examples/tutorial/data/`.
+[`generators.csv`](https://github.com/fluxopt/specsolve/blob/main/examples/tutorial/data/generators.csv)
+has one row for each generator:
+
+```text title="tutorial/data/generators.csv"
+--8<-- "examples/tutorial/data/generators.csv"
+```
+
+[`load.csv`](https://github.com/fluxopt/specsolve/blob/main/examples/tutorial/data/load.csv)
+has the load in each snapshot:
+
+```text title="tutorial/data/load.csv"
+--8<-- "examples/tutorial/data/load.csv"
+```
+
+`generators.csv` has two columns that `dispatch.yaml` does not use yet,
+`p_min` and `no_load_cost`. A later tutorial uses them. Real data often holds
+more than one model needs.
+
+## From files to sources
+
+Read both files with polars:
+
+```python exec="true" source="material-block" result="text" session="data" workdir="examples"
 import polars as pl
 
 import specsolve as sps
 
-SPEC = 'examples/dispatch.yaml'
-work = Path(tempfile.mkdtemp())
+generators = pl.read_csv('tutorial/data/generators.csv')
+load = pl.read_csv('tutorial/data/load.csv')
+print(generators)
 ```
 
-## 1. Tables in
+`dispatch.yaml` wants one table for each parameter, with a `value` column. You
+pick each one out of `generators` with `select`. `load.csv` already has the
+right shape. The labels of each dimension come from a column:
 
-Start from two tables: one row per generator, and the load over four
-snapshots. Write one parquet file per parameter, with the parameter's
-dimension columns and a `value` column:
-
-```python exec="true" source="material-block" result="text" session="tables"
-generators = pl.DataFrame(
-    {'generator': ['wind', 'solar', 'gas'], 'p_max': [80.0, 0.0, 200.0], 'cost': [10.0, 25.0, 50.0]}
-)
-load = pl.DataFrame({'snapshot': range(4), 'value': [60.0, 120.0, 180.0, 90.0]})
-
-generators.select('generator', value='p_max').write_parquet(work / 'p_max.parquet')
-generators.select('generator', value='cost').write_parquet(work / 'cost.parquet')
-load.write_parquet(work / 'load.parquet')
-
-print(pl.read_parquet(work / 'cost.parquet'))
-```
-
-`sources` names a table for each key the file declares
-([the data contract](reference/data.md)). A value is a parquet path or a table
-in memory. The `generator` labels come from the polars frame, and the
-`snapshot` labels from the column of that name in `load.parquet`:
-
-```python exec="true" source="material-block" result="text" session="tables"
+```python exec="true" source="material-block" session="data" workdir="examples"
 sources = {
-    'generator': generators,
-    'snapshot': work / 'load.parquet',
-    'p_max': work / 'p_max.parquet',
-    'cost': work / 'cost.parquet',
-    'load': work / 'load.parquet',
+    'generator': generators['generator'],
+    'snapshot': load['snapshot'],
+    'p_max': generators.select('generator', value='p_max'),
+    'cost': generators.select('generator', value='cost'),
+    'load': load,
 }
+```
 
-result = sps.solve(SPEC, sources)
+A source can also be a pandas frame or a parquet path.
+[The data contract](reference/data.md) lists every form, and what
+specsolve refuses.
+
+## Solve
+
+```python exec="true" source="material-block" result="text" session="data" workdir="examples"
+result = sps.solve('dispatch.yaml', sources)
 print(result.objective)
 ```
 
-## 2. Tables out
+The data is the same as in the first tutorial, so the cost is the same: 10500.
 
-[`primal`](reference/api.md#specsolve.types.Result.primal) gives the value of a variable
-as a polars table: one row per coordinate, keyed by the dimension labels, with
-a `value` column. Solar has no capacity, so `p` has no rows for it:
+## Work with the answer
 
-```python exec="true" source="material-block" result="text" session="tables"
-p = result.primal('p')
-print(p)
-```
+The answer is a polars table, so you continue with polars. Join the output of
+each generator to its cost, and you get what each generator costs over the
+four snapshots:
 
-`dual` gives the price of each constraint row in the same shape:
-
-```python exec="true" source="material-block" result="text" session="tables"
-print(result.dual('power_balance'))
-```
-
-The result is an ordinary table, so polars works on it directly. The cost per
-generator is a join and a sum:
-
-```python exec="true" source="material-block" result="text" session="tables"
+```python exec="true" source="material-block" result="text" session="data" workdir="examples"
 spend = (
-    p.join(generators, on='generator')
+    result.primal('p')
+    .join(generators, on='generator')
     .group_by('generator')
     .agg(spend=(pl.col('value') * pl.col('cost')).sum())
     .sort('generator')
@@ -88,68 +85,41 @@ spend = (
 print(spend)
 ```
 
-The two rows add up to the objective.
+Gas costs 7500 and wind 3000. Together they make the objective.
 
-## 3. Archive
+## Keep the run
 
-`archive=` writes the spec, the sources and the answer to one directory
-([archiving a solve](howto/archiving.md)):
+`archive=` writes the spec, the sources and the answer to a folder. We write
+it to a temporary folder here:
 
-```python exec="true" source="material-block" result="text" session="tables"
-case = work / 'case'
-sps.solve(SPEC, sources, archive=case)
+```python exec="true" source="material-block" result="text" session="data" workdir="examples"
+import tempfile
+from pathlib import Path
 
-for file in sorted(case.rglob('*')):
-    if file.is_file():
-        print(file.relative_to(case))
+run = Path(tempfile.mkdtemp()) / 'first_run'
+sps.solve('dispatch.yaml', sources, archive=run)
+
+for file in sorted(run.rglob('*.parquet')):
+    print(file.relative_to(run))
 ```
 
-`spec.yaml` is the spec. `sources/` holds one parquet file per key, the table
-the solve read ([`sps.tidy`](reference/api.md#specsolve.tidy)).
-`catalog.parquet` says what each file holds.
-`answer/` holds the record of the solve,
-its metrics, and one parquet file per variable and constraint. The record is a
-table too:
+Every file is a parquet file. `sources/` holds each table as the solve read
+it, and `answer/` holds the record of the solve and one file for each variable
+and constraint.
 
-```python exec="true" source="material-block" result="text" session="tables"
-print(pl.read_parquet(case / 'answer' / 'record.parquet').select('specsolve_run', 'status', 'objective'))
+[`load_archive`](reference/api.md#specsolve.load_archive) reads the folder
+back. You get the answer without solving again:
+
+```python exec="true" source="material-block" result="text" session="data" workdir="examples"
+archived = sps.load_archive(run)
+print(archived.result.objective)
 ```
 
-[`load_archive`](reference/api.md#specsolve.load_archive) reads the directory
-back. The spec and the sources in it ask the same question again:
+[Archiving a solve](howto/archiving.md) shows how to zip an archive, and
+[Reading a directory of runs](howto/warehouse.md) how to query many of them
+as one table.
 
-```python exec="true" source="material-block" result="text" session="tables"
-archived = sps.load_archive(case)
-print(sps.solve(archived.spec, archived.sources).objective)
-```
+## Next
 
-## 4. Query the archive
-
-The archive is parquet on disk, so a query needs no specsolve. This scan
-joins the answer to the costs it was solved with, and gives the cost per
-generator of step 2:
-
-```python exec="true" source="material-block" result="text" session="tables"
-solved = pl.scan_parquet(case / 'answer' / 'primal' / 'p.parquet')
-costs = pl.scan_parquet(case / 'sources' / 'cost.parquet')
-
-query = (
-    solved.join(costs, on='generator', suffix='_cost')
-    .group_by('generator')
-    .agg(spend=(pl.col('value') * pl.col('value_cost')).sum())
-    .sort('generator')
-)
-print(query.collect())
-```
-
-A database that reads parquet runs the same query. The SQL for DuckDB is on
-[reading a directory of runs](howto/warehouse.md#query-it-from-a-database).
-
-## Where next
-
-| | |
-|---|---|
-| [Change a model](change.md) | the next tutorial: new numbers, more rows, new math |
-| [The data contract](reference/data.md) | what each key in `sources` accepts and refuses |
-| [Archiving a solve](howto/archiving.md) | zips, sweeps and archives too big to hold |
-| [Reading a directory of runs](howto/warehouse.md) | many archives as one table |
+You have attached your model to data from files, and kept the run. In
+[the next tutorial](change.md) you change the data and solve again.
