@@ -1,10 +1,11 @@
 # Examples
 
-Models somebody else solved first, solved again with specsolve to the same
-optimum. Each page shows the model, the same model as math, and the published
-answer it reaches.
+The published optima are models somebody else solved first, solved again
+with specsolve to the same optimum. The other models are this repository's
+own, and the test suite solves each one. Each page shows the model and the
+same model as math.
 
-## The models
+## Every model
 
 <!-- catalogue:begin -->
 ### Published optima
@@ -20,6 +21,18 @@ answer it reaches.
 | [Choosing the mode of transport](transport_modes.md) | Moving 180 tonnes of chemicals out of four depots, where a depot may reach a centre by rail *or* by road at different cost. |
 | [OSeMOSYS UTOPIA](osemosys_utopia.md) | What to build and how hard to run it, 1990–2010, to meet three end-use demands at least discounted cost. |
 | [Travelling salesman](tsp_mtz.md) | Visit every city once and come home, as cheaply as possible. The most famous problem in combinatorial optimisation, and the one most often assumed to be out of reach here. |
+
+### More models
+
+| | |
+|---|---|
+| [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
+| [storage](storage.md) | Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon. |
+| [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
+| [monthly budget](monthly_budget.md) | A cap on what each technology may generate in each calendar month, with the months read off the timestamps. |
+| [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths. |
+| [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. |
 
 ### PyPSA examples
 

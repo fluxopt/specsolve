@@ -289,7 +289,7 @@ shut-down it never visibly performs. That asymmetry is PyPSA's, and it is
 worth 50 here.
 
 Two `where` clauses on one constraint block say that the row differs at the
-boundary, the shape [storage](https://github.com/fluxopt/specsolve/blob/main/examples/storage.yaml) uses for its initial state of
+boundary, the shape [storage](storage.md) uses for its initial state of
 charge.
 
 ## What it costs

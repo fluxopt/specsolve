@@ -81,11 +81,11 @@ too. A MILP has no duals; those are the `·` rows.
 <!-- references:begin -->
 | port | optimum | `rtol` | duals | reference |
 |---|---|---|---|---|
-| `dispatch` | 10500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure |
+| [dispatch](../examples/dispatch.md) | 10500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure |
 | [facility_location](../examples/facility_location.md) | 932615.75 | 1e-09 | · | published by OR-Library (Beasley) for instance cap71 of the uncapacitated warehouse location set, in the file uncapopt: http://people.brunel.ac.uk/~mastjjb/jeb/orlib/uncapinfo.html |
 | [genx_piecewise_fuel](../examples/genx_piecewise_fuel.md) | 2341.8230753008093 | 1e-09 | · | published by GenX: asserted in test/test_piecewisefuel.jl as obj_true = 2341.82308 under genx_setup UCommit=2, CO2Cap=1, ParameterScale=1, and reproduced here by running GenX itself (julia 1.12.6, HiGHS) which reports 2341.8230753008093 |
-| `monthly_budget` | 9500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
-| `multi_period` | 10020.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
+| [monthly_budget](../examples/monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
+| [multi_period](../examples/multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
 | `piecewise` | 3850.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
 | `piecewise_conversion` | 5990.0 | 1e-06 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away |
@@ -115,11 +115,11 @@ too. A MILP has no duals; those are the `·` rows.
 | [pypsa_store](../examples/pypsa_store.md) | 7005.5025000000005 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_store.py |
 | [pypsa_transport](../examples/pypsa_transport.md) | 22000.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_transport.py |
 | [pypsa_unit_commitment](../examples/pypsa_unit_commitment.md) | 24900.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py |
-| `reserves` | 915.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure |
+| [reserves](../examples/reserves.md) | 915.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure |
 | [stigler_diet](../examples/stigler_diet.md) | 0.10866227820675685 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year[^stigler_diet] |
-| `storage` | 5650.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
+| [storage](../examples/storage.md) | 5650.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure |
 | [telephone_routing](../examples/telephone_routing.md) | 380.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS12.3.3 p. 182 — "380 out of the required 425 calls are routed"; problem and data in SS12.3, pp. 180-182 |
-| `transport` | 4400.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure |
+| [transport](../examples/transport.md) | 4400.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure |
 | [transport_dantzig](../examples/transport_dantzig.md) | 153.675 | 1e-09 | **✔** | published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3[^transport_dantzig] |
 | [transport_modes](../examples/transport_modes.md) | 1715.0 | 1e-09 | · | published by Gueret, Prins, Sevaux & Heipcke, Applications of Optimization with Xpress-MP (Dash Optimization, 2002) SS10.2.3 p. 143 — "The minimum cost is EUR 1,715k"; problem and data in SS10.2, p. 142 |
 | [transport_pwl](../examples/transport_pwl.md) | 8.786852757777865 | 1e-09 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective |
@@ -142,18 +142,18 @@ construct, or every combination.
 <!-- constructs:begin -->
 | model | verified | `sum` | `sum(by=)` | `at()` | `shift` | `shift(edge='wrap')` | `where` | `bounds` | `piecewise` | `sos` | MILP |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `dispatch` | **✔** 10500 | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
-| `monthly_budget` | **✔** 9500 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| `multi_period` | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
+| [dispatch](../examples/dispatch.md) | **✔** 10500 | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
+| [monthly_budget](../examples/monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
+| [multi_period](../examples/multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
 | `piecewise` | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
 | `piecewise_conversion` | **✔** 5990 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** | · |
 | `piecewise_lp` | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
 | `piecewise_ragged` | **✔** 426 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
-| `reserves` | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
-| `seasons` | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
+| [reserves](../examples/reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
+| [seasons](../examples/seasons.md) | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | `sos` | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | **✓** | · |
-| `storage` | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
-| `transport` | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
+| [storage](../examples/storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
+| [transport](../examples/transport.md) | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [facility_location](../examples/facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | · | **✓** | · | · | **✓** |
 | [genx_piecewise_fuel](../examples/genx_piecewise_fuel.md) | **✔** 2341.82 | **✓** | · | · | · | **✓** | **✓** | **✓** | · | · | · |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | **✔** 29446.9 | **✓** | · | · | · | · | · | **✓** | · | · | · |

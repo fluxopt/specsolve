@@ -5,7 +5,7 @@ parameter. The reference is [the data contract](../reference/data.md).
 
 ## The files you start from
 
-The instance for [dispatch](../run.md):
+The instance for [dispatch](../examples/dispatch.md):
 
 `examples/ports/data/dispatch/generators.csv`
 
@@ -69,7 +69,7 @@ sources = {'snapshot': load.index, 'generator': p_max.index, 'p_max': p_max, 'co
 
 Rename the index of a static attribute. `stack()` and `reset_index()` a wide
 time series. Here the load is mapped onto buses, the shape
-[transport](https://github.com/fluxopt/specsolve/blob/main/examples/transport.yaml) attaches:
+[transport](../examples/transport.md) attaches:
 
 ```python
 load = (

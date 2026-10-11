@@ -53,6 +53,14 @@ nav:
               - Choosing the mode of transport: examples/transport_modes.md
               - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
               - Travelling salesman: examples/tsp_mtz.md
+          - More models:
+              - dispatch: examples/dispatch.md
+              - storage: examples/storage.md
+              - transport: examples/transport.md
+              - monthly budget: examples/monthly_budget.md
+              - multi-period: examples/multi_period.md
+              - seasons: examples/seasons.md
+              - reserves: examples/reserves.md
   - About:
       - about/index.md
       - Coming from linopy: about/linopy.md

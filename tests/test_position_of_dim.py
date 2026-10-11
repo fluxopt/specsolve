@@ -10,6 +10,8 @@ differentially that the two orders agree.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 import pytest
 import yaml as pyyaml
@@ -373,6 +375,7 @@ def test_a_relation_over_another_dimension_carries_no_position():
 # ---------------------------------------------------------------------------
 
 SEASONS = EXAMPLES_DIR / 'seasons.yaml'
+SEASONS_PAGE = Path('docs/examples/seasons.md')
 
 
 def _seasons_sources():
@@ -393,7 +396,7 @@ def _seasons_sources():
 
 
 def test_the_seasons_page_number():
-    """The optimum of the seasons model, and the trajectory behind it.
+    """The optimum `docs/examples/seasons.md` quotes, and the trajectory behind it.
 
     Summer is what the numbers are for: it opens holding 6 and sells that at the
     price-4 snapshot *before* its own inflow arrives, which only a cycle closed
@@ -408,6 +411,8 @@ def test_the_seasons_page_number():
     assert held[4] == pytest.approx(0.0), 'and winter closes where it opened, handing summer nothing'
     assert released[5] == pytest.approx(6.0), 'summer sells a snapshot before its inflow arrives'
     assert held[7] == pytest.approx(6.0), 'and closes holding what it opened with, three snapshots later'
+
+    assert '74.0' in SEASONS_PAGE.read_text(), 'the page quotes an optimum this test does not hold'
 
 
 #: One balance row whose edge the case under test swaps in. `release` carries an

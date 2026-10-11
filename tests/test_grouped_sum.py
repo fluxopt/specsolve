@@ -15,6 +15,7 @@ its snapshot index, so a test has to hold both.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -423,6 +424,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
 # ---------------------------------------------------------------------------
 
 MONTHLY_YAML = EXAMPLES_DIR / 'monthly_budget.yaml'
+MONTHLY_PAGE = Path('docs/examples/monthly_budget.md')
 
 
 @pytest.fixture
@@ -523,6 +525,23 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     )
     with pytest.raises(DataError, match=r"relation 'month_of' has value\(s\) in 'month' that are not 'month' labels"):
         sps.solve(MONTHLY_YAML, {**sources, 'month_of': typo})
+
+
+def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
+    """The frame printed on the page is the frame these tests build.
+
+    `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
+    so a pasted *output* block is the one kind of doc claim nothing checks —
+    change the timestamps here and the page would keep printing the old ones.
+    Defaults are restored while formatting, so a contributor's `POLARS_FMT_*`
+    environment cannot fail this.
+    """
+    month_of, _sources = monthly
+    fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
+    printed = [block for block in fences if block.startswith('shape: (')]
+    assert len(printed) == 1, 'the page prints exactly one frame'
+    with pl.Config(restore_defaults=True):
+        assert printed[0].rstrip('\n') == str(month_of)
 
 
 #: Every load stands, so the `otherwise` region of `demand` holds no member

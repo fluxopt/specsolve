@@ -247,5 +247,5 @@ enough.** A per-end variable or bound (a heat-offtake cap on the CHP's heat
 port alone), a value pulled through an end's bus with `at(..., by=…)`, or a
 link touching the same bus twice all need the ends as a dimension with leg
 relations. A parameter holds one value per `(link, bus)` pair and gives the pair
-no identity. [Reserves](https://github.com/fluxopt/specsolve/blob/main/examples/reserves.yaml) proves that other idiom with its
+no identity. [Reserves](reserves.md) proves that other idiom with its
 three-legged offers.
