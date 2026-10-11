@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
 - docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
 - docs(benchmarks): the published benchmarks are re-measured with the Gurobi matrix floor back below specsolve ([#1952](https://github.com/fluxopt/specsolve/pull/1952))
 - docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
