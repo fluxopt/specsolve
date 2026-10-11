@@ -15,7 +15,7 @@ and code from 0.8.0 work as before.
   slower or builds a different model. Up to 250,000 columns and rows,
   specsolve picks polars' in-memory engine by itself.
 - **Faster than linopy at every size we publish.** Build and hand-off to the
-  solver: a median 1.5× at 10k variables, 2.2× at 1M and 10M.
+  solver: a median 1.4× at 10k variables, 2.2× at 1M and 10M.
 - **Gurobi loads a model in a sixth to a third of the time.** With quadratic
   constraints over 1M columns, it loads 70× faster.
 - **Warm re-solves on HiGHS send only what changed.** At 1M columns the
@@ -28,7 +28,8 @@ and code from 0.8.0 work as before.
   crashed.
 
 The benchmark page is re-measured for this release, and `storage` and
-`transport` are on it again ([#1950](https://github.com/fluxopt/specsolve/pull/1950)).
+`transport` are on it again ([#1950](https://github.com/fluxopt/specsolve/pull/1950),
+[#1952](https://github.com/fluxopt/specsolve/pull/1952)).
 
 Building and solving:
 
@@ -60,6 +61,7 @@ Docs and benchmarks:
 - docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
 - docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
 - docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
+- docs(benchmarks): the published benchmarks are re-measured with the Gurobi matrix floor back below specsolve ([#1952](https://github.com/fluxopt/specsolve/pull/1952))
 
 ## 0.8.0 (2026-10-09)
 

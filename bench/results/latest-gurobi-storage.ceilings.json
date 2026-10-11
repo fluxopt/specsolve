@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 2.24 GB on storage/m, so the next rung projects to 44.8 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 2.23 GB on storage/m, so the next rung projects to 44.6 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 5.33 s on storage/m, so the next rung projects to 53.3 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 5.51 s on storage/m, so the next rung projects to 55.1 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -45,7 +45,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve-in-memory took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve-in-memory took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -57,7 +57,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -69,7 +69,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -81,7 +81,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "gurobipy-loop took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "gurobipy-loop took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -93,6 +93,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "gurobipy-matrix took 5.72 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
+  "reason": "gurobipy-matrix took 5.71 GB on storage/xs, so the next rung projects to 114 GB \u2014 over the 16 GB budget"
  }
 ]

@@ -44,9 +44,12 @@ def _model(env: Any, dialect: str, case_name: str, tables: Mapping[str, Any]) ->
     """The model, however this dialect spells one.
 
     `gurobipy-loop` returns a `Model`. `gurobipy-matrix` returns the
-    solver-neutral `Lp`, pushed here into `addMVar` and `addMConstr`.
+    solver-neutral `Lp`, loaded here in one `loadModel` call, the fastest
+    bulk API gurobipy has and the one specsolve's own `Gurobi` loads through.
+    `loadModel` reads the matrix by column, so the CSR is transposed first.
     """
     import gurobipy as gp
+    import numpy as np
 
     from bench.models import formulation
 
@@ -54,10 +57,18 @@ def _model(env: Any, dialect: str, case_name: str, tables: Mapping[str, Any]) ->
     if dialect == 'gurobipy-loop':
         return build(env, tables)
     lp = build(tables)
-    model = gp.Model(env=env)
-    columns = model.addMVar(len(lp.obj), lb=lp.lower, ub=lp.upper, obj=lp.obj)
-    model.addMConstr(lp.matrix, columns, lp.senses, lp.rhs)
-    return model
+    matrix = lp.matrix.tocsc()
+    return gp.loadModel(
+        env=env,
+        numvars=len(lp.obj),
+        numconstrs=len(lp.rhs),
+        obj=lp.obj,
+        lb=lp.lower,
+        ub=lp.upper,
+        constr_csc=(matrix.data, matrix.indices, matrix.indptr),
+        sense=np.asarray(lp.senses, dtype='S1'),
+        rhs=lp.rhs,
+    )
 
 
 def _built(prepared: Prepared) -> tuple[Any, Any]:

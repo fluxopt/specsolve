@@ -42,7 +42,7 @@ whose fingerprint no longer describes it.
 The committed `results/latest-<sink>-<case>.json`, and a
 `latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
 the provenance of the tables `docs/about/benchmarks.md` publishes *today*:
-Published benchmark run 38132473910, on `d1d3797c`. It finished the size ladder
+Published benchmark run 38154932531, on `d0444a0b`. It finished the size ladder
 of all four cases on both sinks. The watchdog killed both width ladders above
 25 GB, at a rung that did not fit: `transport/w100` and `storage/w1000`, on both
 sinks, so no `-width.json` is committed and the page has no width table until a
@@ -274,7 +274,7 @@ against each other. Publish a whole ladder or none of it.
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
-| `gurobipy-matrix` | — | — | `addMVar` + `addMConstr` over a scipy CSR, then `update()` | — |
+| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC | — |
 | `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
@@ -297,8 +297,8 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`addMVar`/`addMConstr` seam our own `Gurobi` constructor does, so what separates it
-from `specsolve` is only where the matrix came from.
+`loadModel` seam our own `Gurobi` constructor does, so what separates it from
+`specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
 expected answer and not the point: it is the baseline most readers already
