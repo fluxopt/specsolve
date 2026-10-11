@@ -69,7 +69,6 @@ class _Settings(BaseModel):
     axis: dict[str, dict[str, object]] | None = None
     carry: dict[str, str] | None = None
     key_name: str | None = None
-    keep: Literal['nothing', 'solver', 'progress'] | None = None
     keep_windows: bool | None = None
     workers: PositiveInt | None = None
 

@@ -32,7 +32,6 @@ as every run's default, or in a run.
 | `axis` | one axis class and its arguments, [below](#axis) | `solve_over` |
 | `carry` | `{parameter: variable}` | `solve_over` |
 | `key_name` | the name of the slice column | `solve_over` |
-| `keep` | `solver`, `progress` or `nothing` | `solve_over` |
 | `keep_windows` | `true` or `false` | `solve_over` |
 
 The keys the manifest owns:

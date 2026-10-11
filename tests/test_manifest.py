@@ -147,7 +147,6 @@ def test_arguments_are_exactly_the_call_written_by_hand(data: Path) -> None:
           scenarios:
             sources: [data/p_max.parquet, data/cost.parquet, data/generator.parquet, data/snapshot.csv, load.parquet]
             axis: {EachCoordinate: {dim: scenario}}
-            keep: nothing
         """,
     )
     run = sps.load_manifest(path).runs['scenarios']
@@ -162,7 +161,6 @@ def test_arguments_are_exactly_the_call_written_by_hand(data: Path) -> None:
         },
         'axis': sps.EachCoordinate('scenario'),
         'archive': str(data / 'runs' / 'scenarios'),
-        'keep': 'nothing',
     }, 'the arguments are the keyword arguments of solve_over, and nothing else'
     assert pl.read_csv(data / 'data' / 'snapshot.csv').equals(snapshot)
     assert load == data / 'load.parquet'
@@ -175,7 +173,6 @@ def test_arguments_are_exactly_the_call_written_by_hand(data: Path) -> None:
             'load': data / 'load.parquet',
         },
         sps.EachCoordinate('scenario'),
-        keep='nothing',
     )
     from_the_manifest = run.solve(archive=None)
     assert from_the_manifest.record['objective'].to_list() == by_hand.record['objective'].to_list()
@@ -333,7 +330,7 @@ def test_every_manifest_key_is_an_argument_of_solve_solve_over_or_the_manifests_
     keys = set(RUN_KEYS) | set(TOP_KEYS)
     assert not keys - verbs - set(OWN_KEYS), 'every key a verb does not take is one of the manifest-own keys'
     assert set(OWN_KEYS) <= keys, 'every manifest-own key is a key of the file'
-    assert {'axis', 'carry', 'key_name', 'keep', 'keep_windows', 'executor'} <= SWEEP_ONLY, (
+    assert {'axis', 'carry', 'key_name', 'keep_windows', 'executor'} <= SWEEP_ONLY, (
         'what only solve_over takes is read off the two signatures'
     )
 
