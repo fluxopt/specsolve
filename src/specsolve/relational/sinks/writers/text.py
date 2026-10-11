@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import IO
 
 import polars as pl
 
-__all__ = ['append_lines', 'chunk_key', 'digits', 'number']
+__all__ = ['NUMBERED', 'Names', 'append_lines', 'chunk_key', 'digits', 'number']
+
+
+@dataclass(frozen=True)
+class Names:
+    """What a file calls each column and row.
+
+    ``None`` numbers them, ``x7`` and ``c3``. A series is indexed by the
+    solver's own column or row index, so a writer looks a name up rather than
+    joining for it.
+    """
+
+    columns: pl.Series | None = None
+    rows: pl.Series | None = None
+
+    def column(self, col: pl.Expr) -> pl.Expr:
+        """The name of the column *col* indexes."""
+        return _named(self.columns, 'x', col)
+
+    def row(self, row: pl.Expr) -> pl.Expr:
+        """The name of the row *row* indexes."""
+        return _named(self.rows, 'c', row)
+
+
+#: The names a file carries unless the caller asks for the declared ones.
+NUMBERED = Names()
+
+
+def _named(names: pl.Series | None, prefix: str, index: pl.Expr) -> pl.Expr:
+    if names is None:
+        return pl.concat_str(pl.lit(prefix), digits(index))
+    return pl.lit(names).gather(index)
 
 
 def append_lines(frame: pl.LazyFrame, f: IO[bytes]) -> None:

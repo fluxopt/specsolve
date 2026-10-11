@@ -35,6 +35,7 @@ from specsolve.relational.engine.scope import Scope
 from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, Diagnostics, Result
 from specsolve.relational.sinks.solvers.base import Basis
+from specsolve.relational.sinks.writers.text import NUMBERED
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -161,21 +162,24 @@ class Engine:
             raise SpecsolveError(_no_built_model(f"to read '{name}' out of"))
         return readback.row(self._built, name, coordinate)
 
-    def write(self, path: str | Path) -> None:
+    def write(self, path: str | Path, *, names: bool = False) -> None:
         """Stream the built model to *path*, in the format its suffix names.
+
+        See [`write`][specsolve.api.Model.write] for *names*.
 
         Raises:
             ValueError: A suffix nothing writes.
-            SpecsolveError: A construct this format cannot spell.
+            SpecsolveError: A construct this format cannot spell, or two
+                coordinates that write as one name.
         """
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
         self.check(suffix)
         with _clocked(self._seconds, 'write'):
-            chosen.write(self._model.handoff, path)
+            chosen.write(self._model.handoff, path, readback.file_names(self._model) if names else NUMBERED)
 
-    def check(self, sink: str) -> None:
+    def check(self, sink: str, *, names: bool = False) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
         Read off the hand-off, so a square the data prices at zero or an
@@ -185,10 +189,16 @@ class Engine:
 
         Raises:
             SpecsolveError: A construct the sink cannot take, naming it and the
-                sinks that do; or a name belonging to no sink.
+                sinks that do; a name belonging to no sink; *names* for a sink
+                that writes no file; or, with *names*, two coordinates that
+                write as one name.
         """
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
+        if names and sink.lower() not in sinks.WRITERS:
+            raise SpecsolveError(f'names= is read by a written file ({", ".join(sinks.WRITERS)}), not by {sink!r}.')
+        if names:
+            readback.file_names(self._model)
 
     def _hand_off(
         self, solver_name: str, solver_options: Mapping[str, object] | None, *, carry_on: bool = False
