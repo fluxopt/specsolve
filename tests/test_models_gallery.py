@@ -199,8 +199,12 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
     )
 
 
+#: A snippet marker, which another page includes the function by and the site never renders.
+_SNIPPET_MARKER = re.compile(r'^[ \t]*# --8<-- \[(?:start|end):\w+\]\n', re.MULTILINE)
+
+
 def _build_slice(reference: Path) -> str:
-    """The reference's ``build`` function, exactly as the file holds it.
+    """The reference's ``build`` function, exactly as the file holds it, snippet markers aside.
 
     The slice ends at the next top-level statement, so the run harness never
     reaches the page.
@@ -208,7 +212,7 @@ def _build_slice(reference: Path) -> str:
     body = reference.read_text()
     body = body[body.index('def build') :]
     end = min(i for i in (body.find('\n\n\ndef '), body.find('\n\n\nif ')) if i != -1)
-    return body[:end].rstrip() + '\n'
+    return _SNIPPET_MARKER.sub('', body[:end]).rstrip() + '\n'
 
 
 def _call_snippet(name: str) -> str:
@@ -345,17 +349,14 @@ def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
 
 #: Every sentence that states how many ports there are, as ``(page, template)``.
 #: A third one is added here, not asserted separately.
-COUNTED_IN_PROSE = (
-    ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-    ('docs/examples/index.md', 'Two rows from {} ports'),
-)
+COUNTED_IN_PROSE = (('examples/README.md', '| `ports/` | {} models somebody else already solved'),)
 
 
 @pytest.mark.parametrize(('page', 'sentence'), COUNTED_IN_PROSE, ids=[page for page, _ in COUNTED_IN_PROSE])
 def test_the_prose_counts_the_ports_there_are(page: str, sentence: str) -> None:
     """The stated size of the port corpus is the size of the port corpus.
 
-    Written by hand in two files: two port PRs that each bump the count from
+    Written by hand: two port PRs that each bump the count from
     the same number merge without a conflict and leave the total one short.
     """
     expected = sentence.format(len(constructs.ports()))
