@@ -536,8 +536,8 @@ what an engine can exploit.
 
 **Measured, this sweep alone does not show it** — at a 1.2M coordinate product
 a dense array over it is ~10 MB and the fixed cost of the process dominates.
-`sector` runs the same sparsity at a 12M product and the effect is plain. See
-[docs/about/benchmarks.md](../docs/about/benchmarks.md#the-density-sweep-and-a-claim-it-refuses).
+`sector` runs the same sparsity at a 12M product. No published run has taken
+either sweep yet ([not measured yet](../docs/about/benchmarks.md#not-measured-yet)).
 
 `Shape.density` (technologies per node: 12 / 6 / 3 / 1) is swept at one model
 size, because sweeping size and density together leaves no way to tell one
