@@ -19,9 +19,10 @@ Each case stresses a different SQL shape:
                with its model YAML generated per rung (``_declarations_spec``).
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
-``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``): a binary
-               variable, a row mask on a relation's label and a sum through a
-               relation, over three dimensions, the first counting snapshots.
+``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``) over
+               ``(snapshot, node, tech)``: a binary ``u`` that switches
+               dispatch ``p``, a row mask on a relation's label, and a sum
+               through a relation into regions.
 
 A rung label counts variables per snapshot across all of a case's
 declarations. ``nominal_variables`` is the full coordinate product; what
@@ -589,12 +590,16 @@ def _milp_spec(shape: Shape) -> str:
 
     from bench.ab.grid import SHAPES, spec
 
+    class Plain(yaml.SafeDumper):
+        def ignore_aliases(self, data: object) -> bool:
+            return True
+
     del shape
-    return yaml.safe_dump(spec(SHAPES['milp']), sort_keys=False)
+    return yaml.dump(spec(SHAPES['milp']), Dumper=Plain, sort_keys=False)
 
 
 def _milp_data(shape: Shape, dest: Path) -> dict[str, str]:
-    """Parquet for one rung of ``milp``: the grid's tables, ``snapshot`` labels on its first dimension."""
+    """Parquet for one rung of ``milp``: the grid's tables at this rung's snapshot count."""
     from bench.ab.grid import SHAPES, per_label, tables
 
     milp = SHAPES['milp']

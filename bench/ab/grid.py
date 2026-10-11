@@ -5,9 +5,9 @@ back slower names the assumption that broke. ``WORST`` moves every axis at once.
 The ladder's own cases at two sizes stand beside them, so the grid is checked
 against the models the benchmark page publishes.
 
-The main constraint is ``x0 + x1 + … >= demand`` over every dimension, with
+The main constraint is ``p + u + … >= demand`` over every dimension, with
 each variable bounded below by 0, and the objective is a positive cost on every
-variable. Every term ``x0`` keeps its coordinate under every mask, so every row
+variable. Every term ``p`` keeps its coordinate under every mask, so every row
 holds a variable and every cell solves.
 """
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The labels of every dimension past the first; the first takes the size.
-OTHER_DIMS = {'d1': 4, 'd2': 3}
+OTHER_DIMS = {'node': 4, 'tech': 3}
 
 #: Total columns of the model at each size. ``below`` and ``above`` straddle 250,000 columns.
 SIZES = {'tiny': 24, 's': 24_000, 'below': 240_000, 'above': 260_000, 'l': 1_200_000}
@@ -47,7 +47,7 @@ class Shape:
     #: Whether the main constraint adds a variable over the first dimension only.
     broadcast: bool = False
     #: Which rows or coordinates a ``where`` removes: on the main constraint (all, half, 1%, or by a relation's
-    #: label), on ``x1`` (half, or where a sparse parameter has a row), or half on both.
+    #: label), on ``u`` (half, or where a sparse parameter has a row), or half on both.
     mask: Literal[
         'none',
         'constraint-all',
@@ -66,16 +66,18 @@ class Shape:
     labels: Literal['int', 'str'] = 'int'
     #: What bounds the variables from above: nothing, a literal, a table over every dimension, or over the first.
     bounds: Literal['none', 'scalar', 'every', 'first'] = 'every'
-    #: Whether the main constraint adds a wrapped shift of ``x0`` along the first dimension.
+    #: Whether the main constraint adds a wrapped shift of ``p`` along the first dimension.
     shift: bool = False
-    #: Whether a second constraint is quadratic in ``x0``.
+    #: Whether a second constraint is quadratic in ``p``.
     quadratic: bool = False
-    #: The domain of ``x1``.
+    #: The domain of ``u``.
     domain: Literal['continuous', 'binary', 'integer'] = 'continuous'
-    #: Whether a constraint sums ``x0`` through a relation into a coarser dimension.
+    #: Whether a constraint sums ``p`` through a relation into a coarser dimension.
     grouped: bool = False
-    #: Whether a constraint over all dimensions but the last sums ``x0`` along it.
+    #: Whether a constraint over all dimensions but the last sums ``p`` along it.
     aggregate: bool = False
+    #: Whether ``p`` runs only where the binary ``u`` is on: ``p <= ub * u``. It takes ``domain='binary'``.
+    gated: bool = False
 
 
 BASELINE = Shape()
@@ -93,6 +95,7 @@ WORST = Shape(
     domain='binary',
     grouped=True,
     aggregate=True,
+    gated=True,
 )
 
 #: Every shape the grid times, by name: the baseline, each axis moved alone, and every axis moved at once.
@@ -123,7 +126,8 @@ SHAPES: dict[str, Shape] = {
     'domain-integer': replace(BASELINE, domain='integer'),
     'grouped': replace(BASELINE, grouped=True),
     'aggregate': replace(BASELINE, aggregate=True),
-    'milp': replace(BASELINE, dims=3, domain='binary', grouped=True, mask='constraint-relation'),
+    'domain-binary-gated': replace(BASELINE, domain='binary', gated=True),
+    'milp': replace(BASELINE, dims=3, domain='binary', gated=True, grouped=True, mask='constraint-relation'),
     'worst': WORST,
 }
 
@@ -194,7 +198,7 @@ def per_label(shape: Shape) -> int:
 
 
 def _dims(shape: Shape) -> list[str]:
-    return ['d0', *list(OTHER_DIMS)[: shape.dims - 1]]
+    return ['snapshot', *list(OTHER_DIMS)[: shape.dims - 1]]
 
 
 def spec(shape: Shape) -> dict:
@@ -203,33 +207,33 @@ def spec(shape: Shape) -> dict:
     parameters: dict[str, dict] = {'demand': {'dims': dims}, 'cost': {'dims': dims}}
     upper: object | None = {'none': None, 'scalar': 10, 'every': 'ub', 'first': 'ub'}[shape.bounds]
     if upper == 'ub':
-        parameters['ub'] = {'dims': dims if shape.bounds == 'every' else ['d0']}
+        parameters['ub'] = {'dims': dims if shape.bounds == 'every' else ['snapshot']}
     bounds = {'lower': 0} if upper is None else {'lower': 0, 'upper': upper}
 
-    names = [f'x{i}' for i in range(shape.terms)]
+    names = ['p', 'u', 'p_2', 'p_3'][: shape.terms]
     variables: dict[str, dict] = {v: {'dims': dims, 'bounds': dict(bounds)} for v in names}
     relations: dict[str, dict] = {}
     extra: dict[str, dict] = {}
     if shape.terms > 1:
         if shape.mask in ('variable-half', 'both'):
-            parameters['gate'] = {'dims': dims, 'dtype': 'bool'}
-            variables['x1']['where'] = 'gate'
+            parameters['built'] = {'dims': dims, 'dtype': 'bool'}
+            variables['u']['where'] = 'built'
         elif shape.mask == 'variable-presence':
             parameters['avail'] = {'dims': dims}
-            variables['x1']['where'] = 'avail'
+            variables['u']['where'] = 'avail'
         if shape.domain == 'binary':
-            variables['x1'] = {k: v for k, v in variables['x1'].items() if k != 'bounds'} | {'domain': 'binary'}
+            variables['u'] = {k: v for k, v in variables['u'].items() if k != 'bounds'} | {'domain': 'binary'}
         elif shape.domain == 'integer':
-            variables['x1']['domain'] = 'integer'
+            variables['u']['domain'] = 'integer'
 
     lhs = ' + '.join(names)
     objective = ' + '.join(f'sum({v} * cost)' for v in names)
     if shape.broadcast:
-        variables['y'] = {'dims': ['d0'], 'bounds': {'lower': 0}}
-        lhs += ' + y'
-        objective += ' + sum(y)'
+        variables['imports'] = {'dims': ['snapshot'], 'bounds': {'lower': 0}}
+        lhs += ' + imports'
+        objective += ' + sum(imports)'
     if shape.shift:
-        lhs += " - 0.5 * shift(x0, along=d0, offset=1, edge='wrap')"
+        lhs += " - 0.5 * shift(p, along=snapshot, offset=1, edge='wrap')"
     constraint: dict = {'dims': dims, 'expression': f'{lhs} >= demand'}
     if shape.mask == 'constraint-all':
         constraint['where'] = 'demand >= 0'
@@ -238,24 +242,28 @@ def spec(shape: Shape) -> dict:
     elif shape.mask == 'constraint-sparse':
         constraint['where'] = 'demand >= 0.99'
     elif shape.mask == 'constraint-relation':
-        extra['kind'] = {'dtype': 'str'}
-        relations['kind_of'] = {'key': 'd0', 'values': 'kind'}
-        constraint['where'] = 'kind_of == a'
+        extra['status'] = {'dtype': 'str'}
+        relations['status_of'] = {'key': 'snapshot', 'values': 'status'}
+        constraint['where'] = 'status_of == active'
     constraints = {'main': constraint}
     if shape.quadratic:
-        constraints['curved'] = {'dims': dims, 'expression': 'x0 * x0 + x0 <= 200'}
+        constraints['curved'] = {'dims': dims, 'expression': 'p * p + p <= 200'}
     if shape.grouped:
-        extra['group'] = {'dtype': 'str'}
-        relations['group_of'] = {'key': 'd0', 'values': 'group'}
-        constraints['pooled'] = {
-            'dims': ['group', *dims[1:]],
-            'expression': 'sum(x0, by=group_of, over=d0, into=group) <= 1000000',
+        extra['region'] = {'dtype': 'str'}
+        relations['region_of'] = {'key': 'snapshot', 'values': 'region'}
+        constraints['regional'] = {
+            'dims': ['region', *dims[1:]],
+            'expression': 'sum(p, by=region_of, over=snapshot, into=region) <= 1000000',
         }
+    if shape.gated and shape.terms > 1:
+        cap = 'ub' if 'ub' in parameters else upper if upper is not None else 10
+        constraints['commitment'] = {'dims': dims, 'expression': f'p <= {cap} * u'}
     if shape.aggregate:
-        constraints['total'] = {'dims': dims[:-1], 'expression': f'sum(x0, over={dims[-1]}) >= 0'}
+        constraints['total'] = {'dims': dims[:-1], 'expression': f'sum(p, over={dims[-1]}) >= 0'}
 
     return {
-        'dimensions': {d: {'dtype': 'int' if d == 'd0' and shape.labels == 'int' else 'str'} for d in dims} | extra,
+        'dimensions': {d: {'dtype': 'int' if d == 'snapshot' and shape.labels == 'int' else 'str'} for d in dims}
+        | extra,
         'relations': relations,
         'parameters': parameters,
         'variables': variables,
@@ -272,11 +280,11 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
 
     first = np.arange(n0)
     index: dict[str, np.ndarray] = {
-        'd0': first if shape.labels == 'int' else np.array([f'l{i:07d}' for i in first]),
+        'snapshot': first if shape.labels == 'int' else np.array([f'l{i:07d}' for i in first]),
         **{d: np.array([f'{d}_{i}' for i in range(OTHER_DIMS[d])]) for d in dims[1:]},
     }
     if shape.index == 'shuffled':
-        index['d0'] = rng.permutation(index['d0'])
+        index['snapshot'] = rng.permutation(index['snapshot'])
     product = _product(dims, index)
     n = product.height
 
@@ -294,19 +302,23 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
     if shape.bounds == 'every':
         frames['ub'] = table(rng.uniform(5.0, 10.0, n))
     elif shape.bounds == 'first':
-        firsts = pl.DataFrame({'d0': index['d0']})
+        firsts = pl.DataFrame({'snapshot': index['snapshot']})
         frames['ub'] = table(rng.uniform(5.0, 10.0, firsts.height), firsts)
     if shape.terms > 1 and shape.mask in ('variable-half', 'both'):
-        frames['gate'] = table(rng.random(n) < 0.5)
+        frames['built'] = table(rng.random(n) < 0.5)
     if shape.terms > 1 and shape.mask == 'variable-presence':
         frames['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
     if shape.mask == 'constraint-relation':
-        frames['kind'] = pl.DataFrame({'kind': ['a', 'b']})
-        frames['kind_of'] = pl.DataFrame({'d0': index['d0'], 'kind': np.where(rng.random(n0) < 0.5, 'a', 'b')})
+        frames['status'] = pl.DataFrame({'status': ['active', 'idle']})
+        frames['status_of'] = pl.DataFrame(
+            {'snapshot': index['snapshot'], 'status': np.where(rng.random(n0) < 0.5, 'active', 'idle')}
+        )
     if shape.grouped:
-        groups = np.array([f'g{i:05d}' for i in range(max(1, n0 // 10))])
-        frames['group'] = pl.DataFrame({'group': groups})
-        frames['group_of'] = pl.DataFrame({'d0': index['d0'], 'group': groups[rng.integers(0, groups.size, n0)]})
+        regions = np.array([f'r{i:05d}' for i in range(max(1, n0 // 10))])
+        frames['region'] = pl.DataFrame({'region': regions})
+        frames['region_of'] = pl.DataFrame(
+            {'snapshot': index['snapshot'], 'region': regions[rng.integers(0, regions.size, n0)]}
+        )
     return frames
 
 
