@@ -800,8 +800,8 @@ freezes every version it runs on, git commits included:
 uv run --locked bench/reproduce.py
 ```
 
-**Why it exists.** `pixi.lock` is not committed, and two of the libraries here
-install from git — specsolve itself, and linopy from `master`, a branch that moves.
+**Why it exists.** `pixi.lock` is not committed, and specsolve itself installs
+from git.
 Before the lock, "the versions that produced this number" existed only inside a
 results file, after the fact, in a form nobody could install. `--locked` refuses
 to run if the resolution has drifted, `test_the_lock_pins_every_library...`

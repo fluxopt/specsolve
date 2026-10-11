@@ -2,7 +2,7 @@
 
 Per-generator cost curves of **different lengths**, each as long as its own data.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **426**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **426**, matched to `rtol=1e-09`.
 
 ## The problem
 

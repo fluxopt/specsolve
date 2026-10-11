@@ -2,7 +2,7 @@
 
 The cheapest way to eat for a year and stay alive. 77 foods, 9 nutrients, 1939 prices.
 
-> **✔ Verified against linopy 0.9.0** — objective **0.10866227820675685** dollars/day, matched to `rtol=1e-09`.
+> **✔ Verified against linopy 0.10.0** — objective **0.10866227820675685** dollars/day, matched to `rtol=1e-09`.
 > **Corroborated by Laderman (1947)**, who published **$39.69/year** for this data.
 
 Stigler posed it in 1945 and got $39.93 by trial and error, admitting there

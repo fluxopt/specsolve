@@ -2,7 +2,7 @@
 
 PyPSA linear optimal power flow at its smallest: transport model, linear marginal cost, no KVL.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **22000**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **22000**, matched to `rtol=1e-09`.
 
 ## The model
 
@@ -188,15 +188,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Link',
             links.index,
-            bus0=links['link_from'],
-            bus1=links['link_to'],
+            bus0=tables['link_from'].set_index('link')['bus'],
+            bus1=tables['link_to'].set_index('link')['bus'],
             p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,

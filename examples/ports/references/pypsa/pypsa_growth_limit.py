@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_growth_limit``: PyPSA's own carrier growth limit. See docs/examples/index.md.
 
@@ -61,7 +61,11 @@ def build(tables: dict[str, pd.DataFrame], growth_limit: bool = True) -> pypsa.N
     """
     n = pypsa.Network()
     snapshots: pd.DataFrame = tables['snapshot']
-    n.set_snapshots(pd.MultiIndex.from_arrays([snapshots['period_of'], snapshots['snapshot']]))
+    n.set_snapshots(
+        pd.MultiIndex.from_arrays(
+            [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+        )
+    )
     n.investment_periods = list(tables['period']['period'])
     n.investment_period_weightings['years'] = 10
     n.investment_period_weightings['objective'] = tables['period_weight'].set_index('period')['value']
@@ -81,9 +85,9 @@ def build(tables: dict[str, pd.DataFrame], growth_limit: bool = True) -> pypsa.N
         'Generator',
         generators.index,
         bus='hub',
-        carrier=generators['gen_carrier'],
+        carrier=tables['gen_carrier'].set_index('generator')['carrier'],
         p_nom_extendable=True,
-        build_year=generators['build_period'],
+        build_year=tables['build_period'].set_index('generator')['period'],
         lifetime=LIFETIME,
         p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
         marginal_cost=tables['opex'].set_index('generator')['value'],
