@@ -13,11 +13,13 @@ them to it.
 
 === "linopy"
 
+    <!-- fmt: off -->
     <!-- The fence includes the model from examples/ports/references/linopy/dispatch.py. -->
     <!-- doctest: skip -->
     ```python
     --8<-- "examples/ports/references/linopy/dispatch.py:model"
     ```
+    <!-- fmt: on -->
 
 === "specsolve"
 
