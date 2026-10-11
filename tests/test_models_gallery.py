@@ -330,9 +330,7 @@ def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
 
 #: Every sentence that states how many ports there are, as ``(page, template)``.
 #: A third one is added here, not asserted separately.
-COUNTED_IN_PROSE = (
-    ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-)
+COUNTED_IN_PROSE = (('examples/README.md', '| `ports/` | {} models somebody else already solved'),)
 
 
 @pytest.mark.parametrize(('page', 'sentence'), COUNTED_IN_PROSE, ids=[page for page, _ in COUNTED_IN_PROSE])
