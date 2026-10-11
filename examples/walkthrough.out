@@ -23,7 +23,7 @@ spec: examples/walkthrough.yaml
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
-[4] plan + data -> the model frames  (relational/engines/polars/engine.py)
+[4] plan + data -> the model frames  (relational/engine/engine.py)
     cols                   18 rows
     obj                     6 rows
     rows                    6 rows

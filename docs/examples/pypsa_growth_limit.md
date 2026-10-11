@@ -2,7 +2,7 @@
 
 A cap on new capacity per investment period, which grows with the period before it. The first `shift` in the corpus along an axis that is not time-of-day.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **47110.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **47110.0**, matched to `rtol=1e-09`.
 
 `Carrier.max_growth` caps how much of a technology may be *newly built* in one
 period. `max_relative_growth` adds a share of the previous period's new build to
@@ -271,7 +271,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         """
         n = pypsa.Network()
         snapshots: pd.DataFrame = tables['snapshot']
-        n.set_snapshots(pd.MultiIndex.from_arrays([snapshots['period_of'], snapshots['snapshot']]))
+        n.set_snapshots(
+            pd.MultiIndex.from_arrays(
+                [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+            )
+        )
         n.investment_periods = list(tables['period']['period'])
         n.investment_period_weightings['years'] = 10
         n.investment_period_weightings['objective'] = tables['period_weight'].set_index('period')['value']
@@ -291,9 +295,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
             'Generator',
             generators.index,
             bus='hub',
-            carrier=generators['gen_carrier'],
+            carrier=tables['gen_carrier'].set_index('generator')['carrier'],
             p_nom_extendable=True,
-            build_year=generators['build_period'],
+            build_year=tables['build_period'].set_index('generator')['period'],
             lifetime=LIFETIME,
             p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
             marginal_cost=tables['opex'].set_index('generator')['value'],

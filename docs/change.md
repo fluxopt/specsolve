@@ -128,7 +128,7 @@ typo = {
 
 try:
     sps.check(typo)
-except sps.LanguageError as exc:
+except sps.errors.LanguageError as exc:
     print(exc)
 ```
 

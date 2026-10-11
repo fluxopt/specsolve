@@ -2,7 +2,7 @@
 
 A shipment is the input shifted along time: withdrawn at one snapshot, delivered at another, derated on the way.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **4311.111111111111**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **4311.111111111111**, matched to `rtol=1e-09`.
 
 Every other `shift` in the corpus relates a variable to *itself*: a ramp limit,
 a state of charge. Here it relates two buses' balances. What `port_a` gives up
@@ -212,7 +212,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -221,8 +221,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Link',
             links.index,
-            bus0=links['link_from'],
-            bus1=links['link_to'],
+            bus0=tables['link_from'].set_index('link')['bus'],
+            bus1=tables['link_to'].set_index('link')['bus'],
             p_nom=tables['link_p_nom'].set_index('link')['value'],
             efficiency=tables['efficiency'].set_index('link')['value'],
             delay=tables['delay'].set_index('link')['value'],

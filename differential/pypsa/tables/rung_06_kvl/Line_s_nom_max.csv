@@ -1,6 +1,6 @@
-line,value
-ab,inf
-bc,inf
-ca,inf
-ca2,40.0
-ca3,40.0
+scenario,line,value
+base,ab,inf
+base,bc,inf
+base,ca,inf
+base,ca2,40.0
+base,ca3,40.0

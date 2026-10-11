@@ -9,9 +9,13 @@ Dims in columns, one metric per row; whatever reads it does its own pivot.
     latest,dispatch,l,highs,specsolve,emit,2000000,wall_seconds,0.83
 
 A missing number is an absent row, never a null, so every value column is
-complete. ``phase`` is ``emit`` for build-and-emit, ``window`` for a later
-window of a rolling horizon, and ``first`` and ``steady`` for the two halves of
-the rebuild loop; only here is ``window`` rendered.
+complete. ``phase`` is ``emit`` for build-and-emit, ``window`` and the other
+names in `results.WINDOWS` for a later window of a rolling horizon, ``sweep``,
+``read-frames`` and ``read-parquet``, ``fresh`` for a first window in a new
+process, and ``first`` and ``steady`` for the two halves of the rebuild loop;
+only here are the windows rendered. A timing carries the
+engine's own clocks beside its wall time — ``attach_seconds``,
+``build_seconds`` and the like, from the last round.
 
 The fingerprint (`--runs`) is long too: one row per fact.
 """
@@ -82,6 +86,10 @@ def measurements(records: Iterable[dict[str, Any]], run: str) -> Iterator[dict[s
                 if row is not None:
                     yield row
             yield from _counts(record, run, phase)
+            for name, seconds in (record.get('phase_seconds') or {}).items():
+                row = _row(record, run, phase, f'{name}_seconds', seconds)
+                if row is not None:
+                    yield row
         elif kind == 'loop':
             for field, phase in (('first_build_seconds', 'first'), ('steady_build_seconds', 'steady')):
                 row = _row(record, run, phase, 'wall_seconds', record.get(field))

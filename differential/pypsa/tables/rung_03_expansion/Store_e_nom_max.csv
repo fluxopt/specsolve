@@ -1,3 +1,3 @@
-store,value
-keg,inf
-tank,80.0
+scenario,store,value
+base,keg,inf
+base,tank,80.0

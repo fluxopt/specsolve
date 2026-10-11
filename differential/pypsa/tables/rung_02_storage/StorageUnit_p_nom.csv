@@ -1,3 +1,3 @@
-storage_unit,value
-battery,20.0
-reservoir,10.0
+scenario,storage_unit,value
+base,battery,20.0
+base,reservoir,10.0

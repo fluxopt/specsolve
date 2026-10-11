@@ -1,6 +1,6 @@
 """The LP sink renders doubles exactly, and writes the same bytes twice.
 
-The renderer is ``writers.base``'s, shared with the MPS sink. ``lp_file`` writes
+The renderer is ``writers.text``'s, shared with the MPS sink. ``lp_file`` writes
 numbers by casting them to string, which is only correct if the cast is
 shortest-*round-trip*; a golden file proves the bytes did not move, not that
 they are correct. Reproducibility (#109) is pinned here too: a golden file
@@ -19,8 +19,8 @@ import pytest
 
 import specsolve as sps
 from specsolve.relational.sinks.writers import lp_file
-from specsolve.relational.sinks.writers.base import number
 from specsolve.relational.sinks.writers.lp_file import _signed
+from specsolve.relational.sinks.writers.text import number
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
@@ -122,6 +122,62 @@ def test_written_bounds_are_bit_exact(tmp_path: Path) -> None:
     objective = text.split('obj:\n')[1].split('\ns.t.')[0]
     coefficients = sorted(float(line.split(' x')[0]) for line in objective.strip().splitlines())
     assert coefficients == sorted(cost)
+
+
+#: One row over three columns whose every number a naive formatter rounds:
+#: repeating binary fractions, a sum that is not its own literal, a negative
+#: coefficient, and magnitudes far from one that HiGHS still keeps as written.
+ROUND_TRIP_SPEC = {
+    'dimensions': {'g': {}},
+    'parameters': {'eff': {'dims': ['g']}, 'cap': {'dims': ['g']}, 'cost': {'dims': ['g']}, 'need': {'dims': []}},
+    'variables': {'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'dims': [], 'expression': 'sum(p * eff, over=g) >= need'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=g)'},
+}
+
+ROUND_TRIP_NUMBERS = {
+    'eff': [0.1, -1 / 3, 123456789.12345679],
+    'cap': [7 / 3, 0.1 + 0.2, 9.87654321e12],
+    'cost': [2 / 3, 0.3, 1e-7],
+    'need': [0.7],
+}
+
+
+@pytest.mark.parametrize('suffix', ['.lp', '.mps'])
+def test_a_solver_reads_back_every_number_the_file_holds(suffix: str, tmp_path: Path) -> None:
+    """End to end through a solver's own reader: costs, bounds, coefficients and the right-hand side.
+
+    The bounds test above parses the text itself; this one asks HiGHS, which is
+    what a published file is for, and covers the rows and the MPS sink too.
+    """
+    import highspy
+
+    g = ['a', 'b', 'c']
+    data = {
+        'g': g,
+        **{
+            name: pl.DataFrame({'g': g, 'value': values})
+            for name, values in ROUND_TRIP_NUMBERS.items()
+            if name != 'need'
+        },
+        'need': pl.DataFrame({'value': ROUND_TRIP_NUMBERS['need']}),
+    }
+    path = sps.write(ROUND_TRIP_SPEC, data, tmp_path / f'model{suffix}')
+    h = highspy.Highs()
+    h.setOptionValue('output_flag', False)
+    h.readModel(str(path))
+    lp = h.getLp()
+
+    read = {
+        'cost': list(lp.col_cost_),
+        'cap': list(lp.col_upper_),
+        'eff': list(lp.a_matrix_.value_),
+        'need': list(lp.row_lower_),
+    }
+    for name, expected in ROUND_TRIP_NUMBERS.items():
+        assert [_bits(x) for x in read[name]] == [_bits(x) for x in expected], (
+            f'{name} must read back bit for bit, in label order: {read[name]} != {expected}'
+        )
 
 
 def _scaled_dispatch(n_generators: int, n_snapshots: int) -> tuple[dict, dict]:
@@ -227,3 +283,34 @@ def test_section_keywords_survive_sections_far_larger_than_a_buffer(tmp_path: Pa
     assert lp.stat().st_size > 4_000_000, 'sections too small for the buffer boundary to be crossed'
     assert sum(1 for line in lines[objective + 1 : at[2]] if line.startswith(('+', '-'))) == variables
     assert sum(1 for line in lines[bounds + 1 : at[4]] if ' <= x' in line) == variables
+
+
+def test_quadratic_rows_keep_their_order_and_their_parts_in_place(tmp_path: Path) -> None:
+    """The quadratic rows are one sorted stream, so its key decides every line's place.
+
+    Two rows with a product and two linear terms each, then a row with no
+    linear term and two squares: a key that sorted on the wrong part would put
+    a term inside a bracket, a pair outside one, or one row's lines in another.
+    """
+    schema = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'floor': {'dims': []}},
+        'variables': {
+            'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+            'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {
+            'coupled': {'dims': ['g'], 'expression': 'p * q + q + p >= floor'},
+            'squares': {'dims': [], 'expression': 'sum(p * p, over=g) <= 40'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
+    }
+    lp = tmp_path / 'model.lp'
+    sps.write(schema, {'g': ['a', 'b'], 'floor': pl.DataFrame({'value': [4.0]})}, lp)
+
+    constraints = lp.read_text().split('s.t.\n\n')[1].split('\n\nbounds')[0]
+    assert constraints.splitlines() == [
+        'c0:', '+1.0 x0', '+1.0 x2', '+ [', '+1.0 x0 * x2', '] >= 4.0',
+        'c1:', '+1.0 x1', '+1.0 x3', '+ [', '+1.0 x1 * x3', '] >= 4.0',
+        'c2:', '+ [', '+1.0 x0 ^ 2', '+1.0 x1 ^ 2', '] <= 40.0',
+    ], 'each row is header, linear terms by column, bracketed pairs, then its footer, in row order'  # fmt: skip

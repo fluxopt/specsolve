@@ -17,8 +17,15 @@ result.dual('power_balance')
 
 ## Reference
 
-Every public name, rendered from its docstring. The [glossary](glossary.md)
-defines *model*, *result*, *sink* and the other house terms the entries use.
+Every public name, rendered from its docstring. Three modules hold them:
+
+- `specsolve` holds what you call;
+- `specsolve.types` holds what a call hands back;
+- `specsolve.errors` holds what a call raises or warns.
+
+Any other name under `specsolve.` is internal, and any release can change it.
+The [glossary](glossary.md) defines *model*, *result*, *sink* and the other
+house terms the entries use.
 
 ### Run a spec
 
@@ -42,6 +49,10 @@ defines *model*, *result*, *sink* and the other house terms the entries use.
     options:
       heading_level: 4
 
+::: specsolve.tidy
+    options:
+      heading_level: 4
+
 ### Run it many times
 
 The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
@@ -60,52 +71,72 @@ The fold and its two axes; [sweeps](sweeps.md) says how a sweep is cut and read.
 
 ### What comes back
 
-::: specsolve.Model
+::: specsolve.types.Model
     options:
       heading_level: 4
 
-::: specsolve.relational.result.ConstraintRow
+::: specsolve.types.ConstraintRow
     options:
       heading_level: 4
 
-::: specsolve.Result
+::: specsolve.types.Result
     options:
       heading_level: 4
 
-::: specsolve.Sweep
+::: specsolve.types.InfeasibleSubsystem
     options:
       heading_level: 4
 
-The rows and frames those hand back: how a solve terminated, what the build
-and its solves took, and what a slice of a sweep took.
-
-::: specsolve.relational.result.Diagnostics
+::: specsolve.types.Sweep
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Record
+::: specsolve.types.ResultArchive
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.Metrics
+::: specsolve.types.SweepArchive
     options:
       heading_level: 4
 
-::: specsolve.relational.parquet.SliceMetrics
+::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4
 
-### Carry an answer
+The rows and frames those hand back: how a solve terminated, what produced
+it, what the build and its solves took, and what a slice of a sweep took.
 
-::: specsolve.SolveArchive
+::: specsolve.types.Diagnostics
     options:
       heading_level: 4
 
-::: specsolve.SweepArchive
+::: specsolve.types.Record
     options:
       heading_level: 4
+
+::: specsolve.types.Provenance
+    options:
+      heading_level: 4
+
+::: specsolve.types.Metrics
+    options:
+      heading_level: 4
+
+::: specsolve.types.Output
+    options:
+      heading_level: 4
+
+::: specsolve.types.Start
+    options:
+      heading_level: 4
+
+### Read an answer back
 
 ::: specsolve.load_archive
+    options:
+      heading_level: 4
+
+::: specsolve.load_inputs
     options:
       heading_level: 4
 
@@ -137,37 +168,37 @@ message names the rewrite. `LanguageError`, with `SchemaError` and
 `DimensionError`, is a fault in the spec, and is the language's own:
 [which error you get](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#which-error-you-get).
 
-::: specsolve.SpecsolveError
+::: specsolve.errors.SpecsolveError
     options:
       heading_level: 4
 
-::: specsolve.LanguageError
+::: specsolve.errors.LanguageError
     options:
       heading_level: 4
 
-::: specsolve.SchemaError
+::: specsolve.errors.SchemaError
     options:
       heading_level: 4
 
-::: specsolve.DimensionError
+::: specsolve.errors.DimensionError
     options:
       heading_level: 4
 
 The rest are specsolve's:
 
-::: specsolve.DataError
+::: specsolve.errors.DataError
     options:
       heading_level: 4
 
-::: specsolve.LayoutError
+::: specsolve.errors.LayoutError
     options:
       heading_level: 4
 
-::: specsolve.NoSolutionError
+::: specsolve.errors.NoSolutionError
     options:
       heading_level: 4
 
-::: specsolve.SpecsolveWarning
+::: specsolve.errors.SpecsolveWarning
     options:
       heading_level: 4
 
@@ -194,11 +225,31 @@ it. A constraint may carry a variable's name already, so a constraint `P`
 beside a variable `p` is accepted. The two are written under `dual/` and
 `primal/`, which nothing folds together.
 
+### Names that start with `specsolve_`
+
+**A declared name that starts with `specsolve_` is refused**, in any letter
+case, whichever verb lowers the spec. The prefix is reserved for the columns
+specsolve adds, such as `specsolve_run` on every table an archive holds, so a
+declared name cannot collide with one. Case does not tell two columns apart:
+SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
+covers dimensions, relations and their columns, parameters, variables,
+constraints, named expressions, `sos:` sets and assumptions. A `key_name=`
+with the prefix is refused too, and so is a dimension called `value`, which
+would collide with the column that holds a parameter's numbers.
+
+```
+variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any
+letter case for the columns specsolve adds, so it could collide with one.
+Rename it.
+```
+
 ### What each sink takes
 
-`check(spec, sink=...)` asks whether a sink takes a spec, and `solve` and
-`write` read the same table, so a refusal comes whether or not it was asked
-for. Where a spec can land is
+`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+sinks that do, and `solve` and `write` refuse the same. The answer is read off
+the model the build produced, not the file: a square the data prices at zero,
+an integer variable no column is built for or a set with no members asks for
+nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
 from whether it is sayable. The four quadratic rows, and the two sections
 HiGHS writes but will not read back, are probed against the shipped solvers by

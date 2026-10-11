@@ -1,2 +1,2 @@
-snapshot,link,value
-2015-01-01T00:00:00.000000,wire,10.0
+scenario,snapshot,link,value
+base,2015-01-01T00:00:00.000000,wire,10.0

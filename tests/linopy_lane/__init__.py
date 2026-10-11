@@ -47,8 +47,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from specsolve import expressions
-from specsolve.lanes import declared, lowered
+from specsolve.inputs import declared, lower, lowered
 from specsolve.sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
@@ -59,7 +58,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from specsolve.lanes import Buildable, Source
+    from specsolve.inputs import Buildable, Source
 
 linopy.options['semantics'] = 'v1'
 
@@ -109,7 +108,7 @@ def evaluate(
 ) -> xarray.DataArray:
     """Evaluate *expression*, written in *spec*'s namespace, at *built*'s solution.
 
-    The linopy half of :meth:`specsolve.Result.evaluate`. Pure like :func:`build` —
+    The linopy half of :meth:`specsolve.types.Result.evaluate`. Pure like :func:`build` —
     nothing is retained, so *sources* is taken again rather than remembered.
 
     Args:
@@ -134,7 +133,7 @@ def evaluate(
     """
     with note(f'while evaluating an expression against {_named(spec)}'):
         written = declared(spec)
-        node = expressions.lower(written, expression)
+        node = lower(written, expression)
         program = lowered(written)
         refuse_relations_the_lane_does_not_build(program)
         tidy = tidy_sources(program, sources)

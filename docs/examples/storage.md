@@ -2,7 +2,7 @@
 
 Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **5650**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **5650**, matched to `rtol=1e-09`.
 
 ## The problem
 

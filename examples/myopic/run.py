@@ -111,8 +111,8 @@ def main() -> None:
     print(sweep.record.select('year', 'termination_condition', pl.col('objective').round(0)))
     print()
 
-    fleet = sweep.primal('total', original_index=True).pivot('generator', index='year', values='value')
-    built = sweep.primal('build', original_index=True).pivot('generator', index='year', values='value')
+    fleet = sweep.primal('total').pivot('generator', index='year', values='value')
+    built = sweep.primal('build').pivot('generator', index='year', values='value')
     print('fleet after each period (MW)')
     print(fleet.select('year', pl.col(GENERATORS).round(1)))
     print()
@@ -125,7 +125,7 @@ def main() -> None:
     print(f'each period starts from the fleet the last one left, across {len(YEARS)} periods')
 
 
-def _check_the_carry_moved_the_fleet(sweep: sps.Sweep) -> None:
+def _check_the_carry_moved_the_fleet(sweep: sps.types.Sweep) -> None:
     """Period *i+1* inherited exactly the fleet period *i* ended with.
 
     `existing` is never read back — it is a parameter, not a variable — so the

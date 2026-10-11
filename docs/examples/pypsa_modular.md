@@ -2,7 +2,7 @@
 
 Capacity that comes in whole modules: an integer count decides it, not a continuous bound.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **56700.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **56700.0**, matched to `rtol=1e-09`.
 
 The capacity variable survives, but `p_nom = n_mod × p_nom_mod` ties it to a
 whole number of modules. A technology sold in 30 MW turbines cannot be built
@@ -212,7 +212,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom_extendable=True,
             p_nom_mod=tables['p_nom_mod'].set_index('generator')['value'],
             p_nom_max=tables['p_nom_max'].set_index('generator')['value'],

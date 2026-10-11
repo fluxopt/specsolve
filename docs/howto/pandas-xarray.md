@@ -1,7 +1,7 @@
 # Reading an answer into pandas or xarray
 
 How to hand an answer to code that works in pandas or xarray. A
-[result](../reference/api.md#specsolve.Result) reads as polars tables, and the
+[result](../reference/api.md#specsolve.types.Result) reads as polars tables, and the
 bridges below convert one name at a time. specsolve installs neither library,
 so install the one you need:
 
@@ -28,7 +28,7 @@ print(result.to_pandas('p').head(3))
 2         1      wind   80.0
 ```
 
-The table has the shape [`primal`](../reference/api.md#specsolve.Result.primal)
+The table has the shape [`primal`](../reference/api.md#specsolve.types.Result.primal)
 gives: one column per dimension, a `value` column, and one row per coordinate
 the model built. `kind='dual'` reads a constraint's duals, and
 `kind='expression'` a named expression:
@@ -65,7 +65,7 @@ Coordinates:
 The array is dense over the variable's dimensions. A coordinate that a
 `where:` removed comes back `NaN`. A label that no row holds is not on the
 axis: solar has no capacity, so `p` has no `solar` column.
-[`to_dataarray`](../reference/api.md#specsolve.Result.to_dataarray) takes
+[`to_dataarray`](../reference/api.md#specsolve.types.Result.to_dataarray) takes
 `kind=` as `to_pandas` does.
 
 ## Every variable as one xarray dataset
@@ -80,12 +80,13 @@ large model, name the few you need: each arrives dense.
 
 ## From a sweep
 
-A [sweep](../reference/sweeps.md) has the same three bridges. The slice key
-becomes a dimension, such as `scenario`. `original_index=True` reads a rolling
-horizon over the dimension it sliced instead, so the answer comes back
-indexed by time:
+A [sweep](../reference/sweeps.md) has the same three bridges, and each returns
+the answer. The slice key of a scenario sweep becomes a dimension, such as
+`scenario`. A rolling horizon comes back over the dimension it sliced, so the
+answer is indexed by time. `per_window=True` reads it window by window instead:
 
 ```python
 sweep.to_dataarray('p')  # (scenario, snapshot, generator)
-rolling.to_pandas('soc', original_index=True)  # over hour, not hour_start
+rolling.to_pandas('soc')  # over hour
+rolling.to_pandas('soc', per_window=True)  # over hour_start and t, lookahead included
 ```

@@ -43,7 +43,7 @@ SOURCES = {
 ASKED: dict[str, dict[str, Any]] = {'highs': {}, 'gurobi': {'InfUnbdInfo': 1}, 'xpress': {'presolve': 0}}
 
 
-def certified(solver_name: str, options: dict[str, Any] | None) -> sps.Result:
+def certified(solver_name: str, options: dict[str, Any] | None) -> sps.types.Result:
     """*SHORT* solved, which is infeasible on every sink."""
     with sps.build(SHORT, SOURCES) as model:
         answer = model.solve(solver_name, solver_options=options)

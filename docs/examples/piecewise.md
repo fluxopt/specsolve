@@ -2,7 +2,7 @@
 
 Per-generator convex cost curves, expanded into a λ-formulation.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **3850**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **3850**, matched to `rtol=1e-09`.
 
 ## The problem
 

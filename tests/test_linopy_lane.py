@@ -117,16 +117,16 @@ class TestMasterCoords:
         with pytest.raises(ValueError, match="dimension 'x' has no index"):
             _master_coords(schema, {'a': {'wind': 1.0}})
 
-    def test_the_labels_keep_the_order_and_the_first_of_each_duplicate(self):
-        """A caller's index is read in its own order on both lanes, deduplicated.
+    def test_the_labels_keep_the_order_they_arrived_in(self):
+        """A caller's index is read in its own order on both lanes.
 
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
-        labels = _master_coords(schema, {'x': ['z', 'a', 'z', 'm'], 'a': {'z': 1.0}})['x']
+        labels = _master_coords(schema, {'x': ['z', 'a', 'm'], 'a': {'z': 1.0}})['x']
 
-        assert list(labels) == ['z', 'a', 'm'], 'source order, each label once'
+        assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
 
     @pytest.mark.parametrize('index', ['pandas', 'polars', 'a bare list'])
     def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):

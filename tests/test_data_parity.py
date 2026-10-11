@@ -17,7 +17,7 @@ import yaml as pyyaml
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.differential import both_lanes_refuse
+from tests.differential import both_lanes_refuse, differential
 from tests.oracle import pd, specsolve_linopy  # skips the module without the oracle
 
 if TYPE_CHECKING:
@@ -111,6 +111,13 @@ def _cases() -> list[Case]:
             DataError,
         ),
         Case(
+            'an index holding a label twice',
+            {**good_r, 'f': ['a', 'b', 'a']},
+            {**good_e, 'f': ['a', 'b', 'a']},
+            # A label's row is its position, so a second row gives it two.
+            DataError,
+        ),
+        Case(
             'a hole in a bound',
             {**good_r, 'cap': _tidy(f=['a', 'b'], value=[5.0, None])},
             {**good_e, 'cap': pd.Series({'a': 5.0, 'b': None})},
@@ -177,7 +184,7 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path)
     assert 'divisor' not in str(relational_error.value), (
         'the message names the hole, not a divisor the model has not got'
     )
-    assert "f='b'" in str(relational_error.value), 'and names the coordinate the hole sits at'
+    assert 'f=b' in str(relational_error.value), 'and names the coordinate the hole sits at'
     assert str(relational_error.value) == str(linopy_error.value), 'one defect, one sentence'
 
 
@@ -429,37 +436,76 @@ TEMPORAL_RELATION_SPEC = {
 }
 
 
-@pytest.mark.parametrize('library', ['pandas', 'polars', 'a parquet path'])
-def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, library):
-    """A relation's values are labels of the dimension it targets, canonicalised as those are.
-
-    Both members map to the same day, so that day's cap binds them together.
-    `datetime[ns]` is not settled here (#1076).
-    """
+def _days() -> list[Any]:
     import datetime
 
-    days = [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
-    path = _written(tmp_path, TEMPORAL_RELATION_SPEC)
-    day_of = _tidy(g=['w', 's'], d=[days[0], days[0]])
-    if library == 'a parquet path':
-        day_of.write_parquet(tmp_path / 'day_of.parquet')
+    return [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
+
+
+def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lanes(tmp_path):
+    """Only a ``datetime`` dimension reads a date as the instant its day starts on; another keeps what it was given."""
+    days = _days()
+    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {}}}
     sources = {
         **_P_MAX,
-        'cap': _tidy(d=days, value=[3.0, 7.0]),
         'd': days,
         'g': ['w', 's'],
-        'day_of': {
-            'pandas': lambda: pd.DataFrame({'g': ['w', 's'], 'd': [days[0], days[0]]}),
-            'polars': lambda: day_of,
-            'a parquet path': lambda: str(tmp_path / 'day_of.parquet'),
-        }[library](),
+        'cap': _tidy(d=days, value=[3.0, 7.0]),
+        'day_of': _tidy(g=['w', 's'], d=[days[0], days[0]]),
     }
+    with differential(_written(tmp_path, spec), sources) as run:
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
+        assert run.result.dual('k')['d'].to_list() == days[:1], 'the day with members comes back as the date it was'
 
-    with sps.solve(path, sources) as run:
-        assert run.objective == pytest.approx(3.0), 'one day, one cap, both members under it'
-    built = specsolve_linopy.build(path, sources)
-    built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane groups them the same way'
+
+def _spelled(spelling: str, columns: dict[str, list[Any]], path: Path) -> Any:
+    """*columns*, their ``d`` column of dates in *spelling*: the table a caller holds for the same instants."""
+    if spelling == 'pandas date':
+        return pd.DataFrame(columns)
+    if spelling == 'pandas datetime64':
+        return pd.DataFrame({**columns, 'd': pd.to_datetime(columns['d'])})
+    table = pl.DataFrame(columns)
+    if spelling == 'polars Date':
+        return table
+    nanoseconds = table.with_columns(pl.col('d').cast(pl.Datetime('ns')))
+    if spelling == 'polars Datetime ns':
+        return nanoseconds
+    nanoseconds.write_parquet(path)
+    return str(path)
+
+
+#: Five spellings of one day, as a caller holds them.
+_SPELLINGS = {
+    'pandas date': 'pandas-date',
+    'pandas datetime64': 'pandas-datetime64',
+    'polars Date': 'polars-date',
+    'polars Datetime ns': 'polars-datetime-ns',
+    'a parquet path': 'parquet-datetime-ns',
+}
+
+
+@pytest.mark.parametrize('column', list(_SPELLINGS), ids=[f'column-{i}' for i in _SPELLINGS.values()])
+@pytest.mark.parametrize('index', list(_SPELLINGS), ids=[f'index-{i}' for i in _SPELLINGS.values()])
+def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
+    """A relation's values and a parameter's labels are labels of the dimension, canonicalised as those are.
+
+    Both members map to the same day, so that day's cap binds them together.
+    A date and a midnight datetime are one instant, whichever spells the index
+    and whichever the columns (#1630). A date was compared with a datetime and
+    matched nothing, so it was refused as not a label of its dimension; and the
+    seconds `pd.to_datetime` gives a date reached polars, which reads no such
+    unit, as a bare `ValueError` naming nothing.
+    """
+    days = _days()
+    sources = {
+        **_P_MAX,
+        'd': _spelled(index, {'d': days}, tmp_path / 'd.parquet'),
+        'g': ['w', 's'],
+        'cap': _spelled(column, {'d': days, 'value': [3.0, 7.0]}, tmp_path / 'cap.parquet'),
+        'day_of': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'day_of.parquet'),
+    }
+    with differential(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources) as run:
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
 
 
 def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_path):
@@ -545,3 +591,155 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     carried = _tidy(g=['w', 's'], cap=[10.0, 20.0], gen_bus=['n', 'e'])
     with pytest.raises(DataError, match=r"index for dimension 'g' carries a 'gen_bus' column"):
         sps.build(path, {**sources, 'g': carried}).close()
+
+
+@pytest.mark.parametrize(
+    ('index', 'rewrite'),
+    [
+        pytest.param(['a', 'b', 'a', 'c', 'b'], 'list(dict.fromkeys(labels))', id='a-bare-sequence'),
+        pytest.param(
+            _tidy(f=['a', 'b', 'a', 'c', 'b'], colour=list('vwxyz')),
+            "table.select('f').unique(maintain_order=True)",
+            id='a-table-with-another-column',
+        ),
+    ],
+)
+def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: Path, index: Any, rewrite: str):
+    """Two rows give one label two positions, so `shift` would read one of them as the other.
+
+    The rewrite is in the shape the index came in: a bare sequence was once told
+    to call `.select` on a table it does not have.
+    """
+    sources = {
+        'f': index,
+        'cost': _tidy(f=['a', 'b', 'c'], value=[1.0, 2.0, 3.0]),
+        'cap': _tidy(f=['a', 'b', 'c'], value=[5.0, 5.0, 5.0]),
+    }
+    with pytest.raises(DataError) as refused:
+        sps.build(spec_path, sources).close()
+    message = str(refused.value)
+    assert "index for dimension 'f' holds 2 label(s) more than once: 'a', 'b'" in message, (
+        'the dimension and the repeated labels, in the order they first repeat'
+    )
+    assert rewrite in message, 'and the rewrite that keeps the first of each, for the shape that was given'
+    assert ('.select(' in message) == ('.select(' in rewrite), 'and no rewrite for a shape that was not given'
+
+
+@pytest.mark.parametrize(
+    'index',
+    [
+        pytest.param([None, 'a', 'c'], id='a-bare-sequence-leading-with-a-null'),
+        pytest.param(_tidy(f=['a', None, 'c']), id='a-table-with-a-null-inside'),
+    ],
+)
+def test_an_index_holding_a_null_label_is_refused(spec_path: Path, index: Any):
+    """A null in an index is refused at load, before it can become a coordinate.
+
+    It was read as a label: a string dimension failed with polars' own ``TypeError``
+    on the null category, and an integer one built a coordinate labelled null.
+    """
+    sources = {
+        'f': index,
+        'cost': _tidy(f=['a', 'c'], value=[1.0, 3.0]),
+        'cap': _tidy(f=['a', 'c'], value=[5.0, 5.0]),
+    }
+    with pytest.raises(DataError, match="index for dimension 'f' holds a null label"):
+        sps.build(spec_path, sources).close()
+
+
+#: A temporal dimension whose index bounds a variable.
+TEMPORAL_BOUND_SPEC = {
+    'dimensions': {'t': {'dtype': 'datetime'}},
+    'parameters': {'cap': {'dims': ['t']}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+def _instants(unit: str, time_zone: str | None = None, *, nanoseconds: int = 0) -> pl.Series:
+    """Two instants a day apart, held in *unit*, the first *nanoseconds* past midnight."""
+    import datetime
+
+    midnight = pl.Series([datetime.datetime(2030, 1, 1), datetime.datetime(2030, 1, 2)]).cast(pl.Datetime('ns'))
+    instants = midnight + pl.Series([nanoseconds, 0]).cast(pl.Duration('ns'))
+    return instants.dt.replace_time_zone(time_zone).dt.cast_time_unit(unit)
+
+
+@pytest.mark.parametrize(
+    ('index', 'column', 'zone'),
+    [
+        pytest.param('ns', 'ns', None, id='nanoseconds-both'),
+        pytest.param('ms', 'ms', None, id='milliseconds-both'),
+        pytest.param('ns', 'us', None, id='nanosecond-index-microsecond-column'),
+        pytest.param('us', 'ns', None, id='microsecond-index-nanosecond-column'),
+        pytest.param('ns', 'ms', 'Europe/Berlin', id='zone-aware-both'),
+    ],
+)
+def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column, zone):
+    """An index in nanoseconds, pandas' default, crashed the bound attach: the labels it met were microseconds."""
+    sources = {
+        't': pl.DataFrame({'t': _instants(index, zone)}),
+        'cap': pl.DataFrame({'t': _instants(column, zone), 'value': [3.0, 4.0]}),
+    }
+    with differential(_written(tmp_path, TEMPORAL_BOUND_SPEC), sources) as run:
+        assert run.oracle == pytest.approx(7.0), 'each instant takes its own cap, on both lanes'
+
+
+def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
+    """The temporal relation model's sources, its three datetime columns given."""
+    return {
+        **_P_MAX,
+        'cap': pl.DataFrame({'d': cap, 'value': [3.0, 7.0]}),
+        'd': pl.DataFrame({'d': index}),
+        'g': ['w', 's'],
+        'day_of': pl.DataFrame({'g': ['w', 's'], 'd': day_of}),
+    }
+
+
+_FINE = _instants('ns', nanoseconds=1)
+_EVEN = _instants('ns')
+_UTC = _instants('us', 'UTC')
+_DATES = _EVEN.cast(pl.Date)
+
+
+@pytest.mark.parametrize(
+    ('sources', 'owner', 'match'),
+    [
+        pytest.param(
+            _temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE),
+            "index for dimension 'd'",
+            'finer',
+            id='index-finer',
+        ),
+        pytest.param(
+            _temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
+        ),
+        pytest.param(
+            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
+        ),
+        pytest.param(
+            _temporal_sources(index=_DATES, cap=_DATES, day_of=_instants('ns', nanoseconds=3_600_000_000_000)),
+            "relation 'day_of'",
+            "not 'd' labels",
+            id='relation-past-midnight-of-a-date',
+        ),
+        pytest.param(
+            _temporal_sources(index=_UTC, cap=_EVEN, day_of=_UTC),
+            "parameter 'cap'",
+            'convert_time_zone',
+            id='parameter-zone',
+        ),
+        pytest.param(
+            _temporal_sources(
+                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day_of=_UTC
+            ),
+            "relation 'day_of'",
+            'convert_time_zone',
+            id='relation-other-zone',
+        ),
+    ],
+)
+def test_a_datetime_label_the_index_cannot_hold_is_refused_on_both_lanes(tmp_path, sources, owner, match):
+    """A cast that drops a nanosecond, or a compare across two clocks, is refused rather than made."""
+    sentence = both_lanes_refuse(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources, match=match)
+    assert sentence.startswith(owner), 'the refusal names what carried the label'

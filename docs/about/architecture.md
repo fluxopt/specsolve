@@ -19,7 +19,9 @@ through the same public calls `sps.solve` makes. Its output is committed as
 [examples/walkthrough.out](https://github.com/fluxopt/specsolve/blob/main/examples/walkthrough.out)
 and asserted line for line by `tests/test_walkthrough.py`.
 
-[The glossary](../reference/glossary.md) defines the nouns this page uses. The
+[The glossary](../reference/glossary.md) defines the nouns a caller meets, and
+[the internal glossary](../reference/internals.md) the names the code uses for
+its own parts. The
 package builds a program along one *lane*, the relational lane (`relational/`),
 which streams a plan to a sink. The test suite builds the same program a second
 way, as a `linopy.Model` (`tests/linopy_lane/`), and compares the two: that is
@@ -79,14 +81,14 @@ flowchart TB
 
     subgraph REL["relational/ — the streaming lane"]
         direction TB
-        subgraph ENG["engines/polars/ — the only part a second engine replaces"]
+        subgraph ENG["engine/ — what the contract around it is written against"]
             direction TB
             COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
-        TABLES --> DIRECT["sinks/solvers/<br/>CSR batches → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
+        TABLES --> DIRECT["sinks/solvers/<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["result.py<br/>label join, never dense"]
     end
 
@@ -127,15 +129,16 @@ accept the same file, attach the same tables and refuse the same constructs.
 oracle stops at the `linopy.Model`, which the tests solve and read back with
 linopy.
 
-**Ten modules sit outside a fence, and each is legitimately both halves**:
-`sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `lanes.py`,
-`frames.py`, `layout.py`, `archive.py`, `expressions.py` and `errors.py`. Size
+**Thirteen modules sit outside a fence, and each is legitimately both halves**:
+`sources.py`, `assumptions.py`, `api.py`, `strategy.py`, `axes.py`,
+`sweep.py`, `inputs.py`, `frames.py`, `archive_layout.py`, `archive.py`,
+`types.py`, `errors.py` and `messages.py`. Size
 does not buy a place among them. A module only one lane reaches is that lane's, down to a
 24-line contextmanager (`tests/linopy_lane/_notes.py`). See [What counts as
 language](#what-counts-as-language).
 
-**Eligibility is decided by attempting the lowering.** `lanes.lowered` returns
-a `Program` or raises `sps.LanguageError`. Both lanes call it, so "neither lane
+**Eligibility is decided by attempting the lowering.** `inputs.lowered` returns
+a `Program` or raises `sps.errors.LanguageError`. Both lanes call it, so "neither lane
 accepts a file the other refuses" is mechanical rather than maintained.
 The oracle asks only for the verdict and discards the plan. Errors split spec
 from run. Everything under `LanguageError` is decidable without data,
@@ -194,18 +197,33 @@ protects: a new consumer is free, a new primitive is taxed.
 
 ### The Python surface
 
-**Twenty-seven names, and the count is the feature.** The spec is the YAML file,
-and Python is how you *run* it. So nothing on the surface constructs math or
-reaches the plan. The names, by role:
+**Three modules hold the surface, and each holds one kind of name.**
+`specsolve` holds what a caller calls. `specsolve.types` holds what a call
+returns, and `specsolve.errors` holds what a call raises or warns. Every other
+module under `specsolve.` is internal, whatever its name, and any release can
+change it.
+
+**Sixteen names to call, and the count is the feature.** The spec is the YAML
+file, and Python is how you *run* it. So nothing on the surface constructs math
+or reaches the plan. The names, by role:
 
 - the five verbs `check`, `build`, `evaluate`, `solve` and `write`;
-- the fold `solve_over` with its two axes;
-- the two archives that carry a spec, its data and its answer, `SolveArchive`
-  and `SweepArchive`, with `load_archive`, `load_result` and `load_sweep` to read
-  one back whole and `scan_archive`, `scan_result` and `scan_sweep` to read it
-  off the directory it lies in;
-- the three types a verb hands back, `Model`, `Result` and `Sweep`;
-- the error tree under `SpecsolveError`, `NoSolutionError` and `SpecsolveWarning`.
+- the fold `solve_over` with its two axes, the only classes a caller builds;
+- `tidy`, the tables a solve reads from the sources, as an archive holds them;
+- `load_archive`, `load_result` and `load_sweep` to read an answer back whole,
+  and `scan_archive`, `scan_result` and `scan_sweep` to read it off the
+  directory it lies in;
+- `load_inputs`, the spec and the data an archive holds, without its answer.
+
+`specsolve.types` holds the three objects a verb returns, `Model`, `Result` and
+`Sweep`, the two archives that carry a spec, its data and its answer,
+`ResultArchive` and `SweepArchive`, and `ArchivedInputs`, which carries the spec
+and the data alone. It also holds the rows they hand back:
+`ConstraintRow`, `InfeasibleSubsystem`, `Diagnostics`, `Record`, `Provenance` and `Metrics`. And it
+holds `Output`, the `Literal` of the names `outputs=` takes, and `Start`, the
+`TypedDict` of the tables `start=` takes, so a caller that builds either can
+type it. `specsolve.errors` holds the error tree under `SpecsolveError`,
+`NoSolutionError` and `SpecsolveWarning`.
 
 What each one takes and returns is its docstring, which
 [the Python API](../reference/api.md) renders. The docstrings are the reference,
@@ -218,25 +236,22 @@ needs no solver installed.
 `mathspec.`'s, counted in its own `__all__`. One name, one home. `check` hands
 back a `Program` and every verb accepts a `Spec`. Obtaining either means calling
 `mathspec`, so a caller annotating one is already in the package that owns it.
-**The errors are the only exception**, because a caller meets them *without
-choosing to*: a `LanguageError` arrives unbidden out of `sps.solve`.
+**The language's errors are the only exception**: `specsolve.errors`
+re-exports them, because a caller meets them *without choosing to*. A
+`LanguageError` arrives unbidden out of `sps.solve`.
 
 **Nothing here reads a `Spec`.** Attaching, the guards and both lanes take the
 `Program`. A verb reads a `Spec` only for the `Program` it carries, through
-`lanes.lowered`. The spec *as written* is `mathspec`'s side of the
+`inputs.lowered`. The spec *as written* is `mathspec`'s side of the
 line: editing it, dumping it and typesetting it.
 
 **What a verb hands back is part of its signature.** A caller that *wraps* this
 package writes the type down. A type it cannot import is a type it cannot write.
-So `Model`, `Result` and `Sweep` are named here. So are `NoSolutionError`, which
-every reader on a `Result` raises, and `SpecsolveWarning`, which `check` emits. A
-sweep that records an infeasible scenario rather than dying on it needs both by
-name. None of the five constructs math or reaches the plan.
-
-**The namespace is flat.** `solve_over` and its axes sit at the top level
-beside `solve`. The surface test exempts submodules (`not inspect.ismodule`).
-So moving names under `specsolve.something` moves them out from under the list
-a reviewer reads.
+So every type a call returns, down to the rows it holds, is in
+`specsolve.types`. `NoSolutionError`, which every reader on a `Result` raises,
+and `SpecsolveWarning`, which `check` emits, are in `specsolve.errors`. A sweep
+that records an infeasible scenario rather than dying on it needs both by name.
+None of these types constructs math or reaches the plan.
 
 **A handle's methods answer "what do I do with this", never "what is this"**:
 `solve`, `write`, `close` and `update` pass. What the objects carry is [the
@@ -252,10 +267,15 @@ The single positional fallback (an *unnamed* pandas index) is narrow on
 purpose. Renaming a named level would transpose the data silently whenever two
 dims share a label space.
 
-`tests/test_architecture.py` pins all of it: `__all__` must match its own
-list by role, **and** no public non-module attribute may exist outside it. The first
-direction catches a name documented and never exported, the second a helper
-that leaked into the namespace from the top of `__init__.py`.
+`tests/test_architecture.py` pins all of it, in each of the three modules:
+`__all__` must match its own list, **and** no public non-module attribute may
+exist outside it. The first direction catches a name documented and never
+exported, the second a helper that leaked into the namespace from an import.
+The same file holds each module to its kind: no class but the two axes at the
+top level, only classes and `Literal` vocabularies in `types`, and only errors
+and warnings in `errors`.
+`tests/test_docs_site.py` holds the API page to the same names, so the page
+cannot document a name at an internal path.
 
 ## Hard rules
 
@@ -293,17 +313,18 @@ the language's rulebook.
    plan → engine → a solver sink → solver. It matches linopy's semantics as a
    spec rather than sharing its code. It never sees the schema, the AST, or the
    oracle's builder. **The engine is a directory, not a convention.**
-   `engines/polars/` is one implementation. Everything above it is what any
-   implementation answers to: `sinks/`, `status.py`, and the plan vocabulary,
-   which is `mathspec.program`'s. An engine package is named for its engine;
-   nothing *inside* one is. The engine imports nothing from the package bar one
-   declared leaf (`errors.py`, in `ENGINE_MAY_IMPORT`), which keeps the
-   subpackage extractable. **`errors.py` is a leaf by name and not by cost**: it
+   `engine/` is the implementation. Everything above it is what it answers
+   to: `sinks/`, `status.py`, and the plan vocabulary, which is
+   `mathspec.program`'s. No contract module names a module inside it. There
+   is one engine, so there is no `Engine` protocol and no directory per
+   engine; a second one adds them. The engine imports nothing from the package bar two
+   declared leaves (`errors.py` and `messages.py`, in `ENGINE_MAY_IMPORT`), which
+   keeps the subpackage extractable. **`errors.py` is a leaf by name and not by cost**: it
    re-exports the language's half of the hierarchy, so importing it loads the
    language. What the engine raises through it is `DataError`, a verdict about
    the *data*, and `SpecsolveError`, a verdict about the engine's reach.
 3. **One language, two builds, and linopy is only the oracle.** The package and
-   the test oracle both pass the one `lanes.lowered` gate ([above](#thesis)). No
+   the test oracle both pass the one `inputs.lowered` gate ([above](#thesis)). No
    operator registry exists that could create a divergence. A construct outside
    the language is a load error naming the construct and its rewrite. What that
    equality buys is [the oracle](linopy.md#2-it-is-the-oracle). linopy is a test
@@ -326,8 +347,8 @@ the language's rulebook.
    `Spec` and the `Program` it lowers to. Whether that seam is ever blessed is
    open ([#381](https://github.com/fluxopt/specsolve/issues/381)). The Python
    surface is the runner (`api.py`) and the driver over it (`strategy.py`); the
-   plan is internal. The whole of it is [twenty-seven
-   names](#the-python-surface), pinned by a test.
+   plan is internal. The whole of it is [three modules and
+   thirty-three names](#the-python-surface), pinned by a test.
 
 ## The plan, node for node
 
@@ -348,20 +369,20 @@ two verdicts it still *raises* are its own: `DataError` about the data, and a
 cannot build (#1137).
 
 **Fan-in** is the column the lanes *act* on. It says how an output row's slots
-relate to the input's. `fragments.fan_in` answers it for every node, and the
+relate to the input's. `pieces.fan_in` answers it for every node, and the
 relational lane's compiler asks it. Anything but one-to-one mixes several input slots into one output row. So
 absence has to be pushed into the operand before the rewrite consumes it
 ([#1142](https://github.com/fluxopt/specsolve/issues/1142)).
 
 | plan node | the file writes | fan-in | the relational query |
 | --- | --- | --- | --- |
-| `Constant` | a number | one-to-one | a one-row const fragment |
+| `Constant` | a number | one-to-one | a one-row const piece |
 | `Parameter` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const fragment with the same presence, a zero at every absent slot under `absence: zero` |
-| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const fragment present exactly where a row stands |
+| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `absence: zero` |
+| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
-| `Add` | `x + y`, `x - y` | one-to-one | the two fragment lists concatenated |
-| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic fragment |
+| `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic piece |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate |
@@ -369,7 +390,7 @@ absence has to be pushed into the operand before the rewrite consumes it
 | `Pullback` | `at(x, by=r, over=d, into=c)` | one-to-one | the same table joined the other way, fanning out |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
-| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the fragment lists concatenated |
+| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the piece lists concatenated |
 | `Named` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 A `Cases` is the one node carrying a **mask in a value position**. It is also
@@ -381,7 +402,7 @@ regions cover.
 
 **A read is the one walk where every leaf is a number.** A named expression is
 evaluated after the solve, never built. The relational lane compiles a variable
-to its primal and `dual(c)` to the constraint's row duals, as const fragments.
+to its primal and `dual(c)` to the constraint's row duals, as const pieces.
 The oracle reads `.solution` and `.dual` and does xarray arithmetic. So the
 language holds an entry the math never reads to no degree. A product of two
 variables, a variable under a power and a division by one are arithmetic over
@@ -392,7 +413,7 @@ entry still reads.
 **Neither reduction aggregates.** A `Sum` drops columns, a `GroupSum` swaps
 them and a `WindowSum` replicates rows. Every duplicate collapses once, in the
 terminal `SUM(coeff) GROUP BY row, col` at assembly. The polars column
-conventions are in `compiler.py` and `fragments.py`.
+conventions are in `compiler.py` and `pieces.py`.
 
 ## The relational lane
 
@@ -402,12 +423,12 @@ the solver between solves. `labels.py`, `readback.py` and `result.py` sit beside
 the engine, because each answers a question the engine only *uses*.
 `scope.py` sits under all of them: the program, its attached data and the
 variable frames built so far, which is what every helper takes and the
-compiler holds beside the walk it adds. `fragments.py`, `predicates.py`,
+compiler holds beside the walk it adds. `pieces.py`, `predicates.py`,
 `reindex.py`, `coverage.py` and `status.py` are off the spine and undrawn. `frames.py`, the other boundary, is top level because
 all three consumers read it. The [module map](#module-map) says what each does.
 
 That split makes the ceiling's admissibility test something you can *perform*:
-build a `PolarsCompiler` over a `Scope`, hand it a node, read `.explain()`.
+build a `Compiler` over a `Scope`, hand it a node, read `.explain()`.
 `tests/test_compiler.py` does that over empty tables, since a schema is all it
 takes to compile a query.
 
@@ -458,6 +479,11 @@ in the lane is order-free, which is what lets the query planner rearrange it.
   leading dims leaves the survivors a *rectangle*, so only the masked suffix is
   materialised. That guarded shortcut must reach the integers the general path
   would have. Nothing else about a build can move an index.
+- **A block over the whole product is addressed, not joined.** Its rows are
+  the row-major rule itself, so a term of a constraint with no mask computes
+  its row from its own coordinate. An `Enum` dimension's ordinal is its
+  physical code, and a dimension of consecutive integers is its own ordinal
+  less its first label.
 - **The same order comes back.** `primal` / `dual` / `save` read the label
   table, which was numbered in that order, and the LP sink writes it.
 
@@ -503,14 +529,14 @@ the tables and returns an answer, chosen by **name** at the call
 (`solver_name='gurobi'`). A **writer** renders them to a file, chosen by the
 output's **suffix**. Both sets are closed dict literals (`SOLVERS`, `WRITERS`):
 no YAML key names a solver, and nothing installed may change what either
-resolves to. The split is a directory for the reason `engines/` is. **How many
+resolves to. The split is a directory for the reason `engine/` is. **How many
 solvers there are will change; what a solver has to answer will not.** A new
 solver is a module named for it and a line in `SOLVERS`, and nothing above it
 changes. Members share the projection of `cols` and `obj` onto the solver's
 column index, which lives on `Handoff`. So two solvers cannot drift into loading
 different models. They never share hand-off code, for two reasons. The
-currencies differ: HiGHS and Xpress take the three CSR arrays, gurobipy a matrix
-object. And an optional package must stay off the import path of a caller who
+currencies differ: HiGHS and Xpress take the three CSR arrays, gurobipy the
+three CSC arrays. And an optional package must stay off the import path of a caller who
 does not use it.
 
 ### Quadratic objectives at the sink
@@ -541,45 +567,49 @@ is structure.
 |---|---|
 | `mathspec` (a dependency) | the whole language, read, expanded, resolved, judged and lowered there; what crosses is a `Spec` and the `Program` it lowers to — [its own reference](https://mathspec.readthedocs.io/en/latest/reference/language/) |
 | `api.py` | the runner: `check` / `build` / `solve` / `write`, and `load_result` / `scan_result` for an answer read back off disk; linopy-free |
-| `layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/`, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together |
-| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `SolveArchive` and `SweepArchive`. It reads; it never writes |
+| `archive_layout.py` | below every verb that solves: what an archive holds — `spec.yaml`, `sources/`, `answer/` in the answer's own layout, `axis.json` — written as one zip or as a directory, because a solve is the one moment all three exist together. `INPUTS_LAYOUT` stamps the spec and the sources apart from the answer's `ANSWER_LAYOUT` |
+| `archive.py` | above the runner and the fold: `load_archive` / `scan_archive` and the two values they give back, `ResultArchive` and `SweepArchive`, and `load_inputs`, which gives back `ArchivedInputs` without reading the answer. It reads; it never writes |
 | `record.py` | beside the archive, behind the `datarecord` extra: `answer_schema` says what a solve of a spec answers with as a datarecord schema, and `write_answer` stages one solve as one run of it, frame for frame what `Result.save` writes |
-| `lanes.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through |
-| `relational/collect.py` | which polars engine materialises a frame: the streaming one where this polars has it, asked once; a build without it, the browser's, gets the in-memory one |
+| `inputs.py` | above both lanes: `Buildable` and `Source`, what every verb takes; `Label`, a dimension's labels and a sweep's keys; `lowered`, the one door every verb lowers a spec through; `lower`, an expression the file never named spliced into the spec as written and lowered with it |
+| `relational/collect.py` | how polars materialises a frame, for every collect in the package: polars' own `auto` engine where this polars has the streaming one, asked once, else the in-memory one, which a build without it, the browser's, gets; the in-memory one by name where a collect asks for it; and joins in the order they were written, never reordered by polars |
 | `sources.py` | the one door: caller data (parquet paths, in-memory tables, plain-Python shapes) read into tidy tables and checked against the declarations |
 | `assumptions.py` | the one guard that needs numbers: every `assumptions:` entry the file wrote, and each condition a `piecewise:` method puts on its breakpoints, evaluated as the masks the language states them as |
 | `frames.py` | the boundary: caller tables in, via the Arrow PyCapsule protocol; read by the front door, the driver and the oracle |
-| `errors.py` | the run half, and the whole re-exported: what a caller catches off `sps.`; a wording lives here only where two modules raise it |
+| `types.py` | public: every type a call returns, re-exported from the module that defines it, so a caller annotates without reaching inside |
+| `errors.py` | public: the run half of the error tree, and the language's half re-exported, so one `except` covers both |
+| `messages.py` | a wording two modules raise, written once; a leaf the engine may import |
 | `strategy.py` | the driver above the runner: one plan per slice, folded — scenarios, rolling horizon, myopic pathways |
-| `relational/engines/polars/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
-| `relational/engines/polars/compiler.py` | plan → lazy queries; pure, reads nothing |
-| `relational/engines/polars/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
-| `relational/engines/polars/reindex.py` | `shift` and `sum_back`: a fragment's rows moved along one dimension's own order, and the edge |
-| `relational/engines/polars/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes and nothing else |
-| `relational/engines/polars/fragments.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
+| `axes.py` | how a sweep cuts its sources: `EachCoordinate`, `EachWindow`, and the stitch that puts a window's frames back over the dimension it cut |
+| `sweep.py` | what a fold returns: `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
+| `relational/engine/scope.py` | the scope a query is compiled in: the program, its attached data and the variable frames built so far; the product of its dimensions and the one row-major rule every index reads — what every helper takes, and the compiler holds |
+| `relational/engine/compiler.py` | plan → lazy queries; pure, reads nothing |
+| `relational/engine/relations.py` | a relation's table as a walk reads it, the one place a role becomes a column: the join a group or a pullback trades its dimensions through, and the grouping a partition ranks inside, the whole dimension being one group |
+| `relational/engine/shifts.py` | `shift` and `sum_back`: a piece's rows moved along one dimension's own order, and the edge |
+| `relational/engine/predicates.py` | a `where:` mask as a boolean query over the coordinate product; the plan's predicate nodes and nothing else |
+| `relational/engine/pieces.py` | what an expression compiles *to*: the additive pieces and the arithmetic over them; no state, no data |
 | `relational/status.py` | solve outcome on two axes; linopy's vocabulary, copied not imported |
-| `relational/engines/polars/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
-| `relational/engines/polars/attaching.py` | the door's tables → `AttachedSources`, the frozen, `Enum`-encoded tables every query is written against |
-| `relational/engines/polars/assembly.py` | one build: every declaration into rows of the model tables, quadratic constraints last |
-| `relational/engines/polars/coverage.py` | is the data there where a declaration reads it: a divisor, and a constant piece, each refused at the last moment the gap is still visible |
-| `relational/engines/polars/readback.py` | a built row, a solve's tables and a named expression, spelled back out in the model's own labels |
-| `relational/engines/polars/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
+| `relational/engine/labels.py` | which coordinate gets which solver index; one rule, one guarded shortcut that must agree with it |
+| `relational/engine/attaching.py` | the door's tables → `AttachedSources`, the frozen, `Enum`-encoded tables every query is written against |
+| `relational/engine/assembly.py` | one build: every declaration into rows of the model tables, quadratic constraints last |
+| `relational/engine/coverage.py` | is the data there where a declaration reads it: a divisor, and a constant piece, each refused at the last moment the gap is still visible |
+| `relational/engine/readback.py` | a built row, a solve's tables and a named expression, spelled back out in the model's own labels |
+| `relational/engine/engine.py` | the lifecycle: build, hand to a sink, read back; the counters and clocks `diagnostics()` reports; and the one read with no build, a spec of parameters and expressions valued as arithmetic |
 | `relational/result.py` | what a solve returned: status, objective, the label joins that read values back, and the deferred expression readers |
-| `expressions.py` | expressions spliced into the spec as written and lowered with it — what a reader values when the file never named the quantity |
-| `relational/parquet.py` | answers on disk: the `<kind>/<name>` layout a result and a sweep both write, and the writer that lands a file whole |
+| `relational/answer_layout.py` | an answer on disk: the `<kind>/<name>` layout a result and a sweep both write, the `Record` and `Metrics` rows beside it, the `ANSWER_LAYOUT` stamp, and the writer that lands a file whole. An archive nests it under `answer/` |
+| `relational/names.py` | the columns specsolve writes beside a spec's own — `value`, and the `specsolve_` prefix with `specsolve_run` and `specsolve_position` under it — and the refusals that keep a declared name off them. Every module that names one imports it from here |
 | `relational/sinks/handoff.py` | what every sink reads and no more: the five tables, the batching scalars, and their projection onto the solver's column index |
-| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; `lanes.py` declares each **lane** in the same vocabulary |
+| `relational/sinks/capabilities.py` | what a sink can ingest — hard rule 3's *accepts ≠ builds* axis; the oracle declares what it builds in the same vocabulary (`tests/linopy_lane/builder.py`) |
 | `relational/sinks/` | how a built model leaves, in two families: `solvers/` (one module per solver, chosen by name) and `writers/` (one per format, chosen by suffix) — [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/relational/sinks/README.md) |
 
 **One subpackage, and the directory *is* the rule.** Everything
 under `relational/` is the relational lane, and it imports nothing else from
-the package. Inside it, `engines/` holds implementations and the rest is what
-they implement. No module of the package imports linopy, and none imports
+the package. Inside it, `engine/` is the implementation and the rest is what
+it implements. No module of the package imports linopy, and none imports
 xarray at module level. `tests/test_architecture.py` holds both rules.
 
 **A fence whose allowlist is empty is a package waiting to happen.** What
-remains points one way. `relational/`'s fence is at one declared leaf,
-`errors.py` (hard rule 2). The language's fence is nowhere, because the language
+remains points one way. `relational/`'s fence is at two declared leaves,
+`errors.py` and `messages.py` (hard rule 2). The language's fence is nowhere, because the language
 is not here.
 
 ### What counts as language
@@ -637,8 +667,8 @@ coordinates.
 **Add a macro or named expression:** edit YAML. Nothing else.
 
 **Add a sink:** a module in `relational/sinks/solvers/` named for the solver, or
-one in `writers/` keyed by suffix in `WRITERS`. A solver module defines
-`solve_<name>` and `build_<name>` and takes one line in `SOLVERS`. It keeps its
+one in `writers/` keyed by suffix in `WRITERS`. A solver module defines a
+`Solver` subclass named for it and takes one line in `SOLVERS`. It keeps its
 dependency behind an extra, imported inside the function. Either way the module
 declares what it can ingest, as a `Capabilities` descriptor beside the code that
 knows. A sink declaring nothing reads as taking nothing. Nothing above it
@@ -663,8 +693,8 @@ pinned language does not parse.
 says the two halves have not drifted since.
 
 The dim rule, the degree verdict and the dense-label assignment
-(`relational/engines/polars/labels.py`, shared by variables and constraint
+(`relational/engine/labels.py`, shared by variables and constraint
 rows) are not per-operator work: each has
 [one implementation](#what-counts-as-language). What a consumer still owns is
-what is about *building*: the fragment rewrite the relational compiler
+what is about *building*: the piece rewrite the relational compiler
 performs, and the linopy call the oracle makes.

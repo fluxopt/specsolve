@@ -10,9 +10,9 @@ takes the handoff and renders it to a file. Everything else follows.
 | | solvers/ | writers/ |
 |---|---|---|
 | answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
-| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `tables.lp` |
+| chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `base.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
 ## Staying loaded
 
@@ -31,49 +31,40 @@ that evidence at the load; a subclass owns **the hand-off**:
 | | |
 |---|---|
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(tables)` | `_run`, plus the refusal of a vector that does not span the model |
-| `Solver.warm(ws)` | `_warm`, plus the refusal of a `WarmStart` from another solver or another shape |
-| `_load(tables, batch_rows)` | hand the model over and hold what reads it back |
-| `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
-| `_run(tables)` | solve what is loaded, and read it back |
-| `warm_start()` | the basis the last solve left — the incumbent, after a MIP — or `None` |
-| `_warm(ws)` | set it on the loaded model, spans already checked |
+| `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
+| `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
+| `_load(handoff)` | hand the model over and hold what reads it back |
+| `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
+| `_run(handoff)` | solve what is loaded, and read it back |
+| `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
+| `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
+| `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
+| `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last seven are a
+The first three are the family's and identical for everyone; the last nine are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over a `Handoff`
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
-the solver already holds. Whether it also solves from the basis the last one
-ended on is the caller's `keep=`: `'progress'` keeps it, and `'solver'` — the
-default — calls `forget()` so the run begins as if the model were new. Every
-member implements both; a solver with nothing to discard implements `forget()`
-as a no-op.
+the solver already holds. A solve carries the solver on by default;
+`start=None` or an answer given calls `forget()`, so the run begins as if the
+model were new. A member with nothing to discard implements `forget()` as a no-op.
+`forget()` rather than a reload, because keeping the solver skips the hand-off,
+while carrying its progress wins or loses by model.
 
-`forget()` rather than a reload because the two costs are different ones. A
-caller keeping the *solver* skips the hand-off, which nothing pays for; one
-keeping its *progress* trades against whatever the member prepares for a run
-that starts from nothing, and that trade goes either way by model. Splitting
-them is what lets a caller take the first without the second.
+A **genuine rebuild** loads a fresh solver, which starts cold.
 
-A **genuine rebuild** gets no carry at all: the new session holds a fresh model
-and starts cold, and `PolarsEngine.solve(keep='nothing')` is how a caller asks
-for that on purpose — the held solver is discarded, so cold is structural
-rather than scrubbed.
-
-`warm_start()` / `warm(ws)` are the machinery for carrying one anyway:
-`warm_start()` reads the basis — or, after a mixed-integer solve, the
-incumbent, no solver leaving a valid basis behind one — out of a session as an
-opaque `WarmStart`, and `warm(ws)` sets it on the next, refusing a start from
-another solver or one whose spans do not match the ingested model. **Nothing
-above the family calls either**, and `WarmStart` is deliberately not
-re-exported: the case that wants a carry most, a cutting-plane master
-re-solved after gaining a cut, gains a *row*, so the span check refuses it by
-construction. [#382](https://github.com/fluxopt/specsolve/issues/382) holds what
-has to be answered before this reaches a caller.
+`warm(basis)` is how a caller carries one anyway. A `Basis` is a code per
+column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a
+basis HiGHS read warms Gurobi. It is positional, and the engine is what makes
+it fit: `solve(start=)` lays an earlier answer's basis onto the new build by
+coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
+*row* starts from every row it kept. `start(values)` hands values over the same
+way: an incumbent to a mixed-integer solve, and a primal to an LP where the
+member's `lp_values` says it takes one.
 
 The guard is `Handoff.structure` — a digest of everything a re-solve may
 not change, recorded by the solver at its load and cached on the handoff. **Values are re-pushed, not diffed**: linopy's persistent layer
@@ -97,13 +88,13 @@ the frames because a constant has no column to attach to.
 
 A sink never learns how the handoff was filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
-`lp_file.py`, not another method on `PolarsEngine`.
+`lp_file.py`, not another method on `Engine`.
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a
-family `base`, which holds no member's own answer: `solvers/base.py` is the
-lifecycle without a solver in it, `writers/base.py` the three renderings
-without a format in them.
+family's one shared module, which holds no member's own answer: `solvers/base.py` is the
+lifecycle without a solver in it, `writers/text.py` the renderings without a
+format in them.
 
 ## Row-major, and the one format that is not
 
@@ -124,11 +115,14 @@ at all. A sink **declares** whether it takes one, in the descriptor *what a
 sink can ingest* below gives it —
 
 ```python
-'sos': 'native'  # gurobi: addSOS, no binaries and no bound to have
-                 # highs: absent, and the refusal names the way past it
+supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound to have
+# highs: left out, and the refusal names the way past it
 ```
 
-— and `sinks.refusal(program, name)` answers before the load. Nothing is
+— and `sinks.refusal(handoff, name)` answers before the load, off the model
+that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
+asks for nothing, and the same goes for a square the data prices at zero or an
+integer variable no column is built for. Nothing is
 rewritten at the hand-off: the language writes a set out itself,
 `to_spec(...).expand()` stating each as binaries and linking rows, and that is
 the model a sink without the concept is given. `_load`, `push`, `_run` and the
@@ -139,8 +133,9 @@ though the fifth stream were never there.
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
 the three arrays and `xpress.py` hands `addRows` the same triple a block
-already is. `gurobi.py` is the exception — its matrix API takes a matrix
-*object*, which is what the `[gurobi]` extra's scipy is for.
+already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
+column, so it transposes the CSR first, which is what the `[gurobi]` extra's
+scipy is for.
 
 The rest of what separates them is each library's own spelling, and the two
 places it bites are worth naming because neither is a choice:
@@ -155,9 +150,9 @@ places it bites are worth naming because neither is a choice:
 ## Adding one
 
 **A solver:** `solvers/<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — plus the
-`build_<name>` seam `bench/` measures, and one line in `SOLVERS` holding the
-class.
+subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
+`SOLVERS` holding the class. Constructing it loads the model and stops there,
+which is what `bench/` measures.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it
@@ -166,7 +161,7 @@ deliberately diverge.
 
 **A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
 holding a `Writer(write, capabilities)` — a function has nowhere to carry a
-fact about itself, so the pair travels together. Render through `base.py`
+fact about itself, so the pair travels together. Render through `text.py`
 rather than casting in the module — that is what makes two files describe one
 model to a reader holding both.
 
@@ -182,11 +177,11 @@ what a sink takes, as against what the language may say — and its docstring is
 where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
-Three callers read it, and between them a construct a sink has no spelling for
-cannot reach that sink by any door: `check(spec, sink=...)` before any data is
-attached, and the engine's `solve` and `write` — which ask without being asked,
-a file written without the section being a different model that parses and
-solves.
+Three callers read it, each off the built model, and between them a construct
+a sink has no spelling for cannot reach that sink by any door: `Model.check`,
+which asks without a solve, and the engine's `solve` and `write` — which ask
+without being asked, a file written without the section being a different model
+that parses and solves.
 
 ## Stable output
 

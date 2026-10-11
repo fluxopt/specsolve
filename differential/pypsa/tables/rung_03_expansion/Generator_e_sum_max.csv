@@ -1,6 +1,6 @@
-generator,value
-coal,inf
-diesel,70.0
-gas,inf
-solar,inf
-wind,inf
+scenario,generator,value
+base,coal,inf
+base,diesel,70.0
+base,gas,inf
+base,solar,inf
+base,wind,inf

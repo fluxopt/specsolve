@@ -108,7 +108,7 @@ def test_the_activity_is_the_whole_left_hand_side():
     ``Ax`` is 0, the row owning no linear entry at all.
     """
     with sps.build(SPEC, SOURCES) as model:
-        result = model.solve(solver_name='gurobi')
+        result = model.solve(solver_name='gurobi', outputs={'activity'})
         recomputed = recomputed_row_values(model._engine, result)
         block = model._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
@@ -237,6 +237,29 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             assert again != pytest.approx(first, rel=SEARCHED), 'and the answer really did move'
 
 
+def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
+    """The digest rule's other half: the linear rows of a model that has a
+    quadratic one take a new right-hand side by value, and Gurobi is handed
+    one per linear row — it refuses a vector that also spans the quadratic tail."""
+    capped = spec(
+        parameters={'floor': {'dims': []}, 'limit': {'dims': []}},
+        constraints={**SPEC['constraints'], 'cap': {'dims': [], 'expression': 'sum(p, over=g) <= limit'}},
+        objective={'sense': 'maximize', 'expression': 'sum(p + q, over=g)'},
+    )
+    loose = {**SOURCES, 'limit': pl.DataFrame({'value': [9.0]})}
+    tight = {**SOURCES, 'limit': pl.DataFrame({'value': [7.0]})}
+    with sps.build(capped, loose) as model:
+        model.solve(solver_name='gurobi').close()
+        model.update(tight)
+        pushed = model.solve(solver_name='gurobi')
+        assert model.diagnostics().loads == 1, 'only a linear right-hand side moved, so it is pushed'
+        with sps.solve(capped, tight, solver_name='gurobi') as fresh:
+            assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
+                'a pushed right-hand side answers what a fresh build answers'
+            )
+        pushed.close()
+
+
 def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
@@ -262,7 +285,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``lanes.lowered`` gate — and refuses it before linopy is asked,
+    model — one ``inputs.lowered`` gate — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 
@@ -275,23 +298,20 @@ def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
         specsolve_linopy.build(path, SOURCES)
 
 
-def test_highs_refuses_it_before_the_build_and_names_who_takes_it():
-    with pytest.raises(SpecsolveError, match='no such concept'):
-        sps.check(SPEC, sink='highs')
-    with pytest.raises(SpecsolveError, match='gurobi'):
-        sps.check(SPEC, sink='highs')
-    with pytest.raises(SpecsolveError, match='no such concept'):
+def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
+    with pytest.raises(SpecsolveError, match='no such concept') as refused:
         sps.solve(SPEC, SOURCES)
+    assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
-    """The backstop for the seam `bench/` uses: `build_highs` is past the
+    """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
-    from specsolve.relational.sinks.solvers.highs import build_highs
+    from specsolve.relational.sinks.solvers.highs import Highs
 
     with sps.build(SPEC, SOURCES) as model, pytest.raises(SpecsolveError, match='no quadratic-constraint concept'):
-        build_highs(model._engine._model.handoff)
+        Highs(model._engine._model.handoff)
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():

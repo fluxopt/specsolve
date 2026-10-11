@@ -217,7 +217,7 @@ def test_highs_refuses_the_written_section_which_is_why_a_set_is_written_out_for
     """The capability finding itself, pinned rather than described.
 
     If HiGHS ever grows an SOS concept this fails, and its capability
-    descriptor should then declare ``'sos': 'native'``.
+    descriptor should then list ``'sos'``.
     """
     path = sps.write(spec(1), DATA, tmp_path / 'model.lp')
     with pytest.raises(AssertionError):

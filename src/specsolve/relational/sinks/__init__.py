@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from specsolve.errors import SpecsolveError, unknown_name_message
+from specsolve.errors import SpecsolveError
+from specsolve.messages import unknown_name_message
 from specsolve.relational.sinks import capabilities as caps
 from specsolve.relational.sinks.capabilities import spelled
 from specsolve.relational.sinks.handoff import Handoff
@@ -18,8 +19,6 @@ from specsolve.relational.sinks.writers import WRITERS, writer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
-
-    from mathspec import program
 
 __all__ = [
     'SOLVERS',
@@ -63,12 +62,13 @@ def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequen
     return None
 
 
-def refusal(program: program.Program, name: str) -> str | None:
-    """The sink called *name*'s refusal of *program*, or ``None`` where it takes it.
+def refusal(handoff: Handoff, name: str) -> str | None:
+    """The sink called *name*'s refusal of the built model in *handoff*, or ``None`` where it takes it.
 
     The refusal names the construct, the sink, and the sinks that do take it.
+    Answered without importing the sink.
     """
-    needed = caps.required(program)
+    needed = caps.required(handoff)
     if (refuses := _blocker(name, needed)) is None:
         return None
     return refuses([other for other in (*SOLVERS, *WRITERS) if other != name and _blocker(other, needed) is None])

@@ -68,7 +68,7 @@ def _frames(sources):
 
 
 def test_each_region_carries_the_coordinates_it_claims():
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES), lp=True) as run:
+    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 40 and 60, the rest at 5'
         caps = run.result.activity('under_cap').sort('t')
         assert list(caps.get_column('value')) == [40.0, 5.0, 60.0, 5.0], (
@@ -198,7 +198,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
     ``never_off`` and ``boundary`` between them carry every unit at the first
     position, so the row stays.
     """
-    with differential(CARRIED_IN, _carried_sources([False, True], [1.0, 0.0])) as run:
+    with differential(CARRIED_IN, _carried_sources([False, True], [1.0, 0.0]), outputs=frozenset({'activity'})) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert sorted(set(rows.get_column('t'))) == [0, 1, 2, 3], 't == 0 is built like any other position'
@@ -270,7 +270,7 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row():
     }
     sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
     sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
-    with differential(spec, sources) as run:
+    with differential(spec, sources, outputs=frozenset({'activity'})) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
@@ -398,3 +398,47 @@ def test_a_hole_the_summed_region_reads_is_still_refused():
     both_lanes_refuse(
         SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed}), match=r"parameter 'hi' covers 1 fewer coordinate"
     )
+
+
+#: The flow an outage takes off its line: the line's flow where it stands,
+#: nothing where it does not. Every line stands, so the `otherwise` region is
+#: empty, and the pullback through `outage_line` cannot carry its claim.
+OUTAGE_FLOW = {
+    'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
+    'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
+    'parameters': {
+        'active': {'dims': ['line'], 'dtype': 'bool'},
+        'share': {'dims': ['line', 'outage']},
+        'cap': {'dims': ['line']},
+    },
+    'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
+    'expressions': {
+        'monitored': {'dims': ['line'], 'cases': {'standing': {'when': 'active', 'expression': 's'}}, 'otherwise': 0},
+        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line, over=line, into=outage)'},
+    },
+    'constraints': {
+        'after': {'dims': ['line', 'outage'], 'expression': 'monitored + share * outage_s <= cap'},
+    },
+    'objective': {'sense': 'maximize', 'expression': 'sum(s, over=line)'},
+}
+
+
+def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
+    """`otherwise: 0` adds nothing anywhere, so no row is short of it.
+
+    The zero was a constant piece claimed by the region where a line does not
+    stand. The pullback dropped that claim, so the piece was owed at every row
+    and, with every line standing, had none: each row was refused as short of
+    `share` and `cap`, which are short of nothing. `a` going out puts half its flow on `b`, so `s_b + s_a / 2 <= 10` and
+    `s_a <= 10` with `s_b <= 10` alone; the most is `s_a = 10, s_b = 5`.
+    """
+    sources = {
+        'line': ['a', 'b'],
+        'outage': ['out_a'],
+        'outage_line': {'outage': ['out_a'], 'line': ['a']},
+        'active': {'line': ['a', 'b'], 'value': [True, True]},
+        'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
+        'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
+    }
+    with differential(OUTAGE_FLOW, _frames(sources)) as run:
+        assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'

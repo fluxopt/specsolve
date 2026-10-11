@@ -1,3 +1,3 @@
-storage_unit,value
-ice,inf
-pump,30.0
+scenario,storage_unit,value
+base,ice,inf
+base,pump,30.0

@@ -17,7 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import NoSolutionError
-from specsolve.relational.parquet import Metrics, Record, SliceMetrics, _column_types
+from specsolve.relational.answer_layout import Metrics, Record, _column_types
 from specsolve.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from specsolve.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
 from specsolve.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
@@ -158,8 +158,8 @@ def test_a_solve_that_left_no_values_writes_the_record_and_no_frames(tmp_path):
     """An export of a run that did not solve is the record alone."""
     with sps.solve(*CASES['INFEASIBLE']) as solution:
         out = solution.save(tmp_path / 'infeasible')
-    assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet'], (
-        'the record and the layout it is in; no values, so no primal/, dual/ or expression/'
+    assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
+        'the record, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
     )
     record = pl.read_parquet(out / 'record.parquet')
     assert record.row(0, named=True)['termination_condition'] == 'infeasible'
@@ -206,10 +206,10 @@ def test_a_record_column_that_names_no_written_type_is_refused_at_import():
     class Unwritable(NamedTuple):
         when: bytes
 
-    with pytest.raises(sps.SpecsolveError, match='_WRITTEN_AS'):
+    with pytest.raises(sps.errors.SpecsolveError, match='_WRITTEN_AS'):
         _column_types(Unwritable)
 
-    for row_type in (Record, Metrics, SliceMetrics):
+    for row_type in (Record, Metrics):
         assert tuple(_column_types(row_type)) == row_type._fields, (
             f'and {row_type.__name__} derives all of its own, so a field nothing writes fails at import'
         )

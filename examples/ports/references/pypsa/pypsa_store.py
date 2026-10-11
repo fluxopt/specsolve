@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pypsa==1.2.4", "linopy==0.9.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
+# dependencies = ["pypsa==1.2.4", "linopy==0.10.0", "pandas>=2.2", "xarray==2026.7.0", "highspy==1.15.1"]
 # ///
 """Reference for ``pypsa_store``: PyPSA's own ``Store`` component. See docs/examples/index.md.
 
@@ -58,7 +58,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=generators['gen_bus'],
+        bus=tables['gen_bus'].set_index('generator')['bus'],
         p_nom=tables['p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )
@@ -67,7 +67,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Store',
         stores.index,
-        bus=stores['store_bus'],
+        bus=tables['store_bus'].set_index('store')['bus'],
         e_nom_extendable=True,
         e_nom_max=tables['e_nom_max'].set_index('store')['value'],
         capital_cost=tables['e_capital_cost'].set_index('store')['value'],

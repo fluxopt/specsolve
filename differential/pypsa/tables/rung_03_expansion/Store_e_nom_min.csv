@@ -1,3 +1,3 @@
-store,value
-keg,0.0
-tank,0.0
+scenario,store,value
+base,keg,0.0
+base,tank,0.0

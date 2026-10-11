@@ -9,7 +9,9 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
+
+import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -181,7 +183,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge.
-ENGINE_MAY_IMPORT = {'specsolve.errors', 'mathspec.program'}
+ENGINE_MAY_IMPORT = {'specsolve.errors', 'specsolve.messages', 'mathspec.program'}
 
 
 def test_engine_is_isolated():
@@ -201,23 +203,23 @@ def test_engine_is_isolated():
 
 
 def test_no_contract_module_names_an_engine():
-    """``relational/__init__.py``'s own split: contract above, ``engines/`` below.
+    """``relational/__init__.py``'s own split: contract above, ``engine/`` below.
 
-    A contract module naming a class out of ``engines/`` inverts the two.
+    A contract module naming a class out of ``engine/`` inverts the two.
     Type-only imports count here.
     """
     offenders = {}
     for path in (PKG / 'relational').rglob('*.py'):
         rel = path.relative_to(PKG / 'relational').as_posix()
-        if '__pycache__' in path.parts or rel.startswith('engines/'):
+        if '__pycache__' in path.parts or rel.startswith('engine/'):
             continue
         named = _imported(ast.parse(path.read_text()), relative=True)
-        engines = sorted({m for m in named if 'engines' in m.split('.')})
-        if engines:
-            offenders[rel] = engines
+        engine = sorted({m for m in named if 'engine' in m.split('.')})
+        if engine:
+            offenders[rel] = engine
     assert not offenders, (
         f'a contract module names an implementation: {offenders}. Either the fact belongs '
-        f'under engines/, or what crosses the seam should be a type the contract already owns'
+        f'under engine/, or what crosses the seam should be a type the contract already owns'
     )
 
 
@@ -316,22 +318,41 @@ def test_every_repository_path_a_workflow_names_exists():
     )
 
 
-#: The whole Python surface, by role (hard rule 5).
+#: What a caller calls, by role (hard rule 5). Everything ``specsolve`` binds.
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
-    'carry it': {
-        'SolveArchive',
-        'SweepArchive',
+    'see what it reads': {'tidy'},
+    'read it back': {
         'load_archive',
+        'load_inputs',
         'load_result',
         'load_sweep',
         'scan_archive',
         'scan_result',
         'scan_sweep',
     },
-    'name what came back': {'Model', 'Result', 'Sweep'},
-    'catch it': {
+}
+
+#: The two public submodules, and every name each one binds.
+PUBLIC_MODULES = {
+    'types': {
+        'ArchivedInputs',
+        'ConstraintRow',
+        'Diagnostics',
+        'InfeasibleSubsystem',
+        'Metrics',
+        'Model',
+        'Output',
+        'Provenance',
+        'Record',
+        'Result',
+        'ResultArchive',
+        'Start',
+        'Sweep',
+        'SweepArchive',
+    },
+    'errors': {
         'SpecsolveError',
         'LanguageError',
         'DataError',
@@ -344,39 +365,80 @@ PUBLIC_API = {
 }
 
 
+def _surface_problems(module: Any, declared: set[str]) -> list[str]:
+    """How *module*'s ``__all__`` and its public attributes depart from *declared*."""
+    import inspect
+
+    name = module.__name__
+    problems = []
+    unresolved = sorted(n for n in module.__all__ if not hasattr(module, n))
+    if unresolved:
+        problems.append(f'{name}.__all__ names what the module does not bind: {unresolved}')
+    if set(module.__all__) != declared:
+        problems.append(
+            f'{name}.__all__ and the declared table disagree: only in __all__ '
+            f'{sorted(set(module.__all__) - declared)}, only in the table {sorted(declared - set(module.__all__))}'
+        )
+    leaked = sorted(
+        n
+        for n in dir(module)
+        if not n.startswith('_') and n not in declared and not inspect.ismodule(getattr(module, n))
+    )
+    if leaked:
+        problems.append(f'{name} binds public names outside __all__: {leaked}')
+    return problems
+
+
 def test_the_public_surface_is_exactly_what_is_declared():
     """Hard rule 5, in names: the Python surface is narrow, and stays narrow.
 
-    Two directions: ``__all__`` matches the table, and no public non-module
-    attribute exists outside it.
+    Three modules, each in two directions: ``__all__`` matches its table, and
+    no public non-module attribute exists outside it.
     """
-    import inspect
-
     import specsolve
 
-    unresolved = sorted(name for name in specsolve.__all__ if not hasattr(specsolve, name))
-    assert not unresolved, (
-        f'__all__ names what the package does not bind: {unresolved} — `from specsolve import *` '
-        f'raises, and an annotation naming one is only silent because it is never evaluated'
+    problems = _surface_problems(specsolve, {name for names in PUBLIC_API.values() for name in names})
+    for module, names in PUBLIC_MODULES.items():
+        problems += _surface_problems(getattr(specsolve, module), names)
+    assert not problems, (
+        f'{problems} — declare a name in PUBLIC_API or PUBLIC_MODULES, with the role it plays, and in '
+        f'docs/about/architecture.md; or import it privately. A surface that grows by accident is not narrow.'
     )
 
-    declared = {name for names in PUBLIC_API.values() for name in names}
-    assert set(specsolve.__all__) == declared, (
-        f'specsolve.__all__ and PUBLIC_API disagree: only in __all__ '
-        f'{sorted(set(specsolve.__all__) - declared)}, only in the table '
-        f'{sorted(declared - set(specsolve.__all__))} — add the name to PUBLIC_API '
-        f'with the role it plays, and to docs/about/architecture.md'
-    )
 
-    leaked = sorted(
-        name
-        for name in dir(specsolve)
-        if not name.startswith('_') and name not in declared and not inspect.ismodule(getattr(specsolve, name))
-    )
-    assert not leaked, (
-        f'public names outside __all__: {leaked} — a surface that grows by '
-        f'accident is not narrow. Import it privately, or declare it.'
-    )
+@pytest.mark.parametrize(
+    ('module', 'belongs'),
+    [
+        pytest.param(
+            'types',
+            lambda held: (
+                get_origin(held) is Literal
+                or (isinstance(held, type) and not issubclass(held, BaseException | Warning))
+            ),
+            id='types-holds-only-classes-that-are-not-errors-and-vocabularies',
+        ),
+        pytest.param(
+            'errors',
+            lambda held: isinstance(held, type) and issubclass(held, Exception | Warning),
+            id='errors-holds-only-errors-and-warnings',
+        ),
+    ],
+)
+def test_each_public_module_holds_one_kind_of_name(module, belongs):
+    """``specsolve.types`` holds what a call returns and the vocabulary it takes, and ``specsolve.errors`` what it raises."""
+    import specsolve
+
+    held = getattr(specsolve, module)
+    wrong = sorted(name for name in held.__all__ if not belongs(getattr(held, name)))
+    assert not wrong, f'specsolve.{module} exports {wrong}, which do not belong to it'
+
+
+def test_only_the_axes_are_classes_at_the_top_level():
+    """A caller builds an axis and passes it in. Every other class is a type, and lives in ``specsolve.types``."""
+    import specsolve
+
+    classes = sorted(n for n in specsolve.__all__ if isinstance(getattr(specsolve, n), type))
+    assert classes == ['EachCoordinate', 'EachWindow'], f'classes at the top level: {classes}, not only the two axes'
 
 
 #: The two sink families; the directory is the family.
@@ -391,17 +453,15 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     """One shape per family, checked off the path.
 
     A solver is a module under ``solvers/`` named for it, a ``Solver``
-    subclass defined in that module, a ``build_<name>`` seam for `bench/`, and
-    the ``SOLVERS`` key holding the class. Writers are keyed by suffix.
+    subclass defined in that module, and the ``SOLVERS`` key holding the
+    class. Writers are keyed by suffix.
     """
-    import importlib
 
     from specsolve.relational.sinks import SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers') - {'base'}
+    solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
     for name in sorted(solvers):
-        module = importlib.import_module(f'specsolve.relational.sinks.solvers.{name}')
         held = SOLVERS[name]
         assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
         assert held.__module__.rsplit('.', 1)[-1] == name, (
@@ -414,9 +474,10 @@ def test_each_sink_family_is_its_directory_and_its_registry():
             f'{name}.is_available() must answer without importing the solver or raising'
         )
         assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
-        assert hasattr(module, f'build_{name}'), f'{name} has no build_{name}: the load-only seam `bench/` measures'
 
-    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {'base'}
+    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {
+        FAMILY_SHARED['writers']
+    }
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
 
 
@@ -424,22 +485,16 @@ def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
     from specsolve.relational.sinks import SOLVERS, WRITERS
-    from specsolve.relational.sinks.capabilities import (
-        CAPABILITIES,
-        Capabilities,
-        Support,
-    )
+    from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
     for sink, capabilities in described.items():
         assert isinstance(capabilities, Capabilities), f'{sink} declares no capabilities'
-        strangers = sorted(set(capabilities.supports) - set(CAPABILITIES))
+        strangers = sorted(set(capabilities.supports) - set(ALL_CAPABILITIES))
         assert not strangers, f'{sink} names capabilities the vocabulary has not got: {strangers}'
-        answers = sorted(set(capabilities.supports.values()) - set(get_args(Support)))
-        assert not answers, f'{sink} answers {answers}, which no comparison in the family reads as support'
         for combination in capabilities.excludes:
-            unsupported = sorted(c for c in combination if capabilities.support(c) == 'absent')
+            unsupported = sorted(combination - capabilities.supports)
             assert not unsupported, (
                 f'{sink} excludes the combination {sorted(combination)} while lacking {unsupported} '
                 f'outright — an exclusion is about a *pair* it has both halves of, and a capability '
@@ -472,15 +527,20 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
     )
 
 
+#: The one module each sink family shares: the solver lifecycle, the text renderings.
+FAMILY_SHARED = {'solvers': 'base', 'writers': 'text'}
+
+
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    A leaf reads ``handoff.py``, its family's ``base``, ``capabilities``, and
-    its own dependency — nothing else in the family.
+    A leaf reads ``handoff.py``, its family's shared module
+    (``FAMILY_SHARED``), ``capabilities``, and its own dependency — nothing
+    else in the family.
     """
-    shareable = ('.handoff', '.base', '.capabilities')
     offenders = {}
-    for family in ('solvers', 'writers'):
+    for family, shared in FAMILY_SHARED.items():
+        shareable = ('.handoff', '.capabilities', f'.{family}.{shared}')
         for path in sorted((SINKS / family).glob('*.py')):
             reached = {
                 name
@@ -490,8 +550,8 @@ def test_no_sink_reaches_a_sibling():
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
     assert not offenders, (
-        f'sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family base '
-        f'and its own dependency; anything else shared belongs on one of those two'
+        f"sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family's shared "
+        f'module and its own dependency; anything else shared belongs on one of those two'
     )
 
 
@@ -501,7 +561,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     from mathspec import program
 
-    engine_dir = PKG / 'relational' / 'engines' / 'polars'
+    engine_dir = PKG / 'relational' / 'engine'
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
@@ -528,9 +588,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / 'lanes.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / 'inputs.py', 'Buildable'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve.lanes.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve.inputs.Buildable takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 
@@ -550,16 +610,17 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve.strategy import EachCoordinate, EachWindow, solve_over
+    from specsolve.axes import EachCoordinate, EachWindow
+    from specsolve.strategy import solve_over
 
     doors = {
         'build': specsolve.build,
         'solve': specsolve.solve,
         'write': specsolve.write,
-        'SolveArchive': specsolve.SolveArchive.__init__,
-        'SweepArchive': specsolve.SweepArchive.__init__,
-        'Model': specsolve.Model.__init__,
-        'Model.update': specsolve.Model.update,
+        'ResultArchive': specsolve.types.ResultArchive.__init__,
+        'SweepArchive': specsolve.types.SweepArchive.__init__,
+        'Model': specsolve.types.Model.__init__,
+        'Model.update': specsolve.types.Model.update,
         'solve_over': solve_over,
         'EachCoordinate.slices': EachCoordinate.slices,
         'EachWindow.slices': EachWindow.slices,
@@ -579,9 +640,26 @@ def test_both_lanes_lower_a_spec_through_one_function():
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute) and node.attr == 'program' and isinstance(node.value, ast.Call)
     }
-    assert reading == {'lanes.py'}, (
+    assert reading == {'inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
-        f'lanes.lowered, which is what refuses a spec this package cannot build or write down'
+        f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
+    )
+
+
+def test_every_frame_is_collected_through_one_function():
+    """``relational/collect.py`` picks the engine and keeps every join in the order it was written."""
+    calls = {
+        f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
+        for path in _all_modules()
+        if path != PKG / 'relational' / 'collect.py'
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {'collect', 'collect_all'}
+    }
+    assert not calls, (
+        f'{sorted(calls)} collect a frame directly; pipe it through relational.collect.collected, '
+        f'or polars picks the engine and reorders the joins'
     )
 
 
@@ -605,7 +683,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve.relational.engines.polars.fragments import fan_in
+    from specsolve.relational.engine.pieces import fan_in
 
     x = program.Variable('x')
     declared = {
@@ -711,7 +789,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
         return found
 
     lanes = {
-        'relational': dispatched_on(*(PKG / 'relational' / 'engines' / 'polars').glob('*.py')),
+        'relational': dispatched_on(*(PKG / 'relational' / 'engine').glob('*.py')),
         'linopy': dispatched_on(*ORACLE.glob('*.py')),
     }
     for lane, handled in lanes.items():
@@ -743,7 +821,7 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('relational/engines/polars/predicates.py', 'specsolve.relational.engines.polars.compiler'): (
+    ('relational/engine/predicates.py', 'specsolve.relational.engine.compiler'): (
         'the same comparison on the streaming lane, and the compiler reads this module for the mask '
         'walk and the carrier both of its walks join on'
     ),

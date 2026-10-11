@@ -12,9 +12,10 @@ from typing import TYPE_CHECKING, get_args
 import polars as pl
 from mathspec import program
 
+from specsolve.relational.collect import collected
 from specsolve.relational.sinks.capabilities import Capabilities
 from specsolve.relational.sinks.handoff import SENSE_CODES
-from specsolve.relational.sinks.writers.base import chunk_key, digits, number, sink
+from specsolve.relational.sinks.writers.text import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
     from specsolve.relational.sinks.handoff import Handoff
@@ -23,13 +24,9 @@ if TYPE_CHECKING:
 #: Every construct the language can reach, quadratic rows included. A reader
 #: may still refuse a section: HiGHS's refuses two.
 LP_FILE_CAPABILITIES = Capabilities(
-    supports={
-        'integrality': 'native',
-        'sos': 'native',
-        'quadratic_objective': 'native',
-        'nonconvex_quadratic_objective': 'native',
-        'quadratic_constraint': 'native',
-    }
+    supports=frozenset(
+        {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+    )
 )
 
 
@@ -69,49 +66,71 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
         f.write((b'max' if handoff.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
         if handoff.objective_constant:
             f.write(f'{handoff.objective_constant:+.17g}\n'.encode())
-        sink(objective, f)
+        append_lines(objective, f)
         if handoff.quad.height:
             f.write(b'+ [\n')
-            sink(_quadratic_terms(handoff), f)
+            append_lines(_quadratic_terms(handoff), f)
             f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
         for block in handoff.row_blocks(EMIT_BUDGET):
-            sink(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
-        for row, pairs in handoff.quadratic_blocks():
-            sink(_quadratic_row_lines(handoff, row, pairs), f)
+            append_lines(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
+        if handoff.qmatrix.height:
+            append_lines(_quadratic_row_lines(handoff), f)
 
         f.write(b'\nbounds\n')
-        sink(bounds, f)
+        append_lines(bounds, f)
 
         for domain, keyword in _LP_DOMAIN_SECTION.items():
             chosen = handoff.cols.lazy().with_row_index('col').filter(pl.col('vtype') == domain)
-            if chosen.select(pl.len()).collect().item() == 0:
+            if chosen.select(pl.len()).pipe(collected).item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
-            sink(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
+            append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
 
         if handoff.sos.height:
             f.write(b'\nsos\n')
-            sink(_set_lines(handoff), f)
+            append_lines(_set_lines(handoff), f)
 
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(handoff: Handoff, row: int, pairs: pl.DataFrame) -> pl.LazyFrame:
-    """One quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``.
+def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
+    """Every quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``, one sorted stream.
 
-    Not doubled: the format divides only the objective's bracket by two.
+    A line's key is ``(row, part, at)``: ``part`` orders header, linear terms,
+    bracket, pairs and footer within a row, and ``at`` orders lines within a
+    part — a term by its column, a pair by its place in ``qmatrix``, which
+    arrives ordered. Not doubled: the format divides only the objective's
+    bracket by two.
     """
-    entries = handoff.matrix_block(row, row + 1)
-    header = pl.LazyFrame({'line': [f'c{row}:']})
-    linear = entries.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')).alias('line'))
-    opened = pl.LazyFrame({'line': ['+ [']})
-    quadratic = pairs.lazy().select(_pair(pl.col('coeff')).alias('line'))
-    closed = (
-        handoff.rows.lazy().filter(pl.col('row') == row).select(pl.concat_str(pl.lit('] '), _footer()).alias('line'))
+    lo = handoff.linear_row_count
+
+    def _keyed(frame: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
+        return frame.select(
+            pl.col('row').cast(pl.Int64),
+            pl.lit(part, dtype=pl.Int64).alias('part'),
+            at.cast(pl.Int64).alias('at'),
+            line.alias('line'),
+        )
+
+    rows = handoff.rows.lazy().filter(pl.col('row') >= lo)
+    entries = handoff.matrix_block(lo, handoff.row_count).lazy()
+    pairs = handoff.qmatrix.lazy().with_row_index('at')
+    zero = pl.lit(0)
+    return (
+        pl.concat(
+            [
+                _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col('row')), pl.lit(':'))),
+                _keyed(entries, 1, pl.col('col'), _term(pl.col('coeff'), pl.col('col'))),
+                _keyed(rows, 2, zero, pl.lit('+ [')),
+                _keyed(pairs, 3, pl.col('at'), _pair(pl.col('coeff'))),
+                _keyed(rows, 4, zero, pl.concat_str(pl.lit('] '), _footer())),
+            ]
+        )
+        .sort('row', 'part', 'at')
+        .select('line')
     )
-    return pl.concat([header, linear, opened, quadratic, closed])
 
 
 def _quadratic_terms(handoff: Handoff) -> pl.LazyFrame:

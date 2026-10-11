@@ -1,0 +1,6 @@
+process,value
+cold_conv,true
+ext_conv,true
+mod_conv,true
+mod_fix,true
+warm_conv,true

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
 
 from specsolve.relational.sinks import SOLVERS  # noqa: E402 — after the guard, or a bare install fails at import
-from specsolve.relational.sinks.capabilities import CAPABILITIES  # noqa: E402
+from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES  # noqa: E402
 
 TABLE = 'docs/about/benchmarks.md, "Sink capabilities"'
 
@@ -106,6 +106,6 @@ def test_the_gurobi_descriptor_says_what_this_sink_does_with_what_it_measured():
     included.
     """
     capabilities = SOLVERS['gurobi'].capabilities
-    for capability in CAPABILITIES:
-        assert capabilities.support(capability) == 'native', f'{capability} solved natively above'
+    for capability in ALL_CAPABILITIES:
+        assert capability in capabilities.supports, f'{capability} solved natively above'
     assert capabilities.excludes == (), 'every combination probed above solved; nothing here is excluded'

@@ -3,9 +3,9 @@
 The operator is degree 0 in variables wherever it appears, so it is not a
 ceiling question at all — it is the arithmetic ``*`` already does, spelled the
 way a discount factor is written. What it costs is one refusal per way a
-variable can get underneath it, and one for an operand that adds: addition does
-not distribute over ``**``, so ``(1 + rate) ** period`` is two factors wearing
-one and is refused where ``growth ** period`` is not (#1175).
+variable can get underneath it. An operand that adds is added up to one number
+per coordinate before the power is taken, so ``(1 + rate) ** period`` is the
+discount factor it reads as.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import dataclasses
 
 import polars as pl
 import pytest
-from mathspec.program import Add, Constant, Parameter, Power, Variable
+from mathspec.program import Constant, Power, Variable
 
 import specsolve as sps
 from specsolve.errors import LanguageError
@@ -52,6 +52,9 @@ def spec(expression: str, **patch) -> dict:
         pytest.param('sum(p * growth ** period ** period)', id='right-associative'),
         pytest.param('sum(p * cost / growth ** 2)', id='a-literal-exponent'),
         pytest.param('sum(p * cost / 2 ** period)', id='a-literal-base'),
+        pytest.param('sum(p * cost / (1 + growth) ** period)', id='a-base-that-adds'),
+        pytest.param('sum(p * cost / growth ** (period + 1))', id='an-exponent-that-adds'),
+        pytest.param('sum(p * cost / (growth - 0.5) ** (2 * period - 1))', id='both-operands-add'),
     ],
 )
 def test_both_lanes_reach_one_optimum(expression):
@@ -60,14 +63,30 @@ def test_both_lanes_reach_one_optimum(expression):
         pass
 
 
-def test_the_discount_factor_is_the_one_a_hand_computes():
+@pytest.mark.parametrize(
+    ('model', 'sources'),
+    [
+        pytest.param(SPEC, SOURCES, id='a-growth-parameter'),
+        pytest.param(
+            spec(
+                'sum(p * cost / (1 + rate) ** period)',
+                parameters={**SPEC['parameters'], 'rate': {'dims': []}},
+            ),
+            {**SOURCES, 'rate': pl.DataFrame({'value': [0.1]})},
+            id='a-base-that-adds',
+        ),
+    ],
+)
+def test_the_discount_factor_is_the_one_a_hand_computes(model, sources):
     """A published number rather than a lane agreeing with itself.
 
     Unit costs discount to 5, 5/1.1 and 5/1.21, so the cheapest twelve units are
     all ten of `c` and two of `b` — an ordering a *linear* cost over equal
     `cost` could not produce, which is what makes the exponent load-bearing.
+    `(1 + rate) ** period` is the same factor, added up before the power: taken
+    term by term it would read `1 ** period`, and no unit would be discounted.
     """
-    result = sps.solve(SPEC, SOURCES)
+    result = sps.solve(model, sources)
     assert result.objective == pytest.approx(10 * 5 / 1.21 + 2 * 5 / 1.1), (
         'the discounted optimum is not what the exponent says it is'
     )
@@ -75,31 +94,24 @@ def test_the_discount_factor_is_the_one_a_hand_computes():
     assert filled == pytest.approx({'a': 0.0, 'b': 2.0, 'c': 10.0}), 'the cheapest period is filled first'
 
 
-# ---------------------------------------------------------------------------
-# the plan boundary: two guards no file can reach
-# ---------------------------------------------------------------------------
+def test_a_missing_row_under_a_power_that_adds_reads_as_zero_on_both_lanes():
+    """`(1 + period) ** 2` is 1 where `period` has no row, as a missing parameter row reads anywhere but a divisor.
 
-
-@pytest.mark.parametrize(
-    ('expression', 'match'),
-    [
-        pytest.param(Power(Variable('p'), Constant(2.0)), 'power over variables', id='a-variable-under-it'),
-        pytest.param(
-            Power(Add(Constant(1.0), Parameter('growth')), Parameter('growth')),
-            'refused at load',
-            id='an-operand-that-adds',
-        ),
-    ],
-)
-def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression, match):
-    """Purpose-built, because `check` refuses both before a plan exists, so the plan is built by hand.
-
-    Addition does not distribute over `**`, so a two-fragment base silently
-    folded would compile `1 ** growth` and drop the rate. Both operands are the
-    *scalar* parameter: the language refuses a variable-free part of an
-    objective that carries dims, so a `period`-shaped one would be turned back
-    before the guard under test could speak.
+    Per unit, `a` costs 5, `b` 20 and `c` 5, so twelve units are ten of `a` and
+    two of `c`. Dropped at `c` instead, the term would cost nothing there.
     """
+    sources = {**SOURCES, 'period': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 1.0]})}
+    with differential(spec('sum(p * cost * (1 + period) ** 2)'), sources) as run:
+        assert float(run.result.objective) == pytest.approx(60.0), 'c is priced at 5 * 1 ** 2, not left free'
+
+
+# ---------------------------------------------------------------------------
+# the plan boundary: a guard no file can reach
+# ---------------------------------------------------------------------------
+
+
+def test_a_power_over_a_variable_is_refused_at_the_plan_boundary():
+    """Purpose-built, because `check` refuses it before a plan exists, so the plan is built by hand."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'growth': {'dims': []}, 'period': {'dims': ['g']}},
@@ -114,6 +126,7 @@ def test_a_power_outside_the_language_is_refused_at_the_plan_boundary(expression
     }
     model = sps.build(spec, sources)
     program = model._program
+    expression = Power(Variable('p'), Constant(2.0))
     patched = dataclasses.replace(program, objective=dataclasses.replace(program.objective, expression=expression))
-    with pytest.raises((LanguageError, AssertionError), match=match):
+    with pytest.raises((LanguageError, AssertionError), match='power over variables'):
         model._engine.build(patched, tidy_sources(program, dict(model._sources)))

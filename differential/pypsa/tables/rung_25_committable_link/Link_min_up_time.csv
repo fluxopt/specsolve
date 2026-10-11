@@ -1,0 +1,7 @@
+scenario,link,value
+base,cold_tie,2
+base,ext_tie,0
+base,hvdc,3
+base,mod_fix,0
+base,mod_tie,0
+base,wire,0

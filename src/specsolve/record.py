@@ -5,8 +5,8 @@ Needs the ``datarecord`` extra: ``pip install 'specsolve[datarecord]'``.
 [`answer_schema`][] is what a solve of a spec answers with, as a record's
 schema: every frame [`Result.save`][specsolve.relational.result.Result.save]
 writes, keyed ``<kind>.<name>`` over the run axis and the declaration's own
-dims, and every column of the [`Record`][specsolve.relational.parquet.Record]
-and [`Metrics`][specsolve.relational.parquet.Metrics] as an attribute over the
+dims, and every column of the [`Record`][specsolve.relational.answer_layout.Record]
+and [`Metrics`][specsolve.relational.answer_layout.Metrics] as an attribute over the
 run axis. [`write_answer`][] stages one solve's answer as one run of it. A
 record holding many runs is a family of solves: a Monte Carlo campaign, a
 sweep, the steps of an iterative scheme. The record that held the inputs is
@@ -22,13 +22,20 @@ import polars as pl
 from datarecord import AttributeSpec, Dimension, Schema
 from mathspec import to_spec
 
-from specsolve.relational.parquet import LAYOUT, METRICS_SCHEMA, RECORD_SCHEMA
+from specsolve.relational.answer_layout import (
+    ANSWER_LAYOUT,
+    BASES,
+    BASIS_STATUSES,
+    METRICS_SCHEMA,
+    OUTPUT_KINDS,
+    RECORD_SCHEMA,
+)
 
 if TYPE_CHECKING:
     from datarecord import WorkingRecord
 
-    from specsolve.lanes import Buildable
-    from specsolve.relational.parquet import Metrics
+    from specsolve.inputs import Buildable
+    from specsolve.relational.answer_layout import Metrics
     from specsolve.relational.result import Result
 
 __all__ = ['answer_schema', 'write_answer']
@@ -40,9 +47,10 @@ QUANTITY = 'quantity'
 def answer_schema(spec: Buildable, *, over: str = 'run') -> Schema:
     """What a solve of *spec* answers with, as the schema of a record of answers.
 
-    One attribute per frame a solve answers with, named ``<kind>.<name>``:
-    ``primal.<variable>``, ``dual.<constraint>``, ``activity.<constraint>`` and
-    ``expression.<name>``, each over *over* and the dims its declaration
+    One attribute per frame a solve can answer with, named ``<kind>.<name>``:
+    ``primal.<variable>``, ``dual.<constraint>``, ``expression.<name>``, and
+    one per kind of frame the ``outputs=`` of a solve can ask for, such as
+    ``activity.<constraint>``, each over *over* and the dims its declaration
     names. One attribute per column of the solve's record and metrics, over
     *over* alone. ``reason`` says why a quantity is not there, over *over* and
     ``quantity``; ``input_node`` names the input record's node a run solved.
@@ -65,20 +73,28 @@ def answer_schema(spec: Buildable, *, over: str = 'run') -> Schema:
         over: Dimension(dtype=nw.String()),
         QUANTITY: Dimension(dtype=nw.String()),
     }
+    declared = {'variable': spec.variables, 'constraint': spec.constraints}
     blocks = [
         *(('primal', name, block.dims) for name, block in spec.variables.items()),
         *(('dual', name, block.dims) for name, block in spec.constraints.items()),
-        *(('activity', name, block.dims) for name, block in spec.constraints.items()),
+        *(
+            (kind, name, block.dims)
+            for kind, carried in OUTPUT_KINDS.items()
+            for name, block in declared[carried.per].items()
+        ),
         *(('expression', name, block.dims) for name, block in spec.expressions.items()),
     ]
     attributes = {
-        f'{kind}.{name}': AttributeSpec(dtype=nw.Float64(), dims=frozenset({over, *(block_dims or ())}))
+        f'{kind}.{name}': AttributeSpec(
+            dtype=nw.Enum(BASIS_STATUSES) if kind in BASES else nw.Float64(),
+            dims=frozenset({over, *(block_dims or ())}),
+        )
         for kind, name, block_dims in blocks
     }
     attributes |= {
         column: AttributeSpec(dtype=dtype, dims=frozenset({over}))
         for column, dtype in _facts().items()
-        if column != 'run'
+        if column != 'specsolve_run'
     }
     attributes['reason'] = AttributeSpec(dtype=nw.String(), dims=frozenset({over, QUANTITY}))
     attributes['input_node'] = AttributeSpec(dtype=nw.String(), dims=frozenset({over}))
@@ -86,7 +102,7 @@ def answer_schema(spec: Buildable, *, over: str = 'run') -> Schema:
         dimensions=dims,
         attributes=attributes,
         partial=frozenset({over}),
-        meta={'producer': 'specsolve', 'layout': LAYOUT},
+        meta={'producer': 'specsolve', 'layout': ANSWER_LAYOUT},
     )
 
 
@@ -133,7 +149,7 @@ def write_answer(
     """
     measured: dict[str, object] = metrics._asdict() if metrics is not None else {}
     facts = result.record._asdict() | measured
-    del facts['run']
+    del facts['specsolve_run']
     facts |= {over: run, 'input_node': input_node}
     working.add(over, pl.DataFrame([facts], schema_overrides=_polars_facts(over)))
     if not result.has_primal:
@@ -154,7 +170,7 @@ def write_answer(
 def _polars_facts(over: str) -> dict[str, pl.DataType | type[pl.DataType]]:
     """The facts' column types for one run's row, which may hold only nulls."""
     return {
-        **{c: t for c, t in (RECORD_SCHEMA | METRICS_SCHEMA).items() if c != 'run'},
+        **{c: t for c, t in (RECORD_SCHEMA | METRICS_SCHEMA).items() if c != 'specsolve_run'},
         over: pl.String,
         'input_node': pl.String,
     }

@@ -38,9 +38,10 @@ from mathspec.program import (
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.engine import PolarsEngine
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.assembly import _sorted
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.engine import Engine
+from specsolve.relational.engine.scope import Scope
 from specsolve.relational.sinks import SOLVERS
 from specsolve.relational.sinks.handoff import ranges
 from specsolve.relational.sinks.solvers.highs import Highs
@@ -262,7 +263,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `PolarsEngine.build` takes a *program* and the frames
+    Below the front door: `Engine.build` takes a *program* and the frames
     a built model reads, which is the same shape `tidy_sources` hands over — an
     index of labels, and each map as its own two-column relation.
     """
@@ -272,8 +273,8 @@ def transport_sources(gens, lines, load) -> dict:
         'cap': lines[['line', 'cap']].rename(columns={'cap': 'value'}),
         'cap_low': lines[['line']].assign(value=-lines['cap']),
         'load': load,
-        'snapshot': load[['snapshot']],
-        'bus': load[['bus']],
+        'snapshot': load[['snapshot']].drop_duplicates(),
+        'bus': load[['bus']].drop_duplicates(),
         'generator': gens[['generator']],
         'line': lines[['line']],
         'gen_bus': gens[['generator', 'bus']],
@@ -294,7 +295,7 @@ class TestTwoModelsRoundTrip:
         gens, load = dispatch_data
         oracle = dispatch_linopy_objective(gens, load)
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
 
             result = engine.solve()
@@ -319,7 +320,7 @@ class TestTwoModelsRoundTrip:
         oracle = transport_linopy_objective(gens, lines, load)
         assert np.isfinite(oracle), 'oracle model must be feasible'
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(transport_program(), tidy_sources(transport_program(), transport_sources(gens, lines, load)))
 
             result = engine.solve()
@@ -589,6 +590,38 @@ class TestTheLabelSpace:
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
         assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
 
+    @pytest.mark.parametrize(
+        'labels',
+        [
+            pytest.param([2, 0, 1], id='rotated'),
+            pytest.param([3, 2, 1], id='descending'),
+        ],
+    )
+    def test_an_integer_dimension_out_of_ascending_order_keeps_each_row_on_its_label(self, labels):
+        """Integer labels that are a run only once sorted are not a run.
+
+        A constraint over the whole of a dimension computes each term's row from
+        the label when the labels are consecutive ascending integers. A set of
+        labels that only sorts into a run must still be placed by its declared
+        order, or each ``x`` lands on the row of another label's ``cap``.
+        """
+        spec = {
+            'dimensions': {'t': {'dtype': 'int'}},
+            'parameters': {'cap': {'dims': ['t']}},
+            'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
+            'constraints': {'k': {'dims': ['t'], 'expression': 'x <= cap'}},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+        }
+        cap = {label: 10.0 * label + 1.0 for label in labels}
+        data = {'t': labels, 'cap': pl.DataFrame({'t': list(cap), 'value': list(cap.values())})}
+
+        with sps.solve(spec, data) as result:
+            x = by_coord(result, 'x', 't')
+
+        assert list(x) == labels, 'read-back follows declaration order'
+        for label, bound in cap.items():
+            assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
+
     def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
         """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
         (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
@@ -629,7 +662,7 @@ class TestTheLabelSpace:
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
-            with PolarsEngine() as engine:
+            with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
@@ -760,6 +793,27 @@ class TestTheLabelSpace:
         assert "'zz'" in str(exc.value), 'the refusal must name the offending label'
         assert 'typo' in str(exc.value)
 
+    @pytest.mark.parametrize(
+        ('name', 'labels'),
+        [
+            pytest.param('cost', [None, 'b'], id='a cost leading with a null'),
+            pytest.param('cap', [None, 'b'], id='a bound leading with a null'),
+            pytest.param('cap', ['b', None], id='a bound ending with a null'),
+        ],
+    )
+    def test_a_null_label_is_refused(self, name, labels):
+        """A null label is refused like any label the dimension does not have.
+
+        It used to pass the known-label check, which skipped nulls: a null cost
+        label joined nothing and the model solved to 10.0 with no error, and a
+        null bound label failed deep in the build with an ``IndexError``.
+        """
+        table = pl.DataFrame({'f': labels, 'value': [1.0, 2.0]}, schema={'f': pl.String, 'value': pl.Float64})
+        data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
+        with pytest.raises(DataError) as exc:
+            sps.solve(LABEL_SPEC, {**data, name: table})
+        assert 'None' in str(exc.value), 'the refusal must name the null as the offending label'
+
     def test_a_missing_row_is_still_only_sparse(self):
         """The distinction the refusal above rests on. A row that is *absent* is
         ordinary — it reads as a zero coefficient (the data-attachment rules) — and
@@ -833,7 +887,7 @@ class TestTheLabelSpace:
 
 def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
-    with PolarsEngine() as engine:
+    with Engine() as engine:
         engine.build(program, tidy_sources(program, sources))
         obj = engine._model.handoff.obj
         return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
@@ -923,7 +977,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_a_variable_appearing_twice_in_a_row_is_summed_not_duplicated(self):
         """The case the skipped aggregate must not break.
 
-        `x + 2 * x` is two term fragments landing on one solver column, so the
+        `x + 2 * x` is two term pieces landing on one solver column, so the
         assembly has to add them. Its coefficient must be 3, and the row must hold
         one entry for that column rather than two — a solver handed the same
         column twice in one row is entitled to reject the model.
@@ -932,7 +986,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
-            assert matrix.height == 2, 'one entry per row, not one per fragment'
+            assert matrix.height == 2, 'one entry per row, not one per piece'
             assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
             result = model.solve()
         assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
@@ -961,7 +1015,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_the_matrix_collapses_a_repeated_cell_and_leaves_the_rest_alone(self, expression, height, coeff):
         """Both outcomes of the terminal aggregate, on models differing only in overlap.
 
-        Two fragments over disjoint variables repeat nothing and must come out
+        Two pieces over disjoint variables repeat nothing and must come out
         untouched; two over the same variable land on one cell and must be summed.
         A matrix holding the same `(row, col)` twice is not a slower model, it is
         one the sinks disagree about.
@@ -991,7 +1045,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_two_sums_of_one_variable_collide_only_where_the_coordinates_meet(self, ends):
         """`group_by=to` and `group_by=from` reach one cell exactly on a line to itself.
 
-        Both fragments carry `f`, so counting variables says the aggregate is
+        Both pieces carry `f`, so counting variables says the aggregate is
         reachable and every nonzero in the model gets sorted to find out. Which
         labels they share is decided by the *line* table — two rows here, forty at
         the `l` rung, against 12.6M nonzeros — so it is asked there.
@@ -1006,7 +1060,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             program = Spec(**spec).program
             built = model._engine._model
-            compiler = PolarsCompiler(Scope(built.program, built.attached, built.variables))
+            compiler = Compiler(Scope(built.program, built.attached, built.variables))
             terms = compiler.expression(next(iter(program.constraints.values())).lhs, 'test').terms
             assert len(terms) == 2
 
@@ -1017,8 +1071,8 @@ class TestWhatReachesTheSolverAsAnEntry:
     @pytest.mark.parametrize(
         ('expression', 'expected'),
         [
-            pytest.param('sum(p * cost)', {0: 2.0, 1: 3.0}, id='one-fragment-one-row-per-column'),
-            pytest.param('sum(p * cost) + sum(p * cost)', {0: 4.0, 1: 6.0}, id='two-fragments-summed-onto-one-column'),
+            pytest.param('sum(p * cost)', {0: 2.0, 1: 3.0}, id='one-piece-one-row-per-column'),
+            pytest.param('sum(p * cost) + sum(p * cost)', {0: 4.0, 1: 6.0}, id='two-pieces-summed-onto-one-column'),
         ],
     )
     def test_the_objective_sums_the_coefficients_that_land_on_one_column(self, expression, expected):
@@ -1038,11 +1092,11 @@ class TestWhatReachesTheSolverAsAnEntry:
         assert _objective_table(Spec(**base).program, sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
-        """A fragment's dims can match the variable's while its rows do not.
+        """A piece's dims can match the variable's while its rows do not.
 
         `sum(q * price, over=generator)` with `q` indexed by snapshot alone reduces
-        to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_fragment`
-        *projects*, so the fragment still carries one row per generator. Those rows
+        to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_piece`
+        *projects*, so the piece still carries one row per generator. Those rows
         all name one column, and `obj` must hold their sum: the LP file would
         quietly re-sum |generator| rows, while `cols` joined to `obj` in the HiGHS
         sink would hand the solver more columns than the model has.
@@ -1109,7 +1163,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         gens, load = dispatch_data
         base = dispatch_program()
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=None)})
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
             assert engine._model.handoff.cols['ub'].is_infinite().all()
             assert engine.solve().is_ok
@@ -1177,9 +1231,9 @@ FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve.relational.engines.polars import compiler as compiler_module
+    from specsolve.relational.engine import compiler as compiler_module
 
-    real = compiler_module.PolarsCompiler._aligned_bound
+    real = compiler_module.Compiler._aligned_bound
     seen = {}
 
     def spy(self, frame, param, v, alias):
@@ -1187,7 +1241,7 @@ def _aligned_for(spec, data, monkeypatch):
         seen[param] = out is not None
         return out
 
-    monkeypatch.setattr(compiler_module.PolarsCompiler, '_aligned_bound', spy)
+    monkeypatch.setattr(compiler_module.Compiler, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
     with contextlib.suppress(SpecsolveError):
         sps.build(spec, data).close()
@@ -1239,13 +1293,10 @@ class TestThePositionalHandoff:
         with sps.build(spec, sources) as model:
             primal = pl.Series('value', np.arange(model._engine._model.handoff.column_count, dtype=np.float64))
             dual = pl.Series('value', np.arange(model._engine._model.handoff.row_count, dtype=np.float64))
-            primals, duals, activities, _ = model._engine._read_back(primal, dual, dual, None)
+            primals, duals, _ = model._engine._read_back(primal, dual, None)
             assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
             assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
             assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
-            assert activities['meet'].collect()['value'].to_list() == list(range(len(dual))), (
-                'activity not in label order'
-            )
 
     @pytest.mark.parametrize('length', [2, 5], ids=['short', 'long'])
     def test_a_solver_vector_that_does_not_span_the_model_is_refused(self, monkeypatch, length):
@@ -1322,7 +1373,7 @@ class TestThePositionalHandoff:
         )
         load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
-        with PolarsEngine() as engine:
+        with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
             tables = engine._model.handoff
             assert tables.matrix.height == n_g * n_s
@@ -1567,7 +1618,7 @@ class TestWhereTheLanesDifferByDesign:
         `LanguageError` here says the file is unsayable, which is false twice over:
         `check` passes with no data, and the linopy oracle builds the model and
         reaches *answer*. What is true is that this lane cannot represent a constant
-        fragment with no rows for the dim the operator acts along, so the refusal is
+        piece with no rows for the dim the operator acts along, so the refusal is
         a `SpecsolveError` that names the rewrite.
         """
         spec = _constant_beside_a_term(expression)
@@ -1586,7 +1637,7 @@ class TestWhereTheLanesDifferByDesign:
     def test_the_rewrite_the_lane_gap_names_reaches_the_answer(self, expression, answer):
         """The rewrite the refusal names reaches the linopy lane's answer.
 
-        Declaring the constant over the dim gives the fragment the rows this lane
+        Declaring the constant over the dim gives the piece the rows this lane
         needs, and the number it then reaches is the one the linopy lane reaches from
         the unrewritten file.
         """
@@ -1666,3 +1717,21 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=['banana', 'to_bus', 'value'])
     with pytest.raises(DataError, match='is missing columns'):
         sps.build(Spec(**NETWORK), {'cap': wide})
+
+
+@pytest.mark.parametrize(
+    'largest',
+    [
+        pytest.param(2**20, id='the keys fit one integer'),
+        pytest.param(2**31 - 1, id='three keys overflow one integer'),
+    ],
+)
+def test_a_share_sorts_into_key_order_whether_or_not_its_keys_fit_one_integer(largest: int) -> None:
+    """Three solver indices near 2^31 have no common base under 2^63, so that share sorts on its columns."""
+    rng = np.random.default_rng(0)
+    share = pl.DataFrame(
+        {key: rng.integers(0, largest, 1_000) for key in ('row', 'col_l', 'col_r')} | {'coeff': rng.random(1_000)}
+    )
+    assert _sorted(share, ('row', 'col_l', 'col_r')).equals(share.sort('row', 'col_l', 'col_r')), (
+        'the share comes back in (row, col_l, col_r) order'
+    )

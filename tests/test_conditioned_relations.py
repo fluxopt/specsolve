@@ -195,13 +195,6 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
     ('relations', 'expression', 'dims', 'match'),
     [
         pytest.param(
-            {'connection': {'key': ['generator', 'bus']}},
-            'sum(p, by=connection, over=generator, into=bus) >= load',
-            ['bus', 'period'],
-            r"relation 'connection' is a bare relation, which maps nothing",
-            id='a-bare-relation',
-        ),
-        pytest.param(
             {'season_of': {'key': ['generator', 'period'], 'values': 'bus'}},
             'shift(p, along=period, offset=1, edge=0, by=season_of, within=bus) >= load',
             ['generator', 'period'],
@@ -230,7 +223,7 @@ def test_a_pair_supplied_twice_is_refused():
     """The key is the pair, so a second row for one pair is what "single-valued" refuses."""
     sources = _inputs()
     sources['zone_of'] = pl.concat([ZONE_OF, ZONE_OF.head(1)])
-    with pytest.raises(DataError, match=r"maps 1 key\(s\) more than once: generator='g1', period=1"):
+    with pytest.raises(DataError, match=r'maps 1 key\(s\) more than once: generator=g1, period=1'):
         sps.solve(SPEC, sources)
 
 

@@ -1,0 +1,7 @@
+link,value
+cold_tie,true
+ext_tie,true
+hvdc,true
+mod_fix,true
+mod_tie,true
+wire,false

@@ -153,7 +153,7 @@ def test_the_same_pair_twice_is_summed_rather_than_repeated():
 
 
 def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
-    """A contract, not tidiness. The stack is fragments in written order, so
+    """A contract, not tidiness. The stack is pieces in written order, so
     naming the higher-numbered variable first is enough to arrive unsorted —
     and two builds disagreeing makes `structure` read a moved *coefficient* as
     a moved pattern, reloading on every update that touches a quadratic
@@ -233,7 +233,7 @@ def test_a_pattern_that_moves_reloads_the_solver_rather_than_pushing():
 def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
     """A rewrite moves rows between coordinates and never reads what they
     carry: ``shift`` over a product puts two labels through the remap a linear
-    fragment goes through, and both lanes still agree."""
+    piece goes through, and both lanes still agree."""
     cyclic = {
         'parameters': {'need': {'dims': []}},
         'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
@@ -257,24 +257,21 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
 # ---------------------------------------------------------------------------
 
 
-def test_a_quadratic_objective_beside_integrality_is_refused_before_the_build():
-    """The exclusion, cashed: both halves are decidable with no data, so this
-    is a `check` verdict rather than a surprise at `run()`."""
+def test_a_quadratic_objective_beside_integrality_is_refused_before_the_load():
+    """The exclusion, cashed: both halves are read off the built model, so this
+    is a refusal before the load rather than a surprise at `run()`."""
     integral = spec('sum(p * p, over=g)')
     integral['variables'] = {**SPEC['variables'], 'p': {**SPEC['variables']['p'], 'domain': 'integer'}}
 
-    with pytest.raises(SpecsolveError, match='separately and refuses them together'):
-        sps.check(integral, sink='highs')
     with pytest.raises(SpecsolveError, match='separately and refuses them together'):
         sps.solve(integral, SOURCES)
 
 
 def test_a_nonconvex_objective_is_refused_at_the_solve_and_still_writes(tmp_path):
-    """The one capability verdict no data-free check can reach: `check` is
-    silent by construction and HiGHS discovers it at `run()`. The error code
-    must not reach the caller, and the file must still write."""
+    """The one capability verdict no table can reach: it is in the coefficients'
+    signs, and HiGHS discovers it at `run()`. The error code must not reach the
+    caller, and the file must still write."""
     concave = spec('-sum(p * p, over=g)')
-    sps.check(concave, sink='highs')
 
     with pytest.raises(SpecsolveError, match='not positive semidefinite'), sps.build(concave, SOURCES) as model:
         model.solve()

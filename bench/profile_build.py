@@ -22,11 +22,11 @@ from bench import cases as bench_cases
 #: What a collection is attributed to, as ``(module path, owner or None, name)``
 #: — a method on the class that owns it, or a module-level function.
 STEPS = (
-    ('specsolve.relational.engines.polars.assembly', 'Assembly', '_build_variable'),
-    ('specsolve.relational.engines.polars.assembly', 'Assembly', '_build_constraint'),
-    ('specsolve.relational.engines.polars.assembly', 'Assembly', '_build_objective'),
-    ('specsolve.relational.engines.polars.labels', None, 'frame'),
-    ('specsolve.relational.engines.polars.attaching', None, 'attach'),
+    ('specsolve.relational.engine.assembly', 'Assembly', '_build_variable'),
+    ('specsolve.relational.engine.assembly', 'Assembly', '_build_constraint'),
+    ('specsolve.relational.engine.assembly', 'Assembly', '_build_objective'),
+    ('specsolve.relational.engine.labels', None, 'frame'),
+    ('specsolve.relational.engine.attaching', None, 'attach'),
 )
 
 

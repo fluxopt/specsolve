@@ -29,11 +29,11 @@ import pytest
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.relational.engines.polars.attaching import AttachedSources
-from specsolve.relational.engines.polars.compiler import PolarsCompiler
-from specsolve.relational.engines.polars.labels import Labelled
-from specsolve.relational.engines.polars.predicates import masked
-from specsolve.relational.engines.polars.scope import Scope
+from specsolve.relational.engine.attaching import AttachedSources
+from specsolve.relational.engine.compiler import Compiler
+from specsolve.relational.engine.labels import Labelled
+from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.scope import Scope
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -87,6 +87,7 @@ def attached() -> AttachedSources:
         relations=RELATIONS,
         cardinality=CARDINALITY,
         parameter_rows={},
+        consecutive={},
     )
 
 
@@ -98,8 +99,8 @@ def declared(dtypes: Mapping[str, str] = MappingProxyType({})) -> program.Progra
     )
 
 
-def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> PolarsCompiler:
-    return PolarsCompiler(Scope(declared(dtypes), attached(), VARIABLES))
+def compiler(dtypes: Mapping[str, str] = MappingProxyType({})) -> Compiler:
+    return Compiler(Scope(declared(dtypes), attached(), VARIABLES))
 
 
 def columns(frame: pl.LazyFrame) -> list[str]:
@@ -121,17 +122,17 @@ def joins(frame: pl.LazyFrame) -> int:
 # ---------------------------------------------------------------------------
 
 
-def test_a_variable_compiles_to_one_term_fragment_over_its_dims():
+def test_a_variable_compiles_to_one_term_piece_over_its_dims():
     compiled = compiler().expression(program.Variable('p'), 'test')
     assert len(compiled.terms) == 1
     assert not compiled.consts
-    fragment = compiled.terms[0]
-    assert fragment.dims == ('snapshot', 'generator')
-    assert fragment.kind == 'term'
-    assert columns(fragment.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    piece = compiled.terms[0]
+    assert piece.dims == ('snapshot', 'generator')
+    assert piece.kind == 'term'
+    assert columns(piece.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
 
 
-def test_a_parameter_is_a_constant_fragment_not_a_term():
+def test_a_parameter_is_a_constant_piece_not_a_term():
     compiled = compiler().expression(program.Parameter('cost'), 'test')
     assert not compiled.terms
     assert compiled.consts[0].dims == ('generator',)
@@ -139,7 +140,7 @@ def test_a_parameter_is_a_constant_fragment_not_a_term():
     assert columns(compiled.consts[0].frame) == ['generator', 'cval']
 
 
-def test_addition_concatenates_fragments_rather_than_joining():
+def test_addition_concatenates_pieces_rather_than_joining():
     """An LP row is a sum of terms, so ``+`` needs no query at all."""
     compiled = compiler().expression(program.Add(program.Variable('p'), program.Variable('p')), 'test')
     assert len(compiled.terms) == 2
@@ -147,10 +148,10 @@ def test_addition_concatenates_fragments_rather_than_joining():
 
 def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     compiled = compiler().expression(program.Multiply(program.Variable('p'), program.Parameter('cost')), 'test')
-    fragment = compiled.terms[0]
-    assert fragment.dims == ('snapshot', 'generator')
-    assert columns(fragment.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
-    assert 'JOIN' in query(fragment.frame)
+    piece = compiled.terms[0]
+    assert piece.dims == ('snapshot', 'generator')
+    assert columns(piece.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert 'JOIN' in query(piece.frame)
 
 
 def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
@@ -169,16 +170,16 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
-    """The aggregate lives in the terminal assembly, not in the fragment."""
+    """The aggregate lives in the terminal assembly, not in the piece."""
     compiled = compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
-    fragment = compiled.terms[0]
-    assert fragment.dims == ('snapshot',)
-    assert columns(fragment.frame) == ['snapshot', 'var_label', 'coeff']
-    assert 'AGGREGATE' not in query(fragment.frame)
+    piece = compiled.terms[0]
+    assert piece.dims == ('snapshot',)
+    assert columns(piece.frame) == ['snapshot', 'var_label', 'coeff']
+    assert 'AGGREGATE' not in query(piece.frame)
 
 
-def masked_compiler() -> PolarsCompiler:
-    """A compiler over two masked variables, since a restriction only crosses between fragments."""
+def masked_compiler() -> Compiler:
+    """A compiler over two masked variables, since a restriction only crosses between pieces."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -192,13 +193,13 @@ def masked_compiler() -> PolarsCompiler:
         dimensions=PROGRAM.dimensions,
     )
     frames = dict(VARIABLES, q=VARIABLES['p'])
-    return PolarsCompiler(Scope(masked, attached(), frames))
+    return Compiler(Scope(masked, attached(), frames))
 
 
-def test_a_reduction_carries_absence_between_fragments_and_not_into_the_one_it_came_from():
+def test_a_reduction_carries_absence_between_pieces_and_not_into_the_one_it_came_from():
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
-    Restricting a fragment by its own coordinates returns the rows it was
+    Restricting a piece by its own coordinates returns the rows it was
     given, so a lone masked term costs no join.
     """
     both = masked_compiler().expression(
@@ -228,24 +229,24 @@ def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = program.GroupSum(program.Variable('p'), GEN_BUS_DIRECTION)
-    fragment = compiler().expression(node, 'test').terms[0]
-    assert fragment.dims == ('snapshot', 'bus')
-    assert columns(fragment.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
-    assert 'AGGREGATE' not in query(fragment.frame)
-    assert joins(fragment.frame) == 1
+    piece = compiler().expression(node, 'test').terms[0]
+    assert piece.dims == ('snapshot', 'bus')
+    assert columns(piece.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
+    assert 'AGGREGATE' not in query(piece.frame)
+    assert joins(piece.frame) == 1
 
 
 def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
-    fragment = (
+    piece = (
         compiler()
         .expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=True), 'test')
         .terms[0]
     )
-    assert fragment.dims == ('snapshot', 'generator')
-    assert columns(fragment.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
-    assert joins(fragment.frame) == 2
-    assert 'OVER' not in query(fragment.frame)
+    assert piece.dims == ('snapshot', 'generator')
+    assert columns(piece.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
+    assert joins(piece.frame) == 2
+    assert 'OVER' not in query(piece.frame)
 
 
 def test_wrapping_is_modulo_and_acyclic_is_not():
@@ -405,8 +406,9 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         relations={},
         cardinality={'snapshot': 3},
         parameter_rows={'load': 3},
+        consecutive={'snapshot': 0},
     )
-    q = PolarsCompiler(Scope(PROGRAM, sources, VARIABLES))
+    q = Compiler(Scope(PROGRAM, sources, VARIABLES))
     shifted = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
 
     rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
@@ -414,5 +416,5 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
     bare = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
-    vacated = q.expression(bare, 'test').consts[0].frame.collect()
+    vacated = q.expression(bare, 'test').consts[0].frame.collect().sort('snapshot')
     assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

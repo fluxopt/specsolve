@@ -41,7 +41,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Model**
 : A spec with data attached, the language's own meaning of the word
   ([glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)).
-  These docs use it in no other sense. `specsolve.Model`, what
+  These docs use it in no other sense. `specsolve.types.Model`, what
   [`build`](api.md) returns, is one. One `Model` feeds any sink through
   `solve()` or `write(path)`; `row(...)` and `diagnostics()` read it without
   solving.
@@ -50,34 +50,31 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Result**
 : One answer read back from a solve: `objective`, `primal(name)`,
   `dual(name)`, `evaluate(expression)` and the rest of
-  [`Result`](api.md#specsolve.Result). It owns its tables, so it
+  [`Result`](api.md#specsolve.types.Result). It owns its tables, so it
   outlives its model.
 
 **Answer**
 : What came back, whichever verb asked: a `Result` for one solve, a
-  [`Sweep`](#sweeps) for a sweep. `save` writes one as a directory —
-  `record.parquet` for how it terminated, then `primal/`, `dual/`,
-  `activity/` and `expression/` — and an archive holds that directory as
-  `answer/`.
+  [`Sweep`](#sweeps) for a sweep. `Result.save` writes one as a directory —
+  `record.parquet` for how it terminated, `spec.yaml` for the spec it
+  answered, then `primal/`, `dual/`,
+  `expression/` and a directory for each output the solve asked for with
+  `outputs=`, such as `activity/` — and an archive holds that directory as
+  `answer/`. The archive of a sweep holds its answer at the same paths, one
+  file per name.
 
 **Archive**
 : A spec, the data it was solved with and what came back, written together as
   one zip or one directory by `archive=` ([archiving](../howto/archiving.md)).
-  It reads back as a `SolveArchive`, or a `SweepArchive` where the sources were
-  cut. Its `run` is the archive's own name, stamped into the answer when it is
-  written. Never "artifact".
-
-**Digest**
-: A hash that says whether two things are the same input. `spec_digest` names
-  the document an answer came from, and an archive whose answer names another
-  is refused; `archive.source_digests` names each data member, so two archives
-  of one spec say which input moved.
+  It reads back as a `ResultArchive`, or a `SweepArchive` where the sources were
+  cut. Every table it holds carries `specsolve_run`, the archive's own name,
+  stamped when it is written. Never "artifact".
 
 ## The verbs
 
 **check** · **build** · **solve** · **write**
-: `check(spec)` validates and lowers; `check(spec, sink)` also asks whether
-  that sink takes it. `build(spec, sources)` returns a [Model](#the-chain).
+: `check(spec)` validates and lowers. `build(spec, sources)` returns a
+  [Model](#the-chain), whose `check(sink)` asks whether a sink takes it.
   `solve` and `write` build and then solve or stream in one call. There is no
   Python API for constructing a spec. Each has
   [its entry](api.md#run-a-spec).
@@ -114,8 +111,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The data
 
 **Index**
-: A dimension's labels in order, supplied under the dimension's own key in
-  `sources`. `shift` reads that order positionally
+: A dimension's labels in order, each once, supplied under the dimension's
+  own key in `sources`. `shift` reads that order positionally
   ([the data contract](data.md#where-coordinates-come-from)).
 
 **Coordinate**
@@ -163,8 +160,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : Where the [handoff](#the-built-form) lands: a solver (`highs`, `gurobi`,
   `xpress`) or a file writer (`.lp`, `.mps`). `linopy` is a lane, not a sink.
   What a sink can ingest is its **capability**: a special-ordered set is one,
-  and a sink without it refuses a model carrying a set rather than rewriting
-  it ([what each sink takes](api.md#what-each-sink-takes)).
+  and a sink without it refuses a built model carrying a set rather than
+  rewriting it ([what each sink takes](api.md#what-each-sink-takes)).
 
 **Sources**
 : The data you attach: parameter, dimension and relation names to tables, and
@@ -182,10 +179,13 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   part), `qmatrix` (the constraints') and `sos`. Handing it over is the phase
   the metrics clock as `handoff_seconds`.
 
-**keep**
-: How much of a session `model.solve` carries to the next solve: `solver`
-  (default), `progress` (its work too) or `nothing`
-  ([`Model.solve`](api.md#specsolve.Model.solve)).
+**start** · **previous**
+: What a solve begins from: `'previous'`, the default, carries on from the
+  solve before, `None` begins from nothing, and an earlier answer or tables
+  under `primal`, `variable_basis` and `constraint_basis` are matched by
+  coordinate. A start changes how soon the solver reaches the optimum, never
+  the optimum ([warm-starting](../howto/warm-start.md)). Never "prior". Unlike
+  a [carry](#sweeps), it changes no data.
 
 ## Sweeps
 
@@ -201,10 +201,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   solved as one model, and its key is the [label](#the-verbs) its rows are
   prefixed with in every table the sweep hands back.
 
-**Sweep**
-: A sweep's answer: `Result`'s readers one dimension wider, the key column
-  first. `original_index=True` reads a table back over the sliced
-  dimension's own labels.
+**Sweep** · **per window**
+: What `solve_over` returns: `Result`'s readers, each returning the answer.
+  A windowed sweep answers over the labels of the dimension it sliced. Any
+  other sweep answers keyed by slice, the key column first. `per_window=True`
+  reads a windowed sweep one window at a time, keyed by where each window
+  started, lookahead rows included.
 
 **carry**
 : `carry={parameter: variable}` hands one slice's solution to the next as
@@ -215,21 +217,21 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   `sweep.primal(name)` and the exports — the **frame readers**, the ones that
   hand back a table — answer off them. A **spilled** sweep left them in a
   directory, which is what `spill_to=` writes and what `scan_sweep` reads: there
-  `sweep.scan(name)` is the reader and the frame readers refuse
-  ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+  a frame reader reads the one name it is asked for, and `sweep.scan(name)`
+  hands it back lazily ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
 
 ## Row types
 
-**Record** · **Metrics** · **SliceMetrics**
-: The three saved rows, each a `NamedTuple` that names its own columns:
-  [`Record`](api.md#specsolve.relational.parquet.Record), how a solve
-  terminated; [`Metrics`](api.md#specsolve.relational.parquet.Metrics), what
-  it took; and [`SliceMetrics`](api.md#specsolve.relational.parquet.SliceMetrics),
-  one slice of a sweep's share of that.
+**Record** · **Metrics**
+: The two saved rows, each a `NamedTuple` that names its own columns:
+  [`Record`](api.md#specsolve.types.Record), how a solve
+  terminated, and [`Metrics`](api.md#specsolve.types.Metrics),
+  what it took. A sweep writes one of each per slice, with the same columns
+  as a single solve; `slice_axis` and `slice` say which slice.
 
   A **row** is a value and gets a type; a **table** stays a
   [Table](#the-data). So a result hands back its one `Record`, while
-  `Record` and `SliceMetrics` are the rows behind `sweep.record` and
+  `Record` and `Metrics` are the rows behind `sweep.record` and
   `sweep.metrics` rather than what those hand back, and a reader that wants
   one row of a table asks the frame for it.
 

@@ -24,7 +24,7 @@ import polars as pl
 from mathspec import Spec, to_spec
 
 import specsolve as sps
-from specsolve.relational.engines.polars.engine import PolarsEngine
+from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
 
 HERE = Path(__file__).parent
@@ -71,7 +71,7 @@ def main() -> None:
     schema = validated_model()
     expanded_ast(schema)
     program = relational_ir(schema)
-    with PolarsEngine() as engine:
+    with Engine() as engine:
         model_frames(engine, schema, program)
         lp_file(engine)
         solution(engine)
@@ -132,7 +132,7 @@ def relational_ir(schema: Spec) -> Any:
     return program
 
 
-def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
+def model_frames(engine: Engine, schema: Spec, program: Any) -> None:
     """Stage 4 — plan plus data to the model frames, the first stage to see a number.
 
     Sources are adapted to tidy frames (dims..., value) and the engine
@@ -141,7 +141,7 @@ def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
     The frames are engine-private, so this is the one place the script reads
     private attributes.
     """
-    banner(4, 'plan + data -> the model frames', 'relational/engines/polars/engine.py')
+    banner(4, 'plan + data -> the model frames', 'relational/engine/engine.py')
     engine.build(program, tidy_sources(program, SOURCES))
     handoff = engine._model.handoff
     for name, frame in (
@@ -162,7 +162,7 @@ def model_frames(engine: PolarsEngine, schema: Spec, program: Any) -> None:
     print(_indent(variables.sort('var_label').head(4)))
 
 
-def lp_file(engine: PolarsEngine) -> None:
+def lp_file(engine: Engine) -> None:
     """Stage 5 — the same frames, second sink.
 
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
@@ -177,7 +177,7 @@ def lp_file(engine: PolarsEngine) -> None:
         print(f'    ... ({len(text)} lines total)')
 
 
-def solution(engine: PolarsEngine) -> None:
+def solution(engine: Engine) -> None:
     """Stage 6 — batches to highspy, and the solution read back by label join.
 
     Never densified. ``primal()`` hands back a frame, printed unsorted: label

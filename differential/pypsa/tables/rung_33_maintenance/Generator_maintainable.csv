@@ -1,0 +1,6 @@
+generator,value
+coal,false
+east_peak,false
+gas,false
+hydro,true
+wind_ext,true

@@ -1,0 +1,7 @@
+transformer,outage,value
+bc_t,Line-ab,0.0
+bc_t,Line-ca,0.0
+bc_t,Transformer-ca_t,0.0
+ca_t,Line-ab,-0.9375
+ca_t,Line-ca,0.967741935484
+ca_t,Transformer-ca_t,-1.0

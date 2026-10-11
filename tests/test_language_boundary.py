@@ -2,7 +2,7 @@
 
 There is no runtime fallback — the streaming subset IS the language
 (docs/about/architecture.md), and both lanes are inside it: `tests.linopy_lane`
-builds the same file through the same `lanes.lowered` gate.
+builds the same file through the same `inputs.lowered` gate.
 Errors must carry the construct and its context, verbatim.
 """
 

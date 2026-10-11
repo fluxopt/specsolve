@@ -87,14 +87,16 @@ def provenance(runs: list[Row]) -> str:
 
 def load(
     path: Path,
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """One results file as its run, gates, build timings, loop records and fresh-process timings."""
     records = bench_results.load(path)
     run = next((r for r in records if r.get('record') == 'run'), {})
     gates = [r for r in records if r.get('record') == 'gate']
     timings = [r for r in records if r.get('record') == 'timing' and r.get('phase', 'emit') == 'emit']
     loop = [r for r in records if r.get('record') == 'loop']
+    started = [r for r in records if r.get('record') == 'timing' and r.get('phase') == 'fresh']
     CEILINGS.extend(r for r in records if r.get('record') == 'ceiling')
-    return run, gates, timings, loop
+    return run, gates, timings, loop, started
 
 
 Row = dict[str, Any]
@@ -254,24 +256,27 @@ def sizes_of(case: str, rows: dict[Key, Row], sink: str = 'lp', *, sweep: re.Pat
     return sorted(seen, key=lambda s: (seen[s], s))
 
 
-#: Where a reader goes to trace a curve.
-_CHART_PAGE = '*The same runs with a cursor: [the chart page](benchmarks-scaling.html).*'
-
-
 #: What every arm in a sink's table has ended up holding.
 _SEAM = {
     'lp': 'Each arm has written the LP file, through whichever writer it has.',
+    'mps': 'Each arm has written the MPS file, through whichever writer it has.',
     'highs': (
         'Each arm ends holding a populated `highspy.Highs` with `run()` never '
-        'called — specsolve through `build_highs`. The simplex is the same work '
+        'called — specsolve through `Highs(handoff)`. The simplex is the same work '
         'whoever filled the model, so timing it would say nothing about the '
         'lane that filled it.'
     ),
     'gurobi': (
         'Each arm ends holding a populated `gurobipy.Model` with `optimize()` '
-        'never called — specsolve through `build_gurobi`, and gurobipy through '
+        'never called — specsolve through `Gurobi(handoff)`, and gurobipy through '
         '`update()`, which is where its own deferred writes land. Opt-in: it '
         'needs the `[gurobi]` extra.'
+    ),
+    'xpress': (
+        'specsolve ends holding a populated `xpress.problem` with `optimize()` '
+        'never called, through `Xpress(handoff)`; no other arm reaches it. '
+        'Opt-in: it needs the `[xpress]` extra. The Community licence that ships '
+        'with it suffices, because it limits the solve and nothing here solves.'
     ),
 }
 
@@ -388,6 +393,39 @@ def marginal(loop_rows: list[Row]) -> str:
             + ' |'
         )
     return '\n'.join(lines)
+
+
+def fresh(rows: dict[Key, Row]) -> str:
+    """What a process started for one solve pays, launch to exit, at the rungs `test_fresh` measures.
+
+    Every arm pays its own interpreter, import and first build here, so the
+    totals compare across libraries; the phases inside them do not. No ratio
+    columns, as in the per-model tables.
+    """
+    if not rows:
+        return ''
+    arms = arms_in(rows)
+    return _grid(
+        [
+            '### A process started for one solve',
+            '',
+            'Launch to exit: a new interpreter imports the library, builds the model '
+            'once and hands it to the sink. The tables above run warm and exclude '
+            'the import, so the gap between this wall and the same rung there is '
+            "what starting costs. The peak is the new process's own.",
+        ],
+        ('case', 'sink', 'variables'),
+        (
+            ([case, sink, _si(ref['counts']['columns'])], at_rung, (case, size, sink))
+            for case in sorted({c for c, _, _, _ in rows})
+            for sink in sorted({k for c, _, k, _ in rows if c == case})
+            for size in sizes_of(case, rows, sink)
+            for at_rung, ref in [_at_rung(rows, case, size, sink, arms)]
+            if ref
+        ),
+        arms,
+        ratios=False,
+    )
 
 
 def _sweep(
@@ -533,13 +571,15 @@ def main(argv: list[str] | None = None) -> int:
     gates: list[Row] = []
     timings: list[Row] = []
     loop: list[Row] = []
+    started: list[Row] = []
     for path in [f for target in opts.results for f in bench_results.files(target)]:
-        one_run, one_gates, one_timings, one_loop = load(path)
+        one_run, one_gates, one_timings, one_loop, one_started = load(path)
         if one_run:
             runs.append(one_run)
         gates += one_gates
         timings += one_timings
         loop += one_loop
+        started += one_started
     rows = best(timings)
     failed = failures(timings)
 
@@ -558,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         print('Parity gate: enforced at measurement time — every arm below built the same model.')
-    results = [_CHART_PAGE]
+    results = []
     for case in sorted({c for c, _, _, _ in rows}):
         sinks = [k for k in sorted({k for c, _, k, _ in rows if c == case}) if sizes_of(case, rows, k)]
         if not sinks:
@@ -571,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fragments = {
         'results': '\n'.join(results),
+        'fresh': fresh(best(started)),
         'marginal': marginal(loop),
         'sweeps': '\n\n'.join(t for t in (width(rows), density(rows), declarations(rows)) if t),
     }

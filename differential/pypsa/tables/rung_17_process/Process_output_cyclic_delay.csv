@@ -1,0 +1,7 @@
+scenario,process_output,value
+base,conv_ext_bus0,true
+base,conv_ext_bus1,true
+base,conv_fix_bus0,true
+base,conv_fix_bus1,true
+base,conv_set_bus0,true
+base,conv_set_bus1,true

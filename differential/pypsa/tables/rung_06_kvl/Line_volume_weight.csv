@@ -1,5 +1,5 @@
-global_constraint,line,value
-vol_ac,ca2,50.0
-vol_ac,ca3,80.0
-vol_ac_floor,ca2,50.0
-vol_ac_floor,ca3,80.0
+scenario,global_constraint,line,value
+base,vol_ac,ca2,50.0
+base,vol_ac,ca3,80.0
+base,vol_ac_floor,ca2,50.0
+base,vol_ac_floor,ca3,80.0

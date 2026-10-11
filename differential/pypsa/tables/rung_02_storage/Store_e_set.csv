@@ -1,2 +1,2 @@
-snapshot,store,value
-2015-01-01T03:00:00.000000,cavern,20.0
+scenario,snapshot,store,value
+base,2015-01-01T03:00:00.000000,cavern,20.0

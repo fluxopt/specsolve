@@ -506,7 +506,10 @@ def assert_agrees_with_highs(solver_name: str, case: str, variable: str, constra
     """
     import specsolve as sps
 
-    with sps.solve(*CASES[case]) as highs, sps.solve(*CASES[case], solver_name=solver_name) as other:
+    with (
+        sps.solve(*CASES[case], outputs={'activity'}) as highs,
+        sps.solve(*CASES[case], solver_name=solver_name, outputs={'activity'}) as other,
+    ):
         assert other.termination_condition == highs.termination_condition
         assert other.objective == pytest.approx(highs.objective)
 

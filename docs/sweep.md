@@ -43,7 +43,7 @@ print(sweep.record.select('scenario', 'termination_condition', 'objective'))
 ```
 
 `sweep.record` has one row per scenario. The readers of a
-[result](reference/api.md#specsolve.Result) read a sweep too, with the
+[result](reference/api.md#specsolve.types.Result) read a sweep too, with the
 scenario column in front:
 
 ```python exec="true" source="material-block" result="text" session="sweep"
@@ -84,7 +84,7 @@ is solved:
 ```python exec="true" source="material-block" result="text" session="sweep"
 try:
     sps.solve_over('examples/storage.yaml', hourly, sps.EachWindow('hour', steps=3, lookahead=3, into='snapshot'))
-except sps.SpecsolveError as exc:
+except sps.errors.SpecsolveError as exc:
     print(exc)
 ```
 
@@ -107,11 +107,11 @@ rolling = sps.solve_over(
 print(rolling.record.select('hour_start', 'termination_condition', 'objective'))
 ```
 
-Each window is keyed by the hour it starts at. `original_index=True` keeps the
-hours each window owns, and reads them back over `hour` as one schedule:
+Each window is keyed by the hour it starts at. The readers return the answer:
+the hours each window owns, read back over `hour` as one schedule:
 
 ```python exec="true" source="material-block" result="text" session="sweep"
-print(rolling.primal('soc', original_index=True))
+print(rolling.primal('soc'))
 ```
 
 The store charges in the windy hours and discharges in the calm ones. The
@@ -180,6 +180,6 @@ that stands in 2030 plus the 8.75 built in 2035 is the 75.0 that stands in
 
 | | |
 |---|---|
-| [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, `keep` and `spill_to=`, and how a sweep is read |
+| [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, `start=` and `spill_to=`, and how a sweep is read |
 | [Running a sweep in parallel](howto/parallel.md) | one slice per worker |
 | [Archiving a solve](howto/archiving.md) | the spec, its data and every slice kept as one archive |

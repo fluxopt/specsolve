@@ -2,7 +2,7 @@
 
 The same three futures as [the stochastic model](pypsa_stochastic.md), planned against the tail as well as the expectation.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **35410.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **35410.0**, matched to `rtol=1e-09`.
 
 `n.set_risk_preference(alpha, omega)` turns on `define_cvar_variables`
 (`variables.py:291`), which declares `CVaR-a` over the scenarios and the two

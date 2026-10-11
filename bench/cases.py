@@ -19,6 +19,10 @@ Each case stresses a different SQL shape:
                with its model YAML generated per rung (``_declarations_spec``).
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
+``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``) over
+               ``(snapshot, node, tech)``: a binary ``u`` that switches
+               dispatch ``p``, a row mask on a relation's label, and a sum
+               through a relation into regions.
 
 A rung label counts variables per snapshot across all of a case's
 declarations. ``nominal_variables`` is the full coordinate product; what
@@ -31,12 +35,13 @@ reads the same parquet files. Every generator is feasible by construction.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -76,6 +81,8 @@ class Case:
     write: Callable[[Shape, Path], dict[str, str]]
     spec: Path | None = None
     generate_spec: Callable[[Shape], str] | None = None
+    #: A parameter that multiplies a variable inside a constraint, so new values of it move the matrix.
+    coefficient: str | None = None
 
     def spec_path(self, shape: Shape, cache: Path = DEFAULT_CACHE) -> Path:
         """The YAML *shape* builds — ``spec``, unless the case generates one per rung.
@@ -109,6 +116,28 @@ class Case:
             stamp.write_text('\n'.join(sorted(paths)))
             return paths
         return {p.stem: str(p) for p in sorted(out.glob('*.parquet'))}
+
+
+def shortened(shape: Shape) -> Shape:
+    """*shape* one snapshot shorter: the next window of a horizon whose length moved.
+
+    Every rung carries ``snapshot``, and a build one snapshot shorter has
+    other counts, so no loaded solver can take it by value.
+    """
+    snapshots = shape.sizes['snapshot']
+    return replace(
+        shape,
+        sizes={**shape.sizes, 'snapshot': snapshots - 1},
+        nominal_variables=shape.nominal_variables // snapshots * (snapshots - 1),
+    )
+
+
+def rescaled(path: str) -> pl.DataFrame:
+    """The parameter at *path* with every value one percent larger: new coefficients on the same pattern.
+
+    A zero stays zero, so no entry enters or leaves the matrix; only its numbers move.
+    """
+    return pl.read_parquet(path).with_columns(pl.col('value') * 1.01)
 
 
 def _seed(shape: Shape) -> np.random.Generator:
@@ -555,23 +584,57 @@ def _storage_data(shape: Shape, dest: Path) -> dict[str, str]:
 # --------------------------------------------------------------------------
 
 
+def _milp_spec(shape: Shape) -> str:
+    """The grid's ``milp`` shape as YAML, which no rung changes."""
+    import yaml
+
+    from bench.ab.grid import SHAPES, spec
+
+    class Plain(yaml.SafeDumper):
+        def ignore_aliases(self, data: object) -> bool:
+            return True
+
+    del shape
+    return yaml.dump(spec(SHAPES['milp']), Dumper=Plain, sort_keys=False)
+
+
+def _milp_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of ``milp``: the grid's tables at this rung's snapshot count."""
+    from bench.ab.grid import SHAPES, per_label, tables
+
+    milp = SHAPES['milp']
+    paths = {}
+    for name, frame in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
+        path = (dest / f'{name}.parquet').absolute()
+        frame.write_parquet(path)
+        paths[name] = str(path)
+    return paths
+
+
 def _ladder(
     sizes: dict[str, int],
     snapshots: Sequence[int],
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    """A case's rungs, one per entry of *snapshots*.
+    """A case's rungs, one per entry of *snapshots*, below them a tenth of the first.
 
     ``xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
     ``docs/about/benchmarks.md`` that a model whose dense build cannot fit on
-    the machine still streams out under the budget.
+    the machine still streams out under the budget. ``2xs`` is the size of one
+    slice of a sweep or one solve of a model predictive controller, where a
+    build's fixed cost per query outweighs its rows. It keeps two snapshots at
+    least, so a window one snapshot shorter still has one.
     """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
-    return tuple(
-        Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
-        for i, n in enumerate(snapshots)
-        if i < len(labels)
+    smallest = max(2, snapshots[0] // 10)
+    return (
+        Shape('2xs', {**sizes, 'snapshot': smallest}, smallest * per_snapshot, density),
+        *(
+            Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
+            for i, n in enumerate(snapshots)
+            if i < len(labels)
+        ),
     )
 
 
@@ -637,6 +700,7 @@ CASES: dict[str, Case] = {
         spec=MODELS / 'commitment' / 'spec.yaml',
         ladder=_ladder({'generator': 50}, (10, 100, 1_000, 10_000, 40_000, 120_000), per_snapshot=100),
         write=_commitment_data,
+        coefficient='p_max',
     ),
     'fleet': Case(
         name='fleet',
@@ -671,6 +735,7 @@ CASES: dict[str, Case] = {
             density=0.083,
         ),
         write=_sector_data,
+        coefficient='produces',
     ),
     'profiled': Case(
         name='profiled',
@@ -689,6 +754,12 @@ CASES: dict[str, Case] = {
         ),
         write=_transport_data,
     ),
+    'milp': Case(
+        name='milp',
+        ladder=_ladder({}, (400, 4_000, 40_000, 400_000), per_snapshot=24),
+        write=_milp_data,
+        generate_spec=_milp_spec,
+    ),
     'storage': Case(
         name='storage',
         spec=MODELS / 'storage' / 'spec.yaml',
@@ -699,5 +770,6 @@ CASES: dict[str, Case] = {
             *_width_ladder({'generator': 40, 'store': 20}, snapshots=100, per_snapshot=100),
         ),
         write=_storage_data,
+        coefficient='eta',
     ),
 }

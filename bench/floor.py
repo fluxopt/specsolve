@@ -152,11 +152,11 @@ def handoff(model: Floor) -> Any:
 
 
 def check() -> tuple[float, float]:
-    """Solve the smallest rung both ways and return (floor, specsolve) objectives."""
+    """Solve the ``xs`` rung both ways and return (floor, specsolve) objectives."""
     from bench.arms import solved
 
     case = bench_cases.CASES[CASE]
-    rung = case.ladder[0]
+    rung = case.shape('xs')
     paths = case.data(rung)
     h = handoff(arrays(read(paths)))
     h.run()
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='python -m bench.floor', description=__doc__)
     parser.add_argument('size', choices=[s.label for s in case.ladder])
     parser.add_argument('--rounds', type=int, default=9, help='builds; the minimum per phase is reported')
-    parser.add_argument('--check', action='store_true', help='also solve the smallest rung both ways and compare')
+    parser.add_argument('--check', action='store_true', help='also solve the xs rung both ways and compare')
     args = parser.parse_args(argv)
 
     shape = case.shape(args.size)
@@ -212,9 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         ours, specsolve = check()
         gap = abs(ours - specsolve) / max(abs(specsolve), 1e-12)
         verdict = 'agree' if gap <= CHECK_RTOL else 'DISAGREE'
-        print(
-            f'\n  check ({case.ladder[0].label}): floor {ours!r}, specsolve {specsolve!r} — {verdict} ({gap:.1e} relative)'
-        )
+        print(f'\n  check (xs): floor {ours!r}, specsolve {specsolve!r} — {verdict} ({gap:.1e} relative)')
         if gap > CHECK_RTOL:
             return 1
     return 0
