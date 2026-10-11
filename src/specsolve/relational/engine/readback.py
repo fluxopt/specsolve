@@ -7,19 +7,28 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve.errors import SpecsolveError, unknown_name_message
-from specsolve.relational.collect import collect_engine
+from specsolve.errors import SpecsolveError
+from specsolve.messages import coordinate_expr, unknown_name_message
+from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
+from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.pieces import absence_restrictions
-from specsolve.relational.result import ConstraintRow
+from specsolve.relational.names import VALUE
+from specsolve.relational.result import ConstraintRow, InfeasibleSubsystem
+from specsolve.relational.sinks.handoff import SENSE_CODES
+from specsolve.relational.sinks.solvers.base import settled
 from specsolve.relational.sinks.writers.text import Names
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    import numpy as np
+
     from specsolve.relational.engine.assembly import BuiltModel
     from specsolve.relational.engine.attaching import AttachedSources
     from specsolve.relational.engine.compiler import Compiler
+    from specsolve.relational.sinks.handoff import Handoff
+    from specsolve.relational.sinks.solvers.base import Basis, InfeasibleSubsystemIndices
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -51,6 +60,59 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
     )
 
 
+def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -> InfeasibleSubsystem:
+    """*found*'s solver indices as the declarations and coordinates that built them.
+
+    A row carries its sense and right-hand side, a bound its side and value,
+    read off the hand-off the solver was given.
+    """
+    rows = pl.DataFrame({'row': found.rows}).join(
+        model.handoff.rows.select(pl.col('row').cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on='row'
+    )
+    columns = model.handoff.cols
+    bounds = pl.concat(
+        [
+            pl.DataFrame({'var_label': indices, VALUE: columns[column].gather(indices)}).select(
+                'var_label', pl.lit(side).alias('bound'), VALUE
+            )
+            for side, column, indices in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
+        ]
+    )
+    return InfeasibleSubsystem(
+        constraints=_members(model, model.constraints, model.program.constraints, rows, 'row', ('sense', 'rhs')),
+        bounds=_members(model, model.variables, model.program.variables, bounds, 'var_label', ('bound', VALUE)),
+    )
+
+
+def _members(
+    model: BuiltModel,
+    registry: Mapping[str, labels.Labelled],
+    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    found: pl.DataFrame,
+    label: str,
+    carried: Sequence[str],
+) -> dict[str, pl.DataFrame]:
+    """``(dims…, *carried)`` per declaration owning a label in *found*, in declaration and label order.
+
+    A declaration owns a contiguous run of labels, so its share is a range test.
+    """
+    found = found.with_columns(pl.col(label).cast(pl.Int64))
+    out = {}
+    for name, held in registry.items():
+        mine = found.filter((pl.col(label) >= held.start) & (pl.col(label) < held.start + held.height))
+        if not mine.height:
+            continue
+        dims = declared[name].dims
+        frame = (
+            held.frame.with_columns(pl.col(label).cast(pl.Int64))
+            .join(mine.lazy(), on=label)
+            .sort(label, *carried)
+            .select(*dims, *carried)
+        )
+        out[name] = _as_strings(frame, model.attached, dims).pipe(collected)
+    return out
+
+
 def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> tuple[int, dict[str, object]]:
     """The global row index constraint *name* built at *coordinate*, and that coordinate in dim order."""
     dims = model.program.constraints[name].dims
@@ -64,7 +126,7 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
     schema = frame.collect_schema()
     ordered = {d: coordinate[d] for d in dims}
     predicates = [pl.col(d) == _label(name, d, v, schema[d]) for d, v in ordered.items()]
-    found = frame.filter(predicates).collect() if predicates else frame.collect()
+    found = frame.filter(predicates).pipe(collected) if predicates else frame.pipe(collected)
     if not found.height:
         raise SpecsolveError(
             f"constraint '{name}' built no row at {ordered}. Either a `where` masked the "
@@ -106,13 +168,14 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
         picked = held.frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
-        rendered = pl.concat_str([pl.col(d).cast(pl.String) for d in dims], separator=', ') if dims else pl.lit('')
+        schema = held.frame.collect_schema()
+        rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
                 pl.col('var_label').alias('col'),
                 pl.lit(variable).alias('variable'),
                 rendered.alias('coordinate'),
-            ).collect()
+            ).pipe(collected)
         )
     labelled = (
         pl.concat(named)
@@ -165,7 +228,7 @@ def _declared_names(
         cleaned = [pl.col(d).cast(pl.String).str.replace_all(_UNSAFE_IN_A_NAME, '_') for d in dims]
         if cleaned:
             spelled = pl.concat_str(pl.lit(f'{name}('), pl.concat_str(cleaned, separator=','), pl.lit(')'))
-            frame = held.frame.select(*dims, spelled.alias('#name')).collect(engine=collect_engine())
+            frame = held.frame.select(*dims, spelled.alias('#name')).pipe(collected)
         else:
             frame = pl.DataFrame({'#name': [f'{name}()'] * held.height}, schema={'#name': pl.String})
         _refuse_a_shared_name(frame, name, dims, kind)
@@ -192,11 +255,60 @@ def laid_out(
 ) -> pl.LazyFrame:
     """One declaration's coordinates in label order, beside its share of *values*.
 
-    The share is a column, not a concatenated frame, so a mismatched length
-    raises instead of padding with nulls. Dim columns leave as ``String``
-    ([`_as_strings`][]).
+    Dim columns leave as ``String`` ([`_as_strings`][]).
     """
-    return _as_strings(held.frame.select(*dims).with_columns(held.share(values)), attached, dims)
+    return _as_strings(held.valued(dims, values), attached, dims)
+
+
+def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Series:
+    """Each column's reduced cost: the objective's gradient less the rows' gradients weighted by *dual*.
+
+    Computed here rather than asked of each solver, so it carries
+    [`dual`][specsolve.relational.result.Result.dual]'s one sign convention on
+    every sink. The gradients are taken at *primal*, which only a quadratic
+    term reads.
+    """
+    import numpy as np
+
+    x = primal.to_numpy()
+    y = dual.to_numpy()
+
+    def summed(cols: pl.Series, weights: np.ndarray) -> np.ndarray:
+        return np.bincount(cols.to_numpy(), weights=weights, minlength=handoff.column_count)
+
+    def index(column: pl.Series) -> np.ndarray:
+        return column.to_numpy().astype(np.int64)
+
+    obj, quad, matrix, qmatrix = handoff.obj, handoff.quad, handoff.matrix, handoff.qmatrix
+    entry_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
+    reduced = np.zeros(handoff.column_count, dtype=np.float64)
+    reduced += summed(obj['col'], obj['coeff'].to_numpy())
+    reduced -= summed(matrix['col'], matrix['coeff'].to_numpy() * y[entry_rows])
+    for frame, weights in (
+        (quad, quad['coeff'].to_numpy()),
+        (qmatrix, -qmatrix['coeff'].to_numpy() * y[index(qmatrix['row'])]),
+    ):
+        reduced += summed(frame['col_l'], weights * x[index(frame['col_r'])])
+        reduced += summed(frame['col_r'], weights * x[index(frame['col_l'])])
+    return pl.Series(VALUE, reduced, dtype=pl.Float64)
+
+
+def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
+    """Each row's distance to binding at *activity*: non-negative wherever the row holds.
+
+    ``rhs - lhs`` for ``<=`` and ``lhs - rhs`` for ``>=``, so the value does
+    not depend on which side a term is written on, and ``-|rhs - lhs|`` for
+    ``==``, which holds only at zero.
+    """
+    import numpy as np
+
+    rows = handoff.dense_rows(np.inf)
+    lhs = activity.to_numpy()
+    gap = rows.rhs - lhs
+    slack = np.where(
+        rows.sense == SENSE_CODES['<='], gap, np.where(rows.sense == SENSE_CODES['>='], -gap, -np.abs(gap))
+    )
+    return pl.Series(VALUE, slack, dtype=pl.Float64)
 
 
 def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
@@ -246,15 +358,15 @@ def _aligned(
             f'answer. Re-solve rather than read.'
         )
     if not dims:
-        return stored['value'].rename(_SOLUTION)
-    order = _as_strings(held.frame.select(*dims).collect(), attached, dims).with_row_index(_LABEL_ORDER)
+        return stored[VALUE].rename(_SOLUTION)
+    order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_LABEL_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
-    if joined['value'].null_count():
+    if joined[VALUE].null_count():
         raise SpecsolveError(
             f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
-    return joined['value'].rename(_SOLUTION)
+    return joined[VALUE].rename(_SOLUTION)
 
 
 def readers(
@@ -310,7 +422,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias('value')).collect(engine=collect_engine())
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
@@ -324,3 +436,112 @@ def _reported_divisor_message(name: str, missing: int) -> str:
         f'  Supply the missing rows.\n'
         f'  Give the value 0 at a coordinate the quotient should skip: a quotient by zero has no value.'
     )
+
+
+def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:
+    """Another answer's basis, *columns* and *rows* as its readers return them, laid onto this build by coordinate.
+
+    A coordinate both builds hold keeps its status. A column only this build
+    holds starts nonbasic at a bound, and a row only this build holds starts
+    basic, which is how a row gained between two builds enters without moving
+    the vertex. A declaration whose dims changed is new. The result is then
+    [`_counted`][] to one basic entry per row, which is what a solver needs to
+    take it, and [`settled`][specsolve.relational.sinks.solvers.base.settled]
+    on this build's bounds.
+
+    Raises:
+        SpecsolveError: No status lands at a coordinate this build holds.
+    """
+    import numpy as np
+
+    handoff = model.handoff
+    status = pl.col(VALUE).cast(BASIS).to_physical()
+    placed_columns = np.full(handoff.column_count, AT_LOWER, dtype=np.int8)
+    placed = _place(placed_columns, model, model.variables, model.program.variables, columns, status)
+    placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
+    placed += _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
+    _refuse_nothing_placed(placed)
+    return settled(handoff, *_counted(placed_columns, placed_rows))
+
+
+def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.ndarray:
+    """A value per column from *values*, ``(dims…, value)`` frames per variable, laid onto this build by coordinate.
+
+    NaN where *values* gives none: a variable it does not name, a coordinate
+    it lacks, a declaration whose dims changed.
+
+    Raises:
+        SpecsolveError: No value lands at a coordinate this build holds.
+    """
+    import numpy as np
+
+    out = np.full(model.handoff.column_count, np.nan)
+    _refuse_nothing_placed(
+        _place(out, model, model.variables, model.program.variables, values, pl.col(VALUE).cast(pl.Float64))
+    )
+    return out
+
+
+def _refuse_nothing_placed(placed: int) -> None:
+    """Refuse a start that lands nowhere, which would start nothing yet read as a start taken."""
+    if not placed:
+        raise SpecsolveError(
+            'start= gives no value at any coordinate this model holds, so it would start nothing. Name the '
+            'declarations as the spec declares them, and their coordinates as the readers return them.'
+        )
+
+
+def _place(
+    into: np.ndarray,
+    model: BuiltModel,
+    held: Mapping[str, labels.Labelled],
+    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
+    previous: Mapping[str, pl.LazyFrame],
+    value: pl.Expr,
+) -> int:
+    """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*; how many landed.
+
+    The join casts every dim to a string on both sides, so a table typed
+    otherwise than the read-back still matches: ``3`` and ``'3'`` are one
+    label. A frame whose columns are not its declaration's dims and ``value``
+    is skipped, as is a coordinate only one side holds.
+    """
+    import numpy as np
+
+    positions = pl.Series(VALUE, np.arange(len(into), dtype=np.int64))
+    placed = 0
+    for name, labelled in held.items():
+        dims = list(declared[name].dims)
+        before = previous.get(name)
+        if before is None or set(before.collect_schema().names()) != {*dims, VALUE}:
+            continue
+        here = laid_out(model.attached, labelled, tuple(dims), positions).select(
+            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col(VALUE).alias(_LABEL_ORDER)
+        )
+        given = before.select(*(pl.col(dim).cast(pl.String) for dim in dims), value)
+        found = (here.join(given, on=dims, how='inner') if dims else here.join(given, how='cross')).pipe(collected)
+        into[found[_LABEL_ORDER].to_numpy()] = found[VALUE].to_numpy()
+        placed += found.height
+    return placed
+
+
+def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """*columns* and *rows* with exactly one basic entry per row, the count every solver's simplex needs.
+
+    A basis carried across a rebuild has one too many for each nonbasic row
+    the rebuild dropped, and one too few for each basic column it dropped.
+    The surplus leaves from the last basic columns, which go to a bound; the
+    shortfall is made up by the last nonbasic rows, whose slacks enter. Which
+    ones is arbitrary: a basis the count makes singular, each solver repairs.
+    """
+    import numpy as np
+
+    columns, rows = columns.copy(), rows.copy()
+    surplus = int((columns == BASIC).sum() + (rows == BASIC).sum()) - len(rows)
+    if surplus > 0:
+        leaving = np.flatnonzero(columns == BASIC)[-surplus:]
+        columns[leaving] = AT_LOWER
+    elif surplus < 0:
+        entering = np.flatnonzero(rows != BASIC)[surplus:]
+        rows[entering] = BASIC
+    return columns, rows

@@ -3,7 +3,7 @@
 Capacity decided once per investment period, binding at every snapshot inside
 it — and the periods need not be the same size.
 
-> **✔ Agrees with hand-written linopy 0.9.0** — objective **10020**, matched to `rtol=1e-09`.
+> **✔ Agrees with hand-written linopy 0.10.0** — objective **10020**, matched to `rtol=1e-09`.
 
 ## The problem
 

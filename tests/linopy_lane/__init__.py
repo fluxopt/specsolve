@@ -108,7 +108,7 @@ def evaluate(
 ) -> xarray.DataArray:
     """Evaluate *expression*, written in *spec*'s namespace, at *built*'s solution.
 
-    The linopy half of :meth:`specsolve.Result.evaluate`. Pure like :func:`build` —
+    The linopy half of :meth:`specsolve.types.Result.evaluate`. Pure like :func:`build` —
     nothing is retained, so *sources* is taken again rather than remembered.
 
     Args:

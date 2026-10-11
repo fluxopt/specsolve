@@ -23,7 +23,8 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve.errors import DataError, SpecsolveError, null_bounds_message
+from specsolve.errors import DataError, SpecsolveError
+from specsolve.messages import null_bounds_message
 from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
@@ -180,7 +181,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             mask = evaluate_where(row.where, ctx)
             context = f"constraint '{name}'"
 
-            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask)
+            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx))
             check_constant_side_covers(context, row, ctx, mask)
 
             if mask is not None and not bool(np.asarray(mask).any()):
@@ -275,7 +276,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
     if odef is None:
         return
     with note('while building the objective'):
-        check_divisors_cover('the objective', (odef.expression,), ctx, None)
+        check_divisors_cover('the objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
 
         expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)

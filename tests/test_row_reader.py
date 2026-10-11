@@ -7,6 +7,7 @@ here is a case where the file and the built row differ.
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -61,16 +62,55 @@ def test_a_row_is_its_terms_its_comparison_and_its_right_hand_side() -> None:
     with sps.build(DISPATCH_SPEC, DATA) as model:
         row = model.row('balance', snapshot=2)
 
-    assert _terms(row) == [('p', '2, wind', 1.0), ('p', '2, gas', 1.0)]
+    assert _terms(row) == [('p', 'snapshot=2, generator=wind', 1.0), ('p', 'snapshot=2, generator=gas', 1.0)]
     assert (row.sense, row.rhs) == ('==', 100.0), 'the right-hand side is the bound value, not the parameter name'
 
 
-def test_printing_a_row_gives_the_line_linopy_gives() -> None:
-    """A row prints as linopy's ``Constraint.print()`` does, with its identity on the same line."""
+def test_printing_a_row_gives_one_line_with_every_coordinate_named() -> None:
+    """A row prints its identity and its terms on one line, each at its named coordinate."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         printed = str(model.row('commit', t=1, g='gas'))
 
-    assert printed == 'commit[t=1, g=gas]: +1 p[1, gas] -200 u[1, gas] <= 0'
+    assert printed == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
+
+
+_HOUR = datetime.datetime(2026, 1, 1, 1)
+
+
+@pytest.mark.parametrize(
+    ('dtype', 'labels', 'at', 'printed'),
+    [
+        pytest.param('int', [0, 1], 1, 'demand[t=1]: +1 p[t=1] >= 20', id='int'),
+        pytest.param('str', ['a', 'b'], 'b', 'demand[t=b]: +1 p[t=b] >= 20', id='str'),
+        pytest.param(
+            'datetime',
+            [_HOUR - datetime.timedelta(hours=1), _HOUR],
+            _HOUR,
+            'demand[t=2026-01-01 01:00:00]: +1 p[t=2026-01-01 01:00:00] >= 20',
+            id='datetime',
+        ),
+        pytest.param('float', [0.5, 1e-07], 1e-07, 'demand[t=1e-7]: +1 p[t=1e-7] >= 20', id='float'),
+    ],
+)
+def test_a_term_prints_its_coordinate_as_the_row_prints_its_own(
+    dtype: str, labels: list[object], at: object, printed: str
+) -> None:
+    """One line, one way of writing a coordinate: named, and the same text for a label wherever it sits.
+
+    The row printed its own coordinate named and through Python's `str()`, and
+    its terms by position through polars: `p[1, gas]` beside `commit[t=1, g=gas]`,
+    `2026-01-01 01:00:00.000000` beside `2026-01-01 01:00:00`, `1e-7` beside `1e-07`.
+    """
+    spec = {
+        'dimensions': {'t': {'dtype': dtype}},
+        'parameters': {'need': {'dims': ['t']}},
+        'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'demand': {'dims': ['t'], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    sources = {'t': pl.DataFrame({'t': labels}), 'need': pl.DataFrame({'t': labels, 'value': [5.0, 20.0]})}
+    with sps.build(spec, sources) as model:
+        assert str(model.row('demand', t=at)) == printed
 
 
 def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
@@ -132,7 +172,7 @@ def test_a_row_spanning_two_declarations_names_both() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert _terms(row) == [('p', '1, gas', 1.0), ('u', '1, gas', -200.0)], (
+    assert _terms(row) == [('p', 't=1, g=gas', 1.0), ('u', 't=1, g=gas', -200.0)], (
         'p - p_max*u <= 0, with p_max the bound value for gas'
     )
     assert (row.sense, row.rhs) == ('<=', 0.0)
@@ -152,7 +192,7 @@ def test_a_term_whose_variable_is_absent_is_absent_from_the_row() -> None:
     with sps.build(spec, COMMITMENT_DATA) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', '0, gas', 1.0)], 'wind is masked out of p, so the balance row lost its term'
+    assert _terms(row) == [('p', 't=0, g=gas', 1.0)], 'wind is masked out of p, so the balance row lost its term'
 
 
 def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
@@ -238,7 +278,7 @@ def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
     with sps.build(PRECISE, PRECISE_DATA) as model:
         printed = str(model.row('balance', t=0))
 
-    assert printed == 'balance[t=0]: +1.0000001 p[0, a] +12345678 p[0, b] >= 12345678.9', (
+    assert printed == 'balance[t=0]: +1.0000001 p[t=0, g=a] +12345678 p[t=0, g=b] >= 12345678.9', (
         'every digit the data carried survives, and a whole coefficient still reads as linopy prints it'
     )
 
@@ -248,7 +288,7 @@ def test_a_row_echoed_at_a_prompt_is_the_line_not_the_frame() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert repr(row) == str(row) == 'commit[t=1, g=gas]: +1 p[1, gas] -200 u[1, gas] <= 0'
+    assert repr(row) == str(row) == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
 
 
 def test_a_row_has_one_spelling_whatever_order_its_coordinate_was_given_in() -> None:
@@ -274,7 +314,7 @@ def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
         'objective': {'sense': 'minimize', 'expression': 'sum(p) + z'},
     }
     with sps.build(spec, {'g': ['wind', 'gas']}) as model:
-        assert str(model.row('total')) == 'total: +1 p[wind] +1 p[gas] +1 z <= 10'
+        assert str(model.row('total')) == 'total: +1 p[g=wind] +1 p[g=gas] +1 z <= 10'
 
 
 def test_a_dimension_called_name_is_still_a_coordinate() -> None:
@@ -289,7 +329,7 @@ def test_a_dimension_called_name_is_still_a_coordinate() -> None:
     }
     data = {'name': ['wind', 'gas'], 'p_max': pl.DataFrame({'name': ['wind', 'gas'], 'value': [40.0, 200.0]})}
     with sps.build(spec, data) as model:
-        assert str(model.row('cap', name='wind')) == 'cap[name=wind]: +1 p[wind] <= 40'
+        assert str(model.row('cap', name='wind')) == 'cap[name=wind]: +1 p[name=wind] <= 40'
 
 
 def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
@@ -300,7 +340,7 @@ def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
     with sps.build(PRECISE, zeroed) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', '0, b', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
+    assert _terms(row) == [('p', 't=0, g=b', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
 
 
 @pytest.mark.parametrize(

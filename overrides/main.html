@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{#- On every page, because instant navigation never re-renders the head: a reader
+    who reaches the benchmark page from another one keeps the head of the first.
+    A map is resolved only when a module asks for it, so a page that draws no
+    chart fetches nothing. -#}
+{% block extrahead %}
+  <script type="importmap">
+    {
+      "imports": {
+        "@tanstack/charts/": "https://cdn.jsdelivr.net/npm/@tanstack/charts@1.0.0/dist/",
+        "d3-shape": "https://cdn.jsdelivr.net/npm/d3-shape@3.2.0/+esm",
+        "d3-scale": "https://cdn.jsdelivr.net/npm/d3-scale@4.0.2/+esm"
+      }
+    }
+  </script>
+{% endblock %}

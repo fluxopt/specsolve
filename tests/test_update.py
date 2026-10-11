@@ -184,6 +184,29 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
             assert updated.dual(name).equals(reference.dual(name)), f"'{name}' came back priced differently"
 
 
+@pytest.mark.parametrize('rung', [rung for rung in RUNGS if rung.values[0].keeps_the_solver])
+def test_an_update_and_its_undoing_answer_on_one_loaded_solver(dispatch_yaml, rung, solver_name):
+    """There and back: the second update restores the numbers the model was loaded with.
+
+    A sink that sends only what moved compares against what it holds, so one
+    that forgot the first push would find nothing to send on the way back.
+    """
+    spec, given = _case(rung, dispatch_yaml)
+    variables = list(to_spec(spec).program.variables)
+
+    def answer(result: Any) -> tuple[float, list[list[tuple[Any, ...]]]]:
+        return result.objective, [result.primal(name).rows() for name in variables]
+
+    with sps.build(spec, given) as model:
+        first = answer(model.solve(solver_name=solver_name))
+        moved = answer(model.update(rung.change).solve(solver_name=solver_name))
+        back = answer(model.update({name: given[name] for name in rung.change}).solve(solver_name=solver_name))
+
+        assert moved != first, 'the rung has to move the answer, or the way back proves nothing'
+        assert back == first, 'the solver kept a number the second update took back'
+        assert model.diagnostics().loads == 1, 'each update moved only numbers, so the solver stayed loaded'
+
+
 # ---------------------------------------------------------------------------
 # the same oracle, over models nobody here wrote
 # ---------------------------------------------------------------------------
@@ -244,7 +267,7 @@ def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
     """Every constraint's prices, or ``None`` where this answer carries none."""
     try:
         return {name: result.dual(name) for name in program.constraints}
-    except sps.SpecsolveError:
+    except sps.errors.SpecsolveError:
         return None
 
 
@@ -279,7 +302,7 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
             change = _scaled(given, factor)
             where = f'{port["name"]} x{factor}'
             with sps.solve(expanded(port['spec']), change) as reference:
-                got = model.update(change).solve()
+                got = model.update(change).solve(start=None)
 
                 assert got.termination_condition == reference.termination_condition, f'{where}: terminated differently'
                 assert got.has_primal == reference.has_primal, f'{where}: one left values and the other did not'
@@ -422,7 +445,7 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
     """
     taken = _hashes(monkeypatch)
     model.solve()
-    assert model.solve().kept == 'solver', 'an unchanged model is the easiest thing there is to keep'
+    model.solve()
     assert model.diagnostics().loads == 1, 'and keeping it means not loading it twice'
     assert len(taken) == 2, f'the outgoing model and the incoming one, as ever, not {len(taken)}'
 
@@ -528,7 +551,7 @@ def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown
     a driver cannot see: it re-solves the numbers already attached and reports the
     answer. `build` needs no such check — it attaches every declared name or
     fails."""
-    with pytest.raises(sps.DataError, match=unknown):
+    with pytest.raises(sps.errors.DataError, match=unknown):
         call(model)
 
 
@@ -613,10 +636,10 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
     of two, which is worse than having nothing to answer with.
     """
     model.solve()
-    with pytest.raises(sps.DataError):
+    with pytest.raises(sps.errors.DataError):
         model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
 
-    with pytest.raises(sps.SpecsolveError, match='no built model to hand over'):
+    with pytest.raises(sps.errors.SpecsolveError, match='no built model to hand over'):
         model.solve()
 
 

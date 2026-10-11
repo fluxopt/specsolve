@@ -1,11 +1,11 @@
 """The archive's layout: a spec, its data and its answer as a directory, or that directory zipped.
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
-``sources.parquet`` digesting them, ``catalog.parquet`` saying what each
-file holds, ``answer/`` in the answer's own layout
-([`specsolve.relational.answer_layout`][]), and ``axis.json`` where the
-sources are cut. A directory archive is read where it lies; a zip is
-unpacked first. Reading one back is [`specsolve.archive`][].
+``catalog.parquet`` saying what each file holds, ``answer/`` in the answer's own layout
+([`specsolve.relational.answer_layout`][]), ``axis.json`` where the
+sources are cut, and ``format.json`` stamping [`INPUTS_LAYOUT`][]. A
+directory archive is read where it lies; a zip is unpacked first. Reading
+one back is [`specsolve.archive`][].
 """
 
 from __future__ import annotations
@@ -14,45 +14,40 @@ import json
 import shutil
 import tempfile
 import zipfile
-from contextlib import contextmanager
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
-from specsolve.relational.answer_layout import (
-    ACTIVITY,
-    METRICS_FILE,
-    RECORD_FILE,
-    RUN,
-    consolidated,
-    digest_of_file,
-    write_whole,
-)
+from specsolve.relational.answer_layout import FORMAT_FILE, OUTPUT_KINDS, write_format, write_whole
+from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
+from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
 
+    from specsolve.relational.answer_layout import FrameWriter
+
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
 AXIS_MEMBER = 'axis.json'
-DIGESTS_MEMBER = 'sources.parquet'
 CATALOG_MEMBER = 'catalog.parquet'
 SOURCES_DIR = 'sources'
 ANSWER_DIR = 'answer'
 
-
-@contextmanager
-def beside(out: Path) -> Iterator[Path]:
-    """A scratch directory beside *out*, gone when the block ends, where an answer is laid out before it is packed."""
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=out.parent) as scratch:
-        yield Path(scratch)
+#: The layout of the spec and the data an archive holds: ``spec.yaml``,
+#: ``sources/`` and ``axis.json``. A change to any of them raises it; any other
+#: change to what an archive writes, ``catalog.parquet`` included, raises
+#: [`ANSWER_LAYOUT`][specsolve.relational.answer_layout.ANSWER_LAYOUT] instead.
+#: Stamped in the archive's own ``format.json``.
+INPUTS_LAYOUT = 1
 
 
 def check_the_target(out: Path) -> None:
@@ -69,7 +64,8 @@ def _staging_for(out: Path) -> Path:
     """A staging directory of this writer's own, beside *out*.
 
     One per writer, so two writers to one path do not clear each other's
-    members; beside *out*, so landing it is a rename.
+    members; beside *out*, so landing it is a rename. The archive is staged
+    one level down in it, so no ``<parent>/*/<member>`` glob reads it early.
     """
     out.parent.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(dir=out.parent, prefix=out.name + '.'))
@@ -81,7 +77,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Path,
+    answer: Callable[[Path, FrameWriter], None],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -90,34 +86,33 @@ def write_archive(
             name without ``.zip`` is the ``specsolve_run`` every table carries.
         spec: The spec as written, held as ``spec.yaml``.
         tables: The tidy table each source stands for, keyed as the file
-            declares, each written as ``sources/<key>.parquet`` and digested
-            before the run is stamped on.
+            declares, each written as ``sources/<key>.parquet``.
         axis: The axis manifest, or ``None`` where the sources are not cut.
-        answer: A directory in the answer's own layout; its record and
-            metrics land as one file each.
+        answer: Lays the answer out in the directory it is given, writing
+            each table with the writer it is given, which adds the run.
 
     Returns:
         *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
+
+    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(frame.lazy(), run), path)
+
     staging = _staging_for(out)
     part = staging / out.name
     tree = staging / 'tree' if zipped else part
     try:
         (tree / SOURCES_DIR).mkdir(parents=True)
+        write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
-        digests: dict[str, str] = {}
         for name, table in tables.items():
-            member = tree / SOURCES_DIR / f'{name}.parquet'
-            table.sink_parquet(member, compression='zstd')
-            digests[name] = digest_of_file(member)
-            _stamped(member, member, run)
-        _digest_table(digests, run).write_parquet(tree / DIGESTS_MEMBER)
+            write(table, tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
-        _copy_the_answer(answer, tree / ANSWER_DIR, run)
-        _catalog(lowered(spec), tree, run).write_parquet(tree / CATALOG_MEMBER)
+        answer(tree / ANSWER_DIR, write)
+        _write_catalogs(lowered(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
     except BaseException:
@@ -130,15 +125,6 @@ def write_archive(
     return out
 
 
-def _digest_table(digests: Mapping[str, str], run: str) -> pl.DataFrame:
-    """``(specsolve_run, source, digest)`` in source order, so one model's data digests to one table."""
-    names = sorted(digests)
-    return pl.DataFrame(
-        {RUN: [run] * len(names), 'source': names, 'digest': [digests[name] for name in names]},
-        schema={RUN: pl.String, 'source': pl.String, 'digest': pl.String},
-    )
-
-
 #: ``catalog.parquet``'s columns, in order.
 _CATALOG_SCHEMA = {
     RUN: pl.String,
@@ -149,39 +135,100 @@ _CATALOG_SCHEMA = {
     'dtype': pl.String,
     'column': pl.String,
     'dim': pl.String,
-    'dim_position': pl.Int32,
 }
+
+
+#: Where an archive keeps an EachWindow sweep's per-window frames, and their own catalog.
+_WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
+
+
+def _answered_under(under: str) -> dict[str, list[str]]:
+    """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
+    held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
+    for kind, carried in OUTPUT_KINDS.items():
+        held[carried.per].append(f'{under}/{kind}')
+    return held
 
 
 #: The directories that hold one file per name of each kind.
-_HELD_UNDER = {
-    'dimension': [SOURCES_DIR],
-    'relation': [SOURCES_DIR],
-    'parameter': [SOURCES_DIR],
-    'variable': [f'{ANSWER_DIR}/primal'],
-    'constraint': [f'{ANSWER_DIR}/dual', f'{ANSWER_DIR}/{ACTIVITY}'],
-    'expression': [f'{ANSWER_DIR}/expression'],
-}
+_HELD_UNDER = MappingProxyType(
+    {
+        'dimension': [SOURCES_DIR],
+        'relation': [SOURCES_DIR],
+        'parameter': [SOURCES_DIR],
+        **_answered_under(ANSWER_DIR),
+    }
+)
 
 
-def _catalog(program: Program, tree: Path, run: str) -> pl.DataFrame:
-    """What each file under ``sources/`` and ``answer/<kind>/`` of *tree* holds, one row per column of labels.
+#: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
+_HELD_IN_WINDOWS = MappingProxyType(_answered_under(_WINDOWS))
 
-    ``path`` and ``dim_position`` are the key, because a constraint may share
-    its name with a parameter. ``dim_position`` is the place in the name's
-    declaration, not in the file, where a sweep's source holds the axis column
-    first. A name with no file has no row.
+
+#: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.
+_OWNED = 'the coordinate of the sliced dimension that each window owns, by window and index inside the window'
+
+
+def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
+    """``catalog.parquet`` for what *tree* holds, and ``answer/windows/catalog.parquet`` where the windows were kept."""
+    dims = _axis_dims(tree, axis)
+    _catalog(program, tree, run, _HELD_UNDER, dims).write_parquet(tree / CATALOG_MEMBER)
+    if (tree / _WINDOWS).is_dir():
+        owned = f'{_WINDOWS}/{OWNED_FILE}'
+        windows = _catalog(program, tree, run, _HELD_IN_WINDOWS, dims, extra=[(owned, 'owned', 'window', _OWNED)])
+        windows.write_parquet(tree / _WINDOWS / CATALOG_MEMBER)
+
+
+def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
+    """The dimension of each column a sweep adds to its files: the axis column, and the key naming each slice.
+
+    A window's answer and cut sources hold the axis column where the spec
+    declares the local index. Empty for a single solve.
     """
+    if axis is None:
+        return {}
+    dim = str(axis['dim'])
+    key = json.loads((tree / ANSWER_DIR / MANIFEST_FILE).read_text())['key_name']
+    return {dim: dim, key: dim}
+
+
+def _catalog(
+    program: Program,
+    tree: Path,
+    run: str,
+    held_under: Mapping[str, Sequence[str]],
+    axis_dims: Mapping[str, str],
+    extra: Sequence[tuple[str, str, str, str]] = (),
+) -> pl.DataFrame:
+    """What each file of *tree* under *held_under* holds, one row per column of labels as the file is written.
+
+    ``path`` and ``column`` are the key, because a constraint may share its
+    name with a parameter. A column's dimension is the one the spec declares
+    for it, else the one *axis_dims* gives, else the dimension of its own
+    name. A name with no file has no row. *extra* is ``(path, name, kind,
+    description)`` for a file the spec declares nothing for.
+    """
+    named = {name: name for name in program.dimensions}
     rows: list[tuple[object, ...]] = []
     for name, kind, description, dtype, columns in _declared_files(program):
-        for directory in _HELD_UNDER[kind]:
-            if (path := _held(tree, directory, name)) is None:
-                continue
-            head = (run, path, name, kind, description, dtype)
-            rows.extend((*head, column, dim, at) for at, (column, dim) in enumerate(columns))
-            if not columns:
-                rows.append((*head, None, None, None))
-    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'dim_position')
+        for directory in held_under.get(kind, []):
+            if (path := _held(tree, directory, name)) is not None:
+                head = (run, path, name, kind, description, dtype)
+                rows.extend(_rows(head, tree / path, {**named, **axis_dims, **dict(columns)}))
+    for path, name, kind, description in extra:
+        rows.extend(_rows((run, path, name, kind, description, None), tree / path, {**named, **axis_dims}))
+    return pl.DataFrame(rows, schema=_CATALOG_SCHEMA, orient='row').sort('path', 'column')
+
+
+def _rows(head: tuple[object, ...], held: Path, dims: Mapping[str, str]) -> list[tuple[object, ...]]:
+    """*head* once per column of labels *held* is written with, and once with no column where it has none."""
+    labels = [column for column in _columns(held) if column != VALUE and not column.startswith(RESERVED_PREFIX)]
+    return [(*head, column, dims.get(column)) for column in labels] or [(*head, None, None)]
+
+
+def _columns(held: Path) -> list[str]:
+    """The columns of *held*, or of its first slice where it is a directory of them."""
+    return list(pl.read_parquet_schema(min(held.glob('*.parquet')) if held.is_dir() else held))
 
 
 def _held(tree: Path, directory: str, name: str) -> str | None:
@@ -208,35 +255,17 @@ def _declared_files(
             yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
 
 
-def _copy_the_answer(answer: Path, into: Path, run: str) -> None:
-    """*answer*'s layout under *into*, its record and metrics as one file each, every table stamped with *run*."""
-    consolidating = (RECORD_FILE, METRICS_FILE)
-    apart = {*consolidating, *(file.removesuffix('.parquet') for file in consolidating)}
-    shutil.copytree(
-        answer,
-        into,
-        ignore=lambda at, names: apart & set(names) if Path(at) == answer else set(),
-        copy_function=lambda source, target: _stamped(Path(source), Path(target), run),
-    )
-    for file in consolidating:
-        _with_run(consolidated(answer, file), run).write_parquet(into / file, compression='zstd')
+def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
+    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
-
-def _stamped(source: Path, target: Path, run: str) -> None:
-    """*source* at *target*, a parquet file with the ``specsolve_run`` column set to *run*; anything else copied.
-
-    Streamed, so a spilled answer larger than memory is stamped too, and
-    landed through a part file, so *target* may be *source*.
+    An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
+    timestamp in a time zone becomes the same instant in UTC.
     """
-    if source.suffix != '.parquet':
-        shutil.copy2(source, target)
-        return
-    write_whole(_with_run(pl.scan_parquet(source), run), target)
-
-
-def _with_run[F: (pl.DataFrame, pl.LazyFrame)](frame: F, run: str) -> F:
-    """*frame* with the [`RUN`][specsolve.relational.answer_layout.RUN] column every archived table carries set to *run*."""
-    return frame.with_columns(pl.lit(run, dtype=pl.String).alias(RUN))
+    return frame.with_columns(
+        cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
+        cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
+        pl.lit(run, dtype=pl.String).alias(RUN),
+    )
 
 
 def _pack(tree: Path, into: Path) -> None:
@@ -290,7 +319,7 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
     strays = [
         member
         for member in found
-        if member not in {SPEC_MEMBER, AXIS_MEMBER, DIGESTS_MEMBER, CATALOG_MEMBER}
+        if member not in {SPEC_MEMBER, AXIS_MEMBER, CATALOG_MEMBER, FORMAT_FILE}
         and not member.startswith(f'{ANSWER_DIR}/')
         and not (member.startswith(f'{SOURCES_DIR}/') and member.endswith('.parquet') and member.count('/') == 1)
     ]
@@ -298,7 +327,7 @@ def _check_the_layout(named: Path, members: Iterable[str]) -> None:
         what = f'holds {strays}' if strays else f'has no {SPEC_MEMBER!r}'
         raise LayoutError(
             f'{named} is not an archive: it {what}. One that archive= writes holds exactly '
-            f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, 'sources.parquet' digesting "
-            f"them, 'catalog.parquet' saying what each file holds, 'answer/' holding what the solve returned, "
-            f"and 'axis.json' where its sources are sliced."
+            f"'spec.yaml', one 'sources/<key>.parquet' per key the file declares, "
+            f"'catalog.parquet' saying what each file holds, 'answer/' holding what the solve returned, "
+            f"'axis.json' where its sources are sliced, and 'format.json' stamping its layout."
         )

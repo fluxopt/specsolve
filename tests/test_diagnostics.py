@@ -17,13 +17,11 @@ from tests.differential import RTOL, differential
 
 
 @pytest.mark.parametrize('solver_name', sorted(SOLVERS))
-@pytest.mark.parametrize('batch_rows', [1, 2, 7, 100_000], ids=['one', 'two', 'odd', 'whole'])
-def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_rows):
+def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     """A row that lost every term is not a constraint, and the build says so.
 
-    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum. Ragged
-    batches, because labels are compacted when a row goes and a block loop
-    has to agree about the narrower block; HiGHS ignores ``batch_rows``.
+    `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum, and the
+    labels close up around it, so every solver loads the narrower matrix.
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
@@ -38,7 +36,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name, batch_row
         occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
-        with solver(solver_name)(tables, batch_rows, None) as sink:
+        with solver(solver_name)(tables) as sink:
             answer = sink.run(tables)
         assert answer.status.termination_condition == 'optimal'
         assert answer.objective == pytest.approx(4.0 + 6.0, rel=RTOL), 'the two built rows still bind'
@@ -304,7 +302,7 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
         built = model.diagnostics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
-        with pytest.raises(sps.DataError, match='used as a divisor'):
+        with pytest.raises(sps.errors.DataError, match='used as a divisor'):
             model.update(HALF_A_DIVISOR)
         after = model.diagnostics()
 

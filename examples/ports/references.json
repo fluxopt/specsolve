@@ -2,7 +2,7 @@
   "dispatch": {
     "objective": 10500.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/dispatch.py — agreement, not a published figure",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -33,7 +33,7 @@
   "monthly_budget": {
     "objective": 9500.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure",
     "duals": {
       "monthly_budget": {
         "month": [
@@ -60,7 +60,7 @@
   "multi_period": {
     "objective": 10020.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure",
     "duals": {
       "balance": {
         "snapshot": [
@@ -90,7 +90,7 @@
   "piecewise": {
     "objective": 3850.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure",
     "duals": {
       "balance": {
         "snapshot": [
@@ -109,7 +109,7 @@
   "piecewise_lp": {
     "objective": 3850.0,
     "rtol": 1e-09,
-    "provenance": "the same instance as piecewise, whose optimum and duals linopy 0.9.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim",
+    "provenance": "the same instance as piecewise, whose optimum and duals linopy 0.10.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim",
     "duals": {
       "balance": {
         "snapshot": [
@@ -128,7 +128,7 @@
   "pypsa_ac_dc": {
     "objective": 18441021.477729216,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -413,7 +413,7 @@
   "pypsa_cyclic_storage": {
     "objective": 17228.77962151063,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_cyclic_storage.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -464,7 +464,7 @@
   "pypsa_kvl": {
     "objective": 17000.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_kvl.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_kvl.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -515,7 +515,7 @@
   "pypsa_ramp": {
     "objective": 18200.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_ramp.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_ramp.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -566,7 +566,7 @@
   "pypsa_storage": {
     "objective": 15253.178322993519,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_storage.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_storage.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -617,7 +617,7 @@
   "pypsa_transport": {
     "objective": 22000.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_transport.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_transport.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -668,12 +668,12 @@
   "pypsa_unit_commitment": {
     "objective": 24900.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py"
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_unit_commitment.py"
   },
   "stigler_diet": {
     "objective": 0.10866227820675685,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/stigler_diet.py — dollars per day; x365 = $39.6617/year",
     "corroborated_by": "Laderman (1947) at the National Bureau of Standards published $39.69/year for this data, the first serious test of the simplex method. This LP's exact optimum is 0.08% under it — his rounding, not a different model — and both select the same five foods: wheat flour, liver, cabbage, spinach, navy beans.",
     "duals": {
       "meet_requirement": {
@@ -705,7 +705,7 @@
   "storage": {
     "objective": 5650.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/storage.py — agreement, not a published figure",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -731,7 +731,7 @@
   "transport": {
     "objective": 4400.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/transport.py — agreement, not a published figure",
     "duals": {
       "balance": {
         "snapshot": [
@@ -759,7 +759,7 @@
     "objective": 153.675,
     "rtol": 1e-09,
     "provenance": "published with GAMS model library #1 (trnsport), after Dantzig, Linear Programming and Extensions (1963) ch. 3.3",
-    "corroborated_by": "examples/ports/references/linopy/transport_dantzig.py — the same LP hand-written in linopy 0.9.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
+    "corroborated_by": "examples/ports/references/linopy/transport_dantzig.py — the same LP hand-written in linopy 0.10.0, which reaches 153.675 independently. Secondary: the published figure is what verifies the port.",
     "duals": {
       "within_capacity": {
         "plant": [
@@ -793,7 +793,7 @@
   "transport_pwl": {
     "objective": 8.786852757777865,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
+    "provenance": "linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/transport_pwl.py; the model is GAMS model library trnspwl (Dantzig transport with economies of scale), which publishes the formulation and its discretisation but no optimal objective"
   },
   "tsp_mtz": {
     "objective": 2085.0,
@@ -803,7 +803,7 @@
   "reserves": {
     "objective": 915.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/reserves.py — agreement, not a published figure",
     "duals": {
       "balance": {
         "bus": [
@@ -820,7 +820,7 @@
   "pypsa_multilink": {
     "objective": 1100.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multilink.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_multilink.py",
     "duals": {
       "nodal_balance": {
         "bus": [
@@ -839,12 +839,12 @@
   "pypsa_modular": {
     "objective": 56700.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_modular.py"
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_modular.py"
   },
   "pypsa_energy_sum": {
     "objective": 21400.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_energy_sum.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_energy_sum.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -871,7 +871,7 @@
   "pypsa_fixed": {
     "objective": 49900.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_fixed.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_fixed.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -898,7 +898,7 @@
   "pypsa_spill": {
     "objective": 3200.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_spill.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_spill.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -931,7 +931,7 @@
   "pypsa_store": {
     "objective": 7005.5025000000005,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_store.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_store.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -964,12 +964,12 @@
   "pypsa_min_up_down": {
     "objective": 32750.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_min_up_down.py"
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_min_up_down.py"
   },
   "pypsa_linearized_uc": {
     "objective": 5540.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_linearized_uc.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_linearized_uc.py",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -990,7 +990,7 @@
   "pypsa_losses": {
     "objective": 24114.237385131008,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_losses.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_losses.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -1077,7 +1077,7 @@
   "pypsa_link_delay": {
     "objective": 4311.111111111111,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_link_delay.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_link_delay.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -1128,7 +1128,7 @@
   "pypsa_global_limits": {
     "objective": 127211.66666666666,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_global_limits.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_global_limits.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -1179,7 +1179,7 @@
   "pypsa_multi_period": {
     "objective": 85300.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_multi_period.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_multi_period.py",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -1200,12 +1200,12 @@
   "pypsa_committable_extendable": {
     "objective": 21700.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_committable_extendable.py"
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_committable_extendable.py"
   },
   "pypsa_growth_limit": {
     "objective": 47110.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_growth_limit.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_growth_limit.py",
     "duals": {
       "power_balance": {
         "snapshot": [
@@ -1230,7 +1230,7 @@
   "pypsa_stochastic": {
     "objective": 33940.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_stochastic.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_stochastic.py",
     "duals": {
       "power_balance": {
         "scenario": [
@@ -1272,7 +1272,7 @@
   "pypsa_cvar": {
     "objective": 35410.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_cvar.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_cvar.py",
     "duals": {
       "power_balance": {
         "scenario": [
@@ -1314,7 +1314,7 @@
   "pypsa_mixed_cycling": {
     "objective": 4800.0,
     "rtol": 1e-09,
-    "provenance": "pypsa 1.2.4 (its own linopy 0.9.0), via examples/ports/references/pypsa/pypsa_mixed_cycling.py",
+    "provenance": "pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_mixed_cycling.py",
     "duals": {
       "nodal_balance": {
         "snapshot": [
@@ -1341,7 +1341,7 @@
   "piecewise_ragged": {
     "objective": 426.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.9.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure",
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure",
     "duals": {
       "balance": {
         "snapshot": [
@@ -1360,6 +1360,6 @@
   "piecewise_conversion": {
     "objective": 5990.0,
     "rtol": 1e-06,
-    "provenance": "linopy 0.9.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away"
+    "provenance": "linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away"
   }
 }

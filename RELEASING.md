@@ -85,8 +85,8 @@ and the tool reads each heading as released because its tag exists.
 
 **PyPI refuses a direct reference.** A distribution that names a git URL in its
 metadata is rejected at upload, in a dependency and in an extra alike. None
-stands in `pyproject.toml`: the test oracle's `linopy @ git+…@master` is in the
-`dev` group, which is not package metadata, so PyPI never sees it.
+stands in `pyproject.toml`. A git URL in a dependency group is not package
+metadata, so PyPI never sees it.
 
 ## Branch protection
 

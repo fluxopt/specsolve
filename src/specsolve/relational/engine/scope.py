@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve.relational.collect import collected
+from specsolve.relational.names import VALUE
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
@@ -56,18 +59,20 @@ class Scope:
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
 
-        Folded in reverse because polars' streaming engine walks a cross join
-        right-major, so the product arrives in label order; [`labels.frame`][]
-        verifies it. The empty product is one real row carrying only [`UNIT`][],
-        so a ``where`` on a scalar declaration has a row to filter.
+        Each cross join keeps its left side's order, then its right's, so the
+        product arrives row-major, which is label order, on either engine; the
+        streaming engine otherwise picks which side it buffers from the
+        tables' sizes, and the order with it. [`labels.frame`][] verifies it.
+        The empty product is one real row carrying only [`UNIT`][], so a
+        ``where`` on a scalar declaration has a row to filter.
         """
         out: pl.LazyFrame | None = None
-        for d in reversed(dims):
+        for d in dims:
             table = self.data.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
-            out = table if out is None else out.join(table, how='cross')
+            out = table if out is None else out.join(table, how='cross', maintain_order='left_right')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
-        return out.select(*(c for d in dims for c in (d, ordinal(d))))
+        return out
 
     def parameter_join(
         self,
@@ -88,7 +93,7 @@ class Scope:
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
-        table = self.data.parameters[param].rename({'value': alias})
+        table = self.data.parameters[param].rename({VALUE: alias})
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
@@ -107,13 +112,15 @@ class Scope:
         """A *dim* value column as that dimension's ordinal.
 
         Attaching encodes an ``Enum`` in ordinal order, so its physical code is the
-        ordinal.
+        ordinal, and a run of consecutive integers is its own ordinal less its first.
         """
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
-        labels = self.data.dimensions[dim].select('val').collect()['val']
-        return column.replace_strict({value: at for at, value in enumerate(labels)}, return_dtype=pl.Int64)
+        if (first := self.data.consecutive.get(dim)) is not None:
+            return column.cast(pl.Int64) - first
+        ordinals = self.data.dimensions[dim].pipe(collected)
+        return column.replace_strict(ordinals.get_column('val'), ordinals.get_column('ord'), return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dim in *want*, saying the same thing.
