@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(tutorials): the last tutorial adds a battery, and solves the model per scenario and window by window ([#1959](https://github.com/fluxopt/specsolve/pull/1959))
 - docs(tutorials): a new tutorial adds generators that are either on or off and solves the model as a MIP ([#1958](https://github.com/fluxopt/specsolve/pull/1958))
 - docs(tutorials): the third tutorial asks what-if questions of one loaded model ([#1957](https://github.com/fluxopt/specsolve/pull/1957))
 - docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
