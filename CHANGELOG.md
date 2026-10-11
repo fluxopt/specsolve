@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the how-to guides are shorter, and the small-models guide joins the one on faster loops ([#1962](https://github.com/fluxopt/specsolve/pull/1962))
 - docs: the Development section is two pages, the architecture and how answers are verified ([#1961](https://github.com/fluxopt/specsolve/pull/1961))
 - docs: the sidebar keeps what a user needs, and a Development section holds the architecture and the PyPSA proofs ([#1960](https://github.com/fluxopt/specsolve/pull/1960))
 - docs(tutorials): the last tutorial adds a battery, and solves the model per scenario and window by window ([#1959](https://github.com/fluxopt/specsolve/pull/1959))
