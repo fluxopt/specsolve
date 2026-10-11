@@ -276,8 +276,12 @@ class Assembly:
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
+        dense = c.where is None and not restrictions
         for p, sign in terms:
-            placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
+            if dense and set(p.dims) == set(c.dims):
+                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+            else:
+                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             pieces.append(
                 placed.select(
                     'row',
@@ -302,6 +306,17 @@ class Assembly:
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
+
+    def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
+        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+
+        Such a block numbers its rows row-major over the declared ordinals
+        ([`labels.frame`][specsolve.relational.engine.labels.frame]), so a term
+        computes its row from its own coordinate rather than joining the block.
+        The door admits no label outside its dimension, so every coordinate a
+        term carries is a row of the block, as the join would find.
+        """
+        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
         self, frame: pl.LazyFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
