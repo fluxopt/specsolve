@@ -102,4 +102,4 @@ spec: examples/walkthrough.yaml
       The objective: this product is degree 3. The language takes degree 2 and nothing above it.
       Multiply by a parameter instead, or give the inner product a name — a variable constrained to equal it is degree 1 wherever it is used.
 
-docs/about/architecture.md has the rules these stages enforce.
+docs/development/architecture.md has the rules these stages enforce.
