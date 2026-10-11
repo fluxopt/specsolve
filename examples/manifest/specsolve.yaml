@@ -1,0 +1,16 @@
+manifest: 1
+spec: ../dispatch.yaml
+sources: [data/base.xlsx, data/timeseries/]
+solver_name: highs
+solver_options: {time_limit: 600}
+archive: runs/
+
+runs:
+  base: {}
+  high_gas:
+    sources: [data/base.xlsx, data/high_gas.xlsx, data/timeseries/]
+  scenarios:
+    from: high_gas
+    sources: [data/base.xlsx, data/high_gas.xlsx, data/timeseries/snapshot.csv, data/scenarios/load.parquet]
+    axis: {EachCoordinate: {dim: scenario}}
+    workers: 2

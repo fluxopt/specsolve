@@ -27,6 +27,7 @@ from specsolve import types as types
 from specsolve.api import build, check, evaluate, load_result, scan_result, solve, tidy, write
 from specsolve.archive import load_archive, load_inputs, scan_archive
 from specsolve.axes import EachCoordinate, EachWindow
+from specsolve.manifest import load_manifest
 from specsolve.strategy import solve_over
 from specsolve.sweep import load_sweep, scan_sweep
 
@@ -38,6 +39,7 @@ __all__ = [
     'evaluate',
     'load_archive',
     'load_inputs',
+    'load_manifest',
     'load_result',
     'load_sweep',
     'scan_archive',

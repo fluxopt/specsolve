@@ -16,6 +16,7 @@ Example::
 
 from specsolve.api import Model
 from specsolve.archive import ArchivedInputs, ResultArchive, SweepArchive
+from specsolve.manifest import Manifest, Run
 from specsolve.relational.answer_layout import Metrics, Output, Provenance, Record
 from specsolve.relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Result, Start
 from specsolve.sweep import Sweep
@@ -25,6 +26,7 @@ __all__ = [
     'ConstraintRow',
     'Diagnostics',
     'InfeasibleSubsystem',
+    'Manifest',
     'Metrics',
     'Model',
     'Output',
@@ -32,6 +34,7 @@ __all__ = [
     'Record',
     'Result',
     'ResultArchive',
+    'Run',
     'Start',
     'Sweep',
     'SweepArchive',
