@@ -811,8 +811,8 @@ def _run(cpu: str, cores: int = 4) -> dict[str, object]:
 
 
 def test_one_machine_prints_as_one_line() -> None:
-    assert report.provenance([_run('AMD EPYC 7763')]) == (
-        'AMD EPYC 7763, 4 cores (Linux 6.8.0), python 3.12.0 — polars 1.0.'
+    assert report.provenance([_run('AMD EPYC 7763')]).splitlines()[0] == (
+        'Measured on AMD EPYC 7763, 4 cores (Linux 6.8.0), python 3.12.0.'
     )
 
 
@@ -829,8 +829,43 @@ def test_two_files_from_one_machine_are_not_marked() -> None:
 
 def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> None:
     """A `.jsonl` result is taken verbatim, so an older run record must render."""
-    assert report.provenance([{'record': 'run', 'platform': None}]) == '? (?), python ? — .'
-    assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
+    for run in ({'record': 'run', 'platform': None}, {'record': 'run'}):
+        assert report.provenance([run]).startswith('Measured on ? (?), python ?.'), 'every key is optional'
+
+
+def _versions(page: str) -> dict[str, str]:
+    rows = (line.split(' | ') for line in page.splitlines() if line.startswith('| ') and '---' not in line)
+    return {name.removeprefix('| '): value.removesuffix(' |') for name, value in rows}
+
+
+def test_every_tracked_package_is_printed_with_its_version() -> None:
+    """The page names every library it compares, so a reader can tell which releases were measured."""
+    shown = _versions(report.provenance([_run('AMD EPYC 7763')]))
+    assert list(shown)[1:] == list(bench_results.TRACKED), 'one row per tracked package, in the tracked order'
+    assert shown['polars'] == '`1.0`', 'a recorded version is printed'
+    assert shown['linopy'] == 'not recorded', 'a package the run did not record says so rather than vanishing'
+
+
+def test_specsolve_is_named_by_its_commit() -> None:
+    """A checkout without tags reports a placeholder version, so the commit is what identifies it."""
+    run = {
+        **_run('AMD EPYC 7763'),
+        'versions': {'specsolve': '0.0.1.dev1+ga19f71c93'},
+        'commits': {'specsolve': 'a19f71c'},
+    }
+    assert _versions(report.provenance([run]))['specsolve'] == 'commit `a19f71c`'
+
+
+def test_two_files_on_different_versions_print_both() -> None:
+    older, newer = _run('AMD EPYC 7763'), {**_run('AMD EPYC 7763'), 'versions': {'polars': '1.1'}}
+    assert _versions(report.provenance([older, newer]))['polars'] == '`1.0`, `1.1`', 'neither version hides the other'
+
+
+def test_the_tracked_versions_are_what_the_page_prints() -> None:
+    """`--write` puts the versions on the page, so the committed page carries them."""
+    page = report.PAGE.read_text()
+    for package in bench_results.TRACKED:
+        assert f'| {package} |' in page, f'{package} is tracked and missing from {report.PAGE}'
 
 
 #: Renders the marginal table for three cases of identical width. Run twice

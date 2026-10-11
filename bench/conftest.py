@@ -23,6 +23,7 @@ import pytest
 
 from bench.arms import ARMS
 from bench.cases import CASES
+from bench.results import TRACKED
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -237,21 +238,6 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     """Release the machine — only a lock this session took, never another holder's."""
     if session.config.stash.get(_TOOK_LOCK, False):
         BENCH_LOCK.unlink(missing_ok=True)
-
-
-#: Fingerprinted into every result file: a number measured against a different
-#: version of any of these is a different number.
-TRACKED = (
-    'specsolve',
-    'highspy',
-    'gurobipy',
-    'scipy',
-    'polars',
-    'pandas',
-    'numpy',
-    'pyarrow',
-    'pytest-benchmem',
-)
 
 
 @pytest.hookimpl(optionalhook=True)

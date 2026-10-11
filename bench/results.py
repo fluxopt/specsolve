@@ -40,6 +40,23 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from pathlib import Path
 
+#: Fingerprinted into every result file and printed on the page: a number
+#: measured against a different version of any of these is a different number.
+TRACKED = (
+    'specsolve',
+    'mathspec',
+    'linopy',
+    'pyomo',
+    'highspy',
+    'gurobipy',
+    'scipy',
+    'polars',
+    'pandas',
+    'numpy',
+    'pyarrow',
+    'pytest-benchmem',
+)
+
 #: pytest-benchmem's blob inside pytest-benchmark's ``extra_info``.
 BENCHMEM = 'benchmem'
 

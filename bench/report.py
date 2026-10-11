@@ -67,22 +67,40 @@ def machine(run: Row) -> str:
 
 
 def provenance(runs: list[Row]) -> str:
-    """The line above the tables: what measured them, and on how many machines (#1315)."""
+    """What measured the tables: the machine, and every tracked package's version (#1315).
+
+    specsolve is named by its commit, because a checkout without tags reports a
+    placeholder version. A package a run did not record says so, rather than
+    leaving the reader to assume the newest release.
+    """
     if not runs:
         return 'No run record — provenance unknown.'
     first = runs[0]
-    versions = ', '.join(f'{k} {v}' for k, v in (first.get('versions') or {}).items() if v)
     python = first.get('python') or '?'
     boxes = sorted({machine(run) for run in runs})
-    line = f'{machine(first)}, python {python} — {versions}.'
     if len(boxes) == 1:
-        return line
-    return (
-        f'python {python} — {versions}. **Taken on {len(boxes)} machines**: '
-        + '; '.join(boxes)
-        + '. A rung and its arms share a file and a machine, so the ratios hold; '
-        'do not read a trend across rungs as one machine getting slower.'
-    )
+        line = f'Measured on {boxes[0]}, python {python}.'
+    else:
+        line = (
+            f'Measured with python {python}. **Taken on {len(boxes)} machines**: '
+            + '; '.join(boxes)
+            + '. A rung and its arms share a file and a machine, so the ratios hold; '
+            'do not read a trend across rungs as one machine getting slower.'
+        )
+    rows = [f'| {package} | {_installed(package, runs)} |' for package in bench_results.TRACKED]
+    return '\n'.join([line, '', '| package | version |', '| --- | --- |', *rows])
+
+
+def _installed(package: str, runs: list[Row]) -> str:
+    if package == BASELINE:
+        seen = {(run.get('commits') or {}).get(package) for run in runs}
+        shown = sorted(f'commit `{c}`' for c in seen if c)
+    else:
+        seen = {(run.get('versions') or {}).get(package) for run in runs}
+        shown = sorted(f'`{v}`' for v in seen if v)
+    if None in seen:
+        shown.append('not recorded')
+    return ', '.join(shown)
 
 
 def load(
@@ -546,8 +564,6 @@ def main(argv: list[str] | None = None) -> int:
     rows = best(timings)
     failed = failures(timings)
 
-    print(provenance(runs))
-    print()
     if gates:
         print(
             'Parity gate: '
@@ -573,6 +589,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(f'<!-- {" ".join(k for k in key if k)}: {error} -->')
 
     fragments = {
+        'provenance': provenance(runs),
         'results': '\n'.join(results),
         'marginal': marginal(loop),
         'sweeps': '\n\n'.join(t for t in (width(rows), density(rows), declarations(rows)) if t),

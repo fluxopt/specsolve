@@ -128,6 +128,29 @@ specsolve's fastest round is the faster one, 28.0 ms against 28.4 ms and 40.7 ms
 against 44.7 ms, and its median is the slower, 39.9 ms against 29.1 ms and
 56.3 ms against 46.4 ms.
 
+## What measured it
+
+<!-- bench:provenance -->
+
+Measured on AMD EPYC-Milan Processor, 8 cores (Linux 7.0.0-29-generic), python 3.12.15.
+
+| package | version |
+| --- | --- |
+| specsolve | commit `a19f71c-dirty` |
+| mathspec | not recorded |
+| linopy | not recorded |
+| pyomo | not recorded |
+| highspy | `1.15.1` |
+| gurobipy | `13.0.3` |
+| scipy | `1.18.1` |
+| polars | `2.0.0` |
+| pandas | `3.0.6` |
+| numpy | `2.5.3` |
+| pyarrow | `26.0.0` |
+| pytest-benchmem | `0.5.5` |
+
+<!-- bench:/provenance -->
+
 ## How to reproduce it
 
 ```bash
