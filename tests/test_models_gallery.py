@@ -121,15 +121,30 @@ def test_the_catalogue_lists_every_model(example: tuple[str, Path]) -> None:
     )
 
 
-def test_the_generated_blocks_are_current() -> None:
-    """All three of the gallery's generated blocks are current.
+@pytest.mark.parametrize('path', constructs.PAGES, ids=lambda p: p.name)
+def test_the_generated_blocks_are_current(path: Path) -> None:
+    """Every generated block on the page is current.
 
     The catalogue comes from the nav and each page's opening line, the
     construct matrix from the resolved plan, and the reference table from
     ``references.json``, the file ``test_ports.py`` asserts against.
     """
-    page = constructs.PAGE.read_text()
-    assert constructs.rendered(page) == page, 'the gallery page is stale — run `pixi run python -m tools.constructs`'
+    page = path.read_text()
+    assert constructs.rendered(page, path) == page, f'{path.name} is stale — run `pixi run python -m tools.constructs`'
+
+
+@pytest.mark.parametrize(
+    'markers',
+    [
+        pytest.param((constructs.CAT_BEGIN, constructs.CAT_END), id='catalogue'),
+        pytest.param((constructs.BEGIN, constructs.END), id='constructs'),
+        pytest.param((constructs.REF_BEGIN, constructs.REF_END), id='references'),
+    ],
+)
+def test_each_generated_block_lives_on_exactly_one_page(markers: tuple[str, str]) -> None:
+    """The generator fills only the blocks it finds, so a dropped marker would stop it silently."""
+    carriers = [path.name for path in constructs.PAGES if all(m in path.read_text() for m in markers)]
+    assert len(carriers) == 1, f'{markers[0]} must be on exactly one of constructs.PAGES, found on {carriers}'
 
 
 @pytest.fixture(scope='module')

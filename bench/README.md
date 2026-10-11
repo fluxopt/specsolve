@@ -45,8 +45,7 @@ the provenance of the tables `docs/about/benchmarks.md` publishes *today*:
 Published benchmark run 38154932531, on `d0444a0b`. It finished the size ladder
 of all four cases on both sinks. The watchdog killed both width ladders above
 25 GB, at a rung that did not fit: `transport/w100` and `storage/w1000`, on both
-sinks, so no `-width.json` is committed and the page has no width table until a
-run completes one. `results.records` still reads the pre-pytest
+sinks, so no `-width.json` is committed. The page publishes no width table. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -691,8 +690,9 @@ the child loads before its clock imports a modelling library, which
 mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
 `2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
 worth knowing, and never under CodSpeed, whose instruments do not follow a
-child process. Its phase is `fresh`, and `bench.report` renders it as the page's
-`fresh` table, beside the warm ones.
+child process. Its phase is `fresh`. `bench.report` prints it as the `fresh`
+table, and the page carries no fence for it, so the page publishes only the
+warm charts.
 
 ## The warm-start payoff
 
