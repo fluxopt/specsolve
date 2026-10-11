@@ -78,6 +78,28 @@ Each panel is one model through one solver, and each line is one library.
   where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
   are sizes the harness refused.
 
+## A script that solves one model
+
+The charts leave out what a script pays to start: the interpreter, the import
+and the first build. This table times a new process from launch to exit, on
+HiGHS.
+
+<!-- bench:fresh -->
+
+| launch to exit | dispatch (10k variables) | fleet (12k variables) | storage (10k variables) | transport (9.8k variables) |
+|---|---|---|---|---|
+| specsolve | 0.49 s | 0.57 s | 0.51 s | 0.51 s |
+| specsolve-in-memory | 0.49 s | 0.54 s | 0.49 s | 0.50 s |
+| linopy | 1.04 s | 1.20 s | 1.06 s | 1.04 s |
+| pyomo | 0.72 s | 1.05 s | 0.88 s | 0.84 s |
+| highspy-matrix | 0.34 s | 0.35 s | 0.34 s | 0.34 s |
+
+<!-- bench:/fresh -->
+
+A script that solves one small model with specsolve finishes in about half a
+second, under half of linopy's time
+([#1952](https://github.com/fluxopt/specsolve/pull/1952)).
+
 ## Not measured yet
 
 - **Sparsity, which is the engine's whole premise.** Every published model is

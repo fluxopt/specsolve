@@ -395,37 +395,38 @@ def marginal(loop_rows: list[Row]) -> str:
     return '\n'.join(lines)
 
 
-def fresh(rows: dict[Key, Row]) -> str:
-    """What a process started for one solve pays, launch to exit, at the rungs `test_fresh` measures.
+#: The sink the start-up table reads: the solver specsolve installs with.
+FRESH_SINK = 'highs'
 
-    Every arm pays its own interpreter, import and first build here, so the
-    totals compare across libraries; the phases inside them do not. No ratio
-    columns, as in the per-model tables.
+
+def fresh(rows: dict[Key, Row]) -> str:
+    """What a script that solves one model pays, launch to exit, on `FRESH_SINK`.
+
+    One row per arm and one column per case, each case at the largest rung the
+    fresh phase measured, so a reader compares libraries down a column. Wall
+    only: every arm pays its own interpreter, import and first build, so the
+    totals compare across libraries, and the phases inside them do not.
     """
-    if not rows:
+    rows = {k: r for k, r in rows.items() if k[2] == FRESH_SINK}
+    cases = sorted({c for c, _, _, _ in rows})
+    if not cases:
         return ''
-    arms = arms_in(rows)
-    return _grid(
-        [
-            '### A process started for one solve',
-            '',
-            'Launch to exit: a new interpreter imports the library, builds the model '
-            'once and hands it to the sink. The tables above run warm and exclude '
-            'the import, so the gap between this wall and the same rung there is '
-            "what starting costs. The peak is the new process's own.",
-        ],
-        ('case', 'sink', 'variables'),
-        (
-            ([case, sink, _si(ref['counts']['columns'])], at_rung, (case, size, sink))
-            for case in sorted({c for c, _, _, _ in rows})
-            for sink in sorted({k for c, _, k, _ in rows if c == case})
-            for size in sizes_of(case, rows, sink)
-            for at_rung, ref in [_at_rung(rows, case, size, sink, arms)]
-            if ref
-        ),
-        arms,
-        ratios=False,
-    )
+    rung = {c: sizes_of(c, rows, FRESH_SINK)[-1] for c in cases}
+    columns = {
+        c: next(r for (cc, s, _, _), r in rows.items() if (cc, s) == (c, rung[c]))['counts']['columns'] for c in cases
+    }
+    head = ['launch to exit', *(f'{c} ({_si(columns[c])} variables)' for c in cases)]
+    lines = ['| ' + ' | '.join(head) + ' |', '|' + '---|' * len(head)]
+    marked = False
+    for arm in arms_in(rows):
+        cells = []
+        for case in cases:
+            row = rows.get((case, rung[case], FRESH_SINK, arm))
+            marked = marked or suspect(row)
+            wall = f'{row["wall_seconds"]:.2f} s' if row else (over_budget(case, rung[case], FRESH_SINK, arm) or '—')
+            cells.append(_marked(wall, noisy=suspect(row)))
+        lines.append('| ' + ' | '.join([arm, *cells]) + ' |')
+    return '\n'.join(_note(lines, marked=marked))
 
 
 def _sweep(
