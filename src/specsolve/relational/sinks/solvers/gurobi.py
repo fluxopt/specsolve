@@ -66,8 +66,7 @@ _LINOPY_DIVERGENCES = {
 class Gurobi(Solver):
     """Gurobi, holding one model at ``.handle``, a `gurobipy.Model`.
 
-    The model loads in one call, so ``batch_rows`` has no effect. ``close``, or
-    leaving a ``with``, releases the model and its environment.
+    ``close``, or leaving a ``with``, releases the model and its environment.
     """
 
     #: The loaded model and its environment. ``close`` drops them.
@@ -106,9 +105,7 @@ class Gurobi(Solver):
         )
     )
 
-    def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
-        """Load in one call — *batch_rows* is the family's parameter and this member has no batches."""
-        del batch_rows
+    def _load(self, handoff: Handoff) -> None:
         self._m, self._env = _built(handoff, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
