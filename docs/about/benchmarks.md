@@ -141,10 +141,11 @@ refuses to start if the resolution has drifted.
 
 Everything the tables are drawn from is in
 [`bench/results`](https://github.com/fluxopt/specsolve/blob/main/bench/results):
-one file per sink and case. Each carries the machine, the versions, the commit
-and every round of every measurement. A case the box could not finish leaves
-no file behind. `pixi run table` prints the directory as one long CSV and
-commits nothing; the JSON stays the archive because it keeps the rounds.
+one file per sink, case and ladder. Each carries the machine, the versions, the
+commit and every round of every measurement. A ladder the box could not finish
+leaves no file behind, and the other ladder of that case keeps its own.
+`pixi run table` prints the directory as one long CSV and commits nothing; the
+JSON stays the archive because it keeps the rounds.
 `pixi run refresh` re-takes the numbers, writes the tables into their fences
 and the chart rows into `benchmarks.json`.
 
@@ -218,11 +219,12 @@ Listed so that a claim with no table under it is visible as one.
   starts a rung that does not fit, and `bench/memory-watchdog.sh` kills the
   case to save the box. Four cases died that way on this run:
   `transport/w100` on `highs` at 25.5 GB and on `gurobi` at 26.4 GB, and
-  `storage/w1000` on `highs` at 26.1 GB and on `gurobi` at 27.8 GB. A killed case writes no
-  file, so each loses every rung it had already measured, its rows in the
-  marginal table above included
-  ([#1498](https://github.com/fluxopt/specsolve/issues/1498)). The last `highs`
-  numbers past `w10` are in
+  `storage/w1000` on `highs` at 26.1 GB and on `gurobi` at 27.8 GB. That run
+  measured both ladders of a case in one process, and a killed process writes
+  no file, so each case lost every rung it had already measured, its rows in
+  the marginal table above included. Each ladder now runs in a process and a
+  file of its own, so a kill on the width rungs keeps the size rungs. The last
+  `highs` numbers past `w10` are in
   [#1285](https://github.com/fluxopt/specsolve/pull/1285), taken on a machine that
   could hold them. There specsolve took 0.11 s and 0.59 GB at `transport/w100`,
   against linopy's 53.53 s and 14.26 GB.
