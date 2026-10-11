@@ -998,6 +998,33 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
+def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
+    """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
+
+    `report.load` keeps it apart, and `report.fresh` renders one row per case and sink.
+    """
+    build = _timing('specsolve', phase='emit', sink='highs', size='xs', wall_seconds=0.03)
+    started = [
+        _timing('specsolve', phase='fresh', sink='highs', size='xs', wall_seconds=1.2),
+        _timing('linopy', phase='fresh', sink='highs', size='xs', wall_seconds=1.9),
+    ]
+    path = tmp_path / 'latest.jsonl'
+    path.write_text('\n'.join(json.dumps(r) for r in (build, *started)))
+    _run, _gates, timings, _loop, fresh = report.load(path)
+    assert [r['phase'] for r in timings] == ['emit'], 'the build tables never see a fresh-process wall'
+    assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
+
+    table = report.fresh(report.best(fresh))
+    assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is a column'
+    assert '| dispatch | highs | 1k | 1.20 s | 1.90 s |' in table, 'one row per case and sink, launch to exit'
+    assert '÷' not in table, 'no ratio column, as in the per-model tables'
+
+
+def test_a_run_without_a_fresh_process_renders_no_fresh_table() -> None:
+    """`report.main` drops an empty fragment, so the page keeps its fence rather than an empty table."""
+    assert report.fresh({}) == '', 'no measurement, no table'
+
+
 def test_a_run_of_one_arm_has_no_ratio_column() -> None:
     """A number divided by itself is not a comparison, and a column of 1.00x
     reads like one."""
@@ -1509,7 +1536,7 @@ def test_a_window_measurement_is_not_published_as_a_build(tmp_path: Path) -> Non
 
     path = tmp_path / 'latest.jsonl'
     path.write_text('\n'.join(json.dumps(r) for r in (build, window)))
-    _run, _gates, timings, _loop = report.load(path)
+    _run, _gates, timings, _loop, _started = report.load(path)
     published = report.best(timings)
     assert published[('dispatch', 'm', 'lp', 'specsolve')]['wall_seconds'] == 1.0, (
         'the table publishes the build, not the faster window measured against it'
