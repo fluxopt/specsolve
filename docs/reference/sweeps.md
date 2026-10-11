@@ -1,7 +1,8 @@
 # Sweeps and rolling horizons
 
 This page is the reference for `solve_over`: the axes it takes, the `Sweep` it
-returns, and the `carry`, `executor`, `spill_to=` and `archive=` keywords.
+returns, an axis's `carry`, and the `executor`, `spill_to=` and `archive=`
+keywords.
 
 `solve_over` runs one [model](glossary.md#the-chain) once per slice and folds
 the answers together. A slice is one set of [sources](glossary.md#how-it-runs)
@@ -29,8 +30,7 @@ is not asked whether it can be cut that way, and its answer is keyed by slice.
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 ```
@@ -228,22 +228,22 @@ sweep = sps.solve_over(
 ```text
 SpecsolveError: this archive holds the answer only, because it was written without
 keep_windows=True, so it has no per-window frames to read. Solving again from the
-archived spec and sources restores them: load_archive gives both, with the axis
-and the carry, so sps.solve_over(archive.spec, archive.sources, archive.axis,
-carry=archive.carry) runs the sweep again.
+archived spec and sources restores them: load_archive gives both, with the axis and
+its carry, so sps.solve_over(archive.spec, archive.sources, archive.axis) runs the
+sweep again.
 ```
 
 ## Carrying state between slices
 
-`carry` copies one slice's answer into the next slice's data, as a mapping
-`{parameter: variable}`.
+An axis's `carry` copies one slice's answer into the next slice's data, as a
+mapping `{parameter: variable}`. Both `EachCoordinate` and `EachWindow` take
+it; a hand-built list carries nothing.
 
 ```python
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 ```
 
@@ -255,10 +255,10 @@ keeping 24, not label 47 of the 48 it solved.
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
 | **the two declarations say what is copied** | The carry collapses the one dimension the *variable* has and the *parameter* does not. Every other dimension rides along. `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t` and hands both stores forward. `total` over `(generator)` into `existing` over `(generator)` drops nothing, so the whole frame moves. |
-| **the collapsed dimension has to be the one the axis advances along** | It is `EachWindow`'s `into`. Any other dimension has no last-owned row to read, so the carry is refused and the error names the YAML: reduce that dimension in a derived variable, where the typesetter prints it and the oracle checks it. A carry under `EachCoordinate` or a hand-built axis therefore collapses nothing. |
+| **the collapsed dimension has to be the one the axis advances along** | It is `EachWindow`'s `into`. Any other dimension has no last-owned row to read, so the carry is refused and the error names the YAML: reduce that dimension in a derived variable, where the typesetter prints it and the oracle checks it. A carry on `EachCoordinate` therefore collapses nothing. |
 | **a carried value is a boundary condition, never a pin** | The parameter supplies the state *entering* the window, as `soc == soc_initial + charge * 0.9 - discharge` does at `t == 0`. Writing `soc == soc_initial` there replaces the first row's dynamics instead of seeding them, which leaves its `charge` and `discharge` tied to nothing — the window gets free energy at every seam, and the sweep comes out cheaper than full foresight. |
 | **the first slice needs a seed** | `carry` supplies the parameter from the second slice on. The first slice takes it from `sources`, and a sweep whose sources lack it is refused before a slice is taken. |
-| **a carry is checked before anything is read** | The dims come from the YAML and the axis is an argument, so a carry that cannot line up raises before the axis has scanned a source: collapsing two dimensions at once, a parameter over more dimensions than the variable, a dimension the axis does not advance along, no seed. `check` cannot answer this, because `carry` is an argument to the call, not part of the spec. |
+| **a carry is checked before anything is read** | The dims come from the YAML and the axis is an argument, so a carry that cannot line up raises before the axis has scanned a source: collapsing two dimensions at once, a parameter over more dimensions than the variable, a dimension the axis does not advance along, no seed. `check` cannot answer this, because `carry` is an argument to the axis, not part of the spec. |
 | **the last slice carries nothing** | There is no next slice to read it. |
 | **a slice that leaves nothing to carry stops the sweep** | An infeasible window has no level to hand forward. The error names the slice, how it terminated, and the slice left waiting. A sweep without a carry records the slice in `record` and goes on. |
 | **`carry` excludes `executor`** | A carried value makes slice *i+1* depend on slice *i*, so the call is refused. |
