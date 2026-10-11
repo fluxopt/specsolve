@@ -208,7 +208,7 @@ memory, and writing into the array changes what an answer's
 [`evaluate`](api.md#specsolve.types.Result.evaluate) reads and what a save
 records. Change data through `update`, or pass a copy.
 
-**The [linopy lane](../about/linopy.md#the-same-language-and-the-same-data)
+**The [linopy lane](../development/verification.md#the-oracle)
 attaches by these same rules, refusals included**, held to them by
 `tests/test_data_parity.py`. The same malformed source gets the same verdict,
 and where one defect has one repair, the same message.

@@ -80,8 +80,8 @@ nav:
   # tools/ladder.py writes them and tools/constructs.py reads them.
   - Development:
       - Architecture: development/architecture.md
-      - Internal glossary: development/internals.md
-      - Decomposition: development/decomposition.md
+      - Verification: development/verification.md
+      - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
       - PyPSA examples:
           - transport model: examples/pypsa_transport.md
           - ramp limits: examples/pypsa_ramp.md

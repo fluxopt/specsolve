@@ -181,7 +181,7 @@ def test_the_translation_table_names_every_built_in_operator():
     """`What a construct becomes` is a copy of the builder, so something checks it."""
     from mathspec import BUILTIN_NAMES
 
-    page = (DOCS / 'about' / 'linopy.md').read_text()
+    page = (DOCS / 'development' / 'verification.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]
     expressions = section.split('| In an expression |')[1].split('| A `where:` |')[0]
     shown = set(re.findall(r'^\| `(\w+)\(', expressions, re.MULTILINE))
