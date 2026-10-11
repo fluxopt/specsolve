@@ -1,8 +1,7 @@
 # Debugging a wrong answer
 
 What to read when a model solves to the wrong number, or does not solve, in
-the order that finds the fault soonest. Each step needs the file, or the file
-and its data.
+the order that finds the fault soonest.
 
 ## 1. Check the file
 
@@ -12,10 +11,8 @@ import specsolve as sps
 sps.check('dispatch.yaml')
 ```
 
-`check` raises on a construct outside the language. Whether the solver takes
-the model is decided at the build: `model.check('highs')` refuses a built
-model the solver cannot take, such as an `sos:` set, which HiGHS has no
-concept of until `Spec.expand()` writes it out as binaries
+`check` raises on a construct outside the language. `model.check('highs')`
+refuses a built model the solver cannot take
 ([what each sink takes](../reference/api.md#what-each-sink-takes)).
 
 ## 2. Read the shape the build produced
@@ -28,9 +25,7 @@ report.omissions  # rows a constraint declared and did not build
 report.sparse_parameters  # parameters whose table is short of their coordinates
 ```
 
-A count smaller than you expected is a mask, or a table with a row missing.
-`omissions` names the constraint, `sparse_parameters` the parameter; which one
-you have is the difference between a `where:` you wrote and a row you lost
+A count smaller than you expected is a mask, or a table with a row missing
 ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## 3. Read the row that is wrong
@@ -40,16 +35,14 @@ print(model.row('power_balance', snapshot=2))
 # power_balance[snapshot=2]: +1 p[snapshot=2, generator=wind] +1 p[snapshot=2, generator=gas] == 180
 ```
 
-The line is the row as the solver got it: every coefficient the data
-produced, and no term for a variable a `where:` removed. Here `solar` is
-absent because its `p_max` is `0.0`. A term you expected and do not see is a
-mask; a coefficient you did not expect is the data
+The line is the row as the solver got it. A term you expected and do not see
+is a mask; a coefficient you did not expect is the data
 ([`Model.row`](../reference/api.md#specsolve.types.Model.row)).
 
 ## 4. When the solve is infeasible
 
-Ask for the IIS (irreducible infeasible subsystem): the rows and bounds that
-cannot all hold.
+Ask for the IIS (irreducible infeasible subsystem), the rows and bounds that
+cannot all hold:
 
 ```python
 model.solve().termination_condition  # 'infeasible'
@@ -59,26 +52,20 @@ print(model.infeasible_subsystem())
 # p[snapshot=2, generator=wind] <= 50 (upper bound)
 ```
 
-Drop any one line and the rest can hold. Read the terms of a row with
-`model.row`, as in step 3
+Drop any one line and the rest can hold
 ([`Model.infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem)).
 
-HiGHS can find no IIS where integer variables cause the conflict. Solve with
-`gurobi` or `xpress`, or add a slack to the row, minimise it, and read where
-it is nonzero, as the
+HiGHS finds no IIS where integer variables cause the conflict. Solve with
+`gurobi` or `xpress`, or add a slack to the row and minimise it, as the
 [feasibility model](https://github.com/fluxopt/specsolve/blob/main/examples/benders/README.md#when-the-subproblem-is-infeasible)
 does.
 
 ## 5. When the number is wrong and the rows look right
 
-Rows that read right and a number you still believe is wrong mean the file
-says something other than what you meant. Render it as math and read the
-constraint as written:
+The file says something other than what you meant. Render it as math:
 [typeset](https://mathspec.readthedocs.io/en/latest/reference/typeset/).
 
 ## 6. When a loop of re-solves is slow
 
 Compare the loop with the default and with `start=None`, as
-[warm-starting a re-solve](warm-start.md#check-that-it-pays) shows. A
-`diagnostics().loads` that counts every iteration means each update moved a
-mask, so the loop pays for loading the solver, not for the solve.
+[warm-starting a re-solve](warm-start.md#check-that-it-pays) shows.
