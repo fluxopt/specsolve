@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 1.96 GB on transport/m, so the next rung projects to 39.3 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 1.95 GB on transport/m, so the next rung projects to 39 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve took 5.03 GB on transport/xs, so the next rung projects to 101 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve-in-memory took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve-in-memory took 5.03 GB on transport/xs, so the next rung projects to 101 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -45,7 +45,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 5.03 GB on transport/xs, so the next rung projects to 101 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -57,7 +57,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 5.03 GB on transport/xs, so the next rung projects to 101 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -69,7 +69,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "highspy-matrix took 5.01 GB on transport/xs, so the next rung projects to 100 GB \u2014 over the 16 GB budget"
+  "reason": "highspy-matrix took 5.03 GB on transport/xs, so the next rung projects to 101 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -81,7 +81,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 6.21 s on transport/m, so the next rung projects to 62.1 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 6.3 s on transport/m, so the next rung projects to 63 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -93,6 +93,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 4.76 s on transport/m, so the next rung projects to 47.6 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 4.98 s on transport/m, so the next rung projects to 49.8 s \u2014 over the 30 s budget"
  }
 ]

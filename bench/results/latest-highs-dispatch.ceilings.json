@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 1.81 GB on dispatch/m, so the next rung projects to 36.3 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 1.81 GB on dispatch/m, so the next rung projects to 36.2 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve took 2.49 GB on dispatch/xs, so the next rung projects to 49.7 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve took 2.45 GB on dispatch/xs, so the next rung projects to 49 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "specsolve-in-memory took 2.49 GB on dispatch/xs, so the next rung projects to 49.7 GB \u2014 over the 16 GB budget"
+  "reason": "specsolve-in-memory took 2.45 GB on dispatch/xs, so the next rung projects to 49 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -45,7 +45,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 2.49 GB on dispatch/xs, so the next rung projects to 49.7 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 2.45 GB on dispatch/xs, so the next rung projects to 49 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -57,7 +57,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 2.49 GB on dispatch/xs, so the next rung projects to 49.7 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 2.45 GB on dispatch/xs, so the next rung projects to 49 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -69,7 +69,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "highspy-matrix took 2.49 GB on dispatch/xs, so the next rung projects to 49.7 GB \u2014 over the 16 GB budget"
+  "reason": "highspy-matrix took 2.45 GB on dispatch/xs, so the next rung projects to 49 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -81,6 +81,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 4.86 s on dispatch/m, so the next rung projects to 48.6 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 5.02 s on dispatch/m, so the next rung projects to 50.2 s \u2014 over the 30 s budget"
  }
 ]
