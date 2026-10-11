@@ -33,7 +33,7 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
 | `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
-| `_load(handoff, batch_rows)` | hand the model over and hold what reads it back |
+| `_load(handoff)` | hand the model over and hold what reads it back |
 | `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(handoff)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
@@ -133,8 +133,9 @@ though the fifth stream were never there.
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
 the three arrays and `xpress.py` hands `addRows` the same triple a block
-already is. `gurobi.py` is the exception — its matrix API takes a matrix
-*object*, which is what the `[gurobi]` extra's scipy is for.
+already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
+column, so it transposes the CSR first, which is what the `[gurobi]` extra's
+scipy is for.
 
 The rest of what separates them is each library's own spelling, and the two
 places it bites are worth naming because neither is a choice:

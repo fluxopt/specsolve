@@ -323,6 +323,18 @@ def test_the_ci_ladder_covers_every_published_case() -> None:
     assert asked == published, f'ladder-ci runs {asked} and the published ladder is {published}'
 
 
+def test_the_ci_ladder_measures_every_published_arm() -> None:
+    """`ladder-ci` hands `ladder` its arms positionally, so the arm list exists
+    twice. Run 37986780225 took no `specsolve-in-memory` cell, and the page
+    described a line it had no data for."""
+
+    tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
+    tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'arms').split()
+    asked = tasks['ladder-ci']['cmd'].split('"{{ sink }}" "', 1)[1].split('"', 1)[0].split()
+    assert asked == published, f'ladder-ci measures {asked} and the published ladder is {published}'
+
+
 def test_a_case_the_box_cannot_hold_leaves_the_others_their_turn() -> None:
     """A dead case must not end the loop; the ladder still fails once it has
     taken what it can."""

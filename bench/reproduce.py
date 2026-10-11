@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "specsolve[gurobi] @ git+https://github.com/fluxopt/specsolve@aa90239393",
+#   "specsolve[gurobi] @ git+https://github.com/fluxopt/specsolve@a19f71c93",
 #   "linopy @ git+https://github.com/PyPSA/linopy@master",
 #   "pyomo>=6.7",
 #   "pytest==9.1.1",
