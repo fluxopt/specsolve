@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+- refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
 
 ## 0.8.1 (2026-10-11)
 
