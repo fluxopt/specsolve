@@ -649,7 +649,8 @@ the child loads before its clock imports a modelling library, which
 mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
 `2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
 worth knowing, and never under CodSpeed, whose instruments do not follow a
-child process. Its phase is `fresh`.
+child process. Its phase is `fresh`, and `bench.report` renders it as the page's
+`fresh` table, beside the warm ones.
 
 ## The warm-start payoff
 
