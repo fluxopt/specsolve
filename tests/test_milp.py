@@ -83,7 +83,7 @@ def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitme
     objective moves. A binary model is the sharp case.
     """
     tables = commitment_run.engine._model.handoff
-    with Highs(tables, None, None) as sink:
+    with Highs(tables, None) as sink:
         loaded = sink.run(tables)
     assert loaded.status.is_ok
     assert loaded.objective == pytest.approx(commitment_run.oracle, rel=1e-9)

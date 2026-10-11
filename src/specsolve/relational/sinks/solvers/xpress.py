@@ -84,8 +84,8 @@ class Xpress(Solver):
     lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'refused'})
     capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
-    def _load(self, handoff: Handoff, batch_rows: int | None) -> None:
-        self._p = _built(handoff, batch_rows, self._options)
+    def _load(self, handoff: Handoff) -> None:
+        self._p = _built(handoff, self._options)
 
     @property
     def handle(self) -> Any:
@@ -200,12 +200,8 @@ class Xpress(Solver):
             self._p = None
 
 
-def _built(
-    handoff: Handoff,
-    batch_rows: int | None,
-    solver_options: Mapping[str, Any] | None,
-) -> Any:
-    """The loaded problem: columns with no entries, then the matrix a row block at a time.
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
+    """The loaded problem: columns with no entries, then every linear row in one ``addRows`` call.
 
     ``outputlog`` leads the controls so a caller's options can put the log back.
     """
@@ -230,15 +226,15 @@ def _built(
 
     rows = handoff.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
-    for chunk in handoff.row_blocks(batch_rows):
-        entries = chunk.entries
-        p.addRows(
-            rowtype=spelling[rows.sense[chunk.lo : chunk.hi]].tolist(),
-            rhs=rows.rhs[chunk.lo : chunk.hi],
-            start=np.append(chunk.starts, entries.height),
-            colind=entries['col'].to_numpy(),
-            rowcoef=entries['coeff'].to_numpy(),
-        )
+    (linear,) = handoff.row_blocks(None)
+    entries = linear.entries
+    p.addRows(
+        rowtype=spelling[rows.sense[: linear.height]].tolist(),
+        rhs=rows.rhs[: linear.height],
+        start=np.append(linear.starts, entries.height),
+        colind=entries['col'].to_numpy(),
+        rowcoef=entries['coeff'].to_numpy(),
+    )
 
     _add_sets(p, handoff, xpress)
     if handoff.objective_sense == 'maximize':
