@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the reference keeps the rules a caller hits, and the port ledger moves to Verification ([#1963](https://github.com/fluxopt/specsolve/pull/1963))
 - docs: the how-to guides are shorter, and the small-models guide joins the one on faster loops ([#1962](https://github.com/fluxopt/specsolve/pull/1962))
 - docs: the Development section is two pages, the architecture and how answers are verified ([#1961](https://github.com/fluxopt/specsolve/pull/1961))
 - docs: the sidebar keeps what a user needs, and a Development section holds the architecture and the PyPSA proofs ([#1960](https://github.com/fluxopt/specsolve/pull/1960))
