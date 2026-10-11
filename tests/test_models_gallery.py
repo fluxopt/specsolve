@@ -332,7 +332,6 @@ def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
 #: A third one is added here, not asserted separately.
 COUNTED_IN_PROSE = (
     ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-    ('docs/examples/index.md', 'Two rows from {} ports'),
 )
 
 
@@ -340,7 +339,7 @@ COUNTED_IN_PROSE = (
 def test_the_prose_counts_the_ports_there_are(page: str, sentence: str) -> None:
     """The stated size of the port corpus is the size of the port corpus.
 
-    Written by hand in two files: two port PRs that each bump the count from
+    Written by hand: two port PRs that each bump the count from
     the same number merge without a conflict and leave the total one short.
     """
     expected = sentence.format(len(constructs.ports()))
