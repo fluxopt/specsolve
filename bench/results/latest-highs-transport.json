@@ -1,0 +1,3693 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 15.3.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.15",
+        "python_version": "3.12.15",
+        "python_build": [
+            "main",
+            "Oct  6 2026 23:50:18"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.15.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.3964 GHz",
+            "hz_actual_friendly": "2.3964 GHz",
+            "hz_advertised": [
+                2396398000,
+                0
+            ],
+            "hz_actual": [
+                2396398000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "specsolve": "0.0.1.dev1+gd1d3797c8",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "2.0.0",
+            "pandas": "3.0.6",
+            "numpy": "2.5.4",
+            "pyarrow": "26.0.0",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            1.28564453125,
+            1.296875,
+            1.109375
+        ]
+    },
+    "commit_info": {
+        "id": "d1d3797c8cfc0e59318d986c5dffc9e25f7d1caa",
+        "time": "2026-10-11T10:23:12Z",
+        "author_time": "2026-10-11T10:22:53Z",
+        "dirty": true,
+        "project": "specsolve",
+        "branch": "chore/release-0.8.1"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-specsolve-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "transport-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        116027089
+                    ],
+                    "allocations": [
+                        72884
+                    ],
+                    "total_bytes": [
+                        244135426
+                    ],
+                    "rss_bytes": [
+                        250986496
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0037344169999187216,
+                    "build": 0.021069758999942678
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04148140500001318,
+                "max": 0.08679171099993255,
+                "mean": 0.05936695588886525,
+                "stddev": 0.016885557101368194,
+                "rounds": 9,
+                "median": 0.05472658100006811,
+                "iqr": 0.024837034000057656,
+                "q1": 0.04450392324991981,
+                "q3": 0.06934095724997746,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.04148140500001318,
+                "hd15iqr": 0.08679171099993255,
+                "ops": 16.844387336820784,
+                "total": 0.5343026029997873,
+                "data": [
+                    0.08679171099993255,
+                    0.04514108999990185,
+                    0.06446406199995636,
+                    0.06330360999993445,
+                    0.08397164300004079,
+                    0.04148140500001318,
+                    0.051830077999966306,
+                    0.04259242299997368,
+                    0.05472658100006811
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "transport-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        122319688
+                    ],
+                    "allocations": [
+                        72883
+                    ],
+                    "total_bytes": [
+                        250082989
+                    ],
+                    "rss_bytes": [
+                        250847232
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.00276644599989595,
+                    "build": 0.02311095999993995
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04598417299996527,
+                "max": 0.06665630100008002,
+                "mean": 0.054601655555555025,
+                "stddev": 0.006508923848169487,
+                "rounds": 9,
+                "median": 0.05645355899991955,
+                "iqr": 0.008819123749930213,
+                "q1": 0.04932833875002984,
+                "q3": 0.058147462499960056,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.04598417299996527,
+                "hd15iqr": 0.06665630100008002,
+                "ops": 18.314462992473544,
+                "total": 0.4914148999999952,
+                "data": [
+                    0.06665630100008002,
+                    0.057850265999945805,
+                    0.05699492500002634,
+                    0.05903905200000281,
+                    0.0486636970000518,
+                    0.049549886000022525,
+                    0.04598417299996527,
+                    0.050223040999981095,
+                    0.05645355899991955
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-linopy-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "transport-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1116635002
+                    ],
+                    "allocations": [
+                        262615
+                    ],
+                    "total_bytes": [
+                        1363295012
+                    ],
+                    "rss_bytes": [
+                        268054528
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.062394155999982104,
+                "max": 0.45242821300007563,
+                "mean": 0.1062969268888815,
+                "stddev": 0.1297998304208478,
+                "rounds": 9,
+                "median": 0.06307317200003126,
+                "iqr": 0.0007754255000236299,
+                "q1": 0.062696400999954,
+                "q3": 0.06347182649997762,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.062394155999982104,
+                "hd15iqr": 0.45242821300007563,
+                "ops": 9.407609695484043,
+                "total": 0.9566723419999335,
+                "data": [
+                    0.45242821300007563,
+                    0.06307317200003126,
+                    0.0627188579999256,
+                    0.06354204899992055,
+                    0.06344841899999665,
+                    0.06340572399994926,
+                    0.06303272100001323,
+                    0.062394155999982104,
+                    0.06262903000003917
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-pyomo-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "transport-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1112381591
+                    ],
+                    "allocations": [
+                        1552319
+                    ],
+                    "total_bytes": [
+                        1292133502
+                    ],
+                    "rss_bytes": [
+                        235323392
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2522576850000178,
+                "max": 1.007167116000005,
+                "mean": 0.3421810895555634,
+                "stddev": 0.24939305547127252,
+                "rounds": 9,
+                "median": 0.26091013799998564,
+                "iqr": 0.005244396000023244,
+                "q1": 0.2572420032499849,
+                "q3": 0.26248639925000816,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.2522576850000178,
+                "hd15iqr": 1.007167116000005,
+                "ops": 2.922429177190459,
+                "total": 3.079629806000071,
+                "data": [
+                    1.007167116000005,
+                    0.25715599099999054,
+                    0.2624585749999824,
+                    0.26091013799998564,
+                    0.257565948999968,
+                    0.2622738060000529,
+                    0.2522576850000178,
+                    0.25727067399998305,
+                    0.2625698720000855
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "transport-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        98623787
+                    ],
+                    "allocations": [
+                        33168
+                    ],
+                    "total_bytes": [
+                        149273958
+                    ],
+                    "rss_bytes": [
+                        210309120
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.012489514999970197,
+                "max": 0.01979223999990154,
+                "mean": 0.015416120555553588,
+                "stddev": 0.0022981680929870796,
+                "rounds": 9,
+                "median": 0.015392657999996118,
+                "iqr": 0.003159126250011468,
+                "q1": 0.013565307499987966,
+                "q3": 0.016724433749999434,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.012489514999970197,
+                "hd15iqr": 0.01979223999990154,
+                "ops": 64.8671626818431,
+                "total": 0.13874508499998228,
+                "data": [
+                    0.01979223999990154,
+                    0.01693620900005044,
+                    0.013777409999988777,
+                    0.012928999999985535,
+                    0.012489514999970197,
+                    0.016341352000040388,
+                    0.014432859000066856,
+                    0.016653841999982433,
+                    0.015392657999996118
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-specsolve-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "transport-s-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        165265599
+                    ],
+                    "allocations": [
+                        72896
+                    ],
+                    "total_bytes": [
+                        295685987
+                    ],
+                    "rss_bytes": [
+                        278491136
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.0034178500000052736,
+                    "build": 0.03853253199997653
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06635251199998038,
+                "max": 0.09250675800001318,
+                "mean": 0.07913003966666565,
+                "stddev": 0.008427100826409168,
+                "rounds": 9,
+                "median": 0.08196656500001609,
+                "iqr": 0.013189794999959759,
+                "q1": 0.07182613124999193,
+                "q3": 0.08501592624995169,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.06635251199998038,
+                "hd15iqr": 0.09250675800001318,
+                "ops": 12.63742573885326,
+                "total": 0.7121703569999909,
+                "data": [
+                    0.07235148899997057,
+                    0.09250675800001318,
+                    0.07617725600005087,
+                    0.08201879399996415,
+                    0.06635251199998038,
+                    0.08475838999993357,
+                    0.07025005800005601,
+                    0.08196656500001609,
+                    0.08578853500000605
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "transport-s-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        151635318
+                    ],
+                    "allocations": [
+                        72893
+                    ],
+                    "total_bytes": [
+                        281710646
+                    ],
+                    "rss_bytes": [
+                        274960384
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.0036449730000640557,
+                    "build": 0.02999146899992411
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06744658399998116,
+                "max": 0.0913635219999378,
+                "mean": 0.07866604022218679,
+                "stddev": 0.006870878953617614,
+                "rounds": 9,
+                "median": 0.08075793000000431,
+                "iqr": 0.0064404582500401375,
+                "q1": 0.07469037074994844,
+                "q3": 0.08113082899998858,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.06744658399998116,
+                "hd15iqr": 0.0913635219999378,
+                "ops": 12.711965635686875,
+                "total": 0.7079943619996811,
+                "data": [
+                    0.08096784800000023,
+                    0.0913635219999378,
+                    0.0808856730000116,
+                    0.0709578359999341,
+                    0.07806064799990509,
+                    0.08161977199995363,
+                    0.07593454899995322,
+                    0.08075793000000431,
+                    0.06744658399998116
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-linopy-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "transport-s-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1153700396
+                    ],
+                    "allocations": [
+                        261283
+                    ],
+                    "total_bytes": [
+                        1484167437
+                    ],
+                    "rss_bytes": [
+                        309293056
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09538846899999953,
+                "max": 0.1066888079999444,
+                "mean": 0.0976303657777559,
+                "stddev": 0.00352174742746817,
+                "rounds": 9,
+                "median": 0.09681580400001621,
+                "iqr": 0.001656438999987131,
+                "q1": 0.09575749574997872,
+                "q3": 0.09741393474996585,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.09538846899999953,
+                "hd15iqr": 0.1066888079999444,
+                "ops": 10.242714877012578,
+                "total": 0.878673291999803,
+                "data": [
+                    0.1066888079999444,
+                    0.09707983299995249,
+                    0.09538846899999953,
+                    0.09592583099993135,
+                    0.09576109099998575,
+                    0.09685050600000977,
+                    0.09681580400001621,
+                    0.09841624000000593,
+                    0.0957467099999576
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-pyomo-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "transport-s-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1255379639
+                    ],
+                    "allocations": [
+                        14530682
+                    ],
+                    "total_bytes": [
+                        2924958529
+                    ],
+                    "rss_bytes": [
+                        392376320
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.465717179999956,
+                "max": 2.570667164999918,
+                "mean": 2.529873883555524,
+                "stddev": 0.032192639519839555,
+                "rounds": 9,
+                "median": 2.532609287000014,
+                "iqr": 0.040706957250108644,
+                "q1": 2.5141984609999213,
+                "q3": 2.55490541825003,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 2.465717179999956,
+                "hd15iqr": 2.570667164999918,
+                "ops": 0.3952766209019813,
+                "total": 22.768864951999717,
+                "data": [
+                    2.465717179999956,
+                    2.527961870000013,
+                    2.5178130779999037,
+                    2.532609287000014,
+                    2.503354609999974,
+                    2.5635093259999167,
+                    2.5351949869999544,
+                    2.570667164999918,
+                    2.5520374490000677
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-highspy-matrix-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "transport-s-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        111410919
+                    ],
+                    "allocations": [
+                        33172
+                    ],
+                    "total_bytes": [
+                        168996720
+                    ],
+                    "rss_bytes": [
+                        221982720
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.015022041999941393,
+                "max": 0.024970878999965862,
+                "mean": 0.018473212666625233,
+                "stddev": 0.004063321241409473,
+                "rounds": 9,
+                "median": 0.01655756000002384,
+                "iqr": 0.007762407000029725,
+                "q1": 0.015415198999903623,
+                "q3": 0.02317760599993335,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.015022041999941393,
+                "hd15iqr": 0.024970878999965862,
+                "ops": 54.132435870597504,
+                "total": 0.1662589139996271,
+                "data": [
+                    0.024970878999965862,
+                    0.023136568999916562,
+                    0.015290968999920551,
+                    0.015925948000017343,
+                    0.01655756000002384,
+                    0.023300716999983706,
+                    0.01545660899989798,
+                    0.016597620999959872,
+                    0.015022041999941393
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-specsolve-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "transport-m-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        562753555
+                    ],
+                    "allocations": [
+                        72991
+                    ],
+                    "total_bytes": [
+                        715398249
+                    ],
+                    "rss_bytes": [
+                        593584128
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.007220938000045862,
+                    "build": 0.18682030699994812
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.29689927600009014,
+                "max": 0.34528438500001357,
+                "mean": 0.30897110833335417,
+                "stddev": 0.01573183717101042,
+                "rounds": 9,
+                "median": 0.30341844699989906,
+                "iqr": 0.017797413250036698,
+                "q1": 0.29761538874998905,
+                "q3": 0.31541280200002575,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.29689927600009014,
+                "hd15iqr": 0.34528438500001357,
+                "ops": 3.236548573729693,
+                "total": 2.7807399750001878,
+                "data": [
+                    0.34528438500001357,
+                    0.311066889000017,
+                    0.29689927600009014,
+                    0.29794412500007184,
+                    0.31618308200006595,
+                    0.31515604200001235,
+                    0.29783691299996917,
+                    0.30341844699989906,
+                    0.2969508160000487
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "transport-m-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        583201754
+                    ],
+                    "allocations": [
+                        72951
+                    ],
+                    "total_bytes": [
+                        735499764
+                    ],
+                    "rss_bytes": [
+                        583196672
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.005199077000042962,
+                    "build": 0.23889472100006515
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.29110900799992123,
+                "max": 0.383354082999972,
+                "mean": 0.3404388588888878,
+                "stddev": 0.032469575733550804,
+                "rounds": 9,
+                "median": 0.3486161030000403,
+                "iqr": 0.04563907224994068,
+                "q1": 0.3183006457500426,
+                "q3": 0.36393971799998326,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.29110900799992123,
+                "hd15iqr": 0.383354082999972,
+                "ops": 2.9373850072925407,
+                "total": 3.0639497299999903,
+                "data": [
+                    0.37510350999991715,
+                    0.2950588200000084,
+                    0.383354082999972,
+                    0.3602184540000053,
+                    0.3486161030000403,
+                    0.29110900799992123,
+                    0.326047921000054,
+                    0.3315790190000598,
+                    0.3528628120000121
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-linopy-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "transport-m-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1524567395
+                    ],
+                    "allocations": [
+                        261983
+                    ],
+                    "total_bytes": [
+                        2735151256
+                    ],
+                    "rss_bytes": [
+                        701407232
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.45451428399996985,
+                "max": 0.4660558839999567,
+                "mean": 0.45874632155553424,
+                "stddev": 0.003205950520947795,
+                "rounds": 9,
+                "median": 0.45806752800001505,
+                "iqr": 0.002702285499935897,
+                "q1": 0.457155240249989,
+                "q3": 0.4598575257499249,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.45451428399996985,
+                "hd15iqr": 0.4660558839999567,
+                "ops": 2.179853991219292,
+                "total": 4.128716893999808,
+                "data": [
+                    0.4660558839999567,
+                    0.4584214909999673,
+                    0.45797926300008385,
+                    0.4598057999999128,
+                    0.45806752800001505,
+                    0.45738051000000723,
+                    0.45647943099993427,
+                    0.45451428399996985,
+                    0.4600127029999612
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-pyomo-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "transport-m-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2781440151
+                    ],
+                    "allocations": [
+                        144312521
+                    ],
+                    "total_bytes": [
+                        80578080064
+                    ],
+                    "rss_bytes": [
+                        1963589632
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 43.29114177999986,
+                "max": 44.60883528399995,
+                "mean": 43.58889258477772,
+                "stddev": 0.3987991364599121,
+                "rounds": 9,
+                "median": 43.47997370600001,
+                "iqr": 0.23631715575010048,
+                "q1": 43.36384700999986,
+                "q3": 43.60016416574996,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 43.29114177999986,
+                "hd15iqr": 44.60883528399995,
+                "ops": 0.022941624361184708,
+                "total": 392.3000332629995,
+                "data": [
+                    44.60883528399995,
+                    43.63213276800002,
+                    43.456858740999905,
+                    43.52892771699999,
+                    43.58950796499994,
+                    43.29114177999986,
+                    43.34128893299999,
+                    43.371366368999816,
+                    43.47997370600001
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-highspy-matrix-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "transport-m-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        252932519
+                    ],
+                    "allocations": [
+                        33180
+                    ],
+                    "total_bytes": [
+                        379872499
+                    ],
+                    "rss_bytes": [
+                        359636992
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0666467940000075,
+                "max": 0.09853808700017908,
+                "mean": 0.08233894344448345,
+                "stddev": 0.013565361358463483,
+                "rounds": 9,
+                "median": 0.08186169100008556,
+                "iqr": 0.02597522024996124,
+                "q1": 0.06902651400002924,
+                "q3": 0.09500173424999048,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.0666467940000075,
+                "hd15iqr": 0.09853808700017908,
+                "ops": 12.144921445029764,
+                "total": 0.741050491000351,
+                "data": [
+                    0.08186169100008556,
+                    0.0666467940000075,
+                    0.06928994700001567,
+                    0.09229140899992672,
+                    0.09390790199995536,
+                    0.06823621500006993,
+                    0.09853808700017908,
+                    0.09828323100009584,
+                    0.07199521500001538
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-specsolve-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "transport-l-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3411990195
+                    ],
+                    "allocations": [
+                        73089
+                    ],
+                    "total_bytes": [
+                        3784708879
+                    ],
+                    "rss_bytes": [
+                        2012614656
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.02191115499999796,
+                    "build": 0.9651633979999588
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.7543693700001768,
+                "max": 1.890388324000014,
+                "mean": 1.8270008450000559,
+                "stddev": 0.04882859620928642,
+                "rounds": 9,
+                "median": 1.8199475180001627,
+                "iqr": 0.07598126425017426,
+                "q1": 1.7923472082499075,
+                "q3": 1.8683284725000817,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 1.7543693700001768,
+                "hd15iqr": 1.890388324000014,
+                "ops": 0.5473451217807014,
+                "total": 16.443007605000503,
+                "data": [
+                    1.864297625000063,
+                    1.7543693700001768,
+                    1.8199475180001627,
+                    1.890388324000014,
+                    1.772864122999863,
+                    1.8804210150001381,
+                    1.8015171930001088,
+                    1.860360867000054,
+                    1.7988415699999223
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "transport-l-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3845052762
+                    ],
+                    "allocations": [
+                        72983
+                    ],
+                    "total_bytes": [
+                        4217424722
+                    ],
+                    "rss_bytes": [
+                        2063417344
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.021743069999956788,
+                    "build": 1.292213511
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.045333683000081,
+                "max": 2.2066356769998947,
+                "mean": 2.1248954272222513,
+                "stddev": 0.05231966396072655,
+                "rounds": 9,
+                "median": 2.1162674230001812,
+                "iqr": 0.08789855549997583,
+                "q1": 2.082480285750023,
+                "q3": 2.170378841249999,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 2.045333683000081,
+                "hd15iqr": 2.2066356769998947,
+                "ops": 0.4706113944191786,
+                "total": 19.124058845000263,
+                "data": [
+                    2.1671278970000003,
+                    2.1162674230001812,
+                    2.1801316739999947,
+                    2.045333683000081,
+                    2.082451143000071,
+                    2.082490000000007,
+                    2.2066356769998947,
+                    2.108405404999985,
+                    2.1352159430000484
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-linopy-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "transport-l-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        5233645252
+                    ],
+                    "allocations": [
+                        268419
+                    ],
+                    "total_bytes": [
+                        15237759711
+                    ],
+                    "rss_bytes": [
+                        4491960320
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 4.565459456999861,
+                "max": 4.656884867000144,
+                "mean": 4.606053218222239,
+                "stddev": 0.031562378257145904,
+                "rounds": 9,
+                "median": 4.603928468000049,
+                "iqr": 0.04836756275005882,
+                "q1": 4.583921680499998,
+                "q3": 4.632289243250057,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 4.565459456999861,
+                "hd15iqr": 4.656884867000144,
+                "ops": 0.21710561138196358,
+                "total": 41.454478964000145,
+                "data": [
+                    4.628747007000129,
+                    4.603928468000049,
+                    4.605118916000038,
+                    4.642915951999839,
+                    4.568271485999958,
+                    4.656884867000144,
+                    4.589138412000011,
+                    4.565459456999861,
+                    4.594014399000116
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-highspy-matrix-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "transport-l-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1640884423
+                    ],
+                    "allocations": [
+                        33188
+                    ],
+                    "total_bytes": [
+                        2459199494
+                    ],
+                    "rss_bytes": [
+                        1699217408
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9505747919999976,
+                "max": 1.0227341590000378,
+                "mean": 0.9737643253333014,
+                "stddev": 0.02220699198828613,
+                "rounds": 9,
+                "median": 0.96710201399992,
+                "iqr": 0.02837934674994358,
+                "q1": 0.9586184854999829,
+                "q3": 0.9869978322499264,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.9505747919999976,
+                "hd15iqr": 1.0227341590000378,
+                "ops": 1.0269425301216684,
+                "total": 8.763878927999713,
+                "data": [
+                    1.0227341590000378,
+                    0.9879504139998971,
+                    0.9866803049999362,
+                    0.9681685450000259,
+                    0.9586227620000045,
+                    0.9586056559999179,
+                    0.9634402809999756,
+                    0.9505747919999976,
+                    0.96710201399992
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-specsolve-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "transport-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.003309630999865476,
+                    "build": 0.0226884799999425,
+                    "first_window": 0.38294665799980976
+                },
+                "process_rss_bytes": 5008125952
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4995927600000414,
+                "max": 0.5574674729998605,
+                "mean": 0.5265454894444398,
+                "stddev": 0.016997988652634105,
+                "rounds": 9,
+                "median": 0.5275622189999467,
+                "iqr": 0.013224360249921574,
+                "q1": 0.5193286137500763,
+                "q3": 0.5325529739999979,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.4995927600000414,
+                "hd15iqr": 0.5574674729998605,
+                "ops": 1.8991711448427824,
+                "total": 4.7389094049999585,
+                "data": [
+                    0.5069123989999298,
+                    0.5296426120000888,
+                    0.5275622189999467,
+                    0.5574674729998605,
+                    0.4995927600000414,
+                    0.5234673520001252,
+                    0.5408378279998942,
+                    0.5297913560000325,
+                    0.5236354060000394
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "transport-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0015828819998660038,
+                    "build": 0.01415845199994692,
+                    "first_window": 0.3786503660001017
+                },
+                "process_rss_bytes": 5008125952
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.49311721599997327,
+                "max": 0.5082029390000571,
+                "mean": 0.49945024222223666,
+                "stddev": 0.004973246630752438,
+                "rounds": 9,
+                "median": 0.4981882269999005,
+                "iqr": 0.006753524250086684,
+                "q1": 0.49589991375000864,
+                "q3": 0.5026534380000953,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.49311721599997327,
+                "hd15iqr": 0.5082029390000571,
+                "ops": 2.002201451641378,
+                "total": 4.49505218000013,
+                "data": [
+                    0.5082029390000571,
+                    0.5012632039999971,
+                    0.4964667980000286,
+                    0.4941992609999488,
+                    0.5019823990000987,
+                    0.5046665550000853,
+                    0.4969655810000404,
+                    0.49311721599997327,
+                    0.4981882269999005
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-linopy-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "transport-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165354
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.8188565180000751
+                },
+                "process_rss_bytes": 5008125952
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9444161569999778,
+                "max": 1.059702444000095,
+                "mean": 1.013903877999989,
+                "stddev": 0.0341678177463992,
+                "rounds": 9,
+                "median": 1.0271052519999557,
+                "iqr": 0.03846696300013264,
+                "q1": 0.9962170492499354,
+                "q3": 1.034684012250068,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.9444161569999778,
+                "hd15iqr": 1.059702444000095,
+                "ops": 0.9862867888153112,
+                "total": 9.1251349019999,
+                "data": [
+                    1.0010837469999387,
+                    1.0271052519999557,
+                    1.059702444000095,
+                    0.9920739539998067,
+                    1.0325182930000665,
+                    0.9975980809999783,
+                    0.9444161569999778,
+                    1.0411811700000726,
+                    1.0294558040000084
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-pyomo-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "transport-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.626953050000111
+                },
+                "process_rss_bytes": 5008125952
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.7444253789999493,
+                "max": 0.8097387810000782,
+                "mean": 0.7727927862222764,
+                "stddev": 0.02300776188732373,
+                "rounds": 9,
+                "median": 0.7651326750001317,
+                "iqr": 0.030462834000161365,
+                "q1": 0.7575606379999726,
+                "q3": 0.788023472000134,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.7444253789999493,
+                "hd15iqr": 0.8097387810000782,
+                "ops": 1.2940079382578147,
+                "total": 6.955135076000488,
+                "data": [
+                    0.7730379700001322,
+                    0.7625860989999182,
+                    0.7595246129999396,
+                    0.7815365210001346,
+                    0.7516687130000719,
+                    0.8074843250001322,
+                    0.7444253789999493,
+                    0.7651326750001317,
+                    0.8097387810000782
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "transport-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.222284271000035
+                },
+                "process_rss_bytes": 5008125952
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.301371324999991,
+                "max": 0.34424957099986386,
+                "mean": 0.3228371948888859,
+                "stddev": 0.014202105426303898,
+                "rounds": 9,
+                "median": 0.3249291490001269,
+                "iqr": 0.020686049749997437,
+                "q1": 0.31158519749999414,
+                "q3": 0.3322712472499916,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.301371324999991,
+                "hd15iqr": 0.34424957099986386,
+                "ops": 3.0975365163366013,
+                "total": 2.905534753999973,
+                "data": [
+                    0.3223169309999321,
+                    0.3140562510000109,
+                    0.3041720369999439,
+                    0.33619311799998286,
+                    0.34424957099986386,
+                    0.3309639569999945,
+                    0.3249291490001269,
+                    0.327282415000127,
+                    0.301371324999991
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-specsolve]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve"
+            },
+            "param": "transport-xs-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        78014
+                    ],
+                    "allocations": [
+                        542
+                    ],
+                    "total_bytes": [
+                        380201
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0032931460000327206,
+                    "build": 0.017954737999843928
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04008586700001615,
+                "max": 0.057319434999953955,
+                "mean": 0.04604946100002962,
+                "stddev": 0.006682265745264437,
+                "rounds": 5,
+                "median": 0.04396669000016118,
+                "iqr": 0.007012591250088462,
+                "q1": 0.041997609499958344,
+                "q3": 0.049010200750046806,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.04008586700001615,
+                "hd15iqr": 0.057319434999953955,
+                "ops": 21.715780777528682,
+                "total": 0.23024730500014812,
+                "data": [
+                    0.04008586700001615,
+                    0.046240456000077756,
+                    0.057319434999953955,
+                    0.04396669000016118,
+                    0.042634856999939075
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-specsolve-in-memory]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "transport-xs-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        79164
+                    ],
+                    "allocations": [
+                        563
+                    ],
+                    "total_bytes": [
+                        396780
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.003536634000056438,
+                    "build": 0.019885575999978755
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.050353039000128774,
+                "max": 0.05397049499993045,
+                "mean": 0.052303452200067116,
+                "stddev": 0.0012923479230970917,
+                "rounds": 5,
+                "median": 0.05230767300008665,
+                "iqr": 0.0011609674999135677,
+                "q1": 0.05179222825012175,
+                "q3": 0.05295319575003532,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.050353039000128774,
+                "hd15iqr": 0.05397049499993045,
+                "ops": 19.11919687776779,
+                "total": 0.26151726100033557,
+                "data": [
+                    0.05227195800011941,
+                    0.05397049499993045,
+                    0.052614096000070276,
+                    0.05230767300008665,
+                    0.050353039000128774
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-linopy]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "linopy"
+            },
+            "param": "transport-xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4180668
+                    ],
+                    "allocations": [
+                        30334
+                    ],
+                    "total_bytes": [
+                        12844075
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06206449399996927,
+                "max": 0.09619256899986794,
+                "mean": 0.0798978468000314,
+                "stddev": 0.01636475174800439,
+                "rounds": 5,
+                "median": 0.088859629000126,
+                "iqr": 0.029202890249962365,
+                "q1": 0.06232039100007114,
+                "q3": 0.0915232812500335,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.06206449399996927,
+                "hd15iqr": 0.09619256899986794,
+                "ops": 12.515981844952634,
+                "total": 0.399489234000157,
+                "data": [
+                    0.09619256899986794,
+                    0.08996685200008869,
+                    0.06206449399996927,
+                    0.088859629000126,
+                    0.062405690000105096
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-pyomo]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "pyomo"
+            },
+            "param": "transport-xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        685800
+                    ],
+                    "allocations": [
+                        32752
+                    ],
+                    "total_bytes": [
+                        4509796
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.047583673999952225,
+                "max": 0.07595727499983695,
+                "mean": 0.05367989540000053,
+                "stddev": 0.012465018750780623,
+                "rounds": 5,
+                "median": 0.048203179999973145,
+                "iqr": 0.008026692749979247,
+                "q1": 0.04767502775007415,
+                "q3": 0.0557017205000534,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.047583673999952225,
+                "hd15iqr": 0.07595727499983695,
+                "ops": 18.628948371609347,
+                "total": 0.26839947700000266,
+                "data": [
+                    0.048949869000125545,
+                    0.048203179999973145,
+                    0.047583673999952225,
+                    0.04770547900011479,
+                    0.07595727499983695
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-gurobipy-loop]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "transport-xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1995998
+                    ],
+                    "allocations": [
+                        13033
+                    ],
+                    "total_bytes": [
+                        5950806
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05083175200002188,
+                "max": 0.078512475000025,
+                "mean": 0.061707492000050476,
+                "stddev": 0.01456520781292374,
+                "rounds": 5,
+                "median": 0.05149429300013253,
+                "iqr": 0.026316241250015082,
+                "q1": 0.05089701025002569,
+                "q3": 0.07721325150004077,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.05083175200002188,
+                "hd15iqr": 0.078512475000025,
+                "ops": 16.205487657790112,
+                "total": 0.3085374600002524,
+                "data": [
+                    0.078512475000025,
+                    0.05083175200002188,
+                    0.07678017700004602,
+                    0.05149429300013253,
+                    0.050918763000026956
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "transport-xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1935020
+                    ],
+                    "allocations": [
+                        1853
+                    ],
+                    "total_bytes": [
+                        5776047
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.023160712999924726,
+                "max": 0.02534609700001056,
+                "mean": 0.02420197299998108,
+                "stddev": 0.0009932557846331707,
+                "rounds": 5,
+                "median": 0.02371863600001234,
+                "iqr": 0.001730772249857182,
+                "q1": 0.023492122250047487,
+                "q3": 0.02522289449990467,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.023160712999924726,
+                "hd15iqr": 0.02534609700001056,
+                "ops": 41.3189453603961,
+                "total": 0.1210098649999054,
+                "data": [
+                    0.023160712999924726,
+                    0.025181826999869372,
+                    0.02534609700001056,
+                    0.023602592000088407,
+                    0.02371863600001234
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-xs-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-xs-highspy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "highspy-matrix"
+            },
+            "param": "transport-xs-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1486605
+                    ],
+                    "allocations": [
+                        1662
+                    ],
+                    "total_bytes": [
+                        2487003
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.012190158000066731,
+                "max": 0.01308378800013088,
+                "mean": 0.012572876200010796,
+                "stddev": 0.00034724143477122865,
+                "rounds": 5,
+                "median": 0.012590221999971618,
+                "iqr": 0.0004915482500678081,
+                "q1": 0.01228854899994758,
+                "q3": 0.012780097250015388,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.012190158000066731,
+                "hd15iqr": 0.01308378800013088,
+                "ops": 79.53629576016515,
+                "total": 0.06286438100005398,
+                "data": [
+                    0.012190158000066731,
+                    0.01267886699997689,
+                    0.012321345999907862,
+                    0.01308378800013088,
+                    0.012590221999971618
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-specsolve]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve"
+            },
+            "param": "transport-s-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        292384
+                    ],
+                    "allocations": [
+                        543
+                    ],
+                    "total_bytes": [
+                        883972
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.0030407829999603564,
+                    "build": 0.035525245999906474
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.057370171999991726,
+                "max": 0.07167949199993018,
+                "mean": 0.06491963779999424,
+                "stddev": 0.005080493942847617,
+                "rounds": 5,
+                "median": 0.06504940299987538,
+                "iqr": 0.004178336499933266,
+                "q1": 0.06297921050008881,
+                "q3": 0.06715754700002208,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.057370171999991726,
+                "hd15iqr": 0.07167949199993018,
+                "ops": 15.403659568785962,
+                "total": 0.32459818899997117,
+                "data": [
+                    0.07167949199993018,
+                    0.057370171999991726,
+                    0.06484889000012117,
+                    0.06565023200005271,
+                    0.06504940299987538
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-specsolve-in-memory]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "transport-s-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        293534
+                    ],
+                    "allocations": [
+                        564
+                    ],
+                    "total_bytes": [
+                        900551
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.003846210999881805,
+                    "build": 0.04011647200013613
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.05903550700008964,
+                "max": 0.08469134100005249,
+                "mean": 0.06987138720005533,
+                "stddev": 0.010326777562602404,
+                "rounds": 5,
+                "median": 0.06677184600016517,
+                "iqr": 0.01587250549999908,
+                "q1": 0.06210144400000672,
+                "q3": 0.0779739495000058,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.05903550700008964,
+                "hd15iqr": 0.08469134100005249,
+                "ops": 14.312010109901012,
+                "total": 0.3493569360002766,
+                "data": [
+                    0.08469134100005249,
+                    0.06312342299997908,
+                    0.06677184600016517,
+                    0.05903550700008964,
+                    0.07573481899999024
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-linopy]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "linopy"
+            },
+            "param": "transport-s-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        41285708
+                    ],
+                    "allocations": [
+                        30364
+                    ],
+                    "total_bytes": [
+                        97233286
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07513788699998258,
+                "max": 0.12085793500000364,
+                "mean": 0.09174095439998382,
+                "stddev": 0.018867230077645604,
+                "rounds": 5,
+                "median": 0.08266430800017588,
+                "iqr": 0.026878416000045036,
+                "q1": 0.07857701049988464,
+                "q3": 0.10545542649992967,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.07513788699998258,
+                "hd15iqr": 0.12085793500000364,
+                "ops": 10.900257213807407,
+                "total": 0.4587047719999191,
+                "data": [
+                    0.07513788699998258,
+                    0.12085793500000364,
+                    0.10032125699990502,
+                    0.08266430800017588,
+                    0.07972338499985199
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-pyomo]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "pyomo"
+            },
+            "param": "transport-s-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        5750280
+                    ],
+                    "allocations": [
+                        57988
+                    ],
+                    "total_bytes": [
+                        20916751
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.557259988999931,
+                "max": 0.5841766979999647,
+                "mean": 0.5752372433999426,
+                "stddev": 0.010920673236168516,
+                "rounds": 5,
+                "median": 0.5762346289998277,
+                "iqr": 0.013490000499984944,
+                "q1": 0.5703776734999906,
+                "q3": 0.5838676739999755,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.557259988999931,
+                "hd15iqr": 0.5841766979999647,
+                "ops": 1.738413170346021,
+                "total": 2.876186216999713,
+                "data": [
+                    0.5837646659999791,
+                    0.5841766979999647,
+                    0.5762346289998277,
+                    0.557259988999931,
+                    0.5747502350000104
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-gurobipy-loop]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "gurobipy-loop"
+            },
+            "param": "transport-s-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        17953978
+                    ],
+                    "allocations": [
+                        126580
+                    ],
+                    "total_bytes": [
+                        55544725
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4441104099998938,
+                "max": 0.4716466950001177,
+                "mean": 0.45235675400003855,
+                "stddev": 0.011077207669961097,
+                "rounds": 5,
+                "median": 0.4492404620000343,
+                "iqr": 0.010167280999951345,
+                "q1": 0.4456808237500809,
+                "q3": 0.45584810475003223,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.4441104099998938,
+                "hd15iqr": 0.4716466950001177,
+                "ops": 2.2106445657267995,
+                "total": 2.261783770000193,
+                "data": [
+                    0.4716466950001177,
+                    0.45058190800000375,
+                    0.4492404620000343,
+                    0.4441104099998938,
+                    0.44620429500014325
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-gurobipy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "transport-s-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        16440137
+                    ],
+                    "allocations": [
+                        14554
+                    ],
+                    "total_bytes": [
+                        51372504
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.142675459999964,
+                "max": 0.17156230499995218,
+                "mean": 0.15661176839994367,
+                "stddev": 0.012354957452664211,
+                "rounds": 5,
+                "median": 0.15202663899981417,
+                "iqr": 0.020864356749825674,
+                "q1": 0.14764545650007221,
+                "q3": 0.1685098132498979,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.142675459999964,
+                "hd15iqr": 0.17156230499995218,
+                "ops": 6.38521619554332,
+                "total": 0.7830588419997184,
+                "data": [
+                    0.17156230499995218,
+                    0.15202663899981417,
+                    0.14930212200010828,
+                    0.142675459999964,
+                    0.1674923159998798
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-s-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-s-highspy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "highspy-matrix"
+            },
+            "param": "transport-s-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        14275605
+                    ],
+                    "allocations": [
+                        1668
+                    ],
+                    "total_bytes": [
+                        22211633
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.01591423600007147,
+                "max": 0.02414086400017368,
+                "mean": 0.019330865400024776,
+                "stddev": 0.003976480856204519,
+                "rounds": 5,
+                "median": 0.017232135999847742,
+                "iqr": 0.007229670249955689,
+                "q1": 0.016154711500064423,
+                "q3": 0.02338438175002011,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.01591423600007147,
+                "hd15iqr": 0.02414086400017368,
+                "ops": 51.73074144930512,
+                "total": 0.09665432700012389,
+                "data": [
+                    0.02414086400017368,
+                    0.016234870000062074,
+                    0.017232135999847742,
+                    0.01591423600007147,
+                    0.023132220999968922
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-specsolve]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve"
+            },
+            "param": "transport-m-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2308384
+                    ],
+                    "allocations": [
+                        546
+                    ],
+                    "total_bytes": [
+                        5214574
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.007215180999992299,
+                    "build": 0.18842439199988803
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.23091464100002668,
+                "max": 0.251166067999975,
+                "mean": 0.23896868980000363,
+                "stddev": 0.007928783445391564,
+                "rounds": 5,
+                "median": 0.2365182889998323,
+                "iqr": 0.01090912700010449,
+                "q1": 0.23339719425001704,
+                "q3": 0.24430632125012153,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.23091464100002668,
+                "hd15iqr": 0.251166067999975,
+                "ops": 4.184648628391086,
+                "total": 1.1948434490000182,
+                "data": [
+                    0.23091464100002668,
+                    0.251166067999975,
+                    0.23422471200001382,
+                    0.24201973900017038,
+                    0.2365182889998323
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-specsolve-in-memory]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "transport-m-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2309534
+                    ],
+                    "allocations": [
+                        569
+                    ],
+                    "total_bytes": [
+                        5231233
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.0074155739998786885,
+                    "build": 0.20753676000003907
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2540006419999372,
+                "max": 0.2878386079999018,
+                "mean": 0.27719596199995067,
+                "stddev": 0.014237063604449355,
+                "rounds": 5,
+                "median": 0.2851491349999833,
+                "iqr": 0.018275984250010424,
+                "q1": 0.2682136984999488,
+                "q3": 0.28648968274995923,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.2540006419999372,
+                "hd15iqr": 0.2878386079999018,
+                "ops": 3.6075561591340137,
+                "total": 1.3859798099997533,
+                "data": [
+                    0.2878386079999018,
+                    0.2851491349999833,
+                    0.27295138399995267,
+                    0.2860400409999784,
+                    0.2540006419999372
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-linopy]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "linopy"
+            },
+            "param": "transport-m-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        412330780
+                    ],
+                    "allocations": [
+                        31060
+                    ],
+                    "total_bytes": [
+                        936143026
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.20865601099990272,
+                "max": 0.24924472599991532,
+                "mean": 0.22544685959996968,
+                "stddev": 0.017219502920881202,
+                "rounds": 5,
+                "median": 0.21996471700003895,
+                "iqr": 0.0287180502500064,
+                "q1": 0.21139188349997085,
+                "q3": 0.24010993374997724,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.20865601099990272,
+                "hd15iqr": 0.24924472599991532,
+                "ops": 4.435635083914624,
+                "total": 1.1272342979998484,
+                "data": [
+                    0.21996471700003895,
+                    0.21230384099999355,
+                    0.20865601099990272,
+                    0.24924472599991532,
+                    0.2370650029999979
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-pyomo]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "pyomo"
+            },
+            "param": "transport-m-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        394291528
+                    ],
+                    "allocations": [
+                        310953
+                    ],
+                    "total_bytes": [
+                        540117834
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 6.211868402000164,
+                "max": 6.378643198999953,
+                "mean": 6.305600057000038,
+                "stddev": 0.06977180750685281,
+                "rounds": 5,
+                "median": 6.327406254999914,
+                "iqr": 0.11575301399994942,
+                "q1": 6.244718354000099,
+                "q3": 6.360471368000049,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 6.211868402000164,
+                "hd15iqr": 6.378643198999953,
+                "ops": 0.15858918912719014,
+                "total": 31.52800028500019,
+                "data": [
+                    6.255668338000078,
+                    6.354414091000081,
+                    6.378643198999953,
+                    6.327406254999914,
+                    6.211868402000164
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-gurobipy-loop]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "gurobipy-loop"
+            },
+            "param": "transport-m-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        407316936
+                    ],
+                    "allocations": [
+                        1261191
+                    ],
+                    "total_bytes": [
+                        793781527
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 4.760230954999997,
+                "max": 4.837376295000013,
+                "mean": 4.802691220399993,
+                "stddev": 0.03526372727593346,
+                "rounds": 5,
+                "median": 4.82200664800007,
+                "iqr": 0.06075420100006568,
+                "q1": 4.767014632249925,
+                "q3": 4.827768833249991,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 4.760230954999997,
+                "hd15iqr": 4.837376295000013,
+                "ops": 0.208216592345638,
+                "total": 24.013456101999964,
+                "data": [
+                    4.760230954999997,
+                    4.837376295000013,
+                    4.769275857999901,
+                    4.824566345999983,
+                    4.82200664800007
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-gurobipy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "transport-m-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        299890315
+                    ],
+                    "allocations": [
+                        140810
+                    ],
+                    "total_bytes": [
+                        664218903
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.0501523429998088,
+                "max": 1.0844693989999996,
+                "mean": 1.0677680697999676,
+                "stddev": 0.012407545096849274,
+                "rounds": 5,
+                "median": 1.0677758440001526,
+                "iqr": 0.014001035750197843,
+                "q1": 1.060993235999831,
+                "q3": 1.074994271750029,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.0501523429998088,
+                "hd15iqr": 1.0844693989999996,
+                "ops": 0.9365329684257527,
+                "total": 5.338840348999838,
+                "data": [
+                    1.0501523429998088,
+                    1.0646068669998385,
+                    1.0677758440001526,
+                    1.0718358960000387,
+                    1.0844693989999996
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-m-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-m-highspy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "highspy-matrix"
+            },
+            "param": "transport-m-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        142165605
+                    ],
+                    "allocations": [
+                        1668
+                    ],
+                    "total_bytes": [
+                        219455828
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07727138999985073,
+                "max": 0.10657227100000455,
+                "mean": 0.086662547800006,
+                "stddev": 0.011544876122604042,
+                "rounds": 5,
+                "median": 0.08332659699999567,
+                "iqr": 0.0109411524999814,
+                "q1": 0.07981331175005835,
+                "q3": 0.09075446425003975,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.07727138999985073,
+                "hd15iqr": 0.10657227100000455,
+                "ops": 11.53900993434595,
+                "total": 0.43331273900003,
+                "data": [
+                    0.08548186200005148,
+                    0.07727138999985073,
+                    0.08066061900012755,
+                    0.10657227100000455,
+                    0.08332659699999567
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-l-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-specsolve]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve"
+            },
+            "param": "transport-l-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        39245600
+                    ],
+                    "allocations": [
+                        547
+                    ],
+                    "total_bytes": [
+                        63145748
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.016365920999987793,
+                    "build": 1.004123834999973
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.0674558700000034,
+                "max": 1.1325040980000267,
+                "mean": 1.1033371984000495,
+                "stddev": 0.028209766233019243,
+                "rounds": 5,
+                "median": 1.1073076780000974,
+                "iqr": 0.050227313000050344,
+                "q1": 1.0784132192500238,
+                "q3": 1.128640532250074,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.0674558700000034,
+                "hd15iqr": 1.1325040980000267,
+                "ops": 0.9063412358888117,
+                "total": 5.516685992000248,
+                "data": [
+                    1.1073076780000974,
+                    1.0820656690000305,
+                    1.0674558700000034,
+                    1.1325040980000267,
+                    1.12735267700009
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-l-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-specsolve-in-memory]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "transport-l-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        22469534
+                    ],
+                    "allocations": [
+                        569
+                    ],
+                    "total_bytes": [
+                        46385191
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.033321884000088176,
+                    "build": 1.2743514019998656
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.4119684150000467,
+                "max": 1.4763200200000028,
+                "mean": 1.4387284711999655,
+                "stddev": 0.02445433990438522,
+                "rounds": 5,
+                "median": 1.4376487959998485,
+                "iqr": 0.03160834049998584,
+                "q1": 1.4206213059999868,
+                "q3": 1.4522296464999727,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.4119684150000467,
+                "hd15iqr": 1.4763200200000028,
+                "ops": 0.6950581850694553,
+                "total": 7.1936423559998275,
+                "data": [
+                    1.4376487959998485,
+                    1.4119684150000467,
+                    1.4763200200000028,
+                    1.4235056029999669,
+                    1.4441995219999626
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-l-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-linopy]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "linopy"
+            },
+            "param": "transport-l-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4122781468
+                    ],
+                    "allocations": [
+                        37530
+                    ],
+                    "total_bytes": [
+                        9321488721
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.5364753570001994,
+                "max": 1.5614544689999548,
+                "mean": 1.546966814400048,
+                "stddev": 0.010603006158756865,
+                "rounds": 5,
+                "median": 1.5484875009999541,
+                "iqr": 0.0174798507499645,
+                "q1": 1.5366575822500863,
+                "q3": 1.5541374330000508,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 1.5364753570001994,
+                "hd15iqr": 1.5614544689999548,
+                "ops": 0.6464262779856883,
+                "total": 7.73483407200024,
+                "data": [
+                    1.5484875009999541,
+                    1.5364753570001994,
+                    1.5367183240000486,
+                    1.5614544689999548,
+                    1.5516984210000828
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-l-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-gurobipy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "transport-l-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3549910777
+                    ],
+                    "allocations": [
+                        1402949
+                    ],
+                    "total_bytes": [
+                        6970268175
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 10.265545417999874,
+                "max": 10.322565047999888,
+                "mean": 10.296936244599966,
+                "stddev": 0.02141178247783657,
+                "rounds": 5,
+                "median": 10.298444944000039,
+                "iqr": 0.028497666250018483,
+                "q1": 10.28356215499997,
+                "q3": 10.312059821249989,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 10.265545417999874,
+                "hd15iqr": 10.322565047999888,
+                "ops": 0.09711626606646528,
+                "total": 51.484681222999825,
+                "data": [
+                    10.298444944000039,
+                    10.265545417999874,
+                    10.308558079000022,
+                    10.322565047999888,
+                    10.289567734000002
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[transport-l-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[transport-l-highspy-matrix]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "highspy-matrix"
+            },
+            "param": "transport-l-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1421065605
+                    ],
+                    "allocations": [
+                        1668
+                    ],
+                    "total_bytes": [
+                        2189730903
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9681711890000315,
+                "max": 0.977128718999893,
+                "mean": 0.9713456016000237,
+                "stddev": 0.0035322359574748545,
+                "rounds": 5,
+                "median": 0.9706635430000006,
+                "iqr": 0.004377667749906777,
+                "q1": 0.9687603635001096,
+                "q3": 0.9731380312500164,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.9681711890000315,
+                "hd15iqr": 0.977128718999893,
+                "ops": 1.0294996943958732,
+                "total": 4.856728008000118,
+                "data": [
+                    0.9689567550001357,
+                    0.9706635430000006,
+                    0.977128718999893,
+                    0.9681711890000315,
+                    0.9718078020000576
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-10-11T11:06:10.919728+00:00",
+    "version": "5.3.0"
+}

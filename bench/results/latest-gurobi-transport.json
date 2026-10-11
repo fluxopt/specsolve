@@ -1,0 +1,2191 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 15.3.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.15",
+        "python_version": "3.12.15",
+        "python_build": [
+            "main",
+            "Oct  6 2026 23:50:18"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.15.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.3964 GHz",
+            "hz_actual_friendly": "2.3964 GHz",
+            "hz_advertised": [
+                2396398000,
+                0
+            ],
+            "hz_actual": [
+                2396398000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "specsolve": "0.0.1.dev1+gd1d3797c8",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "2.0.0",
+            "pandas": "3.0.6",
+            "numpy": "2.5.4",
+            "pyarrow": "26.0.0",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            2.947265625,
+            1.646484375,
+            1.41650390625
+        ]
+    },
+    "commit_info": {
+        "id": "d1d3797c8cfc0e59318d986c5dffc9e25f7d1caa",
+        "time": "2026-10-11T10:23:12Z",
+        "author_time": "2026-10-11T10:22:53Z",
+        "dirty": true,
+        "project": "specsolve",
+        "branch": "chore/release-0.8.1"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-specsolve-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        127996558
+                    ],
+                    "allocations": [
+                        62583
+                    ],
+                    "total_bytes": [
+                        280417714
+                    ],
+                    "rss_bytes": [
+                        260734976
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0030784000000494416,
+                    "build": 0.013432208999802242
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04534880699975474,
+                "max": 0.1700313820001611,
+                "mean": 0.07110232600007294,
+                "stddev": 0.03819068246604659,
+                "rounds": 9,
+                "median": 0.06519326000034198,
+                "iqr": 0.019058011249853735,
+                "q1": 0.04821498875026009,
+                "q3": 0.06727300000011383,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.04534880699975474,
+                "hd15iqr": 0.1700313820001611,
+                "ops": 14.06423750467705,
+                "total": 0.6399209340006564,
+                "data": [
+                    0.1700313820001611,
+                    0.0669799500001318,
+                    0.048205441999925824,
+                    0.04821817100037151,
+                    0.062223765999988245,
+                    0.06815215000005992,
+                    0.0655680059999213,
+                    0.06519326000034198,
+                    0.04534880699975474
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        127998597
+                    ],
+                    "allocations": [
+                        63705
+                    ],
+                    "total_bytes": [
+                        298408397
+                    ],
+                    "rss_bytes": [
+                        261279744
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0016059959998528939,
+                    "build": 0.017671343000074557
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04844848799984902,
+                "max": 0.07304538100015634,
+                "mean": 0.06232277055571305,
+                "stddev": 0.007901496214411137,
+                "rounds": 9,
+                "median": 0.0645567490000758,
+                "iqr": 0.012431185000878031,
+                "q1": 0.0557294662496588,
+                "q3": 0.06816065125053683,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.04844848799984902,
+                "hd15iqr": 0.07304538100015634,
+                "ops": 16.0454997600926,
+                "total": 0.5609049350014175,
+                "data": [
+                    0.07304538100015634,
+                    0.0645567490000758,
+                    0.05540251200000057,
+                    0.055838450999544875,
+                    0.06040668000059668,
+                    0.06938643400008004,
+                    0.06775205700068909,
+                    0.06606818300042505,
+                    0.04844848799984902
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-linopy-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1119751714
+                    ],
+                    "allocations": [
+                        242835
+                    ],
+                    "total_bytes": [
+                        1363186824
+                    ],
+                    "rss_bytes": [
+                        273596416
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0746757830002025,
+                "max": 0.4426366360003158,
+                "mean": 0.11696649833356787,
+                "stddev": 0.1221316391557072,
+                "rounds": 9,
+                "median": 0.07645777400011866,
+                "iqr": 0.0021948994997273985,
+                "q1": 0.0752348327503114,
+                "q3": 0.0774297322500388,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.0746757830002025,
+                "hd15iqr": 0.4426366360003158,
+                "ops": 8.549456590109896,
+                "total": 1.0526984850021108,
+                "data": [
+                    0.4426366360003158,
+                    0.07824083699961193,
+                    0.07605722000062087,
+                    0.07645777400011866,
+                    0.07715936400018109,
+                    0.07711701000062021,
+                    0.07506112600003689,
+                    0.0752927350004029,
+                    0.0746757830002025
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-pyomo-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1117051284
+                    ],
+                    "allocations": [
+                        104711
+                    ],
+                    "total_bytes": [
+                        1213491745
+                    ],
+                    "rss_bytes": [
+                        242733056
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.24193824400026642,
+                "max": 1.036095521999414,
+                "mean": 0.3457519523333556,
+                "stddev": 0.2595096327526842,
+                "rounds": 9,
+                "median": 0.2573258749998786,
+                "iqr": 0.042825169750813075,
+                "q1": 0.2443190544997833,
+                "q3": 0.2871442242505964,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.24193824400026642,
+                "hd15iqr": 1.036095521999414,
+                "ops": 2.8922468644106263,
+                "total": 3.1117675710002004,
+                "data": [
+                    1.036095521999414,
+                    0.24846334799985925,
+                    0.24193824400026642,
+                    0.24339856900041923,
+                    0.24462588299957133,
+                    0.2573258749998786,
+                    0.29101995800010627,
+                    0.28585231300075975,
+                    0.26304785899992567
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        101019951
+                    ],
+                    "allocations": [
+                        14081
+                    ],
+                    "total_bytes": [
+                        105912403
+                    ],
+                    "rss_bytes": [
+                        207998976
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04812856600074156,
+                "max": 0.07417614899986802,
+                "mean": 0.05367910800012194,
+                "stddev": 0.009333955064953828,
+                "rounds": 9,
+                "median": 0.0494673570001396,
+                "iqr": 0.005610181499832834,
+                "q1": 0.048433195250026984,
+                "q3": 0.05404337674985982,
+                "iqr_outliers": 2,
+                "stddev_outliers": 2,
+                "outliers": "2;2",
+                "ld15iqr": 0.04812856600074156,
+                "hd15iqr": 0.06499884799995925,
+                "ops": 18.629221633074238,
+                "total": 0.48311197200109746,
+                "data": [
+                    0.07417614899986802,
+                    0.06499884799995925,
+                    0.04812856600074156,
+                    0.04842376099986723,
+                    0.048436340000080236,
+                    0.049358703000507376,
+                    0.04973069500010752,
+                    0.0494673570001396,
+                    0.05039155299982667
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-xs-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-xs-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        102157299
+                    ],
+                    "allocations": [
+                        14264
+                    ],
+                    "total_bytes": [
+                        148235999
+                    ],
+                    "rss_bytes": [
+                        216129536
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.019846506999783742,
+                "max": 0.03809653299958882,
+                "mean": 0.026652923666612576,
+                "stddev": 0.007962394180173877,
+                "rounds": 9,
+                "median": 0.02213360299992928,
+                "iqr": 0.015203328250663617,
+                "q1": 0.0213855494996551,
+                "q3": 0.036588877750318716,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.019846506999783742,
+                "hd15iqr": 0.03809653299958882,
+                "ops": 37.519336058905765,
+                "total": 0.23987631299951317,
+                "data": [
+                    0.02213360299992928,
+                    0.02107517399963399,
+                    0.021489007999662135,
+                    0.021492664000106743,
+                    0.022192761000042083,
+                    0.03714733900051215,
+                    0.03809653299958882,
+                    0.03640272400025424,
+                    0.019846506999783742
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-specsolve-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        163288855
+                    ],
+                    "allocations": [
+                        62589
+                    ],
+                    "total_bytes": [
+                        316350950
+                    ],
+                    "rss_bytes": [
+                        289492992
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.003218159999960335,
+                    "build": 0.038919476000046416
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.08602874200005317,
+                "max": 0.13183674199990492,
+                "mean": 0.10588836700005938,
+                "stddev": 0.012688578914699884,
+                "rounds": 9,
+                "median": 0.10743868900044617,
+                "iqr": 0.01033824275009465,
+                "q1": 0.09936727075000817,
+                "q3": 0.10970551350010282,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.08602874200005317,
+                "hd15iqr": 0.13183674199990492,
+                "ops": 9.443908035709335,
+                "total": 0.9529953030005345,
+                "data": [
+                    0.13183674199990492,
+                    0.10121226499995828,
+                    0.1111048769998888,
+                    0.10369352299949242,
+                    0.08602874200005317,
+                    0.1086091180004587,
+                    0.09383228800015786,
+                    0.10743868900044617,
+                    0.10923905900017417
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        160668654
+                    ],
+                    "allocations": [
+                        63708
+                    ],
+                    "total_bytes": [
+                        331719377
+                    ],
+                    "rss_bytes": [
+                        289923072
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000,
+                "phase_seconds": {
+                    "attach": 0.0016944899998634355,
+                    "build": 0.03824915299992426
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.08429943000010098,
+                "max": 0.12149362999934965,
+                "mean": 0.10393307600002623,
+                "stddev": 0.014627138373404607,
+                "rounds": 9,
+                "median": 0.1096853339995505,
+                "iqr": 0.027262330499752352,
+                "q1": 0.0886458042502909,
+                "q3": 0.11590813475004325,
+                "iqr_outliers": 0,
+                "stddev_outliers": 5,
+                "outliers": "5;0",
+                "ld15iqr": 0.08429943000010098,
+                "hd15iqr": 0.12149362999934965,
+                "ops": 9.621576099602283,
+                "total": 0.935397684000236,
+                "data": [
+                    0.12149362999934965,
+                    0.08429943000010098,
+                    0.0869562620000579,
+                    0.11019997000039439,
+                    0.09811190199980047,
+                    0.1213469870008339,
+                    0.11409518399977969,
+                    0.08920898500036856,
+                    0.1096853339995505
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-linopy-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1182230832
+                    ],
+                    "allocations": [
+                        255588
+                    ],
+                    "total_bytes": [
+                        1543022863
+                    ],
+                    "rss_bytes": [
+                        342781952
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.18937701300001208,
+                "max": 0.21850182400066842,
+                "mean": 0.19974137455574237,
+                "stddev": 0.01125222385237282,
+                "rounds": 9,
+                "median": 0.19551152900021407,
+                "iqr": 0.015980272250317284,
+                "q1": 0.19121684725018895,
+                "q3": 0.20719711950050623,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.18937701300001208,
+                "hd15iqr": 0.21850182400066842,
+                "ops": 5.006474007822186,
+                "total": 1.7976723710016813,
+                "data": [
+                    0.21850182400066842,
+                    0.19991345699963858,
+                    0.20394473700071103,
+                    0.19551152900021407,
+                    0.21695426699989184,
+                    0.1905496449999191,
+                    0.18937701300001208,
+                    0.19148065100034728,
+                    0.1914392480002789
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-pyomo-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1300492475
+                    ],
+                    "allocations": [
+                        231223
+                    ],
+                    "total_bytes": [
+                        1525275660
+                    ],
+                    "rss_bytes": [
+                        439644160
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.3082531229993037,
+                "max": 2.4341418600006364,
+                "mean": 2.3432220786667637,
+                "stddev": 0.03845655267781685,
+                "rounds": 9,
+                "median": 2.3322082340000634,
+                "iqr": 0.03185369399921001,
+                "q1": 2.322383220750453,
+                "q3": 2.354236914749663,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 2.3082531229993037,
+                "hd15iqr": 2.4341418600006364,
+                "ops": 0.4267627934647047,
+                "total": 21.088998708000872,
+                "data": [
+                    2.4341418600006364,
+                    2.3263765270003205,
+                    2.3507032899997284,
+                    2.3082531229993037,
+                    2.3322082340000634,
+                    2.3356419520005147,
+                    2.3263484750004864,
+                    2.3104874580003525,
+                    2.3648377889994663
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        140052779
+                    ],
+                    "allocations": [
+                        127654
+                    ],
+                    "total_bytes": [
+                        178581170
+                    ],
+                    "rss_bytes": [
+                        251838464
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.493029192000904,
+                "max": 0.5488336220005294,
+                "mean": 0.5199350563334519,
+                "stddev": 0.02045602955342972,
+                "rounds": 9,
+                "median": 0.52055762100008,
+                "iqr": 0.03257588674978251,
+                "q1": 0.5024372577502163,
+                "q3": 0.5350131444999988,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.493029192000904,
+                "hd15iqr": 0.5488336220005294,
+                "ops": 1.9233171293582985,
+                "total": 4.6794155070010675,
+                "data": [
+                    0.52055762100008,
+                    0.5310449130001871,
+                    0.529438286000186,
+                    0.5488336220005294,
+                    0.546917838999434,
+                    0.5018174659999204,
+                    0.493029192000904,
+                    0.5026438550003149,
+                    0.5051327129995116
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-s-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-s-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "s",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "transport-s-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        134486212
+                    ],
+                    "allocations": [
+                        26976
+                    ],
+                    "total_bytes": [
+                        211656244
+                    ],
+                    "rss_bytes": [
+                        249458688
+                    ]
+                },
+                "columns": 98000,
+                "rows": 14000,
+                "nonzeros": 126000,
+                "live_fraction": 1.0,
+                "variables": 98000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09888041300018813,
+                "max": 0.12877981400015415,
+                "mean": 0.11771523055560668,
+                "stddev": 0.012877129273737112,
+                "rounds": 9,
+                "median": 0.1248108689997025,
+                "iqr": 0.024756514000955576,
+                "q1": 0.10207593624954825,
+                "q3": 0.12683245025050383,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.09888041300018813,
+                "hd15iqr": 0.12877981400015415,
+                "ops": 8.4950774447799,
+                "total": 1.05943707500046,
+                "data": [
+                    0.1248108689997025,
+                    0.1279147670002203,
+                    0.12877981400015415,
+                    0.12498078600037843,
+                    0.12647167800059833,
+                    0.10254846199950407,
+                    0.10065835899968079,
+                    0.09888041300018813,
+                    0.12439192700003332
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-specsolve-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        604252571
+                    ],
+                    "allocations": [
+                        62687
+                    ],
+                    "total_bytes": [
+                        762276252
+                    ],
+                    "rss_bytes": [
+                        588144640
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.0034927760007121833,
+                    "build": 0.19052262299919676
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.42691682300028333,
+                "max": 0.4923292539997419,
+                "mean": 0.4648089245554527,
+                "stddev": 0.018244844174442755,
+                "rounds": 9,
+                "median": 0.46425331699992967,
+                "iqr": 0.016619147749906915,
+                "q1": 0.4581505919998108,
+                "q3": 0.4747697397497177,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.4543104089998451,
+                "hd15iqr": 0.4923292539997419,
+                "ops": 2.1514216857096895,
+                "total": 4.183280320999074,
+                "data": [
+                    0.46425331699992967,
+                    0.42691682300028333,
+                    0.4617532020001818,
+                    0.4721448780001083,
+                    0.47346858699984296,
+                    0.4923292539997419,
+                    0.47867319799934194,
+                    0.4543104089998451,
+                    0.45943065299979935
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        606349858
+                    ],
+                    "allocations": [
+                        63764
+                    ],
+                    "total_bytes": [
+                        782360535
+                    ],
+                    "rss_bytes": [
+                        541528064
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000,
+                "phase_seconds": {
+                    "attach": 0.007571437000478909,
+                    "build": 0.2565030529995056
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.442315571999643,
+                "max": 0.5444097589997909,
+                "mean": 0.5036457609999666,
+                "stddev": 0.031019720041059788,
+                "rounds": 9,
+                "median": 0.5006689219999316,
+                "iqr": 0.03994468149971908,
+                "q1": 0.4863235382504172,
+                "q3": 0.5262682197501363,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.442315571999643,
+                "hd15iqr": 0.5444097589997909,
+                "ops": 1.9855225188722798,
+                "total": 4.5328118489997,
+                "data": [
+                    0.5174806750001153,
+                    0.4870788940006605,
+                    0.442315571999643,
+                    0.49823766899953625,
+                    0.5353078910002296,
+                    0.4840574709996872,
+                    0.5006689219999316,
+                    0.5444097589997909,
+                    0.5232549960001052
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-linopy-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1812216921
+                    ],
+                    "allocations": [
+                        382609
+                    ],
+                    "total_bytes": [
+                        3363476190
+                    ],
+                    "rss_bytes": [
+                        976576512
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.4895334439997896,
+                "max": 1.5271645360007824,
+                "mean": 1.5055771482222755,
+                "stddev": 0.01189897274073372,
+                "rounds": 9,
+                "median": 1.503525119999722,
+                "iqr": 0.014329512750236972,
+                "q1": 1.498356702250021,
+                "q3": 1.512686215000258,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 1.4895334439997896,
+                "hd15iqr": 1.5271645360007824,
+                "ops": 0.6641971161562591,
+                "total": 13.55019433400048,
+                "data": [
+                    1.5107217180002408,
+                    1.5000139029998536,
+                    1.5185797060003097,
+                    1.5271645360007824,
+                    1.4999573599998257,
+                    1.503525119999722,
+                    1.5071438179993493,
+                    1.493554729000607,
+                    1.4895334439997896
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-pyomo-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3166425556
+                    ],
+                    "allocations": [
+                        1493657
+                    ],
+                    "total_bytes": [
+                        4713797897
+                    ],
+                    "rss_bytes": [
+                        2352214016
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 23.580678085999352,
+                "max": 24.622092022000288,
+                "mean": 23.898294260333184,
+                "stddev": 0.3474058024691623,
+                "rounds": 9,
+                "median": 23.758969124000032,
+                "iqr": 0.4806429947500419,
+                "q1": 23.645300848749685,
+                "q3": 24.125943843499726,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 23.580678085999352,
+                "hd15iqr": 24.622092022000288,
+                "ops": 0.04184399058387267,
+                "total": 215.08464834299866,
+                "data": [
+                    24.092713117999665,
+                    23.758969124000032,
+                    24.622092022000288,
+                    23.580678085999352,
+                    24.22563601999991,
+                    23.731395629999497,
+                    23.614402471000176,
+                    23.80316156400022,
+                    23.65560030799952
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        569031269
+                    ],
+                    "allocations": [
+                        1262308
+                    ],
+                    "total_bytes": [
+                        965089444
+                    ],
+                    "rss_bytes": [
+                        677818368
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 4.755716896999729,
+                "max": 4.978214767000281,
+                "mean": 4.850763945999764,
+                "stddev": 0.06516259196961455,
+                "rounds": 9,
+                "median": 4.837123294999401,
+                "iqr": 0.04666588700001739,
+                "q1": 4.822729518249844,
+                "q3": 4.869395405249861,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 4.755716896999729,
+                "hd15iqr": 4.978214767000281,
+                "ops": 0.20615309487996444,
+                "total": 43.656875513997875,
+                "data": [
+                    4.800423093999598,
+                    4.755716896999729,
+                    4.833780404999743,
+                    4.923169130999668,
+                    4.978214767000281,
+                    4.851470829999926,
+                    4.837123294999401,
+                    4.830164992999926,
+                    4.846812101999603
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-m-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-m-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "m",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "transport-m-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        476669014
+                    ],
+                    "allocations": [
+                        153284
+                    ],
+                    "total_bytes": [
+                        883241411
+                    ],
+                    "rss_bytes": [
+                        581885952
+                    ]
+                },
+                "columns": 980000,
+                "rows": 140000,
+                "nonzeros": 1260000,
+                "live_fraction": 1.0,
+                "variables": 980000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9417109179994441,
+                "max": 0.9951891860000615,
+                "mean": 0.9715428197778238,
+                "stddev": 0.017657955381881765,
+                "rounds": 9,
+                "median": 0.9698392509999394,
+                "iqr": 0.029471761999502633,
+                "q1": 0.959026388750317,
+                "q3": 0.9884981507498196,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.9417109179994441,
+                "hd15iqr": 0.9951891860000615,
+                "ops": 1.0292907112716698,
+                "total": 8.743885378000414,
+                "data": [
+                    0.9697149720004745,
+                    0.953726930000812,
+                    0.9698392509999394,
+                    0.9417109179994441,
+                    0.9754646589999538,
+                    0.9891735789997256,
+                    0.988273007999851,
+                    0.9951891860000615,
+                    0.960792875000152
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-specsolve-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "transport-l-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3808664795
+                    ],
+                    "allocations": [
+                        62783
+                    ],
+                    "total_bytes": [
+                        4014142386
+                    ],
+                    "rss_bytes": [
+                        2159263744
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.014237698999750137,
+                    "build": 1.0011143559995617
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.1617297590000817,
+                "max": 3.3161658009994426,
+                "mean": 3.244655939444379,
+                "stddev": 0.05257848508563633,
+                "rounds": 9,
+                "median": 3.239443017000667,
+                "iqr": 0.09414975075037546,
+                "q1": 3.199626999249631,
+                "q3": 3.2937767500000064,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 3.1617297590000817,
+                "hd15iqr": 3.3161658009994426,
+                "ops": 0.3081990875652726,
+                "total": 29.20190345499941,
+                "data": [
+                    3.291800422000051,
+                    3.1999083339997014,
+                    3.239443017000667,
+                    3.299705733999872,
+                    3.2281330530004197,
+                    3.2662343399997553,
+                    3.1617297590000817,
+                    3.1987829949994193,
+                    3.3161658009994426
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "transport-l-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4186676386
+                    ],
+                    "allocations": [
+                        63793
+                    ],
+                    "total_bytes": [
+                        4410141021
+                    ],
+                    "rss_bytes": [
+                        2148302848
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000,
+                "phase_seconds": {
+                    "attach": 0.015141603999836661,
+                    "build": 1.3481576730000597
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.4274802489999274,
+                "max": 3.683031049999954,
+                "mean": 3.588828086666783,
+                "stddev": 0.07508412694203764,
+                "rounds": 9,
+                "median": 3.581227950000539,
+                "iqr": 0.08588520924990917,
+                "q1": 3.5572126355000364,
+                "q3": 3.6430978447499456,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 3.550702264999927,
+                "hd15iqr": 3.683031049999954,
+                "ops": 0.2786424916019803,
+                "total": 32.29945278000105,
+                "data": [
+                    3.642900095999721,
+                    3.5797850600001766,
+                    3.6312522600001103,
+                    3.559382759000073,
+                    3.643691091000619,
+                    3.550702264999927,
+                    3.581227950000539,
+                    3.4274802489999274,
+                    3.683031049999954
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[transport-l-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[transport-l-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "l",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "transport-l-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3838055540
+                    ],
+                    "allocations": [
+                        1415435
+                    ],
+                    "total_bytes": [
+                        7300742763
+                    ],
+                    "rss_bytes": [
+                        3814498304
+                    ]
+                },
+                "columns": 9800000,
+                "rows": 1400000,
+                "nonzeros": 12600000,
+                "live_fraction": 1.0,
+                "variables": 9800000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 10.075594449999699,
+                "max": 10.12713565300055,
+                "mean": 10.10160205011117,
+                "stddev": 0.015658892478354166,
+                "rounds": 9,
+                "median": 10.104187745999297,
+                "iqr": 0.015269064250560405,
+                "q1": 10.093107394999834,
+                "q3": 10.108376459250394,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 10.075594449999699,
+                "hd15iqr": 10.12713565300055,
+                "ops": 0.0989941986468369,
+                "total": 90.91441845100053,
+                "data": [
+                    10.08223528400049,
+                    10.075594449999699,
+                    10.105970299000546,
+                    10.12713565300055,
+                    10.115594939999937,
+                    10.104187745999297,
+                    10.105187015999945,
+                    10.10178163100045,
+                    10.096731431999615
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-specsolve-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0039947949999259436,
+                    "build": 0.026598551999995834,
+                    "first_window": 0.4551342639997529
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5198891879999792,
+                "max": 0.5963515560006272,
+                "mean": 0.5706133287778559,
+                "stddev": 0.021977961564042196,
+                "rounds": 9,
+                "median": 0.5771646410003086,
+                "iqr": 0.01794573749953088,
+                "q1": 0.5647024347501883,
+                "q3": 0.5826481722497192,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.5604954500004169,
+                "hd15iqr": 0.5963515560006272,
+                "ops": 1.7525002476577403,
+                "total": 5.135519959000703,
+                "data": [
+                    0.5661047630001121,
+                    0.5963515560006272,
+                    0.5771646410003086,
+                    0.5604954500004169,
+                    0.5198891879999792,
+                    0.5801869670003725,
+                    0.5814381669997601,
+                    0.5862781879995964,
+                    0.5676110389995301
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "attach": 0.0016278080001939088,
+                    "build": 0.013400803999502386,
+                    "first_window": 0.439661991000321
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5542367859998194,
+                "max": 0.5823995500004457,
+                "mean": 0.5691773323333109,
+                "stddev": 0.010774216784238613,
+                "rounds": 9,
+                "median": 0.5716015680000055,
+                "iqr": 0.021098206250599105,
+                "q1": 0.5576104949996079,
+                "q3": 0.578708701250207,
+                "iqr_outliers": 0,
+                "stddev_outliers": 5,
+                "outliers": "5;0",
+                "ld15iqr": 0.5542367859998194,
+                "hd15iqr": 0.5823995500004457,
+                "ops": 1.756921688888339,
+                "total": 5.122595990999798,
+                "data": [
+                    0.5580530809993434,
+                    0.5716015680000055,
+                    0.5542367859998194,
+                    0.5823995500004457,
+                    0.5779955560001326,
+                    0.5734850219996588,
+                    0.5808481370004301,
+                    0.5562827370004015,
+                    0.5676935539995611
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-linopy-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165253
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.7931660869999178
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.950315347000469,
+                "max": 1.0608712089997425,
+                "mean": 0.9907563624444973,
+                "stddev": 0.03365728634736891,
+                "rounds": 9,
+                "median": 0.9873143900003925,
+                "iqr": 0.03902688100060914,
+                "q1": 0.9663896439997188,
+                "q3": 1.005416525000328,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.950315347000469,
+                "hd15iqr": 1.0608712089997425,
+                "ops": 1.0093298795807841,
+                "total": 8.916807262000475,
+                "data": [
+                    1.0112903089993779,
+                    1.0608712089997425,
+                    0.9873143900003925,
+                    1.0034585970006447,
+                    0.9979922800002896,
+                    0.9538124800001242,
+                    0.9705820319995837,
+                    0.950315347000469,
+                    0.981170617999851
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-pyomo-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.6373979639993195
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.7603810789996714,
+                "max": 0.8323958609998954,
+                "mean": 0.7947625298889357,
+                "stddev": 0.023757480075696835,
+                "rounds": 9,
+                "median": 0.7892976630000703,
+                "iqr": 0.036040626749809235,
+                "q1": 0.7776784775001033,
+                "q3": 0.8137191042499126,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.7603810789996714,
+                "hd15iqr": 0.8323958609998954,
+                "ops": 1.2582374764695377,
+                "total": 7.152862769000421,
+                "data": [
+                    0.7892028200003551,
+                    0.812934120999671,
+                    0.7665590030001113,
+                    0.8323958609998954,
+                    0.7892976630000703,
+                    0.8160740540006373,
+                    0.8046331989999089,
+                    0.7603810789996714,
+                    0.7813849690001007
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.21400743300000613
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2777119889997266,
+                "max": 0.3126380400008202,
+                "mean": 0.29707519011107153,
+                "stddev": 0.014259197995146617,
+                "rounds": 9,
+                "median": 0.30464957200001663,
+                "iqr": 0.027431782499888868,
+                "q1": 0.2800352262497654,
+                "q3": 0.30746700874965427,
+                "iqr_outliers": 0,
+                "stddev_outliers": 5,
+                "outliers": "5;0",
+                "ld15iqr": 0.2777119889997266,
+                "hd15iqr": 0.3126380400008202,
+                "ops": 3.3661511741391683,
+                "total": 2.6736767109996435,
+                "data": [
+                    0.27966776299945195,
+                    0.3126380400008202,
+                    0.3060587009995288,
+                    0.3052602249999836,
+                    0.30464957200001663,
+                    0.2958407750002152,
+                    0.2777119889997266,
+                    0.2801577139998699,
+                    0.31169193200003065
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[transport-xs-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[transport-xs-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "transport",
+                "size": "xs",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "transport-xs-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 9800,
+                "rows": 1400,
+                "nonzeros": 12600,
+                "live_fraction": 1.0,
+                "variables": 9800,
+                "phase_seconds": {
+                    "first_window": 0.2816524119998576
+                },
+                "process_rss_bytes": 4313247744
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.3427786539996305,
+                "max": 0.3883497050001097,
+                "mean": 0.3751103645555405,
+                "stddev": 0.015699826609954434,
+                "rounds": 9,
+                "median": 0.38272387699998944,
+                "iqr": 0.023035856750993844,
+                "q1": 0.36387830524950004,
+                "q3": 0.3869141620004939,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.3427786539996305,
+                "hd15iqr": 0.3883497050001097,
+                "ops": 2.6658820829567764,
+                "total": 3.3759932809998645,
+                "data": [
+                    0.3602216839999528,
+                    0.3650971789993491,
+                    0.38735713599999144,
+                    0.3833060070001011,
+                    0.3427786539996305,
+                    0.38676650400066137,
+                    0.3883497050001097,
+                    0.38272387699998944,
+                    0.3793925350000791
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-10-11T11:55:38.706244+00:00",
+    "version": "5.3.0"
+}

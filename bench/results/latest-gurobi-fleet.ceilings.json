@@ -9,19 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.24 s on fleet/s, so the next rung projects to 32.4 s \u2014 over the 30 s budget"
- },
- {
-  "record": "ceiling",
-  "arm": "specsolve",
-  "case": "fleet",
-  "ladder": "size",
-  "sink": "gurobi",
-  "size": "m",
-  "budget": 30.0,
-  "memory_budget": 16.0,
-  "stopped_by": "memory",
-  "reason": "specsolve took 0.949 GB on fleet/m, so the next rung projects to 19 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 3.37 s on fleet/s, so the next rung projects to 33.7 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -45,6 +33,78 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "gurobipy-loop took 0.845 GB on fleet/m, so the next rung projects to 16.9 GB \u2014 over the 16 GB budget"
+  "reason": "gurobipy-loop took 0.852 GB on fleet/m, so the next rung projects to 17 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve-in-memory",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve-in-memory took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-loop took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-matrix",
+  "case": "fleet",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-matrix took 6.01 GB on fleet/xs, so the next rung projects to 120 GB \u2014 over the 16 GB budget"
  }
 ]

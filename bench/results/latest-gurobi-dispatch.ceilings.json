@@ -9,6 +9,78 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 2.18 GB on dispatch/m, so the next rung projects to 43.6 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 2.19 GB on dispatch/m, so the next rung projects to 43.7 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve-in-memory",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve-in-memory took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-loop took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-matrix",
+  "case": "dispatch",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-matrix took 4.98 GB on dispatch/xs, so the next rung projects to 99.5 GB \u2014 over the 16 GB budget"
  }
 ]

@@ -1,0 +1,98 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "s",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "pyomo took 3.12 s on storage/s, so the next rung projects to 31.2 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve-in-memory",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve-in-memory took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "highspy-matrix",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "fresh-highs",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "highspy-matrix took 2.76 GB on storage/xs, so the next rung projects to 55.2 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "pyomo took 5.87 s on storage/m, so the next rung projects to 58.7 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "storage",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 5.76 s on storage/m, so the next rung projects to 57.6 s \u2014 over the 30 s budget"
+ }
+]
