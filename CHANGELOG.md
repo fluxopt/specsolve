@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
 - perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
 - docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))
 - docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
