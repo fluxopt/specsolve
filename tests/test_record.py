@@ -100,10 +100,39 @@ def test_an_answer_axis_the_spec_declares_is_refused(dispatch_yaml):
 def test_the_schema_names_a_quantity_per_declaration(dispatch_yaml):
     schema = answer_schema(dispatch_yaml)
     quantities = sorted(n for n in schema.attributes if '.' in n)
-    assert quantities == ['activity.power_balance', 'dual.power_balance', 'primal.p'], (
-        'one per variable, and a dual and an activity per constraint'
-    )
+    assert quantities == [
+        'activity.power_balance',
+        'constraint_basis.power_balance',
+        'dual.power_balance',
+        'primal.p',
+        'reduced_cost.p',
+        'slack.power_balance',
+        'variable_basis.p',
+    ], 'a primal per variable, a dual per constraint, and one per declaration for each kind outputs= can ask for'
     assert schema.attributes['primal.p'].dims == {'run', 'snapshot', 'generator'}, (
         'a quantity varies over the run and its own dims'
     )
     assert Path(dispatch_yaml).exists()
+
+
+def test_every_output_a_solve_asks_for_reaches_the_record(dispatch_yaml, dispatch_frame_inputs, record_base, tmp_path):
+    """A solve that asks for every kind ``outputs=`` takes stages each one, the basis kinds as their enum."""
+    base, con = record_base
+    write_schema(answer_schema(dispatch_yaml), base)
+    root = Revision.create(con)
+    working = WorkingRecord(root.record, con)
+    with sps.build(dispatch_yaml, dispatch_frame_inputs) as model:
+        result = model.solve(outputs=['activity', 'reduced_cost', 'slack', 'basis'])
+        write_answer(working, result, run='base')
+        saved = result.save(tmp_path / 'answer')
+    record = working.commit(NewChild(root)).record
+    files = sorted(saved.glob('*/*.parquet'))
+    kinds = {path.parent.name for path in files}
+    assert {'activity', 'reduced_cost', 'slack', 'variable_basis', 'constraint_basis'} <= kinds, (
+        'the solve answered with every kind it asked for'
+    )
+    for path in files:
+        on_disk = pl.read_parquet(path)
+        keys = [c for c in on_disk.columns if c != 'value']
+        staged = _run(record, f'{path.parent.name}.{path.stem}', 'base')
+        assert staged.cast(on_disk.schema).equals(on_disk.sort(keys)), path.name

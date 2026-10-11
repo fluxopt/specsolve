@@ -30,6 +30,7 @@ from specsolve.relational.answer_layout import (
     OUTPUT_KINDS,
     RECORD_SCHEMA,
 )
+from specsolve.relational.collect import collected
 
 if TYPE_CHECKING:
     from datarecord import WorkingRecord
@@ -156,7 +157,7 @@ def write_answer(
         return
     answered, no_expressions = result._answered(result._unclosed('the solution'))
     for kind, name, frame in answered:
-        working.set(f'{kind}.{name}', frame.lazy().with_columns(pl.lit(run).alias(over)).collect())
+        working.set(f'{kind}.{name}', frame.lazy().with_columns(pl.lit(run).alias(over)).pipe(collected))
     reasons = {f'expression.{name}': why for name, why in no_expressions.items()}
     if result._no_duals is not None:
         reasons['dual'] = result._no_duals
