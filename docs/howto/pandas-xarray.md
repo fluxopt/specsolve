@@ -7,7 +7,7 @@ or xarray. specsolve installs neither library:
 pip install pandas xarray
 ```
 
-The examples solve [dispatch](../examples/dispatch.md).
+The examples solve [dispatch](../run.md).
 
 ## As a pandas table
 

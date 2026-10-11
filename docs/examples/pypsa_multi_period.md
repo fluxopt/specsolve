@@ -4,7 +4,7 @@ A build year and a lifetime decide which rows an asset appears in, and each peri
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **85300.0**, matched to `rtol=1e-09`.
 
-The [multi-period](multi_period.md) model has no build years, no lifetimes, no
+The [multi-period](https://github.com/fluxopt/specsolve/blob/main/examples/multi_period.yaml) model has no build years, no lifetimes, no
 discounting, and no asset that exists in one period and not the next. This
 model is those four, as PyPSA writes them.
 

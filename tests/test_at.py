@@ -8,8 +8,6 @@ every snapshot.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import polars as pl
 import pytest
 
@@ -17,7 +15,6 @@ import specsolve as sps
 from tests.conftest import EXAMPLES_DIR, by_coord, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
-PAGE = Path('docs/examples/multi_period.md')
 
 #: 2030 at four snapshots and 2050 at two; a 2050 snapshot weighs four hours.
 SNAPSHOTS = [0, 1, 2, 3, 4, 5]
@@ -45,7 +42,7 @@ def _sources(capex_2050_wind: float = 8.0):
 
 
 def test_the_multi_period_page_number():
-    """The optimum `docs/examples/multi_period.md` quotes, and the per-period build behind it."""
+    """The optimum of the multi-period model, and the per-period build behind it."""
     with sps.solve(MULTI_PERIOD, _sources()) as result:
         nominal = result.primal('p_nom').sort('period', 'generator')
         assert result.objective == pytest.approx(750.0)
@@ -57,8 +54,6 @@ def test_the_multi_period_page_number():
         '2050 peaks at 60 with every snapshot weighted four times, so the operating term takes it all to wind'
     )
     assert built[(2050, 'gas')] == pytest.approx(0.0), 'gas is priced out of 2050 entirely'
-
-    assert '750.0' in PAGE.read_text(), 'the page quotes an optimum this test does not hold'
 
 
 def test_a_period_bound_actually_binds():

@@ -91,35 +91,9 @@ def test_markdown_avoids_escapes_github_eats_inside_math():
 
 
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
-#: Pages whose hand-written summary states the **spec's** math. The notation a
-#: gallery reader expects is the spec and `typeset/` is what is under test — so
-#: every symbol the summary uses, the generator has to be able to reach.
-REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Pages whose summary deliberately says something *else*, each with its reason.
 #: `test_every_summary_declares_itself` fails on a page in neither list.
 DIVERGENT = {
-    'seasons': (
-        'states one boundary row rather than the model: the page is about where a '
-        'clause points, so its summary shows the opening equation alone and names '
-        "the translation with the generator's own grouped-wrap notation."
-    ),
-    'reserves': (
-        'compresses two constraints into reader notation: phi, sigma and the barred '
-        'p_max stand in for the spelled-out parameter names the generator '
-        'writes, and the zone contraction names the grouped reserve as one '
-        'inner sum where the model reaches it through a named expression.'
-    ),
-    'multi_period': (
-        'writes the pullback in reader notation: a hatted p for the capacity variable '
-        'and period() for the relation, where the generator spells the declarations — '
-        'p^nom and period_of(). Matching would take a symbol table, not a renderer '
-        'change.'
-    ),
-    'storage': (
-        'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '
-        'wraps — which the generator writes as the cyclic ⊖. Matching would mean '
-        'either dropping the wrap or opening with a symbol nobody has met yet.'
-    ),
     'transport_dantzig': (
         'is the textbook statement of the transportation problem, with an abstract '
         'c_{ij}. The model is the GAMS instance, whose cost is distance times freight over 1000.'
@@ -167,36 +141,15 @@ def _symbols(latex: str) -> set[str]:
 
 
 def test_every_summary_declares_itself():
-    """A page with hand-written math is checked against the generator, or says
-    why not. Being in neither list is the failure this guards."""
+    """A page with hand-written math says why it differs from the generated math."""
     with_math = {p.stem for p in GALLERY.glob('*.md') if p.stem != 'index' and _summary(p.stem).strip()}
-    undeclared = with_math - set(REPRODUCIBLE) - set(DIVERGENT)
+    undeclared = with_math - set(DIVERGENT)
     assert not undeclared, (
-        f'gallery summaries that neither claim reproducibility nor explain a divergence: '
-        f'{sorted(undeclared)} — add each to REPRODUCIBLE or to DIVERGENT with its reason'
+        f'gallery summaries that do not explain how they differ from the generated math: '
+        f'{sorted(undeclared)} — add each to DIVERGENT with its reason'
     )
-    stale = (set(REPRODUCIBLE) | set(DIVERGENT)) - with_math
+    stale = set(DIVERGENT) - with_math
     assert not stale, f'declared pages that no longer carry hand-written math: {sorted(stale)}'
-
-
-@pytest.mark.parametrize('stem', REPRODUCIBLE)
-def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str):
-    """The oracle direction: the hand-written notation is the expectation, and
-    the renderer is what has to meet it.
-    """
-    generated = _generated(stem)
-    missing = sorted(_symbols(_summary(stem)) - _symbols(generated))
-    assert not missing, (
-        f'docs/examples/{stem}.md writes {missing}, which the generated math does not — '
-        f'either the summary drifted from the model, or the renderer cannot say what '
-        f'the gallery promises it can'
-    )
-
-
-def test_the_dispatch_summary_still_carries_the_mask():
-    """Pinned by value: `> 0` is a condition, not a subscripted quantity, so the symbol check would not see it go."""
-    assert r'\bar p_g > 0' in _summary('dispatch')
-    assert r'\bar p_{g} > 0' in _generated('dispatch')
 
 
 def test_typst_output_compiles(typst, tmp_path: Path):
