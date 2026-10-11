@@ -1,8 +1,9 @@
 # Fixing, relaxing and removing
 
 How to do what linopy's `fix`, `relax` and `remove_constraints` do. None is a
-method here: a fix is data, and the other two are an edit to the spec
-([Change a model](../change.md) teaches both).
+method here: a fix is data, as in
+[Change it and solve again](../change.md), and the other two are an edit to
+the spec.
 
 | linopy | here | rebuild |
 |---|---|---|
@@ -86,8 +87,8 @@ print(relaxed.dual('power_balance'))
 
 ## Remove a constraint
 
-`pop` the constraint's key from the spec. Below, the ramp limit from
-[Change a model](../change.md#3-new-math), added and taken away.
+`pop` the constraint's key from the spec. Below, a ramp limit is added and
+taken away.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 ramped = to_spec(MODEL).to_dict()

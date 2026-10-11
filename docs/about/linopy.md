@@ -145,11 +145,10 @@ you review and diff. The third is
 linopy's *design* for declared solver capabilities without adopting its code.
 
 The modeling API is what a reader arriving from linopy misses first. Two
-pages replace it. The tutorial [Change a model](../change.md) covers the
-loops: `update` for new numbers, a longer table for more rows, a patched `dict`
-for new math. The how-to [Fixing, relaxing and removing](../howto/fix-relax-remove.md)
-aims the same loops at `fix`, `relax` and `remove_constraints`. A built row is
-read with [`row`](../reference/api.md#specsolve.types.Model.row), in linopy's
+pages replace it. The tutorial [Change it and solve again](../change.md)
+covers `update` for new numbers and a longer table for more rows. The how-to
+[Fixing, relaxing and removing](../howto/fix-relax-remove.md) aims the same
+loops at `fix`, `relax` and `remove_constraints`. A built row is read with [`row`](../reference/api.md#specsolve.types.Model.row), in linopy's
 own form, and an IIS with [`infeasible_subsystem`](../reference/api.md#specsolve.types.Model.infeasible_subsystem).
 
 Where linopy is ahead, and why none of it is a ceiling question, is
