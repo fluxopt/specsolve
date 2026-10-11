@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))
 - docs: the benchmarks page shows what a script that solves one model pays, as one small table ([#1971](https://github.com/fluxopt/specsolve/pull/1971))
 - docs: the benchmarks page shows the charts, and the gallery lists the models ([#1969](https://github.com/fluxopt/specsolve/pull/1969))
 - docs: every page says what it has to in about a third fewer words ([#1967](https://github.com/fluxopt/specsolve/pull/1967))
