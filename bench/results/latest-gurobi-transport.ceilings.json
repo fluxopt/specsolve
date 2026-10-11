@@ -1,0 +1,110 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 0.974 GB on transport/m, so the next rung projects to 19.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 2.33 GB on transport/m, so the next rung projects to 46.6 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 4.73 s on transport/m, so the next rung projects to 47.3 s \u2014 over the 30 s budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "specsolve-in-memory",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "specsolve-in-memory took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "linopy took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-loop took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-matrix",
+  "case": "transport",
+  "ladder": "size",
+  "sink": "fresh-gurobi",
+  "size": "xs",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "gurobipy-matrix took 2.79 GB on transport/xs, so the next rung projects to 55.8 GB \u2014 over the 16 GB budget"
+ }
+]
