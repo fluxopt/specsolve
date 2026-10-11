@@ -1,9 +1,11 @@
 """The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-``docs/run.md``, ``docs/tables.md``, ``docs/change.md``, ``docs/commitment.md`` and ``docs/howto/fix-relax-remove.md`` run
-every executed block, and each test pins one claim the prose makes. Blocks are
-exec'd in order in one namespace, as markdown-exec's ``session=`` runs them on
-the site, and in the directory a fence's ``workdir=`` names.
+The five tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``,
+``docs/commitment.md`` and ``docs/sweep.md``) and
+``docs/howto/fix-relax-remove.md`` run every executed block, and each test pins
+one claim the prose makes. Blocks are exec'd in order in one namespace, as
+markdown-exec's ``session=`` runs them on the site, and in the directory a
+fence's ``workdir=`` names.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import itertools
 import re
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
 import pytest
 
 import specsolve as sps
@@ -27,6 +30,7 @@ DOCS_DIR = REPO / 'docs'
 FIRST = DOCS_DIR / 'run.md'
 DATA = DOCS_DIR / 'tables.md'
 ON_OFF = DOCS_DIR / 'commitment.md'
+TIME = DOCS_DIR / 'sweep.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
 
@@ -127,6 +131,40 @@ def test_gas_runs_at_its_minimum_and_wind_gives_way(on_off: tuple[dict[str, Any]
 def test_a_mip_has_no_prices(on_off: tuple[dict[str, Any], str]) -> None:
     _, printed = on_off
     assert 'duals are undefined for a mixed-integer model' in printed, 'the page shows the refusal of dual'
+
+
+@pytest.fixture(scope='module')
+def over_time() -> tuple[dict[str, Any], str]:
+    return run(TIME)
+
+
+def test_the_battery_lets_gas_switch_off(over_time: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = over_time
+    assert namespace['result'].objective == pytest.approx(10850.0), 'the page says the battery brings 14000 to 10850'
+
+
+def test_a_cold_scenario_keeps_gas_on(over_time: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = over_time
+    wide = namespace['gas_on'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
+    assert wide['mild'].to_list() == pytest.approx([0.0, 1.0, 1.0, 0.0]), 'mild: gas is off in snapshot 3'
+    assert wide['cold'].to_list() == pytest.approx([0.0, 1.0, 1.0, 1.0]), 'cold: gas stays on in snapshot 3'
+
+
+def test_a_window_starts_from_what_the_window_before_left(over_time: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = over_time
+    soc = namespace['rolling'].primal('soc').sort('hour')['value'].to_list()
+    gas = namespace['rolling'].primal('on').filter(pl.col('generator') == 'gas').sort('hour')['value'].to_list()
+    assert soc[2] == pytest.approx(10.0), 'the page says the first window ends with 10 in the battery'
+    assert gas[3] == pytest.approx(0.0), 'and that the next window spends it in hour 3, with gas off'
+
+
+def test_lookahead_closes_the_gap_to_one_solve(over_time: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = over_time
+    costs = [row['cost'] for row in namespace['rows']]
+    whole = namespace['whole'].objective
+    assert costs[0] / whole - 1 == pytest.approx(0.12, abs=0.005), 'the page says no lookahead costs 12% more'
+    assert costs[0] > costs[1] > costs[2], f'each hour of lookahead buys something: {costs}'
+    assert costs[2] == pytest.approx(whole, abs=0.1), 'the page says three hours close all of the gap'
 
 
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
