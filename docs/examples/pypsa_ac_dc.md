@@ -2,7 +2,7 @@
 
 A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.**
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **18441021.477729216**, matched to `rtol=1e-09`, nodal prices included.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **18441021.477729216**, matched to `rtol=1e-09`, nodal prices included.
 
 Every model above puts a generator on a bus and stops there. Here a generator
 also burns a **carrier**, and both maps do work. The nodal balance groups
@@ -391,7 +391,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         for name, rate in co2.items():
             n.add('Carrier', name, co2_emissions=rate)
 
-        generators = tables['generator'].set_index('generator')
+        generators = (
+            tables['generator']
+            .set_index('generator')
+            .join([tables['gen_bus'].set_index('generator'), tables['gen_carrier'].set_index('generator')])
+        )
         p_max_pu = _wide(tables['p_max_pu'], 'generator')
         for g, row in generators.iterrows():
             n.add(
@@ -408,8 +412,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
                 p_max_pu=p_max_pu[g],
             )
 
-        for line, ends in tables['line'].set_index('line').iterrows():
-            bus0, bus1 = ends['line_from'], ends['line_to']
+        bus0_of = tables['line_from'].set_index('line')['bus']
+        bus1_of = tables['line_to'].set_index('line')['bus']
+        for line in tables['line']['line']:
+            bus0, bus1 = bus0_of[line], bus1_of[line]
             n.add(
                 'Line',
                 line,
@@ -422,8 +428,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
                 capital_cost=_series(tables['line_capital_cost'], 'line')[line],
             )
 
-        for link, ends in tables['link'].set_index('link').iterrows():
-            bus0, bus1 = ends['link_from'], ends['link_to']
+        bus0_of = tables['link_from'].set_index('link')['bus']
+        bus1_of = tables['link_to'].set_index('link')['bus']
+        for link in tables['link']['link']:
+            bus0, bus1 = bus0_of[link], bus1_of[link]
             n.add(
                 'Link',
                 link,

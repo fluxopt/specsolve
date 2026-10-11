@@ -2,7 +2,7 @@
 
 The component every sector-coupled PyPSA model uses for hydrogen, heat and gas.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **7005.5025000000005**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **7005.5025000000005**, matched to `rtol=1e-09`.
 
 [Storage units](pypsa_storage.md) ports the `StorageUnit`: a dispatch/store pair
 of non-negative variables, one per efficiency, and a power rating of its own. A
@@ -267,7 +267,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=generators['gen_bus'],
+            bus=tables['gen_bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -276,7 +276,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Store',
             stores.index,
-            bus=stores['store_bus'],
+            bus=tables['store_bus'].set_index('store')['bus'],
             e_nom_extendable=True,
             e_nom_max=tables['e_nom_max'].set_index('store')['value'],
             capital_cost=tables['e_capital_cost'].set_index('store')['value'],

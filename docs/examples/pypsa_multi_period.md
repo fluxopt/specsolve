@@ -2,7 +2,7 @@
 
 A build year and a lifetime decide which rows an asset appears in, and each period's costs carry its own discount.
 
-> **✔ Verified against pypsa 1.2.4 (its own linopy 0.9.0)** — objective **85300.0**, matched to `rtol=1e-09`.
+> **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **85300.0**, matched to `rtol=1e-09`.
 
 The [multi-period](multi_period.md) model has no build years, no lifetimes, no
 discounting, and no asset that exists in one period and not the next. This
@@ -212,7 +212,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n = pypsa.Network()
         snapshots: pd.DataFrame = tables['snapshot']
         periods = list(tables['period']['period'])
-        n.set_snapshots(pd.MultiIndex.from_arrays([snapshots['period_of'], snapshots['snapshot']]))
+        n.set_snapshots(
+            pd.MultiIndex.from_arrays(
+                [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+            )
+        )
         n.investment_periods = periods
         n.investment_period_weightings['years'] = 10
         n.investment_period_weightings['objective'] = tables['period_weight'].set_index('period')['value']
