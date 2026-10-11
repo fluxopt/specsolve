@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected, in_memory
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -48,11 +48,13 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     """Shape the door's frames into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every frame that
-    carries the dimension is re-encoded against it.
+    carries the dimension is re-encoded against it. Each frame is read
+    [`in_memory`][], since every read holds one table whole.
     """
-    dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
-    relations = {name: sources[name].pipe(collected) for name in program.relations}
-    parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+    with in_memory():
+        dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
+        relations = {name: sources[name].pipe(collected) for name in program.relations}
+        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
