@@ -802,6 +802,24 @@ def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str,
         )
 
 
+def test_the_linopy_arm_builds_under_v1_semantics() -> None:
+    """Under `legacy` an absent slot counts as zero, under `v1` it makes the expression absent.
+
+    The arm sets `v1` where every build starts, whatever the process held before.
+    """
+    import linopy
+
+    before = linopy.options['semantics']
+    linopy.options['semantics'] = 'legacy'
+    try:
+        case = CASES['dispatch']
+        arm = ARMS['linopy']
+        arm.build_only(arm.prepare('dispatch', '2xs', case.data(case.shape('2xs')), {}))
+        assert linopy.options['semantics'] == 'v1', 'a linopy build runs under v1 semantics, not legacy'
+    finally:
+        linopy.options['semantics'] = before
+
+
 # ---------------------------------------------------------------------------
 # the entry points still run
 # ---------------------------------------------------------------------------
