@@ -1,16 +1,13 @@
 # Reading an answer into pandas or xarray
 
-How to hand an answer to code that works in pandas or xarray. A
-[result](../reference/api.md#specsolve.types.Result) reads as polars tables, and the
-bridges below convert one name at a time. specsolve installs neither library,
-so install the one you need:
+How to read a [result](../reference/api.md#specsolve.types.Result) into pandas
+or xarray. specsolve installs neither library:
 
 ```bash
 pip install pandas xarray
 ```
 
-The examples solve [dispatch](../examples/dispatch.md) on its committed
-instance: three generators over four snapshots.
+The examples solve [dispatch](../examples/dispatch.md).
 
 ## As a pandas table
 
@@ -29,9 +26,8 @@ print(result.to_pandas('p').head(3))
 ```
 
 The table has the shape [`primal`](../reference/api.md#specsolve.types.Result.primal)
-gives: one column per dimension, a `value` column, and one row per coordinate
-the model built. `kind='dual'` reads a constraint's duals, and
-`kind='expression'` a named expression:
+gives. `kind='dual'` reads a constraint's duals, and `kind='expression'` a
+named expression:
 
 ```python
 print(result.to_pandas('power_balance', kind='dual'))
@@ -62,11 +58,9 @@ Coordinates:
   * generator  (generator) object 16B 'gas' 'wind'
 ```
 
-The array is dense over the variable's dimensions. A coordinate that a
-`where:` removed comes back `NaN`. A label that no row holds is not on the
-axis: solar has no capacity, so `p` has no `solar` column.
-[`to_dataarray`](../reference/api.md#specsolve.types.Result.to_dataarray) takes
-`kind=` as `to_pandas` does.
+The array is dense. A coordinate that a `where:` removed comes back `NaN`. A
+label that no row holds is not on the axis, so `p` has no `solar` column
+([`to_dataarray`](../reference/api.md#specsolve.types.Result.to_dataarray)).
 
 ## Every variable as one xarray dataset
 
@@ -75,15 +69,13 @@ result.to_dataset()  # every variable
 result.to_dataset('power_balance', kind='dual')  # the duals you name
 ```
 
-One call reads one kind, since a dual and a variable can share a name. On a
-large model, name the few you need: each arrives dense.
+One call reads one kind. On a large model, name the few you need.
 
 ## From a sweep
 
-A [sweep](../reference/sweeps.md) has the same three bridges, and each returns
-the answer. The slice key of a scenario sweep becomes a dimension, such as
-`scenario`. A rolling horizon comes back over the dimension it sliced, so the
-answer is indexed by time. `per_window=True` reads it window by window instead:
+A [sweep](../reference/sweeps.md) has the same three bridges. The slice key
+of a scenario sweep becomes a dimension. A rolling horizon comes back over the
+dimension it sliced, or window by window with `per_window=True`:
 
 ```python
 sweep.to_dataarray('p')  # (scenario, snapshot, generator)

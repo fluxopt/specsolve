@@ -1,7 +1,7 @@
 """Declarative optimisation: YAML math on a streaming engine.
 
 Specs build relationally on polars and stream to the solver — see
-docs/about/architecture.md.
+docs/development/architecture.md.
 
 Example::
 

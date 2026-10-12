@@ -19,73 +19,29 @@ validation:
 nav:
   - Home: index.md
   - Tutorials:
-      - Run a model: run.md
-      - Tables in, tables out: tables.md
-      - Change a model: change.md
-      - Sweep a model: sweep.md
+      - Your first model: run.md
+      - Your data: tables.md
+      - Change it and solve again: change.md
+      - A horizon too large for one solve: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md
-      # The schema is the language's, so the editor recipe is documented with it.
-      - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
-      - Checking a spec without data, in CI: https://mathspec.readthedocs.io/en/latest/howto/check/
-      - Warm-starting a re-solve: howto/warm-start.md
-      - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Choosing a solver: howto/solvers.md
+      - Making a solve faster: howto/faster.md
+      - Starting from an earlier answer: howto/warm-start.md
+      - Solving many scenarios: howto/scenarios.md
       - Running a sweep in parallel: howto/parallel.md
-      - Building many small models faster: howto/small-models.md
+      - Fixing, relaxing and removing: howto/fix-relax-remove.md
+      - Reading an answer into pandas or xarray: howto/pandas-xarray.md
       - Archiving a solve: howto/archiving.md
       - Reading a directory of runs: howto/warehouse.md
-      - Reading an answer into pandas or xarray: howto/pandas-xarray.md
       - Debugging a wrong answer: howto/debug.md
   - Reference:
-      - The verbs: reference/api.md
-      - Sweeps and rolling horizons: reference/sweeps.md
+      - Python API: reference/api.md
       - The data contract: reference/data.md
+      - Sweeps and rolling horizons: reference/sweeps.md
       - Glossary: reference/glossary.md
-      - Internal glossary: reference/internals.md
-      # The language is a dependency and is documented with itself.
-      - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:
           - examples/index.md
-          - Teaching examples:
-              - dispatch: examples/dispatch.md
-              - storage: examples/storage.md
-              - transport: examples/transport.md
-              - piecewise: examples/piecewise.md
-              - piecewise segment lines: examples/piecewise_lp.md
-              - piecewise curves of differing length: examples/piecewise_ragged.md
-              - piecewise conversion: examples/piecewise_conversion.md
-              - special-ordered sets: examples/sos.md
-              - monthly budget: examples/monthly_budget.md
-              - multi-period: examples/multi_period.md
-              - seasons: examples/seasons.md
-              - reserves: examples/reserves.md
-              - walkthrough: examples/walkthrough.md
-          - PyPSA examples:
-              - transport model: examples/pypsa_transport.md
-              - ramp limits: examples/pypsa_ramp.md
-              - storage units: examples/pypsa_storage.md
-              - cyclic storage: examples/pypsa_cyclic_storage.md
-              - Kirchhoff's voltage law: examples/pypsa_kvl.md
-              - transmission losses: examples/pypsa_losses.md
-              - AC-DC, two coordinates: examples/pypsa_ac_dc.md
-              - unit commitment: examples/pypsa_unit_commitment.md
-              - minimum up and down times: examples/pypsa_min_up_down.md
-              - linearized unit commitment: examples/pypsa_linearized_uc.md
-              - global limits: examples/pypsa_global_limits.md
-              - multi-link: examples/pypsa_multilink.md
-              - modular capacity: examples/pypsa_modular.md
-              - energy totals: examples/pypsa_energy_sum.md
-              - fixed by data: examples/pypsa_fixed.md
-              - spillage: examples/pypsa_spill.md
-              - the Store component: examples/pypsa_store.md
-              - mixed cycling: examples/pypsa_mixed_cycling.md
-              - link delay: examples/pypsa_link_delay.md
-              - multi-period investment: examples/pypsa_multi_period.md
-              - committable and extendable: examples/pypsa_committable_extendable.md
-              - growth limit: examples/pypsa_growth_limit.md
-              - stochastic scenarios: examples/pypsa_stochastic.md
-              - CVaR risk preference: examples/pypsa_cvar.md
           - Published optima:
               - Dantzig transport: examples/transport_dantzig.md
               - Dantzig, economies of scale: examples/transport_pwl.md
@@ -96,6 +52,55 @@ nav:
               - Choosing the mode of transport: examples/transport_modes.md
               - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
               - Travelling salesman: examples/tsp_mtz.md
+          - More models:
+              - dispatch: examples/dispatch.md
+              - storage: examples/storage.md
+              - transport: examples/transport.md
+              - piecewise: examples/piecewise.md
+              - piecewise curves of differing length: examples/piecewise_ragged.md
+              - piecewise conversion: examples/piecewise_conversion.md
+              - monthly budget: examples/monthly_budget.md
+              - multi-period: examples/multi_period.md
+              - seasons: examples/seasons.md
+              - reserves: examples/reserves.md
+  - About:
+      - about/index.md
+      - Coming from linopy: about/linopy.md
+      - Benchmarks: about/benchmarks.md
+      - Prior art and credit: about/prior-art.md
+      - Changelog: about/changelog.md
+  # What a user does not need: how the package is built, and the PyPSA models
+  # that prove it works. The PyPSA pages stay in docs/examples/, where
+  # tools/ladder.py writes them and tools/constructs.py reads them.
+  - Development:
+      - Architecture: development/architecture.md
+      - Walkthrough: development/walkthrough.md
+      - Verification: development/verification.md
+      - PyPSA examples:
+          - transport model: examples/pypsa_transport.md
+          - ramp limits: examples/pypsa_ramp.md
+          - storage units: examples/pypsa_storage.md
+          - cyclic storage: examples/pypsa_cyclic_storage.md
+          - Kirchhoff's voltage law: examples/pypsa_kvl.md
+          - transmission losses: examples/pypsa_losses.md
+          - AC-DC, two coordinates: examples/pypsa_ac_dc.md
+          - unit commitment: examples/pypsa_unit_commitment.md
+          - minimum up and down times: examples/pypsa_min_up_down.md
+          - linearized unit commitment: examples/pypsa_linearized_uc.md
+          - global limits: examples/pypsa_global_limits.md
+          - multi-link: examples/pypsa_multilink.md
+          - modular capacity: examples/pypsa_modular.md
+          - energy totals: examples/pypsa_energy_sum.md
+          - fixed by data: examples/pypsa_fixed.md
+          - spillage: examples/pypsa_spill.md
+          - the Store component: examples/pypsa_store.md
+          - mixed cycling: examples/pypsa_mixed_cycling.md
+          - link delay: examples/pypsa_link_delay.md
+          - multi-period investment: examples/pypsa_multi_period.md
+          - committable and extendable: examples/pypsa_committable_extendable.md
+          - growth limit: examples/pypsa_growth_limit.md
+          - stochastic scenarios: examples/pypsa_stochastic.md
+          - CVaR risk preference: examples/pypsa_cvar.md
       - The PyPSA ladder:
           - examples/pypsa_ladder.md
           - Rung 1: examples/pypsa_ladder/rung_01_transport.md
@@ -156,15 +161,7 @@ nav:
           - Rung 57: examples/pypsa_ladder/rung_57_scenario_nom_set.md
           - Rung 58: examples/pypsa_ladder/rung_58_scenario_committable.md
           - Rung 60: examples/pypsa_ladder/rung_60_efficiency_per_snapshot.md
-  - About:
-      - about/index.md
-      - Architecture: about/architecture.md
-      - Decomposition: about/decomposition.md
-      - Benchmarks: about/benchmarks.md
-      - Relationship to linopy: about/linopy.md
-      - Prior art and credit: about/prior-art.md
-      - Roadmap: about/roadmap.md
-      - Changelog: about/changelog.md
+      - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
 
 theme:
   custom_dir: overrides
@@ -245,6 +242,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.snippets:
       check_paths: true
+      dedent_subsections: true
   # Rewrites the GitHub inline math mathspec prints into the `$…$` arithmatex reads.
   - tools.mdx_github_math
   - pymdownx.tabbed:

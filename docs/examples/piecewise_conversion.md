@@ -1,6 +1,7 @@
 # piecewise_conversion
 
-Converters whose flows share one curve, where **how many flows** is data.
+Heat and power from converters whose flows share one curve each, where how many
+flows a converter has is data.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **5990**, matched to `rtol=1e-06`.
 
@@ -13,17 +14,6 @@ many flows it ties is a property of the system, not of the file: two here,
 three there, and a unit with a fourth is a row in a table.
 
 $$\mathit{rate}_{f,t} = \sum_{k \in \mathcal{K}_{c(f)}} \lambda_{c(f),t,k}\, v_{f,k} \qquad \forall\thinspace f, t$$
-
-[`piecewise:`](https://mathspec.readthedocs.io/en/latest/reference/language/piecewise/) cannot say that: its `links:`
-are a list, so the arity would have to be written out. **The formulation it
-would have emitted is four ordinary declarations:**
-
-| what | how |
-|---|---|
-| the weights | a variable over `[converter, time, bp]`, masked by `where: bp_present` |
-| on one segment | [`sos:`](https://mathspec.readthedocs.io/en/latest/reference/language/piecewise/#sos) `type: 2` over that variable |
-| one operating point | `sum(weight, over=bp) == 1` |
-| the tie | one row per **flow**, reading its converter's weights through `at(…, by=converter_of, over=converter, into=flow)` |
 
 <!-- math:begin -->
 <details markdown="1">
@@ -265,24 +255,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m.add_objective((rate * price).sum())
         return m
     ```
-
-## What it exercises
-
-**The arity is a row count.** `on_the_curve` builds one row per flow, so a
-converter tying three expressions and one tying two are the same declaration.
-Nothing in the file says how many flows a converter has; the `converter_of`
-relation does, and it is data.
-
-**The mask is the variable's own.** `where: bp_present` decides which weights
-exist, and an [`sos:`](https://mathspec.readthedocs.io/en/latest/reference/language/piecewise/#sos) set is over the
-members present, so the boiler's three-breakpoint curve and the CHP's four sit
-on one axis with nothing padded. A solver without SOS gets binaries and linking
-rows for the same set, which multiply by the member's own upper bound — 1 here,
-because a weight is at most one.
-
-linopy's `add_piecewise_formulation` ties N expressions to one basis too, but
-its pairs are an argument list, so the linopy tab writes the arity out per
-converter in a Python loop. That loop is what moves into the data here.
 
 ---
 

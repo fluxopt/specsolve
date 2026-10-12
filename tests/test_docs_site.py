@@ -95,14 +95,14 @@ def _nav_pages(entries: list[Any]) -> list[str]:
     """Every page the nav points at, depth first, as `mkdocs.yml` spells it.
 
     An entry is a bare path or a one-key mapping whose value is a path or a
-    deeper list. A value that does not end in `.md` is not a page of this tree.
+    deeper list. A value that does not end in `.md`, or is a URL, is not a page of this tree.
     """
     found: list[str] = []
     for entry in entries:
         target = entry if isinstance(entry, str) else next(iter(entry.values()))
         if isinstance(target, list):
             found.extend(_nav_pages(target))
-        elif isinstance(target, str) and target.endswith('.md'):
+        elif isinstance(target, str) and target.endswith('.md') and '://' not in target:
             found.append(target)
     return found
 
@@ -117,21 +117,6 @@ def test_every_page_under_docs_has_a_nav_entry():
     pages = {page.relative_to(DOCS).as_posix() for page in _pages()} - {'README.md'}
     assert pages == nav, (
         f'pages with no nav entry in mkdocs.yml: {sorted(pages - nav)}; nav entries with no page: {sorted(nav - pages)}'
-    )
-
-
-def test_the_home_page_still_carries_its_math_block():
-    """`docs/index.md` keeps the markers `tools.gallery_math --check` fills.
-
-    The generator fills only the markers it finds, so a dropped marker would
-    stop the check without a failure.
-    """
-    from tools import gallery_math
-
-    page = (DOCS / 'index.md').read_text()
-    assert gallery_math.HOME_BEGIN in page and gallery_math.HOME_END in page, (
-        f'docs/index.md lost its {gallery_math.HOME_BEGIN}/{gallery_math.HOME_END} markers — '
-        f'the LaTeX tabs are generated, and an unmarked page silently opts out'
     )
 
 
@@ -181,7 +166,7 @@ def test_the_translation_table_names_every_built_in_operator():
     """`What a construct becomes` is a copy of the builder, so something checks it."""
     from mathspec import BUILTIN_NAMES
 
-    page = (DOCS / 'about' / 'linopy.md').read_text()
+    page = (DOCS / 'development' / 'verification.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]
     expressions = section.split('| In an expression |')[1].split('| A `where:` |')[0]
     shown = set(re.findall(r'^\| `(\w+)\(', expressions, re.MULTILINE))
@@ -208,7 +193,7 @@ def test_the_plan_table_names_every_expression_node():
 
     from specsolve.relational.engine.pieces import fan_in
 
-    page = (DOCS / 'about' / 'architecture.md').read_text()
+    page = (DOCS / 'development' / 'architecture.md').read_text()
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
     rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
 

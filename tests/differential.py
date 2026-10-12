@@ -1,7 +1,7 @@
 """The both-lanes harness: one model, two backends, one answer.
 
 The same YAML means the same thing on the linopy lane and on the streaming
-relational one (docs/about/architecture.md, hard rule 3). Importing this module
+relational one (docs/development/architecture.md, hard rule 3). Importing this module
 is the oracle's guard: a bare install skips every module that uses it at
 collection.
 

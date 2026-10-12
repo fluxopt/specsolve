@@ -1,24 +1,21 @@
 # piecewise_ragged
 
-Per-generator cost curves of **different lengths**, each as long as its own data.
+Dispatch where each generator's cost curve has as many breakpoints as its own
+data.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **426**, matched to `rtol=1e-09`.
 
 ## The problem
 
-A breakpoint dimension is one axis for the whole system, but a curve is per
-unit. The hydro unit here has two breakpoints, the coal plant three, the gas
-turbine four. Nothing in the model has to know which is longest.
+The hydro unit here has two breakpoints, the coal plant three, the gas turbine
+four. Nothing in the model has to know which is longest.
 
 $$p_{t,g} = \sum_{k \in \mathcal{K}_g} \lambda_{t,g,k}\, x_{g,k}, \quad
 \mathrm{cost}_{t,g} \ge \sum_{k \in \mathcal{K}_g} \lambda_{t,g,k}\, y_{g,k}, \quad
 \sum_{k \in \mathcal{K}_g} \lambda_{t,g,k} = 1$$
 
-The weights run over $\mathcal{K}_g$, the curve's own breakpoint set, which
-is what `points: bp_x` says. Without it the shorter curves have to be padded
-out to the longest. Padding buys a weight per unused breakpoint, and
-`method: convex` refuses it, because a repeated point is not a strictly
-increasing breakpoint.
+The weights exist only where a curve has a breakpoint, so the hydro unit
+carries two weights rather than four, and no curve is padded.
 
 <!-- math:begin -->
 <details markdown="1">
@@ -224,21 +221,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m.add_objective(op_cost.sum())
         return m
     ```
-
-## What it exercises
-
-**`points:` is what makes the curve its own.** The weights, and the segment
-binaries where a method declares them, exist only where the mask does, so the
-hydro unit carries two rather than four. No value is asked for at a breakpoint
-the curve leaves out. A gap in the middle of a curve is refused when data
-attaches: the marked breakpoints have to follow one another, though they need
-not start at the head of the axis.
-
-The linopy reference reaches the same optimum from the **other** formulation:
-segment lines rather than weights, which is exact for a convex curve under
-minimisation and needs no auxiliary variable. Two formulations agreeing is a
-stronger check than two spellings of one. Both sides stay a pure LP, so this
-model keeps its duals.
 
 ---
 
