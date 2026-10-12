@@ -1,4 +1,4 @@
-"""specsolve in Pyodide: a build and solve from polars frames, then a sweep, each checked against its closed form.
+"""specsolve in Pyodide: a build and solve from polars frames, then a sweep over an axis read from JSON, each checked against its closed form.
 
 Run by ``run.mjs`` inside Pyodide, never by pytest: the polars there has no
 streaming engine and no parquet, so the sources are frames and nothing is
@@ -6,6 +6,8 @@ written.
 """
 
 from __future__ import annotations
+
+import json
 
 import polars as pl
 
@@ -52,7 +54,8 @@ def main() -> str:
             'value': [load for load in flat.values() for _ in LOAD],
         }
     )
-    runs = sps.solve_over(SPEC, {**sources, 'load': scenarios}, sps.EachCoordinate('scenario'))
+    axis = json.loads(json.dumps(sps.EachCoordinate('scenario').to_dict()))
+    runs = sps.solve_over(SPEC, {**sources, 'load': scenarios}, axis)
     objectives = dict(runs.record.select('scenario', 'objective').iter_rows())
     assert objectives == {name: GAS_COST * (load - WIND) * len(LOAD) for name, load in flat.items()}, (
         f'one solve per scenario, gas covering the flat load above the wind: {objectives}'
