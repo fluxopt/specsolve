@@ -233,6 +233,29 @@ def test_a_width_ladder_writes_a_file_of_its_own() -> None:
     }, 'a width rung goes to a file of its own, never into the size file'
 
 
+def test_a_fresh_process_reports_its_own_peak_not_its_parents(tmp_path: Path) -> None:
+    """`test_fresh` launches `bench.fresh` from a pytest process that has already measured the large rungs.
+
+    `bench.fresh` read `ru_maxrss`, which on Linux survives `fork` and `exec`,
+    so the child reported the parent's peak: 2.45 GB for every arm on
+    `dispatch/2xs` in run 38302646840, which projected the next rung over the
+    memory budget and refused it.
+    """
+    case = CASES['dispatch']
+    prepared = ARMS['specsolve'].prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    payload, answer = tmp_path / 'payload.pickle', tmp_path / 'answer.json'
+    payload.write_bytes(pickle.dumps(('specsolve', 'highs', prepared)))
+    parent = (
+        'import subprocess, sys\n'
+        'held = bytearray(1_200_000_000)\n'
+        'for i in range(0, len(held), 4096): held[i] = 1\n'
+        f"subprocess.run([sys.executable, '-m', 'bench.fresh', {str(payload)!r}, {str(answer)!r}], check=True)\n"
+    )
+    subprocess.run([sys.executable, '-c', parent], check=True, cwd=Path(__file__).resolve().parents[1])
+    peak = json.loads(answer.read_text())['peak_rss_bytes']
+    assert peak < 600e6, f'a fresh process under a parent holding 1.2 GB reports {peak / 1e6:.0f} MB, not its own peak'
+
+
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
     """`ladder-smoke` lands in `bench/results` too, and is meant to be narrow."""
     smoke = Path.cwd() / 'bench/results/latest-smoke.json'
