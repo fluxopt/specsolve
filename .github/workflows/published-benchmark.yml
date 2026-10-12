@@ -74,21 +74,14 @@ jobs:
         uses: ./.github/actions/ladder-case
         with:
           sink: highs
-          case: transport
+          case: nodal
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
         uses: ./.github/actions/ladder-case
         with:
           sink: highs
-          case: storage
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: highs
-          case: fleet
+          case: network
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
@@ -102,21 +95,14 @@ jobs:
         uses: ./.github/actions/ladder-case
         with:
           sink: gurobi
-          case: transport
+          case: nodal
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
         uses: ./.github/actions/ladder-case
         with:
           sink: gurobi
-          case: storage
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: gurobi
-          case: fleet
+          case: network
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
 

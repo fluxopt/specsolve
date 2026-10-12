@@ -9,6 +9,7 @@ Each arm module defines:
     build_and_emit(sink, prepared) -> Counts
     build_only(prepared) -> Counts
     objective(prepared) -> float
+    written(prepared, path) -> None
 
 and, where the library has a sweep verb:
 

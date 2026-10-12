@@ -211,20 +211,26 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
     published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
     assert sorted(published) == sorted(
-        [
-            f'latest-{sink}-{case}.json'
-            for sink in ('highs', 'gurobi')
-            for case in ('dispatch', 'transport', 'storage', 'fleet')
-        ]
-        + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
-    ), 'every case through both sinks, and a file of its own for each width ladder'
-    assert published['latest-highs-transport.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
-        'the size file holds no width rung'
+        f'latest-{sink}-{case}.json' for sink in ('highs', 'gurobi') for case in ('dispatch', 'nodal', 'network')
+    ), 'every published case through both sinks, one file each'
+    assert published['latest-highs-dispatch.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
+        'a case holds every rung of the size ladder it has'
     )
-    assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
-        'the width file holds only width rungs'
+    assert published['latest-highs-network.json'] == {'2xs', 'xs', 's', 'm', 'l'}, (
+        'a rung the case does not have is left out of its file'
     )
     assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
+
+
+def test_a_width_ladder_writes_a_file_of_its_own() -> None:
+    """No published case has a width ladder, and a run that asks for one still keeps it apart."""
+    from bench.published import files
+
+    written = {path.name: set(rungs) for path, rungs in files('highs', 'transport', ['xs', 's', 'w1', 'w10']).items()}
+    assert written == {
+        'latest-highs-transport.json': {'xs', 's'},
+        'latest-highs-transport-width.json': {'w1', 'w10'},
+    }, 'a width rung goes to a file of its own, never into the size file'
 
 
 def test_a_fresh_process_reports_its_own_peak_not_its_parents(tmp_path: Path) -> None:
@@ -386,7 +392,11 @@ def test_a_ladder_the_box_cannot_hold_loses_only_its_own_file() -> None:
         ['bash', '-c', stub + script],
         capture_output=True,
         text=True,
-        env={**os.environ, 'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}'},
+        env={
+            **os.environ,
+            'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}',
+            'BENCH_SIZES': 'xs s m l w1 w10 w100 w1000',
+        },
         cwd=Path(__file__).resolve().parents[1],
     )
 
@@ -471,7 +481,7 @@ def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     from bench import reproduce
 
     selection = ' '.join(reproduce.published())
-    for expected in ('--cases dispatch transport storage fleet', '--budget 30', 'bench/results/latest.json'):
+    for expected in ('--cases dispatch nodal network', '--budget 30', 'bench/results/latest.json'):
         assert expected in selection, f'the reproduction lost `{expected}` from the task definition'
     assert 'PUBLISHED' not in Path(reproduce.__file__).read_text(), 'the selection is read, not repeated'
 
@@ -721,16 +731,17 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
 
     A transposed index builds a different model that benchmarks perfectly, so
     the `xs` rung of each case is solved both ways and the objectives compared.
-    Not `2xs`: over two snapshots a wrapped shift forward is the shift back, so
-    a reversed time index would solve to the same objective. `unmeasurable`
-    decides which cells there are.
+    It is the test that sees a reversed time index where a store starts empty,
+    as in `network`. A cyclic store, as in `storage`, admits the same charging
+    whichever way time runs, so there no objective tells the two apart.
+    `unmeasurable` decides which cells there are.
     """
     reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
     if reason:
@@ -742,6 +753,76 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
     assert theirs == pytest.approx(ours, rel=1e-9), (
         f'{dialect} solves {case_name}/xs to {theirs}, specsolve to {ours} — not the same model'
     )
+
+
+def _rounded(v: float) -> float:
+    """*v* to nine significant digits: the LP writers disagree in the last ones."""
+    return float(f'{v:.9g}') + 0.0
+
+
+def _canonical(path: Path) -> dict[str, Any]:
+    """The LP file at *path* as HiGHS reads it, with nothing left that depends on a name or an order.
+
+    A column is its cost, bounds and integrality. A row is its bounds and the
+    multiset of its entries, each a coefficient with its column's description.
+    Two models with the same rows and columns in another order, or under other
+    names, compare equal. A model that is the other one relabelled along time is also equal,
+    which is why the objective test above stays beside this one.
+    """
+    import highspy
+
+    highs = highspy.Highs()
+    highs.setOptionValue('output_flag', False)
+    highs.readModel(str(path))
+    lp = highs.getLp()
+    n, m = lp.num_col_, lp.num_row_
+    integrality = list(lp.integrality_) or [0] * n
+    columns = [
+        (_rounded(lp.col_cost_[j]), _rounded(lp.col_lower_[j]), _rounded(lp.col_upper_[j]), int(integrality[j]))
+        for j in range(n)
+    ]
+    a = lp.a_matrix_
+    assert a.format_ == highspy.MatrixFormat.kColwise, 'HiGHS reads an LP file into a column-wise matrix'
+    start, index, value = np.asarray(a.start_), np.asarray(a.index_), np.asarray(a.value_)
+    entries: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
+    for j in range(n):
+        for e in range(start[j], start[j + 1]):
+            entries[int(index[e])].append((_rounded(value[e]), columns[j]))
+    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(entries[i]))) for i in range(m)]
+    return {
+        'sense': str(lp.sense_),
+        'offset': _rounded(lp.offset_),
+        'columns': sorted(columns),
+        'rows': sorted(rows),
+    }
+
+
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
+@pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
+def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
+    """The objective test passes a model that differs only where the optimum does not look.
+
+    A balance written `>=` where specsolve writes `==` binds at equality under a
+    positive cost, and a bound no solution reaches is never tight, so both solve
+    to the same objective. Here each arm writes its unsolved model at `2xs`, and
+    the two files are compared through `_canonical`, row by row.
+    """
+    reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
+    if reason:
+        pytest.skip(reason)
+    case = CASES[case_name]
+    paths = case.data(case.shape('2xs'))
+    forms = {}
+    for arm in ('specsolve', dialect):
+        module = ARMS[arm]
+        path = tmp_path / f'{arm}.lp'
+        module.written(module.prepare(case_name, '2xs', paths, {}), path)
+        forms[arm] = _canonical(path)
+    ours, theirs = forms['specsolve'], forms[dialect]
+    for part in ('sense', 'offset', 'columns', 'rows'):
+        assert theirs[part] == ours[part], (
+            f'{dialect} writes {case_name}/2xs with other {part} than specsolve — not the same model'
+        )
 
 
 def test_the_linopy_arm_builds_under_v1_semantics() -> None:

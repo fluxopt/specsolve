@@ -1,0 +1,96 @@
+# A network of buses: the shape of a small PyPSA dispatch model.
+#
+# Each of the other published cases isolates one thing. This one has them
+# together, as a model somebody actually builds: buses joined by lines
+# (`transport`'s joins), a store at every bus whose state carries over time
+# (`storage`'s recurrence), a technology portfolio that exists only at the
+# buses it is installed at (`nodal`'s mask), and five variable declarations
+# rather than one.
+#
+# `p_max` is installed capacity times availability per snapshot, PyPSA's
+# `p_max_pu`, so solar is zero at night and storage has a reason to cycle. It
+# has a row for every installed pair in every snapshot, and none elsewhere.
+#
+# A store starts empty, PyPSA's default, rather than wrapping around the
+# horizon: a cyclic store admits the same charging whichever way time runs, so
+# a model with its time index reversed would solve to the same objective.
+dimensions:
+  snapshot:
+    dtype: int
+  bus:
+    dtype: str
+  tech:
+    dtype: str
+  line:
+    dtype: str
+  store:
+    dtype: str
+
+relations:
+  line_from: {key: line, values: bus}
+  line_to: {key: line, values: bus}
+  store_bus: {key: store, values: bus}
+
+parameters:
+  installed:            # capacity of `tech` at `bus`; absent pairs are not installed
+    dims: [bus, tech]
+  p_max:                # installed capacity times availability
+    dims: [snapshot, bus, tech]
+  cost:
+    dims: [tech]
+  cap:
+    dims: [line]
+  neg_cap:
+    dims: [line]
+  e_max:
+    dims: [store]
+  p_store:
+    dims: [store]
+  eta:
+    dims: [store]
+  load:
+    dims: [snapshot, bus]
+
+variables:
+  p:
+    dims: [snapshot, bus, tech]
+    where: "installed > 0"
+    bounds:
+      lower: 0
+      upper: p_max
+  f:
+    dims: [snapshot, line]
+    bounds:
+      lower: neg_cap
+      upper: cap
+  charge:
+    dims: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: p_store
+  discharge:
+    dims: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: p_store
+  soc:
+    dims: [snapshot, store]
+    bounds:
+      lower: 0
+      upper: e_max
+
+constraints:
+  balance:
+    dims: [snapshot, bus]
+    expression: >-
+      sum(p, over=tech)
+      + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
+      + sum(discharge, by=store_bus, over=store, into=bus) - sum(charge, by=store_bus, over=store, into=bus)
+      == load
+  soc_balance:
+    dims: [snapshot, store]
+    expression: soc == shift(soc, along=snapshot, offset=1, edge=0) + charge * eta - discharge
+
+objective:
+  sense: minimize
+  expression: sum(p * cost)

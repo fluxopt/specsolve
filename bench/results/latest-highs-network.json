@@ -1,0 +1,4757 @@
+{
+    "machine_info": {
+        "node": "bench-box",
+        "processor": "",
+        "machine": "x86_64",
+        "python_compiler": "GCC 15.3.0",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.12.15",
+        "python_version": "3.12.15",
+        "python_build": [
+            "main",
+            "Oct  6 2026 23:50:18"
+        ],
+        "release": "7.0.0-29-generic",
+        "system": "Linux",
+        "cpu": {
+            "python_version": "3.12.15.final.0 (64 bit)",
+            "cpuinfo_version": [
+                10,
+                1,
+                1
+            ],
+            "cpuinfo_version_string": "10.1.1",
+            "arch": "X86_64",
+            "bits": 64,
+            "count": 8,
+            "arch_string_raw": "x86_64",
+            "vendor_id_raw": "AuthenticAMD",
+            "brand_raw": "AMD EPYC-Milan Processor",
+            "hz_advertised_friendly": "2.4000 GHz",
+            "hz_actual_friendly": "2.4000 GHz",
+            "hz_advertised": [
+                2399998000,
+                0
+            ],
+            "hz_actual": [
+                2399998000,
+                0
+            ],
+            "stepping": 1,
+            "model": 1,
+            "family": 25,
+            "flags": [
+                "3dnowprefetch",
+                "abm",
+                "adx",
+                "aes",
+                "apic",
+                "arat",
+                "avx",
+                "avx2",
+                "bmi1",
+                "bmi2",
+                "clflush",
+                "clflushopt",
+                "clwb",
+                "clzero",
+                "cmov",
+                "cmp_legacy",
+                "cpuid",
+                "cr8_legacy",
+                "cx16",
+                "cx8",
+                "de",
+                "erms",
+                "extd_apicid",
+                "f16c",
+                "fma",
+                "fpu",
+                "fsgsbase",
+                "fsrm",
+                "fxsr",
+                "fxsr_opt",
+                "ht",
+                "hypervisor",
+                "ibpb",
+                "ibrs",
+                "invpcid",
+                "lahf_lm",
+                "lm",
+                "mca",
+                "mce",
+                "misalignsse",
+                "mmx",
+                "mmxext",
+                "movbe",
+                "msr",
+                "mtrr",
+                "nopl",
+                "nx",
+                "ospke",
+                "osvw",
+                "osxsave",
+                "pae",
+                "pat",
+                "pcid",
+                "pclmulqdq",
+                "pdpe1gb",
+                "perfctr_core",
+                "pge",
+                "pku",
+                "pni",
+                "popcnt",
+                "pse",
+                "pse36",
+                "rdpid",
+                "rdrand",
+                "rdrnd",
+                "rdseed",
+                "rdtscp",
+                "rep_good",
+                "sep",
+                "sha",
+                "sha_ni",
+                "smap",
+                "smep",
+                "ssbd",
+                "sse",
+                "sse2",
+                "sse4_1",
+                "sse4_2",
+                "sse4a",
+                "ssse3",
+                "stibp",
+                "syscall",
+                "topoext",
+                "tsc",
+                "tsc_known_freq",
+                "umip",
+                "vme",
+                "vmmcall",
+                "wbnoinvd",
+                "x2apic",
+                "xgetbv1",
+                "xsave",
+                "xsavec",
+                "xsaveerptr",
+                "xsaveopt",
+                "xsaves",
+                "xtopology"
+            ],
+            "l3_cache_size": 524288,
+            "l2_cache_size": 2097152,
+            "l1_data_cache_size": 131072,
+            "l1_instruction_cache_size": 131072,
+            "l2_cache_line_size": 512,
+            "l2_cache_associativity": 6
+        },
+        "versions": {
+            "specsolve": "0.0.1.dev1+g5122bd42c",
+            "highspy": "1.15.1",
+            "gurobipy": "13.0.3",
+            "scipy": "1.18.1",
+            "polars": "2.0.0",
+            "pandas": "3.0.6",
+            "numpy": "2.5.4",
+            "pyarrow": "26.0.0",
+            "pytest-benchmem": "0.5.5"
+        },
+        "load_avg": [
+            1.97900390625,
+            1.85302734375,
+            1.50244140625
+        ]
+    },
+    "commit_info": {
+        "id": "5122bd42c01394394fab4acd358fb168e0b3d5b9",
+        "time": "2026-10-12T21:22:43Z",
+        "author_time": "2026-10-12T21:22:43Z",
+        "dirty": true,
+        "project": "specsolve",
+        "branch": "claude/gifted-cerf-st76zb-publish"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[network-2xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-2xs-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-2xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        119253604
+                    ],
+                    "allocations": [
+                        73741
+                    ],
+                    "total_bytes": [
+                        249103507
+                    ],
+                    "rss_bytes": [
+                        243855360
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.004589208999959737,
+                    "build": 0.029564603999915562
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06440924200001064,
+                "max": 0.1103209920001973,
+                "mean": 0.08327421033335566,
+                "stddev": 0.013338954261581638,
+                "rounds": 9,
+                "median": 0.08517145799987702,
+                "iqr": 0.016643124500035356,
+                "q1": 0.07292989875003286,
+                "q3": 0.08957302325006822,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.06440924200001064,
+                "hd15iqr": 0.1103209920001973,
+                "ops": 12.008519756559586,
+                "total": 0.749467893000201,
+                "data": [
+                    0.1103209920001973,
+                    0.07921149899993907,
+                    0.09017019200018694,
+                    0.08550208599990583,
+                    0.07320556900003794,
+                    0.08517145799987702,
+                    0.08937396700002864,
+                    0.06440924200001064,
+                    0.07210288800001763
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-2xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-2xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-2xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        119254875
+                    ],
+                    "allocations": [
+                        73719
+                    ],
+                    "total_bytes": [
+                        248366510
+                    ],
+                    "rss_bytes": [
+                        244158464
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.00431241899991619,
+                    "build": 0.040844525000011345
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06362493699998595,
+                "max": 0.09896117099992807,
+                "mean": 0.07630191533331122,
+                "stddev": 0.010733326661033792,
+                "rounds": 9,
+                "median": 0.07660534599995117,
+                "iqr": 0.012462881249859947,
+                "q1": 0.06719980400004033,
+                "q3": 0.07966268524990028,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.06362493699998595,
+                "hd15iqr": 0.09896117099992807,
+                "ops": 13.105830903872851,
+                "total": 0.686717237999801,
+                "data": [
+                    0.09896117099992807,
+                    0.0783684150001136,
+                    0.06485031800002616,
+                    0.06362493699998595,
+                    0.07526798599997164,
+                    0.07660534599995117,
+                    0.06798296600004505,
+                    0.07879732099991088,
+                    0.08225877799986847
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-2xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-2xs-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-2xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1112974580
+                    ],
+                    "allocations": [
+                        277372
+                    ],
+                    "total_bytes": [
+                        1356524582
+                    ],
+                    "rss_bytes": [
+                        260800512
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14371887800007244,
+                "max": 0.5190516360000856,
+                "mean": 0.1941850478889238,
+                "stddev": 0.12244382523396515,
+                "rounds": 9,
+                "median": 0.14854366499980642,
+                "iqr": 0.029158842000072127,
+                "q1": 0.14534728850003376,
+                "q3": 0.17450613050010588,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.14371887800007244,
+                "hd15iqr": 0.5190516360000856,
+                "ops": 5.149727081829761,
+                "total": 1.7476654310003141,
+                "data": [
+                    0.5190516360000856,
+                    0.17454421399997955,
+                    0.14422367600013786,
+                    0.174493436000148,
+                    0.14617144299995743,
+                    0.15119665700012774,
+                    0.14854366499980642,
+                    0.14371887800007244,
+                    0.14572182599999906
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-2xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-2xs-pyomo-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "network-2xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1098621429
+                    ],
+                    "allocations": [
+                        331520
+                    ],
+                    "total_bytes": [
+                        1195091644
+                    ],
+                    "rss_bytes": [
+                        218836992
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.04191387800005941,
+                "max": 0.7396255010000914,
+                "mean": 0.12247667955557517,
+                "stddev": 0.23148886198062255,
+                "rounds": 9,
+                "median": 0.0436742360000153,
+                "iqr": 0.0058800627500659175,
+                "q1": 0.04265187224990541,
+                "q3": 0.04853193499997133,
+                "iqr_outliers": 2,
+                "stddev_outliers": 1,
+                "outliers": "1;2",
+                "ld15iqr": 0.04191387800005941,
+                "hd15iqr": 0.05873322200000075,
+                "ops": 8.164819650799226,
+                "total": 1.1022901160001766,
+                "data": [
+                    0.7396255010000914,
+                    0.0436742360000153,
+                    0.04279109200001585,
+                    0.04191387800005941,
+                    0.04265802199984137,
+                    0.05873322200000075,
+                    0.04263342300009754,
+                    0.04512923600009344,
+                    0.04513150599996152
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-2xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-2xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-2xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        97660382
+                    ],
+                    "allocations": [
+                        32944
+                    ],
+                    "total_bytes": [
+                        142235542
+                    ],
+                    "rss_bytes": [
+                        202760192
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.01696360200003255,
+                "max": 0.021935217999953238,
+                "mean": 0.018560014333312818,
+                "stddev": 0.0018943946043359953,
+                "rounds": 9,
+                "median": 0.01769916600005672,
+                "iqr": 0.002549413499991715,
+                "q1": 0.017085210499942605,
+                "q3": 0.01963462399993432,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.01696360200003255,
+                "hd15iqr": 0.021935217999953238,
+                "ops": 53.87926873553808,
+                "total": 0.16704012899981535,
+                "data": [
+                    0.021353161999968506,
+                    0.019061777999922924,
+                    0.018553542000063317,
+                    0.01769916600005672,
+                    0.021935217999953238,
+                    0.017118859999982305,
+                    0.01696360200003255,
+                    0.017370539000012286,
+                    0.016984261999823502
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-xs-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        122744775
+                    ],
+                    "allocations": [
+                        73744
+                    ],
+                    "total_bytes": [
+                        253012931
+                    ],
+                    "rss_bytes": [
+                        248152064
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.003858662000084223,
+                    "build": 0.03904108999995515
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06134157400015283,
+                "max": 0.08305403500003194,
+                "mean": 0.07336452711110218,
+                "stddev": 0.0063113082211269335,
+                "rounds": 9,
+                "median": 0.07369813899981636,
+                "iqr": 0.007028874750062641,
+                "q1": 0.06992891999993844,
+                "q3": 0.07695779475000109,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.06134157400015283,
+                "hd15iqr": 0.08305403500003194,
+                "ops": 13.630565606803604,
+                "total": 0.6602807439999197,
+                "data": [
+                    0.08305403500003194,
+                    0.07977950700001202,
+                    0.07379988899992895,
+                    0.07369813899981636,
+                    0.07037241199986966,
+                    0.06134157400015283,
+                    0.07361951999996563,
+                    0.06859844400014481,
+                    0.07601722399999744
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        122746014
+                    ],
+                    "allocations": [
+                        73721
+                    ],
+                    "total_bytes": [
+                        252275902
+                    ],
+                    "rss_bytes": [
+                        248623104
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.004230101000075592,
+                    "build": 0.0419893990001583
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06219485899987376,
+                "max": 0.09341988400001355,
+                "mean": 0.07352418666664562,
+                "stddev": 0.00996698301270717,
+                "rounds": 9,
+                "median": 0.07112629699986428,
+                "iqr": 0.013808532499979265,
+                "q1": 0.0664773772500098,
+                "q3": 0.08028590974998906,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.06219485899987376,
+                "hd15iqr": 0.09341988400001355,
+                "ops": 13.600966502818206,
+                "total": 0.6617176799998106,
+                "data": [
+                    0.09341988400001355,
+                    0.07966267899996637,
+                    0.06219485899987376,
+                    0.0737016999999014,
+                    0.06489590099999987,
+                    0.06755622200012112,
+                    0.07112629699986428,
+                    0.0670045360000131,
+                    0.08215560200005712
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-xs-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1118381889
+                    ],
+                    "allocations": [
+                        277639
+                    ],
+                    "total_bytes": [
+                        1379202247
+                    ],
+                    "rss_bytes": [
+                        271265792
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15008220000004258,
+                "max": 0.155919380999876,
+                "mean": 0.15201974055556397,
+                "stddev": 0.001647198114038713,
+                "rounds": 9,
+                "median": 0.151915377000023,
+                "iqr": 0.001269924499752051,
+                "q1": 0.1511192810000921,
+                "q3": 0.15238920549984414,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.15008220000004258,
+                "hd15iqr": 0.155919380999876,
+                "ops": 6.578093057818995,
+                "total": 1.3681776650000756,
+                "data": [
+                    0.1511585630000809,
+                    0.1512045230001604,
+                    0.15240993399993386,
+                    0.151915377000023,
+                    0.15238229599981423,
+                    0.15100143500012564,
+                    0.15008220000004258,
+                    0.15210395600001902,
+                    0.155919380999876
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-xs-pyomo-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "network-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1113801125
+                    ],
+                    "allocations": [
+                        2712347
+                    ],
+                    "total_bytes": [
+                        1368894823
+                    ],
+                    "rss_bytes": [
+                        236666880
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.3375032930000543,
+                "max": 0.41443024099999093,
+                "mean": 0.3535337901111133,
+                "stddev": 0.026097978989729785,
+                "rounds": 9,
+                "median": 0.3431489839999813,
+                "iqr": 0.015523958499898072,
+                "q1": 0.33877440374999424,
+                "q3": 0.3542983622498923,
+                "iqr_outliers": 2,
+                "stddev_outliers": 1,
+                "outliers": "1;2",
+                "ld15iqr": 0.3375032930000543,
+                "hd15iqr": 0.3784516599998824,
+                "ops": 2.828583937296932,
+                "total": 3.1818041110000195,
+                "data": [
+                    0.33898424199992405,
+                    0.3431489839999813,
+                    0.34435620599992944,
+                    0.3375032930000543,
+                    0.3381448890002048,
+                    0.3462472629998956,
+                    0.41443024099999093,
+                    0.3784516599998824,
+                    0.34053733300015665
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        98915797
+                    ],
+                    "allocations": [
+                        32960
+                    ],
+                    "total_bytes": [
+                        145175920
+                    ],
+                    "rss_bytes": [
+                        203386880
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.017771747000097093,
+                "max": 0.02863141199986785,
+                "mean": 0.02084254355554549,
+                "stddev": 0.004253592295456545,
+                "rounds": 9,
+                "median": 0.018481433000033576,
+                "iqr": 0.006736728499902256,
+                "q1": 0.01790466350001907,
+                "q3": 0.024641391999921325,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.017771747000097093,
+                "hd15iqr": 0.02863141199986785,
+                "ops": 47.97878902519717,
+                "total": 0.1875828919999094,
+                "data": [
+                    0.026126388999955452,
+                    0.018159493999974075,
+                    0.02863141199986785,
+                    0.017808146000106717,
+                    0.01852104199997484,
+                    0.017771747000097093,
+                    0.017936835999989853,
+                    0.018481433000033576,
+                    0.02414639299990995
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-s-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-s-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-s-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        161269248
+                    ],
+                    "allocations": [
+                        73756
+                    ],
+                    "total_bytes": [
+                        294393408
+                    ],
+                    "rss_bytes": [
+                        277151744
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500,
+                "phase_seconds": {
+                    "attach": 0.006965061999835598,
+                    "build": 0.057450942999821564
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09318488499980049,
+                "max": 0.12263980100010485,
+                "mean": 0.107137331444417,
+                "stddev": 0.00989278589518835,
+                "rounds": 9,
+                "median": 0.10966023099990707,
+                "iqr": 0.017144921000124214,
+                "q1": 0.09639748474995713,
+                "q3": 0.11354240575008134,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.09318488499980049,
+                "hd15iqr": 0.12263980100010485,
+                "ops": 9.333814707890138,
+                "total": 0.9642359829997531,
+                "data": [
+                    0.10966023099990707,
+                    0.10989451999989797,
+                    0.09585581600003934,
+                    0.10858537799981605,
+                    0.11316615600003388,
+                    0.11467115500022373,
+                    0.09318488499980049,
+                    0.09657804099992973,
+                    0.12263980100010485
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-s-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-s-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-s-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        158648951
+                    ],
+                    "allocations": [
+                        73729
+                    ],
+                    "total_bytes": [
+                        291034851
+                    ],
+                    "rss_bytes": [
+                        276668416
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500,
+                "phase_seconds": {
+                    "attach": 0.0038172740000845806,
+                    "build": 0.05015463299992007
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09187286400015182,
+                "max": 0.11841519099994002,
+                "mean": 0.10259783766665957,
+                "stddev": 0.009184362423699155,
+                "rounds": 9,
+                "median": 0.10124095799983479,
+                "iqr": 0.011443302999850857,
+                "q1": 0.09608840550009745,
+                "q3": 0.10753170849994831,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.09187286400015182,
+                "hd15iqr": 0.11841519099994002,
+                "ops": 9.746794111285274,
+                "total": 0.9233805389999361,
+                "data": [
+                    0.11494460499989145,
+                    0.09796958199990513,
+                    0.09720064800012551,
+                    0.11841519099994002,
+                    0.10392427000010684,
+                    0.09187286400015182,
+                    0.09275167800001327,
+                    0.10506074299996726,
+                    0.10124095799983479
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-s-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-s-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-s-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1178764061
+                    ],
+                    "allocations": [
+                        277698
+                    ],
+                    "total_bytes": [
+                        1591123969
+                    ],
+                    "rss_bytes": [
+                        374915072
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.19359323899993797,
+                "max": 0.22970625000016298,
+                "mean": 0.2058882180000031,
+                "stddev": 0.012871833985662006,
+                "rounds": 9,
+                "median": 0.2030565640000077,
+                "iqr": 0.021144015249774384,
+                "q1": 0.19510966950008424,
+                "q3": 0.21625368474985862,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.19359323899993797,
+                "hd15iqr": 0.22970625000016298,
+                "ops": 4.857004493574203,
+                "total": 1.8529939620000278,
+                "data": [
+                    0.2030565640000077,
+                    0.19518948900008581,
+                    0.207383875000005,
+                    0.19359323899993797,
+                    0.215556776999847,
+                    0.22970625000016298,
+                    0.1948702110000795,
+                    0.21834440799989352,
+                    0.19529314900000827
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-s-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-s-pyomo-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "network-s-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1269938453
+                    ],
+                    "allocations": [
+                        26000308
+                    ],
+                    "total_bytes": [
+                        4620144721
+                    ],
+                    "rss_bytes": [
+                        418582528
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.486708508999982,
+                "max": 3.6073474539998642,
+                "mean": 3.553995112555463,
+                "stddev": 0.033524152365489335,
+                "rounds": 9,
+                "median": 3.549160995999955,
+                "iqr": 0.03432838724990006,
+                "q1": 3.542496566999887,
+                "q3": 3.576824954249787,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 3.5416622879999977,
+                "hd15iqr": 3.6073474539998642,
+                "ops": 0.28137348767510273,
+                "total": 31.985956012999168,
+                "data": [
+                    3.6073474539998642,
+                    3.486708508999982,
+                    3.5416622879999977,
+                    3.551747758000147,
+                    3.5746971289997873,
+                    3.549160995999955,
+                    3.54277465999985,
+                    3.548648788999799,
+                    3.583208429999786
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-s-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-s-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-s-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        116977189
+                    ],
+                    "allocations": [
+                        32969
+                    ],
+                    "total_bytes": [
+                        174763770
+                    ],
+                    "rss_bytes": [
+                        218746880
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.023047970999868994,
+                "max": 0.034481810999977824,
+                "mean": 0.030387295222226385,
+                "stddev": 0.003721140671855717,
+                "rounds": 9,
+                "median": 0.031472652000047674,
+                "iqr": 0.004443809750114269,
+                "q1": 0.028299558999947294,
+                "q3": 0.03274336875006156,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.023047970999868994,
+                "hd15iqr": 0.034481810999977824,
+                "ops": 32.90848996881313,
+                "total": 0.27348565700003746,
+                "data": [
+                    0.034481810999977824,
+                    0.031472652000047674,
+                    0.026104099000122005,
+                    0.032261727000104656,
+                    0.030989374999990105,
+                    0.033658226999932594,
+                    0.029031378999889057,
+                    0.023047970999868994,
+                    0.03243841600010455
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-m-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-m-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-m-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        631448662
+                    ],
+                    "allocations": [
+                        73880
+                    ],
+                    "total_bytes": [
+                        791270478
+                    ],
+                    "rss_bytes": [
+                        644038656
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000,
+                "phase_seconds": {
+                    "attach": 0.018197784999983924,
+                    "build": 0.2591261150000719
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.3352295199999844,
+                "max": 0.48822259100006704,
+                "mean": 0.43062702988888507,
+                "stddev": 0.04723682865164401,
+                "rounds": 9,
+                "median": 0.4507346189998316,
+                "iqr": 0.05979385674999094,
+                "q1": 0.3994425090000959,
+                "q3": 0.45923636575008686,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.3352295199999844,
+                "hd15iqr": 0.48822259100006704,
+                "ops": 2.3221951493802666,
+                "total": 3.8756432689999656,
+                "data": [
+                    0.4313531029999922,
+                    0.45552112699988356,
+                    0.40288739000015994,
+                    0.3891078659999039,
+                    0.3352295199999844,
+                    0.48822259100006704,
+                    0.46540784800004076,
+                    0.4507346189998316,
+                    0.45717920500010223
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-m-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-m-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-m-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        598943277
+                    ],
+                    "allocations": [
+                        73793
+                    ],
+                    "total_bytes": [
+                        758024961
+                    ],
+                    "rss_bytes": [
+                        602484736
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000,
+                "phase_seconds": {
+                    "attach": 0.019972010999936174,
+                    "build": 0.24489213400011067
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.33362523999994664,
+                "max": 0.498951605000002,
+                "mean": 0.42803572833332104,
+                "stddev": 0.05781063713415029,
+                "rounds": 9,
+                "median": 0.43659198699992885,
+                "iqr": 0.09520310049992986,
+                "q1": 0.37892581625004595,
+                "q3": 0.4741289167499758,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.33362523999994664,
+                "hd15iqr": 0.498951605000002,
+                "ops": 2.336253573723354,
+                "total": 3.8523215549998895,
+                "data": [
+                    0.4954140390000248,
+                    0.33362523999994664,
+                    0.36938702299994475,
+                    0.3821054140000797,
+                    0.4119716079999307,
+                    0.498951605000002,
+                    0.4670338759999595,
+                    0.43659198699992885,
+                    0.45724076300007255
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-m-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-m-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-m-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1788614108
+                    ],
+                    "allocations": [
+                        279720
+                    ],
+                    "total_bytes": [
+                        3682113553
+                    ],
+                    "rss_bytes": [
+                        990941184
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6522098839998307,
+                "max": 0.715506656000116,
+                "mean": 0.67902273522226,
+                "stddev": 0.02244472907928885,
+                "rounds": 9,
+                "median": 0.6752802450000672,
+                "iqr": 0.037502200749884196,
+                "q1": 0.6609722260001263,
+                "q3": 0.6984744267500105,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.6522098839998307,
+                "hd15iqr": 0.715506656000116,
+                "ops": 1.4727047389255334,
+                "total": 6.11120461700034,
+                "data": [
+                    0.6656452610000088,
+                    0.6980845470000077,
+                    0.6636304650000966,
+                    0.6882059839999783,
+                    0.6996440660000189,
+                    0.6529975090002154,
+                    0.715506656000116,
+                    0.6752802450000672,
+                    0.6522098839998307
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-m-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-m-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-m-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        307497141
+                    ],
+                    "allocations": [
+                        32982
+                    ],
+                    "total_bytes": [
+                        478823261
+                    ],
+                    "rss_bytes": [
+                        400953344
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.11868285699983971,
+                "max": 0.17029267099997014,
+                "mean": 0.14124967277772763,
+                "stddev": 0.014728481996575341,
+                "rounds": 9,
+                "median": 0.14502368600005866,
+                "iqr": 0.014775569249934506,
+                "q1": 0.13243593325000802,
+                "q3": 0.14721150249994253,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.11868285699983971,
+                "hd15iqr": 0.17029267099997014,
+                "ops": 7.079662418571498,
+                "total": 1.2712470549995487,
+                "data": [
+                    0.14855700099997193,
+                    0.14502368600005866,
+                    0.11868285699983971,
+                    0.145346052999912,
+                    0.1337826540000151,
+                    0.12839577099998678,
+                    0.14676300299993272,
+                    0.13440335899986167,
+                    0.17029267099997014
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-l-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-l-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-l-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4287282326
+                    ],
+                    "allocations": [
+                        73975
+                    ],
+                    "total_bytes": [
+                        4714416067
+                    ],
+                    "rss_bytes": [
+                        2435727360
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": 16249950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000,
+                "phase_seconds": {
+                    "attach": 0.03772909200006325,
+                    "build": 1.1282028240000272
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.233249766999961,
+                "max": 2.6764822390000518,
+                "mean": 2.39840402755562,
+                "stddev": 0.12850395415240054,
+                "rounds": 9,
+                "median": 2.3595752230000926,
+                "iqr": 0.12460449799999651,
+                "q1": 2.3316586422500336,
+                "q3": 2.45626314025003,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 2.233249766999961,
+                "hd15iqr": 2.6764822390000518,
+                "ops": 0.41694392959270055,
+                "total": 21.585636248000583,
+                "data": [
+                    2.233249766999961,
+                    2.4037737470000593,
+                    2.2854609950002214,
+                    2.3595752230000926,
+                    2.6764822390000518,
+                    2.4759013870000217,
+                    2.449717058000033,
+                    2.347057857999971,
+                    2.354417974000171
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-l-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-l-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-l-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        3565993517
+                    ],
+                    "allocations": [
+                        73838
+                    ],
+                    "total_bytes": [
+                        3992387118
+                    ],
+                    "rss_bytes": [
+                        2236530688
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": 16249950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000,
+                "phase_seconds": {
+                    "attach": 0.042345817000068564,
+                    "build": 1.604654015000051
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.504862452999987,
+                "max": 2.7268600719999085,
+                "mean": 2.6280920680000386,
+                "stddev": 0.08411306878687295,
+                "rounds": 9,
+                "median": 2.6510063830000945,
+                "iqr": 0.1491448379998701,
+                "q1": 2.5555843535001372,
+                "q3": 2.7047291915000073,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 2.504862452999987,
+                "hd15iqr": 2.7268600719999085,
+                "ops": 0.380504173417712,
+                "total": 23.65282861200035,
+                "data": [
+                    2.617967477000093,
+                    2.7008749350000016,
+                    2.5098118160001377,
+                    2.7162919610000245,
+                    2.570841866000137,
+                    2.6543116489999647,
+                    2.6510063830000945,
+                    2.504862452999987,
+                    2.7268600719999085
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[network-l-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_emit[network-l-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-l-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2217605557
+                    ],
+                    "allocations": [
+                        33002
+                    ],
+                    "total_bytes": [
+                        3524587779
+                    ],
+                    "rss_bytes": [
+                        2148392960
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": 16249950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.1962197420000393,
+                "max": 1.3270859650001512,
+                "mean": 1.2398393495555462,
+                "stddev": 0.037548747435542575,
+                "rounds": 9,
+                "median": 1.2315202710001358,
+                "iqr": 0.027576334249943102,
+                "q1": 1.2219664814999192,
+                "q3": 1.2495428157498623,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 1.1962197420000393,
+                "hd15iqr": 1.3270859650001512,
+                "ops": 0.8065561077396657,
+                "total": 11.158554145999915,
+                "data": [
+                    1.3270859650001512,
+                    1.226269959999854,
+                    1.2463088719998723,
+                    1.2090560460001143,
+                    1.2300766309999744,
+                    1.2315202710001358,
+                    1.2592446469998322,
+                    1.1962197420000393,
+                    1.2327720119999412
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-2xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-2xs-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-2xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.002244224000151007,
+                    "build": 0.0330494259999341,
+                    "first_window": 0.3832983490001425
+                },
+                "process_rss_bytes": 151142400
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4725739689999955,
+                "max": 0.5375123090000216,
+                "mean": 0.5086826417777451,
+                "stddev": 0.021299146259633115,
+                "rounds": 9,
+                "median": 0.5036562689999755,
+                "iqr": 0.03131711924987712,
+                "q1": 0.49519555824997497,
+                "q3": 0.5265126774998521,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.4725739689999955,
+                "hd15iqr": 0.5375123090000216,
+                "ops": 1.9658622446899268,
+                "total": 4.578143775999706,
+                "data": [
+                    0.5244581349998043,
+                    0.5375123090000216,
+                    0.501366156000131,
+                    0.5326763049999954,
+                    0.5189386759998342,
+                    0.49005181899997297,
+                    0.5036562689999755,
+                    0.49691013799997563,
+                    0.4725739689999955
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-2xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-2xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-2xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.002249622999897838,
+                    "build": 0.021069834000172705,
+                    "first_window": 0.3941304490001585
+                },
+                "process_rss_bytes": 151166976
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4776518409998971,
+                "max": 0.5121329759999753,
+                "mean": 0.49444182455557795,
+                "stddev": 0.012632545418622732,
+                "rounds": 9,
+                "median": 0.49800819000006413,
+                "iqr": 0.02297925324995731,
+                "q1": 0.4804289427500521,
+                "q3": 0.5034081960000094,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.4776518409998971,
+                "hd15iqr": 0.5121329759999753,
+                "ops": 2.022482626543246,
+                "total": 4.449976421000201,
+                "data": [
+                    0.5121329759999753,
+                    0.49800819000006413,
+                    0.4776518409998971,
+                    0.47867657300002975,
+                    0.5010339290001866,
+                    0.5057494529999076,
+                    0.4930826160000379,
+                    0.5026277770000434,
+                    0.48101306600005955
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-2xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-2xs-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-2xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165354
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "first_window": 0.8386147650001021
+                },
+                "process_rss_bytes": 239325184
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.017071524999892,
+                "max": 1.0874381950000043,
+                "mean": 1.050710054888845,
+                "stddev": 0.020748124996096497,
+                "rounds": 9,
+                "median": 1.0462938400000894,
+                "iqr": 0.02461139574995741,
+                "q1": 1.039147650499956,
+                "q3": 1.0637590462499134,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.017071524999892,
+                "hd15iqr": 1.0874381950000043,
+                "ops": 0.9517373468989885,
+                "total": 9.456390493999606,
+                "data": [
+                    1.0586282189999565,
+                    1.0874381950000043,
+                    1.0414691759999641,
+                    1.0462938400000894,
+                    1.066815047999853,
+                    1.0627403789999335,
+                    1.0437510379999821,
+                    1.0321830739999314,
+                    1.017071524999892
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-2xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-2xs-pyomo-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "network-2xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "first_window": 0.4531342230000064
+                },
+                "process_rss_bytes": 173129728
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5734733239999059,
+                "max": 0.6754315089999636,
+                "mean": 0.6190540483333078,
+                "stddev": 0.027350727972874387,
+                "rounds": 9,
+                "median": 0.6138100339999255,
+                "iqr": 0.021386945999893214,
+                "q1": 0.6077346727500412,
+                "q3": 0.6291216187499344,
+                "iqr_outliers": 2,
+                "stddev_outliers": 2,
+                "outliers": "2;2",
+                "ld15iqr": 0.6016155360000539,
+                "hd15iqr": 0.6754315089999636,
+                "ops": 1.6153678385470882,
+                "total": 5.57148643499977,
+                "data": [
+                    0.6283103169998867,
+                    0.612900270999944,
+                    0.6754315089999636,
+                    0.5734733239999059,
+                    0.6246155349999754,
+                    0.6016155360000539,
+                    0.6315555240000776,
+                    0.609774385000037,
+                    0.6138100339999255
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-2xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-2xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-2xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "first_window": 0.23260817200002748
+                },
+                "process_rss_bytes": 115322880
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2993858580000506,
+                "max": 0.3376897140001347,
+                "mean": 0.3240419534444199,
+                "stddev": 0.016012329332843453,
+                "rounds": 9,
+                "median": 0.33200189599983787,
+                "iqr": 0.03000487075013325,
+                "q1": 0.3061507659998597,
+                "q3": 0.33615563674999294,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.2993858580000506,
+                "hd15iqr": 0.3376897140001347,
+                "ops": 3.086020156866884,
+                "total": 2.9163775809997787,
+                "data": [
+                    0.3300183709998237,
+                    0.30260775400006423,
+                    0.3341147109999838,
+                    0.2993858580000506,
+                    0.3356975199999397,
+                    0.33200189599983787,
+                    0.3376897140001347,
+                    0.3073317699997915,
+                    0.3375299870001527
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-xs-specsolve-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-xs-specsolve-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve",
+                "sink": "highs"
+            },
+            "param": "network-xs-specsolve-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.0023222830000122485,
+                    "build": 0.03147359800004779,
+                    "first_window": 0.3919654039998477
+                },
+                "process_rss_bytes": 156135424
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.49797553999997035,
+                "max": 0.5379265060000762,
+                "mean": 0.5151224183332993,
+                "stddev": 0.013152703537329684,
+                "rounds": 9,
+                "median": 0.5168304609999268,
+                "iqr": 0.017284776999986207,
+                "q1": 0.5057499132499856,
+                "q3": 0.5230346902499718,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.49797553999997035,
+                "hd15iqr": 0.5379265060000762,
+                "ops": 1.9412861184250976,
+                "total": 4.636101764999694,
+                "data": [
+                    0.5195470520000072,
+                    0.49797553999997035,
+                    0.5379265060000762,
+                    0.5218367439999838,
+                    0.526628528999936,
+                    0.5082301649999863,
+                    0.5168304609999268,
+                    0.49830915799998365,
+                    0.5088176099998236
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-xs-specsolve-in-memory-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-xs-specsolve-in-memory-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve-in-memory",
+                "sink": "highs"
+            },
+            "param": "network-xs-specsolve-in-memory-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.0021968839998862677,
+                    "build": 0.024998544000027323,
+                    "first_window": 0.39116773999990073
+                },
+                "process_rss_bytes": 156778496
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4944530669999949,
+                "max": 0.5319311989999278,
+                "mean": 0.5063391513333246,
+                "stddev": 0.010913241514977511,
+                "rounds": 9,
+                "median": 0.5050439489998553,
+                "iqr": 0.0059648734999200315,
+                "q1": 0.5015080700001135,
+                "q3": 0.5074729435000336,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.4944530669999949,
+                "hd15iqr": 0.5319311989999278,
+                "ops": 1.974960848606583,
+                "total": 4.557052361999922,
+                "data": [
+                    0.5037324679999529,
+                    0.5099017329998787,
+                    0.5319311989999278,
+                    0.5066345170000659,
+                    0.5050439489998553,
+                    0.4944530669999949,
+                    0.4950219830000151,
+                    0.5066633470000852,
+                    0.5036700990001464
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-xs-linopy-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-xs-linopy-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "linopy",
+                "sink": "highs"
+            },
+            "param": "network-xs-linopy-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165354
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "first_window": 0.867766827999958
+                },
+                "process_rss_bytes": 251572224
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.0314249990001372,
+                "max": 1.0938273879999088,
+                "mean": 1.057479485777776,
+                "stddev": 0.02094701944673185,
+                "rounds": 9,
+                "median": 1.0585611989999961,
+                "iqr": 0.035583281750007245,
+                "q1": 1.0363853629999653,
+                "q3": 1.0719686447499726,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 1.0314249990001372,
+                "hd15iqr": 1.0938273879999088,
+                "ops": 0.9456448219082946,
+                "total": 9.517315371999985,
+                "data": [
+                    1.059595710999929,
+                    1.0572573080000893,
+                    1.0708112479999272,
+                    1.0754408350001086,
+                    1.0938273879999088,
+                    1.0585611989999961,
+                    1.0375723839999864,
+                    1.032824299999902,
+                    1.0314249990001372
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-xs-pyomo-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-xs-pyomo-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "pyomo",
+                "sink": "highs"
+            },
+            "param": "network-xs-pyomo-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "first_window": 0.6993352629999663
+                },
+                "process_rss_bytes": 192172032
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.8276928039999802,
+                "max": 0.8847932039998341,
+                "mean": 0.8619212095555516,
+                "stddev": 0.01914145951226802,
+                "rounds": 9,
+                "median": 0.8661956700000246,
+                "iqr": 0.030476142749819246,
+                "q1": 0.8479515722501105,
+                "q3": 0.8784277149999298,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.8276928039999802,
+                "hd15iqr": 0.8847932039998341,
+                "ops": 1.1601988545050985,
+                "total": 7.757290885999964,
+                "data": [
+                    0.8498275510000894,
+                    0.8812493890000042,
+                    0.8581836500000009,
+                    0.8661956700000246,
+                    0.8276928039999802,
+                    0.8423236360001738,
+                    0.8847932039998341,
+                    0.877487156999905,
+                    0.8695378249999521
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[network-xs-highspy-matrix-highs]",
+            "fullname": "bench/test_ladder.py::test_fresh[network-xs-highspy-matrix-highs]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "highspy-matrix",
+                "sink": "highs"
+            },
+            "param": "network-xs-highspy-matrix-highs",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "first_window": 0.23527018200002203
+                },
+                "process_rss_bytes": 116412416
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.30910830700008773,
+                "max": 0.33396996400006174,
+                "mean": 0.320379189777744,
+                "stddev": 0.01072791079341048,
+                "rounds": 9,
+                "median": 0.3185956149998219,
+                "iqr": 0.02262178525006675,
+                "q1": 0.3098831454998958,
+                "q3": 0.33250493074996257,
+                "iqr_outliers": 0,
+                "stddev_outliers": 5,
+                "outliers": "5;0",
+                "ld15iqr": 0.30910830700008773,
+                "hd15iqr": 0.33396996400006174,
+                "ops": 3.1213013575998114,
+                "total": 2.883412707999696,
+                "data": [
+                    0.33330249799996636,
+                    0.3322390749999613,
+                    0.3099792999998954,
+                    0.30910830700008773,
+                    0.3185956149998219,
+                    0.33396996400006174,
+                    0.32401688599998124,
+                    0.30959468199989715,
+                    0.31260638100002325
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-specsolve]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve"
+            },
+            "param": "network-2xs-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        87956
+                    ],
+                    "allocations": [
+                        882
+                    ],
+                    "total_bytes": [
+                        309673
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.004033789999994042,
+                    "build": 0.033652761999974246
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.058524048999970546,
+                "max": 0.08709153800009517,
+                "mean": 0.07342958459994406,
+                "stddev": 0.011497237847233345,
+                "rounds": 5,
+                "median": 0.07011959299984483,
+                "iqr": 0.017673880000131703,
+                "q1": 0.06614478699987103,
+                "q3": 0.08381866700000273,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.058524048999970546,
+                "hd15iqr": 0.08709153800009517,
+                "ops": 13.618489134156993,
+                "total": 0.3671479229997203,
+                "data": [
+                    0.07011959299984483,
+                    0.08272770999997192,
+                    0.08709153800009517,
+                    0.058524048999970546,
+                    0.06868503299983786
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-specsolve-in-memory]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "network-2xs-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        89106
+                    ],
+                    "allocations": [
+                        903
+                    ],
+                    "total_bytes": [
+                        326252
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700,
+                "phase_seconds": {
+                    "attach": 0.0033545250000770466,
+                    "build": 0.031084300999964398
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06634705900000881,
+                "max": 0.09280637400001979,
+                "mean": 0.076080657600005,
+                "stddev": 0.0116655851650749,
+                "rounds": 5,
+                "median": 0.07036065100010092,
+                "iqr": 0.01899884225014148,
+                "q1": 0.06697820949989364,
+                "q3": 0.08597705175003512,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.06634705900000881,
+                "hd15iqr": 0.09280637400001979,
+                "ops": 13.14394527525659,
+                "total": 0.380403288000025,
+                "data": [
+                    0.06634705900000881,
+                    0.06718859299985525,
+                    0.08370061100004023,
+                    0.09280637400001979,
+                    0.07036065100010092
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-linopy]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "linopy"
+            },
+            "param": "network-2xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        674576
+                    ],
+                    "allocations": [
+                        45811
+                    ],
+                    "total_bytes": [
+                        5895004
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14079715899993062,
+                "max": 0.17001979399992706,
+                "mean": 0.15056507719991713,
+                "stddev": 0.012165603440171624,
+                "rounds": 5,
+                "median": 0.1458859609999763,
+                "iqr": 0.017008051749996866,
+                "q1": 0.14139402024989067,
+                "q3": 0.15840207199988754,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.14079715899993062,
+                "hd15iqr": 0.17001979399992706,
+                "ops": 6.641646380403478,
+                "total": 0.7528253859995857,
+                "data": [
+                    0.1458859609999763,
+                    0.15452949799987437,
+                    0.17001979399992706,
+                    0.14079715899993062,
+                    0.14159297399987736
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-pyomo]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "pyomo"
+            },
+            "param": "network-2xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        118168
+                    ],
+                    "allocations": [
+                        45811
+                    ],
+                    "total_bytes": [
+                        4010530
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.026195766999990155,
+                "max": 0.030669752999983757,
+                "mean": 0.027961023200032287,
+                "stddev": 0.0018462289777012094,
+                "rounds": 5,
+                "median": 0.027041160000180753,
+                "iqr": 0.002739077000001089,
+                "q1": 0.026700564999998733,
+                "q3": 0.02943964199999982,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.026195766999990155,
+                "hd15iqr": 0.030669752999983757,
+                "ops": 35.76407032196323,
+                "total": 0.13980511600016143,
+                "data": [
+                    0.029029605000005176,
+                    0.030669752999983757,
+                    0.026868831000001592,
+                    0.026195766999990155,
+                    0.027041160000180753
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-gurobipy-loop]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "network-2xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        407973
+                    ],
+                    "allocations": [
+                        1574
+                    ],
+                    "total_bytes": [
+                        1016591
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.019711464000010892,
+                "max": 0.033743070999889824,
+                "mean": 0.02711515139999392,
+                "stddev": 0.006685047912105022,
+                "rounds": 5,
+                "median": 0.027863125000067157,
+                "iqr": 0.01296240700008866,
+                "q1": 0.020547399749943906,
+                "q3": 0.03350980675003257,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.019711464000010892,
+                "hd15iqr": 0.033743070999889824,
+                "ops": 36.87974982135723,
+                "total": 0.1355757569999696,
+                "data": [
+                    0.033743070999889824,
+                    0.027863125000067157,
+                    0.020826044999921578,
+                    0.03343205200008015,
+                    0.019711464000010892
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "network-2xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        703651
+                    ],
+                    "allocations": [
+                        594
+                    ],
+                    "total_bytes": [
+                        1316431
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.014474723000148515,
+                "max": 0.024821477999921626,
+                "mean": 0.017800128599992603,
+                "stddev": 0.004130649627181853,
+                "rounds": 5,
+                "median": 0.017300642000009248,
+                "iqr": 0.004274851750096786,
+                "q1": 0.014926024249916736,
+                "q3": 0.019200876000013523,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.014474723000148515,
+                "hd15iqr": 0.024821477999921626,
+                "ops": 56.17936940075902,
+                "total": 0.08900064299996302,
+                "data": [
+                    0.024821477999921626,
+                    0.014474723000148515,
+                    0.015076457999839477,
+                    0.017327342000044155,
+                    0.017300642000009248
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-2xs-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-2xs-highspy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "2xs",
+                "arm": "highspy-matrix"
+            },
+            "param": "network-2xs-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        522592
+                    ],
+                    "allocations": [
+                        1777
+                    ],
+                    "total_bytes": [
+                        1007707
+                    ]
+                },
+                "columns": 800,
+                "rows": 200,
+                "nonzeros": 1250,
+                "live_fraction": 0.47058823529411764,
+                "variables": 1700
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.01642121899999438,
+                "max": 0.023403136000069935,
+                "mean": 0.02006358359999467,
+                "stddev": 0.003279853734945657,
+                "rounds": 5,
+                "median": 0.020055860999946162,
+                "iqr": 0.006315196250000099,
+                "q1": 0.01698458449999407,
+                "q3": 0.02329978074999417,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.01642121899999438,
+                "hd15iqr": 0.023403136000069935,
+                "ops": 49.841544757750334,
+                "total": 0.10031791799997336,
+                "data": [
+                    0.023403136000069935,
+                    0.023265328999968915,
+                    0.017172372999993968,
+                    0.01642121899999438,
+                    0.020055860999946162
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-specsolve]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve"
+            },
+            "param": "network-xs-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        87956
+                    ],
+                    "allocations": [
+                        883
+                    ],
+                    "total_bytes": [
+                        450326
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.003495754999903511,
+                    "build": 0.03138359800004764
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07453070900010061,
+                "max": 0.08107836099998167,
+                "mean": 0.07698203900004046,
+                "stddev": 0.002731042778511692,
+                "rounds": 5,
+                "median": 0.07637469600012992,
+                "iqr": 0.00426475774992241,
+                "q1": 0.07466616575004537,
+                "q3": 0.07893092349996778,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.07453070900010061,
+                "hd15iqr": 0.08107836099998167,
+                "ops": 12.990043041071885,
+                "total": 0.3849101950002023,
+                "data": [
+                    0.07821511099996314,
+                    0.07471131800002695,
+                    0.08107836099998167,
+                    0.07637469600012992,
+                    0.07453070900010061
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-specsolve-in-memory]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "network-xs-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        89106
+                    ],
+                    "allocations": [
+                        904
+                    ],
+                    "total_bytes": [
+                        466905
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250,
+                "phase_seconds": {
+                    "attach": 0.0046348160001343786,
+                    "build": 0.03588643499983846
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0720591480001076,
+                "max": 0.08860227500008477,
+                "mean": 0.08076551760004805,
+                "stddev": 0.006918853567322582,
+                "rounds": 5,
+                "median": 0.08318581599996833,
+                "iqr": 0.011423246000049403,
+                "q1": 0.07436368575002916,
+                "q3": 0.08578693175007857,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.0720591480001076,
+                "hd15iqr": 0.08860227500008477,
+                "ops": 12.381521591330769,
+                "total": 0.4038275880002402,
+                "data": [
+                    0.0848484840000765,
+                    0.08318581599996833,
+                    0.08860227500008477,
+                    0.0720591480001076,
+                    0.07513186500000302
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-linopy]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "linopy"
+            },
+            "param": "network-xs-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        6908328
+                    ],
+                    "allocations": [
+                        46007
+                    ],
+                    "total_bytes": [
+                        23181428
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14464791099999275,
+                "max": 0.1459017719998883,
+                "mean": 0.14517396699998245,
+                "stddev": 0.0005236239396678755,
+                "rounds": 5,
+                "median": 0.14518322699996133,
+                "iqr": 0.000862499000106709,
+                "q1": 0.14468880774995796,
+                "q3": 0.14555130675006467,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.14464791099999275,
+                "hd15iqr": 0.1459017719998883,
+                "ops": 6.888287347001553,
+                "total": 0.7258698349999122,
+                "data": [
+                    0.14543448500012346,
+                    0.14518322699996133,
+                    0.14470243999994636,
+                    0.14464791099999275,
+                    0.1459017719998883
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-pyomo]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "pyomo"
+            },
+            "param": "network-xs-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        685472
+                    ],
+                    "allocations": [
+                        61965
+                    ],
+                    "total_bytes": [
+                        7194622
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.06243115899997065,
+                "max": 0.06452028299986523,
+                "mean": 0.06345614100000603,
+                "stddev": 0.0009592666325737262,
+                "rounds": 5,
+                "median": 0.0637827880000259,
+                "iqr": 0.00174281374995644,
+                "q1": 0.0624524515000644,
+                "q3": 0.06419526525002084,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.06243115899997065,
+                "hd15iqr": 0.06452028299986523,
+                "ops": 15.758916067712107,
+                "total": 0.31728070500003014,
+                "data": [
+                    0.06452028299986523,
+                    0.06243115899997065,
+                    0.0637827880000259,
+                    0.06245954900009565,
+                    0.06408692600007271
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-gurobipy-loop]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "gurobipy-loop"
+            },
+            "param": "network-xs-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        2166859
+                    ],
+                    "allocations": [
+                        15527
+                    ],
+                    "total_bytes": [
+                        6482158
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.07112767400008124,
+                "max": 0.10015792899980624,
+                "mean": 0.07786414419992979,
+                "stddev": 0.012535996677276343,
+                "rounds": 5,
+                "median": 0.0723367859998234,
+                "iqr": 0.0097132332499541,
+                "q1": 0.07119095824998567,
+                "q3": 0.08090419149993977,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.07112767400008124,
+                "hd15iqr": 0.10015792899980624,
+                "ops": 12.84288179463355,
+                "total": 0.389320720999649,
+                "data": [
+                    0.10015792899980624,
+                    0.07448627899998428,
+                    0.0723367859998234,
+                    0.07112767400008124,
+                    0.07121205299995381
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-gurobipy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "network-xs-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1943271
+                    ],
+                    "allocations": [
+                        2914
+                    ],
+                    "total_bytes": [
+                        3980658
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.020809787000189317,
+                "max": 0.029891929000086748,
+                "mean": 0.02608706540008825,
+                "stddev": 0.004724435235174495,
+                "rounds": 5,
+                "median": 0.02893097600008332,
+                "iqr": 0.008802529249749114,
+                "q1": 0.02098743800019065,
+                "q3": 0.029789967249939764,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.020809787000189317,
+                "hd15iqr": 0.029891929000086748,
+                "ops": 38.33317334331584,
+                "total": 0.13043532700044125,
+                "data": [
+                    0.021046655000191095,
+                    0.02975597999989077,
+                    0.020809787000189317,
+                    0.029891929000086748,
+                    0.02893097600008332
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-xs-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-xs-highspy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "xs",
+                "arm": "highspy-matrix"
+            },
+            "param": "network-xs-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1777989
+                    ],
+                    "allocations": [
+                        1798
+                    ],
+                    "total_bytes": [
+                        3950625
+                    ]
+                },
+                "columns": 10000,
+                "rows": 2500,
+                "nonzeros": 16200,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.016737866000084978,
+                "max": 0.024778586999900654,
+                "mean": 0.020727354600012404,
+                "stddev": 0.003755092771847763,
+                "rounds": 5,
+                "median": 0.019903981999959797,
+                "iqr": 0.007108680250041743,
+                "q1": 0.017466343250021055,
+                "q3": 0.024575023500062798,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.016737866000084978,
+                "hd15iqr": 0.024778586999900654,
+                "ops": 48.24542346563616,
+                "total": 0.10363677300006202,
+                "data": [
+                    0.017709168999999747,
+                    0.019903981999959797,
+                    0.016737866000084978,
+                    0.024507169000116846,
+                    0.024778586999900654
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-specsolve]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "specsolve"
+            },
+            "param": "network-s-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        468384
+                    ],
+                    "allocations": [
+                        884
+                    ],
+                    "total_bytes": [
+                        1187758
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500,
+                "phase_seconds": {
+                    "attach": 0.005355860000008761,
+                    "build": 0.05557515999998941
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.09717383299994253,
+                "max": 0.11863526299998739,
+                "mean": 0.10633750820002205,
+                "stddev": 0.0089972172235322,
+                "rounds": 5,
+                "median": 0.10818115000006401,
+                "iqr": 0.014415473249982824,
+                "q1": 0.09765488600004346,
+                "q3": 0.11207035925002629,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.09717383299994253,
+                "hd15iqr": 0.11863526299998739,
+                "ops": 9.404019493469686,
+                "total": 0.5316875410001103,
+                "data": [
+                    0.10988205800003925,
+                    0.10818115000006401,
+                    0.09717383299994253,
+                    0.11863526299998739,
+                    0.0978152370000771
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-specsolve-in-memory]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "network-s-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        469534
+                    ],
+                    "allocations": [
+                        905
+                    ],
+                    "total_bytes": [
+                        1204337
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500,
+                "phase_seconds": {
+                    "attach": 0.00508657199998197,
+                    "build": 0.05411052900012692
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1013421620000372,
+                "max": 0.12305413099988982,
+                "mean": 0.11050333719999798,
+                "stddev": 0.008223577371577308,
+                "rounds": 5,
+                "median": 0.11134937700012415,
+                "iqr": 0.010096482749872848,
+                "q1": 0.10429042625003149,
+                "q3": 0.11438690899990434,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.1013421620000372,
+                "hd15iqr": 0.12305413099988982,
+                "ops": 9.049500452553014,
+                "total": 0.5525166859999899,
+                "data": [
+                    0.12305413099988982,
+                    0.11149783499990917,
+                    0.11134937700012415,
+                    0.10527318100002958,
+                    0.1013421620000372
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-linopy]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "linopy"
+            },
+            "param": "network-s-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        67886928
+                    ],
+                    "allocations": [
+                        46084
+                    ],
+                    "total_bytes": [
+                        187114235
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.16671914900007323,
+                "max": 0.19729763200007255,
+                "mean": 0.17572195600005217,
+                "stddev": 0.01245066899362143,
+                "rounds": 5,
+                "median": 0.17114287600020361,
+                "iqr": 0.012458429000105298,
+                "q1": 0.16806667924993235,
+                "q3": 0.18052510825003765,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.16671914900007323,
+                "hd15iqr": 0.19729763200007255,
+                "ops": 5.690808495209916,
+                "total": 0.8786097800002608,
+                "data": [
+                    0.174934267000026,
+                    0.16671914900007323,
+                    0.19729763200007255,
+                    0.1685158559998854,
+                    0.17114287600020361
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-pyomo]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "pyomo"
+            },
+            "param": "network-s-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        12058288
+                    ],
+                    "allocations": [
+                        219577
+                    ],
+                    "total_bytes": [
+                        45242237
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9191267699998207,
+                "max": 0.9800442289999864,
+                "mean": 0.9389812385998993,
+                "stddev": 0.02369975870738693,
+                "rounds": 5,
+                "median": 0.930754092999905,
+                "iqr": 0.019254449000072782,
+                "q1": 0.9271370632498588,
+                "q3": 0.9463915122499316,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.9191267699998207,
+                "hd15iqr": 0.9800442289999864,
+                "ops": 1.0649840048892614,
+                "total": 4.694906192999497,
+                "data": [
+                    0.9191267699998207,
+                    0.9298071609998715,
+                    0.930754092999905,
+                    0.9351739399999133,
+                    0.9800442289999864
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-gurobipy-loop]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "gurobipy-loop"
+            },
+            "param": "network-s-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        20576377
+                    ],
+                    "allocations": [
+                        150716
+                    ],
+                    "total_bytes": [
+                        68851488
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.671331218999967,
+                "max": 0.7034440729999005,
+                "mean": 0.6882997501999398,
+                "stddev": 0.01507650009711517,
+                "rounds": 5,
+                "median": 0.695164042999977,
+                "iqr": 0.027357333500049208,
+                "q1": 0.6725030257499043,
+                "q3": 0.6998603592499535,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.671331218999967,
+                "hd15iqr": 0.7034440729999005,
+                "ops": 1.4528553870744778,
+                "total": 3.441498750999699,
+                "data": [
+                    0.695164042999977,
+                    0.671331218999967,
+                    0.6728936279998834,
+                    0.7034440729999005,
+                    0.6986657879999711
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-gurobipy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "network-s-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        17618271
+                    ],
+                    "allocations": [
+                        25423
+                    ],
+                    "total_bytes": [
+                        27829608
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0391665010001816,
+                "max": 0.0428094339999916,
+                "mean": 0.04080580860004375,
+                "stddev": 0.0015340825110745566,
+                "rounds": 5,
+                "median": 0.04105389699998341,
+                "iqr": 0.002575234500170609,
+                "q1": 0.039334078749959644,
+                "q3": 0.04190931325013025,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.0391665010001816,
+                "hd15iqr": 0.0428094339999916,
+                "ops": 24.506315015135563,
+                "total": 0.20402904300021873,
+                "data": [
+                    0.0428094339999916,
+                    0.04105389699998341,
+                    0.04160927300017647,
+                    0.03938993799988566,
+                    0.0391665010001816
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-s-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-s-highspy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "s",
+                "arm": "highspy-matrix"
+            },
+            "param": "network-s-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        17212989
+                    ],
+                    "allocations": [
+                        1807
+                    ],
+                    "total_bytes": [
+                        30912075
+                    ]
+                },
+                "columns": 100000,
+                "rows": 25000,
+                "nonzeros": 162450,
+                "live_fraction": 0.47058823529411764,
+                "variables": 212500
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.02214677599999959,
+                "max": 0.03408333800007313,
+                "mean": 0.026927587199998014,
+                "stddev": 0.005904880603089207,
+                "rounds": 5,
+                "median": 0.02308814999992137,
+                "iqr": 0.010453769999912765,
+                "q1": 0.022546756250051203,
+                "q3": 0.03300052624996397,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.02214677599999959,
+                "hd15iqr": 0.03408333800007313,
+                "ops": 37.13663584385584,
+                "total": 0.13463793599999008,
+                "data": [
+                    0.02308814999992137,
+                    0.02214677599999959,
+                    0.03263958899992758,
+                    0.03408333800007313,
+                    0.022680083000068407
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-specsolve]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "specsolve"
+            },
+            "param": "network-m-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        6690144
+                    ],
+                    "allocations": [
+                        906
+                    ],
+                    "total_bytes": [
+                        10030654
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000,
+                "phase_seconds": {
+                    "attach": 0.020950124999899344,
+                    "build": 0.23704325799985781
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.3279414970002108,
+                "max": 0.3714307650000137,
+                "mean": 0.33985243280003485,
+                "stddev": 0.01827012624421086,
+                "rounds": 5,
+                "median": 0.332367283999929,
+                "iqr": 0.019482471500111842,
+                "q1": 0.32800127874998,
+                "q3": 0.3474837502500918,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.3279414970002108,
+                "hd15iqr": 0.3714307650000137,
+                "ops": 2.942453557742775,
+                "total": 1.6992621640001744,
+                "data": [
+                    0.3714307650000137,
+                    0.3279414970002108,
+                    0.332367283999929,
+                    0.33950141200011785,
+                    0.32802120599990303
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-specsolve-in-memory]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "network-m-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        4069534
+                    ],
+                    "allocations": [
+                        912
+                    ],
+                    "total_bytes": [
+                        7425121
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000,
+                "phase_seconds": {
+                    "attach": 0.020827916999905938,
+                    "build": 0.27530538499991053
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.36529666100000213,
+                "max": 0.386656862999871,
+                "mean": 0.37905684739998835,
+                "stddev": 0.008458542821951976,
+                "rounds": 5,
+                "median": 0.380097552000052,
+                "iqr": 0.010632445749990893,
+                "q1": 0.3748904029999949,
+                "q3": 0.38552284874998577,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.36529666100000213,
+                "hd15iqr": 0.386656862999871,
+                "ops": 2.638126726529702,
+                "total": 1.8952842369999416,
+                "data": [
+                    0.37808831699999246,
+                    0.36529666100000213,
+                    0.386656862999871,
+                    0.385144844000024,
+                    0.380097552000052
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-linopy]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "linopy"
+            },
+            "param": "network-m-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        677674016
+                    ],
+                    "allocations": [
+                        48073
+                    ],
+                    "total_bytes": [
+                        1799931804
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.4186532470000657,
+                "max": 0.43332472899987806,
+                "mean": 0.42466826220002074,
+                "stddev": 0.005992830581997743,
+                "rounds": 5,
+                "median": 0.42575463399998625,
+                "iqr": 0.008908509749915083,
+                "q1": 0.4191462550001006,
+                "q3": 0.4280547647500157,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.4186532470000657,
+                "hd15iqr": 0.43332472899987806,
+                "ops": 2.354779221831735,
+                "total": 2.123341311000104,
+                "data": [
+                    0.43332472899987806,
+                    0.41931059100011225,
+                    0.42575463399998625,
+                    0.4186532470000657,
+                    0.42629811000006157
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-pyomo]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-pyomo]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "pyomo"
+            },
+            "param": "network-m-pyomo",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        578141224
+                    ],
+                    "allocations": [
+                        1796761
+                    ],
+                    "total_bytes": [
+                        889423744
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 7.799050338000143,
+                "max": 7.881070951999845,
+                "mean": 7.836075156199968,
+                "stddev": 0.03916986497043337,
+                "rounds": 5,
+                "median": 7.819242078999878,
+                "iqr": 0.07267231550002862,
+                "q1": 7.804058657999974,
+                "q3": 7.876730973500003,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 7.799050338000143,
+                "hd15iqr": 7.881070951999845,
+                "ops": 0.12761490670604297,
+                "total": 39.18037578099984,
+                "data": [
+                    7.819242078999878,
+                    7.881070951999845,
+                    7.799050338000143,
+                    7.875284314000055,
+                    7.805728097999918
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-gurobipy-loop]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-gurobipy-loop]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "gurobipy-loop"
+            },
+            "param": "network-m-gurobipy-loop",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        525640302
+                    ],
+                    "allocations": [
+                        1501527
+                    ],
+                    "total_bytes": [
+                        999829847
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 6.89583239600006,
+                "max": 6.947693182999956,
+                "mean": 6.92934964179999,
+                "stddev": 0.023953994006408536,
+                "rounds": 5,
+                "median": 6.944701344999885,
+                "iqr": 0.038937154500160887,
+                "q1": 6.907917601999941,
+                "q3": 6.946854756500102,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 6.89583239600006,
+                "hd15iqr": 6.947693182999956,
+                "ops": 0.1443136876753468,
+                "total": 34.64674820899995,
+                "data": [
+                    6.947693182999956,
+                    6.944701344999885,
+                    6.94657528100015,
+                    6.911946003999901,
+                    6.89583239600006
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-gurobipy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "network-m-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        175493271
+                    ],
+                    "allocations": [
+                        250432
+                    ],
+                    "total_bytes": [
+                        265719147
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.2931756799998766,
+                "max": 0.32397258300011345,
+                "mean": 0.30544725900003866,
+                "stddev": 0.012983584949053342,
+                "rounds": 5,
+                "median": 0.2997338730001502,
+                "iqr": 0.020590757500087875,
+                "q1": 0.29573096374997476,
+                "q3": 0.31632172125006264,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.2931756799998766,
+                "hd15iqr": 0.32397258300011345,
+                "ops": 3.273887620644431,
+                "total": 1.5272362950001934,
+                "data": [
+                    0.3137714340000457,
+                    0.32397258300011345,
+                    0.2997338730001502,
+                    0.2965827250000075,
+                    0.2931756799998766
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-m-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-m-highspy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "m",
+                "arm": "highspy-matrix"
+            },
+            "param": "network-m-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        171562989
+                    ],
+                    "allocations": [
+                        1816
+                    ],
+                    "total_bytes": [
+                        298801614
+                    ]
+                },
+                "columns": 1000000,
+                "rows": 250000,
+                "nonzeros": 1624950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 2125000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14505875400004697,
+                "max": 0.15360539500011328,
+                "mean": 0.14996881020001637,
+                "stddev": 0.0033810842853237667,
+                "rounds": 5,
+                "median": 0.1493019550000554,
+                "iqr": 0.004749071499986712,
+                "q1": 0.14816271299997652,
+                "q3": 0.15291178449996323,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.14505875400004697,
+                "hd15iqr": 0.15360539500011328,
+                "ops": 6.668053168297329,
+                "total": 0.7498440510000819,
+                "data": [
+                    0.14919736599995304,
+                    0.15360539500011328,
+                    0.15268058099991322,
+                    0.14505875400004697,
+                    0.1493019550000554
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-l-specsolve]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-l-specsolve]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "specsolve"
+            },
+            "param": "network-l-specsolve",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        65234688
+                    ],
+                    "allocations": [
+                        907
+                    ],
+                    "total_bytes": [
+                        95136899
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000,
+                "phase_seconds": {
+                    "attach": 0.04242693399987729,
+                    "build": 1.2565204479999466
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.4103508529999544,
+                "max": 1.5693399100000534,
+                "mean": 1.4943535113999586,
+                "stddev": 0.0655943969438772,
+                "rounds": 5,
+                "median": 1.474802802999875,
+                "iqr": 0.1046196804999795,
+                "q1": 1.4516292517499778,
+                "q3": 1.5562489322499573,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.4103508529999544,
+                "hd15iqr": 1.5693399100000534,
+                "ops": 0.6691856996161287,
+                "total": 7.471767556999794,
+                "data": [
+                    1.474802802999875,
+                    1.4653887179999856,
+                    1.4103508529999544,
+                    1.5693399100000534,
+                    1.5518852729999253
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-l-specsolve-in-memory]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-l-specsolve-in-memory]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "specsolve-in-memory"
+            },
+            "param": "network-l-specsolve-in-memory",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        40069534
+                    ],
+                    "allocations": [
+                        912
+                    ],
+                    "total_bytes": [
+                        69987038
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000,
+                "phase_seconds": {
+                    "attach": 0.037358218999997916,
+                    "build": 1.4601631749999342
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.6512255590000677,
+                "max": 1.7952789309999844,
+                "mean": 1.742225151599996,
+                "stddev": 0.05866311649775053,
+                "rounds": 5,
+                "median": 1.7604738929999257,
+                "iqr": 0.08511184775011316,
+                "q1": 1.7023124029999508,
+                "q3": 1.787424250750064,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 1.6512255590000677,
+                "hd15iqr": 1.7952789309999844,
+                "ops": 0.5739786267473159,
+                "total": 8.71112575799998,
+                "data": [
+                    1.7952789309999844,
+                    1.7848060240000905,
+                    1.6512255590000677,
+                    1.7604738929999257,
+                    1.7193413509999118
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-l-linopy]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-l-linopy]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "linopy"
+            },
+            "param": "network-l-linopy",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        6775552288
+                    ],
+                    "allocations": [
+                        76045
+                    ],
+                    "total_bytes": [
+                        17992728856
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": null,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.084889758000145,
+                "max": 3.1186474420001105,
+                "mean": 3.099593753200088,
+                "stddev": 0.014735525299429569,
+                "rounds": 5,
+                "median": 3.093556488000104,
+                "iqr": 0.025257484000178465,
+                "q1": 3.088141562249973,
+                "q3": 3.1133990462501515,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 3.084889758000145,
+                "hd15iqr": 3.1186474420001105,
+                "ops": 0.3226229240420872,
+                "total": 15.49796876600044,
+                "data": [
+                    3.084889758000145,
+                    3.0892254969999158,
+                    3.1186474420001105,
+                    3.093556488000104,
+                    3.111649581000165
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-l-gurobipy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-l-gurobipy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "gurobipy-matrix"
+            },
+            "param": "network-l-gurobipy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1765493271
+                    ],
+                    "allocations": [
+                        2500432
+                    ],
+                    "total_bytes": [
+                        2656125257
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": 16249950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.859382635000202,
+                "max": 2.8725035040001785,
+                "mean": 2.86500820199999,
+                "stddev": 0.005563224595100674,
+                "rounds": 5,
+                "median": 2.8628113109998594,
+                "iqr": 0.009194429249873792,
+                "q1": 2.860767387750002,
+                "q3": 2.8699618169998757,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.859382635000202,
+                "hd15iqr": 2.8725035040001785,
+                "ops": 0.3490391403773034,
+                "total": 14.32504100999995,
+                "data": [
+                    2.8725035040001785,
+                    2.859382635000202,
+                    2.8612289719999353,
+                    2.869114587999775,
+                    2.8628113109998594
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_rebuild[network-l-highspy-matrix]",
+            "fullname": "bench/test_ladder.py::test_rebuild[network-l-highspy-matrix]",
+            "params": {
+                "case_name": "network",
+                "size": "l",
+                "arm": "highspy-matrix"
+            },
+            "param": "network-l-highspy-matrix",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1715062989
+                    ],
+                    "allocations": [
+                        1816
+                    ],
+                    "total_bytes": [
+                        2977957724
+                    ]
+                },
+                "columns": 10000000,
+                "rows": 2500000,
+                "nonzeros": 16249950,
+                "live_fraction": 0.47058823529411764,
+                "variables": 21250000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 1.1896434370000861,
+                "max": 1.254376794000109,
+                "mean": 1.21934407939998,
+                "stddev": 0.028929603036807115,
+                "rounds": 5,
+                "median": 1.2214255349999803,
+                "iqr": 0.05302438699993672,
+                "q1": 1.1907183219999524,
+                "q3": 1.2437427089998891,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 1.1896434370000861,
+                "hd15iqr": 1.254376794000109,
+                "ops": 0.8201130565968585,
+                "total": 6.096720396999899,
+                "data": [
+                    1.2401980139998159,
+                    1.254376794000109,
+                    1.2214255349999803,
+                    1.1896434370000861,
+                    1.1910766169999079
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-10-12T22:09:55.472946+00:00",
+    "version": "5.3.0"
+}

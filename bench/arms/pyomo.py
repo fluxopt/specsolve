@@ -82,6 +82,11 @@ def build_only(prepared: Prepared) -> Counts:
     return _counts(_built(prepared))
 
 
+def written(prepared: Prepared, path: Path) -> None:
+    """Build and write the model to *path* as an LP file, through the same writer as the `lp` sink."""
+    _built(prepared).write(str(path))
+
+
 def objective(prepared: Prepared) -> float:
     """Solve, and return what the arms are checked against."""
     from pyomo.contrib.appsi.base import TerminationCondition
