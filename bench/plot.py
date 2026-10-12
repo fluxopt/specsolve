@@ -34,14 +34,19 @@ def measurements() -> list[Path]:
     return found
 
 
-def _cell(record: dict[str, Any], rung: str) -> dict[str, Any]:
-    """The columns that say which cell a row is, shared by a measurement and a refusal."""
+def _cell(record: dict[str, Any], rung: str, live: dict[tuple[str, str], int]) -> dict[str, Any]:
+    """The columns that say which cell a row is, shared by a measurement and a refusal.
+
+    ``variables`` is the columns the model built at that rung, which a mask
+    makes fewer than the coordinate product, and the rung's declared width
+    where no run of it reported any.
+    """
     return {
         'model': record['case'],
         'sink': record.get('sink', 'lp'),
         'ladder': LADDER_OF[rung],
         'rung': rung,
-        'variables': bench_results.nominal(record['case'], rung),
+        'variables': live.get((record['case'], rung)) or bench_results.nominal(record['case'], rung),
         'library': record['arm'],
     }
 
@@ -56,9 +61,14 @@ def rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     library stopped at, and no numbers. A refusal at a size no library in its
     panel measured is left out, since the axis does not carry it.
     """
+    live = {
+        (r['case'], r['size']): r['counts']['columns']
+        for r in records
+        if r.get('record') == 'timing' and (r.get('counts') or {}).get('columns')
+    }
     measured = [
         {
-            **_cell(r, r['size']),
+            **_cell(r, r['size'], live),
             'wall_s': round(r['wall_seconds'], 4),
             'wall_q1_s': round(r.get('q1_seconds') or r['wall_seconds'], 4),
             'wall_q3_s': round(r.get('q3_seconds') or r['wall_seconds'], 4),
@@ -76,7 +86,7 @@ def rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for c in (r for r in records if r.get('record') == 'ceiling' and r['size'] in LADDER_OF):
         ladder = LADDERS[LADDER_OF[c['size']]]
         for rung in ladder[ladder.index(c['size']) + 1 :]:
-            row = {**_cell(c, rung), 'refused': bench_results.bound_label(c)}
+            row = {**_cell(c, rung, live), 'refused': bench_results.bound_label(c)}
             panel = (row['model'], row['sink'])
             if (*panel, rung) in sizes and (*panel, row['library'], rung) not in taken:
                 refused.append(row)
