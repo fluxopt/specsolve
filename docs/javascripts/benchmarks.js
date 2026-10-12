@@ -8,10 +8,10 @@
 
 let hosts = [];
 
-/* Diverging bins on the ratio to the highlighted library: green where it is faster, blue where
-   the other library is, grey within ten per cent. Every cell also prints its ratio, which carries
-   the reading where blue and green merge (tritanopia). */
-const BINS = [[1 / 4, 'b4'], [1 / 2, 'b3'], [1 / 1.25, 'b2'], [1 / 1.1, 'b1'], [1.1, 'mid'], [1.25, 'g1'], [2, 'g2'], [4, 'g3'], [Infinity, 'g4']];
+/* Diverging bins on the ratio to the highlighted library: `o` (ours, purple, the highlighted
+   library's own hue) where it is faster, `t` (theirs, orange) where the other library is, grey
+   within ten per cent. Every cell also prints its ratio. */
+const BINS = [[1 / 4, 't4'], [1 / 2, 't3'], [1 / 1.25, 't2'], [1 / 1.1, 't1'], [1.1, 'mid'], [1.25, 'o1'], [2, 'o2'], [4, 'o3'], [Infinity, 'o4']];
 const shade = v => {
   const b = BINS.find(([edge]) => v < edge)[1];
   return `background:var(--d-${b});${b.endsWith('4') ? 'color:var(--d-ink4)' : ''}`;
@@ -281,7 +281,7 @@ async function mount(root) {
   }
 
   root.querySelector('#bench-scale').innerHTML = `<span>other library faster</span>` +
-    ['b4', 'b3', 'b2', 'b1', 'mid', 'g1', 'g2', 'g3', 'g4'].map(b => `<i style="background:var(--d-${b})"></i>`).join('') +
+    BINS.map(([, b]) => `<i style="background:var(--d-${b})"></i>`).join('') +
     `<span>${HERO} faster</span><span>4× · 2× · 1.25× · 1.1× · even · 1.1× · 1.25× · 2× · 4×</span>`;
 
   function draw() {
