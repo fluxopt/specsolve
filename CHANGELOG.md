@@ -18,28 +18,66 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
 - docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
 - docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
-- docs(benchmarks): the published benchmarks are re-measured with the Gurobi matrix floor back below specsolve ([#1952](https://github.com/fluxopt/specsolve/pull/1952))
-- docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
-- perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
-- docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))
-- docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
-- docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
+- feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
+- refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
+
+## 0.8.1 (2026-10-11)
+
+**Faster everywhere, nothing to change on your side.** Model files, archives
+and code from 0.8.0 work as before.
+
+- **Small models build and solve about 40% faster than on 0.8.0.** On the 43
+  reference models, `sps.solve` is a median 39% faster end to end, and none is
+  slower or builds a different model. Up to 250,000 columns and rows,
+  specsolve picks polars' in-memory engine by itself.
+- **Faster than linopy at every size we publish.** Build and hand-off to the
+  solver: a median 1.4× at 10k variables, 2.2× at 1M and 10M.
+- **Gurobi loads a model in a sixth to a third of the time.** With quadratic
+  constraints over 1M columns, it loads 70× faster.
+- **Warm re-solves on HiGHS send only what changed.** At 1M columns the
+  hand-off drops from 324 ms to 38 ms when only the right-hand side moves.
+- **LP files with quadratic constraints write about 780× faster.** 5,000
+  quadratic rows take 0.04 s instead of 29 s.
+- **Leaner archives and read-back.** Sources and answers are written once, and
+  results read back faster after every solve.
+- **Fix: a null label is refused at load.** Before, it built a wrong model or
+  crashed.
+
+The benchmark page is re-measured for this release, and `storage` and
+`transport` are on it again ([#1950](https://github.com/fluxopt/specsolve/pull/1950),
+[#1952](https://github.com/fluxopt/specsolve/pull/1952)).
+
+Building and solving:
+
 - perf(engine): a model with at most 250,000 columns and 250,000 rows builds on polars' in-memory engine, a fifth faster at the smallest sizes ([#1930](https://github.com/fluxopt/specsolve/pull/1930))
-- docs(benchmarks): the published benchmarks are re-measured after 0.8.0 ([#1934](https://github.com/fluxopt/specsolve/pull/1934))
-- perf(engine): a model loads into Gurobi in a sixth to a third of the time, and a quadratic constraint no longer slows with the column count ([#1942](https://github.com/fluxopt/specsolve/pull/1942))
 - perf(engine): a constraint that holds at every coordinate of its dimensions computes the row of each term rather than looking it up ([#1931](https://github.com/fluxopt/specsolve/pull/1931))
-- perf(writers): a model with quadratic constraints writes its LP file in about the time of one without them ([#1939](https://github.com/fluxopt/specsolve/pull/1939))
-- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919))
-- fix(data): a null label in an index or a parameter is refused at load rather than building a wrong model or crashing ([#1935](https://github.com/fluxopt/specsolve/pull/1935))
-- perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
+- perf(engine): a constraint whose terms arrive out of order sorts them on one integer rather than on two columns ([#1932](https://github.com/fluxopt/specsolve/pull/1932))
+- perf(engine): a model loads into Gurobi in a sixth to a third of the time, and a quadratic constraint no longer slows with the column count ([#1942](https://github.com/fluxopt/specsolve/pull/1942))
+- perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
 - perf(engine): reading the solution back after a solve converts each vector once rather than twice ([#1925](https://github.com/fluxopt/specsolve/pull/1925))
-- perf(archive): a sweep held in memory is archived without first being saved to scratch ([#1929](https://github.com/fluxopt/specsolve/pull/1929))
+- perf(writers): a model with quadratic constraints writes its LP file in about the time of one without them ([#1939](https://github.com/fluxopt/specsolve/pull/1939))
+- perf(api): a solve reads the installed package versions it records once per process rather than every time ([#1926](https://github.com/fluxopt/specsolve/pull/1926))
+
+Archives:
+
 - perf(archive): an archive writes its answer once rather than saving it and then copying it ([#1924](https://github.com/fluxopt/specsolve/pull/1924))
 - perf(archive): an archive writes each of its sources once rather than twice ([#1922](https://github.com/fluxopt/specsolve/pull/1922))
-- perf(engine): re-solving after an update sends HiGHS only the costs and bounds that changed ([#1921](https://github.com/fluxopt/specsolve/pull/1921))
-- docs(benchmarks): the published benchmarks measure specsolve on polars' in-memory engine beside its default ([#1923](https://github.com/fluxopt/specsolve/pull/1923))
+- perf(archive): a sweep held in memory is archived without first being saved to scratch ([#1929](https://github.com/fluxopt/specsolve/pull/1929))
+
+Data:
+
+- fix(data): a null label in an index or a parameter is refused at load rather than building a wrong model or crashing ([#1935](https://github.com/fluxopt/specsolve/pull/1935))
+
+Docs and benchmarks:
 
 - docs(howto): a process that builds many small models can make each build faster with one polars setting ([#1920](https://github.com/fluxopt/specsolve/pull/1920))
+- docs: the tests, the benchmarks and every reference model run on the linopy 0.10.0 release ([#1945](https://github.com/fluxopt/specsolve/pull/1945))
+- docs(benchmarks): the published benchmarks measure specsolve on polars' in-memory engine beside its default ([#1923](https://github.com/fluxopt/specsolve/pull/1923))
+- docs: the published benchmarks are re-measured on specsolve 0.8.0 ([#1919](https://github.com/fluxopt/specsolve/pull/1919), [#1934](https://github.com/fluxopt/specsolve/pull/1934))
+- docs(benchmarks): the benchmarks page shows what a script that solves one model pays, from launch to exit ([#1947](https://github.com/fluxopt/specsolve/pull/1947))
+- docs(benchmarks): a benchmark case whose widest model does not fit the machine still publishes its other sizes ([#1948](https://github.com/fluxopt/specsolve/pull/1948))
+- docs(benchmarks): the published benchmarks are re-measured for 0.8.1, and storage and transport are published again ([#1950](https://github.com/fluxopt/specsolve/pull/1950))
+- docs(benchmarks): the published benchmarks are re-measured with the Gurobi matrix floor back below specsolve ([#1952](https://github.com/fluxopt/specsolve/pull/1952))
 
 ## 0.8.0 (2026-10-09)
 
