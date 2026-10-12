@@ -181,7 +181,7 @@
   mask-image: url("icons/archive-arrow-down.svg");
 }
 
-.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/reference/api/"])::before {
+.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/about/linopy/"])::before {
   content: "";
   mask-image: url("icons/function-variant.svg");
 }

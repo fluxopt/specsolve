@@ -44,11 +44,13 @@ which states the math and checks it before any data exists.
   loaded: `update()` puts new numbers on it, and the next solve carries on from
   where the last one ended.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
-- **Nothing to tune.** You attach your tables and choose a few options: the
-  solver, where to archive, and the axis a sweep runs along. specsolve decides
-  how to build the model, so there is no chunk size, engine or flag to set for
-  speed. `solve`, `build` and `solve_over` are the whole entry point.
-  [Python API →](https://specsolve.readthedocs.io/en/latest/reference/api/)
+- **No slow way to write a model.** In linopy or Pyomo, you build the model in
+  Python, so its speed depends on your code, such as whether a loop adds one
+  constraint per generator. Here the model file holds
+  no code. specsolve builds every constraint as a join over whole tables, so
+  each model takes the same path, and you only attach data and choose options,
+  such as the axis of a sweep.
+  [Coming from linopy →](https://specsolve.readthedocs.io/en/latest/about/linopy/)
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same model. specsolve checks
   each window against how the model couples before it runs.
