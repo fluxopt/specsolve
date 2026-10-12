@@ -70,70 +70,19 @@ fleet
 Each panel is one model through one solver, and each line is one library's cost
 against the size of the model.
 
-- **specsolve is the thick violet line.** The other libraries are thinner, and
-  the legend hides any of them.
-- **The grey line is the matrix floor.** It is a hand-written matrix handed
-  straight to the solver's bulk API: `gurobipy-matrix` on Gurobi,
-  `highspy-matrix` on HiGHS. Nobody writes a model this way. It is the limit a
-  modelling library can approach, so its distance from specsolve is what
-  specsolve's modelling layer costs.
-- **The pale violet line is specsolve on polars' in-memory engine.** The
-  specsolve line leaves the engine to specsolve, which builds a small model in
-  memory and a large one on polars' default engine. The
-  [how-to for small models](../howto/warm-start.md#build-many-small-models-faster) says where the two part.
-- **The line is the median of the rounds, and the band is the middle half of
-  them.** The band runs from the first quartile to the third. Two lines whose
-  bands overlap are two numbers this run cannot tell apart.
-- **Grown by length adds snapshots; grown by width adds entities.** Both reach
-  the same sizes, so switching holds the size and changes only the shape that
-  got there. `transport` is the model where this matters: its bus-by-generator
-  join grows with width and never with length. No case on this run reached a
-  width rung, so the width view is empty for the reason
-  [below](#not-measured-yet).
-- **Log–log gives every size equal room, and the slope is the scaling order.**
-  A line that rises one decade per decade grows in step with the model.
-  Linear–linear draws the gap at the largest size at its real size and puts the
-  small sizes at the origin. Both axes switch together, because a linear axis
-  over a logarithmic one draws linear growth as a curve.
-- **A dashed line is a projection, not a measurement.** It continues a library
-  past the size its budget refused, at the growth rate of its last measured
-  step and never slower than linear. The axes are scaled to the measurements,
-  so a steep projection leaves the top of the panel, and the tooltip gives its
-  value.
-- **The table divides by specsolve.** The specsolve column is its own cost.
-  Every other cell is that library's cost divided by specsolve's at the same
-  size: green where specsolve is faster, blue where the other library is, grey
-  within ten per cent. The matrix floor's column is not shaded, because a floor
-  is meant to be faster. Hover a cell for the library's own number.
-- **`>30 s` and `>16 GB` are sizes the harness refused.** It projected the
-  measurement past its time or memory budget and skipped it. Hover one for the
-  projection. An em dash is a cell with no number for another reason:
-  `gurobipy` has no HiGHS.
-
-## Why the median
-
-Every published number is the median of nine rounds. Every measurement gets
-the same nine, pinned rather than calibrated by duration, so no cell is a
-best-of-nine beside a neighbour's best-of-forty. The median beats
-the fastest round because a cell whose nine rounds all ran slow has no clean
-round to pick. It beats the mean because one slow round moves a mean and
-leaves a median where it was. On this run
-([#1952](https://github.com/fluxopt/specsolve/pull/1952)) 31 of 160 published
-cells have a mean above 1.10x their median, the worst at 3.03x: `dispatch/xs` on
-pyomo, on the `highs` [sink](../reference/glossary.md#how-it-runs). In 23 of
-them the first round is the slowest of the nine, at 1.9 to 19.4 times the median
-of the other eight, so the median does not move. The other eight are
-matrix-floor and gurobipy-loop cells from `xs` to `m` whose rounds fall into two
-groups, the slow one up to about twice the fast one: `storage/s` on
-gurobipy-matrix on the `gurobi` sink takes either 32 to 33 ms or 56 to 60 ms.
-
-The median decides specsolve against another library in three cells on this
-run, all against gurobipy-loop at `xs` on the `gurobi` sink. At `transport/xs`
-and `storage/xs` specsolve's fastest round is the faster one, 47.1 ms against
-48.0 ms and 51.1 ms against 52.4 ms, and its median is the slower, 58.8 ms
-against 51.7 ms and 55.5 ms against 54.7 ms. At `dispatch/xs` it is the other
-way round: 25.3 ms against 24.3 ms fastest, 31.4 ms against 34.6 ms median. No
-cell flips against linopy.
+- **specsolve is the thick violet line.** Click a library in the legend to
+  hide it.
+- **The grey line is the matrix floor**: a hand-written matrix handed straight
+  to the solver's bulk API. Nobody writes a model this way, so its distance
+  from specsolve is what the modelling layer costs.
+- **The line is the median of nine rounds, and the band is the middle half.**
+  Two lines whose bands overlap are two numbers this run cannot tell apart
+  ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
+- **A dashed line is a projection**, past the size the harness's time or
+  memory budget refused.
+- **The table divides by specsolve.** Green is where specsolve is faster, blue
+  where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
+  are sizes the harness refused.
 
 ## How to reproduce it
 
@@ -141,29 +90,17 @@ cell flips against linopy.
 uv run --locked bench/reproduce.py
 ```
 
-`bench/reproduce.py.lock` freezes every version, git commits included:
-specsolve itself installs from git, at the commit the numbers were taken on.
-`--locked` refuses to start if the resolution has drifted.
-
-Everything the tables are drawn from is in
-[`bench/results`](https://github.com/fluxopt/specsolve/blob/main/bench/results):
-one file per sink, case and ladder. Each carries the machine, the versions, the
-commit and every round of every measurement. A ladder the box could not finish
-leaves no file behind, and the other ladder of that case keeps its own.
-`pixi run table` prints the directory as one long CSV and commits nothing; the
-JSON stays the archive because it keeps the rounds.
-`pixi run refresh` re-takes the numbers, writes the tables into their fences
-and the chart rows into `benchmarks.json`.
+The lock file pins every version, specsolve's commit included. Every round of
+every measurement is in
+[`bench/results`](https://github.com/fluxopt/specsolve/blob/main/bench/results),
+and [the harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
+says how each number is taken.
 
 ## A script that solves one model
 
-The tables above are what a process pays once it is running. A script that
-imports a library and solves one model also pays the interpreter, the import,
-and whatever the library loads the first time it builds. linopy's arrays are
-xarray's, and xarray imports `dask.array` on the first array it makes, so
-linopy's first model costs more than its import alone. This table times a new
-process from launch to exit at `xs`, the rung where starting is a share of the
-cost. A run that did not take it leaves the table out.
+The tables above are what a running process pays. A script that solves one
+model also pays the interpreter, the import, and what a library loads the first
+time it builds. This table times a new process from launch to exit at `xs`.
 
 <!-- bench:fresh -->
 
@@ -217,11 +154,7 @@ Build only, repeated in one process. **first** is the first recorded round and *
 
 ## The same size, reached by widening
 
-This table renders from the `highs` width rungs of `storage` and `transport`,
-and no run has published it: both width ladders are killed on both sinks before
-they write a file, for the reason [below](#not-measured-yet). `bench.report`
-drops a fragment it cannot render rather than blanking the fence, so the fence
-stays empty until `pixi run ladder` brings those rungs back.
+No run has published the width ladders yet ([below](#not-measured-yet)).
 
 <!-- bench:sweeps -->
 <!-- bench:/sweeps -->
@@ -244,38 +177,17 @@ Listed so that a claim with no table under it is visible as one.
   one back.
 - **Sizes past `l`.** `xl` and `2xl` exist in the harness and no run
   publishes them.
-- **The width ladders of `storage` and `transport`.** The memory budget
-  projects the next rung off a `w10` or `w100` cell that took under a
-  gigabyte. Where the projection comes in under 16 GB the run starts a rung
-  that does not fit, and `bench/memory-watchdog.sh` kills it to save the box.
-  Four width ladders died that way on this run: `transport/w100` on linopy, on
-  `highs` at 25.0 GB and on `gurobi` at 25.7 GB, and `storage/w1000` on the
-  matrix floor, on `highs` at 26.1 GB and on `gurobi` at 25.5 GB. Each ladder
-  runs in a process and a file of its own, so the kill took only the width
-  rungs, and both cases publish their size ladder. The last `highs` numbers
-  past `w10` are in
-  [#1285](https://github.com/fluxopt/specsolve/pull/1285), taken on a machine that
-  could hold them. There specsolve took 0.11 s and 0.59 GB at `transport/w100`,
-  against linopy's 53.53 s and 14.26 GB.
+- **The width ladders of `storage` and `transport`.** Their next rung does not
+  fit the box, and the watchdog kills it. The last `highs` numbers past `w10`
+  are in [#1285](https://github.com/fluxopt/specsolve/pull/1285): specsolve
+  took 0.11 s and 0.59 GB at `transport/w100`, against linopy's 53.53 s and
+  14.26 GB.
 - **Anything about expressiveness.** Four models say nothing about a fifth.
 
 ## Method
 
-Each measurement runs in a process of its own. Peak memory is `ru_maxrss`
-rather than a tracker. Import is excluded from the timing and teardown is
-included. A run refuses to start on a machine that is already working. The
-rest is in
-[`bench/README.md`](https://github.com/fluxopt/specsolve/blob/main/bench/README.md):
-every flag, every default switched off and what it costs.
-
-**Peak carries an allocator cost that only the polars arms pay.** polars
-ships its own jemalloc settings, so a peak measured through it holds pages
-freed and not yet returned. An arm on the system allocator never enters
-jemalloc. Our peak moves 12–27% with the decay clock on and off, where
-linopy's does not move at three digits
-([#896](https://github.com/fluxopt/specsolve/issues/896)). It runs against us and
-is left in.
-
-**memray never times anything.** Its tracker slows an allocation-heavy
-engine several-fold and overcounts reserved arenas. Peak RSS is the metric;
-memray is for attribution.
+Each measurement runs in a process of its own, with import excluded and
+teardown included. Peak memory is `ru_maxrss`. A run refuses to start on a
+busy machine. [The harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
+has every flag and every caveat, such as the allocator cost on polars' peak
+([#896](https://github.com/fluxopt/specsolve/issues/896)).

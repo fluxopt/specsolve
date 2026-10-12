@@ -22,8 +22,8 @@ operation parity with xarray or pandas is not a goal either.
 **[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the oracle
 and the denominator.** Where a concept is already theirs, we copy the spelling.
 Every language feature is differentially tested against a linopy build, and
-every ratio on the [benchmarks](benchmarks.md) page is specsolve ÷ linopy. The
-three relationships are [one page](linopy.md). The ported models in
+the [benchmarks](benchmarks.md) measure specsolve against it.
+[Coming from linopy](linopy.md) maps one to the other. The ported models in
 [the gallery](../examples/index.md) and their reference optima are **PyPSA**'s.
 
 No code from any of them is vendored, so none of this is a licence obligation.

@@ -1,17 +1,33 @@
 # About
 
-Why the package is shaped the way it is, what it costs, where it came from
-and where it is going. Nothing here is needed to write a spec or run a model.
+Why specsolve exists, what it will not become, and where to read more. Nothing
+here is needed to write a spec or run a model.
+
+## Why
+
+An optimisation model usually arrives as Python that *builds* math. The
+equations are tangled with the loops and the library that assembled them, so a
+diff shows scaffolding rather than constraints, and reviewing the model means
+reviewing a program.
+
+specsolve makes the math the artifact. A YAML file says what the variables,
+constraints and objective are. It is checked before any data exists, and
+someone who knows the math can review it without knowing the builder.
+
+## What it will not become
+
+The closed language has a price: structure that needs the solver's answer to
+decide the next row, and imperative modelling of any kind. That price buys
+validation before data, two builds of one language, and a build that streams.
+The specific refusals, each with its rewrite, are
+[the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/#deliberate-non-primitives).
+Parity with another tool is not by itself a reason to add anything.
+
+## More
 
 | | |
 |---|---|
-| [The limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/) | what the language deliberately cannot say, and what that buys |
-| [Benchmarks](benchmarks.md) | measured build cost against four other ways of writing the same model, with the method and how to reproduce it |
-| [Relationship to linopy](linopy.md) | not a runtime dependency, the differential oracle, and the second lane |
+| [Benchmarks](benchmarks.md) | what a build costs against four other ways of writing the same model |
+| [Coming from linopy](linopy.md) | the same model in linopy and in specsolve, and what maps to what |
 | [Prior art and credit](prior-art.md) | the work this is derived from, and how to cite it |
-| [Roadmap](roadmap.md) | where it is going, and what it will not become |
 | [Changelog](changelog.md) | every release |
-
-Contributing is
-[CONTRIBUTING.md](https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md)
-and [AGENTS.md](https://github.com/fluxopt/specsolve/blob/main/AGENTS.md).

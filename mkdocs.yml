@@ -70,9 +70,8 @@ nav:
   - About:
       - about/index.md
       - Benchmarks: about/benchmarks.md
-      - Relationship to linopy: about/linopy.md
+      - Coming from linopy: about/linopy.md
       - Prior art and credit: about/prior-art.md
-      - Roadmap: about/roadmap.md
       - Changelog: about/changelog.md
   # What a user does not need: how the package is built, and the PyPSA models
   # that prove it works. The PyPSA pages stay in docs/examples/, where
@@ -246,6 +245,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.snippets:
       check_paths: true
+      dedent_subsections: true
   # Rewrites the GitHub inline math mathspec prints into the `$…$` arithmatex reads.
   - tools.mdx_github_math
   - pymdownx.tabbed:

@@ -333,9 +333,9 @@ published figure.
   `pixi run python -m tools.constructs`, and a test fails if either is stale. The
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
-- **A rung that cannot be said is also a result.** It goes in the ledger with a
-  verdict — macro, primitive or escape — and feeds docs/about/roadmap.md. Do not work
-  around a gap silently.
+- **A rung that cannot be said is also a result.** It goes in the ledger in
+  docs/development/verification.md with a verdict — macro, primitive or
+  escape — and feeds the issue tracks. Do not work around a gap silently.
 
 ## Refreshing the benchmarks
 

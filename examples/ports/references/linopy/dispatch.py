@@ -43,10 +43,12 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     cost: pd.Series = tables['cost'].set_index('generator')['value']
     load: pd.Series = tables['load'].set_index('snapshot')['value']
 
+    # --8<-- [start:model]
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
     m.add_constraints(p.sum('generator') == load, name='power_balance')
     m.add_objective((p * cost).sum())
+    # --8<-- [end:model]
     return m
 
 
