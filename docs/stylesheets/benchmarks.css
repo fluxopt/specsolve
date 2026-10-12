@@ -44,6 +44,26 @@
 .bench .bench-seg button + button { border-left: 1px solid var(--hairline); }
 .bench .bench-seg button[aria-pressed="true"] { background: var(--fg); color: var(--surface); }
 .bench button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.bench .bench-range { position: relative; width: 17rem; max-width: 100%; height: 2.3rem; padding: 0 16px;
+  touch-action: none; cursor: crosshair; user-select: none; }
+.bench .bench-track { position: relative; height: 100%; }
+.bench .bench-track::before { content: ""; position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: var(--hairline); }
+.bench .bench-band { position: absolute; top: 7px; height: 8px; border-radius: 4px; background: var(--s1); opacity: .3; }
+.bench .bench-tick { position: absolute; top: 20px; transform: translateX(-50%); font-size: .6rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.bench .bench-tick::before { content: ""; position: absolute; left: 50%; top: -6px; width: 1px; height: 4px; background: var(--hairline); }
+.bench .bench-tick.in { color: var(--fg); font-weight: 650; }
+.bench .bench-range input { position: absolute; left: 8px; right: 8px; top: 3px; width: calc(100% - 16px); height: 16px; margin: 0;
+  background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.bench .bench-range input::-webkit-slider-runnable-track { background: none; }
+.bench .bench-range input::-moz-range-track { background: none; }
+.bench .bench-range input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--surface); border: 2px solid var(--s1); cursor: grab; }
+.bench .bench-range input::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--s1); cursor: grab; }
+.bench .bench-range input:focus-visible { outline: none; }
+.bench .bench-range input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--s1); outline-offset: 2px; }
+.bench .bench-range input:focus-visible::-moz-range-thumb { outline: 2px solid var(--s1); outline-offset: 2px; }
 .bench #bench-legend { display: flex; gap: .2rem .4rem; flex-wrap: wrap; font-size: .68rem; }
 .bench #bench-legend button { font: inherit; color: var(--fg2); background: none; border: 0; border-radius: 5px;
   display: inline-flex; align-items: center; gap: .4rem; padding: .1rem .3rem; cursor: pointer; }

@@ -29,6 +29,8 @@ fleet
 <span class="bench-seg" data-key="ladder"><button data-value="length" aria-pressed="true">length — more snapshots</button><button data-value="width" aria-pressed="false">width — more entities</button></span>
 <span class="bench-label">Axes</span>
 <span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
+<span class="bench-label">Variables</span>
+<div class="bench-range" role="group" aria-label="Range of model sizes shown"></div>
 </div>
 <div class="bench-row">
 <span class="bench-label">Libraries</span>
@@ -74,6 +76,11 @@ Each panel is one model through one solver, and each line is one library.
   Overlapping bands are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
 - **A dashed line is a projection** past the time or memory budget.
+- **Variables narrows every panel and the table to a range of model sizes**, on
+  either axes. Drag a handle, or drag along the axis to select a new range. Each
+  end is zero or a power of ten, and a rung counts at the nearest power. From
+  zero, a linear axis starts at zero; from a power of ten, it starts just below
+  the smallest size shown.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
   orange where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
   are sizes the harness refused.
