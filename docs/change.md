@@ -91,5 +91,5 @@ snapshots add new columns, and the solver has to start again.
 ## Next
 
 You have changed the numbers and the size of your model without writing it
-again. In the next tutorial you change the model itself:
+again. In [the next tutorial](commitment.md) you change the model itself:
 generators that are either on or off.
