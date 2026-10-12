@@ -9,7 +9,7 @@ it cut.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from functools import partial
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -117,6 +117,13 @@ class EachCoordinate:
     def __post_init__(self) -> None:
         object.__setattr__(self, 'carry', dict(self.carry))
 
+    def to_dict(self) -> dict[str, object]:
+        """This axis as plain data, which [`solve_over`][specsolve.strategy.solve_over] takes in its place.
+
+        ``json.dumps`` writes it, and an archive's ``axis.json`` is this.
+        """
+        return {'each': 'coordinate', 'dim': self.dim, **_carried(self.carry)}
+
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
 
@@ -210,6 +217,21 @@ class EachWindow:
             raise ValueError('into must name the local index the spec declares — it has no default')
         if self.into == self.dim:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
+
+    def to_dict(self) -> dict[str, object]:
+        """This axis as plain data, which [`solve_over`][specsolve.strategy.solve_over] takes in its place.
+
+        ``json.dumps`` writes it, and an archive's ``axis.json`` is this.
+        """
+        steps = self.steps if isinstance(self.steps, int) else list(self.steps)
+        return {
+            'each': 'window',
+            'dim': self.dim,
+            'steps': steps,
+            'lookahead': self.lookahead,
+            'into': self.into,
+            **_carried(self.carry),
+        }
 
     def _key_name(self) -> str:
         """Where the window started, never ``dim``, which would join silently against data over *dim*."""
@@ -305,6 +327,9 @@ class EachWindow:
 #: An axis that cuts one set of sources into slices.
 Axis = EachCoordinate | EachWindow
 
+#: Each axis by the name ``to_dict`` writes under ``each``.
+_EACH: dict[str, type[EachCoordinate] | type[EachWindow]] = {'coordinate': EachCoordinate, 'window': EachWindow}
+
 
 #: Slices written by hand, one ``(key, sources)`` pair each; ``axis=`` takes
 #: this beside an [`Axis`][].
@@ -331,30 +356,35 @@ def check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis:
         )
 
 
-def axis_manifest(axis: Axis) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — the archive's own JSON
-    """*axis* as the JSON an archive carries, read back by [`axis_from`][]."""
-    carry = {'carry': dict(axis.carry)} if axis.carry else {}
-    if isinstance(axis, EachCoordinate):
-        return {'each': 'coordinate', 'dim': axis.dim, **carry}
-    steps = axis.steps if isinstance(axis.steps, int) else list(axis.steps)
-    return {
-        'each': 'window',
-        'dim': axis.dim,
-        'steps': steps,
-        'lookahead': axis.lookahead,
-        'into': axis.into,
-        **carry,
-    }
+def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    """The axis *given* as plain data, as [`EachCoordinate.to_dict`][] and [`EachWindow.to_dict`][] write it.
+
+    Raises:
+        SpecsolveError: An ``each`` that names no axis, or a key the axis
+            does not take or needs and is not given; the message names the
+            keys it takes.
+    """
+    each = given.get('each')
+    if each not in _EACH:
+        raise SpecsolveError(
+            f"an axis given as a mapping names its kind under 'each', one of {sorted(_EACH)} (got {each!r})"
+        )
+    kind = _EACH[each]
+    taken = {f.name: f for f in fields(kind)}
+    keys = {key: value for key, value in given.items() if key != 'each'}
+    needed = [name for name, f in taken.items() if f.default is MISSING and f.default_factory is MISSING]
+    if (unknown := sorted(set(keys) - set(taken))) or (missing := [name for name in needed if name not in keys]):
+        wrong = f'{unknown} is not one of them' if unknown else f'{missing} is missing'
+        raise SpecsolveError(
+            f"{kind.__name__} given as a mapping takes 'each' and {list(taken)}, of which {needed} are "
+            f'required: {wrong}.'
+        )
+    return kind(**keys)
 
 
-def axis_from(manifest: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — the archive's own JSON
-    """The axis [`axis_manifest`][] wrote."""
-    carry = manifest.get('carry', {})
-    if manifest['each'] == 'coordinate':
-        return EachCoordinate(manifest['dim'], carry=carry)
-    return EachWindow(
-        manifest['dim'], steps=manifest['steps'], lookahead=manifest['lookahead'], into=manifest['into'], carry=carry
-    )
+def _carried(carry: Mapping[str, str]) -> dict[str, object]:
+    """The ``carry`` key, left out where nothing is carried: the ``axis.json`` of ``INPUTS_LAYOUT`` 1 holds none then."""
+    return {'carry': dict(carry)} if carry else {}
 
 
 def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

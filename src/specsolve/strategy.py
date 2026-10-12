@@ -17,7 +17,7 @@ import io
 import json
 import shutil
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -29,7 +29,7 @@ import polars as pl
 
 from specsolve.api import build, check
 from specsolve.archive_layout import check_the_target, write_archive
-from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_manifest, check_no_index_is_cut, sources_with_column
+from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
@@ -62,7 +62,7 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
@@ -176,7 +176,7 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windo
 def solve_over(
     spec: Buildable,
     sources: Mapping[str, Source],
-    axis: Axis | HandBuilt,
+    axis: Axis | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     key_name: str | None = None,
     executor: Executor | None = None,
@@ -200,9 +200,10 @@ def solve_over(
         sources: As [`build`][specsolve.api.build] takes them, every shape
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
-        axis: [`EachCoordinate`][], [`EachWindow`][], or a list of
-            ``(key, sources)`` written by hand. An axis's ``carry=`` chains
-            its slices; a hand-built list carries nothing.
+        axis: [`EachCoordinate`][], [`EachWindow`][], either as the plain
+            data its ``to_dict`` writes, or a list of ``(key, sources)``
+            written by hand. An axis's ``carry=`` chains its slices; a
+            hand-built list carries nothing.
         key_name: What to call the slice column; a class axis names its own,
             a hand-built list has to be told.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
@@ -261,7 +262,8 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: Before a slice is taken: a carry that cannot line up,
+        SpecsolveError: Before a slice is taken: an axis given as a mapping
+            whose keys name no axis; a carry that cannot line up,
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
             with a column the frames carry; an axis the program does not
@@ -281,6 +283,8 @@ def solve_over(
             the model counts, which every window restarts, or a *start* that
             leaves a slice no row, which starts that slice from nothing.
     """
+    if isinstance(axis, Mapping):
+        axis = axis_from(axis)
     carry: Mapping[str, str] = axis.carry if isinstance(axis, Axis) else {}
     if carry and executor is not None:
         raise SpecsolveError(
@@ -458,13 +462,14 @@ def _archive_the_sweep(
     Each source's tidy table comes from *one_slice*, except the ones
     [`_uncut`][] and [`_spread_over_the_axis`][] give.
     """
-    manifest = axis_manifest(axis)
     tidied = numbered(program, tidy_sources(program, one_slice))
     sliced = sources_with_column(sources, axis.dim)
     cut = {name: _uncut(program, axis, name, table) for name, table in sliced.items()}
     held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, sliced), **cut}
     tables = {name: held[name] for name in sources}
-    write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, folded, keep_windows=keep_windows))
+    write_archive(
+        out, spec, tables, axis=axis.to_dict(), answer=partial(_the_answer, folded, keep_windows=keep_windows)
+    )
 
 
 def _the_answer(sweep: Sweep, under: Path, write: FrameWriter, *, keep_windows: bool) -> None:

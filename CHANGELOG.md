@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
 - refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
 
 ## 0.8.1 (2026-10-11)
