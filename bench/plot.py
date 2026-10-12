@@ -20,7 +20,7 @@ PAGE_DATA = Path('docs/about/benchmarks.json')
 
 #: The rungs the page plots, per ladder and in order. The two ladders are never
 #: one curve: `w10` and `s` are the same size through different shapes.
-LADDERS = {'length': ('xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
+LADDERS = {'length': ('3xs', '2xs', 'xs', 's', 'm', 'l'), 'width': ('w1', 'w10', 'w100', 'w1000')}
 
 #: Which ladder a rung belongs to.
 LADDER_OF = {rung: name for name, rungs in LADDERS.items() for rung in rungs}

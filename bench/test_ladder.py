@@ -2,7 +2,7 @@
 
     pixi run refresh    # every rung, then both writers, in order — or by hand:
     pixi run -e bench pytest bench --benchmark-memory --benchmark-json=bench/results/latest.json \\
-        --sizes xs s m l
+        --sizes 3xs 2xs xs s m l
     pixi run -e bench python -m bench.report bench/results/latest.json    # -> markdown
     pixi run -e bench python -m bench.plot                                # -> the chart page
 

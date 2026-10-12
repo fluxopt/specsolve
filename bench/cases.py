@@ -617,24 +617,24 @@ def _ladder(
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    """A case's rungs, one per entry of *snapshots*, below them a tenth of the first.
+    """A case's rungs, one per entry of *snapshots*, below them a tenth and a hundredth of the first.
 
-    ``xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
+    ``3xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
     ``docs/about/benchmarks.md`` that a model whose dense build cannot fit on
     the machine still streams out under the budget. ``2xs`` is the size of one
     slice of a sweep or one solve of a model predictive controller, where a
-    build's fixed cost per query outweighs its rows. It keeps two snapshots at
-    least, so a window one snapshot shorter still has one.
+    build's fixed cost per query outweighs its rows, and ``3xs`` is a model
+    small enough to read in full. Both keep two snapshots at least, so a window
+    one snapshot shorter still has one; a ``3xs`` that two snapshots would make
+    as large as ``2xs`` is left out.
     """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
-    smallest = max(2, snapshots[0] // 10)
-    return (
-        Shape('2xs', {**sizes, 'snapshot': smallest}, smallest * per_snapshot, density),
-        *(
-            Shape(labels[i], {**sizes, 'snapshot': n}, n * per_snapshot, density)
-            for i, n in enumerate(snapshots)
-            if i < len(labels)
-        ),
+    first = snapshots[0]
+    rungs = [('3xs', max(2, first // 100)), ('2xs', max(2, first // 10)), *zip(labels, snapshots)]
+    return tuple(
+        Shape(label, {**sizes, 'snapshot': n}, n * per_snapshot, density)
+        for i, (label, n) in enumerate(rungs)
+        if i + 1 == len(rungs) or n < rungs[i + 1][1]
     )
 
 
