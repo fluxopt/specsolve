@@ -65,15 +65,15 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 
 ## Archive a sweep
 
-`archive=` on `solve_over` also keeps the axis and the carry, so the sweep
+`archive=` on `solve_over` also keeps the axis, carry included, so the sweep
 runs again from the archive alone:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t')
-sps.solve_over('window.yaml', sources, axis, carry={'soc_initial': 'soc'}, archive='roll/')
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
 archived = sps.load_archive('roll/')
-sps.solve_over(archived.spec, archived.sources, archived.axis, carry=archived.carry)
+sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
 `keep_windows=True` also writes each window's own frames, which
