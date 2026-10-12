@@ -80,7 +80,7 @@ against the size of the model.
 - **The pale violet line is specsolve on polars' in-memory engine.** The
   specsolve line leaves the engine to specsolve, which builds a small model in
   memory and a large one on polars' default engine. The
-  [how-to for small models](../howto/small-models.md) says where the two part.
+  [how-to for small models](../howto/warm-start.md#build-many-small-models-faster) says where the two part.
 - **The line is the median of the rounds, and the band is the middle half of
   them.** The band runs from the first quartile to the third. Two lines whose
   bands overlap are two numbers this run cannot tell apart.
