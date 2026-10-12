@@ -214,7 +214,7 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
         [
             f'latest-{sink}-{case}.json'
             for sink in ('highs', 'gurobi')
-            for case in ('dispatch', 'transport', 'storage', 'fleet')
+            for case in ('dispatch', 'transport', 'storage', 'fleet', 'nodal')
         ]
         + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
     ), 'every case through both sinks, and a file of its own for each width ladder'
@@ -448,7 +448,7 @@ def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     from bench import reproduce
 
     selection = ' '.join(reproduce.published())
-    for expected in ('--cases dispatch transport storage fleet', '--budget 30', 'bench/results/latest.json'):
+    for expected in ('--cases dispatch transport storage fleet nodal', '--budget 30', 'bench/results/latest.json'):
         assert expected in selection, f'the reproduction lost `{expected}` from the task definition'
     assert 'PUBLISHED' not in Path(reproduce.__file__).read_text(), 'the selection is read, not repeated'
 
