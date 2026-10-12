@@ -29,6 +29,7 @@ from specsolve.relational.answer_layout import (
     checked_kind,
     clear_the_answer,
     not_requested_message,
+    refuse_without_parquet,
     write_format,
     write_reasons,
     write_spec,
@@ -813,8 +814,10 @@ class Result:
             The directory.
 
         Raises:
-            SpecsolveError: This result was closed.
+            SpecsolveError: This result was closed, or this polars has no
+                parquet.
         """
+        refuse_without_parquet('Result.save')
         return self._save(Path(directory), write_whole)
 
     def _save(self, out: Path, write: FrameWriter) -> Path:

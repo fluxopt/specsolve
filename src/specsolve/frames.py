@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.inputs import ArrowTable
+from specsolve.relational.answer_layout import refuse_without_parquet
 from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     import sys
 
     if isinstance(obj, (str, Path)):
+        refuse_without_parquet(f'a source given as the path {str(obj)!r}')
         return pl.scan_parquet(obj)
     if isinstance(obj, pl.LazyFrame):
         return obj

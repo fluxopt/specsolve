@@ -38,6 +38,7 @@ from specsolve.relational.answer_layout import (
     read_outputs,
     read_reasons,
     read_spec,
+    refuse_without_parquet,
     row_of,
     write_format,
     write_reasons,
@@ -709,8 +710,9 @@ class Sweep:
 
         Raises:
             SpecsolveError: The sweep was read off an archive written without
-                its windows.
+                its windows, or this polars has no parquet.
         """
+        refuse_without_parquet('Sweep.save')
         by_slice = self._frames_by_slice()
         spill = Spill.opened(
             directory,
@@ -869,6 +871,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
     only by a stitch from the windows; ``None`` for an archive that kept no
     windows to stitch.
     """
+    refuse_without_parquet('reading a saved sweep')
     manifest = under / MANIFEST_FILE
     if not manifest.is_file():
         raise LayoutError(

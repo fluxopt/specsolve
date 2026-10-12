@@ -23,7 +23,13 @@ import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
-from specsolve.relational.answer_layout import FORMAT_FILE, OUTPUT_KINDS, write_format, write_whole
+from specsolve.relational.answer_layout import (
+    FORMAT_FILE,
+    OUTPUT_KINDS,
+    refuse_without_parquet,
+    write_format,
+    write_whole,
+)
 from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
@@ -294,6 +300,7 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
             unpacked.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
+    refuse_without_parquet('reading an archive')
     held = Path(path)
     if held.is_dir():
         if into is not None:

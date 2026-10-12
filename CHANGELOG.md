@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(api): a call that reads or writes parquet is refused by name where polars has no parquet, as in the browser ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
 - feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
 - refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
 - feat(deps): specsolve runs on polars 1.33.1, the newest polars that runs in the browser ([#1973](https://github.com/fluxopt/specsolve/pull/1973))
