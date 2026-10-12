@@ -1,7 +1,6 @@
 # Glossary
 
-The one definition of each name this project uses. The rest hang off one
-distinction:
+The one definition of each name this project uses.
 
 > A **spec** is what you write: the math, with no data. A **model** is a spec
 > with your data attached, a `Model` in Python. A **result** is one answer read
@@ -17,78 +16,68 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The chain
 
 **Spec**
-: Short for specification. The math before any data: a YAML file, a
-  mapping, or a `Spec` from `mathspec.to_spec`. It carries no numbers, and
-  every function takes it first. What it may contain is
+: The math before any data: a YAML file, a mapping, or a `Spec`. What it may
+  contain is
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
 : What [`check`](api.md#specsolve.check) returns: the spec as the plan a build
-  reads, still with no data. No function takes one back, so keep the `Spec`.
+  reads. No function takes one back, so keep the `Spec`.
 
 **Model**
-: A spec with data attached: what [`build`](api.md) returns. One `Model`
-  feeds any sink through `solve()` or `write(path)`, and `update(...)` puts
-  new numbers on it in place.
+: A spec with data attached: what [`build`](api.md) returns.
 
 **Result**
-: One answer read back from a solve: `objective`, `primal(name)`,
-  `dual(name)`, `evaluate(expression)` and the rest of
-  [`Result`](api.md#specsolve.types.Result). It owns its tables, so it
-  outlives its model.
+: One answer read back from a solve:
+  [`Result`](api.md#specsolve.types.Result). It owns its tables, so it outlives
+  its model.
 
 **Answer**
-: What came back, whichever function asked: a `Result` for one solve, a
-  [`Sweep`](#sweeps) for a sweep.
+: What came back: a `Result` for one solve, a [`Sweep`](#sweeps) for a sweep.
 
 **Archive**
-: A spec, the data it was solved with and what came back, written together
-  as one zip or one directory by `archive=`
-  ([archiving](../howto/archiving.md)).
+: A spec, its data and its answer, written as one zip or directory by
+  `archive=` ([archiving](../howto/archiving.md)).
 
 ## The functions
 
 **check** · **build** · **solve** · **write**
-: `check(spec)` validates the spec with no data. `build(spec, sources)`
-  returns a [Model](#the-chain). `solve` and `write` build and then solve or
-  write a file in one call ([the API](api.md#run-a-spec)).
+: `check` validates a spec with no data, and `build` returns a
+  [Model](#the-chain). `solve` and `write` build and then solve or write a file
+  ([the API](api.md#run-a-spec)).
 
 **evaluate**
-: Values an expression with no solver: of a spec that declares no variables,
-  or of a `Result` at its solution.
+: Values an expression with no solver: of a spec with no variables, or of a
+  `Result` at its solution.
 
 **update**
-: `model.update(sources)` puts new numbers on a built model in place, naming
-  only what changed. A change that moves a mask builds again.
+: `model.update(sources)` puts new numbers on a built model in place. A change
+  that moves a mask builds again.
 
 **load** · **scan**
-: The two ways a saved answer is read back. `load_…` reads it whole;
-  `scan_…` reads each frame when asked, so the files have to outlive the value
+: `load_…` reads a saved answer whole. `scan_…` reads each frame when asked,
+  so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
 
 ## The data
 
 **Sources**
-: The data you attach: a `dict` from each name the spec declares to a table,
-  and from each dimension to its labels ([the data contract](data.md)).
+: The data you attach: a `dict` from each declared name to a table, and from
+  each dimension to its labels ([the data contract](data.md)).
 
 **Index**
-: A dimension's labels in order, each once, under the dimension's own key in
-  `sources`. `shift` reads that order
+: A dimension's labels in order, each once
   ([where coordinates come from](data.md#where-coordinates-come-from)).
 
 **Coordinate**
-: One point of a declaration's dimensions: one snapshot for one generator. A
-  parameter has a value at each coordinate it covers, or no row there.
+: One point of a declaration's dimensions: one snapshot for one generator.
 
 **Table**
-: A polars `DataFrame` with one column per dimension and a `value` column,
-  one row per coordinate: what a parameter arrives as, and what `primal` hands
-  back. A relation's table has one column per column it declares.
+: A polars `DataFrame` with one column per dimension and a `value` column, one
+  row per coordinate.
 
 **Relation**
-: A named map between dimensions, such as the bus each generator sits on,
-  supplied as a table of the rows it has.
+: A named map between dimensions, such as the bus each generator sits on.
 
 **Mask**
 : The `where:` on a declaration. A coordinate it excludes has no row
@@ -97,38 +86,32 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## How it runs
 
 **attach**
-: Fitting sources onto a spec to make a [Model](#the-chain): what `build`
-  does, and `update` does again.
+: Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
+  `update`.
 
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
-  writer (`.lp`, `.mps`). What a sink can take is its **capability**, such as
-  special-ordered sets ([what each sink takes](api.md#what-each-sink-takes)).
+  writer (`.lp`, `.mps`). What a sink can take is its **capability**
+  ([what each sink takes](api.md#what-each-sink-takes)).
 
 **start**
-: What a solve begins from: `'previous'`, the default, carries on from the
-  solve before, and `None` begins from nothing. A start changes how soon the
-  solver reaches the optimum, never the optimum
-  ([making a loop of solves faster](../howto/warm-start.md)).
+: What a solve begins from: `'previous'`, the default, or `None`. It never
+  changes the optimum ([making a loop of solves faster](../howto/warm-start.md)).
 
 ## Sweeps
 
 **Sweep**
 : What [`solve_over`](sweeps.md) returns when it solves one spec once per
-  slice. It has `Result`'s readers. A windowed sweep answers over the labels of
-  the dimension it cut; any other sweep is keyed by slice.
+  slice. It has `Result`'s readers.
 
 **Axis** · **slice** · **key**
-: An axis says how the sources split: `EachCoordinate(dim)`, one slice per
-  label, or `EachWindow(dim, ...)`, one per window of consecutive labels. A
-  slice is one set of sources, solved as one model, and its key names it in
-  every table the sweep hands back.
+: An axis, such as `EachWindow`, says how the sources split. A slice is one
+  set of sources, solved as one model, and its key names it in every table.
 
 **carry**
 : An axis's `carry={parameter: variable}` hands one slice's solution to the
   next as data.
 
 **held** · **spilled**
-: A held sweep keeps its answers in memory. A spilled one writes them to the
-  directory `spill_to=` names, and `sweep.scan(name)` reads them lazily
-  ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+: A held sweep keeps its answers in memory. A spilled one writes them to
+  `spill_to=` ([spilling](sweeps.md#spilling-a-sweep-to-disk)).

@@ -1,9 +1,8 @@
 # Fixing, relaxing and removing
 
-How to do what linopy's `fix`, `relax` and `remove_constraints` do. None is a
-method here: a fix is data, as in
-[Change it and solve again](../change.md), and the other two are an edit to
-the spec.
+How to do what linopy's `fix`, `relax` and `remove_constraints` do. A fix is
+data, as in [Change it and solve again](../change.md). The other two are an
+edit to the spec.
 
 | linopy | here | rebuild |
 |---|---|---|
@@ -11,8 +10,7 @@ the spec.
 | `x.relax()` | `domain:` in the declaration | yes |
 | `remove_constraints` | drop the key from the spec | yes |
 
-The spec is `examples/dispatch.yaml`. Every block runs when the site is
-built, and a block that raises fails the build.
+The spec is `examples/dispatch.yaml`.
 
 ```python exec="true" source="material-block" session="lifecycle"
 import polars as pl
@@ -34,10 +32,9 @@ sources = {
 
 ## Fix a variable
 
-Give the variable two bound parameters, each total over its coordinates: a
-frame holding only the pinned rows is a load error. Keep `p_max` as the
-`where` mask, so a pin does not renumber the labels. Then write the pinned
-value into both bounds with `update`:
+Give the variable two bound parameters, each total over its coordinates.
+Keep `p_max` as the `where` mask. Then write the pinned value into both bounds
+with `update`:
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 pinnable = to_spec(MODEL).to_dict()
@@ -60,14 +57,12 @@ print(f'{pinning.loads} loads over {pinning.solves} solves — a pin moves bound
 print(pl.DataFrame({'gas': ['free to dispatch', 'held at 60'], 'objective': [unpinned, held]}))
 ```
 
-One load for both answers. To fix a combination of variables, such as
-`sum(p, over=generator) == target`, write a constraint instead: a combination
-is not a bound.
+One load for both answers. To fix a combination of variables, write a
+constraint instead.
 
 ## Relax integrality
 
-Patch `domain:` and build again. An integer variable makes duals undefined,
-and asking for one says so.
+Patch `domain:` and build again. An integer model has no duals.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 integral = to_spec(MODEL).to_dict()
@@ -87,8 +82,7 @@ print(relaxed.dual('power_balance'))
 
 ## Remove a constraint
 
-`pop` the constraint's key from the spec. Below, a ramp limit is added and
-taken away.
+`pop` the constraint's key from the spec:
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 ramped = to_spec(MODEL).to_dict()
@@ -106,8 +100,5 @@ without_ramp = sps.solve(ramped, data).objective
 print(pl.DataFrame({'model': ['with ramp_up', 'ramp_up removed'], 'objective': [with_ramp, without_ramp]}))
 ```
 
-To switch rows off with data instead, put a `where` on the constraint. The
-declaration stays and builds no rows where the mask is false. An `update` that
-changes the mask loads the model again, since the rows are renumbered.
-`diagnostics().loads` counts the loads, and `omissions` counts the rows not
-built.
+To switch rows off with data instead, put a `where` on the constraint. An
+`update` that changes the mask loads the model again.

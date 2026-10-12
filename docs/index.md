@@ -36,9 +36,8 @@ keep the solver loaded for quick updates and warm starts.**
 
 --8<-- "README.md:model"
 
-The file holds no data, so it can be checked, reviewed and diffed before any
-data exists. mathspec prints it as LaTeX, Typst or Markdown
-([print a spec as math](https://mathspec.readthedocs.io/en/latest/howto/print/)).
+The file holds no data, so you can check and diff it before any data exists,
+and [print it as math](https://mathspec.readthedocs.io/en/latest/howto/print/).
 
 ## Solve it
 
@@ -51,7 +50,7 @@ pip install specsolve
 ```
 
 [Installation](https://github.com/fluxopt/specsolve#installation) lists the
-extras. Then start with [your first model](run.md).
+extras.
 
 !!! warning "Alpha, pre-1.0"
 

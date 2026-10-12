@@ -1,14 +1,11 @@
 # Preparing the data
 
-From the files an instance arrives in to the `sources` mapping the functions
-take, one table per parameter. What that mapping may contain is
-[the data contract](../reference/data.md).
+How to turn an instance's files into the `sources` mapping, one table per
+parameter. The reference is [the data contract](../reference/data.md).
 
 ## The files you start from
 
-Entity tables, attributes side by side as a PyPSA-style CSV folder holds
-them, and tidy time series. The committed instance for
-[dispatch](../examples/dispatch.md):
+The instance for [dispatch](../examples/dispatch.md):
 
 `examples/ports/data/dispatch/generators.csv`
 
@@ -31,8 +28,7 @@ snapshot,value
 
 ## One table per parameter
 
-One `select` per parameter: its dimension columns and a `value` column. The
-time series passes through untouched:
+One `select` per parameter: its dimension columns and a `value` column:
 
 ```python
 import polars as pl
@@ -55,10 +51,9 @@ With one parquet file per parameter, pass the paths instead:
 
 ## From linopy's shapes
 
-Pass a pandas Series over one dimension as it is; its index attaches to the
-dimension it is named after. A Series over two dimensions is a table:
-`reset_index()` it, since a `MultiIndex` is refused. A `DataArray` becomes one with `.to_series()`. The
-[dispatch](../examples/dispatch.md) instance, linopy-style:
+Pass a pandas Series over one dimension as it is, its index named after the
+dimension. `reset_index()` a Series over two dimensions, since a `MultiIndex`
+is refused. A `DataArray` becomes a Series with `.to_series()`:
 
 ```python
 import pandas as pd
@@ -72,10 +67,9 @@ sources = {'snapshot': load.index, 'generator': p_max.index, 'p_max': p_max, 'co
 
 ## From PyPSA's shapes
 
-A static attribute is an indexed Series already: rename its index. A wide
-time series needs `stack()` and `reset_index()`, since a parameter over two
-dimensions is a table with both as columns. Here the load is mapped onto
-buses on the way, the shape [transport](../examples/transport.md) attaches:
+Rename the index of a static attribute. `stack()` and `reset_index()` a wide
+time series. Here the load is mapped onto buses, the shape
+[transport](../examples/transport.md) attaches:
 
 ```python
 load = (
@@ -99,5 +93,4 @@ sources = {
 
 `gen_bus` is a
 [relation](https://mathspec.readthedocs.io/en/latest/reference/language/relations/),
-so it arrives under its own name as a table, one column per column it declares:
-PyPSA's `bus` column as it stands, not merged into an index.
+so it arrives as a table with one column per column it declares.

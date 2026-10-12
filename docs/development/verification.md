@@ -1,6 +1,6 @@
 # Verification
 
-How we know an answer is right. Four checks, from the cheapest to the most
+How we know an answer is right: four checks, from the cheapest to the most
 convincing. Each one catches what the one before cannot.
 
 | Check | It catches | Where |
@@ -13,26 +13,18 @@ convincing. Each one catches what the one before cannot.
 ## The oracle
 
 The test suite builds every file twice: through the relational engine, and as
-a `linopy.Model` in `tests/linopy_lane/`, from the same `sources`. The
-differential tests compare the two. linopy is a test dependency, and nothing
-under `src/` imports it.
-
-The comparison checks one language only because both builds pass the same
-`inputs.lowered` gate. A construct one build refuses, the other refuses in the
-same sentence. Both read data through `sources.tidy_sources`, so a malformed
-source gets the same refusal from both
-([#60](https://github.com/fluxopt/specsolve/issues/60)).
+a `linopy.Model` in `tests/linopy_lane/`. The differential tests compare the
+two. Both builds pass the same `inputs.lowered` gate and read data through
+`sources.tidy_sources`, so both refuse the same constructs and the same
+malformed sources ([#60](https://github.com/fluxopt/specsolve/issues/60)).
 
 **Where a concept is already linopy's, specsolve copies its name**: solve
-statuses, `status` and `termination_condition` with `is_ok` as the rollup, the
-shape of a result. The engine may not import linopy, so the tables are copied,
-and `tests/test_solve_status.py` imports linopy to check the copy still
-matches.
+statuses, `is_ok`, the shape of a result. `tests/test_solve_status.py` checks
+that the copy still matches.
 
 ### What a construct becomes in the oracle
 
-What the oracle calls for each thing a file can say. Each row lives in
-`tests/linopy_lane/builder.py`.
+Each row lives in `tests/linopy_lane/builder.py`.
 
 | Declaration | linopy |
 |---|---|
@@ -61,70 +53,48 @@ What the oracle calls for each thing a file can say. Each row lives in
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
 A missing parameter row is zero in a coefficient, an error in `bounds:`, and
-false in a `where` operand. `tests/linopy_lane/absence.py` holds each spelling.
+false in a `where` operand (`tests/linopy_lane/absence.py`).
 
 ### The same language, but not every build
 
-Three files pass `check` and build on one side only. Each refusal names the
-rewrite.
+Three files pass `check` and build on one side only.
 
-- **An objective with a constant** builds in specsolve and not in the oracle,
-  because `linopy.Objective` has no slot for one. The oracle refuses it rather
-  than drop the constant (`osemosys_utopia`,
+- **An objective with a constant** builds only in specsolve, because
+  `linopy.Objective` has no slot for one (`osemosys_utopia`,
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
-- **A relation that is not a single-valued map** builds in specsolve and not in
-  the oracle, which holds each relation as one dense array
-  (`tests/linopy_lane/loader.py`).
+- **A relation that is not a single-valued map** builds only in specsolve,
+  because the oracle holds each relation as one dense array.
 - **An operator along a dimension a constant part does not carry**, such as
-  `sum(x * k + d, over=t)` with a scalar `d`, builds in the oracle and not in
-  specsolve. The refusal says to declare the parameter over the dimension
+  `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
+  refusal says to declare the parameter over the dimension
   ([#1137](https://github.com/fluxopt/specsolve/issues/1137)).
 
 ## Published optima
 
-The oracle cannot catch a misreading both builds share. A published optimum
-from outside can. Each model in `examples/ports/` carries the optimum somebody
-else solved, with its source, in `references.json`, and `tests/test_ports.py`
-solves to it. The table is
+A published optimum catches a misreading both builds share. Each model in
+`examples/ports/` carries one, with its source, in `references.json`, and
+`tests/test_ports.py` solves to it. The table is
 [Does it get the right answer?](../examples/index.md#does-it-get-the-right-answer)
-on the gallery page.
 
 ## The PyPSA ladder
 
-[The PyPSA ladder](../examples/pypsa_ladder.md) grows mathspec's one-file PyPSA
-model a feature at a time. Each rung solves the same network in PyPSA and in
-specsolve, and compares the objective, and the duals where PyPSA reports them.
-`tools/ladder.py` writes the pages from `differential/pypsa/`. The ladder is
-the proof that the language holds a real model.
+[The PyPSA ladder](../examples/pypsa_ladder.md) grows a one-file PyPSA model a
+feature at a time. Each rung solves the same network in PyPSA and in
+specsolve, and compares the objective and the duals. `tools/ladder.py` writes
+the pages from `differential/pypsa/`.
 
 ## Decomposition
 
 [`examples/benders/`](https://github.com/fluxopt/specsolve/blob/main/examples/benders/README.md)
-writes Benders decomposition as a loop over three specs, and
+writes Benders decomposition as a loop over three specs.
 `tests/test_benders_example.py` checks that it reaches the optimum of the
-monolith. It shows that an algorithm the language does not contain can be
-written over the specs it does.
+monolith.
 
 ## What a port could not say
 
-Each row is a verdict for the roadmap: macro, primitive, formulation, or
-refused.
+Each row is a verdict: macro, primitive, formulation, or refused.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
 | PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
-| Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut, which is how every serious TSP code works | [MTZ](../examples/tsp_mtz.md), O(n²) and static | **refused, and correctly**: a solve loop is an algorithm, not a model |
-
-### Shapes still without a witness
-
-The language can say each of these, and no outside model in the corpus has yet
-needed one. A model that does is worth more to the corpus than one that uses a
-shape already covered.
-
-| Shape | Where it was looked for |
-|---|---|
-| one axis grouped several ways, all of them load-bearing | OSeMOSYS UTOPIA declares three maps out of its timeslice, but they feed only storage constraints and the instance builds none |
-| a chain whose coarse end carries a constraint | PyPSA's `ac-dc-meshed` has a country per bus and nothing constrains a country; GAMSLIB `alum` composes three such chains and its shipped scenario switches two of them off |
-| a group that carries its own constraint and appears nowhere else | GAMSLIB `mexls` is exactly this, and its optimum is published only in a book with no reachable text |
-| a partial map whose null membership moves an optimum | `reserves` exercises it, but that model is ours and was built to |
-| opposite-sign legs onto one dimension, plus a second hop a constraint reads | an airline fleet-assignment text has it; the data and both optima are not obtainable |
+| Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut | [MTZ](../examples/tsp_mtz.md), O(n²) and static | **refused**: a solve loop is an algorithm, not a model |

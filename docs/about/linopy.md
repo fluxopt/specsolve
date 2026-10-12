@@ -1,15 +1,13 @@
 # Coming from linopy
 
 For a reader who writes models in [linopy](https://github.com/PyPSA/linopy).
-specsolve solves the same models, and borrows linopy's names where it can. The
-difference is where the math lives: in a YAML file you check and diff, not in
-the Python that builds it.
+specsolve solves the same models with linopy's names where it can, but the
+math lives in a YAML file rather than in Python.
 
 ## The same model
 
-The dispatch model of [Your first model](../run.md), written both ways. Both
-reach the same objective and the same prices, and `tests/test_ports.py` holds
-them to it.
+The dispatch model of [Your first model](../run.md), written both ways.
+`tests/test_ports.py` holds both to the same objective and prices.
 
 === "linopy"
 
@@ -54,13 +52,12 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
 ## What is different
 
 - **The model is a file.** There is no Python API that builds math.
-  `sps.check` validates the file with no data, so a model can be reviewed and
-  checked in CI before any data exists.
+  `sps.check` validates the file with no data.
 - **Data is attached by name, and a missing row is a missing coordinate.**
   A model holds only the rows that exist, which is what keeps a sparse model
   small.
-- **linopy is not a dependency.** No install of specsolve brings it. The test
-  suite builds every file a second time in linopy and compares the two
+- **linopy is not a dependency.** Only the test suite uses it, to build every
+  file a second time and compare
   ([verification](../development/verification.md#the-oracle)).
 - **Some of linopy is not taken**: array operations such as `merge` and
   `reindex` are data preparation, and the solver layer is specsolve's own
@@ -68,9 +65,5 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
 
 ## Where linopy is ahead
 
-- **Solver breadth**: twelve solvers against specsolve's three, plus the LP
-  and MPS files.
-- **Verbs on the model**: `fix` and `relax` are methods there, and edits to the
-  data or the spec here.
-- **Labelled answers**: linopy answers in xarray; specsolve answers in tables,
-  and `to_dataarray` bridges.
+linopy reaches twelve solvers against specsolve's three, plus the LP and MPS
+files. It has `fix` and `relax` as methods, and answers in xarray.

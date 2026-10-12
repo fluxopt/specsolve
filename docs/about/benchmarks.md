@@ -1,17 +1,14 @@
 # Benchmarks
 
-This page shows what specsolve costs to build a model and hand it to a solver,
-beside four other ways of writing the same model, and how far to trust each
-number.
-
-Each model is built and handed to a solver. `run()` and `optimize()` are never
-called, so no number includes solve time. Every rival model is hand-written in
-[`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models)
-beside ours, and CI solves each against ours, so nothing here is fast because it
-built a different model.
+What it costs to build a model and hand it to a solver, in specsolve and in
+four other ways of writing the same model. No number includes solve time.
+Every rival model is hand-written in
+[`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models),
+and CI solves each against ours, so nothing here is fast because it built a
+different model.
 
 dispatch
-:   Meets a demand from a fleet of units: bounds and one balance. It is the floor.
+:   Meets a demand from a fleet of units: bounds and one balance.
 
 transport
 :   A network of buses and lines: mapping tables, three joins per row.
@@ -67,19 +64,16 @@ fleet
 
 ## Reading the charts
 
-Each panel is one model through one solver, and each line is one library's cost
-against the size of the model.
+Each panel is one model through one solver, and each line is one library.
 
-- **specsolve is the thick violet line.** Click a library in the legend to
-  hide it.
+- **specsolve is the thick violet line.**
 - **The grey line is the matrix floor**: a hand-written matrix handed straight
-  to the solver's bulk API. Nobody writes a model this way, so its distance
-  from specsolve is what the modelling layer costs.
+  to the solver's bulk API. Its distance from specsolve is what the modelling
+  layer costs.
 - **The line is the median of nine rounds, and the band is the middle half.**
-  Two lines whose bands overlap are two numbers this run cannot tell apart
+  Overlapping bands are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
-- **A dashed line is a projection**, past the size the harness's time or
-  memory budget refused.
+- **A dashed line is a projection** past the time or memory budget.
 - **The table divides by specsolve.** Green is where specsolve is faster, blue
   where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
   are sizes the harness refused.
@@ -90,17 +84,13 @@ against the size of the model.
 uv run --locked bench/reproduce.py
 ```
 
-The lock file pins every version, specsolve's commit included. Every round of
-every measurement is in
-[`bench/results`](https://github.com/fluxopt/specsolve/blob/main/bench/results),
-and [the harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
-says how each number is taken.
+The lock file pins every version, specsolve's commit included. Every round is
+in [`bench/results`](https://github.com/fluxopt/specsolve/blob/main/bench/results).
 
 ## A script that solves one model
 
-The tables above are what a running process pays. A script that solves one
-model also pays the interpreter, the import, and what a library loads the first
-time it builds. This table times a new process from launch to exit at `xs`.
+A script that solves one model also pays the interpreter, the import and the
+first build. This table times a new process from launch to exit at `xs`.
 
 <!-- bench:fresh -->
 
@@ -164,21 +154,17 @@ No run has published the width ladders yet ([below](#not-measured-yet)).
 Listed so that a claim with no table under it is visible as one.
 
 - **Sparsity, which is the engine's whole premise.** Every published cell is
-  100% live: the `where` in `dispatch` removes nothing, and `transport`,
-  `storage` and `fleet` carry no mask at all. A dense coordinate product is the shape an
-  array engine is built for. The published ladder therefore compares
-  the two lanes only where the relational one has the least to win. `nodal` and
-  `sector` are the sparse cases, at 25% and 8.3% of their product. `nodal` has
-  a linopy formulation now, so `pixi run density` sweeps it at four densities;
-  no published run has taken it.
-- **Solve time.** Every number stops at the hand-off. The simplex is the
-  solver's work whoever filled the model.
+  100% live, the dense shape an array engine is built for. `nodal` and
+  `sector` are the sparse cases, at 25% and 8.3% of their product.
+  `pixi run density` sweeps `nodal` at four densities; no published run has
+  taken it.
+- **Solve time.** The simplex is the solver's work whoever filled the model.
 - **The LP-file round trip.** The tables price writing a file, never reading
   one back.
 - **Sizes past `l`.** `xl` and `2xl` exist in the harness and no run
   publishes them.
 - **The width ladders of `storage` and `transport`.** Their next rung does not
-  fit the box, and the watchdog kills it. The last `highs` numbers past `w10`
+  fit the box. The last `highs` numbers past `w10`
   are in [#1285](https://github.com/fluxopt/specsolve/pull/1285): specsolve
   took 0.11 s and 0.59 GB at `transport/w100`, against linopy's 53.53 s and
   14.26 GB.
@@ -186,8 +172,8 @@ Listed so that a claim with no table under it is visible as one.
 
 ## Method
 
-Each measurement runs in a process of its own, with import excluded and
-teardown included. Peak memory is `ru_maxrss`. A run refuses to start on a
-busy machine. [The harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
-has every flag and every caveat, such as the allocator cost on polars' peak
+Each measurement runs in its own process, with import excluded and teardown
+included. Peak memory is `ru_maxrss`. A run refuses to start on a busy
+machine. [The harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
+has every flag and caveat, such as the allocator cost on polars' peak
 ([#896](https://github.com/fluxopt/specsolve/issues/896)).
