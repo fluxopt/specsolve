@@ -10,7 +10,7 @@ is what it printed on this commit. A block that raises fails the build.
 
 ## 1. One solve per scenario
 
-The dispatch model of [Run a model](run.md), with two load levels. The `load`
+The dispatch model of [Your first model](run.md), with two load levels. The `load`
 table carries a `scenario` column, which the spec does not declare.
 [`EachCoordinate('scenario')`](reference/sweeps.md#the-axes) solves the model
 once per label of that column:

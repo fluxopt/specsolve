@@ -1,8 +1,9 @@
 """The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-``docs/change.md`` and ``docs/howto/fix-relax-remove.md`` run every executed
-block, and each test pins one claim the prose makes. Blocks are exec'd in order
-in one namespace, as markdown-exec's ``session=`` runs them on the site.
+``docs/run.md``, ``docs/change.md`` and ``docs/howto/fix-relax-remove.md`` run
+every executed block, and each test pins one claim the prose makes. Blocks are
+exec'd in order in one namespace, as markdown-exec's ``session=`` runs them on
+the site, and in the directory a fence's ``workdir=`` names.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from mathspec import to_spec
 
+import specsolve as sps
 from tests.conftest import EXAMPLES_DIR
 
 if TYPE_CHECKING:
@@ -22,27 +24,36 @@ if TYPE_CHECKING:
 
 REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
+FIRST = DOCS_DIR / 'run.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
-EXECUTED = re.compile(r'^```python[^\n]*\bexec="true"[^\n]*$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
+EXECUTED = re.compile(r'^```python(?P<info>[^\n]*\bexec="true"[^\n]*)$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
+WORKDIR = re.compile(r'\bworkdir="(?P<dir>[^"]*)"')
 
 
 def run(page: Path) -> tuple[dict[str, Any], str]:
     """One top-to-bottom run: the namespace it ends with, and what it printed.
 
     Runs from the repository root, where zensical runs the build, so
-    ``examples/dispatch.yaml`` resolves.
+    ``examples/dispatch.yaml`` resolves, or from the ``workdir`` a fence names.
     """
-    blocks = [match['code'] for match in EXECUTED.finditer(page.read_text())]
+    blocks = list(EXECUTED.finditer(page.read_text()))
     assert blocks, f'{page.name} has no executed block, so this test would assert nothing'
     namespace: dict[str, Any] = {'__name__': '__tutorial__'}
     printed = io.StringIO()
-    with contextlib.chdir(REPO), contextlib.redirect_stdout(printed):
+    with contextlib.redirect_stdout(printed):
         for block in blocks:
-            exec(compile(block, str(page), 'exec'), namespace)
+            workdir = WORKDIR.search(block['info'])
+            with contextlib.chdir(REPO / workdir['dir'] if workdir else REPO):
+                exec(compile(block['code'], str(page), 'exec'), namespace)
     return namespace, printed.getvalue()
+
+
+@pytest.fixture(scope='module')
+def first() -> tuple[dict[str, Any], str]:
+    return run(FIRST)
 
 
 @pytest.fixture(scope='module')
@@ -53,6 +64,23 @@ def session() -> tuple[dict[str, Any], str]:
 @pytest.fixture(scope='module')
 def lifecycle() -> tuple[dict[str, Any], str]:
     return run(LIFECYCLE)
+
+
+def test_the_first_model_solves_to_the_cost_the_page_quotes(first: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = first
+    assert namespace['result'].objective == pytest.approx(10500.0), 'the page says the load is met for 10500'
+
+
+def test_the_first_model_quotes_the_refusal_it_asks_the_reader_to_cause() -> None:
+    """The page has the reader drop the sum from ``power_balance``, and quotes what ``check`` says."""
+    import yaml
+
+    spec = yaml.safe_load((EXAMPLES_DIR / 'dispatch.yaml').read_text())
+    spec['constraints']['power_balance']['expression'] = 'p == load'
+    with pytest.raises(sps.errors.SpecsolveError) as refused:
+        sps.check(spec)
+    quoted = f'{type(refused.value).__name__}: {refused.value}'
+    assert f'```text\n{quoted}\n```' in FIRST.read_text(), f'docs/run.md no longer quotes the refusal whole: {quoted}'
 
 
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
