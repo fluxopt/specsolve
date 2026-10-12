@@ -15,7 +15,7 @@ keep the solver loaded for quick updates and warm starts.**
 
 [Your first model](run.md){ .md-button .md-button--primary }
 [Browse the examples](examples/index.md){ .md-button }
-[The language](https://mathspec.readthedocs.io/en/latest/reference/language/){ .md-button }
+[The language](https://mathspec.readthedocs.io/en/latest/){ .md-button }
 
 </div>
 
