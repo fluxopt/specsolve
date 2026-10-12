@@ -4,7 +4,7 @@ The model is typed out per case in `bench/models/<case>/linopy.py`, the way
 `examples/ports/references/linopy/` writes it, and read from parquet with
 pandas.
 
-Three defaults are switched off:
+Four defaults are changed:
 
 - `set_names=False` on both solver hand-offs, because specsolve's sinks name
   nothing; naming is 82% of linopy's HiGHS hand-off (0.11s against 0.02s at
@@ -12,6 +12,10 @@ Three defaults are switched off:
 - `progress=False` on the LP writer, whose tqdm bars cost ~7% of the write at
   10M variables and write to stderr.
 - `io_api='lp-polars'`, its fastest writer rather than its default one.
+- `semantics='v1'` rather than `legacy`: an absent slot, from `mask=` or
+  `shift`, makes the expression absent instead of counting as zero. It is the
+  convention the suite's linopy lane speaks (`tests/linopy_lane`). A
+  formulation writes `fillna(0)` where it means zero.
 """
 
 from __future__ import annotations
@@ -47,10 +51,12 @@ def prepare(case_name: str, size: str, paths: dict[str, str], options: Mapping[s
 
 def _built(prepared: Prepared) -> Any:
     """The model, parquet read included — every timed verb starts here."""
+    import linopy
     import pandas as pd
 
     from bench.models import formulation
 
+    linopy.options['semantics'] = 'v1'
     tables = {name: pd.read_parquet(path) for name, path in prepared.paths.items()}
     return formulation(prepared.case_name, DIALECT).build(tables)
 
