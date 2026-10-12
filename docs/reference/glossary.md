@@ -19,12 +19,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Spec**
 : Short for specification. The math before any data: a YAML file, a
   mapping, or a `Spec` from `mathspec.to_spec`. It carries no numbers, and
-  every verb takes it first. What it may contain is
+  every function takes it first. What it may contain is
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
 : What [`check`](api.md#specsolve.check) returns: the spec as the plan a build
-  reads, still with no data. No verb takes one back, so keep the `Spec`.
+  reads, still with no data. No function takes one back, so keep the `Spec`.
 
 **Model**
 : A spec with data attached: what [`build`](api.md) returns. One `Model`
@@ -38,7 +38,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   outlives its model.
 
 **Answer**
-: What came back, whichever verb asked: a `Result` for one solve, a
+: What came back, whichever function asked: a `Result` for one solve, a
   [`Sweep`](#sweeps) for a sweep.
 
 **Archive**
@@ -46,12 +46,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   as one zip or one directory by `archive=`
   ([archiving](../howto/archiving.md)).
 
-## The verbs
+## The functions
 
 **check** · **build** · **solve** · **write**
 : `check(spec)` validates the spec with no data. `build(spec, sources)`
   returns a [Model](#the-chain). `solve` and `write` build and then solve or
-  write a file in one call ([the verbs](api.md#run-a-spec)).
+  write a file in one call ([the API](api.md#run-a-spec)).
 
 **evaluate**
 : Values an expression with no solver: of a spec that declares no variables,
