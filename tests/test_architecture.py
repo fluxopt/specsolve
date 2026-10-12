@@ -1,4 +1,4 @@
-"""docs/about/architecture.md, enforced.
+"""docs/development/architecture.md, enforced.
 
 Each test encodes one hard rule from the architecture document. Static checks
 parse source with ``ast``, so they run on a bare install.
@@ -402,7 +402,7 @@ def test_the_public_surface_is_exactly_what_is_declared():
         problems += _surface_problems(getattr(specsolve, module), names)
     assert not problems, (
         f'{problems} — declare a name in PUBLIC_API or PUBLIC_MODULES, with the role it plays, and in '
-        f'docs/about/architecture.md; or import it privately. A surface that grows by accident is not narrow.'
+        f'docs/development/architecture.md; or import it privately. A surface that grows by accident is not narrow.'
     )
 
 
@@ -800,8 +800,8 @@ def test_both_lanes_dispatch_on_every_plan_node():
 
 
 def test_every_module_is_documented_somewhere():
-    """No module is undocumented, in docs/about/architecture.md or a ``README.md`` in a directory above it."""
-    architecture = (REPO / 'docs/about/architecture.md').read_text()
+    """No module is undocumented, in docs/development/architecture.md or a ``README.md`` in a directory above it."""
+    architecture = (REPO / 'docs/development/architecture.md').read_text()
     missing = []
     for path in _all_modules():
         name = path.name
@@ -814,7 +814,7 @@ def test_every_module_is_documented_somewhere():
         if not documented:
             missing.append(str(path.relative_to(PKG)))
     assert not missing, (
-        f'undocumented modules: {missing} — add each to docs/about/architecture.md, or to a '
+        f'undocumented modules: {missing} — add each to docs/development/architecture.md, or to a '
         f'README.md in its own directory if it is one member of a family'
     )
 

@@ -1,7 +1,7 @@
 """The architecture walkthrough keeps running, and keeps printing what it claims.
 
-``examples/walkthrough.py`` calls the real pipeline stage by stage. Its whole
-output is committed as ``examples/walkthrough.out`` and compared line for line;
+``examples/walkthrough/walkthrough.py`` calls the real pipeline stage by stage. Its whole
+output is committed as ``examples/walkthrough/walkthrough.out`` and compared line for line;
 regenerate it with ``pixi run pytest tests/test_walkthrough.py --update-golden``.
 """
 
@@ -11,8 +11,8 @@ import pytest
 
 from tests.conftest import EXAMPLES_DIR, assert_golden, run_example
 
-WALKTHROUGH = EXAMPLES_DIR / 'walkthrough.py'
-GOLDEN = EXAMPLES_DIR / 'walkthrough.out'
+WALKTHROUGH = EXAMPLES_DIR / 'walkthrough' / 'walkthrough.py'
+GOLDEN = EXAMPLES_DIR / 'walkthrough' / 'walkthrough.out'
 
 
 @pytest.fixture(scope='module')

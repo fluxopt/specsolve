@@ -5,7 +5,7 @@ The engine owns the lifecycle — a build, its solver, the counters and clocks
 asks on the way: what the data is ([`attaching`][specsolve.relational.engine.attaching]),
 what each declaration contributes ([`assembly`][specsolve.relational.engine.assembly]),
 how a row or a solve reads back ([`readback`][specsolve.relational.engine.readback]).
-The lane is described in docs/about/architecture.md.
+The lane is described in docs/development/architecture.md.
 """
 
 from __future__ import annotations

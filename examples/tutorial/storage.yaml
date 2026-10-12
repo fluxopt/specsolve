@@ -1,0 +1,87 @@
+description: Least-cost dispatch with on-off generators and a battery.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: generating units
+
+parameters:
+  p_max:
+    description: installed capacity
+    dims: [generator]
+  load:
+    description: demand to be met
+    dims: [snapshot]
+  cost:
+    description: marginal cost
+    dims: [generator]
+  p_min:
+    description: least output of a generator that is on
+    dims: [generator]
+  no_load_cost:
+    description: cost of one snapshot on, whatever the output
+    dims: [generator]
+  soc_initial:
+    description: battery level before the first snapshot
+    dims: []
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    dims: [snapshot, generator]
+    where: "p_max > 0"
+    bounds:
+      lower: 0
+      upper: p_max
+  on:
+    description: whether a generator is on in a snapshot
+    dims: [snapshot, generator]
+    where: "p_max > 0"
+    domain: binary
+  charge:
+    description: energy into the battery
+    dims: [snapshot]
+    bounds:
+      lower: 0
+      upper: 30
+  discharge:
+    description: energy out of the battery
+    dims: [snapshot]
+    bounds:
+      lower: 0
+      upper: 30
+  soc:
+    description: battery level at the end of a snapshot
+    dims: [snapshot]
+    bounds:
+      lower: 0
+      upper: 100
+
+constraints:
+  power_balance:
+    dims: [snapshot]
+    expression: sum(p, over=generator) + discharge - charge == load
+  p_upper:
+    description: a generator that is off produces nothing
+    dims: [snapshot, generator]
+    expression: p <= p_max * on
+  p_lower:
+    description: a generator that is on produces at least its minimum
+    dims: [snapshot, generator]
+    expression: p >= p_min * on
+  soc_first:
+    description: the first snapshot starts from soc_initial
+    dims: [snapshot]
+    where: "snapshot == 0"
+    expression: soc == soc_initial + 0.9 * charge - discharge
+  soc_next:
+    description: every other snapshot starts from the level the one before ended with
+    dims: [snapshot]
+    expression: soc == shift(soc, along=snapshot, offset=1) + 0.9 * charge - discharge
+
+objective:
+  sense: minimize
+  description: total cost of generation and of keeping generators on
+  expression: sum(p * cost) + sum(on * no_load_cost)

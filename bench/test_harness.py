@@ -1036,7 +1036,7 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
 def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
 
-    `report.load` keeps it apart, and `report.fresh` renders one row per case and sink.
+    `report.load` keeps it apart, and `report.fresh` renders one row per library and one column per case.
     """
     build = _timing('specsolve', phase='emit', sink='highs', size='xs', wall_seconds=0.03)
     started = [
@@ -1050,9 +1050,12 @@ def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
 
     table = report.fresh(report.best(fresh))
-    assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is a column'
-    assert '| dispatch | highs | 1k | 1.20 s | 1.90 s |' in table, 'one row per case and sink, launch to exit'
-    assert '÷' not in table, 'no ratio column, as in the per-model tables'
+    assert '<th>dispatch<br>1k variables</th>' in table, 'one column per case, at the rung it was measured'
+    assert '<tr><td>specsolve</td><td class="own">1.20 s</td></tr>' in table, 'the baseline row shows its own wall'
+    assert '<tr><td>linopy</td><td data-ratio="1.583">1.90 s · 1.6x</td></tr>' in table, (
+        'every other library shows its wall and its ratio, which the page shades'
+    )
+    assert 'GB' not in table, 'wall only: no peak'
 
 
 def test_a_run_without_a_fresh_process_renders_no_fresh_table() -> None:

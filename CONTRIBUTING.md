@@ -1,7 +1,7 @@
 # Contributing
 
 Procedure lives here. **Why** the project is shaped the way it is lives in
-[docs/about/architecture.md](docs/about/architecture.md), and that split is deliberate: this file
+[docs/development/architecture.md](docs/development/architecture.md), and that split is deliberate: this file
 should be readable in one sitting and go stale only when a command changes.
 
 ## Setup
@@ -239,7 +239,7 @@ Read, in order:
    plausible-sounding features are refused there on purpose;
 2. [the limits in mathspec](https://mathspec.readthedocs.io/en/latest/about/limits/#what-a-new-primitive-has-to-satisfy) —
    the admissibility test;
-3. [the extension checklists](docs/about/architecture.md#extension-checklists), which sit directly under that
+3. [the extension checklists](docs/development/architecture.md#extension-checklists), which sit directly under that
    test. They stay there rather than moving here: *may I?* and *how?* are one
    question, and splitting them invites answering the second without the first.
 
@@ -254,10 +254,12 @@ A port is a model somebody else already solved, said again in this language and
 checked against **an optimum that did not come from us**. It is the only test
 class that can catch a *shared misreading* — both lanes agreeing on a meaning
 the modeller did not intend — because every other test compares specsolve against
-specsolve. The corpus and the ledger of what a port could *not* say are in
-[docs/examples/index.md](docs/examples/index.md), where the reference table is
-generated from `examples/ports/references.json` — the same file the tests assert
-against. The PyPSA ladder is a different instrument and lives in
+specsolve. The corpus is
+[docs/examples/index.md](docs/examples/index.md). The reference table and the
+ledger of what a port could *not* say are in
+[docs/development/verification.md](docs/development/verification.md), where the
+table is generated from `examples/ports/references.json` — the same file the
+tests assert against. The PyPSA ladder is a different instrument and lives in
 [docs/examples/pypsa_ladder.md](docs/examples/pypsa_ladder.md): one page per
 rung of mathspec's PyPSA corpus, generated from the parity runs, not ports. Each port's page there shows the model and a side-by-side
 against its reference.
@@ -330,13 +332,13 @@ published figure.
   it into the port's entry as a `duals` block. A MILP has no dual solution, so
   it records none and the test skips rather than passing vacuously.
 - **Regenerate the gallery's tables**, don't write them: both the construct
-  matrix and the reference table in `docs/examples/index.md` come from
+  matrix and the reference table in `docs/development/verification.md` come from
   `pixi run python -m tools.constructs`, and a test fails if either is stale. The
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
-- **A rung that cannot be said is also a result.** It goes in the ledger with a
-  verdict — macro, primitive or escape — and feeds docs/about/roadmap.md. Do not work
-  around a gap silently.
+- **A rung that cannot be said is also a result.** It goes in the ledger in
+  docs/development/verification.md with a verdict — macro, primitive or
+  escape — and feeds the issue tracks. Do not work around a gap silently.
 
 ## Refreshing the benchmarks
 

@@ -267,7 +267,7 @@ def reordered(
     """A saved solution's value frames back as the positional vector — the inverse of [`laid_out`][].
 
     A rebuild over the same spec and sources numbers the labels identically
-    (docs/about/architecture.md, "The relational lane").
+    (docs/development/architecture.md, "The relational lane").
 
     Raises:
         SpecsolveError: A declaration whose saved frame misses a coordinate the

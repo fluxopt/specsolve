@@ -8,9 +8,34 @@
 
 let hosts = [];
 
+/* Diverging bins on the ratio to the highlighted library: green where it is faster, blue where
+   the other library is, grey within ten per cent. Every cell also prints its ratio, which carries
+   the reading where blue and green merge (tritanopia). */
+const BINS = [[1 / 4, 'b4'], [1 / 2, 'b3'], [1 / 1.25, 'b2'], [1 / 1.1, 'b1'], [1.1, 'mid'], [1.25, 'g1'], [2, 'g2'], [4, 'g3'], [Infinity, 'g4']];
+const shade = v => {
+  const b = BINS.find(([edge]) => v < edge)[1];
+  return `background:var(--d-${b});${b.endsWith('4') ? 'color:var(--d-ink4)' : ''}`;
+};
+
+/* A table bench.report writes as HTML carries each cell's ratio in `data-ratio`, and is shaded
+   here with the same bins, so the bins have one home. A matrix-floor row stays neutral, as in the
+   charts' own table; the floor's members come from the page's chart spec. */
+function shadeWritten() {
+  const spec = document.getElementById('bench-spec');
+  const floor = spec ? JSON.parse(spec.textContent).series.floor.members : [];
+  document.querySelectorAll('table.bench-heat tr').forEach(tr => {
+    const isFloor = floor.includes(tr.cells[0]?.textContent.trim());
+    tr.querySelectorAll('td[data-ratio]').forEach(td => {
+      if (isFloor) td.className = 'floor';
+      else td.setAttribute('style', shade(+td.dataset.ratio));
+    });
+  });
+}
+
 document$.subscribe(() => {
   hosts.forEach(h => h.destroy());
   hosts = [];
+  shadeWritten();
   const root = document.getElementById('benchmark-charts');
   if (root) mount(root);
 });
@@ -198,15 +223,6 @@ async function mount(root) {
       tooltip: grouped(metric.format),
     });
   }
-
-  /* Diverging bins on the ratio to the highlighted library: green where it is faster, blue where
-     the other library is, grey within ten per cent. Every cell also prints its ratio, which carries
-     the reading where blue and green merge (tritanopia). */
-  const BINS = [[1 / 4, 'b4'], [1 / 2, 'b3'], [1 / 1.25, 'b2'], [1 / 1.1, 'b1'], [1.1, 'mid'], [1.25, 'g1'], [2, 'g2'], [4, 'g3'], [Infinity, 'g4']];
-  const shade = v => {
-    const b = BINS.find(([edge]) => v < edge)[1];
-    return `background:var(--d-${b});${b.endsWith('4') ? 'color:var(--d-ink4)' : ''}`;
-  };
 
   function table(rows, metric) {
     const fmt = FORMAT[metric.format];
