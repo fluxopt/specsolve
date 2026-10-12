@@ -10,8 +10,8 @@
   --hairline: var(--md-default-fg-color--lightest);
   --s1: #6d28d9; --s2: #a9800c; --s3: #2a78d6; --s4: #d42f2a; --floor: #6b6a61;
   --mix: 70%;
-  --d-mid: #f0efec; --d-b1: #dce8f7; --d-b2: #aecbef; --d-b3: #76a7e4; --d-b4: #2a6fc4;
-  --d-g1: #dcf0e5; --d-g2: #a6dcbf; --d-g3: #5fbf8f; --d-g4: #13945e; --d-ink4: #ffffff;
+  --d-mid: #f0efec; --d-t1: #fbe0c6; --d-t2: #f5bf8c; --d-t3: #e5934c; --d-t4: #b35a0c;
+  --d-o1: #e2d6f9; --d-o2: #c3acf1; --d-o3: #a080e8; --d-o4: var(--s1); --d-ink4: #ffffff;
   --ts-chart-tooltip-background: var(--surface);
   --ts-chart-tooltip-color: var(--fg);
   --ts-chart-tooltip-border: 1px solid var(--hairline);
@@ -22,8 +22,8 @@
 [data-md-color-scheme="slate"] .bench {
   --s1: #9670e8; --s2: #b88d18; --s3: #35b9f2; --s4: #e5483f; --floor: #a3a196;
   --mix: 85%;
-  --d-mid: #383835; --d-b1: #1e3149; --d-b2: #24497a; --d-b3: #2f65ad; --d-b4: #4a90e8;
-  --d-g1: #173a2b; --d-g2: #1d5a40; --d-g3: #237a55; --d-g4: #33a874; --d-ink4: #141413;
+  --d-mid: #383835; --d-t1: #45301a; --d-t2: #64411a; --d-t3: #8a5218; --d-t4: #e9944a;
+  --d-o1: #30244f; --d-o2: #45307a; --d-o3: #6247b0; --d-o4: var(--s1); --d-ink4: #141413;
 }
 /* The context libraries: each hue mixed into the surface, so they recede in either scheme. */
 .bench {
