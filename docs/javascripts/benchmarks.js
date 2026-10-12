@@ -113,22 +113,29 @@ async function mount(root) {
     return full.filter((_, i) => i % step === 0 || i === full.length - 1);
   }
 
-  /* One axis under the shared switch. Linear starts at zero unless `fromZero` is off, and then at
-     the smallest value. Log ticks on the given sizes when there are some, else on 1–2–5; a single
-     size is centred on a decade of its own. */
-  function axis(values, fmt, label, sizes = null, fromZero = true) {
+  /* The y axis under the shared switch. Linear starts at zero, log ticks on 1–2–5. */
+  function axis(values, fmt, label) {
     if (state.scale === 'linear') {
-      const scale = fromZero ? scaleLinear().domain([0, Math.max(...values)]).nice(5)
-        : scaleLinear().domain([Math.min(...values), Math.max(...values)]);
-      return { scale, grid: true,
+      return { scale: scaleLinear().domain([0, Math.max(...values)]).nice(5), grid: true,
         axis: { label, ticks: { count: 5, format: fmt } } };
     }
-    if (sizes?.length === 1) {
-      return { scale: scaleLog().domain([sizes[0] / 3, sizes[0] * 3]), axis: { label, ticks: { values: sizes, format: fmt } } };
-    }
-    if (sizes) return { scale: scaleLog, axis: { label, ticks: { values: sizes, format: fmt } } };
     const ticks = logTicks(values);
     return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { label, ticks: { values: ticks, format: fmt } } };
+  }
+
+  /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
+     and a single size in the middle. Linear starts at zero when `fromZero`, else just below the
+     smallest size; log ticks on the sizes themselves. */
+  function xAxis(sizes, fromZero) {
+    const label = SPEC.x.label, format = FORMAT[SPEC.x.format];
+    const lo = sizes[0], hi = sizes.at(-1), one = sizes.length === 1;
+    if (state.scale === 'linear') {
+      const pad = one ? hi : (hi - (fromZero ? 0 : lo)) * 0.06;
+      return { scale: scaleLinear().domain([fromZero || one ? 0 : Math.max(0, lo - pad), hi + pad]), grid: true,
+        axis: { label, ticks: { count: 5, format } } };
+    }
+    const pad = one ? 3 : 1.25;
+    return { scale: scaleLog().domain([lo / pad, hi * pad]), axis: { label, ticks: { values: sizes, format } } };
   }
 
   /* Where each refused size would land: the last measured point carried forward at the log–log
@@ -229,7 +236,7 @@ async function mount(root) {
         crosshair({ y: false }),
       ],
       scales: {
-        x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes, state.range.from === STOPS[0]),
+        x: xAxis(sizes, state.range.from === STOPS[0]),
         y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
