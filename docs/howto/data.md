@@ -49,6 +49,38 @@ sources = {
 With one parquet file per parameter, pass the paths instead:
 `sources = {'p_max': 'p_max.parquet', ...}`.
 
+## From a large file
+
+Read only the rows and columns the model uses. Specsolve holds every source
+whole in memory while the model lives, so what you read is what it holds.
+
+- **Store the data as parquet.** Parquet keeps each column's type, and polars
+  can skip the rows and columns you do not ask for. A path in `sources` is
+  always read as parquet, so convert a CSV once:
+  `pl.read_csv('load.csv').write_parquet('load.parquet')`.
+- **Scan the file, then filter and select before you collect.**
+  `pl.scan_parquet` reads nothing yet. Polars pushes the `filter` and the
+  `select` into the scan, so `collect` reads only the slice for one year:
+
+  ```python
+  import polars as pl
+
+  year = pl.scan_parquet('timeseries.parquet').filter(pl.col('year') == 2030).select('snapshot', 'load').collect()
+  generators = pl.read_parquet('generators.parquet', columns=['generator', 'p_max', 'cost'])
+
+  sources = {
+      'snapshot': year.select('snapshot'),
+      'load': year.select('snapshot', value='load'),
+      'generator': generators.select('generator'),
+      'p_max': generators.select('generator', value='p_max'),
+      'cost': generators.select('generator', value='cost'),
+  }
+  ```
+
+- **A lazy frame is a source too.** Specsolve collects it when the data
+  attaches. Collect once yourself when several sources come from one file, as
+  above. Each lazy source scans the file again.
+
 ## From linopy's shapes
 
 Pass a pandas Series over one dimension as it is, its index named after the
