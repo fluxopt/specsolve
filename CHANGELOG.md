@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the benchmarks page shows the charts, and the gallery lists the models ([#1969](https://github.com/fluxopt/specsolve/pull/1969))
 - docs: every page says what it has to in about a third fewer words ([#1967](https://github.com/fluxopt/specsolve/pull/1967))
 - docs: the sidebar lists each section in the order a user needs it ([#1966](https://github.com/fluxopt/specsolve/pull/1966))
 - docs: the home page shows the pitch, one model file, a solve and the install ([#1965](https://github.com/fluxopt/specsolve/pull/1965))

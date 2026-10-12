@@ -16,8 +16,9 @@ link relatively; outside it, write the full GitHub URL, because the relative
 form 404s on the site. The rest is
 [CONTRIBUTING.md](https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md#the-docs).
 
-**Generated, so do not hand-edit:** the catalogue, construct matrix and
-reference table in [examples/index.md](examples/index.md)
+**Generated, so do not hand-edit:** the catalogue in
+[examples/index.md](examples/index.md) and the construct matrix and reference
+table in [development/verification.md](development/verification.md)
 (`tools/constructs.py`), the *"the same model, as math"* block on each model
 page (`tools/gallery_math.py`), and the tables in
 [benchmarks.md](about/benchmarks.md) (`bench.report`) and the rows in

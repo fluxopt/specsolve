@@ -253,10 +253,12 @@ A port is a model somebody else already solved, said again in this language and
 checked against **an optimum that did not come from us**. It is the only test
 class that can catch a *shared misreading* — both lanes agreeing on a meaning
 the modeller did not intend — because every other test compares specsolve against
-specsolve. The corpus and the ledger of what a port could *not* say are in
-[docs/examples/index.md](docs/examples/index.md), where the reference table is
-generated from `examples/ports/references.json` — the same file the tests assert
-against. The PyPSA ladder is a different instrument and lives in
+specsolve. The corpus is
+[docs/examples/index.md](docs/examples/index.md). The reference table and the
+ledger of what a port could *not* say are in
+[docs/development/verification.md](docs/development/verification.md), where the
+table is generated from `examples/ports/references.json` — the same file the
+tests assert against. The PyPSA ladder is a different instrument and lives in
 [docs/examples/pypsa_ladder.md](docs/examples/pypsa_ladder.md): one page per
 rung of mathspec's PyPSA corpus, generated from the parity runs, not ports. Each port's page there shows the model and a side-by-side
 against its reference.
@@ -329,7 +331,7 @@ published figure.
   it into the port's entry as a `duals` block. A MILP has no dual solution, so
   it records none and the test skips rather than passing vacuously.
 - **Regenerate the gallery's tables**, don't write them: both the construct
-  matrix and the reference table in `docs/examples/index.md` come from
+  matrix and the reference table in `docs/development/verification.md` come from
   `pixi run python -m tools.constructs`, and a test fails if either is stale. The
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
