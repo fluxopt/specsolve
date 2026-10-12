@@ -21,11 +21,6 @@ validation before data, two builds of one language, and a build that streams.
 list each refusal with its rewrite. Parity with another tool is not by itself
 a reason to add anything.
 
-The work is in issues, under three tracks:
-[primitives](https://github.com/fluxopt/specsolve/issues/470),
-[the operational surface](https://github.com/fluxopt/specsolve/issues/471) and
-[capabilities](https://github.com/fluxopt/specsolve/issues/472).
-
 ## More
 
 | | |
