@@ -1050,9 +1050,12 @@ def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
 
     table = report.fresh(report.best(fresh))
-    assert '| launch to exit | dispatch (1k variables) |' in table, 'one column per case, at the rung it was measured'
-    assert '| specsolve | 1.20 s |' in table and '| linopy | 1.90 s |' in table, 'one row per library, launch to exit'
-    assert 'GB' not in table and '÷' not in table, 'wall only: no peak and no ratio column'
+    assert '<th>dispatch<br>1k variables</th>' in table, 'one column per case, at the rung it was measured'
+    assert '<tr><td>specsolve</td><td class="own">1.20 s</td></tr>' in table, 'the baseline row shows its own wall'
+    assert '<tr><td>linopy</td><td data-ratio="1.583">1.90 s · 1.6x</td></tr>' in table, (
+        'every other library shows its wall and its ratio, which the page shades'
+    )
+    assert 'GB' not in table, 'wall only: no peak'
 
 
 def test_a_run_without_a_fresh_process_renders_no_fresh_table() -> None:
