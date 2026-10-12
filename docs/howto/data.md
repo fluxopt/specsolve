@@ -1,6 +1,6 @@
 # Preparing the data
 
-From the files an instance arrives in to the `sources` mapping the verbs
+From the files an instance arrives in to the `sources` mapping the functions
 take, one table per parameter. What that mapping may contain is
 [the data contract](../reference/data.md).
 

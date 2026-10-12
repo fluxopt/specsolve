@@ -109,7 +109,7 @@ flowchart TB
 raises or warns. Every other module is internal, and any release can change it.
 
 **Nothing on the surface constructs math or reaches the plan.** The YAML file
-is the model, and Python runs it: the five verbs `check`, `build`,
+is the model, and Python runs it: the five functions `check`, `build`,
 `evaluate`, `solve` and `write`, the fold `solve_over` with its two axes,
 `tidy`, and the readers of an archive. Loading and typesetting a spec are
 `mathspec`'s. `specsolve.errors` re-exports the language's errors, because a
@@ -266,10 +266,10 @@ pattern is structure.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language, read, expanded, resolved, judged and lowered there |
-| `api.py` | the runner: the verbs, and `load_result` / `scan_result` |
-| `archive_layout.py` | below every verb that solves: what an archive holds |
+| `api.py` | the runner: the functions, and `load_result` / `scan_result` |
+| `archive_layout.py` | below every function that solves: what an archive holds |
 | `archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs`; it never writes |
-| `inputs.py` | above both lanes: `Buildable` and `Source`, what every verb takes |
+| `inputs.py` | above both lanes: `Buildable` and `Source`, what every function takes |
 | `relational/collect.py` | how polars materialises a frame, for every collect in the package |
 | `sources.py` | the one door: caller data read into tidy tables and checked against the declarations |
 | `assumptions.py` | the one guard that needs numbers: a spec's `assumptions:` and a curve's conditions, checked against the data |
