@@ -42,14 +42,14 @@ document$.subscribe(() => {
 
 async function mount(root) {
   const [
-    { areaY }, { crosshair }, { dot }, { mountChart }, { lineY },
+    { crosshair }, { dot }, { mountChart }, { lineY }, { link },
     { scaleLinear }, { defineChart }, { tooltip }, { scaleLog },
   ] = await Promise.all([
-    import('@tanstack/charts/area.js'),
     import('@tanstack/charts/crosshair.js'),
     import('@tanstack/charts/dot.js'),
     import('@tanstack/charts/dom.js'),
     import('@tanstack/charts/line.js'),
+    import('@tanstack/charts/link.js'),
     import('@tanstack/charts/scales/linear.js'),
     import('@tanstack/charts/scene.js'),
     import('@tanstack/charts/tooltip.js'),
@@ -75,7 +75,7 @@ async function mount(root) {
      linear axis on its origin. */
   const decade = v => Math.round(Math.log10(v));
   const STOPS = [-Infinity, ...new Set(ROWS.map(r => decade(r[X])).sort((a, b) => a - b))];
-  const state = { metric: 'wall', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
+  const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
     range: { from: STOPS[0], to: STOPS.at(-1) } };
   const inRange = r => decade(r[X]) >= state.range.from && decade(r[X]) <= state.range.to;
 
@@ -84,9 +84,9 @@ async function mount(root) {
   const isFloor = r => FLOOR.members.includes(r[SERIES]);
   const ink = name => SPEC.series.ink[LIBRARIES.indexOf(name)];
 
-  /* The rows both views read: the current filter and visible libraries, each with the chosen
-     metric as `value`, its band as `lo`/`hi`, and its ratio to the highlighted library at the
-     same panel and size. */
+  /* The rows the charts and the table read: the current filter and visible libraries, each with
+     the chosen metric as `value`, its middle half as `lo`/`hi`, the highlighted library's value at
+     the same panel and size as `ours`, and the ratio of the two. */
   function rowsNow() {
     const m = SPEC.metrics[state.metric];
     const cell = r => `${panelOf(r)}|${r[X]}`;
@@ -94,12 +94,20 @@ async function mount(root) {
     return ROWS
       .filter(r => Object.entries(state.filter).every(([k, v]) => r[k] === v) && !state.hidden.has(r[SERIES]))
       .map(r => {
-        const value = r[m.y] ?? null;
-        if (value == null) return { ...r, value };
-        const ours = base.get(cell(r));
-        return { ...r, value, lo: m.band ? r[m.band[0]] : value, hi: m.band ? r[m.band[1]] : value,
+        const value = r[m.y] ?? null, ours = base.get(cell(r)) ?? null;
+        if (value == null) return { ...r, value, ours };
+        return { ...r, value, ours, lo: m.band ? r[m.band[0]] : value, hi: m.band ? r[m.band[1]] : value,
           ratio: ours ? value / ours : null };
       });
+  }
+
+  /* The points as the chosen view draws them: as measured, or divided by the highlighted library's
+     value at the same panel and size, with the measured value kept as `raw`. A point with nothing to
+     divide by is left out of the relative view. */
+  function viewed(points) {
+    if (state.view === 'absolute') return points;
+    return points.filter(p => p.ours).map(p => ({ ...p, raw: p.value, value: p.value / p.ours,
+      lo: p.lo / p.ours, hi: p.hi / p.ours }));
   }
 
   /* Log ticks on 1–2–5 and a domain snapped to them, so a panel inside half a decade is not drawn
@@ -177,9 +185,9 @@ async function mount(root) {
       content: points => {
         const at = [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
           .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => b.value - a.value);
-        const ours = at.find(isHero);
-        const values = amounts(at.map(d => d.value), format);
-        const ratios = padded(at.map(d => (ours ? `${(d.value / ours.value).toFixed(1)}×` : '–')));
+        const ours = at.find(isHero), raw = d => d.raw ?? d.value;
+        const values = amounts(at.map(raw), format);
+        const ratios = padded(at.map(d => (ours ? `${(raw(d) / raw(ours)).toFixed(1)}×` : '–')));
         return {
           title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
           rows: at.map((d, i) => ({
@@ -192,9 +200,10 @@ async function mount(root) {
     };
   }
 
-  /* One panel: a line per library over size, the band under it, the projections dashed. The
-     highlighted library is drawn last and thick, so it stays on top where the lines cross, and is
-     named right of its last point. The matrix floor is a thin neutral line without a band.
+  /* One panel: a line per library over size, a whisker over the middle half at each point, the
+     projections dashed. The highlighted library is drawn last and thick, so it stays on top where
+     the lines cross, and is named right of its last point. The matrix floor is a thin neutral line
+     without whiskers.
      Each measured point is a dot ringed in the surface colour, so
      crossing points stay apart; each projected size is a hollow ring in the library's colour. */
   /* The highlighted library's name, right of its last point. A control rather than a text mark:
@@ -212,8 +221,8 @@ async function mount(root) {
      not move with the range. */
   function definition(rows, metric) {
     const fmt = FORMAT[metric.format];
-    const measured = rows.filter(r => r.value != null && inRange(r));
-    const ahead = projections(rows).filter(inRange);
+    const measured = viewed(rows.filter(r => r.value != null && inRange(r)));
+    const ahead = viewed(projections(rows).filter(inRange));
     const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
     const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
     const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
@@ -224,11 +233,12 @@ async function mount(root) {
       dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface)',
         stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
     const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
-    const area = (data, fillOpacity) => areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity });
+    const whiskers = (data, strokeWidth) => link(data.filter(r => r.hi > r.lo),
+      { x1: X, x2: X, y1: 'lo', y2: 'hi', color: SERIES, strokeWidth, lineCap: 'round' });
     const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
     return defineChart({
       marks: [
-        ...(metric.band ? [area(theirs, 0.35), area(ours, 0.22)] : []),
+        ...(metric.band ? [whiskers(theirs, 1.5), whiskers(ours, 2)] : []),
         dashed(theirsAhead, 2), dashed(oursAhead, 3),
         line(floor, 1.5), line(theirs, 2), line(ours, 3.5),
         ...hollow,
@@ -237,7 +247,7 @@ async function mount(root) {
       ],
       scales: {
         x: xAxis(sizes, state.range.from === STOPS[0]),
-        y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
+        y: axis(measured.flatMap(r => [r.lo, r.hi]), state.view === 'absolute' ? fmt : FORMAT.ratio),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 }, controls: heroLabel([...ours, ...oursAhead]),
@@ -298,7 +308,8 @@ async function mount(root) {
       fig.innerHTML = `<div class="bench-caption">${title}</div><div></div>`;
       grid.appendChild(fig);
       hosts.push(mountChart(fig.lastElementChild, { definition: definition(panel, metric), height: 240,
-        ariaLabel: `${title}: ${metric.label} against model size, one line per ${SERIES}` }));
+        ariaLabel: `${title}: ${metric.label}${state.view === 'absolute' ? '' : ` relative to ${HERO}`} ` +
+          `against model size, one line per ${SERIES}` }));
     }
     table(rows, metric);
     const present = new Set(ROWS.map(r => r[SERIES]));
@@ -383,7 +394,7 @@ async function mount(root) {
     const b = ev.target.closest('.bench-seg button');
     if (!b) return;
     const key = b.parentElement.dataset.key;
-    if (key === 'metric' || key === 'scale') state[key] = b.dataset.value;
+    if (['metric', 'view', 'scale'].includes(key)) state[key] = b.dataset.value;
     else state.filter[key] = b.dataset.value;
     b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
     draw();
