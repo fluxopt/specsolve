@@ -1,8 +1,6 @@
 # monthly_budget
 
-A cap on what each technology may generate per calendar month — an aggregate
-over a *coarser grouping of time*, written with the same operator that places
-a generator on a bus.
+A cap on what each technology may generate in each calendar month, with the months read off the timestamps.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **9500**, matched to `rtol=1e-09`.
 
@@ -229,45 +227,3 @@ join and a `group_by` do it:
 sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value').sum())
 ```
 
-## Why `month` is a dimension
-
-A keyed relation is a **function between two dimensions**, so it needs a
-codomain. Three things rest on `month` being one:
-
-1. **`sum(by=)` lands terms on the dimension the relation's value column is over.**
-   The expression's dims are therefore `[month, generator]`, and a `dims:`
-   can only name declared dimensions.
-2. **`monthly_cap` is indexed *by* month.** A parameter carries values *at*
-   coordinates; it cannot be the thing a `dims:` ranges over.
-3. **It is what makes a typo an error.** A value in the snapshot index that is
-   not a coordinate of `month` is rejected at attach time:
-
-```text
-DataError: dimension 'snapshot' coordinate 'month' has value(s) that are
-           not 'month' coordinates: '2030-3'
-```
-
-Without a declared target there is nothing to check against, and `2030-3`
-beside `2030-03` would become a fourth group with a budget of its own, solved
-without a word. The same check catches a generator assigned to a bus that does
-not exist.
-
-**Null is still legal.** A snapshot belonging to no month contributes its terms
-nowhere, as a generator on no bus does. Absent is a claim; misspelled is a
-mistake.
-
-## What this cannot do
-
-`sum(by=)` takes a **partition**: `month_of` is a function from snapshot to
-month, so a snapshot belongs to at most one group, and a group with no members
-contributes nothing.
-
-It cannot express an **overlapping** aggregate such as *trailing twelve months,
-at every month*: each snapshot would belong to twelve groups, and no single
-column can say so. That is a sliding window over a variable,
-[#468](https://github.com/fluxopt/specsolve/issues/468).
-
-The same split appears one level up, where a *process* loops over plans rather
-than an expression over rows
-([#457](https://github.com/fluxopt/specsolve/issues/457)): slicing a model per
-group is a partition, slicing it per window overlaps.

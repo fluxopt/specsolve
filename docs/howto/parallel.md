@@ -1,7 +1,7 @@
 # Running a sweep in parallel
 
 One slice of a [sweep](../reference/sweeps.md) per worker, on a pool you
-start. The reference for `executor=` is
+start. The reference is
 [running slices in parallel](../reference/sweeps.md#running-slices-in-parallel).
 
 ## Start the pool with `spawn`
@@ -27,26 +27,21 @@ if __name__ == '__main__':  # spawn re-imports your module; without this it recu
     main()
 ```
 
-Four workers hold four slices at once, so the pool wants four times the
-memory of one slice.
+Four workers need four times the memory of one slice.
 
 ## Hand the workers paths
 
-A parquet path the workers can reach stays a path. A path they cannot reach,
-and every in-memory table, crosses as parquet bytes. So for a cluster, write
-the sources to a filesystem the workers mount and pass the paths:
+On a cluster, write the sources to a filesystem the workers mount and pass the
+paths. Without `workers_share_fs=True`, the paths are read here and shipped:
 
 ```python
 sources = {'load': '/shared/load.parquet', 'cost': '/shared/cost.parquet', 'p_max': '/shared/p_max.parquet'}
 sweep = sps.solve_over('spec.yaml', sources, sps.EachCoordinate('scenario'), executor=client, workers_share_fs=True)
 ```
 
-`workers_share_fs=True` says the mount is there; without it the paths are
-read here and shipped.
-
 ## Read the sweep back
 
-`sweep` reads as it does for a serial sweep, one column wider:
+`sweep` reads as it does for a serial sweep:
 
 ```python
 sweep.record  # one Record per slice, the scenario column first

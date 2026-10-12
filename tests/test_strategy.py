@@ -26,6 +26,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve import sweep as sweep_module
+from specsolve.axes import axis_from
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -1124,6 +1125,93 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
 # ---------------------------------------------------------------------------
 # the fold's own rules
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'axis',
+    [
+        pytest.param(sps.EachCoordinate('period', carry={'existing': 'total'}), id='coordinate'),
+        pytest.param(replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), id='window'),
+    ],
+)
+def test_an_axis_that_carries_is_still_hashable(axis):
+    """An axis is a frozen value, so a carry, which is a mapping, stays out of its hash."""
+    assert hash(axis) == hash(replace(axis, carry={})), 'the carry is left out of the hash'
+    assert axis != replace(axis, carry={}), 'and kept in the equality'
+
+
+@pytest.mark.parametrize(
+    'axis',
+    [
+        pytest.param(sps.EachCoordinate('period'), id='coordinate'),
+        pytest.param(sps.EachCoordinate('period', carry={'existing': 'total'}), id='coordinate-carrying'),
+        pytest.param(WINDOW_AXIS, id='window'),
+        pytest.param(sps.EachWindow('snapshot', steps=(2, 4), lookahead=1, into='t'), id='window-of-listed-steps'),
+        pytest.param(replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), id='window-carrying'),
+    ],
+)
+def test_an_axis_reads_back_from_the_json_of_its_dict(axis):
+    """``to_dict`` is plain data: through JSON and back, it is the axis it was."""
+    assert axis_from(json.loads(json.dumps(axis.to_dict()))) == axis
+
+
+def test_an_axis_that_carries_nothing_writes_no_carry_key():
+    """The ``axis.json`` of an archive whose sweep carried nothing holds no ``carry``, as ``INPUTS_LAYOUT`` 1 has it."""
+    assert sps.EachCoordinate('period').to_dict() == {'each': 'coordinate', 'dim': 'period'}, (
+        'no carry key where nothing is carried'
+    )
+
+
+def test_solve_over_takes_an_axis_as_its_dict():
+    """The dict stands where the axis does, carry included."""
+    axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    given = sps.solve_over(WINDOW, horizon_sources(), json.loads(json.dumps(axis.to_dict())))
+    expected = sps.solve_over(WINDOW, horizon_sources(), axis)
+    assert given.record['objective'].to_list() == expected.record['objective'].to_list()
+    assert given.primal('soc').equals(expected.primal('soc')), 'each window started from the one before it'
+
+
+def test_an_archive_holds_the_dict_of_its_axis(tmp_path):
+    """``axis.json`` is ``to_dict``, so the archive's file and the public form are one."""
+    axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    sps.solve_over(WINDOW, horizon_sources(), axis, archive=tmp_path / 'roll')
+    assert json.loads((tmp_path / 'roll' / 'axis.json').read_text()) == axis.to_dict()
+
+
+@pytest.mark.parametrize(
+    ('given', 'expected'),
+    [
+        pytest.param(
+            {'dim': 'snapshot'},
+            "under 'each', one of \\['axes', 'coordinate', 'window'\\] \\(got None\\)",
+            id='no-each',
+        ),
+        pytest.param(
+            {'each': 'axes', 'axes': {'each': 'coordinate', 'dim': 'scenario'}},
+            "several axes given as a mapping take 'each': 'axes' and 'axes', a list",
+            id='several-axes-not-a-list',
+        ),
+        pytest.param(
+            {'each': 'axes', 'axes': [], 'dim': 'scenario'},
+            "a list of axes .* \\(got the keys \\['axes', 'dim', 'each'\\]\\)",
+            id='several-axes-with-a-key-of-one',
+        ),
+        pytest.param({'each': 'slice', 'dim': 'snapshot'}, "\\(got 'slice'\\)", id='an-each-that-names-no-axis'),
+        pytest.param(
+            {'each': 'coordinate', 'dim': 'period', 'carries': {}},
+            "takes 'each' and \\['dim', 'carry'\\].*\\['carries'\\] is not one of them",
+            id='a-key-the-axis-does-not-take',
+        ),
+        pytest.param(
+            {'each': 'window', 'dim': 'snapshot', 'steps': 4, 'into': 't'},
+            "\\['dim', 'steps', 'lookahead', 'into'\\] are required: \\['lookahead'\\] is missing",
+            id='a-key-the-axis-needs',
+        ),
+    ],
+)
+def test_an_axis_dict_that_names_no_axis_is_refused_with_the_keys_it_takes(given, expected):
+    with pytest.raises(sps.errors.SpecsolveError, match=expected):
+        sps.solve_over(WINDOW, horizon_sources(), given)
 
 
 def test_carry_and_executor_are_refused_together():
@@ -2248,19 +2336,21 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
 
 
 def test_a_sweep_archive_carries_its_carry(tmp_path):
-    """The carry is config the frames do not hold, so the archive stores it on the axis."""
+    """The carry is config the frames do not hold, so the archive stores it beside the axis."""
     sps.solve_over(
         WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
-    axis = sps.load_archive(tmp_path / 'roll').axis
-    assert axis.carry == {'soc_initial': 'soc'}, 'the carry reads back on the axis as it was given'
+    assert sps.load_archive(tmp_path / 'roll').axis.carry == {'soc_initial': 'soc'}, (
+        'the carry reads back as it was given'
+    )
 
 
 def test_a_sweep_archive_with_no_carry_reads_an_empty_carry(tmp_path):
     """A sweep that chained nothing carries nothing — the manifest omits the key and the reader defaults it."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'plain')
-    axis = sps.load_archive(tmp_path / 'plain').axis
-    assert axis.carry == {}, 'no carry given, none stored, an empty mapping read back'
+    assert sps.load_archive(tmp_path / 'plain').axis.carry == {}, (
+        'no carry given, none stored, an empty mapping read back'
+    )
 
 
 def test_a_carried_sweep_reruns_from_its_archive_with_the_stored_carry(tmp_path):

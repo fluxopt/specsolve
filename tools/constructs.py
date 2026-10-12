@@ -1,7 +1,8 @@
-"""The gallery's catalogue and its two evidence tables: which models there are,
-what each exercises, and what somebody else says its answer is.
+"""The gallery's catalogue and the two evidence tables beside the verification:
+which models there are, what each exercises, and what somebody else says its
+answer is.
 
-    pixi run python -m tools.constructs           # rewrite all three blocks
+    pixi run python -m tools.constructs           # rewrite every block on PAGES
     pixi run python -m tools.constructs --check   # fail if any has drifted
 
 ``tests/test_models_gallery.py`` asserts the committed blocks equal what this
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
@@ -33,6 +35,9 @@ from mathspec import program, to_spec
 ROOT = Path(__file__).resolve().parent.parent
 GALLERY = ROOT / 'docs' / 'examples'
 PAGE = GALLERY / 'index.md'
+#: Every page that carries a generated block: the catalogue on the gallery, the
+#: construct matrix and the reference table on the verification page.
+PAGES = (PAGE, ROOT / 'docs' / 'development' / 'verification.md')
 MKDOCS = ROOT / 'mkdocs.yml'
 REFERENCES = json.loads((ROOT / 'examples' / 'ports' / 'references.json').read_text())
 CAT_BEGIN, CAT_END = '<!-- catalogue:begin -->', '<!-- catalogue:end -->'
@@ -108,13 +113,15 @@ _NavLoader.add_multi_constructor('tag:yaml.org,2002:python/', lambda *_: None)
 
 
 def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
-    """The Examples section of the site nav: group title, then its pages.
+    """The model groups of the site nav: group title, then its pages.
 
-    Each page is ``(label, name)``: the sidebar label and the model's name,
-    which is also its page and its YAML file. An entry that is not a group is
-    skipped.
+    The groups under Examples come first, then PyPSA examples, which the nav
+    files under Development. Each page is ``(label, name)``: the sidebar label
+    and the model's name, which is also its page and its YAML file. An entry
+    that is not a group is skipped.
     """
-    section = _section(yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav'], 'Examples')
+    nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
+    section = [*_section(nav, 'Examples'), {'PyPSA examples': _section(nav, 'PyPSA examples')}]
     groups = []
     for entry in section:
         if not isinstance(entry, dict):
@@ -154,7 +161,12 @@ def catalogue() -> str:
     return '\n\n'.join(blocks)
 
 
-def table(models: list[tuple[str, Path]]) -> str:
+def _named(name: str, gallery: str) -> str:
+    """*name* linked to its gallery page, or plain where the gallery shows no page for it."""
+    return f'[{name}]({gallery}{name}.md)' if (GALLERY / f'{name}.md').exists() else f'`{name}`'
+
+
+def table(models: list[tuple[str, Path]], gallery: str = '') -> str:
     """Markdown, one row per model, `·` where a construct is absent.
 
     The ``verified`` badge marks a port checked against an external optimum.
@@ -167,11 +179,11 @@ def table(models: list[tuple[str, Path]]) -> str:
         used = constructs(path)
         cells = ['**✓**' if c in used else '·' for c in COLUMNS]
         badge = f'**✔** {REFERENCES[name]["objective"]:g}' if name in REFERENCES else '·'
-        lines.append(f'| [{name}]({name}.md) | {badge} | ' + ' | '.join(cells) + ' |')
+        lines.append(f'| {_named(name, gallery)} | {badge} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
 
 
-def references_table() -> str:
+def references_table(gallery: str = '') -> str:
     """One row per verified port, straight from ``references.json``.
 
     The optimum is the ``repr`` the assertion uses, not a rounding.
@@ -186,7 +198,7 @@ def references_table() -> str:
         duals = '**✔**' if entry.get('duals') else '·'
         mark = f'[^{name}]' if entry.get('corroborated_by') else ''
         lines.append(
-            f'| [{name}]({name}.md) | {entry["objective"]!r} | {entry["rtol"]:g} | '
+            f'| {_named(name, gallery)} | {entry["objective"]!r} | {entry["rtol"]:g} | '
             f'{duals} | {entry["provenance"]}{mark} |'
         )
         if corroborated := entry.get('corroborated_by'):
@@ -211,11 +223,23 @@ def replace_between(page: str, begin: str, end: str, body: str) -> str:
     return page[:i] + '\n' + body + '\n' + page[j:]
 
 
-def rendered(page: str) -> str:
-    """*page* with all three generated blocks replaced."""
-    page = replace_between(page, CAT_BEGIN, CAT_END, catalogue())
-    page = replace_between(page, BEGIN, END, table(models()))
-    return replace_between(page, REF_BEGIN, REF_END, references_table())
+def rendered(page: str, path: Path = PAGE) -> str:
+    """*page*, which lives at *path*, with each generated block it carries replaced.
+
+    A link in a block is relative to *path*, so a block reaches the model pages
+    from whichever page carries it.
+    """
+    gallery = os.path.relpath(GALLERY, path.parent).replace(os.sep, '/') + '/'
+    gallery = '' if gallery == './' else gallery
+    blocks = (
+        (CAT_BEGIN, CAT_END, catalogue),
+        (BEGIN, END, lambda: table(models(), gallery)),
+        (REF_BEGIN, REF_END, lambda: references_table(gallery)),
+    )
+    for begin, end, body in blocks:
+        if begin in page:
+            page = replace_between(page, begin, end, body())
+    return page
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -223,16 +247,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--check', action='store_true', help='fail if any committed block has drifted')
     opts = ap.parse_args(argv)
 
-    page = PAGE.read_text()
-    updated = rendered(page)
-    if opts.check:
-        if updated != page:
-            print(f'{PAGE} is stale — run `pixi run python -m tools.constructs`', file=sys.stderr)
-            return 1
-        print(f'{PAGE} matches the models')
-        return 0
-    PAGE.write_text(updated)
-    print(f'{PAGE} refreshed')
+    stale = []
+    for path in PAGES:
+        page = path.read_text()
+        updated = rendered(page, path)
+        if updated == page:
+            continue
+        if opts.check:
+            stale.append(str(path.relative_to(ROOT)))
+        else:
+            path.write_text(updated)
+            print(f'{path.relative_to(ROOT)} refreshed')
+    if stale:
+        print(f'stale: {", ".join(stale)} — run `pixi run python -m tools.constructs`', file=sys.stderr)
+        return 1
     return 0
 
 

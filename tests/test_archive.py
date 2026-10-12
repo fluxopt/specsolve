@@ -996,7 +996,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 
 #: The overlapping rolling horizon every archive test below solves.
 ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
-#: The same windows, handing the store's level on to the next.
+#: The same horizon, each window handing its last state of charge to the next.
 CARRIED = replace(ROLLING, carry={'soc_initial': 'soc'})
 
 
@@ -1034,9 +1034,9 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
 
     spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t']}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
-    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t')
+    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t', carry={'soc_initial': 'soc'})
     sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}
-    runs = sps.solve_over(spec, sources, replace(axis, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll.zip')
+    runs = sps.solve_over(spec, sources, axis, archive=tmp_path / 'roll.zip')
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
 
     differing = _attached_differently(spec, sources, archived)
@@ -1369,8 +1369,7 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=runs / 'single').close()
     sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sweep_sources, sps.EachCoordinate('scenario'), archive=runs / 'scenarios')
-    window = sps.EachWindow('snapshot', steps=4, lookahead=2, into='t')
-    sps.solve_over(WINDOW, horizon_sources(12), replace(window, carry={'soc_initial': 'soc'}), archive=runs / 'rolling')
+    sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=runs / 'rolling')
 
     files = sorted(runs.glob(f'*/{ANSWER_DIR}/{table}'))
     schemas = {file.parts[-3]: pl.read_parquet_schema(file) for file in files}

@@ -1,12 +1,12 @@
 """The whole architecture, one model, one stage at a time — run it and read.
 
-docs/about/architecture.md describes the pipeline; this script executes it one
+docs/development/architecture.md describes the pipeline; this script executes it one
 stage at a time and prints the artifact each stage produces, through the same
 entry points ``sps.solve`` takes internally.
 
-    pixi run python examples/walkthrough.py
+    pixi run python examples/walkthrough/walkthrough.py
 
-Its output is committed as ``examples/walkthrough.out`` and asserted line for
+Its output is committed as ``examples/walkthrough/walkthrough.out`` and asserted line for
 line by ``tests/test_walkthrough.py``, so everything printed is deterministic.
 
 A YAML math spec is a closed AST known before any data is touched: stages 1-3
@@ -66,7 +66,7 @@ def banner(n: int, title: str, module: str) -> None:
 
 def main() -> None:
     print(__doc__.split('\n\n')[0])
-    print(f'\nspec: {SPEC.relative_to(HERE.parent)}')
+    print(f'\nspec: {SPEC.relative_to(HERE.parents[1])}')
 
     schema = validated_model()
     expanded_ast(schema)
@@ -77,7 +77,7 @@ def main() -> None:
         solution(engine)
     refusals()
 
-    print(f'\n{_dim("docs/about/architecture.md has the rules these stages enforce.")}')
+    print(f'\n{_dim("docs/development/architecture.md has the rules these stages enforce.")}')
 
 
 def validated_model() -> Spec:

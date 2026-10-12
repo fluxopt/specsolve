@@ -233,25 +233,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         return m
     ```
 
-## What it exercises
-
-Three `sum(by=)` calls are what a network *is* in this language. The model
-declares three **relations**: `gen_bus` maps `generator` onto `bus`, and
-`line_from` and `line_to` map `line` onto `bus`. `sum(f, by=line_to, over=line, into=bus)` sums
-each line's flow onto its `line_to` bus, so the result lands on `bus`. The
-same `f` is summed twice through two relations, once as an inflow and once as an
-outflow.
-
-There is no adjacency matrix and no hand-written join: the topology is data on
-the dimension.
-
-The two halves of the balance are **named expressions**. Each stands in the
-constraint as its name with its body under it, and both backends build the
-body where the name stands, so naming them costs nothing at build or solve. What it buys is a constraint that reads as a
-sentence, and a quantity the solution hands back: `expression('net_inflow')`
-is the net flow at each bus that the balance constrained. One definition serves
-the constraint and the report.
-
 ---
 
 [`examples/transport.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/transport.yaml) · back to [all models](index.md)

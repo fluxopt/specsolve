@@ -1,7 +1,7 @@
 """Dense solver indices for a masked coordinate product.
 
 ``var_label`` is the solver's column index and ``row`` its row index, so two
-builds of one model must agree on every label (docs/about/architecture.md,
+builds of one model must agree on every label (docs/development/architecture.md,
 "The relational lane").
 """
 

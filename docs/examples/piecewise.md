@@ -1,17 +1,41 @@
 # piecewise
 
-Per-generator convex cost curves, expanded into a λ-formulation.
+Dispatch where each generator's cost follows its own convex curve.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **3850**, matched to `rtol=1e-09`.
 
 ## The problem
 
-Each generator gets its own breakpoint list, so the curve varies per unit,
-which a flat breakpoint list cannot express:
+Each generator has its own breakpoints, and its cost is read off its own
+curve:
 
 $$p_g = \sum_k \lambda_{g,k}\, x_{g,k}, \quad
 \mathrm{cost}_g = \sum_k \lambda_{g,k}\, y_{g,k}, \quad
 \sum_k \lambda_{g,k} = 1, \quad \lambda \ge 0$$
+
+## Choosing a method
+
+`method:` decides what the solver receives. Two more files in `examples/` hold
+this model with only that line changed.
+
+| `method:` | the solver receives | which solvers |
+|---|---|---|
+| `convex`, on this page | a weight per breakpoint, as an LP | all |
+| `lp`, in [`piecewise_lp.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/piecewise_lp.yaml) | one row per segment, and no extra variable, as an LP | all |
+| `sos2`, in [`sos.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/sos.yaml) | a weight per breakpoint, and a set it branches on | gurobi and xpress, and the `.lp` and `.mps` files; HiGHS refuses the model, and the error names the way past it |
+| `adjacency`, the default | a weight per breakpoint and a binary per segment, as a MILP | all |
+
+`convex` and `lp` are exact here because the curve is convex and the cost is
+minimised. Both check the curve when the data attaches. On this instance `convex` and `lp`
+reach the same optimum, 3850, and the same duals on `balance`.
+
+The two LP methods trade columns for rows. On 20 generators × 48 snapshots × 6
+breakpoints:
+
+| | columns | rows | nonzeros |
+|---|---:|---:|---:|
+| `method: convex` | 7680 | 2928 | 18240 |
+| `method: lp` | **1920** | 6768 | **12480** |
 
 ## The model
 
@@ -211,17 +235,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m.add_objective(op_cost.sum())
         return m
     ```
-
-## What it exercises
-
-`piecewise:` is a **declaration, not an operator**. It expands into the
-λ-formulation above before lowering, and nothing called *piecewise* survives
-into the plan. With `method: convex` the expansion emits no binaries: the
-convex hull is exact for a convex curve under minimisation, so the model stays
-a pure LP. `method: adjacency`, the default, adds segment binaries and
-adjacency constraints instead, and the model becomes a MILP that is still
-inside the relational subset. `method: sos2` states the same restriction as a
-[set](sos.md) and leaves the binaries to whichever sink needs them.
 
 ---
 

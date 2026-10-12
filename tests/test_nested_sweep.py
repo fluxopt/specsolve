@@ -7,6 +7,7 @@ every test here compares against `solve_over` run once per outer key.
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import replace
@@ -16,6 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import api, strategy
+from specsolve.axes import axis_from
 from tests.test_strategy import MYOPIC, WINDOW, WINDOW_AXIS, horizon_sources, myopic_sources
 
 AXES = (sps.EachCoordinate('scenario'), WINDOW_AXIS)
@@ -140,6 +142,16 @@ def test_a_nested_sweep_archive_holds_its_axes_and_runs_again(nested, tmp_path):
     same(archive.sweep.primal('soc', per_window=True), nested.primal('soc', per_window=True))
     again = sps.solve_over(archive.spec, archive.sources, archive.axis)
     same(again.primal('soc'), nested.primal('soc'))
+
+
+def test_a_tuple_of_axes_is_plain_data_as_the_archive_holds_it(nested, tmp_path):
+    """``axis.json`` of a nested sweep is its axes' plain data, and ``solve_over`` takes that data in their place."""
+    sps.solve_over(WINDOW, scenario_horizons(), CARRIED, archive=tmp_path / 'run')
+    data = json.loads((tmp_path / 'run' / 'axis.json').read_text())
+
+    assert data == {'each': 'axes', 'axes': [each.to_dict() for each in CARRIED]}, 'each axis as its to_dict writes it'
+    assert axis_from(data) == CARRIED, 'the data reads back as the tuple, carry included'
+    same(sps.solve_over(WINDOW, scenario_horizons(), data).primal('soc'), nested.primal('soc'))
 
 
 def test_an_undeclared_expression_reads_off_a_nested_archive(nested, tmp_path):

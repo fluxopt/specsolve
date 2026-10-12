@@ -24,17 +24,15 @@ from tools import constructs, gallery_math
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
 
 
-@pytest.fixture(params=constructs.models(), ids=lambda m: m[0])
+#: The models the gallery shows: a model with a page. A model without one is
+#: still solved, typeset and verified by the suite, and named in the evidence
+#: tables on the verification page.
+SHOWN = [(name, path) for name, path in constructs.models() if (GALLERY / f'{name}.md').exists()]
+
+
+@pytest.fixture(params=SHOWN, ids=lambda m: m[0])
 def example(request: pytest.FixtureRequest) -> tuple[str, Path]:
     return request.param
-
-
-def test_every_model_has_a_page(example: tuple[str, Path]) -> None:
-    name, _ = example
-    assert (GALLERY / f'{name}.md').exists(), (
-        f'{name} has no gallery page. A model with no page is invisible to a reader '
-        f'deciding whether the language can say theirs.'
-    )
 
 
 def _fences(markdown: str, lang: str) -> list[str]:
@@ -83,9 +81,7 @@ def test_the_gallery_math_is_current() -> None:
 
 def test_every_page_with_a_model_carries_a_math_block() -> None:
     """A page added without the markers would silently opt out of the check above."""
-    missing = [
-        name for name, _ in constructs.models() if gallery_math.BEGIN not in (GALLERY / f'{name}.md').read_text()
-    ]
+    missing = [name for name, _ in SHOWN if gallery_math.BEGIN not in (GALLERY / f'{name}.md').read_text()]
     assert not missing, (
         f'gallery pages with no math block: {missing} — add the '
         f'{gallery_math.BEGIN}/{gallery_math.END} markers under "## The model"'
@@ -121,15 +117,30 @@ def test_the_catalogue_lists_every_model(example: tuple[str, Path]) -> None:
     )
 
 
-def test_the_generated_blocks_are_current() -> None:
-    """All three of the gallery's generated blocks are current.
+@pytest.mark.parametrize('path', constructs.PAGES, ids=lambda p: p.name)
+def test_the_generated_blocks_are_current(path: Path) -> None:
+    """Every generated block on the page is current.
 
     The catalogue comes from the nav and each page's opening line, the
     construct matrix from the resolved plan, and the reference table from
     ``references.json``, the file ``test_ports.py`` asserts against.
     """
-    page = constructs.PAGE.read_text()
-    assert constructs.rendered(page) == page, 'the gallery page is stale — run `pixi run python -m tools.constructs`'
+    page = path.read_text()
+    assert constructs.rendered(page, path) == page, f'{path.name} is stale — run `pixi run python -m tools.constructs`'
+
+
+@pytest.mark.parametrize(
+    'markers',
+    [
+        pytest.param((constructs.CAT_BEGIN, constructs.CAT_END), id='catalogue'),
+        pytest.param((constructs.BEGIN, constructs.END), id='constructs'),
+        pytest.param((constructs.REF_BEGIN, constructs.REF_END), id='references'),
+    ],
+)
+def test_each_generated_block_lives_on_exactly_one_page(markers: tuple[str, str]) -> None:
+    """The generator fills only the blocks it finds, so a dropped marker would stop it silently."""
+    carriers = [path.name for path in constructs.PAGES if all(m in path.read_text() for m in markers)]
+    assert len(carriers) == 1, f'{markers[0]} must be on exactly one of constructs.PAGES, found on {carriers}'
 
 
 @pytest.fixture(scope='module')
@@ -157,7 +168,10 @@ PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports' / 'referen
 ARMS = {'linopy': 'linopy', 'pypsa': 'PyPSA'}
 
 
-@pytest.fixture(params=sorted(PORTS.glob('*/*.py')), ids=lambda p: f'{p.parent.name}-{p.stem}')
+@pytest.fixture(
+    params=sorted(p for p in PORTS.glob('*/*.py') if (GALLERY / f'{p.stem}.md').exists()),
+    ids=lambda p: f'{p.parent.name}-{p.stem}',
+)
 def reference(request: pytest.FixtureRequest) -> Path:
     return request.param
 
@@ -184,8 +198,12 @@ def test_the_page_shows_the_reference_that_runs(reference: Path) -> None:
     )
 
 
+#: A snippet marker, which another page includes the function by and the site never renders.
+_SNIPPET_MARKER = re.compile(r'^[ \t]*# --8<-- \[(?:start|end):\w+\]\n', re.MULTILINE)
+
+
 def _build_slice(reference: Path) -> str:
-    """The reference's ``build`` function, exactly as the file holds it.
+    """The reference's ``build`` function, exactly as the file holds it, snippet markers aside.
 
     The slice ends at the next top-level statement, so the run harness never
     reaches the page.
@@ -193,7 +211,7 @@ def _build_slice(reference: Path) -> str:
     body = reference.read_text()
     body = body[body.index('def build') :]
     end = min(i for i in (body.find('\n\n\ndef '), body.find('\n\n\nif ')) if i != -1)
-    return body[:end].rstrip() + '\n'
+    return _SNIPPET_MARKER.sub('', body[:end]).rstrip() + '\n'
 
 
 def _call_snippet(name: str) -> str:
@@ -330,17 +348,14 @@ def test_the_prose_teaches_lines_that_exist(page: Path) -> None:
 
 #: Every sentence that states how many ports there are, as ``(page, template)``.
 #: A third one is added here, not asserted separately.
-COUNTED_IN_PROSE = (
-    ('examples/README.md', '| `ports/` | {} models somebody else already solved'),
-    ('docs/examples/index.md', 'Two rows from {} ports'),
-)
+COUNTED_IN_PROSE = (('examples/README.md', '| `ports/` | {} models somebody else already solved'),)
 
 
 @pytest.mark.parametrize(('page', 'sentence'), COUNTED_IN_PROSE, ids=[page for page, _ in COUNTED_IN_PROSE])
 def test_the_prose_counts_the_ports_there_are(page: str, sentence: str) -> None:
     """The stated size of the port corpus is the size of the port corpus.
 
-    Written by hand in two files: two port PRs that each bump the count from
+    Written by hand: two port PRs that each bump the count from
     the same number merge without a conflict and leave the total one short.
     """
     expected = sentence.format(len(constructs.ports()))

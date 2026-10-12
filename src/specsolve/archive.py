@@ -93,8 +93,8 @@ class ResultArchive:
 class SweepArchive:
     """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
 
-    ``sps.solve_over(archive.spec, archive.sources, archive.axis)``
-    runs it again.
+    ``sps.solve_over(archive.spec, archive.sources, archive.axis)`` runs it
+    again.
 
     Attributes:
         spec: The spec as written.

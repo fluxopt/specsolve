@@ -18,7 +18,7 @@ import io
 import json
 import shutil
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -36,7 +36,8 @@ from specsolve.axes import (
     EachWindow,
     HandBuilt,
     Slice,
-    axis_manifest,
+    axis_data,
+    axis_from,
     check_no_index_is_cut,
     checked_axes,
     cut_by,
@@ -75,7 +76,7 @@ from specsolve.sweep import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Sequence
 
     from mathspec import Spec
     from mathspec.program import Program
@@ -236,7 +237,7 @@ def _archiving(archive: str | Path | None, axes: Axes | None, *, keep_windows: b
 def solve_over(
     spec: Buildable,
     sources: Mapping[str, Source],
-    axis: Axis | Axes | HandBuilt,
+    axis: Axis | Axes | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     key_name: str | None = None,
     executor: Executor | None = None,
@@ -261,12 +262,14 @@ def solve_over(
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
         axis: [`EachCoordinate`][], [`EachWindow`][], a tuple of them, outer
-            first, or a list of ``(key, sources)`` written by hand. A tuple
-            cuts with each axis in turn, and any of them may be windows. An
-            axis's ``carry=``
-            chains its slices; the slices that share the keys of every axis
-            outside the outermost one that carries are a chain, and the answer
-            carries one key column per axis.
+            first, or a list of ``(key, sources)`` written by hand. An axis
+            may come as the plain data its ``to_dict`` writes, and a tuple as
+            ``{'each': 'axes', 'axes': [...]}``, as an archive's
+            ``axis.json`` holds them. A tuple cuts with each axis in turn,
+            and any of them may be windows. An axis's ``carry=`` chains its
+            slices; the slices that share the keys of every axis outside the
+            outermost one that carries are a chain, and the answer carries
+            one key column per axis. A hand-built list carries nothing.
         key_name: What to call the slice column; a class axis names its own,
             a hand-built list has to be told.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
@@ -328,7 +331,8 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: Before a slice is taken: a tuple of axes with two
+        SpecsolveError: Before a slice is taken: an axis given as a mapping
+            whose keys name no axis; a tuple of axes with two
             windows over one local index, or two axes over one dimension; a carry that
             cannot line up, has no seed, collapses a dimension its axis does
             not advance along, writes a parameter another axis carries too, or
@@ -351,6 +355,8 @@ def solve_over(
             the model counts, which every window restarts, or a *start* that
             leaves a slice no row, which starts that slice from nothing.
     """
+    if isinstance(axis, Mapping):
+        axis = axis_from(axis)
     document = declared(spec)
     sources = _materialised(sources)
     axes = checked_axes(cast('Axis | Axes', axis)) if _is_axes(axis) else None
@@ -545,7 +551,6 @@ def _archive_the_sweep(
     Each source's tidy table comes from *one_slice*, except the ones
     [`_uncut`][] and [`_spread_over_the_axis`][] give.
     """
-    manifest = axis_manifest(axes if len(axes) > 1 else axes[0])
     tidied = numbered(program, tidy_sources(program, one_slice))
     sliced = {name: table for each in axes for name, table in sources_with_column(sources, each.dim).items()}
     cut = {name: _uncut(program, axes, name, table) for name, table in sliced.items()}
@@ -557,7 +562,13 @@ def _archive_the_sweep(
     }
     held = {**tidied, **spread, **cut}
     tables = {name: held[name] for name in sources}
-    write_archive(out, spec, tables, axis=manifest, answer=partial(_the_answer, folded, keep_windows=keep_windows))
+    write_archive(
+        out,
+        spec,
+        tables,
+        axis=axis_data(axes if len(axes) > 1 else axes[0]),
+        answer=partial(_the_answer, folded, keep_windows=keep_windows),
+    )
 
 
 def _the_answer(sweep: Sweep, under: Path, write: FrameWriter, *, keep_windows: bool) -> None:
