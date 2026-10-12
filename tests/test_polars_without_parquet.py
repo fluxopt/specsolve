@@ -47,7 +47,7 @@ def polars_without_parquet(monkeypatch):
 
 
 def test_the_probe_sees_no_parquet(polars_without_parquet):
-    assert not answer_layout.has_parquet()
+    assert not answer_layout.has_parquet(), 'the probe reads the missing parquet as no parquet'
 
 
 def test_polars_has_parquet_where_it_was_built_with_it():
