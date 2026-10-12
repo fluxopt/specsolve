@@ -79,10 +79,10 @@ Each panel is one model through one solver, and each line is one library.
 - **Variables narrows every panel and the table to a range of model sizes**, on
   either axes. Drag a handle, or drag along the axis to select a new range. Each
   end is zero or a power of ten, and a rung counts at the nearest power. From
-  zero, a linear axis starts at zero; from a power of ten, it starts at the
-  smallest size shown.
-- **The table divides by specsolve.** Green is where specsolve is faster, blue
-  where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
+  zero, a linear axis starts at zero; from a power of ten, it starts just below
+  the smallest size shown.
+- **The table divides by specsolve.** Purple is where specsolve is faster,
+  orange where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
   are sizes the harness refused.
 
 ## A script that solves one model
