@@ -1,18 +1,7 @@
 # The data contract
 
-This page lists what `sources` may hold and what attaching refuses and accepts,
-for anyone putting data on a [spec](glossary.md). `sources` maps each name the
-spec declares to its numbers:
-
-```python
-import specsolve as sps
-
-result = sps.solve(
-    'dispatch.yaml',
-    {'load': 'load.parquet', 'cost': cost_frame, 'p_max': p_max_frame},
-)
-```
-
+What `sources` may hold, and what attaching refuses and accepts. `sources`
+maps each name a [spec](glossary.md) declares to its numbers.
 [Preparing the data](../howto/data.md) gets an instance into these shapes.
 
 ## What a parameter accepts

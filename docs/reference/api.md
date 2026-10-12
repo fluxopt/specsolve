@@ -4,17 +4,6 @@ Every public name, rendered from its docstring. A *spec* is the YAML file;
 what it may contain is
 [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
-```python
-import specsolve as sps
-
-sps.check('spec.yaml')  # compiles? no data needed
-
-result = sps.solve('spec.yaml', sources)
-result.objective
-result.primal('p')  # a polars.DataFrame
-result.dual('power_balance')
-```
-
 ## Reference
 
 `specsolve` holds what you call, `specsolve.types` what a call hands back,
