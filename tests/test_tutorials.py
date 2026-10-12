@@ -2,7 +2,7 @@
 
 The four tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``
 and ``docs/sweep.md``) and
-``docs/howto/fix-relax-remove.md`` run every executed block, and each test pins
+``docs/howto/fix-relax-remove.md`` and ``docs/howto/scenarios.md`` run every executed block, and each test pins
 one claim the prose makes. Blocks are exec'd in order in one namespace, as
 markdown-exec's ``session=`` runs them on the site, and in the directory a
 fence's ``workdir=`` names.
@@ -32,6 +32,7 @@ DATA = DOCS_DIR / 'tables.md'
 TIME = DOCS_DIR / 'sweep.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
+SCENARIOS = DOCS_DIR / 'howto' / 'scenarios.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
 EXECUTED = re.compile(r'^```python(?P<info>[^\n]*\bexec="true"[^\n]*)$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
@@ -204,3 +205,23 @@ def test_a_mip_is_priced_once_its_decisions_are_fixed(lifecycle: tuple[dict[str,
 def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any], str]) -> None:
     namespace, _ = lifecycle
     assert namespace['with_ramp'] > namespace['without_ramp'], 'popping the key has to give the objective back'
+
+
+@pytest.fixture(scope='module')
+def scenarios() -> tuple[dict[str, Any], str]:
+    return run(SCENARIOS)
+
+
+def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = scenarios
+    objectives = dict(namespace['scenarios'].record.select('scenario', 'objective').iter_rows())
+    assert objectives == pytest.approx({'cold': 16530.0, 'mild': 10500.0}), 'one solve for each label of scenario'
+    wide = namespace['gas'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
+    assert (wide['cold'] >= wide['mild']).all(), 'gas covers the extra load of the cold scenario'
+
+
+def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = scenarios
+    objectives = dict(namespace['both'].record.select('scenario', 'objective').iter_rows())
+    assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
+    assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'

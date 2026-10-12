@@ -26,7 +26,9 @@ nav:
   - How-to guides:
       - Preparing the data: howto/data.md
       - Choosing a solver: howto/solvers.md
-      - Making a loop of solves faster: howto/warm-start.md
+      - Making a solve faster: howto/faster.md
+      - Starting from an earlier answer: howto/warm-start.md
+      - Solving many scenarios: howto/scenarios.md
       - Running a sweep in parallel: howto/parallel.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Reading an answer into pandas or xarray: howto/pandas-xarray.md
