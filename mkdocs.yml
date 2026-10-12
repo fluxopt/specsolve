@@ -1,5 +1,5 @@
 site_name: specsolve
-site_description: Self-documenting optimisation models — declarative LP/MILP, built relationally and handed straight to the solver
+site_description: Optimisation as a data pipeline — tables in, a model built on polars, tables out, and every solve kept as parquet
 site_url: https://specsolve.readthedocs.io/en/latest/
 repo_url: https://github.com/fluxopt/specsolve
 repo_name: fluxopt/specsolve

@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 [project]
 name = "specsolve"
 dynamic = ["version"]
-description = "Self-documenting optimisation models: declarative LP/MILP, built relationally and handed straight to the solver"
+description = "Optimisation as a data pipeline: tables in, a model built on polars, tables out, and every solve kept as parquet"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

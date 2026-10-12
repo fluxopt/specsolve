@@ -10,35 +10,51 @@
 
 <!-- --8<-- [end:badges] -->
 
-**Solve an optimisation problem written in YAML. Attach your data as tables, and
-keep the solver loaded for quick updates and warm starts.**
+<!-- --8<-- [start:tagline] -->
+
+**Optimisation as a data pipeline.** Tables in, polars builds the model, tables
+out. Every solve can be kept as parquet, to query, share or solve again.
+
+<!-- --8<-- [end:tagline] -->
 
 <!-- --8<-- [start:intro] -->
 
-specsolve solves [mathspec](https://github.com/energy-models/mathspec) specs.
-A spec states the math, and mathspec checks it before any data exists.
-specsolve attaches your tables to the spec, builds the resulting model on
-polars, and hands it to HiGHS, Gurobi or Xpress.
+specsolve solves linear and mixed-integer models from tables. You pass a model
+file and your data as Arrow tables or parquet paths. specsolve builds the model
+on polars, hands it to HiGHS, Gurobi or Xpress, and returns tidy tables. The
+model file is written in [mathspec](https://github.com/energy-models/mathspec),
+which states the math and checks it before any data exists.
 
 <!-- --8<-- [end:intro] -->
 
 <!-- --8<-- [start:benefits] -->
 
 - **Tables in, tables out.** Pass any Arrow table, such as polars, pandas or
-  DuckDB, or a parquet path. Results come back as tables, and an archive keeps
-  the spec, its data and its results as parquet, ready for queries, plots or
-  BI. [Your data →](https://specsolve.readthedocs.io/en/latest/tables/)
-- **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
-  rolling horizons and myopic pathways over the same spec. Each window is
-  checked against how the model couples before it runs. [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
-- **Fast, and hard to get wrong.** Tables hold only the rows that exist, so a
-  model's topology does not change its cost. The solver stays loaded:
-  `update()` puts new numbers on it, and the next solve carries on from where
-  the last one ended. The API is a handful of functions, with nothing to tune.
+  DuckDB, or a parquet path. Each variable, dual and expression comes back as a
+  tidy table with one row per coordinate.
+  [Your data →](https://specsolve.readthedocs.io/en/latest/tables/)
+- **Every solve is an archive.** `archive=` writes the model, its data and its
+  answer as parquet, with the solver and versions that made it. `scan_archive`
+  reads it where it lies and solves the same question again, and a directory
+  of runs reads as one set of tables.
+  [Archiving a solve →](https://specsolve.readthedocs.io/en/latest/howto/archiving/)
+- **Fast from the first call.** A script that solves one small model finishes
+  in about half a second, under half of linopy's time
+  ([#1952](https://github.com/fluxopt/specsolve/pull/1952)). The solver stays
+  loaded: `update()` puts new numbers on it, and the next solve carries on from
+  where the last one ended.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
+- **No slow way to write a model.** In linopy or Pyomo, the model is Python
+  code, and slow code builds slowly. A specsolve model is a YAML file with data
+  attached, and specsolve makes sure it builds fast.
+  [Coming from linopy →](https://specsolve.readthedocs.io/en/latest/about/linopy/)
+- **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
+  rolling horizons and myopic pathways over the same model. specsolve checks
+  each window against how the model couples before it runs.
+  [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All
-  16 rungs match PyPSA's objective, and 12 match its duals row for row.
+  58 rungs match PyPSA's objective, and 36 match its duals row for row.
   [The PyPSA ladder →](https://specsolve.readthedocs.io/en/latest/examples/pypsa_ladder/)
 
 <!-- --8<-- [end:benefits] -->

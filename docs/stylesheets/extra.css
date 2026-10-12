@@ -176,6 +176,16 @@
   mask-image: url("icons/table-arrow-right.svg");
 }
 
+.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/howto/archiving/"])::before {
+  content: "";
+  mask-image: url("icons/archive-arrow-down.svg");
+}
+
+.md-typeset .landing .grid.cards > ul > li:has(> a[href$="/about/linopy/"])::before {
+  content: "";
+  mask-image: url("icons/function-variant.svg");
+}
+
 .md-typeset .landing .grid.cards > ul > li:has(> a[href$="/sweep/"])::before {
   content: "";
   mask-image: url("icons/split.svg");
