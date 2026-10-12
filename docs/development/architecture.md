@@ -4,8 +4,8 @@ How the package is put together, for anyone who changes its structure or adds
 a sink or an operator. A PR that changes the structure described here updates
 this page.
 
-`python examples/walkthrough.py` runs the pipeline stage by stage. Its output,
-[examples/walkthrough.out](https://github.com/fluxopt/specsolve/blob/main/examples/walkthrough.out),
+[The walkthrough](walkthrough.md) runs the pipeline stage by stage. Its output,
+[walkthrough.out](https://github.com/fluxopt/specsolve/blob/main/examples/walkthrough/walkthrough.out),
 is asserted line for line by `tests/test_walkthrough.py`.
 
 ## The pipeline

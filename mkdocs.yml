@@ -56,7 +56,6 @@ nav:
               - multi-period: examples/multi_period.md
               - seasons: examples/seasons.md
               - reserves: examples/reserves.md
-              - walkthrough: examples/walkthrough.md
           - Published optima:
               - Dantzig transport: examples/transport_dantzig.md
               - Dantzig, economies of scale: examples/transport_pwl.md
@@ -78,6 +77,7 @@ nav:
   # tools/ladder.py writes them and tools/constructs.py reads them.
   - Development:
       - Architecture: development/architecture.md
+      - Walkthrough: development/walkthrough.md
       - Verification: development/verification.md
       - PyPSA examples:
           - transport model: examples/pypsa_transport.md
