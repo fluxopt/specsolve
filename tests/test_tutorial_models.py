@@ -104,8 +104,7 @@ def test_a_rolling_horizon_pays_for_what_its_windows_cannot_see() -> None:
         sweep = sps.solve_over(
             SPECS['storage'],
             sources('storage', load),
-            sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot'),
-            carry={'soc_initial': 'soc'},
+            sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
         )
         assert sweep.primal('soc')['hour'].to_list() == list(range(12)), 'the windows cover every hour exactly once'
         costs.append(schedule_cost(sweep))
