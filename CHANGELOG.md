@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): a run in the browser reads and writes its files through pyarrow, where polars has no parquet ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
+- feat(api): a run in the browser reads and writes its files through pyarrow, where polars has no parquet ([#1991](https://github.com/fluxopt/specsolve/pull/1991))
 - docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
 - docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
 - docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
