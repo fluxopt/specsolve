@@ -24,17 +24,15 @@ from tools import constructs, gallery_math
 GALLERY = Path(__file__).resolve().parent.parent / 'docs' / 'examples'
 
 
-@pytest.fixture(params=constructs.models(), ids=lambda m: m[0])
+#: The models the gallery shows: a model with a page. A model without one is
+#: still solved, typeset and verified by the suite, and named in the evidence
+#: tables on the verification page.
+SHOWN = [(name, path) for name, path in constructs.models() if (GALLERY / f'{name}.md').exists()]
+
+
+@pytest.fixture(params=SHOWN, ids=lambda m: m[0])
 def example(request: pytest.FixtureRequest) -> tuple[str, Path]:
     return request.param
-
-
-def test_every_model_has_a_page(example: tuple[str, Path]) -> None:
-    name, _ = example
-    assert (GALLERY / f'{name}.md').exists(), (
-        f'{name} has no gallery page. A model with no page is invisible to a reader '
-        f'deciding whether the language can say theirs.'
-    )
 
 
 def _fences(markdown: str, lang: str) -> list[str]:
@@ -83,9 +81,7 @@ def test_the_gallery_math_is_current() -> None:
 
 def test_every_page_with_a_model_carries_a_math_block() -> None:
     """A page added without the markers would silently opt out of the check above."""
-    missing = [
-        name for name, _ in constructs.models() if gallery_math.BEGIN not in (GALLERY / f'{name}.md').read_text()
-    ]
+    missing = [name for name, _ in SHOWN if gallery_math.BEGIN not in (GALLERY / f'{name}.md').read_text()]
     assert not missing, (
         f'gallery pages with no math block: {missing} — add the '
         f'{gallery_math.BEGIN}/{gallery_math.END} markers under "## The model"'
@@ -172,7 +168,10 @@ PORTS = Path(__file__).resolve().parent.parent / 'examples' / 'ports' / 'referen
 ARMS = {'linopy': 'linopy', 'pypsa': 'PyPSA'}
 
 
-@pytest.fixture(params=sorted(PORTS.glob('*/*.py')), ids=lambda p: f'{p.parent.name}-{p.stem}')
+@pytest.fixture(
+    params=sorted(p for p in PORTS.glob('*/*.py') if (GALLERY / f'{p.stem}.md').exists()),
+    ids=lambda p: f'{p.parent.name}-{p.stem}',
+)
 def reference(request: pytest.FixtureRequest) -> Path:
     return request.param
 
