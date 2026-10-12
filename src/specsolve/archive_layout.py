@@ -87,7 +87,8 @@ def write_archive(
         spec: The spec as written, held as ``spec.yaml``.
         tables: The tidy table each source stands for, keyed as the file
             declares, each written as ``sources/<key>.parquet``.
-        axis: The axis manifest, or ``None`` where the sources are not cut.
+        axis: The axis as its ``to_dict`` writes it, or ``None`` where the
+            sources are not cut.
         answer: Lays the answer out in the directory it is given, writing
             each table with the writer it is given, which adds the run.
 

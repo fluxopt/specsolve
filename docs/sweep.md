@@ -110,8 +110,7 @@ Each window keeps three hours, and `lookahead=1` lets it see one more.
 rolling = sps.solve_over(
     'tutorial/storage.yaml',
     hourly,
-    sps.EachWindow('hour', steps=3, lookahead=1, into='snapshot'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('hour', steps=3, lookahead=1, into='snapshot', carry={'soc_initial': 'soc'}),
 )
 print(rolling.record.select('hour_start', 'objective'))
 print(rolling.primal('soc').filter(pl.col('hour') % 3 == 2))
@@ -139,8 +138,7 @@ for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
         'tutorial/storage.yaml',
         hourly,
-        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
     )
     rows.append({'lookahead': lookahead, 'cost': round(schedule_cost(sweep), 1)})
 
