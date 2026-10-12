@@ -4,7 +4,7 @@ An expression the file never named passes the same door: [`lower`][] splices
 it into the spec as a named one and lowers the whole spec again. This sits
 above both lanes because nothing
 under ``relational/`` may see the spec as written
-(docs/about/architecture.md, hard rule 2).
+(docs/development/architecture.md, hard rule 2).
 """
 
 from __future__ import annotations

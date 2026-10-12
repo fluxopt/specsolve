@@ -106,7 +106,7 @@ an existing file or output holds still raises it.
 - **Docs move with the change.** A construct added, renamed or retired updates
   the [language reference](https://mathspec.readthedocs.io/en/latest/reference/language/) — its ten rules if
   the change moves a law, and it lives in mathspec now; structure updates
-  [ARCHITECTURE](docs/about/architecture.md), diagrams included.
+  [ARCHITECTURE](docs/development/architecture.md), diagrams included.
 - **After a decision in conversation, sweep for what now contradicts it**, stale
   rationale included: a stale sentence outranks correct code in every reader's
   head.
@@ -119,7 +119,7 @@ an existing file or output holds still raises it.
 - The architectural invariants — the engine importing no linopy, load-time
   validation, the dependency set, the git tag as the version — are enforced by
   `tests/test_architecture.py`, the bare-install job and
-  [ARCHITECTURE](docs/about/architecture.md), so they are not repeated here.
+  [ARCHITECTURE](docs/development/architecture.md), so they are not repeated here.
 
 # Part 2 — Good defaults
 

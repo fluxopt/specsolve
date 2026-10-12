@@ -1,0 +1,57 @@
+description: Least-cost dispatch where each generator is on or off in every snapshot.
+
+dimensions:
+  snapshot:
+    description: dispatch periods
+    dtype: int
+  generator:
+    description: generating units
+
+parameters:
+  p_max:
+    description: installed capacity
+    dims: [generator]
+  load:
+    description: demand to be met
+    dims: [snapshot]
+  cost:
+    description: marginal cost
+    dims: [generator]
+  p_min:
+    description: least output of a generator that is on
+    dims: [generator]
+  no_load_cost:
+    description: cost of one snapshot on, whatever the output
+    dims: [generator]
+
+variables:
+  p:
+    description: output of a generator in a snapshot
+    dims: [snapshot, generator]
+    where: "p_max > 0"
+    bounds:
+      lower: 0
+      upper: p_max
+  on:
+    description: whether a generator is on in a snapshot
+    dims: [snapshot, generator]
+    where: "p_max > 0"
+    domain: binary
+
+constraints:
+  power_balance:
+    dims: [snapshot]
+    expression: sum(p, over=generator) == load
+  p_upper:
+    description: a generator that is off produces nothing
+    dims: [snapshot, generator]
+    expression: p <= p_max * on
+  p_lower:
+    description: a generator that is on produces at least its minimum
+    dims: [snapshot, generator]
+    expression: p >= p_min * on
+
+objective:
+  sense: minimize
+  description: total cost of generation and of keeping generators on
+  expression: sum(p * cost) + sum(on * no_load_cost)

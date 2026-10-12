@@ -217,7 +217,7 @@ class Model:
         """One unnamed expression as a plan node, for a result reading a quantity the file never named.
 
         Held here because the engine may not see the model as written
-        (docs/about/architecture.md, hard rule 2).
+        (docs/development/architecture.md, hard rule 2).
         """
         return lower(self._spec, written)
 
