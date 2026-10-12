@@ -85,5 +85,5 @@ loaded the model a second time.
 
 ## Next
 
-In [the next tutorial](sweep.md) you change the model itself: generators
-that are either on or off, and a battery.
+In [the next tutorial](sweep.md) you solve a horizon too large for one solve,
+a window at a time.

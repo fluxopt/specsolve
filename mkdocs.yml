@@ -22,7 +22,7 @@ nav:
       - Your first model: run.md
       - Your data: tables.md
       - Change it and solve again: change.md
-      - A battery, over time: sweep.md
+      - A horizon too large for one solve: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md
       - Choosing a solver: howto/solvers.md

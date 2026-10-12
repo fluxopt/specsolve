@@ -30,7 +30,7 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
   BI. [Your data →](https://specsolve.readthedocs.io/en/latest/tables/)
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same spec. Each window is
-  checked against how the model couples before it runs. [A battery, over time →](https://specsolve.readthedocs.io/en/latest/sweep/)
+  checked against how the model couples before it runs. [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Fast, and hard to get wrong.** Tables hold only the rows that exist, so a
   model's topology does not change its cost. The solver stays loaded:
   `update()` puts new numbers on it, and the next solve carries on from where

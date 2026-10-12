@@ -1,40 +1,25 @@
-# A battery, over time
+# A horizon too large for one solve
 
-`tutorial/commitment.yaml` is the first model with one change: a generator
-is either on or off, and gas cannot run below 50 while it is on. Add a battery
-to it, so that one snapshot depends on the one before. Then solve it many times with one call:
-once for each scenario, and window by window. Every block runs from the
-`examples/` folder.
+A model over a year can be too large to solve at once. Solve it a window at a
+time instead, and see what that costs. Every block runs from the `examples/`
+folder.
 
-## The battery
+## The model
 
-Copy `tutorial/commitment.yaml` to `tutorial/storage.yaml`, and make these
-changes:
+`tutorial/storage.yaml` is the first model with two additions. A generator is
+either on or off, and gas cannot run below 50 while it is on. A battery
+carries its level from one snapshot to the next.
 
-```python exec="true" result="diff" workdir="examples"
-import difflib
-from pathlib import Path
+??? note "tutorial/storage.yaml"
 
-before = Path('tutorial/commitment.yaml').read_text().splitlines(keepends=True)
-after = Path('tutorial/storage.yaml').read_text().splitlines(keepends=True)
-print(''.join(difflib.unified_diff(before, after, 'tutorial/commitment.yaml', 'tutorial/storage.yaml', n=1)))
-```
+    ```yaml
+    --8<-- "examples/tutorial/storage.yaml"
+    ```
 
-- **Three new variables**: `charge`, `discharge` and `soc`, the level of the
-  battery at the end of a snapshot.
-- **The power balance** counts what the battery gives back and what it takes.
-- **`soc_next`** says that the level is the level of the snapshot before
-  (read with `shift`), plus 90% of the charge, minus the discharge.
-  [shift →](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift)
-- **`soc_first`** does the same for snapshot 0, from the new parameter
-  `soc_initial`.
+Solve one day. The sources gain `p_min`, `no_load_cost` and the battery's
+level at the start, `soc_initial`:
 
-## One day
-
-The sources gain `soc_initial`. We keep the generator data in its own `dict`
-for reuse:
-
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
 import polars as pl
 
 import specsolve as sps
@@ -44,97 +29,96 @@ load = pl.read_csv('tutorial/data/load.csv')
 fleet = {'generator': generators['generator']} | {
     name: generators.select('generator', value=name) for name in ('p_max', 'cost', 'p_min', 'no_load_cost')
 }
-sources = fleet | {'snapshot': load['snapshot'], 'load': load, 'soc_initial': 0.0}
 
-result = sps.solve('tutorial/storage.yaml', sources)
+result = sps.solve('tutorial/storage.yaml', fleet | {'snapshot': load['snapshot'], 'load': load, 'soc_initial': 0.0})
 print(result.objective)
 ```
 
-The battery brings the cost down from 14000 to 10850. Here is what it does:
+## A longer horizon is a larger model
 
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
-battery = pl.concat(
-    [result.primal(name).rename({'value': name}) for name in ('charge', 'discharge', 'soc')], how='align'
-)
-print(battery)
+Repeat the day to make a longer horizon, and build the model without solving
+it. [`diagnostics`](reference/api.md#specsolve.types.Model.diagnostics) gives
+its size:
+
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
+def horizon(days: int) -> dict:
+    hours = days * load.height
+    repeated = pl.DataFrame({'snapshot': range(hours), 'value': days * load['value'].to_list()})
+    return fleet | {'snapshot': range(hours), 'load': repeated, 'soc_initial': 0.0}
+
+
+sizes = []
+for days in (1, 3, 30, 365):
+    with sps.build('tutorial/storage.yaml', horizon(days)) as model:
+        size = model.diagnostics()
+    sizes.append({'days': days, 'columns': size.columns, 'rows': size.rows})
+print(pl.DataFrame(sizes))
 ```
 
-The battery stores spare wind in snapshots 0 and 1 and gives it back in 2
-and 3, enough to keep gas off in snapshot 3.
-
-## One solve for each scenario
-
-What if the load is 30% higher? Put both loads in one table, with a
-`scenario` column the spec does not declare.
-[`solve_over`](reference/sweeps.md) with
-[`EachCoordinate`](reference/sweeps.md#the-axes) solves once for each label:
-
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
-loads = pl.concat(
-    [
-        load.with_columns(scenario=pl.lit('mild')),
-        load.with_columns(scenario=pl.lit('cold'), value=1.3 * pl.col('value')),
-    ]
-)
-scenarios = sps.solve_over('tutorial/storage.yaml', sources | {'load': loads}, sps.EachCoordinate('scenario'))
-print(scenarios.record.select('scenario', 'objective'))
-```
-
-The answers come back as one table, with the `scenario` column added. Here is
-when gas is on:
-
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
-gas_on = scenarios.primal('on').filter(pl.col('generator') == 'gas')
-print(gas_on.pivot(on='scenario', index='snapshot', values='value'))
-```
-
-In the cold scenario the battery cannot cover snapshot 3, and gas stays on.
+Each day adds 28 columns and 24 rows. A real model has many more generators
+and hours than this one, and its solve gets slower as it grows.
 
 ## Window by window
 
-A rolling horizon solves a long horizon in windows, and hands the battery level
-from each window to the next. Here the horizon is three days of the same four
-hours. The load is over `hour` now.
-[`EachWindow`](reference/sweeps.md#the-axes) cuts `hour` into windows, and
-numbers the hours of each window from zero into `snapshot`:
+A rolling horizon solves the horizon in windows. Here three days stand in for
+a year, and the load is over `hour`:
 
-```python exec="true" source="material-block" session="time" workdir="examples"
+```python exec="true" source="material-block" session="horizon" workdir="examples"
 days = pl.DataFrame({'hour': range(12), 'value': 3 * load['value'].to_list()})
 hourly = fleet | {'load': days, 'soc_initial': 0.0}
 ```
 
-Each window keeps three hours, and `lookahead=1` lets it see one more.
+[`EachWindow`](reference/sweeps.md#the-axes) cuts `hour` into windows of
+three hours, and numbers the hours of each window from zero into `snapshot`.
+`lookahead=0` means a window sees only the hours it keeps.
 [`carry`](reference/sweeps.md#carrying-state-between-slices) copies the last
-`soc` a window keeps into the `soc_initial` of the next:
+`soc` of a window into the `soc_initial` of the next:
 
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
-rolling = sps.solve_over(
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
+windows = sps.solve_over(
     'tutorial/storage.yaml',
     hourly,
-    sps.EachWindow('hour', steps=3, lookahead=1, into='snapshot'),
+    sps.EachWindow('hour', steps=3, lookahead=0, into='snapshot'),
     carry={'soc_initial': 'soc'},
 )
-print(rolling.record.select('hour_start', 'objective'))
-print(rolling.primal('soc').filter(pl.col('hour') % 3 == 2))
+print(windows.metrics.select('hour_start', 'columns', 'rows'))
 ```
 
-`record` has one row for each window. The second table is the battery level
-that each window hands on. The first window ends with 10 in the battery, and
-the next window spends it in hour 3, so gas stays off.
+Each window has 21 columns, however long the horizon is.
 
 ## What a window cannot see
 
-Without lookahead, the first window empties the battery in hour 2, and the
-next window needs gas in hour 3. We compare three lookaheads with one solve
-over all twelve hours:
+Solve the three days at once, and compare the cost of the two schedules. The
+objective of a window counts only that window, so add up what the windows
+kept:
 
-```python exec="true" source="material-block" result="text" session="time" workdir="examples"
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
 def schedule_cost(sweep: sps.types.Sweep) -> float:
     output = sweep.primal('p').join(generators, on='generator')
     on = sweep.primal('on').join(generators, on='generator')
     return (output['value'] * output['cost']).sum() + (on['value'] * on['no_load_cost']).sum()
 
 
+whole = sps.solve('tutorial/storage.yaml', horizon(3))
+print(f'one solve {whole.objective:.1f}, windows {schedule_cost(windows):.1f}')
+```
+
+The windows cost 12% more. To see why, look at the battery level at the end of
+each window:
+
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
+print(windows.primal('soc').filter(pl.col('hour') % 3 == 2))
+```
+
+Every window ends with the battery empty. A window cannot see the hours after
+it, so it spends all the stored energy, and the next window needs gas sooner.
+
+## Lookahead
+
+`lookahead` lets each window see more hours than it keeps, and solve them
+too. Try none, one and three:
+
+```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
 rows = []
 for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
@@ -143,19 +127,19 @@ for lookahead in (0, 1, 3):
         sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot'),
         carry={'soc_initial': 'soc'},
     )
-    rows.append({'lookahead': lookahead, 'cost': round(schedule_cost(sweep), 1)})
-
-whole = sps.solve(
-    'tutorial/storage.yaml',
-    fleet | {'snapshot': range(12), 'load': days.rename({'hour': 'snapshot'}), 'soc_initial': 0.0},
-)
+    rows.append(
+        {
+            'lookahead': lookahead,
+            'columns': sweep.metrics['columns'][0],
+            'cost': round(schedule_cost(sweep), 1),
+        }
+    )
 print(pl.DataFrame(rows))
-print(whole.objective)
 ```
 
-Without lookahead, the schedule costs 12% more than one solve over the whole
-horizon. One hour closes most of that gap. Three hours close all of it,
-because every window then sees to the end of its day.
+One hour of lookahead closes most of the gap, and three hours close all of it.
+Each hour also makes every window larger. The lookahead that is enough depends
+on the model: here, it is how far ahead the battery has to plan.
 
 ## Next
 
@@ -164,6 +148,6 @@ These pages go further:
 | | |
 |---|---|
 | [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, and how a sweep is read |
-| [Running a sweep in parallel](howto/parallel.md) | one window or scenario for each worker |
+| [Making a loop of solves faster](howto/warm-start.md) | each window starts from the answer of the window before |
 | [Debugging a wrong answer](howto/debug.md) | when a model solves and the number is wrong |
 | [Examples](examples/index.md) | every model in the repository |
