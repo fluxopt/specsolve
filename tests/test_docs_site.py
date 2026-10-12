@@ -208,7 +208,7 @@ def test_the_plan_table_names_every_expression_node():
 
     from specsolve.relational.engine.pieces import fan_in
 
-    page = (DOCS / 'about' / 'architecture.md').read_text()
+    page = (DOCS / 'development' / 'architecture.md').read_text()
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
     rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
 

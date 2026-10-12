@@ -1,7 +1,7 @@
 # Contributing
 
 Procedure lives here. **Why** the project is shaped the way it is lives in
-[docs/about/architecture.md](docs/about/architecture.md), and that split is deliberate: this file
+[docs/development/architecture.md](docs/development/architecture.md), and that split is deliberate: this file
 should be readable in one sitting and go stale only when a command changes.
 
 ## Setup
@@ -238,7 +238,7 @@ Read, in order:
    plausible-sounding features are refused there on purpose;
 2. [the limits in mathspec](https://mathspec.readthedocs.io/en/latest/about/limits/#what-a-new-primitive-has-to-satisfy) —
    the admissibility test;
-3. [the extension checklists](docs/about/architecture.md#extension-checklists), which sit directly under that
+3. [the extension checklists](docs/development/architecture.md#extension-checklists), which sit directly under that
    test. They stay there rather than moving here: *may I?* and *how?* are one
    question, and splitting them invites answering the second without the first.
 

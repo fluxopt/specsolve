@@ -34,7 +34,7 @@ the same `sources` `sps.build` takes.
 
 The comparison means something only because both paths consume the *same
 resolved AST*, the narrow waist in
-[the architecture notes](architecture.md#one-contract-many-consumers). If each
+[the architecture notes](../development/architecture.md#one-contract-many-consumers). If each
 path resolved names on its own, the suite would compare two dialects rather than
 check one language.
 
@@ -139,7 +139,7 @@ A malformed source gets the same refusal from both builds, in the same sentence.
 specsolve does not take array operations (`merge`, `reindex`, `stack`), the Python
 modeling API, or the solver layer. The first is data prep
 ([the limits](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#what-the-language-will-not-express)).
-The second is [hard rule 5](architecture.md#hard-rules): the spec is the file
+The second is [hard rule 5](../development/architecture.md#hard-rules): the spec is the file
 you review and diff. The third is
 [#106](https://github.com/fluxopt/specsolve/issues/106), where specsolve adopts
 linopy's *design* for declared solver capabilities without adopting its code.

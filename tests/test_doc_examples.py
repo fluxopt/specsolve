@@ -56,9 +56,9 @@ TRACKED = [
     'docs/reference/api.md',
     'docs/reference/sweeps.md',
     'docs/about/linopy.md',
-    'docs/about/architecture.md',
+    'docs/development/architecture.md',
     'docs/about/roadmap.md',
-    'docs/about/decomposition.md',
+    'docs/development/decomposition.md',
 ]
 
 #: Names an example may dot into, and the object that decides what is valid.

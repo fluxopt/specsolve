@@ -26,9 +26,6 @@ nav:
       - A battery, over time: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md
-      # The schema is the language's, so the editor recipe is documented with it.
-      - Editor completion and offline checking: https://mathspec.readthedocs.io/en/latest/howto/installation/#editor-completion-and-offline-checking
-      - Checking a spec without data, in CI: https://mathspec.readthedocs.io/en/latest/howto/check/
       - Warm-starting a re-solve: howto/warm-start.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Choosing a solver: howto/solvers.md
@@ -43,7 +40,6 @@ nav:
       - Sweeps and rolling horizons: reference/sweeps.md
       - The data contract: reference/data.md
       - Glossary: reference/glossary.md
-      - Internal glossary: reference/internals.md
       # The language is a dependency and is documented with itself.
       - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:
@@ -62,31 +58,6 @@ nav:
               - seasons: examples/seasons.md
               - reserves: examples/reserves.md
               - walkthrough: examples/walkthrough.md
-          - PyPSA examples:
-              - transport model: examples/pypsa_transport.md
-              - ramp limits: examples/pypsa_ramp.md
-              - storage units: examples/pypsa_storage.md
-              - cyclic storage: examples/pypsa_cyclic_storage.md
-              - Kirchhoff's voltage law: examples/pypsa_kvl.md
-              - transmission losses: examples/pypsa_losses.md
-              - AC-DC, two coordinates: examples/pypsa_ac_dc.md
-              - unit commitment: examples/pypsa_unit_commitment.md
-              - minimum up and down times: examples/pypsa_min_up_down.md
-              - linearized unit commitment: examples/pypsa_linearized_uc.md
-              - global limits: examples/pypsa_global_limits.md
-              - multi-link: examples/pypsa_multilink.md
-              - modular capacity: examples/pypsa_modular.md
-              - energy totals: examples/pypsa_energy_sum.md
-              - fixed by data: examples/pypsa_fixed.md
-              - spillage: examples/pypsa_spill.md
-              - the Store component: examples/pypsa_store.md
-              - mixed cycling: examples/pypsa_mixed_cycling.md
-              - link delay: examples/pypsa_link_delay.md
-              - multi-period investment: examples/pypsa_multi_period.md
-              - committable and extendable: examples/pypsa_committable_extendable.md
-              - growth limit: examples/pypsa_growth_limit.md
-              - stochastic scenarios: examples/pypsa_stochastic.md
-              - CVaR risk preference: examples/pypsa_cvar.md
           - Published optima:
               - Dantzig transport: examples/transport_dantzig.md
               - Dantzig, economies of scale: examples/transport_pwl.md
@@ -97,6 +68,45 @@ nav:
               - Choosing the mode of transport: examples/transport_modes.md
               - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
               - Travelling salesman: examples/tsp_mtz.md
+  - About:
+      - about/index.md
+      - Benchmarks: about/benchmarks.md
+      - Relationship to linopy: about/linopy.md
+      - Prior art and credit: about/prior-art.md
+      - Roadmap: about/roadmap.md
+      - Changelog: about/changelog.md
+  # What a user does not need: how the package is built, and the PyPSA models
+  # that prove it works. The PyPSA pages stay in docs/examples/, where
+  # tools/ladder.py writes them and tools/constructs.py reads them.
+  - Development:
+      - Architecture: development/architecture.md
+      - Internal glossary: development/internals.md
+      - Decomposition: development/decomposition.md
+      - PyPSA examples:
+          - transport model: examples/pypsa_transport.md
+          - ramp limits: examples/pypsa_ramp.md
+          - storage units: examples/pypsa_storage.md
+          - cyclic storage: examples/pypsa_cyclic_storage.md
+          - Kirchhoff's voltage law: examples/pypsa_kvl.md
+          - transmission losses: examples/pypsa_losses.md
+          - AC-DC, two coordinates: examples/pypsa_ac_dc.md
+          - unit commitment: examples/pypsa_unit_commitment.md
+          - minimum up and down times: examples/pypsa_min_up_down.md
+          - linearized unit commitment: examples/pypsa_linearized_uc.md
+          - global limits: examples/pypsa_global_limits.md
+          - multi-link: examples/pypsa_multilink.md
+          - modular capacity: examples/pypsa_modular.md
+          - energy totals: examples/pypsa_energy_sum.md
+          - fixed by data: examples/pypsa_fixed.md
+          - spillage: examples/pypsa_spill.md
+          - the Store component: examples/pypsa_store.md
+          - mixed cycling: examples/pypsa_mixed_cycling.md
+          - link delay: examples/pypsa_link_delay.md
+          - multi-period investment: examples/pypsa_multi_period.md
+          - committable and extendable: examples/pypsa_committable_extendable.md
+          - growth limit: examples/pypsa_growth_limit.md
+          - stochastic scenarios: examples/pypsa_stochastic.md
+          - CVaR risk preference: examples/pypsa_cvar.md
       - The PyPSA ladder:
           - examples/pypsa_ladder.md
           - Rung 1: examples/pypsa_ladder/rung_01_transport.md
@@ -157,15 +167,6 @@ nav:
           - Rung 57: examples/pypsa_ladder/rung_57_scenario_nom_set.md
           - Rung 58: examples/pypsa_ladder/rung_58_scenario_committable.md
           - Rung 60: examples/pypsa_ladder/rung_60_efficiency_per_snapshot.md
-  - About:
-      - about/index.md
-      - Architecture: about/architecture.md
-      - Decomposition: about/decomposition.md
-      - Benchmarks: about/benchmarks.md
-      - Relationship to linopy: about/linopy.md
-      - Prior art and credit: about/prior-art.md
-      - Roadmap: about/roadmap.md
-      - Changelog: about/changelog.md
 
 theme:
   custom_dir: overrides

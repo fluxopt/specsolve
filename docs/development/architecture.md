@@ -9,8 +9,8 @@ is
 [the language reference](https://mathspec.readthedocs.io/en/latest/reference/language/).
 What may enter it is
 [the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/). Plans
-and refusals are [the roadmap](roadmap.md). Measured results are
-[the benchmarks](benchmarks.md), produced by the harness in
+and refusals are [the roadmap](../about/roadmap.md). Measured results are
+[the benchmarks](../about/benchmarks.md), produced by the harness in
 [bench/](https://github.com/fluxopt/specsolve/blob/main/bench/README.md), which is
 also how a claim on this page gets falsified.
 
@@ -20,7 +20,7 @@ through the same public calls `sps.solve` makes. Its output is committed as
 and asserted line for line by `tests/test_walkthrough.py`.
 
 [The glossary](../reference/glossary.md) defines the nouns a caller meets, and
-[the internal glossary](../reference/internals.md) the names the code uses for
+[the internal glossary](internals.md) the names the code uses for
 its own parts. The
 package builds a program along one *lane*, the relational lane (`relational/`),
 which streams a plan to a sink. The test suite builds the same program a second
@@ -34,7 +34,7 @@ whole spec can be compiled two ways: to eager xarray/linopy calls in the test
 oracle, or to a logical plan streamed to a sink. Both paths provably mean the
 same thing. A
 *declared* memory ceiling is not something the package has; see [the memory
-axis](roadmap.md#where-it-is-going).
+axis](../about/roadmap.md#where-it-is-going).
 
 **The producer of the AST is a different package.** `mathspec` parses, expands,
 resolves and judges a file, and this repository consumes what comes out. The
@@ -284,7 +284,7 @@ static checks, and CI's bare-install job proves the dependency claims.*
 
 **These rules constrain the language**: what a construct may say, which layer
 may know what, and what a file means on its own. How much a build *costs* is a
-property of the engine, measured in [the benchmarks](benchmarks.md), and not a
+property of the engine, measured in [the benchmarks](../about/benchmarks.md), and not a
 rule. A cost phrased as a rule makes one implementation's choice load-bearing in
 the language's rulebook.
 
@@ -327,7 +327,7 @@ the language's rulebook.
    the test oracle both pass the one `inputs.lowered` gate ([above](#thesis)). No
    operator registry exists that could create a divergence. A construct outside
    the language is a load error naming the construct and its rewrite. What that
-   equality buys is [the oracle](linopy.md#2-it-is-the-oracle). linopy is a test
+   equality buys is [the oracle](../about/linopy.md#2-it-is-the-oracle). linopy is a test
    dependency, and nothing under `src/` imports it.
 
    **Accepting is not building, and one construct now separates them.**
@@ -355,7 +355,7 @@ the language's rulebook.
 **The plan is the vocabulary both lanes speak.** Each node has one meaning per
 lane. This table is what the file writes and what the relational lane's query
 does with it. The oracle's linopy call for each row is [what a construct
-becomes in the oracle](linopy.md#what-a-construct-becomes-in-the-oracle). `tests/test_docs_site.py` holds it
+becomes in the oracle](../about/linopy.md#what-a-construct-becomes-in-the-oracle). `tests/test_docs_site.py` holds it
 to `mathspec.program.Expression`'s own subclasses, so no node lacks a row.
 
 **The plan decides what is sayable; the engine only builds.** Every refusal
@@ -656,7 +656,7 @@ are not Python identifiers.
 Anything this package shares with linopy (solve statuses, result shapes, solver
 metrics, duals) takes linopy's spelling, field names and decomposition. Copy
 them rather than import them (rule 2). The rule and its reason are [relationship
-to linopy](linopy.md#2-it-is-the-oracle); `tests/test_solve_status.py` holds the
+to linopy](../about/linopy.md#2-it-is-the-oracle); `tests/test_solve_status.py` holds the
 copy to the original. Where the design differs it stays ours: there is no
 `Solution` of dense arrays, because values are read back by joining labels to
 coordinates.

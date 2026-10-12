@@ -466,7 +466,7 @@ wall time and is usually the honest half of a before/after claim.
 
 ## The cases
 
-Chosen so each stresses a *different* SQL shape (docs/about/architecture.md, "read the
+Chosen so each stresses a *different* SQL shape (docs/development/architecture.md, "read the
 verdict off the SQL"), not to cover the language:
 
 | case | shape | why |

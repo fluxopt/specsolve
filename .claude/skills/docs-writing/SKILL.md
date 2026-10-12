@@ -66,6 +66,12 @@ Two questions decide it, and they work on a paragraph as well as a page:
 | Reference   | cognition | apply   | "What exactly does X accept?"  | Reference · `docs/reference/`, model pages in `docs/examples/` |
 | Explanation | cognition | acquire | "Why is it like this?"         | About · `docs/about/`                             |
 
+A fifth section, **Development**, is for whoever changes the package, not
+whoever uses it: the architecture, the internal names, and the PyPSA pages
+that prove the package works (`docs/development/`; the PyPSA pages stay in
+`docs/examples/`, where the tools write them). Keep it small. A page a user
+needs does not go there.
+
 The nav and the tree are both arranged by kind. A new page goes in the folder
 of its kind and under the nav section of the same name.
 

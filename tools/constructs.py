@@ -108,13 +108,15 @@ _NavLoader.add_multi_constructor('tag:yaml.org,2002:python/', lambda *_: None)
 
 
 def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
-    """The Examples section of the site nav: group title, then its pages.
+    """The model groups of the site nav: group title, then its pages.
 
-    Each page is ``(label, name)``: the sidebar label and the model's name,
-    which is also its page and its YAML file. An entry that is not a group is
-    skipped.
+    The groups under Examples come first, then PyPSA examples, which the nav
+    files under Development. Each page is ``(label, name)``: the sidebar label
+    and the model's name, which is also its page and its YAML file. An entry
+    that is not a group is skipped.
     """
-    section = _section(yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav'], 'Examples')
+    nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
+    section = [*_section(nav, 'Examples'), {'PyPSA examples': _section(nav, 'PyPSA examples')}]
     groups = []
     for entry in section:
         if not isinstance(entry, dict):

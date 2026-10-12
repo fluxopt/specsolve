@@ -1,8 +1,8 @@
 # Internal glossary
 
 The names the code uses for its own parts, for anyone reading `src/` or
-[the architecture](../about/architecture.md). The names a caller meets are in
-[the glossary](glossary.md); this page does not repeat them.
+[the architecture](architecture.md). The names a caller meets are in
+[the glossary](../reference/glossary.md); this page does not repeat them.
 
 Each entry says what the thing is, then the module it lives in.
 
