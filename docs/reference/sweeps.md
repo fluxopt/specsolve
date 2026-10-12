@@ -78,6 +78,22 @@ Solved as a list, the slices key by `key_name=`, and the answer is keyed by
 slice. Two axes compose as a comprehension over the slices of one, each
 sliced again by the other.
 
+**An axis is also plain data.** `axis.to_dict()` writes it as a mapping that
+`json.dumps` takes, and `solve_over` takes that mapping in the axis's place. An
+archive's `axis.json` holds the same mapping:
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+axis.to_dict()
+# {'each': 'window', 'dim': 'snapshot', 'steps': 24, 'lookahead': 24, 'into': 't',
+#  'carry': {'soc_initial': 'soc'}}
+sps.solve_over('window.yaml', sources, json.loads(text))
+```
+
+A mapping whose `each` names no axis, or that holds a key the axis does not
+take or lacks one it needs, is refused before a slice is taken. The message
+names the keys the axis takes.
+
 **Sources cross a slice in every shape `build` takes.** A parameter or a
 relation whose table carries the axis is filtered, as a table or as a parquet
 path. Every other source passes through as it is. **An index of another
