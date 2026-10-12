@@ -7,13 +7,12 @@ inheriting the fleet the last one left.
 
 One file, `pathway.yaml`, written for *a* period. The driver supplies which:
 
-    sps.solve_over(model, sources, sps.EachCoordinate('year'),
-                   carry={'existing': 'total'})
+    sps.solve_over(model, sources, sps.EachCoordinate('year', carry={'existing': 'total'}))
 
 The periods run in sorted order, which is the order the carry chains them in.
 `total` is over `(generator)` and so is `existing`, so the whole fleet vector
 moves forward. The rolling-horizon case (`examples/rolling/`) is the same
-keyword where a dimension is dropped.
+keyword on its axis where a dimension is dropped.
 
 **The accumulation is in the YAML.** `carry` copies; it never adds.
 `total == existing + build` is a constraint in `pathway.yaml`.
@@ -102,8 +101,7 @@ def main() -> None:
     sweep = sps.solve_over(
         MODEL,
         sources(),
-        sps.EachCoordinate('year'),
-        carry={'existing': 'total'},
+        sps.EachCoordinate('year', carry={'existing': 'total'}),
     )
 
     print('myopic pathway — each period sees only itself, and inherits the last')
