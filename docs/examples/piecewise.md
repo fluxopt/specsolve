@@ -13,6 +13,30 @@ $$p_g = \sum_k \lambda_{g,k}\, x_{g,k}, \quad
 \mathrm{cost}_g = \sum_k \lambda_{g,k}\, y_{g,k}, \quad
 \sum_k \lambda_{g,k} = 1, \quad \lambda \ge 0$$
 
+## Choosing a method
+
+`method:` decides what the solver receives. Two more files in `examples/` hold
+this model with only that line changed.
+
+| `method:` | the solver receives | which solvers |
+|---|---|---|
+| `convex`, on this page | a weight per breakpoint, as an LP | all |
+| `lp`, in [`piecewise_lp.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/piecewise_lp.yaml) | one row per segment, and no extra variable, as an LP | all |
+| `sos2`, in [`sos.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/sos.yaml) | a weight per breakpoint, and a set it branches on | gurobi and xpress, and the `.lp` and `.mps` files; HiGHS refuses the model, and the error names the way past it |
+| `adjacency`, the default | a weight per breakpoint and a binary per segment, as a MILP | all |
+
+`convex` and `lp` are exact here because the curve is convex and the cost is
+minimised. Both check the curve when the data attaches. On this instance `convex` and `lp`
+reach the same optimum, 3850, and the same duals on `balance`.
+
+The two LP methods trade columns for rows. On 20 generators × 48 snapshots × 6
+breakpoints:
+
+| | columns | rows | nonzeros |
+|---|---:|---:|---:|
+| `method: convex` | 7680 | 2928 | 18240 |
+| `method: lp` | **1920** | 6768 | **12480** |
+
 ## The model
 
 <!-- math:begin -->
