@@ -218,7 +218,9 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
         ]
         + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
     ), 'every case through both sinks, and a file of its own for each width ladder'
-    assert published['latest-highs-transport.json'] == {'xs', 's', 'm', 'l'}, 'the size file holds no width rung'
+    assert published['latest-highs-transport.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
+        'the size file holds no width rung'
+    )
     assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
         'the width file holds only width rungs'
     )

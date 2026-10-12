@@ -23,7 +23,7 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 pixi run refresh
 
 # or a rung at a time — the same five tasks `refresh` depends on, in order
-pixi run ladder        # --sizes xs s m l          -> bench/results/latest.json
+pixi run ladder        # --sizes 3xs 2xs xs s m l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
 pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
