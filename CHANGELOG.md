@@ -5,6 +5,10 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
+## Upcoming version
+
+- docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
+
 ## 0.9.0 (2026-10-12)
 
 **specsolve runs in the browser.** It installs in Pyodide, builds, solves and
