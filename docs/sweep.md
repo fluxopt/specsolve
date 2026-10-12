@@ -78,8 +78,7 @@ three hours, and numbers the hours of each window from zero into `snapshot`.
 windows = sps.solve_over(
     'tutorial/storage.yaml',
     hourly,
-    sps.EachWindow('hour', steps=3, lookahead=0, into='snapshot'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('hour', steps=3, lookahead=0, into='snapshot', carry={'soc_initial': 'soc'}),
 )
 print(windows.metrics.select('hour_start', 'columns', 'rows'))
 ```
@@ -124,8 +123,7 @@ for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
         'tutorial/storage.yaml',
         hourly,
-        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
     )
     rows.append(
         {
