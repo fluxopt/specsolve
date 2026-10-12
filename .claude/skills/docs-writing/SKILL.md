@@ -290,8 +290,8 @@ PY
 - **Anything that duplicates another page.** One fact, one home; link instead.
   A second copy drifts silently. A rule of the language is mathspec's page,
   not a paraphrase here.
-- **Generated content.** The catalogue, construct matrix and reference table
-  in `docs/examples/index.md`, the *"the same model, as math"* block on each
+- **Generated content.** The gallery catalogue, the construct matrix and
+  reference table on the verification page, the *"the same model, as math"* block on each
   model page, and the tables in `docs/about/benchmarks.md` are written by a
   tool, between `<!-- …:begin -->` and `<!-- …:end -->` markers. Change the
   generator, named in `docs/README.md`.

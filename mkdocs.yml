@@ -22,12 +22,13 @@ nav:
       - Your first model: run.md
       - Your data: tables.md
       - Change it and solve again: change.md
-      - On or off: commitment.md
-      - A battery, over time: sweep.md
+      - A horizon too large for one solve: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md
       - Choosing a solver: howto/solvers.md
-      - Making a loop of solves faster: howto/warm-start.md
+      - Making a solve faster: howto/faster.md
+      - Starting from an earlier answer: howto/warm-start.md
+      - Solving many scenarios: howto/scenarios.md
       - Running a sweep in parallel: howto/parallel.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Reading an answer into pandas or xarray: howto/pandas-xarray.md
@@ -35,28 +36,12 @@ nav:
       - Reading a directory of runs: howto/warehouse.md
       - Debugging a wrong answer: howto/debug.md
   - Reference:
-      - The verbs: reference/api.md
-      - Sweeps and rolling horizons: reference/sweeps.md
+      - Python API: reference/api.md
       - The data contract: reference/data.md
+      - Sweeps and rolling horizons: reference/sweeps.md
       - Glossary: reference/glossary.md
-      # The language is a dependency and is documented with itself.
-      - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:
           - examples/index.md
-          - Teaching examples:
-              - dispatch: examples/dispatch.md
-              - storage: examples/storage.md
-              - transport: examples/transport.md
-              - piecewise: examples/piecewise.md
-              - piecewise segment lines: examples/piecewise_lp.md
-              - piecewise curves of differing length: examples/piecewise_ragged.md
-              - piecewise conversion: examples/piecewise_conversion.md
-              - special-ordered sets: examples/sos.md
-              - monthly budget: examples/monthly_budget.md
-              - multi-period: examples/multi_period.md
-              - seasons: examples/seasons.md
-              - reserves: examples/reserves.md
-              - walkthrough: examples/walkthrough.md
           - Published optima:
               - Dantzig transport: examples/transport_dantzig.md
               - Dantzig, economies of scale: examples/transport_pwl.md
@@ -67,20 +52,30 @@ nav:
               - Choosing the mode of transport: examples/transport_modes.md
               - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
               - Travelling salesman: examples/tsp_mtz.md
+          - More models:
+              - dispatch: examples/dispatch.md
+              - storage: examples/storage.md
+              - transport: examples/transport.md
+              - piecewise: examples/piecewise.md
+              - piecewise curves of differing length: examples/piecewise_ragged.md
+              - piecewise conversion: examples/piecewise_conversion.md
+              - monthly budget: examples/monthly_budget.md
+              - multi-period: examples/multi_period.md
+              - seasons: examples/seasons.md
+              - reserves: examples/reserves.md
   - About:
       - about/index.md
+      - Coming from linopy: about/linopy.md
       - Benchmarks: about/benchmarks.md
-      - Relationship to linopy: about/linopy.md
       - Prior art and credit: about/prior-art.md
-      - Roadmap: about/roadmap.md
       - Changelog: about/changelog.md
   # What a user does not need: how the package is built, and the PyPSA models
   # that prove it works. The PyPSA pages stay in docs/examples/, where
   # tools/ladder.py writes them and tools/constructs.py reads them.
   - Development:
       - Architecture: development/architecture.md
+      - Walkthrough: development/walkthrough.md
       - Verification: development/verification.md
-      - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
       - PyPSA examples:
           - transport model: examples/pypsa_transport.md
           - ramp limits: examples/pypsa_ramp.md
@@ -166,6 +161,7 @@ nav:
           - Rung 57: examples/pypsa_ladder/rung_57_scenario_nom_set.md
           - Rung 58: examples/pypsa_ladder/rung_58_scenario_committable.md
           - Rung 60: examples/pypsa_ladder/rung_60_efficiency_per_snapshot.md
+      - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
 
 theme:
   custom_dir: overrides
@@ -246,6 +242,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.snippets:
       check_paths: true
+      dedent_subsections: true
   # Rewrites the GitHub inline math mathspec prints into the `$…$` arithmatex reads.
   - tools.mdx_github_math
   - pymdownx.tabbed:

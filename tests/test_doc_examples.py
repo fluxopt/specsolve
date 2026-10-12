@@ -58,7 +58,6 @@ TRACKED = [
     'docs/about/linopy.md',
     'docs/development/verification.md',
     'docs/development/architecture.md',
-    'docs/about/roadmap.md',
     'examples/benders/README.md',
 ]
 

@@ -227,7 +227,7 @@ PyPSA and reproduced in its own model: **a transport model** (this one) ·
 `-rating`, an expression `bounds:` cannot take. It ships as a `neg_rating`
 column instead. The gap is
 [issue #31](https://github.com/fluxopt/specsolve/issues/31), verdict *primitive*,
-and [the ledger](index.md#ledger--what-a-port-could-not-say) records it.
+and [the ledger](../development/verification.md#what-a-port-could-not-say) records it.
 
 ---
 

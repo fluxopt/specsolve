@@ -140,14 +140,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         return m
     ```
 
-## What it exercises
-
-`where: "p_max > 0"` is the one line worth pausing on. A generator with no
-capacity gets **no columns at all**, not a column pinned to zero, so a retired
-unit costs nothing to carry in the data. That is row absence, and it is how
-sparsity is spelled throughout: see [`where`](https://mathspec.readthedocs.io/en/latest/reference/language/absence/) in the
-language reference.
-
 ---
 
 [`examples/dispatch.yaml`](https://github.com/fluxopt/specsolve/blob/main/examples/dispatch.yaml) · back to [all models](index.md)

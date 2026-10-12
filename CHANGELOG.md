@@ -7,6 +7,20 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
+- docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
+- docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
+- docs: pricing a MIP moves from the tutorials into the fixing how-to ([#1983](https://github.com/fluxopt/specsolve/pull/1983))
+- docs: the examples lead with the published optima, and the other models follow as plain model pages ([#1978](https://github.com/fluxopt/specsolve/pull/1978))
+- docs: the start-up table is shaded like the benchmark charts' own table ([#1974](https://github.com/fluxopt/specsolve/pull/1974))
+- docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))
+- docs: the benchmarks page shows what a script that solves one model pays, as one small table ([#1971](https://github.com/fluxopt/specsolve/pull/1971))
+- docs: the benchmarks page shows the charts, and the gallery lists the models ([#1969](https://github.com/fluxopt/specsolve/pull/1969))
+- docs: every page says what it has to in about a third fewer words ([#1967](https://github.com/fluxopt/specsolve/pull/1967))
+- docs: the sidebar lists each section in the order a user needs it ([#1966](https://github.com/fluxopt/specsolve/pull/1966))
+- docs: the home page shows the pitch, one model file, a solve and the install ([#1965](https://github.com/fluxopt/specsolve/pull/1965))
+- docs: About says why specsolve exists, and a page shows the same model in linopy and specsolve ([#1964](https://github.com/fluxopt/specsolve/pull/1964))
+- docs: the reference keeps the rules a caller hits, and the port ledger moves to Verification ([#1963](https://github.com/fluxopt/specsolve/pull/1963))
 - docs: the how-to guides are shorter, and the small-models guide joins the one on faster loops ([#1962](https://github.com/fluxopt/specsolve/pull/1962))
 - docs: the Development section is two pages, the architecture and how answers are verified ([#1961](https://github.com/fluxopt/specsolve/pull/1961))
 - docs: the sidebar keeps what a user needs, and a Development section holds the architecture and the PyPSA proofs ([#1960](https://github.com/fluxopt/specsolve/pull/1960))

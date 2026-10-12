@@ -1,6 +1,6 @@
 # storage
 
-Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear.
+Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **5650**, matched to `rtol=1e-09`.
 
@@ -203,18 +203,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m.add_objective((p * cost).sum())
         return m
     ```
-
-## What it exercises
-
-`shift(soc, along=snapshot, offset=1, edge='wrap')` is the whole of it. One
-term reaches one position back along `snapshot`. With `edge='wrap'` the first
-snapshot reads the last, which makes the storage cyclic without a boundary
-condition written out by hand. Without `edge=` the same node does not wrap,
-and a position translated past the edge contributes nothing.
-
-It is also the one plan shape whose cost is not obviously linear in the model
-size, so [the benchmarks](../about/benchmarks.md) list it under *Not measured
-yet*.
 
 ---
 

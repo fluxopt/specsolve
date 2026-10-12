@@ -45,8 +45,7 @@ the provenance of the tables `docs/about/benchmarks.md` publishes *today*:
 Published benchmark run 38154932531, on `d0444a0b`. It finished the size ladder
 of all four cases on both sinks. The watchdog killed both width ladders above
 25 GB, at a rung that did not fit: `transport/w100` and `storage/w1000`, on both
-sinks, so no `-width.json` is committed and the page has no width table until a
-run completes one. `results.records` still reads the pre-pytest
+sinks, so no `-width.json` is committed. The page publishes no width table. `results.records` still reads the pre-pytest
 `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -379,6 +378,47 @@ inherits the last one's garbage, and on the gurobi sink that is a million
 decided by which one the median fell on (#1288). What a round measures is one
 build.
 
+## Reading the published numbers
+
+### Why the median
+
+Every published number is the median of nine rounds. Every measurement gets
+the same nine, pinned rather than calibrated by duration, so no cell is a
+best-of-nine beside a neighbour's best-of-forty. The median beats
+the fastest round because a cell whose nine rounds all ran slow has no clean
+round to pick. It beats the mean because one slow round moves a mean and
+leaves a median where it was. On this run
+([#1952](https://github.com/fluxopt/specsolve/pull/1952)) 31 of 160 published
+cells have a mean above 1.10x their median, the worst at 3.03x: `dispatch/xs` on
+pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In 23 of
+them the first round is the slowest of the nine, at 1.9 to 19.4 times the median
+of the other eight, so the median does not move. The other eight are
+matrix-floor and gurobipy-loop cells from `xs` to `m` whose rounds fall into two
+groups, the slow one up to about twice the fast one: `storage/s` on
+gurobipy-matrix on the `gurobi` sink takes either 32 to 33 ms or 56 to 60 ms.
+
+The median decides specsolve against another library in three cells on this
+run, all against gurobipy-loop at `xs` on the `gurobi` sink. At `transport/xs`
+and `storage/xs` specsolve's fastest round is the faster one, 47.1 ms against
+48.0 ms and 51.1 ms against 52.4 ms, and its median is the slower, 58.8 ms
+against 51.7 ms and 55.5 ms against 54.7 ms. At `dispatch/xs` it is the other
+way round: 25.3 ms against 24.3 ms fastest, 31.4 ms against 34.6 ms median. No
+cell flips against linopy.
+
+### Peak memory
+
+**Peak carries an allocator cost that only the polars arms pay.** polars
+ships its own jemalloc settings, so a peak measured through it holds pages
+freed and not yet returned. An arm on the system allocator never enters
+jemalloc. Our peak moves 12–27% with the decay clock on and off, where
+linopy's does not move at three digits
+([#896](https://github.com/fluxopt/specsolve/issues/896)). It runs against us and
+is left in.
+
+**memray never times anything.** Its tracker slows an allocation-heavy
+engine several-fold and overcounts reserved arenas. Peak RSS is the metric;
+memray is for attribution.
+
 ## Why it is built this way
 
 **One process per measurement.** Peak RSS is a property of a process: a second
@@ -495,8 +535,8 @@ what an engine can exploit.
 
 **Measured, this sweep alone does not show it** — at a 1.2M coordinate product
 a dense array over it is ~10 MB and the fixed cost of the process dominates.
-`sector` runs the same sparsity at a 12M product and the effect is plain. See
-[docs/about/benchmarks.md](../docs/about/benchmarks.md#the-density-sweep-and-a-claim-it-refuses).
+`sector` runs the same sparsity at a 12M product. No published run has taken
+either sweep yet ([not measured yet](../docs/about/benchmarks.md#not-measured-yet)).
 
 `Shape.density` (technologies per node: 12 / 6 / 3 / 1) is swept at one model
 size, because sweeping size and density together leaves no way to tell one
@@ -650,8 +690,9 @@ the child loads before its clock imports a modelling library, which
 mark, `peak_rss_bytes`: `benchmem` would measure the parent. It is taken at
 `2xs` and `xs` only (`FRESH_SIZES`), where starting is a share of the cost
 worth knowing, and never under CodSpeed, whose instruments do not follow a
-child process. Its phase is `fresh`, and `bench.report` renders it as the page's
-`fresh` table, beside the warm ones.
+child process. Its phase is `fresh`. `bench.report` prints it as the `fresh`
+table, and the page carries no fence for it, so the page publishes only the
+warm charts.
 
 ## The warm-start payoff
 

@@ -395,37 +395,57 @@ def marginal(loop_rows: list[Row]) -> str:
     return '\n'.join(lines)
 
 
-def fresh(rows: dict[Key, Row]) -> str:
-    """What a process started for one solve pays, launch to exit, at the rungs `test_fresh` measures.
+#: The sink the start-up table reads: the solver specsolve installs with.
+FRESH_SINK = 'highs'
 
-    Every arm pays its own interpreter, import and first build here, so the
-    totals compare across libraries; the phases inside them do not. No ratio
-    columns, as in the per-model tables.
+
+def fresh(rows: dict[Key, Row]) -> str:
+    """What a script that solves one model pays, launch to exit, on `FRESH_SINK`, as a heat table.
+
+    One row per arm and one column per case, each case at the largest rung the
+    fresh phase measured, so a reader compares libraries down a column. Wall
+    only: every arm pays its own interpreter, import and first build, so the
+    totals compare across libraries, and the phases inside them do not.
+
+    The table is HTML in the charts' own `bench-heat` style. A cell beside
+    `BASELINE` carries its ratio in ``data-ratio``, and the page's
+    ``benchmarks.js`` shades it with the charts' bins, so the bins have one home.
     """
-    if not rows:
+    rows = {k: r for k, r in rows.items() if k[2] == FRESH_SINK}
+    cases = sorted({c for c, _, _, _ in rows})
+    if not cases:
         return ''
-    arms = arms_in(rows)
-    return _grid(
-        [
-            '### A process started for one solve',
-            '',
-            'Launch to exit: a new interpreter imports the library, builds the model '
-            'once and hands it to the sink. The tables above run warm and exclude '
-            'the import, so the gap between this wall and the same rung there is '
-            "what starting costs. The peak is the new process's own.",
-        ],
-        ('case', 'sink', 'variables'),
-        (
-            ([case, sink, _si(ref['counts']['columns'])], at_rung, (case, size, sink))
-            for case in sorted({c for c, _, _, _ in rows})
-            for sink in sorted({k for c, _, k, _ in rows if c == case})
-            for size in sizes_of(case, rows, sink)
-            for at_rung, ref in [_at_rung(rows, case, size, sink, arms)]
-            if ref
-        ),
-        arms,
-        ratios=False,
-    )
+    rung = {c: sizes_of(c, rows, FRESH_SINK)[-1] for c in cases}
+    columns = {
+        c: next(r for (cc, s, _, _), r in rows.items() if (cc, s) == (c, rung[c]))['counts']['columns'] for c in cases
+    }
+    head = ''.join(f'<th>{c}<br>{_si(columns[c])} variables</th>' for c in cases)
+    body = []
+    marked = False
+    for arm in arms_in(rows):
+        cells = []
+        for case in cases:
+            row = rows.get((case, rung[case], FRESH_SINK, arm))
+            ours = rows.get((case, rung[case], FRESH_SINK, BASELINE))
+            noisy = suspect(row)
+            marked = marked or noisy
+            if not row:
+                cells.append(f'<td class="none">{over_budget(case, rung[case], FRESH_SINK, arm) or "—"}</td>')
+            elif arm == BASELINE or not ours:
+                cells.append(f'<td class="own">{_marked(f"{row['wall_seconds']:.2f} s", noisy=noisy)}</td>')
+            else:
+                ratio = row['wall_seconds'] / ours['wall_seconds']
+                text = _marked(f'{row["wall_seconds"]:.2f} s · {ratio:.1f}x', noisy=noisy)
+                cells.append(f'<td data-ratio="{ratio:.3f}">{text}</td>')
+        body.append(f'<tr><td>{arm}</td>{"".join(cells)}</tr>')
+    lines = [
+        '<div class="bench"><div class="bench-table"><table class="bench-heat">',
+        f'<thead><tr><th>launch to exit</th>{head}</tr></thead>',
+        '<tbody>',
+        *body,
+        '</tbody></table></div></div>',
+    ]
+    return '\n'.join(_note(lines, marked=marked))
 
 
 def _sweep(

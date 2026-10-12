@@ -1,8 +1,8 @@
 """The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-The five tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``,
-``docs/commitment.md`` and ``docs/sweep.md``) and
-``docs/howto/fix-relax-remove.md`` run every executed block, and each test pins
+The four tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``
+and ``docs/sweep.md``) and
+``docs/howto/fix-relax-remove.md`` and ``docs/howto/scenarios.md`` run every executed block, and each test pins
 one claim the prose makes. Blocks are exec'd in order in one namespace, as
 markdown-exec's ``session=`` runs them on the site, and in the directory a
 fence's ``workdir=`` names.
@@ -29,10 +29,10 @@ REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
 FIRST = DOCS_DIR / 'run.md'
 DATA = DOCS_DIR / 'tables.md'
-ON_OFF = DOCS_DIR / 'commitment.md'
 TIME = DOCS_DIR / 'sweep.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
+SCENARIOS = DOCS_DIR / 'howto' / 'scenarios.md'
 
 #: A block markdown-exec runs, and only those: the fence carries `exec="true"`.
 EXECUTED = re.compile(r'^```python(?P<info>[^\n]*\bexec="true"[^\n]*)$\n(?P<code>.*?)^```$', re.DOTALL | re.MULTILINE)
@@ -110,61 +110,44 @@ def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], st
 
 
 @pytest.fixture(scope='module')
-def on_off() -> tuple[dict[str, Any], str]:
-    return run(ON_OFF)
-
-
-def test_on_off_generators_cost_what_the_page_says(on_off: tuple[dict[str, Any], str]) -> None:
-    namespace, _ = on_off
-    assert namespace['result'].objective == pytest.approx(14000.0), 'the page says the cost goes up to 14000'
-
-
-def test_gas_runs_at_its_minimum_and_wind_gives_way(on_off: tuple[dict[str, Any], str]) -> None:
-    namespace, _ = on_off
-    wide = namespace['result'].primal('p').pivot(on='generator', index='snapshot', values='value').sort('snapshot')
-    assert wide['gas'].to_list() == pytest.approx([0.0, 50.0, 100.0, 50.0]), (
-        'gas is off in snapshot 0, at its minimum in 1 and 3, and above it in 2'
-    )
-    assert wide['wind'].to_list() == pytest.approx([60.0, 70.0, 80.0, 40.0]), 'wind gives way in snapshots 1 and 3'
-
-
-def test_a_mip_has_no_prices(on_off: tuple[dict[str, Any], str]) -> None:
-    _, printed = on_off
-    assert 'duals are undefined for a mixed-integer model' in printed, 'the page shows the refusal of dual'
-
-
-@pytest.fixture(scope='module')
 def over_time() -> tuple[dict[str, Any], str]:
     return run(TIME)
 
 
-def test_the_battery_lets_gas_switch_off(over_time: tuple[dict[str, Any], str]) -> None:
+def test_one_day_with_the_battery_costs_what_it_did(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
-    assert namespace['result'].objective == pytest.approx(10850.0), 'the page says the battery brings 14000 to 10850'
+    assert namespace['result'].objective == pytest.approx(10850.0), 'the day the windows repeat solves to 10850'
 
 
-def test_a_cold_scenario_keeps_gas_on(over_time: tuple[dict[str, Any], str]) -> None:
+def test_each_day_adds_the_same_size(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
-    wide = namespace['gas_on'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
-    assert wide['mild'].to_list() == pytest.approx([0.0, 1.0, 1.0, 0.0]), 'mild: gas is off in snapshot 3'
-    assert wide['cold'].to_list() == pytest.approx([0.0, 1.0, 1.0, 1.0]), 'cold: gas stays on in snapshot 3'
+    sizes = {row['days']: (row['columns'], row['rows']) for row in namespace['sizes']}
+    assert sizes == {days: (28 * days, 24 * days) for days in (1, 3, 30, 365)}, 'the page says each day adds 28 and 24'
 
 
-def test_a_window_starts_from_what_the_window_before_left(over_time: tuple[dict[str, Any], str]) -> None:
+def test_a_window_keeps_its_size(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
-    soc = namespace['rolling'].primal('soc').sort('hour')['value'].to_list()
-    gas = namespace['rolling'].primal('on').filter(pl.col('generator') == 'gas').sort('hour')['value'].to_list()
-    assert soc[2] == pytest.approx(10.0), 'the page says the first window ends with 10 in the battery'
-    assert gas[3] == pytest.approx(0.0), 'and that the next window spends it in hour 3, with gas off'
+    assert namespace['windows'].metrics['columns'].to_list() == [21] * 4, 'the page says each window has 21 columns'
 
 
-def test_lookahead_closes_the_gap_to_one_solve(over_time: tuple[dict[str, Any], str]) -> None:
+def test_a_window_without_lookahead_empties_the_battery(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
-    costs = [row['cost'] for row in namespace['rows']]
+    windows = namespace['windows']
+    ends = windows.primal('soc').filter(pl.col('hour') % 3 == 2)['value'].to_list()
+    assert ends == pytest.approx([0.0] * 4), 'the page says every window ends with the battery empty'
+    gap = namespace['schedule_cost'](windows) / namespace['whole'].objective - 1
+    assert gap == pytest.approx(0.12, abs=0.005), 'the page says the windows cost 12% more'
+
+
+def test_lookahead_closes_the_gap_and_grows_the_window(over_time: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = over_time
+    rows = namespace['rows']
     whole = namespace['whole'].objective
-    assert costs[0] / whole - 1 == pytest.approx(0.12, abs=0.005), 'the page says no lookahead costs 12% more'
+    costs = [row['cost'] for row in rows]
     assert costs[0] > costs[1] > costs[2], f'each hour of lookahead buys something: {costs}'
+    assert costs[1] - whole < (costs[0] - whole) / 2, 'the page says one hour closes most of the gap'
     assert costs[2] == pytest.approx(whole, abs=0.1), 'the page says three hours close all of the gap'
+    assert [row['columns'] for row in rows] == [21, 28, 42], 'each hour of lookahead makes every window larger'
 
 
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
@@ -210,6 +193,35 @@ def test_integrality_is_a_declaration_and_costs_the_duals(lifecycle: tuple[dict[
     assert namespace['relaxed'].dual('power_balance').height == 6, 'the continuous declaration prices every row'
 
 
+def test_a_mip_is_priced_once_its_decisions_are_fixed(lifecycle: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = lifecycle
+    assert namespace['priced'].objective == pytest.approx(namespace['mip'].objective), (
+        'the page says the fixed LP has the same optimum as the MIP'
+    )
+    prices = namespace['priced'].dual('power_balance').sort('snapshot')['value'].to_list()
+    assert prices == pytest.approx([10.0, 10.0, 50.0, 10.0]), 'gas sets the price in snapshot 2, and wind elsewhere'
+
+
 def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any], str]) -> None:
     namespace, _ = lifecycle
     assert namespace['with_ramp'] > namespace['without_ramp'], 'popping the key has to give the objective back'
+
+
+@pytest.fixture(scope='module')
+def scenarios() -> tuple[dict[str, Any], str]:
+    return run(SCENARIOS)
+
+
+def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = scenarios
+    objectives = dict(namespace['scenarios'].record.select('scenario', 'objective').iter_rows())
+    assert objectives == pytest.approx({'cold': 16530.0, 'mild': 10500.0}), 'one solve for each label of scenario'
+    wide = namespace['gas'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
+    assert (wide['cold'] >= wide['mild']).all(), 'gas covers the extra load of the cold scenario'
+
+
+def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = scenarios
+    objectives = dict(namespace['both'].record.select('scenario', 'objective').iter_rows())
+    assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
+    assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'
