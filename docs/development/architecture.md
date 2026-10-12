@@ -196,10 +196,10 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language |
-| `api.py` | the verbs, and `load_result` / `scan_result` |
+| `api.py` | the functions, and `load_result` / `scan_result` |
 | `archive_layout.py` | what an archive holds |
 | `archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
-| `inputs.py` | `Buildable` and `Source`, what every verb takes |
+| `inputs.py` | `Buildable` and `Source`, what every function takes |
 | `relational/collect.py` | how polars materialises a frame |
 | `sources.py` | the door: caller data into tidy tables |
 | `assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
