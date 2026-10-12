@@ -146,6 +146,7 @@ def test_every_call_that_needs_parquet_goes_through_pyarrow_where_it_can_be_impo
     monkeypatch, call, dispatch_yaml, dispatch_frame_inputs, tmp_path
 ):
     """The same calls succeed where pyarrow is importable, reading what polars wrote and writing what it reads."""
+    pytest.importorskip('pyarrow')
     saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
     _take_parquet_away(monkeypatch, pyarrow=True)
     try:
