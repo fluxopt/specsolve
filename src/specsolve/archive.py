@@ -93,8 +93,8 @@ class ResultArchive:
 class SweepArchive:
     """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
 
-    ``sps.solve_over(archive.spec, archive.sources, archive.axis, carry=archive.carry)``
-    runs it again.
+    ``sps.solve_over(archive.spec, archive.sources, archive.axis)`` runs it
+    again.
 
     Attributes:
         spec: The spec as written.
@@ -102,9 +102,7 @@ class SweepArchive:
             holds them. A source the axis cuts holds the axis column first; a
             parameter given as one number over a window's local index is held
             over the axis, so each slice cuts from it what it attached.
-        axis: What cut them.
-        carry: ``{parameter: variable}`` the slices were chained with, empty
-            where they were not.
+        axis: What cut them, with the ``carry=`` it chained the slices with.
         sweep: The archived answer, in memory from [`load_archive`][], on
             disk from [`scan_archive`][]. ``per_window=True`` reads an
             EachWindow sweep's windows where ``keep_windows=True`` kept them,
@@ -114,7 +112,6 @@ class SweepArchive:
     spec: Spec
     sources: Mapping[str, Source]
     axis: Axis
-    carry: Mapping[str, str]
     sweep: Sweep
 
 
@@ -123,23 +120,21 @@ class ArchivedInputs:
     """A spec and the data it was solved with, read off an archive without its answer.
 
     ``sps.solve(inputs.spec, inputs.sources)`` asks the question again, and
-    ``sps.solve_over(inputs.spec, inputs.sources, inputs.axis, carry=inputs.carry)``
-    runs a sweep again.
+    ``sps.solve_over(inputs.spec, inputs.sources, inputs.axis)`` runs a sweep
+    again.
 
     Attributes:
         spec: The spec as written.
         sources: What was attached, keyed as the file declares it, as the
             tables [`tidy`][specsolve.api.tidy] returns. A sweep's are uncut,
             as [`SweepArchive`][] holds them.
-        axis: What cut the sources, or ``None`` for an archive of one solve.
-        carry: ``{parameter: variable}`` the slices were chained with, empty
-            where they were not and for an archive of one solve.
+        axis: What cut the sources, with the ``carry=`` it chained the slices
+            with, or ``None`` for an archive of one solve.
     """
 
     spec: Spec
     sources: Mapping[str, Source]
     axis: Axis | None
-    carry: Mapping[str, str]
 
 
 def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
@@ -224,9 +219,8 @@ def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
     }
     axis_member = under / AXIS_MEMBER
     if not axis_member.is_file():
-        return ArchivedInputs(spec, sources, None, {})
-    manifest = json.loads(axis_member.read_text())
-    return ArchivedInputs(spec, sources, axis_from(manifest), manifest.get('carry', {}))
+        return ArchivedInputs(spec, sources, None)
+    return ArchivedInputs(spec, sources, axis_from(json.loads(axis_member.read_text())))
 
 
 def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepArchive:
@@ -238,8 +232,8 @@ def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepAr
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis, inputs.carry)
-    return SweepArchive(spec, sources, inputs.axis, inputs.carry, answer)
+    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
+    return SweepArchive(spec, sources, inputs.axis, answer)
 
 
 def _refuse_other_inputs(under: Path, archive: Path) -> None:
@@ -322,14 +316,13 @@ def _attach_sweep_readers(
     spec: Spec,
     sources: Mapping[str, Source],
     axis: Axis,
-    carry: Mapping[str, str],
 ) -> Sweep:
     """*sweep* with an undeclared expression readable through [`Sweep.evaluate`][], over a sweep archive's own inputs.
 
     Each slice's saved primal is put back against its rebuilt model, so nothing
     is re-solved.
     """
-    return replace(sweep, _evaluate=_sweep_evaluator(sweep, spec, sources, axis, carry))
+    return replace(sweep, _evaluate=_sweep_evaluator(sweep, spec, sources, axis))
 
 
 def _per_slice(
@@ -351,7 +344,7 @@ def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
         raise SpecsolveError(
             f'this expression reads {touched}, which the sweep carried from one slice into the next, and a '
             f"carried value is a previous slice's answer rather than stored data — so it cannot be put back "
-            f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis, carry=...) '
+            f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis) '
             f'and evaluate on what comes back, or read a quantity over the sweep that reads no carried parameter.'
         )
 
@@ -361,10 +354,9 @@ def _sweep_evaluator(
     spec: Spec,
     sources: Mapping[str, Source],
     axis: Axis,
-    carry: Mapping[str, str],
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
-    carried = set(carry)
+    carried = set(axis.carry)
     key_dtype = sweep.record.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
