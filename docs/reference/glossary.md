@@ -109,8 +109,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   set of sources, solved as one model, and its key names it in every table.
 
 **carry**
-: `carry={parameter: variable}` hands one slice's solution to the next as
-  data.
+: An axis's `carry={parameter: variable}` hands one slice's solution to the
+  next as data.
 
 **held** · **spilled**
 : A held sweep keeps its answers in memory. A spilled one writes them to
