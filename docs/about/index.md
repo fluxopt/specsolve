@@ -23,11 +23,6 @@ The specific refusals, each with its rewrite, are
 [the limits of the language](https://mathspec.readthedocs.io/en/latest/about/limits/#deliberate-non-primitives).
 Parity with another tool is not by itself a reason to add anything.
 
-The work is in issues, under three tracks:
-[primitives](https://github.com/fluxopt/specsolve/issues/470),
-[the operational surface](https://github.com/fluxopt/specsolve/issues/471) and
-[capabilities](https://github.com/fluxopt/specsolve/issues/472).
-
 ## More
 
 | | |
