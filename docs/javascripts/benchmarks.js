@@ -124,14 +124,14 @@ async function mount(root) {
   }
 
   /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
-     and a single size in the middle. Linear starts at zero when `fromZero`, else just below the
-     smallest size; log ticks on the sizes themselves. */
+     and a single size in the middle. Linear starts at zero when `fromZero`, else below the smallest
+     size by at most half of it, so it stays off zero; log ticks on the sizes themselves. */
   function xAxis(sizes, fromZero) {
     const label = SPEC.x.label, format = FORMAT[SPEC.x.format];
     const lo = sizes[0], hi = sizes.at(-1), one = sizes.length === 1;
     if (state.scale === 'linear') {
       const pad = one ? hi : (hi - (fromZero ? 0 : lo)) * 0.06;
-      return { scale: scaleLinear().domain([fromZero || one ? 0 : Math.max(0, lo - pad), hi + pad]), grid: true,
+      return { scale: scaleLinear().domain([fromZero || one ? 0 : lo - Math.min(pad, lo / 2), hi + pad]), grid: true,
         axis: { label, ticks: { count: 5, format } } };
     }
     const pad = one ? 3 : 1.25;
