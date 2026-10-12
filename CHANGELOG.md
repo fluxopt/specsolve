@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: a guide says how to attach data from a file too large to read whole ([#1990](https://github.com/fluxopt/specsolve/pull/1990))
 - docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
 - docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
 - docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
