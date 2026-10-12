@@ -195,12 +195,12 @@ The rest are specsolve's:
     options:
       heading_level: 4
 
-## Rules across the verbs
+## Rules across the functions
 
 ### Names that differ only by case
 
 **Two declarations of one namespace whose names differ only by case are
-refused** by every verb. A case-insensitive filesystem folds `p` and `P` into
+refused** by every function. A case-insensitive filesystem folds `p` and `P` into
 one file on disk.
 
 ```
@@ -215,7 +215,7 @@ variable `p` is accepted.
 ### Names that start with `specsolve_`
 
 **A declared name that starts with `specsolve_`, in any letter case, is
-refused** by every verb. The prefix is reserved for the columns specsolve adds,
+refused** by every function. The prefix is reserved for the columns specsolve adds,
 such as `specsolve_run`. The rule covers dimensions, relations and their
 columns, parameters, variables, constraints, named expressions, `sos:` sets and
 assumptions. A `key_name=` with the prefix is refused too, and so is a
