@@ -74,8 +74,8 @@ Each panel is one model through one solver, and each line is one library.
   Overlapping bands are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
 - **A dashed line is a projection** past the time or memory budget.
-- **The table divides by specsolve.** Green is where specsolve is faster, blue
-  where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
+- **The table divides by specsolve.** Purple is where specsolve is faster,
+  orange where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
   are sizes the harness refused.
 
 ## A script that solves one model
