@@ -80,8 +80,9 @@ Each panel is one model through one solver, and each line is one library.
 - **A dashed line is a projection** past the time or memory budget.
 - **÷ specsolve divides each point by specsolve's at the same size**, so
   specsolve is the line at 1× and a line above it is that many times slower or
-  larger. It applies to wall time and to peak RSS. On linear axes it stops at
-  10×, and a point past that is named at the top edge with its ratio.
+  larger. It applies to wall time and to peak RSS. Every panel shares one
+  window, 0× to 5× on linear axes and 0.1× to 50× on log axes, and a point
+  outside it is named with its ratio at the edge it crosses.
 - **Variables narrows every panel and the table to a range of model sizes**, on
   either axes. Drag a handle, or drag along the axis to select a new range. Each
   end is zero or a power of ten, and a rung counts at the nearest power. From

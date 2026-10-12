@@ -217,33 +217,49 @@ async function mount(root) {
     }] }) }];
   }
 
-  /* Past this ratio a linear axis would give one library the whole panel, so it stops there. */
-  const CAP = 10;
+  /* The relative view's y window per axis type, the same in every panel so panels compare at a
+     glance. Wide enough for every library but pyomo in the published run. */
+  const WINDOW = { linear: [0, 5], log: [0.1, 50] };
+  const WINDOW_TICKS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
 
-  /* Each measured point past the top of the axis, named at the top edge by its ratio in its
-     library's colour. Labels go left to right, each into the first row where it clears the one
-     before, so sizes a linear axis draws close together do not overprint. */
-  function pastTop(points, top) {
-    const past = points.filter(p => !p.projected && p.value > top);
-    if (!past.length) return [];
-    return [{ id: 'past-top', resolve: ({ scales }) => {
+  function windowAxis() {
+    const [lo, hi] = WINDOW[state.scale];
+    if (state.scale === 'linear') {
+      return { scale: scaleLinear().domain([lo, hi]), grid: true, axis: { ticks: { count: 5, format: FORMAT.ratio } } };
+    }
+    return { scale: scaleLog().domain([lo, hi]), grid: true, axis: { ticks: { values: WINDOW_TICKS, format: FORMAT.ratio } } };
+  }
+
+  /* Each library with measured points outside the window, named at the edge they cross: its ratio,
+     or the range of its ratios, in its colour above its last such point. Along each edge, labels go
+     left to right, each into the first row where it clears the one before, so sizes a linear axis
+     draws close together do not overprint. */
+  function outside(points, [lo, hi]) {
+    const edges = [['↑', p => p.value > hi, hi, 1], ['↓', p => p.value < lo, lo, -1]];
+    const span = ps => {
+      const v = ps.map(p => p.value), a = FORMAT.ratio(Math.min(...v)), b = FORMAT.ratio(Math.max(...v));
+      return a === b ? b : `${a.slice(0, -1)}–${b}`;
+    };
+    const marked = points.filter(p => !p.projected && (p.value > hi || p.value < lo));
+    if (!marked.length) return [];
+    return [{ id: 'outside', resolve: ({ scales }) => ({ nodes: edges.flatMap(([arrow, past, edge, inward]) => {
       const ends = [];
-      const nodes = past.map(p => ({ p, x: scales.x.map(p[X]), text: `↑${FORMAT.ratio(p.value)}` }))
-        .sort((a, b) => a.x - b.x || b.p.value - a.p.value)
-        .map(({ p, x, text }) => {
+      return [...Map.groupBy(marked.filter(past), p => p[SERIES])]
+        .map(([name, ps]) => ({ name, x: scales.x.map(Math.max(...ps.map(p => p[X]))), text: `${arrow}${span(ps)}` }))
+        .sort((a, b) => a.x - b.x)
+        .map(({ name, x, text }) => {
           const half = text.length * 3;
           let row = ends.findIndex(end => end < x - half);
           if (row < 0) row = ends.push(0) - 1;
           ends[row] = x + half + 4;
-          return { kind: 'label', key: `past-${p[SERIES]}-${p[X]}`, x, y: scales.y.map(top) + 8 + row * 12, text,
-            anchor: 'middle', baseline: 'middle', fontSize: 10, fontWeight: 650, style: { fill: ink(p[SERIES]) } };
+          return { kind: 'label', key: `outside-${name}-${arrow}`, x, y: scales.y.map(edge) + inward * (8 + row * 12),
+            text, anchor: 'middle', baseline: 'middle', fontSize: 10, fontWeight: 650, style: { fill: ink(name) } };
         });
-      return { nodes };
-    } }];
+    }) }) }];
   }
 
   /* A projection is taken from the whole panel and then cut to the size range, so its slope does
-     not move with the range. The relative view on linear axes stops at `CAP`. */
+     not move with the range. */
   function definition(rows, metric) {
     const fmt = FORMAT[metric.format];
     const measured = viewed(rows.filter(r => r.value != null && inRange(r)));
@@ -261,8 +277,7 @@ async function mount(root) {
     const whiskers = (data, strokeWidth) => link(data.filter(r => r.hi > r.lo),
       { x1: X, x2: X, y1: 'lo', y2: 'hi', color: SERIES, strokeWidth, lineCap: 'round' });
     const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
-    const spread = measured.flatMap(r => [r.lo, r.hi]);
-    const capped = state.view === 'relative' && state.scale === 'linear' && Math.max(...spread) > CAP;
+    const relative = state.view === 'relative';
     return defineChart({
       marks: [
         ...(metric.band ? [whiskers(theirs, 1.5), whiskers(ours, 2)] : []),
@@ -274,11 +289,11 @@ async function mount(root) {
       ],
       scales: {
         x: xAxis(sizes, state.range.from === STOPS[0]),
-        y: axis(capped ? [...spread.filter(v => v <= CAP), CAP] : spread, state.view === 'absolute' ? fmt : FORMAT.ratio),
+        y: relative ? windowAxis() : axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 },
-      controls: [...heroLabel([...ours, ...oursAhead]), ...(capped ? pastTop(measured, CAP) : [])],
+      controls: [...heroLabel([...ours, ...oursAhead]), ...(relative ? outside(measured, WINDOW[state.scale]) : [])],
       focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
       tooltip: grouped(metric.format),
     });
