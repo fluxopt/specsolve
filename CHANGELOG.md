@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
 - docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
 - docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
 - feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))

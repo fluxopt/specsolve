@@ -1,6 +1,6 @@
 """The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-``docs/run.md``, ``docs/change.md`` and ``docs/howto/fix-relax-remove.md`` run
+``docs/run.md``, ``docs/tables.md``, ``docs/change.md`` and ``docs/howto/fix-relax-remove.md`` run
 every executed block, and each test pins one claim the prose makes. Blocks are
 exec'd in order in one namespace, as markdown-exec's ``session=`` runs them on
 the site, and in the directory a fence's ``workdir=`` names.
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
 FIRST = DOCS_DIR / 'run.md'
+DATA = DOCS_DIR / 'tables.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
 
@@ -81,6 +82,26 @@ def test_the_first_model_quotes_the_refusal_it_asks_the_reader_to_cause() -> Non
         sps.check(spec)
     quoted = f'{type(refused.value).__name__}: {refused.value}'
     assert f'```text\n{quoted}\n```' in FIRST.read_text(), f'docs/run.md no longer quotes the refusal whole: {quoted}'
+
+
+@pytest.fixture(scope='module')
+def data() -> tuple[dict[str, Any], str]:
+    return run(DATA)
+
+
+def test_the_data_from_files_solves_as_the_first_model_did(data: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = data
+    assert namespace['result'].objective == pytest.approx(10500.0), 'the page says the files hold the same data'
+    assert namespace['spend']['spend'].to_list() == pytest.approx([7500.0, 3000.0]), (
+        'gas then wind, and the page says the two make the objective'
+    )
+
+
+def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = data
+    assert namespace['archived'].result.objective == pytest.approx(namespace['result'].objective), (
+        'the page says load_archive gives the answer without solving again'
+    )
 
 
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
