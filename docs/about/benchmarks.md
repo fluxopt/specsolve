@@ -8,22 +8,19 @@ and CI solves each against ours, so nothing here is fast because it built a
 different model.
 
 dispatch
-:   Meets a demand from a fleet of units: bounds and one balance.
-
-transport
-:   A network of buses and lines: mapping tables, three joins per row.
-
-storage
-:   Dispatch plus a state of charge that carries from each snapshot to the next:
-    a cyclic recurrence over time.
-
-fleet
-:   Twelve declarations rather than one large one: cost per declaration, not per row.
+:   Meets a demand from a fleet of units: bounds and one balance. The shape an
+    array library is built for, so the comparison least in specsolve's favour.
 
 nodal
 :   Dispatch at nodes, where a technology exists only at the nodes it is
     installed at: a quarter of the node and technology pairs have a variable.
     The chart counts the variables that exist, not the pairs.
+
+network
+:   A small PyPSA dispatch model: buses joined by lines, a store at every bus
+    that carries its charge from each snapshot to the next, a technology
+    portfolio installed at some buses only, and solar and wind availability
+    per snapshot.
 
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
@@ -32,8 +29,6 @@ nodal
 <span class="bench-seg" data-key="metric"><button data-value="wall" aria-pressed="true">wall time</button><button data-value="peak" aria-pressed="false">peak RSS</button></span>
 <span class="bench-label">As</span>
 <span class="bench-seg" data-key="view"><button data-value="absolute" aria-pressed="true">measured</button><button data-value="relative" aria-pressed="false">÷ specsolve</button></span>
-<span class="bench-label">Grown by</span>
-<span class="bench-seg" data-key="ladder"><button data-value="length" aria-pressed="true">length — more snapshots</button><button data-value="width" aria-pressed="false">width — more entities</button></span>
 <span class="bench-label">Axes</span>
 <span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
 <span class="bench-label">Variables</span>

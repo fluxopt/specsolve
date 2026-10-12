@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmark charts zoom to a range of model sizes, on log and linear axes ([#1993](https://github.com/fluxopt/specsolve/pull/1993))
 - docs: the benchmark charts show each library relative to specsolve, and the spread of each point ([#1994](https://github.com/fluxopt/specsolve/pull/1994))
 - docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
+- docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
 
 ## 0.9.0 (2026-10-12)
 
