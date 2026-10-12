@@ -15,6 +15,7 @@ keep the solver loaded for quick updates and warm starts.**
 
 [Your first model](run.md){ .md-button .md-button--primary }
 [Browse the examples](examples/index.md){ .md-button }
+[The language](https://mathspec.readthedocs.io/en/latest/reference/language/){ .md-button }
 
 </div>
 
@@ -33,6 +34,11 @@ keep the solver loaded for quick updates and warm starts.**
 </div>
 
 ## A model is one file
+
+The file is written in [mathspec](https://mathspec.readthedocs.io/), the
+language specsolve solves.
+[Its reference](https://mathspec.readthedocs.io/en/latest/reference/language/)
+lists everything a file may hold.
 
 --8<-- "README.md:model"
 
