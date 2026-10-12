@@ -31,12 +31,26 @@ this project. They are not stupid, they are unfamiliar.
 - **No enthusiasm, no marketing.** No "powerful", "seamless", "elegant",
   "simply", "just", "of course", "as you can see", "note that". Each of these
   either tells the reader their confusion is their fault, or says nothing.
-- **No jokes and no asides.** A reader hitting this page is stuck, and reads
-  it in a hurry.
+- **No jokes and no asides.** A reader on a how-to or reference page is
+  stuck, and reads it in a hurry.
 - **No apology and no warning voice.** "Unfortunately", "be careful",
   "beware" — say what happens and what to write instead.
 - **One spelling convention per page.** The tree is mixed and this skill does
   not settle it: match the page you are on.
+
+### The voice of a tutorial
+
+A tutorial reader is learning, not stuck. Write as a teacher who sits next to
+them.
+
+- **Say "you" for what the reader does, and "we" for what you do together.**
+  "Save the file as `dispatch.yaml`." "We give gas a minimum output next."
+- **Say what the reader will see before they see it**, and what it means
+  after. "Gas now runs at 50 in snapshot 1, so wind gives way."
+- **Every tutorial grows one model.** The page opens with what the model
+  gains and what the reader learns, and starts from where the last page
+  ended. The specs are `examples/dispatch.yaml` and the files in
+  `examples/tutorial/`.
 
 ## 1. Decide what the page is before writing a sentence
 
@@ -58,8 +72,9 @@ of its kind and under the nav section of the same name.
 Each kind has one job, and one thing it must not do:
 
 - **A tutorial is a lesson.** One path, every step shows a result, and the
-  reader finishes with a model that solves. It explains nothing and offers no
-  choice: a choice is a how-to leaking in.
+  reader finishes with a model that solves. It offers no choice: a choice is a
+  how-to leaking in. It explains each step in one sentence and links the rest:
+  the language to mathspec, the verb to the reference, the why to About.
 - **A how-to is a recipe.** The title names the goal, the body is the steps,
   and the reader is assumed competent. It neither teaches nor explains.
 - **Reference describes, and only describes.** One consistent format, and a
