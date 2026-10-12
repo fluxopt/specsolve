@@ -22,7 +22,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Program**
 : What [`check`](api.md#specsolve.check) returns: the spec as the plan a build
-  reads. No verb takes one back, so keep the `Spec`.
+  reads. No function takes one back, so keep the `Spec`.
 
 **Model**
 : A spec with data attached: what [`build`](api.md) returns.
@@ -39,12 +39,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : A spec, its data and its answer, written as one zip or directory by
   `archive=` ([archiving](../howto/archiving.md)).
 
-## The verbs
+## The functions
 
 **check** · **build** · **solve** · **write**
 : `check` validates a spec with no data, and `build` returns a
   [Model](#the-chain). `solve` and `write` build and then solve or write a file
-  ([the verbs](api.md#run-a-spec)).
+  ([the API](api.md#run-a-spec)).
 
 **evaluate**
 : Values an expression with no solver: of a spec with no variables, or of a
