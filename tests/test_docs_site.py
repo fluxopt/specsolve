@@ -95,14 +95,14 @@ def _nav_pages(entries: list[Any]) -> list[str]:
     """Every page the nav points at, depth first, as `mkdocs.yml` spells it.
 
     An entry is a bare path or a one-key mapping whose value is a path or a
-    deeper list. A value that does not end in `.md` is not a page of this tree.
+    deeper list. A value that does not end in `.md`, or is a URL, is not a page of this tree.
     """
     found: list[str] = []
     for entry in entries:
         target = entry if isinstance(entry, str) else next(iter(entry.values()))
         if isinstance(target, list):
             found.extend(_nav_pages(target))
-        elif isinstance(target, str) and target.endswith('.md'):
+        elif isinstance(target, str) and target.endswith('.md') and '://' not in target:
             found.append(target)
     return found
 
@@ -181,7 +181,7 @@ def test_the_translation_table_names_every_built_in_operator():
     """`What a construct becomes` is a copy of the builder, so something checks it."""
     from mathspec import BUILTIN_NAMES
 
-    page = (DOCS / 'about' / 'linopy.md').read_text()
+    page = (DOCS / 'development' / 'verification.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]
     expressions = section.split('| In an expression |')[1].split('| A `where:` |')[0]
     shown = set(re.findall(r'^\| `(\w+)\(', expressions, re.MULTILINE))
