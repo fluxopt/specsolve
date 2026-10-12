@@ -8,14 +8,13 @@ hide:
 
 # specsolve
 
-**Solve an optimisation problem written in YAML. Attach your data as tables, and
-keep the solver loaded for quick updates and warm starts.**
+--8<-- "README.md:tagline"
 
 --8<-- "README.md:badges"
 
 [Your first model](run.md){ .md-button .md-button--primary }
 [Browse the examples](examples/index.md){ .md-button }
-[The language](https://mathspec.readthedocs.io/en/latest/){ .md-button }
+[Benchmarks](about/benchmarks.md){ .md-button }
 
 </div>
 
@@ -33,12 +32,24 @@ keep the solver loaded for quick updates and warm starts.**
 
 </div>
 
-## A model is one file
+## Built on mathspec
 
-The file is written in [mathspec](https://mathspec.readthedocs.io/), the
-language specsolve solves.
-[Its reference](https://mathspec.readthedocs.io/en/latest/reference/language/)
-lists everything a file may hold.
+specsolve and [mathspec](https://mathspec.readthedocs.io/) split one job, and both
+read the same model file.
+
+<div class="grid cards" markdown>
+
+- **mathspec states the model.** A YAML file of dimensions, parameters,
+  variables, constraints and an objective. mathspec checks the file with no
+  data, and prints it as math for a paper.
+  [The language →](https://mathspec.readthedocs.io/en/latest/reference/language/)
+- **specsolve solves it.** specsolve attaches your tables to the file, builds
+  the model on polars, solves it, and keeps the answer as parquet.
+  [Your first model →](run.md)
+
+</div>
+
+## A model is one file
 
 --8<-- "README.md:model"
 
