@@ -209,8 +209,9 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   started, lookahead rows included.
 
 **carry**
-: `carry={parameter: variable}` hands one slice's solution to the next as
-  data, in slice order.
+: An axis's `carry={parameter: variable}` hands one slice's solution to the
+  next as data, in slice order
+  ([carrying state](sweeps.md#carrying-state-between-slices)).
 
 **held** · **spilled**
 : Where a sweep's frames are. A **held** sweep carries them in memory, and
