@@ -39,14 +39,13 @@ The selections behind those five are in `pyproject.toml`, under
 down: a published number that came from a ladder somebody retyped is a number
 whose fingerprint no longer describes it.
 
-The committed `results/latest-<sink>-<case>.json`, and a
-`latest-<sink>-<case>-width.json` beside it for a case with a width ladder, are
-the provenance of the tables `docs/about/benchmarks.md` publishes *today*:
-Published benchmark run 38154932531, on `d0444a0b`. It finished the size ladder
-of all four cases on both sinks. The watchdog killed both width ladders above
-25 GB, at a rung that did not fit: `transport/w100` and `storage/w1000`, on both
-sinks, so no `-width.json` is committed. The page publishes no width table. `results.records` still reads the pre-pytest
-`.jsonl` shape, though no such file is committed any more.
+The committed `results/latest-<sink>-<case>.json` are the provenance of the
+tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
+38311491180, on `5122bd42`. It finished the size ladder of `dispatch`, `nodal`
+and `network` on both sinks, `3xs` to `l`. The budget stopped pyomo after `m`,
+or after `s` on `network` through HiGHS, and linopy and gurobipy-loop after `m`
+on `network`. `results.records` still reads the pre-pytest `.jsonl` shape,
+though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
 selects `test_emit` and `test_rebuild`. The windows and the read-back are
@@ -388,22 +387,23 @@ best-of-nine beside a neighbour's best-of-forty. The median beats
 the fastest round because a cell whose nine rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
-([#1952](https://github.com/fluxopt/specsolve/pull/1952)) 31 of 160 published
-cells have a mean above 1.10x their median, the worst at 3.03x: `dispatch/xs` on
-pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In 23 of
-them the first round is the slowest of the nine, at 1.9 to 19.4 times the median
-of the other eight, so the median does not move. The other eight are
-matrix-floor and gurobipy-loop cells from `xs` to `m` whose rounds fall into two
-groups, the slow one up to about twice the fast one: `storage/s` on
-gurobipy-matrix on the `gurobi` sink takes either 32 to 33 ms or 56 to 60 ms.
+([#2005](https://github.com/fluxopt/specsolve/pull/2005)) 29 of 166 published
+cells have a mean above 1.10x their median, the worst at 16.05x: `dispatch/3xs`
+on pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In
+21 of them the first round is the slowest of the nine, at 1.4 to 137.2 times the
+median of the other eight, so the median does not move. The other eight are
+matrix-floor, gurobipy-loop and pyomo cells from `3xs` to `m`. In seven of them
+the rounds fall into two groups, the slow one up to about twice the fast one:
+`nodal/m` on gurobipy-matrix on the `gurobi` sink takes either 82 to 83 ms or
+105 to 108 ms. The eighth has one slow round.
 
-The median decides specsolve against another library in three cells on this
-run, all against gurobipy-loop at `xs` on the `gurobi` sink. At `transport/xs`
-and `storage/xs` specsolve's fastest round is the faster one, 47.1 ms against
-48.0 ms and 51.1 ms against 52.4 ms, and its median is the slower, 58.8 ms
-against 51.7 ms and 55.5 ms against 54.7 ms. At `dispatch/xs` it is the other
-way round: 25.3 ms against 24.3 ms fastest, 31.4 ms against 34.6 ms median. No
-cell flips against linopy.
+The median decides specsolve against another library in two cells on this run.
+At `dispatch/s` on the `highs` sink specsolve's fastest round is the faster one
+against linopy, 39.0 ms against 43.4 ms, and its median is the slower, 46.3 ms
+against 43.7 ms. It is the one cell of 30 where linopy is faster by median. At
+`dispatch/xs` on the `gurobi` sink it is the other way round against
+gurobipy-loop: 25.6 ms against 22.5 ms fastest, 31.4 ms against 48.3 ms
+median.
 
 ### Peak memory
 
