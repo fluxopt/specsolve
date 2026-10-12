@@ -1,7 +1,8 @@
 # A battery, over time
 
-Add a battery to the model from [On or off](commitment.md), so that one
-snapshot depends on the one before. Then solve it many times with one call:
+`tutorial/commitment.yaml` is the first model with one change: a generator
+is either on or off, and gas cannot run below 50 while it is on. Add a battery
+to it, so that one snapshot depends on the one before. Then solve it many times with one call:
 once for each scenario, and window by window. Every block runs from the
 `examples/` folder.
 

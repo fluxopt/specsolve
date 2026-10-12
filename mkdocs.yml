@@ -22,7 +22,6 @@ nav:
       - Your first model: run.md
       - Your data: tables.md
       - Change it and solve again: change.md
-      - On or off: commitment.md
       - A battery, over time: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md

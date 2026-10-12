@@ -1,7 +1,7 @@
 """The tutorial and how-to pages whose blocks the site runs keep running, and keep claiming true things.
 
-The five tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``,
-``docs/commitment.md`` and ``docs/sweep.md``) and
+The four tutorials (``docs/run.md``, ``docs/tables.md``, ``docs/change.md``
+and ``docs/sweep.md``) and
 ``docs/howto/fix-relax-remove.md`` run every executed block, and each test pins
 one claim the prose makes. Blocks are exec'd in order in one namespace, as
 markdown-exec's ``session=`` runs them on the site, and in the directory a
@@ -29,7 +29,6 @@ REPO = EXAMPLES_DIR.parent
 DOCS_DIR = REPO / 'docs'
 FIRST = DOCS_DIR / 'run.md'
 DATA = DOCS_DIR / 'tables.md'
-ON_OFF = DOCS_DIR / 'commitment.md'
 TIME = DOCS_DIR / 'sweep.md'
 LOOPS = DOCS_DIR / 'change.md'
 LIFECYCLE = DOCS_DIR / 'howto' / 'fix-relax-remove.md'
@@ -110,30 +109,6 @@ def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], st
 
 
 @pytest.fixture(scope='module')
-def on_off() -> tuple[dict[str, Any], str]:
-    return run(ON_OFF)
-
-
-def test_on_off_generators_cost_what_the_page_says(on_off: tuple[dict[str, Any], str]) -> None:
-    namespace, _ = on_off
-    assert namespace['result'].objective == pytest.approx(14000.0), 'the page says the cost goes up to 14000'
-
-
-def test_gas_runs_at_its_minimum_and_wind_gives_way(on_off: tuple[dict[str, Any], str]) -> None:
-    namespace, _ = on_off
-    wide = namespace['result'].primal('p').pivot(on='generator', index='snapshot', values='value').sort('snapshot')
-    assert wide['gas'].to_list() == pytest.approx([0.0, 50.0, 100.0, 50.0]), (
-        'gas is off in snapshot 0, at its minimum in 1 and 3, and above it in 2'
-    )
-    assert wide['wind'].to_list() == pytest.approx([60.0, 70.0, 80.0, 40.0]), 'wind gives way in snapshots 1 and 3'
-
-
-def test_a_mip_has_no_prices(on_off: tuple[dict[str, Any], str]) -> None:
-    _, printed = on_off
-    assert 'duals are undefined for a mixed-integer model' in printed, 'the page shows the refusal of dual'
-
-
-@pytest.fixture(scope='module')
 def over_time() -> tuple[dict[str, Any], str]:
     return run(TIME)
 
@@ -208,6 +183,15 @@ def test_integrality_is_a_declaration_and_costs_the_duals(lifecycle: tuple[dict[
     assert namespace['milp'].has_primal, 'the integer solve still answers'
     assert 'duals are undefined for a mixed-integer model' in printed, 'and says why it cannot be priced'
     assert namespace['relaxed'].dual('power_balance').height == 6, 'the continuous declaration prices every row'
+
+
+def test_a_mip_is_priced_once_its_decisions_are_fixed(lifecycle: tuple[dict[str, Any], str]) -> None:
+    namespace, _ = lifecycle
+    assert namespace['priced'].objective == pytest.approx(namespace['mip'].objective), (
+        'the page says the fixed LP has the same optimum as the MIP'
+    )
+    prices = namespace['priced'].dual('power_balance').sort('snapshot')['value'].to_list()
+    assert prices == pytest.approx([10.0, 10.0, 50.0, 10.0]), 'gas sets the price in snapshot 2, and wind elsewhere'
 
 
 def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any], str]) -> None:
