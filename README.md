@@ -12,9 +12,8 @@
 
 <!-- --8<-- [start:tagline] -->
 
-**Optimisation as a data pipeline.** Tables go in, polars builds the model, and
-tables come out. Every solve can be kept as parquet, to query, share or solve
-again.
+**Optimisation as a data pipeline.** Tables in, polars builds the model, tables
+out. Every solve can be kept as parquet, to query, share or solve again.
 
 <!-- --8<-- [end:tagline] -->
 
