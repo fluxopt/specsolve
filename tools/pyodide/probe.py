@@ -1,8 +1,9 @@
-"""specsolve in Pyodide: a build and solve from polars frames, then a sweep over an axis read from JSON, each checked against its closed form.
+"""specsolve in Pyodide, before pyarrow is loaded and after, each answer checked against its closed form.
 
-Run by ``run.mjs`` inside Pyodide, never by pytest: the polars there has no
-streaming engine and no parquet, so the sources are frames and nothing is
-written.
+Run by ``run.mjs`` inside Pyodide, never by pytest. The polars there has no
+streaming engine and no parquet. Before pyarrow: a solve and a sweep from
+frames, the sweep over an axis read from JSON, and an archive refused by name.
+After: the sweep archived as a zip and read back, and solved again from it.
 """
 
 from __future__ import annotations
@@ -29,14 +30,38 @@ SPEC = {
 }
 
 
-def main() -> str:
-    sources = {
+#: Each scenario's flat load, and the cost the gas pays to cover what the wind does not.
+FLAT = {'low': 60.0, 'high': 120.0}
+EXPECTED = {name: GAS_COST * (load - WIND) * len(LOAD) for name, load in FLAT.items()}
+
+
+def _sources() -> dict[str, object]:
+    return {
         'g': GENERATORS,
         't': list(range(len(LOAD))),
         'cap': pl.DataFrame({'g': GENERATORS, 'value': [WIND, 200.0]}),
         'cost': pl.DataFrame({'g': GENERATORS, 'value': [0.0, GAS_COST]}),
         'load': pl.DataFrame({'t': range(len(LOAD)), 'value': LOAD}),
     }
+
+
+def _by_scenario() -> dict[str, object]:
+    scenarios = pl.DataFrame(
+        {
+            'scenario': [name for name in FLAT for _ in LOAD],
+            't': list(range(len(LOAD))) * len(FLAT),
+            'value': [load for load in FLAT.values() for _ in LOAD],
+        }
+    )
+    return {**_sources(), 'load': scenarios}
+
+
+def _objectives(sweep: sps.types.Sweep) -> dict[str, float]:
+    return dict(sweep.record.select('scenario', 'objective').iter_rows())
+
+
+def without_pyarrow() -> str:
+    sources = _sources()
     assert collect_engine() == 'in-memory', "Pyodide's polars refuses the streaming engine, and the probe saw it"
 
     result = sps.solve(SPEC, sources)
@@ -46,20 +71,9 @@ def main() -> str:
         f'gas covers the load above the wind: {result.objective} != {expected}'
     )
 
-    flat = {'low': 60.0, 'high': 120.0}
-    scenarios = pl.DataFrame(
-        {
-            'scenario': [name for name in flat for _ in LOAD],
-            't': list(range(len(LOAD))) * len(flat),
-            'value': [load for load in flat.values() for _ in LOAD],
-        }
-    )
     axis = json.loads(json.dumps(sps.EachCoordinate('scenario').to_dict()))
-    runs = sps.solve_over(SPEC, {**sources, 'load': scenarios}, axis)
-    objectives = dict(runs.record.select('scenario', 'objective').iter_rows())
-    assert objectives == {name: GAS_COST * (load - WIND) * len(LOAD) for name, load in flat.items()}, (
-        f'one solve per scenario, gas covering the flat load above the wind: {objectives}'
-    )
+    objectives = _objectives(sps.solve_over(SPEC, _by_scenario(), axis))
+    assert objectives == EXPECTED, f'one solve per scenario, gas covering the flat load above the wind: {objectives}'
     try:
         sps.solve(SPEC, sources, archive='/tmp/refused')
     except sps.errors.SpecsolveError as refused:
@@ -70,3 +84,14 @@ def main() -> str:
         f'polars {pl.__version__}, specsolve {sps.__version__}: a solve, a sweep of {len(objectives)}, '
         f'and an archive refused for want of parquet'
     )
+
+
+def with_pyarrow() -> str:
+    archived = sps.solve_over(SPEC, _by_scenario(), sps.EachCoordinate('scenario'), archive='/tmp/study.zip')
+    assert _objectives(archived) == EXPECTED, 'the archived sweep answers as the one in memory did'
+    study = sps.load_archive('/tmp/study.zip', '/tmp/study')
+    assert _objectives(study.sweep) == EXPECTED, 'the archive reads back through pyarrow'
+    assert study.sweep.primal('p').equals(archived.primal('p')), 'every value it wrote'
+    again = sps.solve_over(study.spec, study.sources, study.axis)
+    assert _objectives(again) == EXPECTED, 'and solves again from what it holds'
+    return 'a sweep archived as a zip through pyarrow, read back and solved again from it'

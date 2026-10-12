@@ -60,7 +60,7 @@ def require(what: str) -> Literal['polars', 'pyarrow']:
     raise SpecsolveError(
         f"{what} reads or writes parquet, and this polars was built without it, as the browser's (Pyodide) "
         f'is. Load pyarrow first, which specsolve then reads and writes parquet with — in Pyodide, '
-        f"`await pyodide.loadPackage(['pyarrow', 'tzdata'])` — or pass each source as a table and read the "
+        f"`await pyodide.loadPackage('pyarrow')` — or pass each source as a table and read the "
         f'answer off the result or the sweep in memory.'
     )
 
@@ -126,12 +126,34 @@ def _schema(source: Source) -> pl.Schema:
 
 
 def _to_arrow(frame: pl.DataFrame) -> pa.Table:
-    """*frame* as an Arrow table, its strings as plain strings: pyarrow cannot cast a dictionary of string views."""
+    """*frame* as an Arrow table whose string and binary views are plain large strings and binaries.
+
+    The views are cast on the pyarrow side. polars' own oldest IPC, which
+    writes no views, panics on 32-bit WebAssembly for a string column
+    broadcast from one literal, and pyarrow writes no dictionary of string
+    views to parquet.
+    """
     import pyarrow as pa
 
     buffer = io.BytesIO()
-    frame.write_ipc_stream(buffer, compat_level=pl.CompatLevel.oldest())
-    return pa.ipc.open_stream(buffer.getvalue()).read_all()
+    frame.write_ipc_stream(buffer)
+    table = pa.ipc.open_stream(buffer.getvalue()).read_all()
+    return table.cast(
+        pa.schema([field.with_type(_unviewed(field.type)) for field in table.schema], table.schema.metadata)
+    )
+
+
+def _unviewed(kind: pa.DataType) -> pa.DataType:
+    """*kind* with a string or binary view, also as a dictionary's values, made a large string or binary."""
+    import pyarrow as pa
+
+    if pa.types.is_string_view(kind):
+        return pa.large_string()
+    if pa.types.is_binary_view(kind):
+        return pa.large_binary()
+    if pa.types.is_dictionary(kind):
+        return pa.dictionary(kind.index_type, _unviewed(kind.value_type), kind.ordered)
+    return kind
 
 
 def _from_arrow(table: pa.Table) -> pl.DataFrame:
