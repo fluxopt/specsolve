@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the home page's language button opens the mathspec home page ([#1989](https://github.com/fluxopt/specsolve/pull/1989))
 - docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
 - docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
 - docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
