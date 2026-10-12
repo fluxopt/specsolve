@@ -98,6 +98,16 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 #: Pages whose summary deliberately says something *else*, each with its reason.
 #: `test_every_summary_declares_itself` fails on a page in neither list.
 DIVERGENT = {
+    'piecewise_conversion': (
+        'names the weights at the converter a flow belongs to — the c(f) the tie reads through '
+        'at(). The generator writes each row against the dims it carries, so the pullback is a '
+        'coordinate there and a subscript here.'
+    ),
+    'piecewise_ragged': (
+        "names each curve's own breakpoint set as K_g, which is what the page is about and "
+        'what the generator has no notation for: the weights it writes run over the whole '
+        'axis, and points: is a mask on their declaration rather than a smaller index set.'
+    ),
     'seasons': (
         'states one boundary row rather than the model: the page is about where a '
         'clause points, so its summary shows the opening equation alone and names '
@@ -119,6 +129,10 @@ DIVERGENT = {
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '
         'wraps — which the generator writes as the cyclic ⊖. Matching would mean '
         'either dropping the wrap or opening with a symbol nobody has met yet.'
+    ),
+    'piecewise': (
+        "shows one generator's curve. The model carries the snapshot dim through λ "
+        'as well, so the generated subscripts are (t, g, k) where the summary has (g, k).'
     ),
     'transport_dantzig': (
         'is the textbook statement of the transportation problem, with an abstract '

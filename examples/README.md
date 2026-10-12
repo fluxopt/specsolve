@@ -15,9 +15,9 @@ reference is *generated from* it. Name a new model in
 (`tests/test_architecture.py`); a model in neither fails the suite rather than
 defaulting to a side.
 
-**Read them explained** in [docs/examples/](../docs/examples/index.md) — the maths,
-what each construct exercises, and for a port a side-by-side against the
-reference implementation. This directory is the source; that is the guided tour.
+**Read them explained** in [docs/examples/](../docs/examples/index.md): the
+maths, and for a port a side-by-side against the reference implementation.
+This directory is the source; that is the guided tour.
 
 | | |
 |---|---|

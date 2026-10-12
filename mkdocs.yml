@@ -43,14 +43,6 @@ nav:
       - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:
           - examples/index.md
-          - Teaching examples:
-              - dispatch: examples/dispatch.md
-              - storage: examples/storage.md
-              - transport: examples/transport.md
-              - monthly budget: examples/monthly_budget.md
-              - multi-period: examples/multi_period.md
-              - seasons: examples/seasons.md
-              - reserves: examples/reserves.md
           - Published optima:
               - Dantzig transport: examples/transport_dantzig.md
               - Dantzig, economies of scale: examples/transport_pwl.md
@@ -61,6 +53,17 @@ nav:
               - Choosing the mode of transport: examples/transport_modes.md
               - OSeMOSYS UTOPIA: examples/osemosys_utopia.md
               - Travelling salesman: examples/tsp_mtz.md
+          - More models:
+              - dispatch: examples/dispatch.md
+              - storage: examples/storage.md
+              - transport: examples/transport.md
+              - piecewise: examples/piecewise.md
+              - piecewise curves of differing length: examples/piecewise_ragged.md
+              - piecewise conversion: examples/piecewise_conversion.md
+              - monthly budget: examples/monthly_budget.md
+              - multi-period: examples/multi_period.md
+              - seasons: examples/seasons.md
+              - reserves: examples/reserves.md
   - About:
       - about/index.md
       - Coming from linopy: about/linopy.md

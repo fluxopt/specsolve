@@ -1,23 +1,13 @@
 # Examples
 
-Every model in the repository. Use it to find a model like yours: each page
-shows the YAML, the same model as math, and its data.
+The published optima are models somebody else solved first, solved again
+with specsolve to the same optimum. The other models are this repository's
+own, and the test suite solves each one. Each page shows the model and the
+same model as math.
 
 ## Every model
 
 <!-- catalogue:begin -->
-### Teaching examples
-
-| | |
-|---|---|
-| [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
-| [storage](storage.md) | Dispatch plus a battery, and the only construct in the language whose cost is not obviously linear. |
-| [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
-| [monthly budget](monthly_budget.md) | A cap on what each technology may generate per calendar month — an aggregate over a *coarser grouping of time*, written with the same operator that places a generator on a bus. |
-| [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
-| [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next. |
-| [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. The model exists to prove a claim — every many-to-many shape the language covers, in one instance, each one load-bearing. |
-
 ### Published optima
 
 | | |
@@ -31,6 +21,21 @@ shows the YAML, the same model as math, and its data.
 | [Choosing the mode of transport](transport_modes.md) | Moving 180 tonnes of chemicals out of four depots, where a depot may reach a centre by rail *or* by road at different cost. |
 | [OSeMOSYS UTOPIA](osemosys_utopia.md) | What to build and how hard to run it, 1990–2010, to meet three end-use demands at least discounted cost. |
 | [Travelling salesman](tsp_mtz.md) | Visit every city once and come home, as cheaply as possible. The most famous problem in combinatorial optimisation, and the one most often assumed to be out of reach here. |
+
+### More models
+
+| | |
+|---|---|
+| [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
+| [storage](storage.md) | Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon. |
+| [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
+| [piecewise](piecewise.md) | Dispatch where each generator's cost follows its own convex curve. |
+| [piecewise curves of differing length](piecewise_ragged.md) | Dispatch where each generator's cost curve has as many breakpoints as its own data. |
+| [piecewise conversion](piecewise_conversion.md) | Heat and power from converters whose flows share one curve each, where how many flows a converter has is data. |
+| [monthly budget](monthly_budget.md) | A cap on what each technology may generate in each calendar month, with the months read off the timestamps. |
+| [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
+| [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths. |
+| [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. |
 
 ### PyPSA examples
 
