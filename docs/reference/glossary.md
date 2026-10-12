@@ -125,8 +125,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   every table the sweep hands back.
 
 **carry**
-: `carry={parameter: variable}` hands one slice's solution to the next as
-  data.
+: An axis's `carry={parameter: variable}` hands one slice's solution to the
+  next as data.
 
 **held** · **spilled**
 : A held sweep keeps its answers in memory. A spilled one writes them to the
