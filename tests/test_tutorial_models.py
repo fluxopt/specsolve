@@ -1,9 +1,10 @@
 """The model the tutorials grow, one spec per step, solved on the data they share.
 
-Steps 1 to 3 solve ``examples/dispatch.yaml``. Step 4 adds on-off generators
-(``examples/tutorial/commitment.yaml``) and step 5 a battery
-(``examples/tutorial/storage.yaml``). Each step has to change the answer, or
-the page that adds it has nothing to show. The data is
+The first three tutorials solve ``examples/dispatch.yaml``. On-off generators
+(``examples/tutorial/commitment.yaml``, which the fixing how-to prices) and a
+battery (``examples/tutorial/storage.yaml``, which the last tutorial solves in
+windows) each have to change the answer, or the page that uses them has
+nothing to show. The data is
 ``examples/tutorial/data/``: four snapshots, and three days of them where a
 rolling horizon needs room for windows.
 """
@@ -58,9 +59,9 @@ def three_days() -> pl.DataFrame:
 @pytest.mark.parametrize(
     ('step', 'objective'),
     [
-        pytest.param('dispatch', 10500.0, id='1-3 dispatch'),
-        pytest.param('commitment', 14000.0, id='4 commitment'),
-        pytest.param('storage', 10850.0, id='5 storage'),
+        pytest.param('dispatch', 10500.0, id='dispatch'),
+        pytest.param('commitment', 14000.0, id='commitment'),
+        pytest.param('storage', 10850.0, id='storage'),
     ],
 )
 def test_each_step_solves_to_the_objective_its_page_quotes(step: str, objective: float) -> None:
