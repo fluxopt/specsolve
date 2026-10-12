@@ -77,7 +77,10 @@ Each panel is one model through one solver, and each line is one library.
 - **The line is the median of nine rounds, and the whisker is the middle half.**
   Overlapping whiskers are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
-- **A dashed line is a projection** past the time or memory budget.
+- **A shaded funnel is a projection** past the time or memory budget. It opens
+  from the last measured point. One edge carries the last step's cost per
+  variable forward, and the other keeps the last step's growth rate. A wide
+  funnel is a guess the measurements do not narrow.
 - **÷ specsolve divides each point by specsolve's at the same size**, so
   specsolve is the line at 1× and a line above it is that many times slower or
   larger. It applies to wall time and to peak RSS. Every panel shares one

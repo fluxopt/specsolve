@@ -42,9 +42,10 @@ document$.subscribe(() => {
 
 async function mount(root) {
   const [
-    { crosshair }, { dot }, { mountChart }, { lineY }, { link },
+    { areaY }, { crosshair }, { dot }, { mountChart }, { lineY }, { link },
     { scaleLinear }, { defineChart }, { tooltip }, { scaleLog },
   ] = await Promise.all([
+    import('@tanstack/charts/area.js'),
     import('@tanstack/charts/crosshair.js'),
     import('@tanstack/charts/dot.js'),
     import('@tanstack/charts/dom.js'),
@@ -146,41 +147,47 @@ async function mount(root) {
     return { scale: scaleLog().domain([lo / pad, hi * pad]), axis: { label, ticks: { values: sizes, format } } };
   }
 
-  /* Where each refused size would land: the library's last measured step carried forward at its
-     cost per variable, so on linear axes the dashed line continues the solid one. Every cost has a
-     fixed part, an interpreter's memory or a build's set-up, and scaling the whole last value with
-     size would count that part again at each step. With one measured size there is no step, and
-     the value grows in proportion. Each library's run starts at that last point, so the dashed line
-     joins its solid one. */
+  /* Where each refused size could land, as a range from `lo` to `hi`: between two continuations
+     of the library's last measured step, one straight at the step's cost per variable and one
+     curved at the step's growth rate. Both run through the step's two points and part with
+     distance, so the range is narrow where they agree and wide where the step says little.
+     `value` is the range's geometric middle. Each library's run starts at its last measured point
+     with no width, so the funnel opens from the solid line. A library with one measured size has
+     no step, and nothing is projected. */
   function projections(rows) {
     const out = [];
     for (const own of Map.groupBy(rows, r => r[SERIES]).values()) {
-      const measured = own.filter(r => r.value != null).sort((a, b) => a[X] - b[X]);
-      const last = measured.at(-1), prev = measured.at(-2);
+      const [prev, last] = own.filter(r => r.value != null).sort((a, b) => a[X] - b[X]).slice(-2);
       const ahead = own.filter(r => r[REFUSED] && last && r[X] > last[X]).sort((a, b) => a[X] - b[X]);
-      if (!ahead.length) continue;
-      const perVariable = prev ? (last.value - prev.value) / (last[X] - prev[X]) : last.value / last[X];
-      out.push({ ...last, projected: false });
-      for (const r of ahead) out.push({ ...r, value: last.value + perVariable * (r[X] - last[X]), projected: true });
+      if (!ahead.length || !prev) continue;
+      const perVariable = (last.value - prev.value) / (last[X] - prev[X]);
+      const growth = Math.log(last.value / prev.value) / Math.log(last[X] / prev[X]);
+      out.push({ ...last, lo: last.value, hi: last.value, projected: false });
+      for (const r of ahead) {
+        const [lo, hi] = [last.value + perVariable * (r[X] - last[X]), last.value * (r[X] / last[X]) ** growth]
+          .sort((a, b) => a - b);
+        out.push({ ...r, value: Math.sqrt(lo * hi), lo, hi, projected: true });
+      }
     }
     return out;
   }
 
   /* A tooltip's number columns. Each row lays out on its own, value right-aligned in tabular
      digits, so a column lines up only if every entry has one shape: one unit for the column (the
-     smallest value's), fixed decimals, and figure spaces, a digit wide, padding the left. */
+     smallest value's), fixed decimals, and figure spaces, a digit wide, padding the left. Each
+     entry is one value or a projection's range. */
   const UNITS = { seconds: [['ms', 1e-3], ['s', 1]], gigabytes: [['MB', 1e-3], ['GB', 1]] };
   const padded = texts => texts.map(t => t.padStart(Math.max(...texts.map(x => x.length)), '\u2007'));
-  function amounts(values, format) {
-    const [unit, scale] = UNITS[format][Math.min(...values) < 1 ? 0 : 1];
-    const low = Math.min(...values) / scale;
-    const digits = low < 1 ? 2 : low < 10 ? 1 : 0;
-    return padded(values.map(v => `${(v / scale).toFixed(digits)} ${unit}`));
+  function amounts(spans, format) {
+    const low = Math.min(...spans.flat());
+    const [unit, scale] = UNITS[format][low < 1 ? 0 : 1];
+    const digits = low / scale < 1 ? 2 : low / scale < 10 ? 1 : 0;
+    return padded(spans.map(vs => `${vs.map(v => (v / scale).toFixed(digits)).join('–')} ${unit}`));
   }
 
   /* One row per library at the hovered size, slowest first as the lines stack in the panel: its
      value, then its ratio to the highlighted library, whose row is emphasised. A projection stands
-     in for a library only where the library has no measurement at that size. */
+     in for a library only where the library has no measurement at that size, and gives its range. */
   function grouped(format) {
     return {
       use: tooltip,
@@ -188,8 +195,9 @@ async function mount(root) {
         const at = [...new Map([...points].sort((a, b) => !!b.datum.projected - !!a.datum.projected)
           .map(p => [p.datum[SERIES], p.datum])).values()].sort((a, b) => b.value - a.value);
         const ours = at.find(isHero), raw = d => d.raw ?? d.value;
-        const values = amounts(at.map(raw), format);
-        const ratios = padded(at.map(d => (ours ? `${(raw(d) / raw(ours)).toFixed(1)}×` : '–')));
+        const span = d => (d.projected ? [d.lo, d.hi].map(v => v * raw(d) / d.value) : [raw(d)]);
+        const values = amounts(at.map(span), format);
+        const ratios = padded(at.map(d => (ours ? `${span(d).map(v => (v / raw(ours)).toFixed(1)).join('–')}×` : '–')));
         return {
           title: `${FORMAT[SPEC.x.format](points[0].xValue)} ${SPEC.x.label}`,
           rows: at.map((d, i) => ({
@@ -202,12 +210,12 @@ async function mount(root) {
     };
   }
 
-  /* One panel: a line per library over size, a whisker over the middle half at each point, the
-     projections dashed. The highlighted library is drawn last and thick, so it stays on top where
+  /* One panel: a line per library over size, a whisker over the middle half at each point, and a
+     shaded funnel over each projection's range. The highlighted library is drawn last and thick, so it stays on top where
      the lines cross, and is named right of its last point. The matrix floor is a thin neutral line
      without whiskers.
      Each measured point is a dot ringed in the surface colour, so
-     crossing points stay apart; each projected size is a hollow ring in the library's colour. */
+     crossing points stay apart. */
   /* The highlighted library's name, right of its last point. A control rather than a text mark:
      the marks share one clip, which would cut the name off in the right margin it sits in. */
   function heroLabel(ours) {
@@ -272,10 +280,8 @@ async function mount(root) {
     const enc = { x: X, z: SERIES, color: SERIES };
     const line = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth });
     const points = (data, r) => dot(data, { ...enc, y: 'value', r, stroke: 'var(--surface)', strokeWidth: 2 });
-    const hollow = [...Map.groupBy(ahead.filter(r => r.projected), r => r[SERIES])].map(([name, data]) =>
-      dot(data, { x: X, y: 'value', r: isHero(data[0]) ? 4.5 : 3.5, fill: 'var(--surface)',
-        stroke: SPEC.series.paint[LIBRARIES.indexOf(name)], strokeWidth: isHero(data[0]) ? 2.5 : 1.5 }));
-    const dashed = (data, strokeWidth) => lineY(data, { ...enc, y: 'value', strokeWidth, strokeDasharray: '5 5' });
+    const funnel = (data, fillOpacity) => [areaY(data, { ...enc, y1: 'lo', y2: 'hi', fillOpacity }),
+      lineY(data, { ...enc, y: 'lo', strokeWidth: 1 }), lineY(data, { ...enc, y: 'hi', strokeWidth: 1 })];
     const whiskers = (data, strokeWidth) => link(data.filter(r => r.hi > r.lo),
       { x1: X, x2: X, y1: 'lo', y2: 'hi', color: SERIES, strokeWidth, lineCap: 'round' });
     const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
@@ -283,9 +289,8 @@ async function mount(root) {
     return defineChart({
       marks: [
         ...(metric.band ? [whiskers(theirs, 1.5), whiskers(ours, 2)] : []),
-        dashed(theirsAhead, 2), dashed(oursAhead, 3),
+        ...funnel(theirsAhead, 0.25), ...funnel(oursAhead, 0.35),
         line(floor, 1.5), line(theirs, 2), line(ours, 3.5),
-        ...hollow,
         points(floor, 2.5), points(theirs, 3.5), points(ours, 5),
         crosshair({ y: false }),
       ],
@@ -307,14 +312,14 @@ async function mount(root) {
     const floorShown = rows.some(isFloor);
     const body = [];
     for (const [title, panel] of Map.groupBy(rows, panelOf)) {
-      const guess = new Map(projections(panel).filter(r => r.projected).map(r => [`${r[SERIES]}|${r[X]}`, r.value]));
+      const guess = new Map(projections(panel).filter(r => r.projected).map(r => [`${r[SERIES]}|${r[X]}`, r]));
       const cell = (r, kind = '') => {
         if (!r) return '<td class="none">—</td>';
         if (r.value == null) {
           if (!r[REFUSED]) return '<td class="none">—</td>';
           const g = guess.get(`${r[SERIES]}|${r[X]}`);
           const why = `refused by the ${r[REFUSED].slice(1)} budget`;
-          return `<td class="none" title="${g ? `${why} · projected ≈ ${fmt(g)}` : why}">${r[REFUSED]}</td>`;
+          return `<td class="none" title="${g ? `${why} · projected ${fmt(g.lo)} to ${fmt(g.hi)}` : why}">${r[REFUSED]}</td>`;
         }
         if (kind === 'own') return `<td class="own">${fmt(r.value)}</td>`;
         if (r.ratio == null) return `<td class="none">${fmt(r.value)}</td>`;
