@@ -27,8 +27,7 @@ An axis says how the sources split into slices:
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
 ```
@@ -61,6 +60,16 @@ pairs:
 ```python
 slices = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t').slices(sources)
 sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that was infeasible
+```
+
+**An axis is also plain data.** `axis.to_dict()` writes it as a mapping, and
+`solve_over` takes that mapping in the axis's place. An archive's `axis.json`
+holds the same mapping. A mapping with a key the axis does not take, or without
+one it needs, is refused, and the message names the keys the axis takes.
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+sps.solve_over('window.yaml', sources, axis.to_dict())
 ```
 
 **Sources cross a slice in every shape `build` takes.** A parameter or relation
@@ -167,15 +176,15 @@ sweep = sps.solve_over(
 
 ## Carrying state between slices
 
-**`carry={parameter: variable}` copies one slice's answer into the next
-slice's data.**
+**An axis's `carry={parameter: variable}` copies one slice's answer into the
+next slice's data.** `EachCoordinate` and `EachWindow` take it. A hand-built
+list carries nothing.
 
 ```python
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
-    carry={'soc_initial': 'soc'},
+    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
 )
 ```
 
@@ -186,7 +195,7 @@ label 23 of a window keeping 24, not label 47 of the 48 it solved.
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
 | **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole frame. |
-| **that dimension must be `EachWindow`'s `into`** | Any other is refused. Under `EachCoordinate` or a hand-built axis a carry collapses nothing. |
+| **that dimension must be `EachWindow`'s `into`** | Any other is refused. A carry on `EachCoordinate` collapses nothing. |
 | **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` at `t == 0`. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |
 | **the first slice needs a seed** | It takes the parameter from `sources`. A sweep whose sources lack it is refused. |
 | **a carry is checked before any source is read** | Two collapsed dimensions, a parameter over more dimensions than the variable, the wrong dimension and no seed all raise first. `check` cannot see a carry, because it is not part of the spec. |

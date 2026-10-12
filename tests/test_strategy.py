@@ -26,6 +26,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import strategy
 from specsolve import sweep as sweep_module
+from specsolve.axes import axis_from
 from specsolve.relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -223,8 +224,7 @@ def overlapping() -> sweep_module.Sweep:
     return sps.solve_over(
         WINDOW,
         horizon_sources(12),
-        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t', carry={'soc_initial': 'soc'}),
     )
 
 
@@ -296,7 +296,7 @@ def _pooled(tmp_path) -> pl.DataFrame:
 
 def _rolling(tmp_path) -> pl.DataFrame:
     carry = {'soc_initial': 'soc'}
-    return sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry=carry, solver_options=_OPTIONS).record
+    return sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry=carry), solver_options=_OPTIONS).record
 
 
 def _scanned(tmp_path) -> pl.DataFrame:
@@ -366,7 +366,7 @@ def test_a_carried_fold_still_builds_once(builds):
     """A carry writes a parameter the first slice already attached, so no slice names new sources."""
     built = builds(strategy)
 
-    runs = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    runs = sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
     assert runs.keys == [0, 4, 8]
     assert len(built) == 1, f'{len(built)} builds for three windows — the carry cost the fold its fast path'
@@ -453,7 +453,7 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
     `soc_initial` is updated per window from the previous window's last `soc`,
     which is the carry doing its one job — a copy, at a named index.
     """
-    runs = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    runs = sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
     assert runs.keys == [0, 4, 8]
     assert runs.primal('p', per_window=True).height == 3 * 4 * 2
@@ -507,8 +507,7 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
     runs = sps.solve_over(
         WINDOW,
         horizon_sources(periods),
-        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t', carry={'soc_initial': 'soc'}),
     )
     assert runs.primal('soc')['snapshot'].to_list() == list(range(periods)), (
         'the seam is in range for every geometry, so the sweep completes'
@@ -616,8 +615,7 @@ def priced() -> sweep_module.Sweep:
     return sps.solve_over(
         SPENDING,
         horizon_sources(12),
-        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t', carry={'soc_initial': 'soc'}),
     )
 
 
@@ -856,8 +854,7 @@ def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(blocks):
     runs = sps.solve_over(
         WINDOW,
         horizon_sources(12),
-        sps.EachWindow('snapshot', steps=blocks, lookahead=2, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=blocks, lookahead=2, into='t', carry={'soc_initial': 'soc'}),
     )
     stitched = runs.primal('soc')
 
@@ -958,8 +955,7 @@ def test_a_short_tail_window_carries_off_its_own_last_row():
     runs = sps.solve_over(
         WINDOW,
         horizon_sources(12),
-        sps.EachWindow('snapshot', steps=5, lookahead=1, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=5, lookahead=1, into='t', carry={'soc_initial': 'soc'}),
     )
     assert runs.keys == [0, 5, 10]
     assert runs.record['termination_condition'].to_list() == ['optimal'] * 3
@@ -973,7 +969,7 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
     so `t` is the one the carry collapses, and `storage` passes through — both
     stores are handed forward, each its own level.
     """
-    runs = sps.solve_over(MULTI_STORE, multi_store_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    runs = sps.solve_over(MULTI_STORE, multi_store_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
     assert runs.keys == [0, 4, 8]
     assert set(runs.primal('soc', per_window=True).columns) == {'snapshot_start', 't', 'storage', 'value'}
@@ -1018,8 +1014,7 @@ def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
     runs = sps.solve_over(
         WINDOW,
         horizon_sources(12),
-        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t'),
-        carry={'soc_initial': 'soc'},
+        sps.EachWindow('snapshot', steps=3, lookahead=3, into='t', carry={'soc_initial': 'soc'}),
     )
 
     def at(name: str, start: int, t: int) -> float:
@@ -1050,8 +1045,7 @@ def test_a_myopic_pathway_carries_a_whole_vector():
     runs = sps.solve_over(
         MYOPIC,
         myopic_sources(),
-        sps.EachCoordinate('period'),
-        carry={'existing': 'total'},
+        sps.EachCoordinate('period', carry={'existing': 'total'}),
     )
 
     assert runs.keys == [1, 2, 3]
@@ -1104,7 +1098,7 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, source
     doing the model's arithmetic here.
     """
     with pytest.raises(sps.errors.SpecsolveError, match=expected) as raised:
-        sps.solve_over(spec, sources(), axis, carry=carry)
+        sps.solve_over(spec, sources(), replace(axis, carry=carry))
     if names is not None:
         assert names in str(raised.value), 'the message names the dimensions it could not choose between'
 
@@ -1119,16 +1113,91 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
     sources = {**horizon_sources(), 'load': str(missing)}
 
     with pytest.raises(sps.errors.SpecsolveError, match='does not declare'):
-        sps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': 'nope'})
+        sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'nope'}))
 
     with pytest.raises(Exception, match='not-written-yet') as raised:
-        sps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': 'soc'})
+        sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
     assert not isinstance(raised.value, sps.errors.SpecsolveError), 'the file, not the carry, is what failed'
 
 
 # ---------------------------------------------------------------------------
 # the fold's own rules
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'axis',
+    [
+        pytest.param(sps.EachCoordinate('period', carry={'existing': 'total'}), id='coordinate'),
+        pytest.param(replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), id='window'),
+    ],
+)
+def test_an_axis_that_carries_is_still_hashable(axis):
+    """An axis is a frozen value, so a carry, which is a mapping, stays out of its hash."""
+    assert hash(axis) == hash(replace(axis, carry={})), 'the carry is left out of the hash'
+    assert axis != replace(axis, carry={}), 'and kept in the equality'
+
+
+@pytest.mark.parametrize(
+    'axis',
+    [
+        pytest.param(sps.EachCoordinate('period'), id='coordinate'),
+        pytest.param(sps.EachCoordinate('period', carry={'existing': 'total'}), id='coordinate-carrying'),
+        pytest.param(WINDOW_AXIS, id='window'),
+        pytest.param(sps.EachWindow('snapshot', steps=(2, 4), lookahead=1, into='t'), id='window-of-listed-steps'),
+        pytest.param(replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), id='window-carrying'),
+    ],
+)
+def test_an_axis_reads_back_from_the_json_of_its_dict(axis):
+    """``to_dict`` is plain data: through JSON and back, it is the axis it was."""
+    assert axis_from(json.loads(json.dumps(axis.to_dict()))) == axis
+
+
+def test_an_axis_that_carries_nothing_writes_no_carry_key():
+    """The ``axis.json`` of an archive whose sweep carried nothing holds no ``carry``, as ``INPUTS_LAYOUT`` 1 has it."""
+    assert sps.EachCoordinate('period').to_dict() == {'each': 'coordinate', 'dim': 'period'}, (
+        'no carry key where nothing is carried'
+    )
+
+
+def test_solve_over_takes_an_axis_as_its_dict():
+    """The dict stands where the axis does, carry included."""
+    axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    given = sps.solve_over(WINDOW, horizon_sources(), json.loads(json.dumps(axis.to_dict())))
+    expected = sps.solve_over(WINDOW, horizon_sources(), axis)
+    assert given.record['objective'].to_list() == expected.record['objective'].to_list()
+    assert given.primal('soc').equals(expected.primal('soc')), 'each window started from the one before it'
+
+
+def test_an_archive_holds_the_dict_of_its_axis(tmp_path):
+    """``axis.json`` is ``to_dict``, so the archive's file and the public form are one."""
+    axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    sps.solve_over(WINDOW, horizon_sources(), axis, archive=tmp_path / 'roll')
+    assert json.loads((tmp_path / 'roll' / 'axis.json').read_text()) == axis.to_dict()
+
+
+@pytest.mark.parametrize(
+    ('given', 'expected'),
+    [
+        pytest.param(
+            {'dim': 'snapshot'}, "under 'each', one of \\['coordinate', 'window'\\] \\(got None\\)", id='no-each'
+        ),
+        pytest.param({'each': 'slice', 'dim': 'snapshot'}, "\\(got 'slice'\\)", id='an-each-that-names-no-axis'),
+        pytest.param(
+            {'each': 'coordinate', 'dim': 'period', 'carries': {}},
+            "takes 'each' and \\['dim', 'carry'\\].*\\['carries'\\] is not one of them",
+            id='a-key-the-axis-does-not-take',
+        ),
+        pytest.param(
+            {'each': 'window', 'dim': 'snapshot', 'steps': 4, 'into': 't'},
+            "\\['dim', 'steps', 'lookahead', 'into'\\] are required: \\['lookahead'\\] is missing",
+            id='a-key-the-axis-needs',
+        ),
+    ],
+)
+def test_an_axis_dict_that_names_no_axis_is_refused_with_the_keys_it_takes(given, expected):
+    with pytest.raises(sps.errors.SpecsolveError, match=expected):
+        sps.solve_over(WINDOW, horizon_sources(), given)
 
 
 def test_carry_and_executor_are_refused_together():
@@ -1138,8 +1207,7 @@ def test_carry_and_executor_are_refused_together():
         sps.solve_over(
             WINDOW,
             horizon_sources(),
-            WINDOW_AXIS,
-            carry={'soc_initial': 'soc'},
+            replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
             executor=object(),
         )
 
@@ -1880,7 +1948,7 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
     sources = myopic_sources()
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
     with pytest.warns(sps.errors.SpecsolveWarning, match=r"'cost' has no rows for period 3, which 'demand' has"):
-        runs = sps.solve_over(MYOPIC, sources, sps.EachCoordinate('period'), carry={'existing': 'total'})
+        runs = sps.solve_over(MYOPIC, sources, sps.EachCoordinate('period', carry={'existing': 'total'}))
     assert runs.record['objective'].to_list()[-1] == 0.0, 'the sweep still runs, and period 3 is free'
 
 
@@ -1892,7 +1960,7 @@ def test_a_carry_with_no_seed_says_the_first_slice_needs_one():
     sources = horizon_sources(12)
     del sources['soc_initial']
     with pytest.raises(sps.errors.SpecsolveError, match=r"carry writes 'soc_initial' from the second slice on"):
-        sps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': 'soc'})
+        sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
 
 def test_a_slice_that_leaves_nothing_to_carry_stops_the_sweep_by_name():
@@ -1905,7 +1973,7 @@ def test_a_slice_that_leaves_nothing_to_carry_stops_the_sweep_by_name():
         pl.when(pl.col('snapshot') == 5).then(10_000.0).otherwise(pl.col('value')).alias('value')
     )
     with pytest.raises(sps.errors.SpecsolveError, match=r'slice 4 .*infeasible') as raised:
-        sps.solve_over(WINDOW, sources, WINDOW_AXIS, carry={'soc_initial': 'soc'})
+        sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
     assert 'slice 8' in str(raised.value), 'the message names the slice that had nothing to start from'
 
 
@@ -2033,7 +2101,9 @@ PRICED_CARRY = {'soc_initial': 'soc'}
 
 
 def _spilled(directory, **kwargs) -> sweep_module.Sweep:
-    return sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, spill_to=directory, **kwargs)
+    return sps.solve_over(
+        SPENDING, horizon_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), spill_to=directory, **kwargs
+    )
 
 
 @pytest.mark.parametrize(
@@ -2164,7 +2234,7 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
     resumed = _spilled(tmp_path, start=None)
-    cold = sps.solve_over(SPENDING, horizon_sources(12), PRICED_AXIS, carry=PRICED_CARRY, start=None)
+    cold = sps.solve_over(SPENDING, horizon_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
     assert answer_of(resumed).equals(answer_of(cold))
     assert resumed.scan('soc').collect().equals(cold.primal('soc'))
     assert resumed.scan('soc', per_window=True).collect().equals(cold.primal('soc', per_window=True))
@@ -2249,23 +2319,29 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
 
 def test_a_sweep_archive_carries_its_carry(tmp_path):
     """The carry is config the frames do not hold, so the archive stores it beside the axis."""
-    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll')
-    assert sps.load_archive(tmp_path / 'roll').carry == {'soc_initial': 'soc'}, 'the carry reads back as it was given'
+    sps.solve_over(
+        WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
+    )
+    assert sps.load_archive(tmp_path / 'roll').axis.carry == {'soc_initial': 'soc'}, (
+        'the carry reads back as it was given'
+    )
 
 
 def test_a_sweep_archive_with_no_carry_reads_an_empty_carry(tmp_path):
     """A sweep that chained nothing carries nothing — the manifest omits the key and the reader defaults it."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'plain')
-    assert sps.load_archive(tmp_path / 'plain').carry == {}, 'no carry given, none stored, an empty mapping read back'
+    assert sps.load_archive(tmp_path / 'plain').axis.carry == {}, (
+        'no carry given, none stored, an empty mapping read back'
+    )
 
 
 def test_a_carried_sweep_reruns_from_its_archive_with_the_stored_carry(tmp_path):
     """The stored carry is what makes a re-run the same sweep: with it the chained answer is reproduced."""
     original = sps.solve_over(
-        WINDOW, horizon_sources(), WINDOW_AXIS, carry={'soc_initial': 'soc'}, archive=tmp_path / 'roll'
+        WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
     packed = sps.load_archive(tmp_path / 'roll')
-    rerun = sps.solve_over(packed.spec, packed.sources, packed.axis, carry=packed.carry)
+    rerun = sps.solve_over(packed.spec, packed.sources, packed.axis)
     assert rerun.primal('soc').equals(original.primal('soc')), 'the re-run with the stored carry matches the archive'
 
 
@@ -2308,8 +2384,7 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
     sps.solve_over(
         WINDOW,
         horizon_sources(),
-        WINDOW_AXIS,
-        carry={'soc_initial': 'soc'},
+        replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         archive=tmp_path / 'roll.zip',
         keep_windows=True,
     )
