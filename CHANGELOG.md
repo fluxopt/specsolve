@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the reference is for lookup, and the language leaves its section ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
 - docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
 - docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
 - docs: pricing a MIP moves from the tutorials into the fixing how-to ([#1983](https://github.com/fluxopt/specsolve/pull/1983))
