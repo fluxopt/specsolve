@@ -721,16 +721,17 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
 
     A transposed index builds a different model that benchmarks perfectly, so
     the `xs` rung of each case is solved both ways and the objectives compared.
-    Not `2xs`: over two snapshots a wrapped shift forward is the shift back, so
-    a reversed time index would solve to the same objective. `unmeasurable`
-    decides which cells there are.
+    It is the test that sees a reversed time index where a store starts empty,
+    as in `network`. A cyclic store, as in `storage`, admits the same charging
+    whichever way time runs, so there no objective tells the two apart.
+    `unmeasurable` decides which cells there are.
     """
     reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
     if reason:
@@ -786,7 +787,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
     """The objective test passes a model that differs only where the optimum does not look.
