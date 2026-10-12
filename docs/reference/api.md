@@ -202,14 +202,14 @@ The rest are specsolve's:
     options:
       heading_level: 4
 
-## Rules across the verbs
+## Rules across the functions
 
-What no single entry above holds, because every verb keeps it.
+What no single entry above holds, because every function keeps it.
 
 ### Names that differ only by case
 
 **Two declarations of one namespace whose names differ only by case are
-refused**, whichever verb lowers the spec. Every declaration is written to
+refused**, whichever function lowers the spec. Every declaration is written to
 disk as a file named after it, and a case-insensitive filesystem, which a
 stock macOS or Windows volume is, folds `p` and `P` into one file.
 
@@ -228,7 +228,7 @@ beside a variable `p` is accepted. The two are written under `dual/` and
 ### Names that start with `specsolve_`
 
 **A declared name that starts with `specsolve_` is refused**, in any letter
-case, whichever verb lowers the spec. The prefix is reserved for the columns
+case, whichever function lowers the spec. The prefix is reserved for the columns
 specsolve adds, such as `specsolve_run` on every table an archive holds, so a
 declared name cannot collide with one. Case does not tell two columns apart:
 SQL, DuckDB and Power BI read `Specsolve_run` as `specsolve_run`. The rule
