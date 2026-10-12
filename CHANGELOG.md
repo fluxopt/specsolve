@@ -5,35 +5,70 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
-## Upcoming version
+## 0.9.0 (2026-10-12)
 
-- docs: a guide says how to attach data from a file too large to read whole ([#1990](https://github.com/fluxopt/specsolve/pull/1990))
-- docs: the home page's language button opens the mathspec home page ([#1989](https://github.com/fluxopt/specsolve/pull/1989))
-- docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
-- docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
+**specsolve runs in the browser.** It installs in Pyodide, builds, solves and
+sweeps there, and writes archives that native specsolve reads back. A sweep's
+carry moves onto its axis, and the docs are rewritten around five tutorials.
+Model files and archives from 0.8.x work as before.
+
+New:
+
+- specsolve runs on polars 1.33.1 and later. 1.33.1 is the newest polars that
+  builds for the browser. Anyone who does not pin polars still gets 2.x.
+- In the browser, where polars has no parquet, every file goes through
+  pyarrow once the page loads it (`await pyodide.loadPackage('pyarrow')`).
+  Without pyarrow, each call that needs a file is refused by name.
+- An axis is plain data: `axis.to_dict()` writes it, and `solve_over` takes
+  that mapping in the axis's place. An archive's `axis.json` is this mapping.
+
+Breaks:
+
+- `solve_over(..., carry=c)` is `EachWindow(..., carry=c)` or
+  `EachCoordinate(..., carry=c)`. A hand-built list of slices carries nothing.
+- `archive.carry` and `inputs.carry` are gone. Read `archive.axis.carry`.
+
+The browser:
+
+- feat(deps): specsolve runs on polars 1.33.1, the newest polars that runs in the browser ([#1973](https://github.com/fluxopt/specsolve/pull/1973))
+- fix(api): a call that reads or writes parquet is refused by name where polars has no parquet, as in the browser ([#1988](https://github.com/fluxopt/specsolve/pull/1988))
+- feat(api): a run in the browser reads and writes its files through pyarrow, where polars has no parquet ([#1991](https://github.com/fluxopt/specsolve/pull/1991))
+
+Sweeps:
+
+- refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
+- feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
+
+Tutorials:
+
+- docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
+- docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
+- docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
+- docs(tutorials): the third tutorial asks what-if questions of one loaded model ([#1957](https://github.com/fluxopt/specsolve/pull/1957))
+- docs(tutorials): a new tutorial adds generators that are either on or off and solves the model as a MIP ([#1958](https://github.com/fluxopt/specsolve/pull/1958))
+- docs(tutorials): the last tutorial adds a battery, and solves the model per scenario and window by window ([#1959](https://github.com/fluxopt/specsolve/pull/1959))
 - docs: the last tutorial solves a horizon too large for one solve, and shows what windows cost ([#1984](https://github.com/fluxopt/specsolve/pull/1984))
 - docs: pricing a MIP moves from the tutorials into the fixing how-to ([#1983](https://github.com/fluxopt/specsolve/pull/1983))
-- docs: the examples lead with the published optima, and the other models follow as plain model pages ([#1978](https://github.com/fluxopt/specsolve/pull/1978))
-- docs: the start-up table is shaded like the benchmark charts' own table ([#1974](https://github.com/fluxopt/specsolve/pull/1974))
-- docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))
-- docs: the benchmarks page shows what a script that solves one model pays, as one small table ([#1971](https://github.com/fluxopt/specsolve/pull/1971))
-- docs: the benchmarks page shows the charts, and the gallery lists the models ([#1969](https://github.com/fluxopt/specsolve/pull/1969))
-- docs: every page says what it has to in about a third fewer words ([#1967](https://github.com/fluxopt/specsolve/pull/1967))
-- docs: the sidebar lists each section in the order a user needs it ([#1966](https://github.com/fluxopt/specsolve/pull/1966))
+
+The site:
+
 - docs: the home page shows the pitch, one model file, a solve and the install ([#1965](https://github.com/fluxopt/specsolve/pull/1965))
 - docs: About says why specsolve exists, and a page shows the same model in linopy and specsolve ([#1964](https://github.com/fluxopt/specsolve/pull/1964))
-- docs: the reference keeps the rules a caller hits, and the port ledger moves to Verification ([#1963](https://github.com/fluxopt/specsolve/pull/1963))
-- docs: the how-to guides are shorter, and the small-models guide joins the one on faster loops ([#1962](https://github.com/fluxopt/specsolve/pull/1962))
-- docs: the Development section is two pages, the architecture and how answers are verified ([#1961](https://github.com/fluxopt/specsolve/pull/1961))
+- docs: the sidebar lists each section in the order a user needs it ([#1966](https://github.com/fluxopt/specsolve/pull/1966))
+- docs: every page says what it has to in about a third fewer words ([#1967](https://github.com/fluxopt/specsolve/pull/1967))
 - docs: the sidebar keeps what a user needs, and a Development section holds the architecture and the PyPSA proofs ([#1960](https://github.com/fluxopt/specsolve/pull/1960))
-- docs(tutorials): the last tutorial adds a battery, and solves the model per scenario and window by window ([#1959](https://github.com/fluxopt/specsolve/pull/1959))
-- docs(tutorials): a new tutorial adds generators that are either on or off and solves the model as a MIP ([#1958](https://github.com/fluxopt/specsolve/pull/1958))
-- docs(tutorials): the third tutorial asks what-if questions of one loaded model ([#1957](https://github.com/fluxopt/specsolve/pull/1957))
-- docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
-- docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
-- docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
-- feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
-- refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
+- docs: the Development section is two pages, the architecture and how answers are verified ([#1961](https://github.com/fluxopt/specsolve/pull/1961))
+- docs: the reference keeps the rules a caller hits, and the port ledger moves to Verification ([#1963](https://github.com/fluxopt/specsolve/pull/1963))
+- docs: the reference is for lookup, and the home page links the language instead ([#1987](https://github.com/fluxopt/specsolve/pull/1987))
+- docs: the how-to guides are shorter, and the small-models guide joins the one on faster loops ([#1962](https://github.com/fluxopt/specsolve/pull/1962))
+- docs: two how-tos say how to make a solve faster and how to solve many scenarios ([#1985](https://github.com/fluxopt/specsolve/pull/1985))
+- docs: a guide says how to attach data from a file too large to read whole ([#1990](https://github.com/fluxopt/specsolve/pull/1990))
+- docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))
+- docs: the examples lead with the published optima, and the other models follow as plain model pages ([#1978](https://github.com/fluxopt/specsolve/pull/1978))
+- docs: the benchmarks page shows the charts, and the gallery lists the models ([#1969](https://github.com/fluxopt/specsolve/pull/1969))
+- docs: the benchmarks page shows what a script that solves one model pays, as one small table ([#1971](https://github.com/fluxopt/specsolve/pull/1971))
+- docs: the start-up table is shaded like the benchmark charts' own table ([#1974](https://github.com/fluxopt/specsolve/pull/1974))
+- docs: the home page's language button opens the mathspec home page ([#1989](https://github.com/fluxopt/specsolve/pull/1989))
 
 ## 0.8.1 (2026-10-11)
 
