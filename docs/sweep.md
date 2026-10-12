@@ -146,6 +146,7 @@ These pages go further:
 | | |
 |---|---|
 | [Sweeps and rolling horizons](reference/sweeps.md) | every axis, `carry`, and how a sweep is read |
-| [Making a loop of solves faster](howto/warm-start.md) | each window starts from the answer of the window before |
+| [Making a solve faster](howto/faster.md) | the other ways, and what each one costs |
+| [Solving many scenarios](howto/scenarios.md) | one model for several sets of data, in one call |
 | [Debugging a wrong answer](howto/debug.md) | when a model solves and the number is wrong |
 | [Examples](examples/index.md) | every model in the repository |

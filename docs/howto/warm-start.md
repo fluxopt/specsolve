@@ -1,7 +1,7 @@
-# Making a loop of solves faster
+# Starting from an earlier answer
 
-How to start each solve in a loop from the one before, and build many small
-models faster. The reference is
+How to start each solve in a loop from the one before, or from an answer you
+kept. The reference is
 [`Model.solve`](../reference/api.md#specsolve.types.Model.solve).
 
 ## Carry on from the solve before
@@ -87,18 +87,3 @@ today = sps.solve('commitment.yaml', sources, start={'primal': {'on': 1.0}})
 A start never changes the optimum.
 [`Model.solve`](../reference/api.md#specsolve.types.Model.solve) lists what each
 solver takes.
-
-## Build many small models faster
-
-specsolve builds a model of at most 250,000 columns and 250,000 rows on
-polars' in-memory engine. To move the rest of a process onto it too, such as a
-sweep of many small models and your own queries:
-
-```python
-import polars as pl
-
-pl.Config.set_engine_affinity('in-memory')
-```
-
-`POLARS_ENGINE_AFFINITY=in-memory` in the environment does the same, and the
-workers of a [parallel sweep](parallel.md) inherit it.
