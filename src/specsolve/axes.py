@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from specsolve.inputs import Label, Source
 
 
+#: The key [`EachCoordinate.to_dict`][] and [`EachWindow.to_dict`][] write an axis's carry under.
+CARRY = 'carry'
+
+
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and what it owns.
 
@@ -120,9 +124,13 @@ class EachCoordinate:
     def to_dict(self) -> dict[str, object]:
         """This axis as plain data, which [`solve_over`][specsolve.strategy.solve_over] takes in its place.
 
-        ``json.dumps`` writes it, and an archive's ``axis.json`` is this.
+        ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
+        holds a ``carry`` key only where the axis carries something.
         """
-        return {'each': 'coordinate', 'dim': self.dim, **_carried(self.carry)}
+        out: dict[str, object] = {'each': 'coordinate', 'dim': self.dim}
+        if self.carry:
+            out[CARRY] = dict(self.carry)
+        return out
 
     def slices(self, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
         """The ``(key, sources)`` list this axis would run — what ``axis=`` takes hand-built.
@@ -221,17 +229,20 @@ class EachWindow:
     def to_dict(self) -> dict[str, object]:
         """This axis as plain data, which [`solve_over`][specsolve.strategy.solve_over] takes in its place.
 
-        ``json.dumps`` writes it, and an archive's ``axis.json`` is this.
+        ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
+        holds a ``carry`` key only where the axis carries something.
         """
         steps = self.steps if isinstance(self.steps, int) else list(self.steps)
-        return {
+        out: dict[str, object] = {
             'each': 'window',
             'dim': self.dim,
             'steps': steps,
             'lookahead': self.lookahead,
             'into': self.into,
-            **_carried(self.carry),
         }
+        if self.carry:
+            out[CARRY] = dict(self.carry)
+        return out
 
     def _key_name(self) -> str:
         """Where the window started, never ``dim``, which would join silently against data over *dim*."""
@@ -380,11 +391,6 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
             f'required: {wrong}.'
         )
     return kind(**keys)
-
-
-def _carried(carry: Mapping[str, str]) -> dict[str, object]:
-    """The ``carry`` key, left out where nothing is carried: the ``axis.json`` of ``INPUTS_LAYOUT`` 1 holds none then."""
-    return {'carry': dict(carry)} if carry else {}
 
 
 def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
