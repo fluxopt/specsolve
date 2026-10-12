@@ -34,7 +34,7 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
 - **Fast, and hard to get wrong.** Tables hold only the rows that exist, so a
   model's topology does not change its cost. The solver stays loaded:
   `update()` puts new numbers on it, and the next solve carries on from where
-  the last one ended. The API is a handful of verbs, with nothing to tune.
+  the last one ended. The API is a handful of functions, with nothing to tune.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All
