@@ -19,6 +19,9 @@ Each case stresses a different SQL shape:
                with its model YAML generated per rung (``_declarations_spec``).
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
+``network``    buses joined by lines, a store at every bus and a portfolio
+               installed at some buses only: ``transport``, ``storage`` and
+               ``nodal`` in one model, the shape of a small PyPSA dispatch.
 ``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``) over
                ``(snapshot, node, tech)``: a binary ``u`` that switches
                dispatch ``p``, a row mask on a relation's label, and a sum
@@ -545,6 +548,98 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------
+# network
+
+
+#: The technology every bus has, sized to meet the bus's demand on its own.
+FIRM = 'ocgt'
+
+
+def _availability(rng: np.random.Generator, n_snap: int, techs: list[str]) -> np.ndarray:
+    """Per snapshot and technology, the share of installed capacity that can run.
+
+    Solar follows a 24-snapshot day and is zero at night, wind draws per
+    snapshot, and the rest always run.
+    """
+    hour = np.arange(n_snap) % 24
+    solar = np.clip(np.sin((hour - 6) * np.pi / 12), 0.0, None)
+    out = np.ones((n_snap, len(techs)))
+    for k, tech in enumerate(techs):
+        if tech == 'solar':
+            out[:, k] = solar
+        elif tech in ('onwind', 'offwind'):
+            out[:, k] = 0.1 + 0.8 * rng.random(n_snap)
+    return out
+
+
+def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``network`` ladder.
+
+    Every bus has `FIRM` and draws the rest of its portfolio to the shape's
+    density. Demand is at most 60 per cent of a bus's `FIRM` capacity, so the
+    model is feasible with no line and no store; `FIRM` is the most expensive
+    technology, so the optimum still uses both. The network is `transport`'s,
+    a ring plus chords, and every bus has one store.
+    """
+    rng = _seed(shape)
+    n_snap, n_bus, n_line = shape.sizes['snapshot'], shape.sizes['bus'], shape.sizes['line']
+    techs = list(TECHNOLOGIES[: shape.sizes['tech']])
+    firm = techs.index(FIRM)
+    buses = [f'b{i:04d}' for i in range(n_bus)]
+    stores = [f's{i:04d}' for i in range(n_bus)]
+    lines = [f'l{i:05d}' for i in range(n_line)]
+
+    others = [k for k in range(len(techs)) if k != firm]
+    per_bus = max(1, round(shape.density * len(techs))) - 1
+    installed = np.zeros((n_bus, len(techs)), dtype=bool)
+    installed[:, firm] = True
+    for i in range(n_bus):
+        installed[i, rng.choice(others, size=per_bus, replace=False)] = True
+    capacity = installed * rng.uniform(200.0, 800.0, (n_bus, len(techs)))
+
+    cost = rng.uniform(1.0, 60.0, len(techs))
+    cost[firm] = 100.0
+    bus_of, tech_of = np.nonzero(installed)
+    p_max = capacity[bus_of, tech_of][None, :] * _availability(rng, n_snap, techs)[:, tech_of]
+    load = capacity[:, firm][None, :] * 0.5 * (0.8 + 0.4 * rng.random((n_snap, n_bus)))
+    p_store = rng.uniform(50.0, 150.0, n_bus)
+
+    return _dump(
+        {
+            'installed': _installed_frame(buses, techs, installed, capacity).rename(columns={'node': 'bus'}),
+            'p_max': pd.DataFrame(
+                {
+                    'snapshot': np.repeat(np.arange(n_snap), len(bus_of)),
+                    'bus': np.tile(np.asarray(buses)[bus_of], n_snap),
+                    'tech': np.tile(np.asarray(techs)[tech_of], n_snap),
+                    'value': p_max.reshape(-1),
+                }
+            ),
+            'cost': pd.DataFrame({'tech': techs, 'value': cost}),
+            'cap': pd.DataFrame({'line': lines, 'value': rng.uniform(100.0, 300.0, n_line)}),
+            'neg_cap': pd.DataFrame({'line': lines, 'value': -rng.uniform(100.0, 300.0, n_line)}),
+            'e_max': pd.DataFrame({'store': stores, 'value': p_store * 6.0}),
+            'p_store': pd.DataFrame({'store': stores, 'value': p_store}),
+            'eta': pd.DataFrame({'store': stores, 'value': rng.uniform(0.85, 0.95, n_bus)}),
+            'load': pd.DataFrame(
+                {'snapshot': np.repeat(np.arange(n_snap), n_bus), 'bus': buses * n_snap, 'value': load.reshape(-1)}
+            ),
+            'line_from': pd.DataFrame({'line': lines, 'bus': [buses[i % n_bus] for i in range(n_line)]}),
+            'line_to': pd.DataFrame(
+                {'line': lines, 'bus': [buses[(i % n_bus + 1 + i // n_bus) % n_bus] for i in range(n_line)]}
+            ),
+            'store_bus': pd.DataFrame({'store': stores, 'bus': buses}),
+            'bus': pd.DataFrame({'bus': buses}),
+            'tech': pd.DataFrame({'tech': techs}),
+            'line': pd.DataFrame({'line': lines}),
+            'store': pd.DataFrame({'store': stores}),
+            'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        },
+        dest,
+    )
+
+
+# --------------------------------------------------------------------------
 # storage
 
 
@@ -753,6 +848,18 @@ CASES: dict[str, Case] = {
             *_width_ladder({'generator': 100, 'bus': 20, 'line': 40}, snapshots=70, per_snapshot=140),
         ),
         write=_transport_data,
+    ),
+    'network': Case(
+        name='network',
+        spec=MODELS / 'network' / 'spec.yaml',
+        ladder=_ladder(
+            {'bus': 50, 'tech': 12, 'line': 100, 'store': 50},
+            (25, 250, 2_500, 25_000, 100_000, 300_000),
+            per_snapshot=850,
+            density=0.25,
+        ),
+        write=_network_data,
+        coefficient='eta',
     ),
     'milp': Case(
         name='milp',
