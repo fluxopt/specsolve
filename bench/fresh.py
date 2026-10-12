@@ -7,7 +7,7 @@ process from launch to exit. Here the arm's own ``build_and_emit`` is timed
 once, so the gap between the two is the interpreter, the harness and the
 library's import. The answer is one JSON object, written to a file because a
 library may print to stdout: the arm's counts, with ``first_window`` among its
-phases, and ``peak_rss_bytes``, this process's high-water mark.
+phases, and ``peak_rss_bytes``, this process's own high-water mark.
 
 Nothing here imports a modelling library: the arm imports its own inside the
 verb, so the import lands in ``first_window``.
@@ -25,6 +25,21 @@ from pathlib import Path
 from typing import Any
 
 
+def _peak_rss_bytes() -> int:
+    """This process's own peak resident set, not its parent's.
+
+    On Linux `ru_maxrss` survives `fork` and `exec`, so a process launched by a
+    large one reports the larger peak. ``VmHWM`` belongs to the process image
+    `exec` made. Where there is no ``/proc``, `ru_maxrss` is all there is.
+    """
+    status = Path('/proc/self/status')
+    if status.exists():
+        for line in status.read_text().splitlines():
+            if line.startswith('VmHWM:'):
+                return int(line.split()[1]) * 1024
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+
+
 def run(payload: Path) -> dict[str, Any]:
     """Unpickle *payload*, time one ``build_and_emit``, and return its counts with the clock and the peak."""
     arm, sink, prepared = pickle.loads(payload.read_bytes())
@@ -35,7 +50,7 @@ def run(payload: Path) -> dict[str, Any]:
     return {
         **counts,
         'phases': {**(counts.get('phases') or {}), 'first_window': seconds},
-        'peak_rss_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+        'peak_rss_bytes': _peak_rss_bytes(),
     }
 
 
