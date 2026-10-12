@@ -41,6 +41,11 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
     return _in_memory(specsolve.build_only, prepared)
 
 
+def written(prepared: tuple[Path, dict[str, str]], path: Path) -> None:
+    """The `specsolve` arm's LP file, on the in-memory engine."""
+    _in_memory(specsolve.written, prepared, path)
+
+
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:
     """The `specsolve` arm's solve, on the in-memory engine."""
     return _in_memory(specsolve.objective, prepared)

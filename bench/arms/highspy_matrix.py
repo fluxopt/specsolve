@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from bench.arms import Counts
 
@@ -94,6 +95,15 @@ def build_and_emit(sink: str, prepared: Prepared) -> Counts:
 def build_only(prepared: Prepared) -> Counts:
     """The same work: this arm has no sink to leave out."""
     return build_and_emit('highs', prepared)
+
+
+def written(prepared: Prepared, path: Path) -> None:
+    """Build the matrix and write the loaded model to *path* as an LP file."""
+    highs = _built(prepared)
+    try:
+        highs.writeModel(str(path))
+    finally:
+        highs.clear()
 
 
 def objective(prepared: Prepared) -> float:
