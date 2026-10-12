@@ -96,7 +96,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **start**
 : What a solve begins from: `'previous'`, the default, or `None`. It never
-  changes the optimum ([making a loop of solves faster](../howto/warm-start.md)).
+  changes the optimum ([starting from an earlier answer](../howto/warm-start.md)).
 
 ## Sweeps
 

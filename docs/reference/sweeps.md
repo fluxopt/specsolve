@@ -3,15 +3,8 @@
 `solve_over` runs one [model](glossary.md#the-chain) once per slice and folds
 the answers together. A slice is one set of [sources](glossary.md#how-it-runs)
 under one key. This page is the reference for its axes, keywords and the `Sweep` it
-returns.
-
-```python
-import specsolve as sps
-
-sweep = sps.solve_over('spec.yaml', sources, sps.EachCoordinate('scenario'))
-sweep.record  # one Record per slice, the scenario column first
-sweep.primal('p')  # (scenario, snapshot, generator, value)
-```
+returns. [A horizon too large for one solve](../sweep.md) and
+[Solving many scenarios](../howto/scenarios.md) show them in use.
 
 ## The axes
 
@@ -23,16 +16,7 @@ An axis says how the sources split into slices:
 | [`EachWindow`](api.md#specsolve.EachWindow) | one per window of consecutive labels |
 | a sequence of `(key, sources)` pairs | as written. It must pass `key_name=`, and its answer is keyed by slice. |
 
-```python
-sweep = sps.solve_over(
-    'window.yaml',
-    sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
-)
-sweep.primal('soc')  # (snapshot, value) — the answer over the real labels
-```
-
-`into` has no default, and a seam's `where: "t == 0"` matches on it.
+`EachWindow`'s `into` has no default, and a seam's `where: "t == 0"` matches on it.
 
 **A datetime axis is held in microseconds**, as
 [a label is](data.md#where-coordinates-come-from). A key finer than a

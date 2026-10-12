@@ -40,8 +40,6 @@ nav:
       - The data contract: reference/data.md
       - Sweeps and rolling horizons: reference/sweeps.md
       - Glossary: reference/glossary.md
-      # The language is a dependency and is documented with itself.
-      - The language: https://mathspec.readthedocs.io/en/latest/reference/language/
       - Examples:
           - examples/index.md
           - Published optima:
