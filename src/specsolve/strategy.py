@@ -41,6 +41,7 @@ from specsolve.relational.answer_layout import (
     Record,
     checked_outputs,
     kinds_of,
+    refuse_without_parquet,
     write_format,
     write_reasons,
     write_whole,
@@ -291,6 +292,8 @@ def solve_over(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
+    if archive is not None or spill_to is not None:
+        refuse_without_parquet('archive=' if archive is not None else 'spill_to=')
     document = declared(spec)
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)

@@ -32,6 +32,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
 - docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
 - docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
+- fix(api): a call that reads or writes parquet is refused by name where polars has no parquet, as in the browser ([#1988](https://github.com/fluxopt/specsolve/pull/1988))
 - feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
 - refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
 - feat(deps): specsolve runs on polars 1.33.1, the newest polars that runs in the browser ([#1973](https://github.com/fluxopt/specsolve/pull/1973))

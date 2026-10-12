@@ -12,6 +12,7 @@ under its own ``answer/``
 
 from __future__ import annotations
 
+import io
 import json
 from datetime import datetime
 from functools import cache
@@ -554,6 +555,30 @@ def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
         file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
         for file in sorted(under.glob('*.parquet'))
     }
+
+
+@cache
+def has_parquet() -> bool:
+    """Whether this polars reads and writes parquet: the browser's build (Pyodide) does not."""
+    try:
+        pl.DataFrame({'probe': [0]}).write_parquet(io.BytesIO())
+    except AttributeError:  # a polars built without parquet lacks the binding the call reaches for
+        return False
+    return True
+
+
+def refuse_without_parquet(what: str) -> None:
+    """Refuse *what*, a call that reads or writes parquet, where [`has_parquet`][] says this polars cannot.
+
+    Raises:
+        SpecsolveError: This polars has no parquet.
+    """
+    if not has_parquet():
+        raise SpecsolveError(
+            f"{what} reads or writes parquet, and this polars was built without it, as the browser's "
+            f'(Pyodide) is. Pass each source as a table, and read the answer off the result or the sweep '
+            f'in memory.'
+        )
 
 
 def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:

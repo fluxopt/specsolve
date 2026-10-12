@@ -60,4 +60,13 @@ def main() -> str:
     assert objectives == {name: GAS_COST * (load - WIND) * len(LOAD) for name, load in flat.items()}, (
         f'one solve per scenario, gas covering the flat load above the wind: {objectives}'
     )
-    return f'polars {pl.__version__}, specsolve {sps.__version__}: a solve and a sweep of {len(objectives)}'
+    try:
+        sps.solve(SPEC, sources, archive='/tmp/refused')
+    except sps.errors.SpecsolveError as refused:
+        assert 'this polars was built without it' in str(refused), f'the refusal names parquet: {refused}'
+    else:
+        raise AssertionError("Pyodide's polars has no parquet, and archive= went ahead regardless")
+    return (
+        f'polars {pl.__version__}, specsolve {sps.__version__}: a solve, a sweep of {len(objectives)}, '
+        f'and an archive refused for want of parquet'
+    )
