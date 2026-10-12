@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(tutorials): the third tutorial asks what-if questions of one loaded model ([#1957](https://github.com/fluxopt/specsolve/pull/1957))
 - docs(tutorials): the second tutorial attaches the model to data from CSV files and keeps the run ([#1956](https://github.com/fluxopt/specsolve/pull/1956))
 - docs(tutorials): the first tutorial walks a new user through the model, its data and its answer ([#1955](https://github.com/fluxopt/specsolve/pull/1955))
 - docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))

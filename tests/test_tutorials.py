@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import contextlib
 import io
+import itertools
 import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from mathspec import to_spec
 
 import specsolve as sps
 from tests.conftest import EXAMPLES_DIR
@@ -106,28 +106,30 @@ def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], st
 
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    reused = namespace['reused']
-    assert (reused.loads, reused.solves) == (1, 3), 'the page says three answers came off one loaded model'
+    numbers = namespace['after_numbers']
+    assert (numbers.loads, numbers.solves) == (1, 5), 'the page says five answers came off one loaded model'
 
 
-def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:
+def test_more_wind_saves_less_each_time(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['grown'].loads == 2, 'the page says new coordinates cost a reload, and why that is fine'
-    assert namespace['schedule'].height == 36, 'twelve snapshots against three generators'
+    objectives = [row['objective'] for row in namespace['rows']]
+    savings = [a - b for a, b in itertools.pairwise(objectives)]
+    assert savings == sorted(savings, reverse=True) and savings[-1] > 0, (
+        f'the page says each step of wind saves less than the one before: {savings}'
+    )
 
 
 def test_a_update_answers_what_a_fresh_build_answers(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['updated'] == pytest.approx(namespace['fresh']), (
+    assert namespace['fresh'].objective == pytest.approx(namespace['rows'][-1]['objective']), (
         'the equality the page offers as the oracle for a loop that looks wrong'
     )
 
 
-def test_the_added_constraint_changes_the_answer(session: tuple[dict[str, Any], str]) -> None:
+def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['ramped'] > namespace['base'], (
-        'the ramp limit has to bind — a structural edit with no effect teaches nothing'
-    )
+    assert namespace['after_rows'].loads == 2, 'the page says new snapshots cost a reload'
+    assert namespace['longer'].objective == pytest.approx(2 * 10500.0), 'the page says two days cost twice one day'
 
 
 def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, Any], str]) -> None:
@@ -135,26 +137,6 @@ def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, An
     namespace, _ = lifecycle
     assert namespace['pinning'].loads == 1, 'a pin writes bounds, so the solver keeps the model it has loaded'
     assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'
-
-
-def test_a_refused_edit_says_what_is_wrong(session: tuple[dict[str, Any], str]) -> None:
-    _, printed = session
-    assert 'does not name a declared dimension' in printed, "the load-time error is the page's error message"
-
-
-def test_the_session_leaves_a_file(session: tuple[dict[str, Any], str]) -> None:
-    """``to_yaml`` on the patched spec is what the reader diffs against the model."""
-    import yaml
-
-    namespace, _ = session
-    patched = to_spec(namespace['spec'])
-    written = patched.to_yaml()
-    assert to_spec(yaml.safe_load(written)).to_dict() == patched.to_dict(), (
-        'the review copy has to reload as the model it was written from'
-    )
-    assert 'ramp_up' in written and 'ramp_up' not in (EXAMPLES_DIR / 'dispatch.yaml').read_text(), (
-        'and to differ from the file on disk — that difference is what the reader commits'
-    )
 
 
 def test_integrality_is_a_declaration_and_costs_the_duals(lifecycle: tuple[dict[str, Any], str]) -> None:

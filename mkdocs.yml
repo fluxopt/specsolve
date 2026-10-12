@@ -21,7 +21,7 @@ nav:
   - Tutorials:
       - Your first model: run.md
       - Your data: tables.md
-      - Change a model: change.md
+      - Change it and solve again: change.md
       - Sweep a model: sweep.md
   - How-to guides:
       - Preparing the data: howto/data.md
