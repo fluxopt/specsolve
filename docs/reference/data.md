@@ -9,6 +9,7 @@ maps each name a [spec](glossary.md) declares to its numbers.
 For a parameter declared `dims: [d1, d2]`, the value under its key is one of:
 
 - a **parquet path**;
+- a **polars `LazyFrame`**, collected when the data attaches;
 - **a table exposing the Arrow PyCapsule protocol** (polars, pandas, pyarrow,
   duckdb) with columns `d1, d2, value`;
 - an **`int` or `float`**, one value for every
