@@ -146,9 +146,12 @@ async function mount(root) {
     return { scale: scaleLog().domain([lo / pad, hi * pad]), axis: { label, ticks: { values: sizes, format } } };
   }
 
-  /* Where each refused size would land: the last measured point carried forward at the log–log
-     slope of the last measured step, floored at 1 (linear), the rule the harness refuses by. Each
-     library's run starts at that last point, so the dashed line joins its solid one. */
+  /* Where each refused size would land: the library's last measured step carried forward at its
+     cost per variable, so on linear axes the dashed line continues the solid one. Every cost has a
+     fixed part, an interpreter's memory or a build's set-up, and scaling the whole last value with
+     size would count that part again at each step. With one measured size there is no step, and
+     the value grows in proportion. Each library's run starts at that last point, so the dashed line
+     joins its solid one. */
   function projections(rows) {
     const out = [];
     for (const own of Map.groupBy(rows, r => r[SERIES]).values()) {
@@ -156,10 +159,9 @@ async function mount(root) {
       const last = measured.at(-1), prev = measured.at(-2);
       const ahead = own.filter(r => r[REFUSED] && last && r[X] > last[X]).sort((a, b) => a[X] - b[X]);
       if (!ahead.length) continue;
-      const slope = prev ? Math.log(last.value / prev.value) / Math.log(last[X] / prev[X]) : 1;
-      const k = Math.max(slope, 1);
+      const perVariable = prev ? (last.value - prev.value) / (last[X] - prev[X]) : last.value / last[X];
       out.push({ ...last, projected: false });
-      for (const r of ahead) out.push({ ...r, value: last.value * (r[X] / last[X]) ** k, projected: true });
+      for (const r of ahead) out.push({ ...r, value: last.value + perVariable * (r[X] - last[X]), projected: true });
     }
     return out;
   }
