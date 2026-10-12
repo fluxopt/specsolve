@@ -31,6 +31,7 @@ from specsolve.archive_layout import (
 from specsolve.axes import axis_from
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.inputs import lower
+from specsolve.relational import parquet
 from specsolve.relational.answer_layout import (
     ANSWER_LAYOUT,
     KINDS,
@@ -214,7 +215,7 @@ def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
     _refuse_other_inputs(under, archive)
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
-        member.stem: pl.read_parquet(member).drop(RUN, strict=False) if whole else member
+        member.stem: parquet.read(member).drop(RUN, strict=False) if whole else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
     axis_member = under / AXIS_MEMBER
@@ -230,7 +231,7 @@ def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepAr
     saved = under / ANSWER_DIR
     if inputs.axis is None:
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
-        metrics = row_of(Metrics, pl.read_parquet(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
+        metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
     answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)

@@ -409,7 +409,7 @@ def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the linopy lane read the same index'
 
 
-def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch):
+def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch, polars_parquet):
     """The oracle brings pandas and xarray, and nothing says it brings pyarrow."""
     import sys
 

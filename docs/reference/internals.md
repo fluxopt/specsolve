@@ -98,6 +98,12 @@ Each entry says what the thing is, then the module it lives in.
   collected, on that engine and with polars' join reordering off.
   `collect_engine()` is not the `Engine` (`relational/collect.py`).
 
+**Parquet backend**
+: Which library reads and writes a parquet file: polars where it has parquet,
+  pyarrow where it does not and pyarrow can be imported, as in the browser,
+  and a refusal that names the call otherwise. Every file goes through
+  `relational/parquet.py`, and a frame crosses to pyarrow as Arrow IPC bytes.
+
 ## Sinks
 
 **Handoff**

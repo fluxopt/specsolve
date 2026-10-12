@@ -14,6 +14,7 @@ import importlib.util
 import io
 import json
 import sys
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -92,10 +93,31 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='how deep tests/test_expression_sweep.py enumerates; 3 is minutes and has its own CI job',
     )
     parser.addoption(
+        '--parquet-via-pyarrow',
+        action='store_true',
+        default=False,
+        help='read and write every file through pyarrow, as specsolve does where polars has no parquet',
+    )
+    parser.addoption(
         '--sweep-shard',
         default='0/1',
         help='run the i-th of n equal strides of the sweep, as `i/n`; the CI job takes one per matrix leg',
     )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet."""
+    if config.getoption('--parquet-via-pyarrow'):
+        from specsolve.relational import parquet
+
+        parquet._polars_has_parquet = cache(lambda: False)
+
+
+@pytest.fixture
+def polars_parquet(request: pytest.FixtureRequest) -> None:
+    """Skip where ``--parquet-via-pyarrow`` takes away the polars parquet this test needs."""
+    if request.config.getoption('--parquet-via-pyarrow'):
+        pytest.skip('--parquet-via-pyarrow takes away the polars parquet this test needs')
 
 
 # ---------------------------------------------------------------------------
