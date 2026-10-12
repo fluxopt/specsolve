@@ -16,4 +16,6 @@ const at = `/tmp/${basename(wheel)}`
 pyodide.FS.writeFile(at, readFileSync(wheel))
 await pyodide.pyimport('micropip').install(`emfs:${at}`)
 pyodide.FS.writeFile('/home/pyodide/probe.py', readFileSync(new URL('probe.py', import.meta.url)))
-console.log(`Pyodide ${version}: ${pyodide.runPython('import probe; probe.main()')}`)
+console.log(`Pyodide ${version}: ${pyodide.runPython('import probe; probe.without_pyarrow()')}`)
+await pyodide.loadPackage(['pyarrow'])
+console.log(`with pyarrow: ${pyodide.runPython('probe.with_pyarrow()')}`)

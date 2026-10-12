@@ -41,6 +41,7 @@ jobs:
       # `github` is the output format, so findings land as annotations on the diff.
       - run: pixi run typecheck github
       - run: pixi run test
+      - run: pixi run test-via-pyarrow
 
       # `test` does not reach the bench tests (#1185, #1245).
       - run: pixi run test-bench

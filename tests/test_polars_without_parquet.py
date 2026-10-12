@@ -1,9 +1,9 @@
-"""A polars built without parquet, such as the browser's, still solves from tables and refuses every file by name.
+"""A polars built without parquet, such as the browser's: every file goes through pyarrow, or is refused by name.
 
 polars' Pyodide build has no parquet: each read and write raises an
 ``AttributeError`` from inside polars. Every call that reads or writes a file
-asks first, and refuses with a message that names the call and what still
-works.
+asks first. With pyarrow importable it goes through pyarrow; without, it is
+refused with a message that names the call and what still works.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational import answer_layout
+from specsolve.relational import parquet
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -25,8 +25,8 @@ def _missing(*args: object, **kwargs: object) -> None:
     raise AttributeError("'builtins.PyLazyFrame' object has no attribute 'sink_parquet'")
 
 
-def _take_parquet_away(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every parquet call raise ``AttributeError``, the way the browser build's do, and the probe ask again."""
+def _take_parquet_away(monkeypatch: pytest.MonkeyPatch, *, pyarrow: bool = False) -> None:
+    """Every polars parquet call raise ``AttributeError``, as the browser build's do, pyarrow present or not."""
     for owner, name in (
         (pl.DataFrame, 'write_parquet'),
         (pl.LazyFrame, 'sink_parquet'),
@@ -35,24 +35,26 @@ def _take_parquet_away(monkeypatch: pytest.MonkeyPatch) -> None:
         (pl, 'read_parquet_schema'),
     ):
         monkeypatch.setattr(owner, name, _missing)
-    answer_layout.has_parquet.cache_clear()
+    if not pyarrow:
+        monkeypatch.setattr(parquet, 'find_spec', lambda name: None)
+    parquet._polars_has_parquet.cache_clear()
 
 
 @pytest.fixture
 def polars_without_parquet(monkeypatch):
-    """A polars without parquet for the whole test."""
+    """A polars without parquet, and no pyarrow, for the whole test."""
     _take_parquet_away(monkeypatch)
     yield
-    answer_layout.has_parquet.cache_clear()
+    parquet._polars_has_parquet.cache_clear()
 
 
 def test_the_probe_sees_no_parquet(polars_without_parquet):
-    assert not answer_layout.has_parquet(), 'the probe reads the missing parquet as no parquet'
+    assert not parquet._polars_has_parquet(), 'the probe reads the missing parquet as no parquet'
 
 
-def test_polars_has_parquet_where_it_was_built_with_it():
-    answer_layout.has_parquet.cache_clear()
-    assert answer_layout.has_parquet(), 'the polars this suite runs on reads and writes parquet'
+def test_polars_has_parquet_where_it_was_built_with_it(polars_parquet):
+    parquet._polars_has_parquet.cache_clear()
+    assert parquet.require('a test') == 'polars', 'the polars this suite runs on reads and writes parquet'
 
 
 def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_frame_inputs):
@@ -133,6 +135,21 @@ def test_every_call_that_needs_parquet_says_so_by_name(
         with pytest.raises(sps.errors.SpecsolveError, match='this polars was built without it') as raised:
             call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
     finally:
-        answer_layout.has_parquet.cache_clear()
+        parquet._polars_has_parquet.cache_clear()
     assert names in str(raised.value), 'the refusal names the call'
+    assert 'Load pyarrow first' in str(raised.value), 'and names what lifts it'
     assert not (tmp_path / 'new').exists(), 'nothing was written before the refusal'
+
+
+@pytest.mark.parametrize('call', [pytest.param(call, id=label) for label, call, _ in CALLS])
+def test_every_call_that_needs_parquet_goes_through_pyarrow_where_it_can_be_imported(
+    monkeypatch, call, dispatch_yaml, dispatch_frame_inputs, tmp_path
+):
+    """The same calls succeed where pyarrow is importable, reading what polars wrote and writing what it reads."""
+    pytest.importorskip('pyarrow')
+    saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
+    _take_parquet_away(monkeypatch, pyarrow=True)
+    try:
+        call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
+    finally:
+        parquet._polars_has_parquet.cache_clear()

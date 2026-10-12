@@ -38,6 +38,7 @@ from specsolve.errors import (
     SpecsolveWarning,
 )
 from specsolve.inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve.relational import parquet
 from specsolve.relational.answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
@@ -51,7 +52,6 @@ from specsolve.relational.answer_layout import (
     read_outputs,
     read_reasons,
     read_spec,
-    refuse_without_parquet,
     saved_frames,
 )
 from specsolve.relational.collect import collected
@@ -355,7 +355,7 @@ class Model:
         """
         out = None if archive is None else Path(archive)
         if out is not None:
-            refuse_without_parquet('archive=')
+            parquet.require('archive=')
             check_the_target(out)
         if isinstance(record_options, str):
             raise SpecsolveError(
@@ -720,7 +720,7 @@ def scan_result(directory: str | Path) -> Result:
 
 def _answer_under(out: Path, *, whole: bool) -> Result:
     """The saved answer under *out*, its frames read into memory now where *whole*, else scanned."""
-    refuse_without_parquet('reading a saved answer')
+    parquet.require('reading a saved answer')
     record_file = out / RECORD_FILE
     if not record_file.is_file():
         raise LayoutError(
@@ -728,7 +728,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
             f'carries that record whether or not the solve produced values.'
         )
     check_format(out)
-    record = Record(**pl.read_parquet(record_file).row(0, named=True))
+    record = Record(**parquet.read(record_file).row(0, named=True))
     status = record.solve_status
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)

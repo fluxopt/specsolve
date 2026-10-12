@@ -19,6 +19,7 @@ import polars as pl
 from specsolve.axes import Stitch, bulleted
 from specsolve.errors import LayoutError, SpecsolveError
 from specsolve.messages import no_model_behind_this_answer_message
+from specsolve.relational import parquet
 from specsolve.relational.answer_layout import (
     BASES,
     KINDS,
@@ -38,7 +39,6 @@ from specsolve.relational.answer_layout import (
     read_outputs,
     read_reasons,
     read_spec,
-    refuse_without_parquet,
     row_of,
     write_format,
     write_reasons,
@@ -244,14 +244,14 @@ class Spill:
 
     def read_back(self, position: int) -> SliceAnswer:
         """A done slice's record, with no frames."""
-        row = pl.read_parquet(self._file('record', position)).row(0, named=True)
-        held = pl.read_parquet(self._file('metrics', position)).row(0, named=True)
+        row = parquet.read(self._file('record', position)).row(0, named=True)
+        held = parquet.read(self._file('metrics', position)).row(0, named=True)
         return SliceAnswer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory))
 
     def written(self, kind: str, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
         """The named frames of *kind* a done slice wrote; a name it did not write is absent."""
         found = {name: self._file(kind, position, name) for name in names}
-        return {name: pl.read_parquet(path).drop(self.key_name) for name, path in found.items() if path.exists()}
+        return {name: parquet.read(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
     def frames(self, *, whole: bool) -> dict[str, dict[str, pl.LazyFrame]]:
         """``{kind: {name: frame}}``, every slice's frame of a name as one, keyed and in slice order.
@@ -265,7 +265,7 @@ class Spill:
             under = self.directory / kind
             for named in sorted(under.iterdir()) if under.is_dir() else []:
                 files = sorted(named.glob('*.parquet'))
-                frame = pl.read_parquet(files).lazy() if whole else pl.scan_parquet(files)
+                frame = parquet.read(files).lazy() if whole else parquet.scan(files)
                 out.setdefault(kind, {})[named.name] = frame.drop(RUN, strict=False)
         return out
 
@@ -712,7 +712,7 @@ class Sweep:
             SpecsolveError: The sweep was read off an archive written without
                 its windows, or this polars has no parquet.
         """
-        refuse_without_parquet('Sweep.save')
+        parquet.require('Sweep.save')
         by_slice = self._frames_by_slice()
         spill = Spill.opened(
             directory,
@@ -871,7 +871,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
     only by a stitch from the windows; ``None`` for an archive that kept no
     windows to stitch.
     """
-    refuse_without_parquet('reading a saved sweep')
+    parquet.require('reading a saved sweep')
     manifest = under / MANIFEST_FILE
     if not manifest.is_file():
         raise LayoutError(
@@ -883,7 +883,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
     stitch = found['stitch']
     no_duals, absent = read_reasons(under)
     key_name = found['key_name']
-    keys = pl.read_parquet(under / KEYS_FILE, columns=[key_name]).to_series()
+    keys = parquet.read(under / KEYS_FILE, columns=[key_name]).to_series()
     return Sweep(
         key_name=key_name,
         record=_rekeyed(consolidated(under, RECORD_FILE), keys),
@@ -897,7 +897,7 @@ def opened_sweep(under: Path, owned: Path | None) -> Sweep:
         else Stitch(
             stitch['local'],
             stitch['dim'],
-            pl.DataFrame() if owned is None else pl.read_parquet(owned).drop(RUN, strict=False),
+            pl.DataFrame() if owned is None else parquet.read(owned).drop(RUN, strict=False),
         ),
     )
 

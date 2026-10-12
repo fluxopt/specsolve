@@ -145,6 +145,7 @@ pyodide = { features = ["pyodide"], no-default-feature = true }
 
 [tool.pixi.tasks]
 test = { cmd = "pytest -q -n auto", description = "The suite, across cores" }
+test-via-pyarrow = { cmd = "pytest -q -n auto --parquet-via-pyarrow", description = "The suite with every file read and written through pyarrow, as in the browser" }
 test-bench = { cmd = "pytest bench/test_harness.py -q", description = "The harness measures what it says it measures" }
 lint = { cmd = "ruff check .", description = "Lint" }
 format = { cmd = "ruff format .", description = "Format in place" }

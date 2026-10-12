@@ -33,6 +33,7 @@ from specsolve.axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame
 from specsolve.inputs import declared
+from specsolve.relational import parquet
 from specsolve.relational.answer_layout import (
     KINDS,
     METRICS_FILE,
@@ -41,7 +42,6 @@ from specsolve.relational.answer_layout import (
     Record,
     checked_outputs,
     kinds_of,
-    refuse_without_parquet,
     write_format,
     write_reasons,
     write_whole,
@@ -72,10 +72,6 @@ if TYPE_CHECKING:
     from specsolve.inputs import Buildable, Label, Source
     from specsolve.relational.answer_layout import FrameWriter, Output
     from specsolve.relational.result import Diagnostics, Start
-
-
-#: The codec a frame is written with to cross a process.
-_COMPRESSION = 'zstd'
 
 
 def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
@@ -293,7 +289,7 @@ def solve_over(
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
     if archive is not None or spill_to is not None:
-        refuse_without_parquet('archive=' if archive is not None else 'spill_to=')
+        parquet.require('archive=' if archive is not None else 'spill_to=')
     document = declared(spec)
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
@@ -521,7 +517,7 @@ def _the_windows(sweep: Sweep, under: Path, write: FrameWriter) -> None:
             shutil.copytree(
                 sweep._spill.directory / kind,
                 under / kind,
-                copy_function=lambda source, target: write(pl.scan_parquet(source), Path(target)),
+                copy_function=lambda source, target: write(parquet.scan(Path(source)), Path(target)),
             )
 
 
@@ -848,7 +844,7 @@ def _encode(
             out[name] = obj
         else:
             buffer = io.BytesIO()
-            table.pipe(collected).write_parquet(buffer, compression=_COMPRESSION)
+            parquet.write(table.pipe(collected), buffer)
             out[name] = buffer.getvalue()
         memo[name] = (obj, out[name])
     return out
@@ -856,4 +852,4 @@ def _encode(
 
 def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
     """The inverse of [`_encode`][]; anything not ``bytes`` passes through."""
-    return {name: pl.read_parquet(io.BytesIO(v)) if isinstance(v, bytes) else v for name, v in encoded.items()}
+    return {name: parquet.read(io.BytesIO(v)) if isinstance(v, bytes) else v for name, v in encoded.items()}

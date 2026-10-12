@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 
 from specsolve.errors import NoSolutionError, SpecsolveError
 from specsolve.messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
+from specsolve.relational import parquet
 from specsolve.relational.answer_layout import (
     BASES,
     NO_BASIS,
@@ -29,7 +30,6 @@ from specsolve.relational.answer_layout import (
     checked_kind,
     clear_the_answer,
     not_requested_message,
-    refuse_without_parquet,
     write_format,
     write_reasons,
     write_spec,
@@ -817,7 +817,7 @@ class Result:
             SpecsolveError: This result was closed, or this polars has no
                 parquet.
         """
-        refuse_without_parquet('Result.save')
+        parquet.require('Result.save')
         return self._save(Path(directory), write_whole)
 
     def _save(self, out: Path, write: FrameWriter) -> Path:
