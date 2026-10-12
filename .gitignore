@@ -36,3 +36,4 @@ docs/*.pdf
 !docs/benchmarks-scaling.html
 
 bench/results/.inflight
+node_modules/

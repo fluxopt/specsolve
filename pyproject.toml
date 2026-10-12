@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "mathspec>=0.2.1,<0.3",
-    "polars>=2.0",
+    "polars>=1.33.1",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.
     "highspy>=1.13",
@@ -123,12 +123,17 @@ python = "3.12.*"
 # Each pin is the floor `[project.dependencies]` declares; tests/test_tooling_pins.py checks it.
 [tool.pixi.feature.floors.pypi-dependencies]
 specsolve = { path = "." }
-polars = "==2.0"
+polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
 mathspec = "==0.2.1"
 pytest = "*"
 pytest-xdist = "*"
+
+[tool.pixi.feature.pyodide.dependencies]
+python = "3.12.*"
+nodejs = "22.*"
+pip = "*"
 
 [tool.pixi.environments]
 default = ["dev"]
@@ -136,9 +141,11 @@ docs = ["docs"]
 bench = ["dev", "bench"]
 codspeed = ["codspeed"]
 floors = { features = ["floors"], no-default-feature = true }
+pyodide = { features = ["pyodide"], no-default-feature = true }
 
 [tool.pixi.tasks]
 test = { cmd = "pytest -q -n auto", description = "The suite, across cores" }
+test-via-pyarrow = { cmd = "pytest -q -n auto --parquet-via-pyarrow", description = "The suite with every file read and written through pyarrow, as in the browser" }
 test-bench = { cmd = "pytest bench/test_harness.py -q", description = "The harness measures what it says it measures" }
 lint = { cmd = "ruff check .", description = "Lint" }
 format = { cmd = "ruff format .", description = "Format in place" }
@@ -218,6 +225,10 @@ depends-on = [
 [tool.pixi.feature.bench.tasks.refresh]
 description = "Re-measure the published ladder and rewrite the tables and the chart page"
 depends-on = ["ladder", "density", "declarations", "report", "plot"]
+
+# 314.0.7 is the Pyodide the browser app loads. Its polars, 1.33.1, is the newest that builds for WebAssembly.
+[tool.pixi.feature.pyodide.tasks]
+test-pyodide = { cmd = "rm -rf dist/pyodide && python -m pip wheel --no-deps --wheel-dir dist/pyodide . && npm install --no-save --prefix tools/pyodide pyodide@314.0.7 && node tools/pyodide/run.mjs dist/pyodide/specsolve-*.whl", description = "A wheel of this tree installs, solves and sweeps in the browser's Python" }
 
 [tool.pixi.feature.floors.tasks]
 test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.find_spec('linopy') is not None)\" && pytest -q -n auto", description = "The suite on the shipped shape, at the declared floors" }

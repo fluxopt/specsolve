@@ -23,7 +23,13 @@ import polars.selectors as cs
 
 from specsolve.errors import LayoutError
 from specsolve.inputs import lowered
-from specsolve.relational.answer_layout import FORMAT_FILE, OUTPUT_KINDS, write_format, write_whole
+from specsolve.relational import parquet
+from specsolve.relational.answer_layout import (
+    FORMAT_FILE,
+    OUTPUT_KINDS,
+    write_format,
+    write_whole,
+)
 from specsolve.relational.names import RESERVED_PREFIX, RUN, VALUE
 from specsolve.sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 
@@ -173,11 +179,11 @@ _OWNED = 'the coordinate of the sliced dimension that each window owns, by windo
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
     """``catalog.parquet`` for what *tree* holds, and ``answer/windows/catalog.parquet`` where the windows were kept."""
     dims = _axis_dims(tree, axis)
-    _catalog(program, tree, run, _HELD_UNDER, dims).write_parquet(tree / CATALOG_MEMBER)
+    parquet.write(_catalog(program, tree, run, _HELD_UNDER, dims), tree / CATALOG_MEMBER)
     if (tree / _WINDOWS).is_dir():
         owned = f'{_WINDOWS}/{OWNED_FILE}'
         windows = _catalog(program, tree, run, _HELD_IN_WINDOWS, dims, extra=[(owned, 'owned', 'window', _OWNED)])
-        windows.write_parquet(tree / _WINDOWS / CATALOG_MEMBER)
+        parquet.write(windows, tree / _WINDOWS / CATALOG_MEMBER)
 
 
 def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
@@ -229,7 +235,7 @@ def _rows(head: tuple[object, ...], held: Path, dims: Mapping[str, str]) -> list
 
 def _columns(held: Path) -> list[str]:
     """The columns of *held*, or of its first slice where it is a directory of them."""
-    return list(pl.read_parquet_schema(min(held.glob('*.parquet')) if held.is_dir() else held))
+    return parquet.columns(min(held.glob('*.parquet')) if held.is_dir() else held)
 
 
 def _held(tree: Path, directory: str, name: str) -> str | None:
@@ -294,6 +300,7 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
             unpacked.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
+    parquet.require('reading an archive')
     held = Path(path)
     if held.is_dir():
         if into is not None:

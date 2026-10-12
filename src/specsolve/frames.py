@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.inputs import ArrowTable
+from specsolve.relational import parquet
 from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
@@ -49,7 +50,8 @@ def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
     import sys
 
     if isinstance(obj, (str, Path)):
-        return pl.scan_parquet(obj)
+        parquet.require(f'a source given as the path {str(obj)!r}')
+        return parquet.scan(obj)
     if isinstance(obj, pl.LazyFrame):
         return obj
     if isinstance(obj, pl.DataFrame):

@@ -9,6 +9,7 @@ such a polars is asked for the in-memory engine by name.
 Every plan here orders its joins by hand, so polars' own join reordering is
 off: it moves a join between two others that share its keys, and the one it
 runs first can be keyed on a part of them, which multiplies the rows it holds.
+A polars 1.x does not reorder joins, so there is nothing to turn off.
 """
 
 from __future__ import annotations
@@ -25,7 +26,20 @@ if TYPE_CHECKING:
 
 __all__ = ['collect_engine', 'collected', 'collected_all', 'in_memory']
 
-_AS_WRITTEN = pl.QueryOptFlags(join_order=False)
+
+def _as_written() -> pl.QueryOptFlags:
+    """The optimisations with join reordering off, on a polars that has it to turn off.
+
+    The browser's polars is 1.33, the last that builds for WebAssembly, and its
+    flags have no ``join_order``.
+    """
+    try:
+        return pl.QueryOptFlags(join_order=False)
+    except TypeError:  # a polars 1.x, which takes no `join_order` and never reorders
+        return pl.QueryOptFlags()
+
+
+_AS_WRITTEN = _as_written()
 
 _in_memory: ContextVar[bool] = ContextVar('in_memory', default=False)
 

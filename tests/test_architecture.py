@@ -646,6 +646,22 @@ def test_both_lanes_lower_a_spec_through_one_function():
     )
 
 
+def test_every_parquet_file_goes_through_one_module():
+    """``relational/parquet.py`` reads and writes through pyarrow where polars has no parquet, as in the browser."""
+    calls = {
+        f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
+        for path in _all_modules()
+        if path != PKG / 'relational' / 'parquet.py'
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.Attribute)
+        and node.attr in {'read_parquet', 'scan_parquet', 'read_parquet_schema', 'write_parquet', 'sink_parquet'}
+    }
+    assert not calls, (
+        f'{sorted(calls)} read or write parquet directly; go through relational.parquet, or the browser, '
+        f'whose polars has no parquet, fails there'
+    )
+
+
 def test_every_frame_is_collected_through_one_function():
     """``relational/collect.py`` picks the engine and keeps every join in the order it was written."""
     calls = {

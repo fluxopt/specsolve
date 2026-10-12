@@ -41,6 +41,7 @@ jobs:
       # `github` is the output format, so findings land as annotations on the diff.
       - run: pixi run typecheck github
       - run: pixi run test
+      - run: pixi run test-via-pyarrow
 
       # `test` does not reach the bench tests (#1185, #1245).
       - run: pixi run test-bench
@@ -113,8 +114,23 @@ jobs:
           restore-keys: pixi-ci-floors-${{ runner.os }}-
       - run: pixi run test-floors
 
+  pyodide:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          run-install: false
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-ci-pyodide-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-ci-pyodide-${{ runner.os }}-
+      - run: pixi run test-pyodide
+
   ci:
-    needs: [suite, docs, floors]
+    needs: [suite, docs, floors, pyodide]
     # Without `always()`, a failed job skips this check, and a pull request merges over a skip.
     if: always()
     runs-on: ubuntu-24.04

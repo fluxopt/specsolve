@@ -201,6 +201,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
 | `inputs.py` | `Buildable` and `Source`, what every function takes |
 | `relational/collect.py` | how polars materialises a frame |
+| `relational/parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `sources.py` | the door: caller data into tidy tables |
 | `assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `frames.py` | caller tables in, via the Arrow PyCapsule protocol |
@@ -263,6 +264,10 @@ The names the code uses for its own parts. The names a caller meets are in
 **Collect engine**
 : Which polars engine materialises a frame. A build within `IN_MEMORY_REACH`
   columns and rows uses the in-memory engine (`collect.py`).
+
+**Parquet backend**
+: Which library reads and writes a parquet file: polars, or pyarrow where
+  polars has none, as in the browser (`parquet.py`).
 
 **Structure digest**
 : A digest of everything a re-solve may not change. A loaded solver keeps its

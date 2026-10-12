@@ -23,6 +23,7 @@ import polars as pl
 from mathspec import to_spec
 
 from specsolve.errors import LayoutError, SpecsolveError
+from specsolve.relational import parquet
 from specsolve.relational.names import RUN
 from specsolve.relational.status import SolveStatus, status_of
 
@@ -457,9 +458,9 @@ def consolidated(under: Path, file: str) -> pl.DataFrame:
     """
     apart = file.removesuffix('.parquet')
     if (single := under / file).is_file():
-        frames = [pl.read_parquet(single)]
+        frames = [parquet.read(single)]
     elif (many := under / apart).is_dir():
-        frames = [pl.read_parquet(path) for path in sorted(many.glob('*.parquet'))]
+        frames = [parquet.read(path) for path in sorted(many.glob('*.parquet'))]
     else:
         raise LayoutError(
             f'{str(under)!r} holds no {file!r} and no {apart!r} beside it, so it is not a sweep or a saved '
@@ -517,7 +518,7 @@ def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]
     """What [`write_reasons`][] wrote: the duals' reason, and ``{kind: {name: reason}}`` for each name left out."""
     file = directory / REASONS_FILE
     rows: list[tuple[str, str, str]] = (
-        pl.read_parquet(file, columns=['kind', 'name', 'reason']).rows() if file.is_file() else []
+        parquet.read(file, columns=['kind', 'name', 'reason']).rows() if file.is_file() else []
     )
     absent: dict[str, dict[str, str]] = {}
     for kind, name, why in rows:
@@ -551,20 +552,14 @@ def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
     if not under.is_dir():
         return {}
     return {
-        file.stem: (pl.read_parquet(file).lazy() if whole else pl.scan_parquet(file)).drop(RUN, strict=False)
+        file.stem: (parquet.read(file).lazy() if whole else parquet.scan(file)).drop(RUN, strict=False)
         for file in sorted(under.glob('*.parquet'))
     }
 
 
 def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-    """*frame* at *path*, arriving whole: written beside it and renamed into place.
-
-    A lazy frame is sunk, so it streams to disk.
-    """
+    """*frame* at *path*, arriving whole: written beside it and renamed into place."""
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + '.part')
-    if isinstance(frame, pl.LazyFrame):
-        frame.sink_parquet(part)
-    else:
-        frame.write_parquet(part)
+    parquet.write(frame, part)
     part.replace(path)

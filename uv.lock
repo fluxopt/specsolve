@@ -1583,7 +1583,7 @@ requires-dist = [
     { name = "highspy", specifier = ">=1.13" },
     { name = "mathspec", specifier = ">=0.2.1,<0.3" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "polars", specifier = ">=2.0" },
+    { name = "polars", specifier = ">=1.33.1" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
     { name = "xpress", marker = "extra == 'xpress'", specifier = ">=9.5" },
 ]
