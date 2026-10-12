@@ -112,6 +112,15 @@ def build_only(prepared: Prepared) -> Counts:
         _release(env, model)
 
 
+def written(prepared: Prepared, path: Path) -> None:
+    """Build and write the model to *path* as an LP file; writing, unlike solving, is not size-limited."""
+    env, model = _built(prepared)
+    try:
+        model.write(str(path))
+    finally:
+        _release(env, model)
+
+
 def objective(prepared: Prepared) -> float:
     """Write the model out and solve it with HiGHS — never with Gurobi.
 
@@ -120,18 +129,14 @@ def objective(prepared: Prepared) -> float:
     """
     import highspy
 
-    env, model = _built(prepared)
-    try:
-        with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
-            path = str(Path(tmp) / 'model.lp')
-            model.write(path)
-            highs = highspy.Highs()
-            highs.setOptionValue('output_flag', False)
-            highs.readModel(path)
-            highs.run()
-            status = highs.getModelStatus()
-            if highs.modelStatusToString(status) != 'Optimal':
-                raise RuntimeError(f'HiGHS finished {highs.modelStatusToString(status)!r} on the gurobipy model')
-            return float(highs.getInfo().objective_function_value)
-    finally:
-        _release(env, model)
+    with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
+        path = Path(tmp) / 'model.lp'
+        written(prepared, path)
+        highs = highspy.Highs()
+        highs.setOptionValue('output_flag', False)
+        highs.readModel(str(path))
+        highs.run()
+        status = highs.getModelStatus()
+        if highs.modelStatusToString(status) != 'Optimal':
+            raise RuntimeError(f'HiGHS finished {highs.modelStatusToString(status)!r} on the gurobipy model')
+        return float(highs.getInfo().objective_function_value)

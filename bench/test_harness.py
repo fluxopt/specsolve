@@ -721,6 +721,76 @@ def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) 
     )
 
 
+def _rounded(v: float) -> float:
+    """*v* to nine significant digits: the LP writers disagree in the last ones."""
+    return float(f'{v:.9g}') + 0.0
+
+
+def _canonical(path: Path) -> dict[str, Any]:
+    """The LP file at *path* as HiGHS reads it, with nothing left that depends on a name or an order.
+
+    A column is its cost, bounds and integrality. A row is its bounds and the
+    multiset of its entries, each a coefficient with its column's description.
+    Two models with the same rows and columns in another order, or under other
+    names, compare equal. A model that is the other one relabelled along time is also equal,
+    which is why the objective test above stays beside this one.
+    """
+    import highspy
+
+    highs = highspy.Highs()
+    highs.setOptionValue('output_flag', False)
+    highs.readModel(str(path))
+    lp = highs.getLp()
+    n, m = lp.num_col_, lp.num_row_
+    integrality = list(lp.integrality_) or [0] * n
+    columns = [
+        (_rounded(lp.col_cost_[j]), _rounded(lp.col_lower_[j]), _rounded(lp.col_upper_[j]), int(integrality[j]))
+        for j in range(n)
+    ]
+    a = lp.a_matrix_
+    assert a.format_ == highspy.MatrixFormat.kColwise, 'HiGHS reads an LP file into a column-wise matrix'
+    start, index, value = np.asarray(a.start_), np.asarray(a.index_), np.asarray(a.value_)
+    entries: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
+    for j in range(n):
+        for e in range(start[j], start[j + 1]):
+            entries[int(index[e])].append((_rounded(value[e]), columns[j]))
+    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(entries[i]))) for i in range(m)]
+    return {
+        'sense': str(lp.sense_),
+        'offset': _rounded(lp.offset_),
+        'columns': sorted(columns),
+        'rows': sorted(rows),
+    }
+
+
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal'])
+@pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
+def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
+    """The objective test passes a model that differs only where the optimum does not look.
+
+    A balance written `>=` where specsolve writes `==` binds at equality under a
+    positive cost, and a bound no solution reaches is never tight, so both solve
+    to the same objective. Here each arm writes its unsolved model at `2xs`, and
+    the two files are compared through `_canonical`, row by row.
+    """
+    reason = unmeasurable(dialect, case_name, ARMS[dialect].SINKS[0])
+    if reason:
+        pytest.skip(reason)
+    case = CASES[case_name]
+    paths = case.data(case.shape('2xs'))
+    forms = {}
+    for arm in ('specsolve', dialect):
+        module = ARMS[arm]
+        path = tmp_path / f'{arm}.lp'
+        module.written(module.prepare(case_name, '2xs', paths, {}), path)
+        forms[arm] = _canonical(path)
+    ours, theirs = forms['specsolve'], forms[dialect]
+    for part in ('sense', 'offset', 'columns', 'rows'):
+        assert theirs[part] == ours[part], (
+            f'{dialect} writes {case_name}/2xs with other {part} than specsolve — not the same model'
+        )
+
+
 # ---------------------------------------------------------------------------
 # the entry points still run
 # ---------------------------------------------------------------------------

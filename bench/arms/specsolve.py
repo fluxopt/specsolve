@@ -276,6 +276,15 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
         return _counts(_handoff(model), nonzeros=False) | {'phases': _clocks(model)}
 
 
+def written(prepared: tuple[Path, dict[str, str]], path: Path) -> None:
+    """Build and write the model to *path* as an LP file, unsolved — what the whole-model comparison reads."""
+    import specsolve as sps
+
+    spec, sources = prepared
+    with sps.build(spec, sources) as model:
+        model.write(path)
+
+
 def objective(prepared: tuple[Path, dict[str, str]]) -> float:
     """Solve, and return the objective the parity gate compares."""
     import specsolve as sps

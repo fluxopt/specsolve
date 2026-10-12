@@ -18,6 +18,7 @@ REQUIRES = (*runtime.REQUIRES, 'scipy')
 build_and_emit = runtime.build_and_emit
 build_only = runtime.build_only
 objective = runtime.objective
+written = runtime.written
 
 
 def prepare(case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> Any:
