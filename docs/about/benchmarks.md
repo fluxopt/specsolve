@@ -20,6 +20,11 @@ storage
 fleet
 :   Twelve declarations rather than one large one: cost per declaration, not per row.
 
+nodal
+:   Dispatch at nodes, where a technology exists only at the nodes it is
+    installed at: a quarter of the node and technology pairs have a variable.
+    The chart counts the variables that exist, not the pairs.
+
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
 <div class="bench-row">
@@ -118,9 +123,9 @@ second, under half of linopy's time
 
 ## Not measured yet
 
-- **Sparsity, which is the engine's whole premise.** Every published model is
-  dense, the shape an array engine is built for. `pixi run density` sweeps a
-  sparse one, and no published run has taken it.
+- **Sparsity other than a quarter.** `nodal` is the one sparse published
+  model, at one density. `pixi run density` sweeps it from dense to one pair in
+  twelve, and no published run has taken that sweep.
 - **Solve time.** Every number stops when the model reaches the solver.
 
 ## Method
