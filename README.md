@@ -44,8 +44,10 @@ which states the math and checks it before any data exists.
   loaded: `update()` puts new numbers on it, and the next solve carries on from
   where the last one ended.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
-- **A small API.** `solve` runs one model, `build` keeps a model to change and
-  solve again, and `solve_over` runs a sweep. There is nothing to tune.
+- **Nothing to tune.** You attach your tables and choose a few options: the
+  solver, where to archive, and the axis a sweep runs along. specsolve decides
+  how to build the model, so there is no chunk size, engine or flag to set for
+  speed. `solve`, `build` and `solve_over` are the whole entry point.
   [Python API →](https://specsolve.readthedocs.io/en/latest/reference/api/)
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same model. specsolve checks
