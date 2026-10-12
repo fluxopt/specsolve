@@ -71,11 +71,12 @@ async function mount(root) {
   };
 
   /* The size range is chosen in decades, since every ladder steps tenfold: `dispatch` at 10k and
-     `transport` at 9.8k are one choice. */
+     `transport` at 9.8k are one choice. Below the smallest is zero, which cuts nothing and keeps a
+     linear axis on its origin. */
   const decade = v => Math.round(Math.log10(v));
-  const DECADES = [...new Set(ROWS.map(r => decade(r[X])))].sort((a, b) => a - b);
+  const STOPS = [-Infinity, ...new Set(ROWS.map(r => decade(r[X])).sort((a, b) => a - b))];
   const state = { metric: 'wall', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
-    range: { from: DECADES[0], to: DECADES.at(-1) } };
+    range: { from: STOPS[0], to: STOPS.at(-1) } };
   const inRange = r => decade(r[X]) >= state.range.from && decade(r[X]) <= state.range.to;
 
   const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
@@ -228,7 +229,7 @@ async function mount(root) {
         crosshair({ y: false }),
       ],
       scales: {
-        x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes, state.range.from === DECADES[0]),
+        x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes, state.range.from === STOPS[0]),
         y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
@@ -301,26 +302,25 @@ async function mount(root) {
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
 
-  /* The size range as a slider on an axis of its own: a tick per decade, the chosen span shaded, a
-     handle at each end, and a drag along the axis that brushes a new span; a click moves the nearer
-     end. Each end snaps to a decade and stays one short of the other, so every panel keeps two
-     sizes at least. */
+  /* The size range as a slider on an axis of its own: zero, then a tick per decade, the chosen span
+     shaded, a handle at each end, and a drag along the axis that brushes a new span; a click moves
+     the nearer end. Each end snaps to a stop and stays one short of the other. */
   const slider = root.querySelector('.bench-range');
-  const LAST = DECADES.length - 1;
+  const LAST = STOPS.length - 1;
   const at = i => `${(i / LAST) * 100}%`;
   slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
-    DECADES.map((d, i) => `<span class="bench-tick" style="left:${at(i)}">${FORMAT.count(10 ** d)}</span>`).join('') +
+    STOPS.map((d, i) => `<span class="bench-tick" style="left:${at(i)}">${FORMAT.count(10 ** d)}</span>`).join('') +
     '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${LAST}" step="1" ` +
       `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} model shown">`).join('');
   const track = slider.querySelector('.bench-track');
   const handle = end => slider.querySelector(`input[data-end="${end}"]`);
-  const span = () => [DECADES.indexOf(state.range.from), DECADES.indexOf(state.range.to)];
+  const span = () => [STOPS.indexOf(state.range.from), STOPS.indexOf(state.range.to)];
 
   function showRange() {
     const [lo, hi] = span();
     [['from', lo], ['to', hi]].forEach(([end, i]) => {
       handle(end).value = i;
-      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(10 ** DECADES[i])} ${SPEC.x.label}`);
+      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(10 ** STOPS[i])} ${SPEC.x.label}`);
     });
     Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / LAST) * 100}%` });
     slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));
@@ -328,7 +328,7 @@ async function mount(root) {
 
   function setRange(lo, hi) {
     const changed = lo !== span()[0] || hi !== span()[1];
-    state.range = { from: DECADES[lo], to: DECADES[hi] };
+    state.range = { from: STOPS[lo], to: STOPS[hi] };
     showRange();
     if (changed) draw();
   }
