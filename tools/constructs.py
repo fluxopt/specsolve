@@ -161,11 +161,6 @@ def catalogue() -> str:
     return '\n\n'.join(blocks)
 
 
-def _named(name: str, gallery: str) -> str:
-    """*name* linked to its gallery page, or plain where the gallery shows no page for it."""
-    return f'[{name}]({gallery}{name}.md)' if (GALLERY / f'{name}.md').exists() else f'`{name}`'
-
-
 def table(models: list[tuple[str, Path]], gallery: str = '') -> str:
     """Markdown, one row per model, `·` where a construct is absent.
 
@@ -179,7 +174,7 @@ def table(models: list[tuple[str, Path]], gallery: str = '') -> str:
         used = constructs(path)
         cells = ['**✓**' if c in used else '·' for c in COLUMNS]
         badge = f'**✔** {REFERENCES[name]["objective"]:g}' if name in REFERENCES else '·'
-        lines.append(f'| {_named(name, gallery)} | {badge} | ' + ' | '.join(cells) + ' |')
+        lines.append(f'| [{name}]({gallery}{name}.md) | {badge} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(lines)
 
 
@@ -198,7 +193,7 @@ def references_table(gallery: str = '') -> str:
         duals = '**✔**' if entry.get('duals') else '·'
         mark = f'[^{name}]' if entry.get('corroborated_by') else ''
         lines.append(
-            f'| {_named(name, gallery)} | {entry["objective"]!r} | {entry["rtol"]:g} | '
+            f'| [{name}]({gallery}{name}.md) | {entry["objective"]!r} | {entry["rtol"]:g} | '
             f'{duals} | {entry["provenance"]}{mark} |'
         )
         if corroborated := entry.get('corroborated_by'):

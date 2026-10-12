@@ -29,6 +29,11 @@ same model as math.
 | [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
 | [storage](storage.md) | Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon. |
 | [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
+| [piecewise](piecewise.md) | Dispatch where each generator's cost follows its own convex curve. |
+| [piecewise segment lines](piecewise_lp.md) | The [piecewise](piecewise.md) model, with each cost curve stated as the lines its segments lie on. |
+| [piecewise curves of differing length](piecewise_ragged.md) | Dispatch where each generator's cost curve has as many breakpoints as its own data. |
+| [piecewise conversion](piecewise_conversion.md) | Heat and power from converters whose flows share one curve each, where how many flows a converter has is data. |
+| [special-ordered sets](sos.md) | The [piecewise](piecewise.md) model, with each cost curve handed to the solver as a special-ordered set. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate in each calendar month, with the months read off the timestamps. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
 | [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths. |

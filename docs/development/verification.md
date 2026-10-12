@@ -87,10 +87,10 @@ too. A MILP has no duals; those are the `·` rows.
 | [monthly_budget](../examples/monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](../examples/multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
-| `piecewise` | 3850.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
-| `piecewise_conversion` | 5990.0 | 1e-06 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away |
-| `piecewise_lp` | 3850.0 | 1e-09 | **✔** | the same instance as piecewise, whose optimum and duals linopy 0.10.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim |
-| `piecewise_ragged` | 426.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure |
+| [piecewise](../examples/piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
+| [piecewise_conversion](../examples/piecewise_conversion.md) | 5990.0 | 1e-06 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away |
+| [piecewise_lp](../examples/piecewise_lp.md) | 3850.0 | 1e-09 | **✔** | the same instance as piecewise, whose optimum and duals linopy 0.10.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim |
+| [piecewise_ragged](../examples/piecewise_ragged.md) | 426.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure |
 | [pypsa_ac_dc](../examples/pypsa_ac_dc.md) | 18441021.477729216 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_ac_dc.py — n.objective + n.objective_constant, the system cost |
 | [pypsa_committable_extendable](../examples/pypsa_committable_extendable.md) | 21700.0 | 1e-09 | · | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_committable_extendable.py |
 | [pypsa_cvar](../examples/pypsa_cvar.md) | 35410.0 | 1e-09 | **✔** | pypsa 1.2.4 (its own linopy 0.10.0), via examples/ports/references/pypsa/pypsa_cvar.py |
@@ -145,13 +145,13 @@ construct, or every combination.
 | [dispatch](../examples/dispatch.md) | **✔** 10500 | **✓** | · | · | · | · | **✓** | **✓** | · | · | · |
 | [monthly_budget](../examples/monthly_budget.md) | **✔** 9500 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [multi_period](../examples/multi_period.md) | **✔** 10020 | **✓** | · | **✓** | · | · | · | **✓** | · | · | · |
-| `piecewise` | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
-| `piecewise_conversion` | **✔** 5990 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** | · |
-| `piecewise_lp` | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
-| `piecewise_ragged` | **✔** 426 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
+| [piecewise](../examples/piecewise.md) | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
+| [piecewise_conversion](../examples/piecewise_conversion.md) | **✔** 5990 | **✓** | · | **✓** | · | · | **✓** | **✓** | · | **✓** | · |
+| [piecewise_lp](../examples/piecewise_lp.md) | **✔** 3850 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
+| [piecewise_ragged](../examples/piecewise_ragged.md) | **✔** 426 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | · |
 | [reserves](../examples/reserves.md) | **✔** 915 | **✓** | **✓** | **✓** | · | · | · | **✓** | · | · | · |
 | [seasons](../examples/seasons.md) | · | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
-| `sos` | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | **✓** | · |
+| [sos](../examples/sos.md) | · | **✓** | · | · | · | · | **✓** | **✓** | **✓** | **✓** | · |
 | [storage](../examples/storage.md) | **✔** 5650 | **✓** | · | · | · | **✓** | · | **✓** | · | · | · |
 | [transport](../examples/transport.md) | **✔** 4400 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
 | [facility_location](../examples/facility_location.md) | **✔** 932616 | **✓** | · | · | · | · | · | **✓** | · | · | **✓** |
