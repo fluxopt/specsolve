@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs(examples): two models for the tutorials to grow into, one with on-off generators and one with a battery ([#1953](https://github.com/fluxopt/specsolve/pull/1953))
 - feat(api): an axis is written as plain data with to_dict, and solve_over takes that data in its place ([#1981](https://github.com/fluxopt/specsolve/pull/1981))
 - refactor(api): the carry is an argument of the axis rather than of solve_over, so an archive's axis holds its carry ([#1980](https://github.com/fluxopt/specsolve/pull/1980))
 
