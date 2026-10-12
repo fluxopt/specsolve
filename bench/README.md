@@ -886,6 +886,10 @@ against each other, and what `test_a_width_rung_matches_its_size_twin...` holds
 them to. They render as their own table: sorting `w10` and `s` into one column
 would read as a single curve that is really two shapes.
 
+No published case carries a width ladder: the page publishes `dispatch`,
+`nodal` and `network`, and `pixi run ladder` takes no width rung. Ask for one
+with `--sizes w1 w10 …` and a results file of your own.
+
 ## Adding a case
 
 Add `bench/models/<case>/spec.yaml`, and a data generator and a ladder to

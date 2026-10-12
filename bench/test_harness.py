@@ -211,20 +211,26 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
     published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
     assert sorted(published) == sorted(
-        [
-            f'latest-{sink}-{case}.json'
-            for sink in ('highs', 'gurobi')
-            for case in ('dispatch', 'transport', 'storage', 'fleet', 'nodal')
-        ]
-        + [f'latest-{sink}-{case}-width.json' for sink in ('highs', 'gurobi') for case in ('transport', 'storage')]
-    ), 'every case through both sinks, and a file of its own for each width ladder'
-    assert published['latest-highs-transport.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
-        'the size file holds no width rung'
+        f'latest-{sink}-{case}.json' for sink in ('highs', 'gurobi') for case in ('dispatch', 'nodal', 'network')
+    ), 'every published case through both sinks, one file each'
+    assert published['latest-highs-dispatch.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
+        'a case holds every rung of the size ladder it has'
     )
-    assert published['latest-highs-transport-width.json'] == {'w1', 'w10', 'w100', 'w1000'}, (
-        'the width file holds only width rungs'
+    assert published['latest-highs-network.json'] == {'2xs', 'xs', 's', 'm', 'l'}, (
+        'a rung the case does not have is left out of its file'
     )
     assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
+
+
+def test_a_width_ladder_writes_a_file_of_its_own() -> None:
+    """No published case has a width ladder, and a run that asks for one still keeps it apart."""
+    from bench.published import files
+
+    written = {path.name: set(rungs) for path, rungs in files('highs', 'transport', ['xs', 's', 'w1', 'w10']).items()}
+    assert written == {
+        'latest-highs-transport.json': {'xs', 's'},
+        'latest-highs-transport-width.json': {'w1', 'w10'},
+    }, 'a width rung goes to a file of its own, never into the size file'
 
 
 def test_a_smoke_run_may_still_write_its_own_file(tmp_path: Path) -> None:
@@ -363,7 +369,11 @@ def test_a_ladder_the_box_cannot_hold_loses_only_its_own_file() -> None:
         ['bash', '-c', stub + script],
         capture_output=True,
         text=True,
-        env={**os.environ, 'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}'},
+        env={
+            **os.environ,
+            'PATH': f'{Path(sys.executable).parent}{os.pathsep}{os.environ["PATH"]}',
+            'BENCH_SIZES': 'xs s m l w1 w10 w100 w1000',
+        },
         cwd=Path(__file__).resolve().parents[1],
     )
 
@@ -448,7 +458,7 @@ def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     from bench import reproduce
 
     selection = ' '.join(reproduce.published())
-    for expected in ('--cases dispatch transport storage fleet nodal', '--budget 30', 'bench/results/latest.json'):
+    for expected in ('--cases dispatch nodal network', '--budget 30', 'bench/results/latest.json'):
         assert expected in selection, f'the reproduction lost `{expected}` from the task definition'
     assert 'PUBLISHED' not in Path(reproduce.__file__).read_text(), 'the selection is read, not repeated'
 

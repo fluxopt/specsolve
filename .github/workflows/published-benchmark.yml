@@ -74,28 +74,14 @@ jobs:
         uses: ./.github/actions/ladder-case
         with:
           sink: highs
-          case: transport
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: highs
-          case: storage
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: highs
-          case: fleet
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: highs
           case: nodal
+          memory-budget: ${{ inputs.memory_budget }}
+          sizes: ${{ inputs.sizes }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: highs
+          case: network
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
@@ -109,28 +95,14 @@ jobs:
         uses: ./.github/actions/ladder-case
         with:
           sink: gurobi
-          case: transport
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: gurobi
-          case: storage
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: gurobi
-          case: fleet
-          memory-budget: ${{ inputs.memory_budget }}
-          sizes: ${{ inputs.sizes }}
-      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
-        uses: ./.github/actions/ladder-case
-        with:
-          sink: gurobi
           case: nodal
+          memory-budget: ${{ inputs.memory_budget }}
+          sizes: ${{ inputs.sizes }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: network
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
 
