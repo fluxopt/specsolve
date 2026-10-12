@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: pricing a MIP moves from the tutorials into the fixing how-to ([#1983](https://github.com/fluxopt/specsolve/pull/1983))
 - docs: the examples lead with the published optima, and the other models follow as plain model pages ([#1978](https://github.com/fluxopt/specsolve/pull/1978))
 - docs: the start-up table is shaded like the benchmark charts' own table ([#1974](https://github.com/fluxopt/specsolve/pull/1974))
 - docs: the pipeline walkthrough moves from the examples to the Development section ([#1972](https://github.com/fluxopt/specsolve/pull/1972))

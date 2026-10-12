@@ -80,6 +80,37 @@ relaxed = sps.solve(MODEL, sources)  # the same file, continuous as declared
 print(relaxed.dual('power_balance'))
 ```
 
+## Prices from a MIP
+
+To price a MIP, fix its integer decisions at the answer and solve again. What
+is left is an LP with the same optimum, and its duals are the prices for those
+decisions. The model is `examples/tutorial/commitment.yaml`, where `on` says
+whether a generator is on. `on` becomes continuous, and two bounds hold it at
+the MIP's answer:
+
+```python exec="true" source="material-block" result="text" session="lifecycle"
+UNITS = 'examples/tutorial/commitment.yaml'
+
+generators = pl.read_csv('examples/tutorial/data/generators.csv')
+load = pl.read_csv('examples/tutorial/data/load.csv')
+units = {'generator': generators['generator'], 'snapshot': load['snapshot'], 'load': load} | {
+    name: generators.select('generator', value=name) for name in ('p_max', 'cost', 'p_min', 'no_load_cost')
+}
+mip = sps.solve(UNITS, units)
+
+fixable = to_spec(UNITS).to_dict()
+fixable['parameters']['on_fixed'] = {'dims': ['snapshot', 'generator']}
+fixable['variables']['on'] |= {'domain': 'continuous', 'bounds': {'lower': 'on_fixed', 'upper': 'on_fixed'}}
+
+priced = sps.solve(fixable, units | {'on_fixed': mip.primal('on')})
+print(f'MIP {mip.objective}, fixed LP {priced.objective}')
+print(priced.dual('power_balance'))
+```
+
+Gas sets the price in snapshot 2. In the other snapshots wind is at the margin.
+The prices hold the on-off decisions fixed, so they do not include the cost of
+keeping gas on.
+
 ## Remove a constraint
 
 `pop` the constraint's key from the spec:
