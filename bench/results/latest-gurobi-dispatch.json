@@ -27,14 +27,14 @@
             "arch_string_raw": "x86_64",
             "vendor_id_raw": "AuthenticAMD",
             "brand_raw": "AMD EPYC-Milan Processor",
-            "hz_advertised_friendly": "2.3964 GHz",
-            "hz_actual_friendly": "2.3964 GHz",
+            "hz_advertised_friendly": "2.4000 GHz",
+            "hz_actual_friendly": "2.4000 GHz",
             "hz_advertised": [
-                2396398000,
+                2399998000,
                 0
             ],
             "hz_actual": [
-                2396398000,
+                2399998000,
                 0
             ],
             "stepping": 1,
@@ -147,7 +147,7 @@
             "l2_cache_associativity": 6
         },
         "versions": {
-            "specsolve": "0.0.1.dev1+gd0444a0bd",
+            "specsolve": "0.0.1.dev1+g5122bd42c",
             "highspy": "1.15.1",
             "gurobipy": "13.0.3",
             "scipy": "1.18.1",
@@ -158,20 +158,912 @@
             "pytest-benchmem": "0.5.5"
         },
         "load_avg": [
-            1.72607421875,
-            1.30029296875,
-            1.33251953125
+            1.77734375,
+            1.3828125,
+            1.36767578125
         ]
     },
     "commit_info": {
-        "id": "d0444a0bd55e3014c210ec286666073a158fe291",
-        "time": "2026-10-11T18:18:34+02:00",
-        "author_time": "2026-10-11T18:18:34+02:00",
+        "id": "5122bd42c01394394fab4acd358fb168e0b3d5b9",
+        "time": "2026-10-12T21:22:43Z",
+        "author_time": "2026-10-12T21:22:43Z",
         "dirty": true,
         "project": "specsolve",
-        "branch": "main"
+        "branch": "claude/gifted-cerf-st76zb-publish"
     },
     "benchmarks": [
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-specsolve-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        124601788
+                    ],
+                    "allocations": [
+                        62347
+                    ],
+                    "total_bytes": [
+                        275734555
+                    ],
+                    "rss_bytes": [
+                        248967168
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": 200,
+                "live_fraction": 1.0,
+                "variables": 200,
+                "phase_seconds": {
+                    "attach": 0.000808813999810809,
+                    "build": 0.009827601999859326
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.022197574000074383,
+                "max": 0.12637413499987815,
+                "mean": 0.038128415333226764,
+                "stddev": 0.033279438208691975,
+                "rounds": 9,
+                "median": 0.02753345699966303,
+                "iqr": 0.005215893250124282,
+                "q1": 0.025053979499830348,
+                "q3": 0.03026987274995463,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.022197574000074383,
+                "hd15iqr": 0.12637413499987815,
+                "ops": 26.227158701991907,
+                "total": 0.34315573799904087,
+                "data": [
+                    0.12637413499987815,
+                    0.029060156000014103,
+                    0.027078710999830946,
+                    0.028626320000057603,
+                    0.03389902299977621,
+                    0.02753345699966303,
+                    0.025914777999787475,
+                    0.022197574000074383,
+                    0.022471583999958966
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        124603731
+                    ],
+                    "allocations": [
+                        63498
+                    ],
+                    "total_bytes": [
+                        294298390
+                    ],
+                    "rss_bytes": [
+                        249303040
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": 200,
+                "live_fraction": 1.0,
+                "variables": 200,
+                "phase_seconds": {
+                    "attach": 0.0005914059997849108,
+                    "build": 0.012044626000260905
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.021442429999751766,
+                "max": 0.03189091600006577,
+                "mean": 0.02729350433325332,
+                "stddev": 0.004017462646235369,
+                "rounds": 9,
+                "median": 0.027586175999658735,
+                "iqr": 0.0062871647500060135,
+                "q1": 0.024442837250035154,
+                "q3": 0.030730002000041168,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.021442429999751766,
+                "hd15iqr": 0.03189091600006577,
+                "ops": 36.638754327403824,
+                "total": 0.24564153899927987,
+                "data": [
+                    0.030379067000012583,
+                    0.03178280700012692,
+                    0.021442429999751766,
+                    0.025489491999906022,
+                    0.021827687000040896,
+                    0.03189091600006577,
+                    0.02531455400003324,
+                    0.029928409999683936,
+                    0.027586175999658735
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-linopy-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1112794140
+                    ],
+                    "allocations": [
+                        223402
+                    ],
+                    "total_bytes": [
+                        1350458483
+                    ],
+                    "rss_bytes": [
+                        259223552
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 200
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.027501186999870697,
+                "max": 0.3848292580000816,
+                "mean": 0.06772495177781618,
+                "stddev": 0.1189146258955462,
+                "rounds": 9,
+                "median": 0.028144344000338606,
+                "iqr": 0.0006310759996495108,
+                "q1": 0.02784383225014153,
+                "q3": 0.028474908249791042,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.027501186999870697,
+                "hd15iqr": 0.3848292580000816,
+                "ops": 14.765606674489467,
+                "total": 0.6095245660003457,
+                "data": [
+                    0.3848292580000816,
+                    0.027898264000214112,
+                    0.027501186999870697,
+                    0.028144344000338606,
+                    0.02856199000007109,
+                    0.027680536999923788,
+                    0.028351681000003737,
+                    0.028445880999697692,
+                    0.028111424000144325
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-pyomo-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1098683164
+                    ],
+                    "allocations": [
+                        72549
+                    ],
+                    "total_bytes": [
+                        1180125126
+                    ],
+                    "rss_bytes": [
+                        219799552
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 200
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.012444562999917252,
+                "max": 0.8275618210000175,
+                "mean": 0.10386026877783176,
+                "stddev": 0.27139093903589256,
+                "rounds": 9,
+                "median": 0.012822159999814176,
+                "iqr": 0.0027761562503201276,
+                "q1": 0.012633168499860403,
+                "q3": 0.01540932475018053,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.012444562999917252,
+                "hd15iqr": 0.8275618210000175,
+                "ops": 9.628320933186753,
+                "total": 0.9347424190004858,
+                "data": [
+                    0.8275618210000175,
+                    0.015288203000181966,
+                    0.012649820999740768,
+                    0.012444562999917252,
+                    0.012822159999814176,
+                    0.012672681000367447,
+                    0.012947269000051165,
+                    0.012583211000219308,
+                    0.015772690000176226
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        92015712
+                    ],
+                    "allocations": [
+                        1461
+                    ],
+                    "total_bytes": [
+                        93182640
+                    ],
+                    "rss_bytes": [
+                        196427776
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": 200,
+                "live_fraction": 1.0,
+                "variables": 200
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.005666000000019267,
+                "max": 0.00871549999965282,
+                "mean": 0.006795273888858194,
+                "stddev": 0.0013877705494450688,
+                "rounds": 9,
+                "median": 0.005967528999917704,
+                "iqr": 0.0028264900001886417,
+                "q1": 0.005748789999870496,
+                "q3": 0.008575280000059138,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.005666000000019267,
+                "hd15iqr": 0.00871549999965282,
+                "ops": 147.16110290118556,
+                "total": 0.06115746499972374,
+                "data": [
+                    0.00861799999984214,
+                    0.00856104000013147,
+                    0.00871549999965282,
+                    0.005967528999917704,
+                    0.005698570000276959,
+                    0.0057655299997350085,
+                    0.006224957000085851,
+                    0.005666000000019267,
+                    0.005940339000062522
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-3xs-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-3xs-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "3xs",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-3xs-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        98354541
+                    ],
+                    "allocations": [
+                        12567
+                    ],
+                    "total_bytes": [
+                        140818402
+                    ],
+                    "rss_bytes": [
+                        204394496
+                    ]
+                },
+                "columns": 200,
+                "rows": 2,
+                "nonzeros": 200,
+                "live_fraction": 1.0,
+                "variables": 200
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.005667110000104003,
+                "max": 0.009039965999818378,
+                "mean": 0.007040660666765082,
+                "stddev": 0.0011928284122017683,
+                "rounds": 9,
+                "median": 0.006592994000129693,
+                "iqr": 0.0019514357503567226,
+                "q1": 0.006244151499913642,
+                "q3": 0.008195587250270364,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.005667110000104003,
+                "hd15iqr": 0.009039965999818378,
+                "ops": 142.03212558168383,
+                "total": 0.06336594600088574,
+                "data": [
+                    0.009039965999818378,
+                    0.006592994000129693,
+                    0.005667110000104003,
+                    0.008097733000340668,
+                    0.005990248000216525,
+                    0.006735444000241841,
+                    0.0063287859998126805,
+                    0.008489150000059453,
+                    0.006424515000162501
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-specsolve-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        124602719
+                    ],
+                    "allocations": [
+                        62347
+                    ],
+                    "total_bytes": [
+                        275847671
+                    ],
+                    "rss_bytes": [
+                        249942016
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "attach": 0.0006627050001952739,
+                    "build": 0.012165685000127269
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.023738824000247405,
+                "max": 0.029618532999847957,
+                "mean": 0.026844598888803577,
+                "stddev": 0.0019812656611819667,
+                "rounds": 9,
+                "median": 0.026851082000121096,
+                "iqr": 0.003094466499646842,
+                "q1": 0.02529289525011791,
+                "q3": 0.02838736174976475,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.023738824000247405,
+                "hd15iqr": 0.029618532999847957,
+                "ops": 37.25144131012078,
+                "total": 0.2416013899992322,
+                "data": [
+                    0.025437262000195915,
+                    0.029618532999847957,
+                    0.029394904999662685,
+                    0.026523754999743687,
+                    0.026851082000121096,
+                    0.02805151399979877,
+                    0.023738824000247405,
+                    0.02485979499988389,
+                    0.02712571999973079
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        118312438
+                    ],
+                    "allocations": [
+                        63496
+                    ],
+                    "total_bytes": [
+                        288119218
+                    ],
+                    "rss_bytes": [
+                        250163200
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "attach": 0.0007937440000205243,
+                    "build": 0.010196109999924374
+                }
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0215621980000833,
+                "max": 0.029302854999968986,
+                "mean": 0.025709597777778172,
+                "stddev": 0.0027230347932307116,
+                "rounds": 9,
+                "median": 0.02618491700013692,
+                "iqr": 0.004477543750113,
+                "q1": 0.02328858974999548,
+                "q3": 0.02776613350010848,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.0215621980000833,
+                "hd15iqr": 0.029302854999968986,
+                "ops": 38.89597996217349,
+                "total": 0.23138638000000356,
+                "data": [
+                    0.02618491700013692,
+                    0.02276972100025887,
+                    0.028602609999779816,
+                    0.029302854999968986,
+                    0.027487308000218036,
+                    0.024670266999692103,
+                    0.023461545999907685,
+                    0.027344957999957842,
+                    0.0215621980000833
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-linopy-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1112805256
+                    ],
+                    "allocations": [
+                        223469
+                    ],
+                    "total_bytes": [
+                        1350999690
+                    ],
+                    "rss_bytes": [
+                        259420160
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.031278620999728446,
+                "max": 0.033588904999760416,
+                "mean": 0.032113230111058835,
+                "stddev": 0.0007128554596220484,
+                "rounds": 9,
+                "median": 0.03213988600009543,
+                "iqr": 0.000902418500118074,
+                "q1": 0.03154295024990006,
+                "q3": 0.03244536875001813,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.031278620999728446,
+                "hd15iqr": 0.033588904999760416,
+                "ops": 31.139813607713975,
+                "total": 0.2890190709995295,
+                "data": [
+                    0.031278620999728446,
+                    0.03138149100004739,
+                    0.033588904999760416,
+                    0.031786338000074466,
+                    0.03244137399997271,
+                    0.0323483329998453,
+                    0.0324573530001544,
+                    0.03213988600009543,
+                    0.03159676999985095
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-pyomo-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        1098887835
+                    ],
+                    "allocations": [
+                        73473
+                    ],
+                    "total_bytes": [
+                        1182491302
+                    ],
+                    "rss_bytes": [
+                        220479488
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.018922867000128463,
+                "max": 0.041216781999992236,
+                "mean": 0.021754017777867476,
+                "stddev": 0.0073098344905537,
+                "rounds": 9,
+                "median": 0.019280805000107648,
+                "iqr": 0.0007580342496567027,
+                "q1": 0.019048727000267718,
+                "q3": 0.01980676124992442,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.018922867000128463,
+                "hd15iqr": 0.041216781999992236,
+                "ops": 45.96851994013719,
+                "total": 0.19578616000080729,
+                "data": [
+                    0.019669211999826075,
+                    0.041216781999992236,
+                    0.019087977000253886,
+                    0.019163815999945655,
+                    0.020219409000219457,
+                    0.019280805000107648,
+                    0.018922867000128463,
+                    0.019294315000024653,
+                    0.018930977000309213
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        92067225
+                    ],
+                    "allocations": [
+                        2377
+                    ],
+                    "total_bytes": [
+                        93545093
+                    ],
+                    "rss_bytes": [
+                        196833280
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.0071433800003433134,
+                "max": 0.013566345000072033,
+                "mean": 0.008712814888945609,
+                "stddev": 0.0023614443017705975,
+                "rounds": 9,
+                "median": 0.007521767000071122,
+                "iqr": 0.0020685939998656977,
+                "q1": 0.007371408500148391,
+                "q3": 0.009440002500014089,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.0071433800003433134,
+                "hd15iqr": 0.013566345000072033,
+                "ops": 114.77347019833404,
+                "total": 0.07841533400051048,
+                "data": [
+                    0.013566345000072033,
+                    0.007521767000071122,
+                    0.007449568000083673,
+                    0.008611710999957722,
+                    0.011924877000183187,
+                    0.0071433800003433134,
+                    0.007572787999833963,
+                    0.007194529999651422,
+                    0.007430368000314047
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_emit[dispatch-2xs-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_emit[dispatch-2xs-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        98456921
+                    ],
+                    "allocations": [
+                        12580
+                    ],
+                    "total_bytes": [
+                        140968962
+                    ],
+                    "rss_bytes": [
+                        204431360
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.005926897999870562,
+                "max": 0.007153190000281029,
+                "mean": 0.006316018222251942,
+                "stddev": 0.0003645589506961307,
+                "rounds": 9,
+                "median": 0.006185627999911958,
+                "iqr": 0.0003927144996396237,
+                "q1": 0.006095860500067829,
+                "q3": 0.006488574999707453,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.005926897999870562,
+                "hd15iqr": 0.007153190000281029,
+                "ops": 158.32759894151403,
+                "total": 0.05684416400026748,
+                "data": [
+                    0.006098488000134239,
+                    0.006234315000256174,
+                    0.007153190000281029,
+                    0.006511104999844974,
+                    0.006185627999911958,
+                    0.006481064999661612,
+                    0.005926897999870562,
+                    0.006087977999868599,
+                    0.006165497000438336
+                ],
+                "iterations": 1
+            }
+        },
         {
             "group": null,
             "name": "test_emit[dispatch-xs-specsolve-gurobi]",
@@ -186,16 +1078,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        125480385
+                        125490708
                     ],
                     "allocations": [
-                        62286
+                        62348
                     ],
                     "total_bytes": [
-                        276904478
+                        277057767
                     ],
                     "rss_bytes": [
-                        256778240
+                        251375616
                     ]
                 },
                 "columns": 10000,
@@ -204,8 +1096,8 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "attach": 0.0006897370003571268,
-                    "build": 0.013238851000096474
+                    "attach": 0.0012334620000729046,
+                    "build": 0.015350931999819295
                 }
             },
             "options": {
@@ -219,32 +1111,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.02528272500012463,
-                "max": 0.13072376300033284,
-                "mean": 0.041552725888979895,
-                "stddev": 0.033591518559704915,
+                "min": 0.025622311000006448,
+                "max": 0.03580366899996079,
+                "mean": 0.03102610600010141,
+                "stddev": 0.0037293603493783827,
                 "rounds": 9,
-                "median": 0.031447060000118654,
-                "iqr": 0.0050182830001404,
-                "q1": 0.0282271609999043,
-                "q3": 0.0332454440000447,
-                "iqr_outliers": 1,
-                "stddev_outliers": 1,
-                "outliers": "1;1",
-                "ld15iqr": 0.02528272500012463,
-                "hd15iqr": 0.13072376300033284,
-                "ops": 24.065809850159738,
-                "total": 0.37397453300081906,
+                "median": 0.03142532000038045,
+                "iqr": 0.007033653749886071,
+                "q1": 0.027705873000172687,
+                "q3": 0.03473952675005876,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.025622311000006448,
+                "hd15iqr": 0.03580366899996079,
+                "ops": 32.23092192093753,
+                "total": 0.2792349540009127,
                 "data": [
-                    0.13072376300033284,
-                    0.03615381500003423,
-                    0.031447060000118654,
-                    0.031683767000231455,
-                    0.03091063400006533,
-                    0.03227598700004819,
-                    0.02528272500012463,
-                    0.028705930999876728,
-                    0.026790850999987015
+                    0.0347012669999458,
+                    0.03258159100005287,
+                    0.03142532000038045,
+                    0.027923724000174843,
+                    0.03485430600039763,
+                    0.029270445999827643,
+                    0.02705232000016622,
+                    0.025622311000006448,
+                    0.03580366899996079
                 ],
                 "iterations": 1
             }
@@ -263,16 +1155,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        125481688
+                        125491115
                     ],
                     "allocations": [
-                        63440
+                        63500
                     ],
                     "total_bytes": [
-                        295467681
+                        295620218
                     ],
                     "rss_bytes": [
-                        257126400
+                        251228160
                     ]
                 },
                 "columns": 10000,
@@ -281,8 +1173,8 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "attach": 0.0007496569996874314,
-                    "build": 0.0173334139999497
+                    "attach": 0.001364440000088507,
+                    "build": 0.013660305000030348
                 }
             },
             "options": {
@@ -296,32 +1188,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.029310178000287124,
-                "max": 0.041374694000296586,
-                "mean": 0.03608001477788195,
-                "stddev": 0.00416254322505149,
+                "min": 0.02232004400002552,
+                "max": 0.03769993700007035,
+                "mean": 0.030373489666645683,
+                "stddev": 0.0042540451011700755,
                 "rounds": 9,
-                "median": 0.03652037600022595,
-                "iqr": 0.006921728250176784,
-                "q1": 0.03253833700000541,
-                "q3": 0.0394600652501822,
-                "iqr_outliers": 0,
-                "stddev_outliers": 4,
-                "outliers": "4;0",
-                "ld15iqr": 0.029310178000287124,
-                "hd15iqr": 0.041374694000296586,
-                "ops": 27.71617490059976,
-                "total": 0.3247201330009375,
+                "median": 0.030248527999901853,
+                "iqr": 0.0037009662503351137,
+                "q1": 0.028786158499769954,
+                "q3": 0.03248712475010507,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.027745945999868127,
+                "hd15iqr": 0.03769993700007035,
+                "ops": 32.92344774917777,
+                "total": 0.27336140699981115,
                 "data": [
-                    0.041374694000296586,
-                    0.03709630299999844,
-                    0.029310178000287124,
-                    0.03293936499994743,
-                    0.039004120000299736,
-                    0.04082790099982958,
-                    0.03652037600022595,
-                    0.031335253000179364,
-                    0.03631194299987328
+                    0.02232004400002552,
+                    0.030871144000229833,
+                    0.03409959099963089,
+                    0.02913289599973723,
+                    0.030248527999901853,
+                    0.029293685000084224,
+                    0.027745945999868127,
+                    0.03769993700007035,
+                    0.031949636000263126
                 ],
                 "iterations": 1
             }
@@ -340,16 +1232,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1117155582
+                        1117153617
                     ],
                     "allocations": [
-                        222977
+                        223652
                     ],
                     "total_bytes": [
-                        1349563789
+                        1360880047
                     ],
                     "rss_bytes": [
-                        265437184
+                        261492736
                     ]
                 },
                 "columns": 10000,
@@ -369,32 +1261,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.03953030200000285,
-                "max": 0.3961437789998854,
-                "mean": 0.08056699611102482,
-                "stddev": 0.11834904885401411,
+                "min": 0.03656925399991451,
+                "max": 0.06451131900030305,
+                "mean": 0.040806663333417724,
+                "stddev": 0.008920275791162462,
                 "rounds": 9,
-                "median": 0.04098530800001754,
-                "iqr": 0.0019661892499698297,
-                "q1": 0.040413927499798774,
-                "q3": 0.042380116749768604,
+                "median": 0.03776465600003576,
+                "iqr": 0.0013596034998499817,
+                "q1": 0.03755129675016633,
+                "q3": 0.03891090025001631,
                 "iqr_outliers": 1,
                 "stddev_outliers": 1,
                 "outliers": "1;1",
-                "ld15iqr": 0.03953030200000285,
-                "hd15iqr": 0.3961437789998854,
-                "ops": 12.4120303383529,
-                "total": 0.7251029649992233,
+                "ld15iqr": 0.03656925399991451,
+                "hd15iqr": 0.06451131900030305,
+                "ops": 24.50580170766062,
+                "total": 0.3672599700007595,
                 "data": [
-                    0.3961437789998854,
-                    0.04132980599979419,
-                    0.04413677499996993,
-                    0.04098530800001754,
-                    0.04068393599982301,
-                    0.041794563999701495,
-                    0.04089459300030285,
-                    0.03953030200000285,
-                    0.03960390199972608
+                    0.0377572570000666,
+                    0.06451131900030305,
+                    0.03724757899999531,
+                    0.037652536000223336,
+                    0.03888619800000015,
+                    0.037886164000155986,
+                    0.03656925399991451,
+                    0.03776465600003576,
+                    0.0389850070000648
                 ],
                 "iterations": 1
             }
@@ -413,16 +1305,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1114944152
+                        1114812523
                     ],
                     "allocations": [
-                        82361
+                        82357
                     ],
                     "total_bytes": [
-                        1220445496
+                        1220313411
                     ],
                     "rss_bytes": [
-                        235970560
+                        231383040
                     ]
                 },
                 "columns": 10000,
@@ -442,32 +1334,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.20130485899971973,
-                "max": 1.036476709999988,
-                "mean": 0.29844418933336986,
-                "stddev": 0.27677251761085003,
+                "min": 0.18046925699991334,
+                "max": 0.196841392999886,
+                "mean": 0.1863671794444599,
+                "stddev": 0.004963503280808214,
                 "rounds": 9,
-                "median": 0.20689174900007856,
-                "iqr": 0.0026933162499744867,
-                "q1": 0.20551558124998337,
-                "q3": 0.20820889749995786,
-                "iqr_outliers": 2,
-                "stddev_outliers": 1,
-                "outliers": "1;2",
-                "ld15iqr": 0.20395239899971784,
-                "hd15iqr": 1.036476709999988,
-                "ops": 3.3507102357518987,
-                "total": 2.6859977040003287,
+                "median": 0.18567450099999405,
+                "iqr": 0.004841038499989736,
+                "q1": 0.1833872769999516,
+                "q3": 0.18822831549994135,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.18046925699991334,
+                "hd15iqr": 0.196841392999886,
+                "ops": 5.365751646727123,
+                "total": 1.6773046150001392,
                 "data": [
-                    1.036476709999988,
-                    0.20689174900007856,
-                    0.20650297400015916,
-                    0.20130485899971973,
-                    0.20971698400035166,
-                    0.20740918500041516,
-                    0.2077062019998266,
-                    0.20395239899971784,
-                    0.20603664200007188
+                    0.1811929720001899,
+                    0.1865119260000938,
+                    0.18751978799991775,
+                    0.19035389800001212,
+                    0.18411871199987218,
+                    0.18046925699991334,
+                    0.18462216800026,
+                    0.18567450099999405,
+                    0.196841392999886
                 ],
                 "iterations": 1
             }
@@ -486,16 +1378,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        95522655
+                        99717023
                     ],
                     "allocations": [
-                        12369
+                        12373
                     ],
                     "total_bytes": [
-                        99885869
+                        104080237
                     ],
                     "rss_bytes": [
-                        206491648
+                        200454144
                     ]
                 },
                 "columns": 10000,
@@ -515,32 +1407,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.024251364000065223,
-                "max": 0.05248348299983263,
-                "mean": 0.03665349933332133,
-                "stddev": 0.012715154835238744,
+                "min": 0.02245392200029528,
+                "max": 0.054005731000415835,
+                "mean": 0.041203338222304514,
+                "stddev": 0.012394463541393291,
                 "rounds": 9,
-                "median": 0.034599841000272136,
-                "iqr": 0.026708172500434557,
-                "q1": 0.02458429224975589,
-                "q3": 0.05129246475019045,
+                "median": 0.048297002000254,
+                "iqr": 0.022778872999765554,
+                "q1": 0.026248896500078445,
+                "q3": 0.049027769499844,
                 "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 0.024251364000065223,
-                "hd15iqr": 0.05248348299983263,
-                "ops": 27.28252467537008,
-                "total": 0.329881493999892,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.02245392200029528,
+                "hd15iqr": 0.054005731000415835,
+                "ops": 24.269878197846413,
+                "total": 0.3708300440007406,
                 "data": [
-                    0.05248348299983263,
-                    0.05137918199989144,
-                    0.02455793499984793,
-                    0.02459307799972521,
-                    0.051263559000290115,
-                    0.041780373999699805,
-                    0.024251364000065223,
-                    0.034599841000272136,
-                    0.02497267800026748
+                    0.04834115199992084,
+                    0.026327976000175113,
+                    0.049088196999946376,
+                    0.04729677900013485,
+                    0.04900762699980987,
+                    0.02601165799978844,
+                    0.054005731000415835,
+                    0.02245392200029528,
+                    0.048297002000254
                 ],
                 "iterations": 1
             }
@@ -559,16 +1451,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        99616989
+                        99617053
                     ],
                     "allocations": [
-                        12667
+                        12669
                     ],
                     "total_bytes": [
-                        142590261
+                        142590309
                     ],
                     "rss_bytes": [
-                        210825216
+                        204349440
                     ]
                 },
                 "columns": 10000,
@@ -588,32 +1480,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.008068868999998813,
-                "max": 0.013578049999978248,
-                "mean": 0.010203241666608341,
-                "stddev": 0.002222685193124046,
+                "min": 0.006990451000092435,
+                "max": 0.013063228000191884,
+                "mean": 0.008595504222335472,
+                "stddev": 0.0024037654605825456,
                 "rounds": 9,
-                "median": 0.009717446999729873,
-                "iqr": 0.00441839475058714,
-                "q1": 0.008289923749657646,
-                "q3": 0.012708318500244786,
-                "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 0.008068868999998813,
-                "hd15iqr": 0.013578049999978248,
-                "ops": 98.00806769799955,
-                "total": 0.09182917499947507,
+                "median": 0.007547977000285755,
+                "iqr": 0.0017257899996820925,
+                "q1": 0.007208566750250611,
+                "q3": 0.008934356749932704,
+                "iqr_outliers": 2,
+                "stddev_outliers": 2,
+                "outliers": "2;2",
+                "ld15iqr": 0.006990451000092435,
+                "hd15iqr": 0.012555601999792998,
+                "ops": 116.33988817101546,
+                "total": 0.07735953800101925,
                 "data": [
-                    0.008068868999998813,
-                    0.008343551999587362,
-                    0.012807361999875866,
-                    0.008587959000124101,
-                    0.008129038999868499,
-                    0.01267530400036776,
-                    0.009717446999729873,
-                    0.00992159299994455,
-                    0.013578049999978248
+                    0.013063228000191884,
+                    0.007727274999979272,
+                    0.007652187000076083,
+                    0.012555601999792998,
+                    0.007202200000392622,
+                    0.006990451000092435,
+                    0.007210689000203274,
+                    0.007547977000285755,
+                    0.007409929000004922
                 ],
                 "iterations": 1
             }
@@ -632,16 +1524,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        148281269
+                        148422517
                     ],
                     "allocations": [
-                        62300
+                        62360
                     ],
                     "total_bytes": [
-                        299860447
+                        300145381
                     ],
                     "rss_bytes": [
-                        278388736
+                        271085568
                     ]
                 },
                 "columns": 100000,
@@ -650,8 +1542,8 @@
                 "live_fraction": 1.0,
                 "variables": 100000,
                 "phase_seconds": {
-                    "attach": 0.0008765990000938473,
-                    "build": 0.02416286100014986
+                    "attach": 0.0006498849998024525,
+                    "build": 0.022271524000188947
                 }
             },
             "options": {
@@ -665,32 +1557,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.05950081099990712,
-                "max": 0.08331200300017372,
-                "mean": 0.07067804577779195,
-                "stddev": 0.010966597283250577,
+                "min": 0.053325036999922304,
+                "max": 0.07962024400012524,
+                "mean": 0.06289890588888941,
+                "stddev": 0.011111162958714161,
                 "rounds": 9,
-                "median": 0.06440070700000433,
-                "iqr": 0.02104936450018613,
-                "q1": 0.06109858249988065,
-                "q3": 0.08214794700006678,
+                "median": 0.057668166999974346,
+                "iqr": 0.021737350249736664,
+                "q1": 0.054409224750202156,
+                "q3": 0.07614657499993882,
                 "iqr_outliers": 0,
-                "stddev_outliers": 4,
-                "outliers": "4;0",
-                "ld15iqr": 0.05950081099990712,
-                "hd15iqr": 0.08331200300017372,
-                "ops": 14.148665105200381,
-                "total": 0.6361024120001275,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.053325036999922304,
+                "hd15iqr": 0.07962024400012524,
+                "ops": 15.898527738566628,
+                "total": 0.5660901530000046,
                 "data": [
-                    0.06440070700000433,
-                    0.06070423999972263,
-                    0.08331200300017372,
-                    0.08260061400005725,
-                    0.05950081099990712,
-                    0.06172682700025689,
-                    0.06123002999993332,
-                    0.08199705800006996,
-                    0.0806301220000023
+                    0.05938249500013626,
+                    0.07962024400012524,
+                    0.0759341289999611,
+                    0.07678391299987197,
+                    0.053325036999922304,
+                    0.0545207590002974,
+                    0.05407462199991642,
+                    0.057668166999974346,
+                    0.0547807869997996
                 ],
                 "iterations": 1
             }
@@ -709,16 +1601,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        145660940
+                        145147724
                     ],
                     "allocations": [
-                        63451
+                        63513
                     ],
                     "total_bytes": [
-                        315803002
+                        315431920
                     ],
                     "rss_bytes": [
-                        276168704
+                        271265792
                     ]
                 },
                 "columns": 100000,
@@ -727,8 +1619,8 @@
                 "live_fraction": 1.0,
                 "variables": 100000,
                 "phase_seconds": {
-                    "attach": 0.0006805930001974048,
-                    "build": 0.025696456999867223
+                    "attach": 0.0007003850000728562,
+                    "build": 0.022328483999899618
                 }
             },
             "options": {
@@ -742,32 +1634,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.052487158000076306,
-                "max": 0.08431537199976447,
-                "mean": 0.07103515933330426,
-                "stddev": 0.012021671817565804,
+                "min": 0.05303430899994055,
+                "max": 0.08562879100009013,
+                "mean": 0.06830397544434971,
+                "stddev": 0.011912462136801274,
                 "rounds": 9,
-                "median": 0.07094397299988486,
-                "iqr": 0.02052526899979057,
-                "q1": 0.061730587500051115,
-                "q3": 0.08225585649984168,
+                "median": 0.07552659099974335,
+                "iqr": 0.01964666899993972,
+                "q1": 0.056536913499940056,
+                "q3": 0.07618358249987978,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 0.052487158000076306,
-                "hd15iqr": 0.08431537199976447,
-                "ops": 14.077535820084492,
-                "total": 0.6393164339997384,
+                "ld15iqr": 0.05303430899994055,
+                "hd15iqr": 0.08562879100009013,
+                "ops": 14.640436277603555,
+                "total": 0.6147357789991474,
                 "data": [
-                    0.07094397299988486,
-                    0.08431537199976447,
-                    0.06209796500024822,
-                    0.061970443000063824,
-                    0.08136328399996273,
-                    0.052487158000076306,
-                    0.06101102100001299,
-                    0.08317911399990408,
-                    0.08194810399982089
+                    0.08562879100009013,
+                    0.05303430899994055,
+                    0.07632186599994384,
+                    0.07613748799985842,
+                    0.059753141999863146,
+                    0.07590690000006362,
+                    0.07552659099974335,
+                    0.055566210999586474,
+                    0.056860481000057916
                 ],
                 "iterations": 1
             }
@@ -786,16 +1678,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1154910939
+                        1154910331
                     ],
                     "allocations": [
-                        224016
+                        224692
                     ],
                     "total_bytes": [
-                        1438337007
+                        1448363870
                     ],
                     "rss_bytes": [
-                        297889792
+                        293183488
                     ]
                 },
                 "columns": 100000,
@@ -815,32 +1707,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.1336212080000223,
-                "max": 0.16413491699995575,
-                "mean": 0.14086194766655857,
-                "stddev": 0.009276448796834046,
+                "min": 0.12683095300008063,
+                "max": 0.13225762499996563,
+                "mean": 0.12947098755557818,
+                "stddev": 0.001883537849570547,
                 "rounds": 9,
-                "median": 0.1370839219998743,
-                "iqr": 0.005586644499658178,
-                "q1": 0.13597446300002503,
-                "q3": 0.1415611074996832,
-                "iqr_outliers": 1,
-                "stddev_outliers": 1,
-                "outliers": "1;1",
-                "ld15iqr": 0.1336212080000223,
-                "hd15iqr": 0.16413491699995575,
-                "ops": 7.099149320064425,
-                "total": 1.2677575289990273,
+                "median": 0.1291829060000964,
+                "iqr": 0.002953029000082097,
+                "q1": 0.12811914899987187,
+                "q3": 0.13107217799995396,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.12683095300008063,
+                "hd15iqr": 0.13225762499996563,
+                "ops": 7.72373810442072,
+                "total": 1.1652388880002036,
                 "data": [
-                    0.14394866199972967,
-                    0.14076525599966772,
-                    0.1370839219998743,
-                    0.13508142299997417,
-                    0.136977282999851,
-                    0.13987271499991039,
-                    0.16413491699995575,
-                    0.13627214300004198,
-                    0.1336212080000223
+                    0.13105190299984315,
+                    0.13225762499996563,
+                    0.12722556000016993,
+                    0.1291829060000964,
+                    0.1284170119997725,
+                    0.12683095300008063,
+                    0.13060185599988472,
+                    0.1285380700001042,
+                    0.1311330030002864
                 ],
                 "iterations": 1
             }
@@ -859,16 +1751,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1301985949
+                        1301780669
                     ],
                     "allocations": [
-                        168362
+                        168356
                     ],
                     "total_bytes": [
-                        1653198681
+                        1652150249
                     ],
                     "rss_bytes": [
-                        430080000
+                        427065344
                     ]
                 },
                 "columns": 100000,
@@ -888,32 +1780,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 1.7190995709997878,
-                "max": 1.770059014999788,
-                "mean": 1.7396797961111286,
-                "stddev": 0.01633568364877164,
+                "min": 1.6227794269998412,
+                "max": 1.7309567600000264,
+                "mean": 1.6911077919999622,
+                "stddev": 0.03183527018581699,
                 "rounds": 9,
-                "median": 1.7393865580002057,
-                "iqr": 0.0215482352498384,
-                "q1": 1.726363681750172,
-                "q3": 1.7479119170000104,
-                "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 1.7190995709997878,
-                "hd15iqr": 1.770059014999788,
-                "ops": 0.5748184247672445,
-                "total": 15.657118165000156,
+                "median": 1.6946269539998866,
+                "iqr": 0.0334577724997871,
+                "q1": 1.6795606250001356,
+                "q3": 1.7130183974999227,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 1.6731015349996596,
+                "hd15iqr": 1.7309567600000264,
+                "ops": 0.5913283616400145,
+                "total": 15.219970127999659,
                 "data": [
-                    1.7453177620000133,
-                    1.770059014999788,
-                    1.7375533819999873,
-                    1.7282804830001623,
-                    1.7556943820000015,
-                    1.7190995709997878,
-                    1.7393865580002057,
-                    1.7206132780002008,
-                    1.7411137340000096
+                    1.6227794269998412,
+                    1.7309567600000264,
+                    1.6946269539998866,
+                    1.6979122509997069,
+                    1.7097295479998138,
+                    1.6817136550002942,
+                    1.6731015349996596,
+                    1.7228849460002493,
+                    1.6862650520001807
                 ],
                 "iterations": 1
             }
@@ -932,16 +1824,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        131501236
+                        125209812
                     ],
                     "allocations": [
                         111525
                     ],
                     "total_bytes": [
-                        171763918
+                        165472494
                     ],
                     "rss_bytes": [
-                        240812032
+                        234708992
                     ]
                 },
                 "columns": 100000,
@@ -961,32 +1853,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.3153488190000644,
-                "max": 0.3873274269999456,
-                "mean": 0.36231488011112056,
-                "stddev": 0.025964515637033676,
+                "min": 0.2878789460000917,
+                "max": 0.3416752390003239,
+                "mean": 0.3157604931111564,
+                "stddev": 0.02356002349651952,
                 "rounds": 9,
-                "median": 0.37430803500001275,
-                "iqr": 0.03826845975061133,
-                "q1": 0.3455849974997136,
-                "q3": 0.38385345725032494,
+                "median": 0.31386525500010976,
+                "iqr": 0.04658993675002421,
+                "q1": 0.29240673149990926,
+                "q3": 0.33899666824993346,
                 "iqr_outliers": 0,
-                "stddev_outliers": 2,
-                "outliers": "2;0",
-                "ld15iqr": 0.3153488190000644,
-                "hd15iqr": 0.3873274269999456,
-                "ops": 2.760030169595309,
-                "total": 3.260833921000085,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.2878789460000917,
+                "hd15iqr": 0.3416752390003239,
+                "ops": 3.1669573040854493,
+                "total": 2.8418444380004075,
                 "data": [
-                    0.32946098299998994,
-                    0.3153488190000644,
-                    0.37775632900002165,
-                    0.3873274269999456,
-                    0.38362415000028705,
-                    0.3845413790004386,
-                    0.3509596689996215,
-                    0.37430803500001275,
-                    0.35750712999970347
+                    0.2984614120000515,
+                    0.2878789460000917,
+                    0.29145426000013686,
+                    0.33975512300003174,
+                    0.337286130999928,
+                    0.3416752390003239,
+                    0.31386525500010976,
+                    0.3387438499999007,
+                    0.2927242219998334
                 ],
                 "iterations": 1
             }
@@ -1005,16 +1897,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        111299822
+                        105008430
                     ],
                     "allocations": [
-                        13573
+                        13574
                     ],
                     "total_bytes": [
-                        157210570
+                        150919186
                     ],
                     "rss_bytes": [
-                        219586560
+                        213225472
                     ]
                 },
                 "columns": 100000,
@@ -1034,32 +1926,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.022593382999730238,
-                "max": 0.05028415700007827,
-                "mean": 0.040223427999939707,
-                "stddev": 0.012810223021570472,
+                "min": 0.021787437000057253,
+                "max": 0.04759784700036107,
+                "mean": 0.035843692555621,
+                "stddev": 0.012925336332310666,
                 "rounds": 9,
-                "median": 0.04741311099996892,
-                "iqr": 0.025866206000387137,
-                "q1": 0.023683100499852117,
-                "q3": 0.049549306500239254,
+                "median": 0.04534896299992397,
+                "iqr": 0.024675987749787964,
+                "q1": 0.022284134000301492,
+                "q3": 0.046960121750089456,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 0.022593382999730238,
-                "hd15iqr": 0.05028415700007827,
-                "ops": 24.861133168498192,
-                "total": 0.3620108519994574,
+                "ld15iqr": 0.021787437000057253,
+                "hd15iqr": 0.04759784700036107,
+                "ops": 27.89891132026185,
+                "total": 0.32259323300058895,
                 "data": [
-                    0.04935738300036974,
-                    0.05028415700007827,
-                    0.02383854399977281,
-                    0.04841433599995071,
-                    0.023216770000090037,
-                    0.050125076999847806,
-                    0.04676809099964885,
-                    0.022593382999730238,
-                    0.04741311099996892
+                    0.021787437000057253,
+                    0.02292022999972687,
+                    0.04691050200017344,
+                    0.04534896299992397,
+                    0.04667380299997603,
+                    0.04759784700036107,
+                    0.02244553300033658,
+                    0.04710898099983751,
+                    0.021799937000196223
                 ],
                 "iterations": 1
             }
@@ -1078,16 +1970,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        395030877
+                        400808317
                     ],
                     "allocations": [
-                        62358
+                        62419
                     ],
                     "total_bytes": [
-                        548144075
+                        554064425
                     ],
                     "rss_bytes": [
-                        474492928
+                        475828224
                     ]
                 },
                 "columns": 1000000,
@@ -1096,8 +1988,8 @@
                 "live_fraction": 1.0,
                 "variables": 1000000,
                 "phase_seconds": {
-                    "attach": 0.0017960590002985555,
-                    "build": 0.09951583199972447
+                    "attach": 0.0015449100001205807,
+                    "build": 0.1016821279999931
                 }
             },
             "options": {
@@ -1111,32 +2003,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.28192607800019687,
-                "max": 0.35160001200029,
-                "mean": 0.3164240673333249,
-                "stddev": 0.025359243859340467,
+                "min": 0.26670150399968406,
+                "max": 0.3425298729998758,
+                "mean": 0.303227114888917,
+                "stddev": 0.02768668995839816,
                 "rounds": 9,
-                "median": 0.32354494899982456,
-                "iqr": 0.04148617099997409,
-                "q1": 0.2911807675000091,
-                "q3": 0.3326669384999832,
+                "median": 0.2909231240000736,
+                "iqr": 0.045721780000121726,
+                "q1": 0.2834928437500821,
+                "q3": 0.3292146237502038,
                 "iqr_outliers": 0,
                 "stddev_outliers": 4,
                 "outliers": "4;0",
-                "ld15iqr": 0.28192607800019687,
-                "hd15iqr": 0.35160001200029,
-                "ops": 3.1603158648061624,
-                "total": 2.847816605999924,
+                "ld15iqr": 0.26670150399968406,
+                "hd15iqr": 0.3425298729998758,
+                "ops": 3.2978581099725726,
+                "total": 2.7290440340002533,
                 "data": [
-                    0.3434460839998792,
-                    0.28192607800019687,
-                    0.3144650809999803,
-                    0.282405918999757,
-                    0.29410571700009314,
-                    0.32724887599988506,
-                    0.32354494899982456,
-                    0.35160001200029,
-                    0.32907389000001785
+                    0.3425298729998758,
+                    0.2909231240000736,
+                    0.2869214920001468,
+                    0.33387895400028356,
+                    0.26670150399968406,
+                    0.32765984700017725,
+                    0.28949855500013655,
+                    0.2732068989998879,
+                    0.31772378599998774
                 ],
                 "iterations": 1
             }
@@ -1155,16 +2047,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        415479188
+                        412999924
                     ],
                     "allocations": [
-                        63475
+                        63538
                     ],
                     "total_bytes": [
-                        587153510
+                        584816380
                     ],
                     "rss_bytes": [
-                        449634304
+                        471474176
                     ]
                 },
                 "columns": 1000000,
@@ -1173,8 +2065,8 @@
                 "live_fraction": 1.0,
                 "variables": 1000000,
                 "phase_seconds": {
-                    "attach": 0.0013146770002094854,
-                    "build": 0.14778689100012343
+                    "attach": 0.0007553949999419274,
+                    "build": 0.1585402709997652
                 }
             },
             "options": {
@@ -1188,32 +2080,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.3477719069996965,
-                "max": 0.42436802499969417,
-                "mean": 0.38038443844445485,
-                "stddev": 0.02121044307986248,
+                "min": 0.3259454580002057,
+                "max": 0.4105248279997795,
+                "mean": 0.36504812222225763,
+                "stddev": 0.02900152530076287,
                 "rounds": 9,
-                "median": 0.3801773680002043,
-                "iqr": 0.018248390750386534,
-                "q1": 0.37042768524986514,
-                "q3": 0.38867607600025167,
-                "iqr_outliers": 1,
-                "stddev_outliers": 2,
-                "outliers": "2;1",
-                "ld15iqr": 0.3477719069996965,
-                "hd15iqr": 0.42436802499969417,
-                "ops": 2.6289193219612312,
-                "total": 3.4234599460000936,
+                "median": 0.3566309440002442,
+                "iqr": 0.039097880250324124,
+                "q1": 0.3462562952498729,
+                "q3": 0.385354175500197,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.3259454580002057,
+                "hd15iqr": 0.4105248279997795,
+                "ops": 2.7393648648633655,
+                "total": 3.2854331000003185,
                 "data": [
-                    0.42436802499969417,
-                    0.3801773680002043,
-                    0.39281603700010237,
-                    0.38729608900030144,
-                    0.37438533200020174,
-                    0.3477719069996965,
-                    0.38083507700002883,
-                    0.37295031499979814,
-                    0.3628597960000661
+                    0.4077245469998161,
+                    0.34878422900010264,
+                    0.3473765899998398,
+                    0.3676537080000344,
+                    0.3428954109999722,
+                    0.3259454580002057,
+                    0.3566309440002442,
+                    0.4105248279997795,
+                    0.377897385000324
                 ],
                 "iterations": 1
             }
@@ -1232,16 +2124,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1538643841
+                        1538641697
                     ],
                     "allocations": [
-                        233322
+                        233986
                     ],
                     "total_bytes": [
-                        2349213999
+                        2348239942
                     ],
                     "rss_bytes": [
-                        690876416
+                        689922048
                     ]
                 },
                 "columns": 1000000,
@@ -1261,32 +2153,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 1.1138691370001652,
-                "max": 1.1710382020000907,
-                "mean": 1.1291443589999897,
-                "stddev": 0.017351844502443224,
+                "min": 1.045841012999972,
+                "max": 1.0914279339999666,
+                "mean": 1.0619163116667147,
+                "stddev": 0.015020974917734789,
                 "rounds": 9,
-                "median": 1.1271177710000302,
-                "iqr": 0.015210191999926792,
-                "q1": 1.1165654720000475,
-                "q3": 1.1317756639999743,
+                "median": 1.0580294780002077,
+                "iqr": 0.013362986499600993,
+                "q1": 1.0531053345002874,
+                "q3": 1.0664683209998884,
                 "iqr_outliers": 1,
-                "stddev_outliers": 1,
-                "outliers": "1;1",
-                "ld15iqr": 1.1138691370001652,
-                "hd15iqr": 1.1710382020000907,
-                "ops": 0.8856263524051394,
-                "total": 10.162299230999906,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 1.045841012999972,
+                "hd15iqr": 1.0914279339999666,
+                "ops": 0.941693793581968,
+                "total": 9.557246805000432,
                 "data": [
-                    1.1710382020000907,
-                    1.1315713369999685,
-                    1.1271177710000302,
-                    1.1139105679999375,
-                    1.1323886449999918,
-                    1.123915406999913,
-                    1.1310377239997251,
-                    1.1174504400000842,
-                    1.1138691370001652
+                    1.0914279339999666,
+                    1.0612295649998487,
+                    1.0541199050003343,
+                    1.045841012999972,
+                    1.050061623000147,
+                    1.0821845890000077,
+                    1.0584116959998937,
+                    1.0559410020000541,
+                    1.0580294780002077
                 ],
                 "iterations": 1
             }
@@ -1305,16 +2197,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        3019821443
+                        3021918595
                     ],
                     "allocations": [
-                        1025044
+                        1025046
                     ],
                     "total_bytes": [
-                        5757891424
+                        5759988576
                     ],
                     "rss_bytes": [
-                        2185748480
+                        2175913984
                     ]
                 },
                 "columns": 1000000,
@@ -1334,32 +2226,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 16.95216748799976,
-                "max": 17.81314371899998,
-                "mean": 17.274993992999953,
-                "stddev": 0.2808157702380753,
+                "min": 15.549883133000094,
+                "max": 16.384017988999858,
+                "mean": 15.730353262444421,
+                "stddev": 0.2554600112247488,
                 "rounds": 9,
-                "median": 17.225611647999813,
-                "iqr": 0.42338056300002336,
-                "q1": 17.01840705425002,
-                "q3": 17.441787617250043,
-                "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 16.95216748799976,
-                "hd15iqr": 17.81314371899998,
-                "ops": 0.057887140244749884,
-                "total": 155.47494593699957,
+                "median": 15.655030493999675,
+                "iqr": 0.14784261649992914,
+                "q1": 15.60232319250008,
+                "q3": 15.75016580900001,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 15.549883133000094,
+                "hd15iqr": 16.384017988999858,
+                "ops": 0.0635713631675049,
+                "total": 141.5731793619998,
                 "data": [
-                    17.81314371899998,
-                    17.225611647999813,
-                    17.46164649299999,
-                    17.43516799200006,
-                    17.198449827999866,
-                    17.390209570000025,
-                    17.037539509,
-                    16.961009690000083,
-                    16.95216748799976
+                    16.384017988999858,
+                    15.751475434999975,
+                    15.686659642999984,
+                    15.615366290000111,
+                    15.655030493999675,
+                    15.74972926700002,
+                    15.549883133000094,
+                    15.617823211000086,
+                    15.563193899999987
                 ],
                 "iterations": 1
             }
@@ -1378,16 +2270,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        483242030
+                        483241998
                     ],
                     "allocations": [
-                        1102079
+                        1102078
                     ],
                     "total_bytes": [
-                        840819837
+                        840819805
                     ],
                     "rss_bytes": [
-                        594157568
+                        587755520
                     ]
                 },
                 "columns": 1000000,
@@ -1407,32 +2299,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 2.6534379499998977,
-                "max": 2.896078136000142,
-                "mean": 2.7521329694444225,
-                "stddev": 0.07228192038524361,
+                "min": 2.510252933999709,
+                "max": 2.6116952319998745,
+                "mean": 2.5657059545554954,
+                "stddev": 0.036565885069130076,
                 "rounds": 9,
-                "median": 2.7502293069996995,
-                "iqr": 0.0909442802499143,
-                "q1": 2.7030596862500715,
-                "q3": 2.794003966499986,
+                "median": 2.5790140379999684,
+                "iqr": 0.0552138040002319,
+                "q1": 2.5369026252499225,
+                "q3": 2.5921164292501544,
                 "iqr_outliers": 0,
-                "stddev_outliers": 2,
-                "outliers": "2;0",
-                "ld15iqr": 2.6534379499998977,
-                "hd15iqr": 2.896078136000142,
-                "ops": 0.36335453668209633,
-                "total": 24.7691967249998,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 2.510252933999709,
+                "hd15iqr": 2.6116952319998745,
+                "ops": 0.38975627671770685,
+                "total": 23.09135359099946,
                 "data": [
-                    2.7278900060000524,
-                    2.7107392150001033,
-                    2.7598795029998655,
-                    2.896078136000142,
-                    2.7983743290001257,
-                    2.6800210999999763,
-                    2.6534379499998977,
-                    2.792547178999939,
-                    2.7502293069996995
+                    2.510252933999709,
+                    2.546459553999739,
+                    2.5232935939998242,
+                    2.584555159000047,
+                    2.6077333080002063,
+                    2.5790140379999684,
+                    2.6116952319998745,
+                    2.586910803000137,
+                    2.5414389689999553
                 ],
                 "iterations": 1
             }
@@ -1451,16 +2343,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        229036790
+                        229036886
                     ],
                     "allocations": [
-                        22572
+                        22575
                     ],
                     "total_bytes": [
-                        304310448
+                        304310552
                     ],
                     "rss_bytes": [
-                        328544256
+                        322654208
                     ]
                 },
                 "columns": 1000000,
@@ -1480,32 +2372,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.16955247000032614,
-                "max": 0.20478998899989165,
-                "mean": 0.18668742644452627,
-                "stddev": 0.01421710679309502,
+                "min": 0.16746935899982418,
+                "max": 0.19910680899965882,
+                "mean": 0.17667766599990703,
+                "stddev": 0.01347803052677996,
                 "rounds": 9,
-                "median": 0.19535135100022671,
-                "iqr": 0.02487311825029792,
-                "q1": 0.17238824874982583,
-                "q3": 0.19726136700012376,
+                "median": 0.16796098499980872,
+                "iqr": 0.024222401500082924,
+                "q1": 0.1677368672500279,
+                "q3": 0.19195926875011082,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 0.16955247000032614,
-                "hd15iqr": 0.20478998899989165,
-                "ops": 5.356547138953398,
-                "total": 1.6801868380007363,
+                "ld15iqr": 0.16746935899982418,
+                "hd15iqr": 0.19910680899965882,
+                "ops": 5.660024963203477,
+                "total": 1.5900989939991632,
                 "data": [
-                    0.16955247000032614,
-                    0.19547849199989287,
-                    0.17248133399971266,
-                    0.17210899300016536,
-                    0.19535135100022671,
-                    0.19998359400005938,
-                    0.1963539580001452,
-                    0.20478998899989165,
-                    0.17408665700031634
+                    0.16782921699996223,
+                    0.16776697700015575,
+                    0.16809759399984614,
+                    0.16746935899982418,
+                    0.16764653799964435,
+                    0.1924137350001729,
+                    0.19910680899965882,
+                    0.19180778000009013,
+                    0.16796098499980872
                 ],
                 "iterations": 1
             }
@@ -1524,16 +2416,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        2323223229
+                        2319039197
                     ],
                     "allocations": [
-                        62443
+                        62504
                     ],
                     "total_bytes": [
-                        2490579106
+                        2486537992
                     ],
                     "rss_bytes": [
-                        1779253248
+                        1773641728
                     ]
                 },
                 "columns": 10000000,
@@ -1542,8 +2434,8 @@
                 "live_fraction": 1.0,
                 "variables": 10000000,
                 "phase_seconds": {
-                    "attach": 0.0018715530000008584,
-                    "build": 0.35004933099980917
+                    "attach": 0.0007905940001364797,
+                    "build": 0.38738023500036434
                 }
             },
             "options": {
@@ -1557,32 +2449,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 2.33169688199996,
-                "max": 2.4876488180002525,
-                "mean": 2.419655162111111,
-                "stddev": 0.05617431441013368,
+                "min": 2.3400841249999758,
+                "max": 2.4494102670000757,
+                "mean": 2.373948998777754,
+                "stddev": 0.033140196668688,
                 "rounds": 9,
-                "median": 2.4416548399999556,
-                "iqr": 0.0898443900005077,
-                "q1": 2.3696416437497874,
-                "q3": 2.459486033750295,
-                "iqr_outliers": 0,
+                "median": 2.3692047229997115,
+                "iqr": 0.03173045924972939,
+                "q1": 2.3531293017501866,
+                "q3": 2.384859760999916,
+                "iqr_outliers": 1,
                 "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 2.33169688199996,
-                "hd15iqr": 2.4876488180002525,
-                "ops": 0.41328203111699424,
-                "total": 21.776896459,
+                "outliers": "3;1",
+                "ld15iqr": 2.3400841249999758,
+                "hd15iqr": 2.4494102670000757,
+                "ops": 0.4212390411566794,
+                "total": 21.365540988999783,
                 "data": [
-                    2.4864828439999656,
-                    2.4496761979999064,
-                    2.33169688199996,
-                    2.3640827029998945,
-                    2.450487097000405,
-                    2.4876488180002525,
-                    2.4416548399999556,
-                    2.3936724529999083,
-                    2.3714946239997516
+                    2.4494102670000757,
+                    2.3824642999998105,
+                    2.3400841249999758,
+                    2.3643334569997023,
+                    2.3692047229997115,
+                    2.3574744340003235,
+                    2.340093904999776,
+                    2.3920461440002327,
+                    2.3704296340001747
                 ],
                 "iterations": 1
             }
@@ -1601,16 +2493,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        2435421172
+                        2438578036
                     ],
                     "allocations": [
-                        63503
+                        63569
                     ],
                     "total_bytes": [
-                        2621337509
+                        2624637251
                     ],
                     "rss_bytes": [
-                        1782226944
+                        1776234496
                     ]
                 },
                 "columns": 10000000,
@@ -1619,8 +2511,8 @@
                 "live_fraction": 1.0,
                 "variables": 10000000,
                 "phase_seconds": {
-                    "attach": 0.0015449620000254072,
-                    "build": 0.7099549200002002
+                    "attach": 0.0008987239998532459,
+                    "build": 0.6723214079997888
                 }
             },
             "options": {
@@ -1634,32 +2526,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 2.7092441079998935,
-                "max": 2.8752547230001255,
-                "mean": 2.7728201014444696,
-                "stddev": 0.053878740749072375,
+                "min": 2.663872559000083,
+                "max": 2.827417785000307,
+                "mean": 2.7414144963333658,
+                "stddev": 0.0499982986107121,
                 "rounds": 9,
-                "median": 2.7752240990002974,
-                "iqr": 0.07397447274991009,
-                "q1": 2.7239130432501497,
-                "q3": 2.79788751600006,
+                "median": 2.7468316839999716,
+                "iqr": 0.04932438999981059,
+                "q1": 2.713705906749965,
+                "q3": 2.7630302967497755,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 2.7092441079998935,
-                "hd15iqr": 2.8752547230001255,
-                "ops": 0.3606436636401551,
-                "total": 24.955380913000226,
+                "ld15iqr": 2.663872559000083,
+                "hd15iqr": 2.827417785000307,
+                "ops": 0.3647751922730026,
+                "total": 24.672730467000292,
                 "data": [
-                    2.8752547230001255,
-                    2.72258689399996,
-                    2.753847326000141,
-                    2.8294985429997723,
-                    2.7092441079998935,
-                    2.7752240990002974,
-                    2.724355093000213,
-                    2.7873505070001556,
-                    2.778019619999668
+                    2.765876063000178,
+                    2.663872559000083,
+                    2.7468316839999716,
+                    2.745798111000113,
+                    2.761724062000212,
+                    2.7620817079996414,
+                    2.7278475660000367,
+                    2.827417785000307,
+                    2.6712809289997494
                 ],
                 "iterations": 1
             }
@@ -1678,16 +2570,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        5423572448
+                        5423571328
                     ],
                     "allocations": [
-                        325109
+                        325775
                     ],
                     "total_bytes": [
-                        11661626211
+                        11548784106
                     ],
                     "rss_bytes": [
-                        4514889728
+                        4507795456
                     ]
                 },
                 "columns": 10000000,
@@ -1707,32 +2599,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 11.127983522999784,
-                "max": 11.528699995999887,
-                "mean": 11.27292104822229,
-                "stddev": 0.15590287910905246,
+                "min": 10.796625017999759,
+                "max": 11.048521759999858,
+                "mean": 10.86063341144437,
+                "stddev": 0.07778071643489497,
                 "rounds": 9,
-                "median": 11.185048071999972,
-                "iqr": 0.26474170799963304,
-                "q1": 11.153367049000394,
-                "q3": 11.418108757000027,
-                "iqr_outliers": 0,
-                "stddev_outliers": 2,
-                "outliers": "2;0",
-                "ld15iqr": 11.127983522999784,
-                "hd15iqr": 11.528699995999887,
-                "ops": 0.08870815254735571,
-                "total": 101.45628943400061,
+                "median": 10.833817323999938,
+                "iqr": 0.06707965499981583,
+                "q1": 10.812974521749993,
+                "q3": 10.880054176749809,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 10.796625017999759,
+                "hd15iqr": 11.048521759999858,
+                "ops": 0.0920756609781389,
+                "total": 97.74570070299933,
                 "data": [
-                    11.40082067000003,
-                    11.528699995999887,
-                    11.289662647000114,
-                    11.133112432000416,
-                    11.160118588000387,
-                    11.160870488,
-                    11.127983522999784,
-                    11.185048071999972,
-                    11.469973018000019
+                    10.89828663399976,
+                    10.817232127999887,
+                    10.796625017999759,
+                    10.833817323999938,
+                    10.829272864999893,
+                    10.800201703000312,
+                    10.847766580000098,
+                    11.048521759999858,
+                    10.873976690999825
                 ],
                 "iterations": 1
             }
@@ -1751,16 +2643,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        4109526794
+                        4106905322
                     ],
                     "allocations": [
-                        11006840
+                        11006838
                     ],
                     "total_bytes": [
-                        7731854925
+                        7729233453
                     ],
                     "rss_bytes": [
-                        4069793792
+                        4063395840
                     ]
                 },
                 "columns": 10000000,
@@ -1780,32 +2672,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 28.734746893000192,
-                "max": 29.753829174000202,
-                "mean": 29.324830599444493,
-                "stddev": 0.3028776279313538,
+                "min": 27.05036612799995,
+                "max": 27.427853359999972,
+                "mean": 27.292091166222136,
+                "stddev": 0.12338233668201529,
                 "rounds": 9,
-                "median": 29.338060266999946,
-                "iqr": 0.39011475250015337,
-                "q1": 29.169985854499828,
-                "q3": 29.56010060699998,
+                "median": 27.332684798999708,
+                "iqr": 0.15324513700034004,
+                "q1": 27.212666996749817,
+                "q3": 27.365912133750157,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 28.734746893000192,
-                "hd15iqr": 29.753829174000202,
-                "ops": 0.0341007937491357,
-                "total": 263.9234753950004,
+                "ld15iqr": 27.05036612799995,
+                "hd15iqr": 27.427853359999972,
+                "ops": 0.036640651458677634,
+                "total": 245.6288204959992,
                 "data": [
-                    29.184836837999683,
-                    29.753829174000202,
-                    29.34034369400024,
-                    29.535712542000056,
-                    29.633264801999758,
-                    29.338060266999946,
-                    29.277248281000084,
-                    29.125432904000263,
-                    28.734746893000192
+                    27.05036612799995,
+                    27.149288452999826,
+                    27.233793177999814,
+                    27.358257071000025,
+                    27.329674853999677,
+                    27.388529712000036,
+                    27.427853359999972,
+                    27.358372941000198,
+                    27.332684798999708
                 ],
                 "iterations": 1
             }
@@ -1824,16 +2716,16 @@
             "extra_info": {
                 "benchmem": {
                     "peak_bytes": [
-                        1428089878
+                        1425468438
                     ],
                     "allocations": [
-                        112582
+                        112581
                     ],
                     "total_bytes": [
-                        1797050466
+                        1794429026
                     ],
                     "rss_bytes": [
-                        1432711168
+                        1426010112
                     ]
                 },
                 "columns": 10000000,
@@ -1853,32 +2745,480 @@
                 "warmup": false
             },
             "stats": {
-                "min": 2.0482169619999695,
-                "max": 2.1270570589999807,
-                "mean": 2.0742716104444603,
-                "stddev": 0.02514021613225779,
+                "min": 1.9889918440003385,
+                "max": 2.027925623000101,
+                "mean": 2.0027540055555417,
+                "stddev": 0.013193957191912771,
                 "rounds": 9,
-                "median": 2.0700001549998888,
-                "iqr": 0.034463019250438265,
-                "q1": 2.056398410999691,
-                "q3": 2.090861430250129,
+                "median": 1.995745505999821,
+                "iqr": 0.019537279499786564,
+                "q1": 1.9932721285000525,
+                "q3": 2.012809407999839,
                 "iqr_outliers": 0,
                 "stddev_outliers": 2,
                 "outliers": "2;0",
-                "ld15iqr": 2.0482169619999695,
-                "hd15iqr": 2.1270570589999807,
-                "ops": 0.48209694186853724,
-                "total": 18.66844449400014,
+                "ld15iqr": 1.9889918440003385,
+                "hd15iqr": 2.027925623000101,
+                "ops": 0.49931244537574204,
+                "total": 18.024786049999875,
                 "data": [
-                    2.090634051000052,
-                    2.0482169619999695,
-                    2.1270570589999807,
-                    2.0495902679999745,
-                    2.0625465410003017,
-                    2.0586677919995964,
-                    2.091543568000361,
-                    2.0700001549998888,
-                    2.070188098000017
+                    2.0117812049998065,
+                    1.9932042549999096,
+                    1.9932947530001002,
+                    2.0043186570001126,
+                    1.995745505999821,
+                    1.9936301899997488,
+                    1.9889918440003385,
+                    2.027925623000101,
+                    2.015894016999937
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-specsolve-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-specsolve-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "specsolve",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-specsolve-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "attach": 0.0010087129999192257,
+                    "build": 0.009992570999656891,
+                    "first_window": 0.39399545899959776
+                },
+                "process_rss_bytes": 161247232
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.49940745799995057,
+                "max": 0.537488103999749,
+                "mean": 0.5136244549999497,
+                "stddev": 0.014449925271791004,
+                "rounds": 9,
+                "median": 0.5091071110000485,
+                "iqr": 0.023822669499850235,
+                "q1": 0.5010089769999695,
+                "q3": 0.5248316464998197,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.49940745799995057,
+                "hd15iqr": 0.537488103999749,
+                "ops": 1.9469477947659208,
+                "total": 4.622620094999547,
+                "data": [
+                    0.5328389060000518,
+                    0.5013287649999256,
+                    0.537488103999749,
+                    0.5039436170000045,
+                    0.5221625599997424,
+                    0.5091071110000485,
+                    0.5162939609999739,
+                    0.5000496130001011,
+                    0.49940745799995057
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-specsolve-in-memory-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-specsolve-in-memory-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "specsolve-in-memory",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-specsolve-in-memory-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "attach": 0.0008277850001832121,
+                    "build": 0.007690186999752768,
+                    "first_window": 0.4184899890001361
+                },
+                "process_rss_bytes": 160968704
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.509445788999983,
+                "max": 0.5573875160002899,
+                "mean": 0.5397833116666738,
+                "stddev": 0.013865587292723398,
+                "rounds": 9,
+                "median": 0.5394633010000689,
+                "iqr": 0.011225954250107861,
+                "q1": 0.5357164889998103,
+                "q3": 0.5469424432499181,
+                "iqr_outliers": 1,
+                "stddev_outliers": 3,
+                "outliers": "3;1",
+                "ld15iqr": 0.5345677440000145,
+                "hd15iqr": 0.5573875160002899,
+                "ops": 1.85259525143956,
+                "total": 4.858049805000064,
+                "data": [
+                    0.544215296999937,
+                    0.5345677440000145,
+                    0.509445788999983,
+                    0.5551238819998616,
+                    0.5430568659999153,
+                    0.5360994039997422,
+                    0.5573875160002899,
+                    0.5386900060002517,
+                    0.5394633010000689
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-linopy-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-linopy-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "linopy",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-linopy-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        27
+                    ],
+                    "total_bytes": [
+                        165253
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "first_window": 0.8114654149999296
+                },
+                "process_rss_bytes": 239177728
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9429573129996243,
+                "max": 1.0281742830002258,
+                "mean": 0.9767572138889086,
+                "stddev": 0.025181963408774287,
+                "rounds": 9,
+                "median": 0.9696008790001542,
+                "iqr": 0.026260133500045413,
+                "q1": 0.9617068635000123,
+                "q3": 0.9879669970000577,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.9429573129996243,
+                "hd15iqr": 1.0281742830002258,
+                "ops": 1.0237958683904176,
+                "total": 8.790814925000177,
+                "data": [
+                    0.9670640170002116,
+                    0.9429573129996243,
+                    0.9953773510001156,
+                    0.9696008790001542,
+                    0.9642356260001179,
+                    0.9837880009999935,
+                    0.9541205759996956,
+                    0.9854968790000385,
+                    1.0281742830002258
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-pyomo-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-pyomo-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "pyomo",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-pyomo-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": null,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "first_window": 0.44075254400013364
+                },
+                "process_rss_bytes": 175280128
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.572032623999803,
+                "max": 0.6043306599999596,
+                "mean": 0.5898952671110843,
+                "stddev": 0.011902744147164928,
+                "rounds": 9,
+                "median": 0.5909966829999576,
+                "iqr": 0.02093660049990831,
+                "q1": 0.5791593645000148,
+                "q3": 0.6000959649999231,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.572032623999803,
+                "hd15iqr": 0.6043306599999596,
+                "ops": 1.6952161777756525,
+                "total": 5.309057403999759,
+                "data": [
+                    0.6040814529997078,
+                    0.6043306599999596,
+                    0.5880195039999307,
+                    0.5755714199999602,
+                    0.572032623999803,
+                    0.5949022450004122,
+                    0.5909966829999576,
+                    0.5987674689999949,
+                    0.580355346000033
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-gurobipy-loop-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-gurobipy-loop-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "gurobipy-loop",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-gurobipy-loop-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "first_window": 0.1540926320003564
+                },
+                "process_rss_bytes": 104452096
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.21300396400010868,
+                "max": 0.25290812699995513,
+                "mean": 0.23353632899999058,
+                "stddev": 0.016283379120809207,
+                "rounds": 9,
+                "median": 0.2239872169998307,
+                "iqr": 0.028287308500352992,
+                "q1": 0.22168600849977338,
+                "q3": 0.24997331700012637,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.21300396400010868,
+                "hd15iqr": 0.25290812699995513,
+                "ops": 4.281989034776856,
+                "total": 2.101826960999915,
+                "data": [
+                    0.25290812699995513,
+                    0.2239872169998307,
+                    0.2230510639997192,
+                    0.21759084199993595,
+                    0.2230594940001538,
+                    0.21300396400010868,
+                    0.2504633640000975,
+                    0.24795292099997823,
+                    0.249809968000136
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_fresh[dispatch-2xs-gurobipy-matrix-gurobi]",
+            "fullname": "bench/test_ladder.py::test_fresh[dispatch-2xs-gurobipy-matrix-gurobi]",
+            "params": {
+                "case_name": "dispatch",
+                "size": "2xs",
+                "arm": "gurobipy-matrix",
+                "sink": "gurobi"
+            },
+            "param": "dispatch-2xs-gurobipy-matrix-gurobi",
+            "extra_info": {
+                "benchmem": {
+                    "peak_bytes": [
+                        59705
+                    ],
+                    "allocations": [
+                        25
+                    ],
+                    "total_bytes": [
+                        132349
+                    ]
+                },
+                "columns": 1000,
+                "rows": 10,
+                "nonzeros": 1000,
+                "live_fraction": 1.0,
+                "variables": 1000,
+                "phase_seconds": {
+                    "first_window": 0.2666543619998265
+                },
+                "process_rss_bytes": 117518336
+            },
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 9,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "precision": null,
+                "confidence": null,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.32792679699969085,
+                "max": 0.3701639639998575,
+                "mean": 0.35461263522211084,
+                "stddev": 0.012556989119518238,
+                "rounds": 9,
+                "median": 0.356082301999777,
+                "iqr": 0.012681247250156957,
+                "q1": 0.3501722674999428,
+                "q3": 0.36285351475009975,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.34344230899978356,
+                "hd15iqr": 0.3701639639998575,
+                "ops": 2.8199784798239134,
+                "total": 3.1915137169989976,
+                "data": [
+                    0.356082301999777,
+                    0.3608016879998104,
+                    0.34344230899978356,
+                    0.35241558699999587,
+                    0.3628092150001976,
+                    0.32792679699969085,
+                    0.36298641399980625,
+                    0.35488544100007857,
+                    0.3701639639998575
                 ],
                 "iterations": 1
             }
@@ -1912,11 +3252,11 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "attach": 0.0022710829998686677,
-                    "build": 0.015849853999952757,
-                    "first_window": 0.4297223660000782
+                    "attach": 0.0008785930003796238,
+                    "build": 0.01374689500016757,
+                    "first_window": 0.40335734399968715
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 162885632
             },
             "options": {
                 "disable_gc": false,
@@ -1929,32 +3269,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.5400417189998734,
-                "max": 0.5964880050000829,
-                "mean": 0.5651031842222538,
-                "stddev": 0.018195014448333838,
+                "min": 0.5108094390002407,
+                "max": 0.5631996359998084,
+                "mean": 0.5315867984443483,
+                "stddev": 0.01574344202722998,
                 "rounds": 9,
-                "median": 0.5611362970003029,
-                "iqr": 0.026518885749965193,
-                "q1": 0.5509627402500428,
-                "q3": 0.577481626000008,
-                "iqr_outliers": 0,
+                "median": 0.5284505770000578,
+                "iqr": 0.01588975075014787,
+                "q1": 0.5211566842498314,
+                "q3": 0.5370464349999793,
+                "iqr_outliers": 1,
                 "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 0.5400417189998734,
-                "hd15iqr": 0.5964880050000829,
-                "ops": 1.769588329919412,
-                "total": 5.0859286580002845,
+                "outliers": "3;1",
+                "ld15iqr": 0.5108094390002407,
+                "hd15iqr": 0.5631996359998084,
+                "ops": 1.8811603352950643,
+                "total": 4.784281185999134,
                 "data": [
-                    0.5400417189998734,
-                    0.5611362970003029,
-                    0.5565555520001908,
-                    0.5490072960001271,
-                    0.5516145550000147,
-                    0.5964880050000829,
-                    0.5753120250001302,
-                    0.5717827799999213,
-                    0.5839904289996412
+                    0.5219659509998564,
+                    0.5328607159999592,
+                    0.5270931269997163,
+                    0.5476664139996501,
+                    0.5108094390002407,
+                    0.533506442000089,
+                    0.5284505770000578,
+                    0.5187288839997564,
+                    0.5631996359998084
                 ],
                 "iterations": 1
             }
@@ -1988,11 +3328,11 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "attach": 0.0009483750000072177,
-                    "build": 0.011037730999760242,
-                    "first_window": 0.43473333799965985
+                    "attach": 0.0008874529999047809,
+                    "build": 0.008991118000267306,
+                    "first_window": 0.4248845950000941
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 163229696
             },
             "options": {
                 "disable_gc": false,
@@ -2005,32 +3345,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.5603233249998993,
-                "max": 0.5908876170001349,
-                "mean": 0.5816908339999018,
-                "stddev": 0.009547702509474478,
+                "min": 0.5380298800000674,
+                "max": 0.5672553979998156,
+                "mean": 0.5544553979999465,
+                "stddev": 0.00971094847464481,
                 "rounds": 9,
-                "median": 0.5845952789995863,
-                "iqr": 0.010532660249964465,
-                "q1": 0.5784208222499956,
-                "q3": 0.58895348249996,
-                "iqr_outliers": 1,
-                "stddev_outliers": 1,
-                "outliers": "1;1",
-                "ld15iqr": 0.5753796959997999,
-                "hd15iqr": 0.5908876170001349,
-                "ops": 1.7191262807489394,
-                "total": 5.235217505999117,
+                "median": 0.5547914349999701,
+                "iqr": 0.012683989000265683,
+                "q1": 0.5496601257498241,
+                "q3": 0.5623441147500898,
+                "iqr_outliers": 0,
+                "stddev_outliers": 4,
+                "outliers": "4;0",
+                "ld15iqr": 0.5380298800000674,
+                "hd15iqr": 0.5672553979998156,
+                "ops": 1.8035715832278658,
+                "total": 4.9900985819995185,
                 "data": [
-                    0.5903909999997268,
-                    0.5845952789995863,
-                    0.5603233249998993,
-                    0.5794345310000608,
-                    0.5908876170001349,
-                    0.5805975389998821,
-                    0.5884743100000378,
-                    0.5753796959997999,
-                    0.5851342089999889
+                    0.5547914349999701,
+                    0.556669920999866,
+                    0.5672553979998156,
+                    0.5522714529997756,
+                    0.5532304459998159,
+                    0.5380298800000674,
+                    0.5418261439999696,
+                    0.5643476280001778,
+                    0.5616762770000605
                 ],
                 "iterations": 1
             }
@@ -2064,9 +3404,9 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "first_window": 0.8026083400000061
+                    "first_window": 0.7855947150001157
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 242884608
             },
             "options": {
                 "disable_gc": false,
@@ -2079,32 +3419,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.991634428999987,
-                "max": 1.065463852999983,
-                "mean": 1.0384457163333234,
-                "stddev": 0.026634715411903057,
+                "min": 0.9615443460002098,
+                "max": 1.0062644839999848,
+                "mean": 0.9843300403332856,
+                "stddev": 0.01743818683283049,
                 "rounds": 9,
-                "median": 1.0456565819999923,
-                "iqr": 0.03129565199992612,
-                "q1": 1.0283453770000506,
-                "q3": 1.0596410289999767,
+                "median": 0.9875548449999769,
+                "iqr": 0.03249648225016699,
+                "q1": 0.9654362979998723,
+                "q3": 0.9979327802500393,
                 "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 0.991634428999987,
-                "hd15iqr": 1.065463852999983,
-                "ops": 0.9629776350091054,
-                "total": 9.34601144699991,
+                "stddev_outliers": 5,
+                "outliers": "5;0",
+                "ld15iqr": 0.9615443460002098,
+                "hd15iqr": 1.0062644839999848,
+                "ops": 1.0159194162777037,
+                "total": 8.858970362999571,
                 "data": [
-                    1.0613827690003745,
-                    1.0456565819999923,
-                    1.0463279789996704,
-                    1.059060448999844,
-                    1.0386607850000473,
-                    1.0404254479999508,
-                    0.991634428999987,
-                    1.065463852999983,
-                    0.9973991530000603
+                    0.9663335619998179,
+                    1.0053049509997436,
+                    0.9954753900001378,
+                    0.9875548449999769,
+                    0.9816254859997571,
+                    1.0062644839999848,
+                    0.9921227929999077,
+                    0.9615443460002098,
+                    0.9627445060000355
                 ],
                 "iterations": 1
             }
@@ -2138,9 +3478,9 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "first_window": 0.5774801039997328
+                    "first_window": 0.5396493590001228
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 190730240
             },
             "options": {
                 "disable_gc": false,
@@ -2153,32 +3493,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.6994372909998674,
-                "max": 0.7798474569999598,
-                "mean": 0.7422894847778075,
-                "stddev": 0.03162985072445511,
+                "min": 0.6643572250000034,
+                "max": 0.7387147690001257,
+                "mean": 0.7040707808888934,
+                "stddev": 0.02049058793927059,
                 "rounds": 9,
-                "median": 0.7459073510003691,
-                "iqr": 0.06086080699992635,
-                "q1": 0.7078742892499577,
-                "q3": 0.768735096249884,
-                "iqr_outliers": 0,
-                "stddev_outliers": 5,
-                "outliers": "5;0",
-                "ld15iqr": 0.6994372909998674,
-                "hd15iqr": 0.7798474569999598,
-                "ops": 1.3471833031547442,
-                "total": 6.680605363000268,
+                "median": 0.7000920069999665,
+                "iqr": 0.017308946000071046,
+                "q1": 0.6978003129999024,
+                "q3": 0.7151092589999735,
+                "iqr_outliers": 1,
+                "stddev_outliers": 2,
+                "outliers": "2;1",
+                "ld15iqr": 0.6920598820001942,
+                "hd15iqr": 0.7387147690001257,
+                "ops": 1.4203117458410845,
+                "total": 6.336637028000041,
                 "data": [
-                    0.6994372909998674,
-                    0.7459073510003691,
-                    0.708407232999889,
-                    0.7062754580001638,
-                    0.7796978619999209,
-                    0.7798474569999598,
-                    0.760526986000059,
-                    0.7650808409998717,
-                    0.7354248840001674
+                    0.7000920069999665,
+                    0.7387147690001257,
+                    0.7074931669999387,
+                    0.6920598820001942,
+                    0.7211710920000769,
+                    0.6997137899998052,
+                    0.6643572250000034,
+                    0.713088647999939,
+                    0.6999464479999915
                 ],
                 "iterations": 1
             }
@@ -2212,9 +3552,9 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "first_window": 0.1958422759998939
+                    "first_window": 0.1841146739998294
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 107601920
             },
             "options": {
                 "disable_gc": false,
@@ -2227,32 +3567,32 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.2524379550000049,
-                "max": 0.29872334799983946,
-                "mean": 0.27803230444442306,
-                "stddev": 0.01598641258107285,
+                "min": 0.22530050800014578,
+                "max": 0.2778799640000216,
+                "mean": 0.26106578677778697,
+                "stddev": 0.01726294030421268,
                 "rounds": 9,
-                "median": 0.2834995439998238,
-                "iqr": 0.019667796250132596,
-                "q1": 0.2696280034998608,
-                "q3": 0.2892957997499934,
+                "median": 0.26199225399977877,
+                "iqr": 0.02061220975008382,
+                "q1": 0.2537185280000358,
+                "q3": 0.2743307377501196,
                 "iqr_outliers": 0,
-                "stddev_outliers": 3,
-                "outliers": "3;0",
-                "ld15iqr": 0.2524379550000049,
-                "hd15iqr": 0.29872334799983946,
-                "ops": 3.5967043541873522,
-                "total": 2.5022907399998076,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.22530050800014578,
+                "hd15iqr": 0.2778799640000216,
+                "ops": 3.8304521337036648,
+                "total": 2.3495920810000825,
                 "data": [
-                    0.2772106719999101,
-                    0.2892918309999004,
-                    0.29872334799983946,
-                    0.2524379550000049,
-                    0.28377418800027954,
-                    0.2528122369999437,
-                    0.2834995439998238,
-                    0.2752332589998332,
-                    0.28930770600027245
+                    0.22530050800014578,
+                    0.26199225399977877,
+                    0.2597041389999504,
+                    0.2726045009999325,
+                    0.24500247200012382,
+                    0.27706506899994565,
+                    0.25662388000000647,
+                    0.2778799640000216,
+                    0.2734192940001776
                 ],
                 "iterations": 1
             }
@@ -2286,9 +3626,9 @@
                 "live_fraction": 1.0,
                 "variables": 10000,
                 "phase_seconds": {
-                    "first_window": 0.2728793820001556
+                    "first_window": 0.24015083499989487
                 },
-                "process_rss_bytes": 5020499968
+                "process_rss_bytes": 117616640
             },
             "options": {
                 "disable_gc": false,
@@ -2301,37 +3641,37 @@
                 "warmup": false
             },
             "stats": {
-                "min": 0.35436169900003733,
-                "max": 0.38399492200005625,
-                "mean": 0.3731812726666956,
-                "stddev": 0.010707309918351032,
+                "min": 0.3065895460003958,
+                "max": 0.36455493300036323,
+                "mean": 0.340863882000071,
+                "stddev": 0.020605967388842586,
                 "rounds": 9,
-                "median": 0.37692962100027216,
-                "iqr": 0.011915285999975822,
-                "q1": 0.36808085475001917,
-                "q3": 0.379996140749995,
+                "median": 0.3488550029996986,
+                "iqr": 0.027470896749946405,
+                "q1": 0.3268406170001299,
+                "q3": 0.3543115137500763,
                 "iqr_outliers": 0,
                 "stddev_outliers": 3,
                 "outliers": "3;0",
-                "ld15iqr": 0.35436169900003733,
-                "hd15iqr": 0.38399492200005625,
-                "ops": 2.679662869613351,
-                "total": 3.3586314540002604,
+                "ld15iqr": 0.3065895460003958,
+                "hd15iqr": 0.36455493300036323,
+                "ops": 2.933722382472285,
+                "total": 3.067774938000639,
                 "data": [
-                    0.37692962100027216,
-                    0.38301952500023617,
-                    0.37483890899966354,
-                    0.37189970000008543,
-                    0.3566243189998204,
-                    0.37797441300017454,
-                    0.35436169900003733,
-                    0.38399492200005625,
-                    0.3789883459999146
+                    0.3488550029996986,
+                    0.36455493300036323,
+                    0.35337638000009974,
+                    0.34242620699978943,
+                    0.3065895460003958,
+                    0.3325348550001763,
+                    0.3525631960001192,
+                    0.357116915000006,
+                    0.3097579029999906
                 ],
                 "iterations": 1
             }
         }
     ],
-    "datetime": "2026-10-11T17:24:01.948864+00:00",
+    "datetime": "2026-10-12T22:24:55.317132+00:00",
     "version": "5.3.0"
 }
