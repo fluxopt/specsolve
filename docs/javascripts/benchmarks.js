@@ -70,7 +70,13 @@ async function mount(root) {
     ratio: v => v >= 10 ? `${v.toFixed(0)}×` : v >= 1 ? `${trim(v, 1)}×` : `${trim(v, 2)}×`,
   };
 
-  const state = { metric: 'wall', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set() };
+  /* The size range is chosen in decades, since every ladder steps tenfold: `dispatch` at 10k and
+     `transport` at 9.8k are one choice. */
+  const decade = v => Math.round(Math.log10(v));
+  const DECADES = [...new Set(ROWS.map(r => decade(r[X])))].sort((a, b) => a - b);
+  const state = { metric: 'wall', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
+    range: { from: DECADES[0], to: DECADES.at(-1) } };
+  const inRange = r => decade(r[X]) >= state.range.from && decade(r[X]) <= state.range.to;
 
   const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
   const isHero = r => r[SERIES] === HERO;
@@ -106,12 +112,18 @@ async function mount(root) {
     return full.filter((_, i) => i % step === 0 || i === full.length - 1);
   }
 
-  /* One axis under the shared switch. Linear starts at zero. Log ticks on the given sizes when
-     there are some, else on 1–2–5. */
-  function axis(values, fmt, label, sizes = null) {
+  /* One axis under the shared switch. Linear starts at zero unless `fromZero` is off, and then at
+     the smallest value. Log ticks on the given sizes when there are some, else on 1–2–5; a single
+     size is centred on a decade of its own. */
+  function axis(values, fmt, label, sizes = null, fromZero = true) {
     if (state.scale === 'linear') {
-      return { scale: scaleLinear().domain([0, Math.max(...values)]).nice(5), grid: true,
+      const scale = fromZero ? scaleLinear().domain([0, Math.max(...values)]).nice(5)
+        : scaleLinear().domain([Math.min(...values), Math.max(...values)]);
+      return { scale, grid: true,
         axis: { label, ticks: { count: 5, format: fmt } } };
+    }
+    if (sizes?.length === 1) {
+      return { scale: scaleLog().domain([sizes[0] / 3, sizes[0] * 3]), axis: { label, ticks: { values: sizes, format: fmt } } };
     }
     if (sizes) return { scale: scaleLog, axis: { label, ticks: { values: sizes, format: fmt } } };
     const ticks = logTicks(values);
@@ -188,10 +200,12 @@ async function mount(root) {
     }] }) }];
   }
 
+  /* A projection is taken from the whole panel and then cut to the size range, so its slope does
+     not move with the range. */
   function definition(rows, metric) {
     const fmt = FORMAT[metric.format];
-    const measured = rows.filter(r => r.value != null);
-    const ahead = projections(rows);
+    const measured = rows.filter(r => r.value != null && inRange(r));
+    const ahead = projections(rows).filter(inRange);
     const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
     const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
     const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
@@ -214,7 +228,7 @@ async function mount(root) {
         crosshair({ y: false }),
       ],
       scales: {
-        x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes),
+        x: axis(sizes, FORMAT[SPEC.x.format], SPEC.x.label, sizes, state.range.from === DECADES[0]),
         y: axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
       },
       color: { domain: LIBRARIES, range: SPEC.series.paint },
@@ -244,7 +258,7 @@ async function mount(root) {
         const look = kind === 'floor' ? 'class="floor"' : `style="${shade(r.ratio)}"`;
         return `<td ${look} title="${r[SERIES]}: ${fmt(r.value)}">${FORMAT.ratio(r.ratio)}</td>`;
       };
-      const sizes = [...new Set(panel.filter(isHero).map(r => r[X]))].sort((a, b) => a - b);
+      const sizes = [...new Set(panel.filter(r => isHero(r) && inRange(r)).map(r => r[X]))].sort((a, b) => a - b);
       sizes.forEach((size, i) => {
         const at = new Map(panel.filter(r => r[X] === size).map(r => [r[SERIES], r]));
         body.push(`<tr class="${i ? '' : 'first'}"><td class="panel">${i ? '' : title}</td>` +
@@ -270,7 +284,7 @@ async function mount(root) {
     const grid = root.querySelector('#bench-facets');
     grid.replaceChildren();
     for (const [title, panel] of Map.groupBy(rows, panelOf)) {
-      if (!panel.some(r => r.value != null)) continue;
+      if (!panel.some(r => r.value != null && inRange(r))) continue;
       const fig = document.createElement('div');
       fig.className = 'bench-panel';
       fig.innerHTML = `<div class="bench-caption">${title}</div><div></div>`;
@@ -286,6 +300,70 @@ async function mount(root) {
       `<i class="swatch${n === HERO ? ' hero' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('') +
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
+
+  /* The size range as a slider on an axis of its own: a tick per decade, the chosen span shaded, a
+     handle at each end, and a drag along the axis that brushes a new span; a click moves the nearer
+     end. Each end snaps to a decade and stays one short of the other, so every panel keeps two
+     sizes at least. */
+  const slider = root.querySelector('.bench-range');
+  const LAST = DECADES.length - 1;
+  const at = i => `${(i / LAST) * 100}%`;
+  slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
+    DECADES.map((d, i) => `<span class="bench-tick" style="left:${at(i)}">${FORMAT.count(10 ** d)}</span>`).join('') +
+    '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${LAST}" step="1" ` +
+      `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} model shown">`).join('');
+  const track = slider.querySelector('.bench-track');
+  const handle = end => slider.querySelector(`input[data-end="${end}"]`);
+  const span = () => [DECADES.indexOf(state.range.from), DECADES.indexOf(state.range.to)];
+
+  function showRange() {
+    const [lo, hi] = span();
+    [['from', lo], ['to', hi]].forEach(([end, i]) => {
+      handle(end).value = i;
+      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(10 ** DECADES[i])} ${SPEC.x.label}`);
+    });
+    Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / LAST) * 100}%` });
+    slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));
+  }
+
+  function setRange(lo, hi) {
+    const changed = lo !== span()[0] || hi !== span()[1];
+    state.range = { from: DECADES[lo], to: DECADES[hi] };
+    showRange();
+    if (changed) draw();
+  }
+
+  slider.addEventListener('input', ev => {
+    const [lo, hi] = span(), v = +ev.target.value;
+    if (ev.target.dataset.end === 'from') setRange(Math.min(v, hi - 1), hi);
+    else setRange(lo, Math.max(v, lo + 1));
+  });
+
+  const nearest = ev => {
+    const r = track.getBoundingClientRect();
+    return Math.round(Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1) * LAST);
+  };
+  let brush = null;
+  slider.addEventListener('pointerdown', ev => {
+    if (ev.target.matches('input')) return;
+    brush = { start: nearest(ev), moved: false };
+    slider.setPointerCapture(ev.pointerId);
+  });
+  slider.addEventListener('pointermove', ev => {
+    if (!brush) return;
+    const i = nearest(ev);
+    if (i === brush.start) return;
+    brush.moved = true;
+    setRange(Math.min(i, brush.start), Math.max(i, brush.start));
+  });
+  slider.addEventListener('pointerup', () => {
+    if (brush && !brush.moved) {
+      const [lo, hi] = span(), i = brush.start;
+      if (Math.abs(i - lo) <= Math.abs(i - hi)) setRange(Math.min(i, hi - 1), hi);
+      else setRange(lo, Math.max(i, lo + 1));
+    }
+    brush = null;
+  });
 
   root.addEventListener('click', ev => {
     const lib = ev.target.closest('#bench-legend button');
@@ -304,5 +382,7 @@ async function mount(root) {
     draw();
   });
 
+  slider.hidden = LAST < 1;
+  if (LAST >= 1) showRange();
   draw();
 }
