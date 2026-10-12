@@ -1,7 +1,7 @@
 description: >-
   The dispatch model of README.md, plus one macro and one named expression —
   small enough to print in full, complete enough that every pipeline stage in
-  examples/walkthrough.py has something to show.
+  examples/walkthrough/walkthrough.py has something to show.
 
 dimensions:
   snapshot:

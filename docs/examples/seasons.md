@@ -1,8 +1,6 @@
 # seasons
 
-A store that cycles inside each season rather than across the horizon, with
-seasons of different lengths — one balance row says it, because the wrap is the
-season's own and no level is carried from one season into the next.
+A store that cycles inside each season rather than across the horizon, with seasons of different lengths.
 
 ## The problem
 
@@ -184,16 +182,6 @@ starts at, except that it must return to it.
 The same instance written against the axis gives **80.0**: the extra 6 comes
 out of winter, which had it only because summer's closing level leaked across
 the boundary.
-
-## Why it is one row
-
-Per-season cycling can be written without `by=`, as a level each season begins
-and ends at: a variable per season, an opening row that reads it, and a closing
-row that pins it. Substituting the closing row into the opening one gives the
-equation above, so the two are the same model.
-
-With `by=` no first snapshot is named anywhere, so nothing needs re-checking
-when the horizon is renumbered, extended, or cut into different seasons.
 
 ## The grouping is data
 

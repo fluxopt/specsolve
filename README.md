@@ -27,14 +27,14 @@ polars, and hands it to HiGHS, Gurobi or Xpress.
 - **Tables in, tables out.** Pass any Arrow table, such as polars, pandas or
   DuckDB, or a parquet path. Results come back as tables, and an archive keeps
   the spec, its data and its results as parquet, ready for queries, plots or
-  BI. [Tables in, tables out →](https://specsolve.readthedocs.io/en/latest/tables/)
+  BI. [Your data →](https://specsolve.readthedocs.io/en/latest/tables/)
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same spec. Each window is
-  checked against how the model couples before it runs. [Sweep a model →](https://specsolve.readthedocs.io/en/latest/sweep/)
+  checked against how the model couples before it runs. [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Fast, and hard to get wrong.** Tables hold only the rows that exist, so a
   model's topology does not change its cost. The solver stays loaded:
   `update()` puts new numbers on it, and the next solve carries on from where
-  the last one ended. The API is a handful of verbs, with nothing to tune.
+  the last one ended. The API is a handful of functions, with nothing to tune.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All

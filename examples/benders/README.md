@@ -1,14 +1,13 @@
 # Decomposition, as evidence
 
-This page shows that the language can express a Benders decomposition and reach
-the right answer, for anyone decomposing a model in specsolve or asking for a
-driver that does it.
+This folder shows that the language can express a Benders decomposition and
+reach the right answer, for anyone decomposing a model in specsolve or asking
+for a driver that does it.
 
 **specsolve ships no decomposition driver, and
 [#596](https://github.com/fluxopt/specsolve/issues/596) settled that it will not
 own one.** The loop is the caller's, and so are its failure modes. Every block
-below is validated against
-[`examples/benders/`](https://github.com/fluxopt/specsolve/blob/main/examples/benders/run.py).
+below is validated against [`run.py`](run.py).
 
 ## Why anyone wants it
 
@@ -122,7 +121,7 @@ objective:
 ```
 
 **`cut` and `fcut` take their members from data**
-([the data contract](../reference/data.md)). An iteration appends rows to their
+([the data contract](../../docs/reference/data.md)). An iteration appends rows to their
 parameter tables and generates no YAML, so the spec a reviewer reads is the
 spec that runs.
 
@@ -134,7 +133,7 @@ thing keeping the first master bounded before any cut exists.
 A cut is the value and the slope of the subproblem at the capacity that was
 tried. The slope is the shadow price of the capacity constraint, weighted by
 availability and summed over snapshots. `sources` is the data attached to
-the spec ([glossary](../reference/glossary.md#how-it-runs)):
+the spec ([glossary](../../docs/reference/glossary.md#how-it-runs)):
 
 ```python
 import specsolve as sps
@@ -150,7 +149,7 @@ with sps.solve('examples/benders/sub.yaml', sources) as sub:
     )
 ```
 
-The whole interface with the [engine](../reference/glossary.md#how-it-runs) is
+The whole interface with the [engine](../../docs/reference/glossary.md#how-it-runs) is
 `dual` and a join against the model's own `avail` table. Appending the cut is
 two `pl.concat` calls onto the parameter tables the master already declares.
 
@@ -230,7 +229,7 @@ settled on.
 Each spec is read once above the loop **and built once**, because a cut is a row
 in a parameter table rather than an edit to a file. `sps.build` attaches the data
 and `update` puts the next iteration's numbers on the model that is already
-there ([glossary](../reference/glossary.md#the-chain)), so parsing, validation
+there ([glossary](../../docs/reference/glossary.md#the-chain)), so parsing, validation
 and the build are paid once per run rather than three times an iteration. The
 subproblem's `cap_hat` reaches its rows as a right-hand side, so the solver keeps
 the model it holds and re-solves from the last basis. The master gains a row a

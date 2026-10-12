@@ -1,9 +1,6 @@
 # reserves
 
-Energy and reserve co-optimization on a two-bus grid: offers are (generator,
-market, tranche) triples, reserve zones overlap, and one line dangles. The
-model exists to prove a claim — every many-to-many shape the language covers,
-in one instance, each one load-bearing.
+Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **915**, matched to `rtol=1e-09`.
 
@@ -369,28 +366,6 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         m.add_objective((p * series['energy_cost']).sum() + (r * series['offer_cost']).sum())
         return m
     ```
-
-## What it proves
-
-Present is not proven, so each shape carries the one data mutation that must
-move the optimum. `tests/test_reserves.py` holds them, beside the three-way
-agreement of both lanes, the written LP file and the incidence-matrix
-reference above, and checks the balance duals too.
-
-| Shape | Where | Idiom | Mutation that moves the optimum |
-|---|---|---|---|
-| self-relation, used in both directions | lines bus→bus, balance sums through `line_from` and `line_to` | edge dimension + leg relations | — (the balance is every other row's feasibility) |
-| parallel edges | `l1`, `l2` both b2→b1 | member identity is the label, not the endpoint pair | drop `l2` → dearer |
-| dangling member | `l4`'s `line_to` is null | a partial relation: the open end aggregates nowhere | point `l4` at b1 → cheaper |
-| pullback through a leg | `f ≤ at(bus_cap, by=line_from, over=bus, into=line)` | `at()` | uncap the exporting bus → cheaper |
-| k-ary edge set | offers carry `gen_of`, `market_of`, `tranche_of` | three legs, one edge dimension | — (structure, pinned by test) |
-| duplicate pair | `o1`, `o2` share all three legs | multiplicity is real capacity | drop `o2` → dearer |
-| two pullbacks through two legs | the offer cap above | `at() * at()` | `o4` sits exactly at its cap |
-| weighted n-to-n membership | `zone_share`, `g2` in both zones at 0.5 / 1.0 | incidence parameter, contracted | zero g2's z2 share → dearer |
-
-Zone `z1` stays slack by design: it holds the *overlap* (g2 at weight 0.5)
-while `z2` holds the *bindingness*, so the fractional weight is shown without
-double-loading one constraint.
 
 ## The optimum, by hand
 

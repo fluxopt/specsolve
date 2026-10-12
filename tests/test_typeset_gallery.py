@@ -108,11 +108,6 @@ DIVERGENT = {
         'what the generator has no notation for: the weights it writes run over the whole '
         'axis, and points: is a mask on their declaration rather than a smaller index set.'
     ),
-    'piecewise_lp': (
-        'states the identity the method rests on rather than the rows it emits: a convex '
-        'curve is the upper envelope of its own segment lines, which is why bounding the '
-        'cost above every line needs no weights. The rows themselves are in the block below.'
-    ),
     'seasons': (
         'states one boundary row rather than the model: the page is about where a '
         'clause points, so its summary shows the opening equation alone and names '
@@ -138,12 +133,6 @@ DIVERGENT = {
     'piecewise': (
         "shows one generator's curve. The model carries the snapshot dim through λ "
         'as well, so the generated subscripts are (t, g, k) where the summary has (g, k).'
-    ),
-    'sos': (
-        'states one curve, as the textbook writes it: λ_k against the breakpoints k. '
-        'The model carries snapshot and generator through λ as well, so the generated '
-        'subscripts are (t, g, b) — piecewise diverges from its own summary for the '
-        'same reason, these being the two spellings of one formulation.'
     ),
     'transport_dantzig': (
         'is the textbook statement of the transportation problem, with an abstract '
