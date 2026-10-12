@@ -34,6 +34,9 @@ MOVES = {
     ),
 }
 
+#: polars 1.x runs ``auto`` in memory, so only polars 2 streams a build above the limit.
+AUTO_STREAMS = int(pl.__version__.split('.')[0]) >= 2
+
 
 @pytest.fixture
 def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dict[str, Any]:
@@ -84,12 +87,12 @@ def test_the_same_sources_build_the_same_model(
 ) -> None:
     """Every port holds below `IN_MEMORY_REACH`, a ``MOVES`` one included: there the build runs in memory.
 
-    Above it the build is left to polars' streaming engine, which sums the same
+    Above it the build is left to polars, whose streaming engine sums the same
     rows of osemosys_utopia in another order from one build to the next.
     """
     if above_the_limit:
         monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
-        if reason := MOVES.get(port['name']):
+        if (reason := MOVES.get(port['name'])) and AUTO_STREAMS:
             request.applymarker(pytest.mark.xfail(reason=reason, strict=True))
     given = sources(port['name'])
     assert _built(port, given) == _built(port, given)

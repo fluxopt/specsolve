@@ -557,7 +557,9 @@ def _spread_over_the_axis(
     coordinates = pl.concat([table.select(axis.dim) for table in sliced.values()], how='vertical_relaxed')
     coordinates = coordinates.unique().sort(axis.dim)
     return {
-        name: coordinates.join(tidied[name].drop(axis.into).unique(maintain_order=True), how='cross')
+        name: coordinates.join(
+            tidied[name].drop(axis.into).unique(maintain_order=True), how='cross', maintain_order='left_right'
+        )
         for name in numbers
     }
 
