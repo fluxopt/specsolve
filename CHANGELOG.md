@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
+- fix(engine): a quadratic row keeps its own pair when a row before it has no term ([#2028](https://github.com/fluxopt/specsolve/pull/2028))
 - docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
 - docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
 - docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))

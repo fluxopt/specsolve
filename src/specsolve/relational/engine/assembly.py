@@ -287,7 +287,7 @@ class Assembly:
 
         if not terms and not quads:
             none = pl.Series('row', [], dtype=_DTYPES['row'])
-            rows, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), none, start)
+            rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
         pieces = []
@@ -313,14 +313,12 @@ class Assembly:
         qmatrix = self._quadratic_share(frame, quads, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        rows, matrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, term_rows, start)
+        rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
         spread = _magnitude_range(matrix, 'coeff')
         if spread is not None:
             self.measured.coefficients[name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
-        if qmatrix is not None:
-            qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return rows, matrix, qmatrix
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
@@ -358,16 +356,23 @@ class Assembly:
         return share
 
     def _drop_termless_rows(
-        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series, start: int
-    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
+        self,
+        name: str,
+        rows: pl.DataFrame,
+        matrix: pl.DataFrame,
+        qmatrix: pl.DataFrame | None,
+        kept: pl.Series,
+        start: int,
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None, int]:
         """Rows that kept no variable term are not built, and the block closes up.
 
         *kept* is read before zeros are pruned, so a row whose every term is
         zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
-        because the dual read-back reads a block by position.
+        because the dual read-back reads a block by position. Every row either
+        share holds is in *kept*, so each of its entries moves with its row.
         """
         if kept.len() == rows.height:
-            return rows, matrix, start + rows.height
+            return rows, matrix, qmatrix, start + rows.height
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
@@ -375,13 +380,15 @@ class Assembly:
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        if qmatrix is not None:
+            qmatrix = qmatrix.with_columns(pl.col('row').replace_strict(remap))
         kept_frame = (
             self.constraints[name]
             .frame.filter(pl.col('row').is_in(kept))
             .with_columns(pl.col('row').replace_strict(remap))
         )
         self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
-        return rows, matrix, start + surviving.height
+        return rows, matrix, qmatrix, start + surviving.height
 
     def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
