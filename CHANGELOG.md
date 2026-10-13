@@ -7,8 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- fix: the specsolve line in the benchmark legend sits level with its name
-- fix: the benchmark charts and table measure each library against specsolve under the same solver, so specsolve reads 1× with Gurobi too
+- docs: the specsolve line in the benchmark legend sits level with its name
+- docs: the benchmark charts and table measure each library against specsolve under the same solver, so specsolve reads 1× with Gurobi too
 - docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
 - docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
 - docs: the benchmark charts zoom to a range of model sizes, on log and linear axes ([#1993](https://github.com/fluxopt/specsolve/pull/1993))
