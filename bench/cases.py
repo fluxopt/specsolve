@@ -22,6 +22,8 @@ Each case stresses a different SQL shape:
 ``network``    buses joined by lines, a store at every bus and a portfolio
                installed at some buses only: ``transport``, ``storage`` and
                ``nodal`` in one model, the shape of a small PyPSA dispatch.
+               Pools cap groups of plants through a relation keyed by the
+               sparse (bus, tech) pair.
 ``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``) over
                ``(snapshot, node, tech)``: a binary ``u`` that switches
                dispatch ``p``, a row mask on a relation's label, and a sum
@@ -554,6 +556,9 @@ def _profiled_data(shape: Shape, dest: Path) -> dict[str, str]:
 #: The technology every bus has, sized to meet the bus's demand on its own.
 FIRM = 'ocgt'
 
+#: How many pools the installed (bus, tech) pairs of `network` draw from.
+POOLS = 50
+
 
 def _availability(rng: np.random.Generator, n_snap: int, techs: list[str]) -> np.ndarray:
     """Per snapshot and technology, the share of installed capacity that can run.
@@ -580,6 +585,13 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
     model is feasible with no line and no store; `FIRM` is the most expensive
     technology, so the optimum still uses both. The network is `transport`'s,
     a ring plus chords, and every bus has one store.
+
+    The installed pairs are dealt at random into `POOLS` pools, so every pool
+    has a plant and a pool's members are not a product of a bus set and a
+    technology set. A
+    pool's limit is 60 per cent of its `FIRM` capacity plus 40 per cent of the
+    rest. The `FIRM` plants alone can carry every load inside that limit, so
+    the pools keep the model feasible, and they bind on the cheap plants.
     """
     rng = _seed(shape)
     n_snap, n_bus, n_line = shape.sizes['snapshot'], shape.sizes['bus'], shape.sizes['line']
@@ -603,6 +615,10 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
     p_max = capacity[bus_of, tech_of][None, :] * _availability(rng, n_snap, techs)[:, tech_of]
     load = capacity[:, firm][None, :] * 0.5 * (0.8 + 0.4 * rng.random((n_snap, n_bus)))
     p_store = rng.uniform(50.0, 150.0, n_bus)
+    pools = [f'pool{i:03d}' for i in range(POOLS)]
+    pool_of = rng.permutation(np.arange(len(bus_of)) % POOLS)
+    share = np.where(tech_of == firm, 0.6, 0.4)
+    limit = np.bincount(pool_of, weights=share * capacity[bus_of, tech_of], minlength=POOLS)
 
     return _dump(
         {
@@ -629,10 +645,19 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
                 {'line': lines, 'bus': [buses[(i % n_bus + 1 + i // n_bus) % n_bus] for i in range(n_line)]}
             ),
             'store_bus': pd.DataFrame({'store': stores, 'bus': buses}),
+            'pool_of': pd.DataFrame(
+                {
+                    'bus': np.asarray(buses)[bus_of],
+                    'tech': np.asarray(techs)[tech_of],
+                    'pool': np.asarray(pools)[pool_of],
+                }
+            ),
+            'limit': pd.DataFrame({'pool': pools, 'value': limit}),
             'bus': pd.DataFrame({'bus': buses}),
             'tech': pd.DataFrame({'tech': techs}),
             'line': pd.DataFrame({'line': lines}),
             'store': pd.DataFrame({'store': stores}),
+            'pool': pd.DataFrame({'pool': pools}),
             'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
         },
         dest,
