@@ -18,15 +18,17 @@ const shade = v => {
 };
 
 /* A table bench.report writes as HTML carries each cell's ratio in `data-ratio`, and is shaded
-   here with the same bins, so the bins have one home. A matrix-floor row stays neutral, as in the
-   charts' own table; the floor's members come from the page's chart spec. */
+   here with the same bins, so the bins have one home. A row of the matrix floor or of specsolve's
+   own other lane stays neutral, as in the charts' own table: neither is a rival. Both lists come
+   from the page's chart spec. */
 function shadeWritten() {
   const spec = document.getElementById('bench-spec');
-  const floor = spec ? JSON.parse(spec.textContent).series.floor.members : [];
+  const series = spec ? JSON.parse(spec.textContent).series : null;
+  const neutral = series ? [...series.floor.members, ...series.internal] : [];
   document.querySelectorAll('table.bench-heat tr').forEach(tr => {
-    const isFloor = floor.includes(tr.cells[0]?.textContent.trim());
+    const plain = neutral.includes(tr.cells[0]?.textContent.trim());
     tr.querySelectorAll('td[data-ratio]').forEach(td => {
-      if (isFloor) td.className = 'floor';
+      if (plain) td.className = 'neutral';
       else td.setAttribute('style', shade(+td.dataset.ratio));
     });
   });
@@ -60,7 +62,7 @@ async function mount(root) {
   const SPEC = JSON.parse(root.querySelector('#bench-spec').textContent);
   const ROWS = await (await fetch(new URL(SPEC.data, location.href))).json();
   if (!root.isConnected) return;
-  const { field: SERIES, refused: REFUSED, highlight: HERO, domain: LIBRARIES, floor: FLOOR } = SPEC.series;
+  const { field: SERIES, refused: REFUSED, highlight: HERO, domain: LIBRARIES, floor: FLOOR, internal: INTERNAL } = SPEC.series;
   const X = SPEC.x.field;
 
   const trim = (v, d) => `${+v.toFixed(d)}`;
@@ -324,20 +326,20 @@ async function mount(root) {
         }
         if (kind === 'own') return `<td class="own">${fmt(r.value)}</td>`;
         if (r.ratio == null) return `<td class="none">${fmt(r.value)}</td>`;
-        const look = kind === 'floor' ? 'class="floor"' : `style="${shade(r.ratio)}"`;
+        const look = kind === 'neutral' ? 'class="neutral"' : `style="${shade(r.ratio)}"`;
         return `<td ${look} title="${r[SERIES]}: ${fmt(r.value)}">${FORMAT.ratio(r.ratio)}</td>`;
       };
       const sizes = [...new Set(panel.filter(r => isHero(r) && inRange(r)).map(r => r[X]))].sort((a, b) => a - b);
       sizes.forEach((size, i) => {
         const at = new Map(panel.filter(r => r[X] === size).map(r => [r[SERIES], r]));
         body.push(`<tr class="${i ? '' : 'first'}"><td class="panel">${i ? '' : title}</td>` +
-          `<td>${FORMAT[SPEC.x.format](size)}</td>${cell(at.get(HERO), 'own')}${others.map(n => cell(at.get(n))).join('')}` +
-          `${floorShown ? cell(FLOOR.members.map(n => at.get(n)).find(Boolean), 'floor') : ''}</tr>`);
+          `<td>${FORMAT[SPEC.x.format](size)}</td>${cell(at.get(HERO), 'own')}${others.map(n => cell(at.get(n), INTERNAL.includes(n) ? 'neutral' : '')).join('')}` +
+          `${floorShown ? cell(FLOOR.members.map(n => at.get(n)).find(Boolean), 'neutral') : ''}</tr>`);
       });
     }
     root.querySelector('#bench-heat').innerHTML =
-      `<thead><tr><th>panel</th><th>${SPEC.x.label}</th><th>${HERO}</th>${others.map(n => `<th>${n}</th>`).join('')}` +
-      `${floorShown ? `<th class="floor">${FLOOR.label}</th>` : ''}</tr></thead>` +
+      `<thead><tr><th>panel</th><th>${SPEC.x.label}</th><th>${HERO}</th>${others.map(n => `<th${INTERNAL.includes(n) ? ' class="neutral"' : ''}>${n}</th>`).join('')}` +
+      `${floorShown ? `<th class="neutral">${FLOOR.label}</th>` : ''}</tr></thead>` +
       `<tbody>${body.join('')}</tbody>`;
   }
 

@@ -60,6 +60,7 @@ network
     "refused": "refused",
     "highlight": "specsolve",
     "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
+    "internal": ["specsolve-in-memory"],
     "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "specsolve-in-memory", "gurobipy-matrix", "highspy-matrix"],
     "ink": ["var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--floor)", "var(--floor)"],
     "paint": ["var(--s1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--floor)", "var(--floor)"]
@@ -95,8 +96,9 @@ solver that every panel and the table run through.
   zero, a linear axis starts at zero; from a power of ten, it starts just below
   the smallest size shown.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
-  orange where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
-  are sizes the harness refused.
+  orange where the other library is, grey within ten per cent. The
+  specsolve-in-memory and matrix floor columns are not shaded: they are
+  references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
 
 ## A script that solves one model
 
