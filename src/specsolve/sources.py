@@ -109,7 +109,8 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        streamed = _streamed_parameter(pname, pdef, data[pname], sources)
+        sources[pname] = streamed if streamed is not None else _checked_parameter(pname, pdef, sources[pname], sources)
 
     for dname in program.dimensions:
         if dname not in sources:
@@ -119,7 +120,10 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
 
 
 def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[str, Source]:
-    """*data* with every parquet path read into memory, the files in one concurrent pass.
+    """*data* with every index and relation given as a parquet path read into memory, the files in one concurrent pass.
+
+    A parameter's file is left to [`_streamed_parameter`][], which reads it
+    without holding it.
 
     Reading a file costs a fixed time however few rows it holds, and files read
     one after the other add those times up. Each file is read for the columns
@@ -134,7 +138,8 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     scans: dict[str, pl.LazyFrame] = {}
     for name, source in data.items():
         if (
-            isinstance(source, (str, Path))
+            name not in program.parameters
+            and isinstance(source, (str, Path))
             and (table := as_frame(source)) is not None
             and set(wanted[name]) <= set(table.collect_schema().names())
         ):
@@ -731,6 +736,45 @@ def _checked_parameter(
     _check_values_are_present(name, p, frame, kind)
     _check_value_dtype(name, p, frame, kind)
     return frame.lazy()
+
+
+def _streamed_parameter(
+    name: str, p: ParameterDeclaration, source: Source, sources: Mapping[str, pl.LazyFrame]
+) -> pl.LazyFrame | None:
+    """*source*, a parquet path, as a scan the build streams, once one streaming pass has checked it.
+
+    The pass asks [`_checked_parameter`][]'s questions as aggregates, so the
+    file is never held whole. ``None`` where *source* is no parquet path,
+    where a dim holds datetimes, or where a check fails: the eager reader then
+    reads the file and names the defect.
+    """
+    if not isinstance(source, (str, Path)) or (scan := as_frame(source)) is None:
+        return None
+    schema = scan.collect_schema()
+    wanted = [*p.dims, VALUE]
+    if not set(wanted) <= set(schema.names()) or schema[VALUE] not in ACCEPTED_VALUE_TYPES[p.dtype]:
+        return None
+    if any(isinstance(schema[d], (pl.Datetime, pl.Date)) for d in p.dims):
+        return None
+    known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
+    value = pl.col(VALUE)
+    holed = value.is_null() | value.is_nan() if schema[VALUE].is_float() else value.is_null()
+    with in_memory(False):
+        answers = (
+            scan.select(
+                pl.len().alias('#rows'),
+                holed.sum().alias('#holes'),
+                (pl.struct(p.dims).n_unique() if p.dims else pl.lit(1)).alias('#coordinates'),
+                *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
+            )
+            .pipe(collected)
+            .row(0, named=True)
+        )
+    if answers['#holes'] or answers['#coordinates'] != answers['#rows'] or (not p.dims and answers['#rows'] != 1):
+        return None
+    if not all(answers[f'#known {d}'] for d in known):
+        return None
+    return scan.select(wanted)
 
 
 def _check_one_row_per_coordinate(
