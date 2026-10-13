@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
 - docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
 - docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
 - docs: the benchmark charts zoom to a range of model sizes, on log and linear axes ([#1993](https://github.com/fluxopt/specsolve/pull/1993))

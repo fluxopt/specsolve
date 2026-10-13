@@ -70,7 +70,7 @@
 .bench #bench-legend button[aria-pressed="false"] { opacity: .38; }
 .bench #bench-legend button[disabled] { cursor: default; }
 .bench .swatch { width: 16px; height: 2px; border-radius: 2px; display: inline-block; }
-.bench .swatch.hero { width: 20px; height: 4px; }
+.bench .swatch.ours { width: 20px; height: 4px; }
 
 /* `minmax(0, 1fr)` rather than `1fr`: the zero lets a track be narrower than its content. */
 .bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .8rem; }
