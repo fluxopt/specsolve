@@ -182,9 +182,9 @@ class Assembly:
         with in_memory(small):
             stacked, _ = _collapsed(terms, ('row', 'col'), ordered=True)
             self.measured.coefficients = _ranges(
-                stacked.get_column('row'), [stacked.get_column('coeff')], names, offsets
+                stacked.get_column('row'), [stacked.get_column('coeff')], names, offsets[:-1]
             )
-            self.measured.rhs = _ranges(rows.get_column('row'), [rows.get_column('rhs')], names, offsets)
+            self.measured.rhs = _ranges(rows.get_column('row'), [rows.get_column('rhs')], names, offsets[:-1])
             self.measured.bounds = _ranges(
                 pl.Series(np.arange(self.n_cols)),
                 [stacked_cols.get_column('lb'), stacked_cols.get_column('ub')],
@@ -476,7 +476,9 @@ class Assembly:
         stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
-        self.measured.objective_range = _magnitude_range(objective, 'coeff')
+        self.measured.objective_range = _ranges(
+            pl.Series(np.arange(objective.height)), [objective.get_column('coeff')], ['objective'], [0]
+        ).get('objective')
         return objective
 
     def _objective_quadratic(self, quads: tuple[Piece, ...], expression: program.Expression) -> pl.DataFrame | None:
@@ -525,48 +527,29 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
     )
 
 
-def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
-    """The smallest and largest magnitude across *columns*, or ``None`` where none has one.
-
-    Zero and infinity are dropped, as in the ``Bound`` and ``RHS`` lines a solver prints.
-    """
-    sides: list[pl.Expr] = []
-    for i, column in enumerate(columns):
-        value = pl.col(column)
-        finite, up, down = value.is_finite(), value > 0, value < 0
-        sides += [
-            value.filter(finite & up).min().alias(f'#low+{i}'),
-            value.filter(finite & up).max().alias(f'#high+{i}'),
-            value.filter(finite & down).max().alias(f'#low-{i}'),
-            value.filter(finite & down).min().alias(f'#high-{i}'),
-        ]
-    answered = frame.select(sides).row(0, named=True)
-    lows = [abs(bound) for name, bound in answered.items() if name.startswith('#low') and bound is not None]
-    highs = [abs(bound) for name, bound in answered.items() if name.startswith('#high') and bound is not None]
-    return (min(lows), max(highs)) if lows else None
-
-
 def _ranges(
     positions: pl.Series, values: Sequence[pl.Series], names: Sequence[str], starts: Sequence[int]
 ) -> dict[str, tuple[float, float]]:
-    """Each block's [`_magnitude_range`][] across *values*, by name; a block with none is left out.
+    """Each block's smallest and largest magnitude across *values*, by name; a block with none is left out.
 
-    Block *i* holds the *positions* from ``starts[i]`` on, and blocks come in
-    position order. Every block is read in one query, because a polars query
-    costs a fixed time a small block never earns back.
+    Block *i* holds the *positions* from ``starts[i]`` on, and *positions*
+    ascend, so a block is a contiguous run that numpy reduces in place. Zero
+    and infinity are dropped, as in the ``Bound`` and ``RHS`` lines a solver
+    prints.
     """
-    block = pl.Series('#block', np.searchsorted(np.asarray(starts), positions.to_numpy(), side='right') - 1)
-    magnitude = pl.col('#value').abs()
-    ranged = (
-        pl.concat([pl.DataFrame([block, value.cast(pl.Float64).alias('#value')]) for value in values])
-        .lazy()
-        .filter(magnitude.is_finite() & (magnitude > 0))
-        .group_by('#block')
-        .agg(magnitude.min().alias('#smallest'), magnitude.max().alias('#largest'))
-        .sort('#block')
-        .pipe(collected)
-    )
-    return {names[b]: (smallest, largest) for b, smallest, largest in ranged.iter_rows()}
+    first = np.searchsorted(positions.to_numpy(), np.asarray(starts, dtype=np.int64))
+    filled = first < np.append(first[1:], positions.len())
+    smallest = np.full(len(names), np.inf)
+    largest = np.full(len(names), -np.inf)
+    if filled.any():
+        for value in values:
+            magnitude = np.abs(value.cast(pl.Float64).to_numpy())
+            usable = np.isfinite(magnitude) & (magnitude > 0)
+            low = np.minimum.reduceat(np.where(usable, magnitude, np.inf), first[filled])
+            high = np.maximum.reduceat(np.where(usable, magnitude, -np.inf), first[filled])
+            smallest[filled] = np.minimum(smallest[filled], low)
+            largest[filled] = np.maximum(largest[filled], high)
+    return {name: (float(lo), float(hi)) for name, lo, hi in zip(names, smallest, largest, strict=True) if lo <= hi}
 
 
 def _collapsed(
