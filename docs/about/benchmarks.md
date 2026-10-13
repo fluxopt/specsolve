@@ -20,7 +20,8 @@ network
 :   A small PyPSA dispatch model: buses joined by lines, a store at every bus
     that carries its charge from each snapshot to the next, a technology
     portfolio installed at some buses only, and solar and wind availability
-    per snapshot.
+    per snapshot. Each plant draws from one of fifty pools, such as a fuel
+    contract, and a pool caps what its plants generate together.
 
 sector
 :   `nodal`'s portfolio, where each technology delivers one of five carriers,

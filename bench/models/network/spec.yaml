@@ -14,6 +14,11 @@
 # A store starts empty, PyPSA's default, rather than wrapping around the
 # horizon: a cyclic store admits the same charging whichever way time runs, so
 # a model with its time index reversed would solve to the same objective.
+#
+# Every installed plant draws from one pool, a fuel contract or an emission
+# budget, and a pool caps what its plants generate in each snapshot. Pools are
+# drawn per plant, so `pool_of` is keyed by the (bus, tech) pair, and the cap
+# sums `p` over both of its sparse dimensions at once.
 dimensions:
   snapshot:
     dtype: int
@@ -25,11 +30,14 @@ dimensions:
     dtype: str
   store:
     dtype: str
+  pool:
+    dtype: str
 
 relations:
   line_from: {key: line, values: bus}
   line_to: {key: line, values: bus}
   store_bus: {key: store, values: bus}
+  pool_of: {key: [bus, tech], values: pool}
 
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
@@ -50,6 +58,8 @@ parameters:
     dims: [store]
   load:
     dims: [snapshot, bus]
+  limit:                # what a pool's plants may generate together, per snapshot
+    dims: [pool]
 
 variables:
   p:
@@ -90,6 +100,9 @@ constraints:
   soc_balance:
     dims: [snapshot, store]
     expression: soc == shift(soc, along=snapshot, offset=1, edge=0) + charge * eta - discharge
+  pool_cap:
+    dims: [snapshot, pool]
+    expression: sum(p, by=pool_of, over=[bus, tech], into=pool) <= limit
 
 objective:
   sense: minimize

@@ -6,6 +6,11 @@ are `groupby(...).sum()` into buses, as `transport`'s are.
 `shift(...).fillna(0)` gives the first snapshot an empty store, which is the
 YAML's `edge=0`, and `p.fillna(0)` makes an absent pair contribute zero, as in
 `nodal`.
+
+`pool_of` is pivoted to a bus x tech array of pool labels, as `installed` is,
+and `p.groupby(pool).sum()` is the YAML's
+`sum(p, by=pool_of, over=[bus, tech], into=pool)`. linopy refuses a NaN label,
+so a pair with no plant is labelled `''` and that group is dropped.
 """
 
 from __future__ import annotations
@@ -45,6 +50,11 @@ def build(tables: Mapping[str, Any]) -> Any:
     e_max = tables['e_max'].set_index('store')['value'].reindex(stores)
     p_store = tables['p_store'].set_index('store')['value'].reindex(stores)
     eta = tables['eta'].set_index('store')['value'].reindex(stores)
+    pool = xr.DataArray(
+        tables['pool_of'].pivot(index='bus', columns='tech', values='pool').reindex(index=buses, columns=techs),
+        name='pool',
+    ).fillna('')
+    limit = tables['limit'].set_index('pool')['value']
 
     def into_bus(x: Any, relation: str, key: str) -> Any:
         by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
@@ -66,5 +76,8 @@ def build(tables: Mapping[str, Any]) -> Any:
         name='balance',
     )
     m.add_constraints(soc - soc.shift(snapshot=1).fillna(0) - charge * eta + discharge == 0, name='soc_balance')
+    pooled = p.fillna(0).groupby(pool).sum()
+    pooled = pooled.sel(pool=pooled.indexes['pool'][pooled.indexes['pool'] != ''])
+    m.add_constraints(pooled <= limit.reindex(pooled.indexes['pool']), name='pool_cap')
     m.add_objective((p.fillna(0) * cost).sum())
     return m
