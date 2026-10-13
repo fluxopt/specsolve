@@ -7,7 +7,6 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- fix(engine): a quadratic row keeps its own pair when a row before it has no term ([#2027](https://github.com/fluxopt/specsolve/pull/2027))
 - docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
 - docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
 - docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
@@ -24,6 +23,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
 - docs: the published benchmarks are re-measured with the sector-coupled model ([#2024](https://github.com/fluxopt/specsolve/pull/2024))
 - perf: a model with many variables and constraints builds in about half the time ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
+- fix: a quadratic constraint keeps each row's own pair when a row before it has no term ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
 
 ## 0.9.0 (2026-10-12)
 
