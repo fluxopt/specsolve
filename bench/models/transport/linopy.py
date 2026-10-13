@@ -1,8 +1,9 @@
-"""`transport` as a linopy user writes it — `examples/ports/references/linopy/transport.py`.
+"""`transport` as a linopy user writes it.
 
-The same model against the ladder's parquet. Where the YAML groups by its
-declared relations, this multiplies through dense bus x generator and bus x
-line incidence matrices, so the product is bus x generator x snapshot.
+Each of the YAML's `sum(x, by=rel, over=key, into=bus)` is linopy's
+`x.groupby(rel).sum()`, with the relation as a key -> bus array. A grouped sum
+has a row only for a bus the relation reaches, so `reindex(bus=buses)` puts the
+other buses back and `fillna(0)` makes them contribute zero, as the YAML means.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ if TYPE_CHECKING:
 
 def build(tables: Mapping[str, Any]) -> Any:
     import linopy
-    import pandas as pd
     import xarray as xr
 
     p_max = tables['p_max'].set_index('generator')['value']
@@ -25,21 +25,15 @@ def build(tables: Mapping[str, Any]) -> Any:
     load = xr.DataArray(tables['load'].pivot(index='snapshot', columns='bus', values='value'))
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
-    gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
-    for gen, bus in zip(tables['gen_bus']['generator'], tables['gen_bus']['bus'], strict=True):
-        gen_at.loc[bus, gen] = 1.0
-    flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
-    for line, src, dst in zip(
-        tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
-    ):
-        flow_in.loc[dst, line] += 1.0
-        flow_in.loc[src, line] -= 1.0
+    def into_bus(x: Any, relation: str, key: str) -> Any:
+        by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
+        return x.groupby(by).sum().reindex(bus=buses).fillna(0)
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, p_max.index], name='p')
     f = m.add_variables(lower=neg_cap, upper=cap, coords=[snapshots, cap.index], name='f')
     m.add_constraints(
-        (p * xr.DataArray(gen_at)).sum('generator') + (f * xr.DataArray(flow_in)).sum('line') == load,
+        into_bus(p, 'gen_bus', 'generator') + into_bus(f, 'line_to', 'line') - into_bus(f, 'line_from', 'line') == load,
         name='balance',
     )
     m.add_objective((p * cost).sum())

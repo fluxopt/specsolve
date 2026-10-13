@@ -2,10 +2,10 @@
 
 `mask=` is the YAML's `where: installed > 0`, as a bus x tech plane linopy
 broadcasts along the snapshot axis. The joins the YAML declares as relations
-are dense bus x line and bus x store incidence matrices, built inside the
-timed build as `transport`'s are. `shift(...).fillna(0)` gives the first
-snapshot an empty store, which is the YAML's `edge=0`, and `p.fillna(0)` makes
-an absent pair contribute zero, as in `nodal`.
+are `groupby(...).sum()` into buses, as `transport`'s are.
+`shift(...).fillna(0)` gives the first snapshot an empty store, which is the
+YAML's `edge=0`, and `p.fillna(0)` makes an absent pair contribute zero, as in
+`nodal`.
 """
 
 from __future__ import annotations
@@ -46,15 +46,9 @@ def build(tables: Mapping[str, Any]) -> Any:
     p_store = tables['p_store'].set_index('store')['value'].reindex(stores)
     eta = tables['eta'].set_index('store')['value'].reindex(stores)
 
-    flow_in = pd.DataFrame(0.0, index=buses, columns=lines)
-    for line, src, dst in zip(
-        tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
-    ):
-        flow_in.loc[dst, line] += 1.0
-        flow_in.loc[src, line] -= 1.0
-    store_at = pd.DataFrame(0.0, index=buses, columns=stores)
-    for store, bus in zip(tables['store_bus']['store'], tables['store_bus']['bus'], strict=True):
-        store_at.loc[bus, store] = 1.0
+    def into_bus(x: Any, relation: str, key: str) -> Any:
+        by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
+        return x.groupby(by).sum().reindex(bus=buses).fillna(0)
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, buses, techs], mask=capacity > 0, name='p')
@@ -65,8 +59,9 @@ def build(tables: Mapping[str, Any]) -> Any:
 
     m.add_constraints(
         p.fillna(0).sum('tech')
-        + (f * xr.DataArray(flow_in)).sum('line')
-        + ((discharge - charge) * xr.DataArray(store_at)).sum('store')
+        + into_bus(f, 'line_to', 'line')
+        - into_bus(f, 'line_from', 'line')
+        + into_bus(discharge - charge, 'store_bus', 'store')
         == load,
         name='balance',
     )
