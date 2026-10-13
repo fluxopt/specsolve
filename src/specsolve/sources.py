@@ -16,6 +16,7 @@ import polars.selectors as cs
 from mathspec import did_you_mean
 from mathspec.program import ParameterDeclaration
 
+from specsolve import streamed
 from specsolve.assumptions import validate_assumptions
 from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
@@ -24,7 +25,6 @@ from specsolve.relational.answer_layout import BASIS_STATUSES
 from specsolve.relational.collect import collected, collected_all, in_memory
 from specsolve.relational.names import POSITION, VALUE
 from specsolve.relational.result import Start
-from specsolve.streamed import is_large
 
 if TYPE_CHECKING:
     from mathspec.program import (
@@ -92,7 +92,11 @@ def _read(program: Program, data: Mapping[str, Source], copies: Copies | None) -
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
-    large = {name for name in program.parameters if copies is not None and name in data and is_large(data[name])}
+    large = (
+        streamed.large({name: data[name] for name in program.parameters if name in data})
+        if copies is not None
+        else set()
+    )
     data = _read_paths_at_once(program, data, large)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
@@ -112,8 +116,8 @@ def _read(program: Program, data: Mapping[str, Source], copies: Copies | None) -
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        streamed = _streamed_parameter(pname, pdef, data[pname], sources, copies) if pname in large else None
-        sources[pname] = streamed if streamed is not None else _checked_parameter(pname, pdef, sources[pname], sources)
+        scan = _streamed_parameter(pname, pdef, data[pname], sources, copies) if pname in large else None
+        sources[pname] = scan if scan is not None else _checked_parameter(pname, pdef, sources[pname], sources)
 
     for dname in program.dimensions:
         if dname not in sources:

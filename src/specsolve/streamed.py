@@ -18,22 +18,32 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve.frames import as_frame
-from specsolve.relational.collect import collected
+from specsolve.relational.collect import collected_all
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from specsolve.inputs import Source
 
-__all__ = ['ROWS', 'Copies', 'is_large']
+__all__ = ['ROWS', 'Copies', 'large']
 
 #: The rows from which a parameter streams.
 ROWS = 250_000
 
 
-def is_large(source: Source) -> bool:
-    """Whether *source* is a parquet path whose footer counts at least [`ROWS`][] rows."""
-    if not isinstance(source, (str, Path)) or (scan := as_frame(source)) is None:
-        return False
-    return scan.select(pl.len()).pipe(collected).item() >= ROWS
+def large(sources: Mapping[str, Source]) -> set[str]:
+    """The names in *sources* given as a parquet path of at least [`ROWS`][] rows.
+
+    The rows are counted off each file's footer, every footer in one
+    concurrent pass, since opening a file costs a fixed time however small it is.
+    """
+    scans = {
+        name: scan
+        for name, source in sources.items()
+        if isinstance(source, (str, Path)) and (scan := as_frame(source)) is not None
+    }
+    counts = collected_all(scan.select(pl.len()) for scan in scans.values())
+    return {name for name, count in zip(scans, counts, strict=True) if count.item() >= ROWS}
 
 
 class Copies:
