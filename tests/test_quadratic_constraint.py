@@ -155,6 +155,31 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
         assert tables.linear_row_count == 1
 
 
+@pytest.mark.xfail(reason='the quadratic share keeps its old row numbers when a termless row closes up the block')
+def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
+    """A row with no term closes up the block, and every quadratic entry moves with its row.
+
+    ``k`` has no value at ``a``, so that row has no term and is not built, and
+    ``b`` and ``c`` move up to rows 0 and 1. Each keeps its own pair:
+    ``p_b² <= 10`` and ``4·p_c² <= 10``.
+    """
+    sparse = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'k': {'dims': ['g']}},
+        'variables': {'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'quad': {'dims': ['g'], 'expression': 'k * p * p <= 10'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
+    }
+    sources = {'g': ['a', 'b', 'c'], 'k': pl.DataFrame({'g': ['b', 'c'], 'value': [1.0, 4.0]})}
+    with sps.build(sparse, sources) as model:
+        assert model._engine._model.handoff.qmatrix.rows() == [(0, 1, 1, 1.0), (1, 2, 2, 4.0)], (
+            'row b holds p_b² at 1 and row c holds p_c² at 4, each on its new row'
+        )
+        assert model.solve(solver_name='gurobi').objective == pytest.approx(10 + 10**0.5 + 2.5**0.5, rel=1e-3), (
+            'p_a is free to its bound, and p_b and p_c stop where their own rows bind'
+        )
+
+
 def test_a_quadratic_row_has_no_price_unless_the_caller_asks():
     """The default is the *answer*, not the extra information.
 
