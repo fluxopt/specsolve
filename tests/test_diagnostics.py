@@ -74,12 +74,12 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         )
 
 
-@pytest.mark.xfail(reason='the count of rows with no terms replaces the count of rows a restriction removed')
 def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together():
     """A restriction and a missing term can each remove a row of one constraint, and the report adds both.
 
     ``p`` is absent at ``a``, so the restriction removes that row. ``k`` has no
-    value at ``b``, so that row has no term. Only ``c`` is built.
+    value at ``b``, so that row has no term. Only ``c`` is built. The count of
+    rows with no term used to replace the count the restriction recorded.
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},

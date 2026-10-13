@@ -371,7 +371,7 @@ class Assembly:
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__', offset=start)
-        self.measured.omitted[name] = rows.height - surviving.height
+        self.measured.omitted[name] = self.measured.omitted.get(name, 0) + rows.height - surviving.height
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col('row').replace_strict(remap))
         matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
