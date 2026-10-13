@@ -157,13 +157,11 @@ class Assembly:
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. Each constraint builds on rows of its own from 0, and its
         block is moved onto the model's rows here, once every block knows which
-        of its rows it kept. The matrix is then summed, pruned and ordered
-        once. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks. A build whose [`_reach`][] is
+        of its rows it kept. The matrix and ``rows`` leave in ``(row, col)``
+        order, as ``Handoff`` promises its sinks. A build whose [`_reach`][] is
         at most [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
-        small = self._reach() <= IN_MEMORY_REACH
-        with in_memory(small):
+        with in_memory(self._reach() <= IN_MEMORY_REACH):
             cols = self._build_variables()
             sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
@@ -174,11 +172,7 @@ class Assembly:
         row_count = offsets[-1]
         for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets, strict=False):
             self.constraints[name] = labels.Labelled(_moved(frame, 'row', offset).lazy(), offset, rows.height)
-        terms = _stack([_moved(m, 'row', o) for (_, _, m, _), o in zip(built, offsets, strict=False)], _MATRIX)
-        names = [name for name, _ in ordered]
-        with in_memory(small):
-            stacked, _ = _collapsed(terms, ('row', 'col'), ordered=True)
-            self.measured.coefficients = _per_block_ranges(stacked, names, offsets)
+        stacked = _on_model_rows([m for _, _, m, _ in built], offsets, _MATRIX)
         matrix_starts = _row_starts(stacked, row_count)
         matrix = stacked.select('col', 'coeff').rechunk()
 
@@ -212,6 +206,19 @@ class Assembly:
             sum(math.prod(cardinality[d] for d in declared.dims) for declared in declarations.values())
             for declarations in (self.program.variables, self.program.constraints)
         )
+
+    def _matrix_share(
+        self, stacked: pl.DataFrame, name: str, *expressions: program.Expression
+    ) -> tuple[pl.DataFrame, pl.Series]:
+        """One constraint's share: in ``(row, col)`` order, repeated cells summed.
+
+        Returns:
+            The share, and the rows that had any term, read before the prune: a
+            row whose every coefficient is zero is not a row with no terms.
+        """
+        coverage.refuse_null_coefficients(stacked, name, *expressions)
+        share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
+        return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
 
     # ------------------------------------------------------------------
     # declarations
@@ -363,22 +370,20 @@ class Assembly:
     def _block(
         self, con: _Constraint, frame: pl.DataFrame, rows: pl.DataFrame, stacked: pl.DataFrame
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
-        """One constraint as its labelled block, its ``rows``, its linear terms and its quadratic share.
+        """One constraint as its labelled block, its ``rows``, its share of the matrix and its quadratic share.
 
         All four are on the block's own rows, numbered from 0, which
-        [`run`][] moves onto the model's; the terms are summed there, with
-        every other block's. A row is built where either has a term, read
-        before any zero is pruned: a row whose every coefficient is zero is
-        not a row with no terms. The labelled block narrows to the rows that
-        survived.
+        [`run`][] moves onto the model's. A row is built where either matrix
+        has a term, and the labelled block narrows to the rows that survived.
         """
         c = con.declaration
-        coverage.refuse_null_coefficients(stacked, con.subject, c.lhs, c.rhs)
-        term_rows = _rows_with_terms(stacked.get_column('row'), rows.height)
+        matrix, term_rows = self._matrix_share(stacked, con.subject, c.lhs, c.rhs)
         qmatrix = self._quadratic_share(frame, con.quads, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        frame, rows, matrix, qmatrix = self._drop_termless_rows(con.name, frame, rows, stacked, qmatrix, term_rows)
+        frame, rows, matrix, qmatrix = self._drop_termless_rows(con.name, frame, rows, matrix, qmatrix, term_rows)
+        if (spread := _magnitude_range(matrix, 'coeff')) is not None:
+            self.measured.coefficients[con.name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[con.name] = sides
         return frame, rows, matrix, qmatrix
@@ -547,21 +552,6 @@ def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] 
     return (min(lows), max(highs)) if lows else None
 
 
-def _per_block_ranges(
-    matrix: pl.DataFrame, names: Sequence[str], offsets: Sequence[int]
-) -> dict[str, tuple[float, float]]:
-    """Each constraint's [`_magnitude_range`][] of coefficients, read off its slice of the summed, row-ordered *matrix*.
-
-    Constraint *i* holds the rows from ``offsets[i]`` to ``offsets[i + 1]``.
-    """
-    bounds = np.searchsorted(matrix.get_column('row').to_numpy(), np.asarray(offsets, dtype=np.int64))
-    return {
-        name: spread
-        for name, start, end in zip(names, bounds[:-1], bounds[1:], strict=True)
-        if end > start and (spread := _magnitude_range(matrix.slice(int(start), int(end - start)), 'coeff')) is not None
-    }
-
-
 def _collapsed(
     stacked: pl.DataFrame, keys: tuple[str, ...], *, ordered: bool, space: int | None = None
 ) -> tuple[pl.DataFrame, bool]:
@@ -620,15 +610,13 @@ def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
     return (now > before) | ((now == before) & _in_key_order(tuple(rest)))
 
 
-def _rows_with_terms(rows: pl.Series, count: int) -> pl.Series:
-    """The distinct *rows*, in ascending order, over a block's dense ``0..count-1`` rows.
+def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
+    """The distinct ``row`` labels of a matrix already ordered by ``row``.
 
-    Marked in one pass rather than hashed, since a block's terms arrive in no
-    order and can number in the millions.
+    ``set_sorted`` is an assertion, not a check: an unordered column silently
+    loses rows, so call it only on what [`_collapsed`][] returned ordered.
     """
-    seen = np.zeros(count, dtype=bool)
-    seen[rows.to_numpy()] = True
-    return pl.Series('row', np.flatnonzero(seen), dtype=_DTYPES['row'])
+    return matrix.get_column('row').set_sorted().unique()
 
 
 def _repeats_a_label(labels: pl.Series, count: int) -> bool:
@@ -646,7 +634,7 @@ def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
     """*matrix* without its exactly-zero coefficients — unchanged, and not rechunked, when it has none.
 
     A pruned share no longer says which rows had terms, so
-    [`Assembly._block`][] reads that set before pruning.
+    [`Assembly._matrix_share`][] reads that set before pruning.
     """
     if not matrix.select(pl.col('coeff').eq(0).any()).item():
         return matrix
