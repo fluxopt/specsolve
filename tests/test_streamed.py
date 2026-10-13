@@ -151,6 +151,7 @@ def test_a_parameter_over_datetimes_is_read_as_a_held_one_is(tmp_path, monkeypat
         assert streaming.objective == pytest.approx(expected, rel=1e-12), 'every label met its index'
 
 
+@pytest.mark.usefixtures('polars_parquet')
 def test_a_parameter_given_as_a_glob_of_files_is_held(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     """A glob names no one file to measure, so the build holds what it matches, as it did before."""
     (parts := tmp_path / 'load').mkdir()
