@@ -188,9 +188,6 @@ def test_an_index_given_as_an_iterator_is_archived_as_the_labels_the_solve_read(
     assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels the build read, in index order'
 
 
-@pytest.mark.xfail(
-    strict=True, reason='a parameter streamed from its parquet file is read again after the build, by the archive'
-)
 def test_a_path_rewritten_after_the_build_is_archived_as_the_table_the_solve_read(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:

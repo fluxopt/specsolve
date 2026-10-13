@@ -15,7 +15,7 @@ import polars as pl
 from specsolve.relational.collect import collected, in_memory
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from mathspec import program
 
@@ -44,19 +44,22 @@ class AttachedSources:
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
 
-def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
+def attach(
+    program: program.Program, sources: Mapping[str, pl.LazyFrame], streamed: Collection[str] = ()
+) -> AttachedSources:
     """Shape the door's frames into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
-    [`in_memory`][], since every read holds one table whole.
+    [`in_memory`][], since every read holds one table whole, except a
+    parameter named in *streamed*: it stays a scan of its file, and the build
+    reads it each time it needs it.
     """
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
         parameters = {
-            name: frame if is_streamed(frame) else frame.pipe(collected)
-            for name, frame in ((name, sources[name]) for name in program.parameters)
+            name: sources[name] if name in streamed else sources[name].pipe(collected) for name in program.parameters
         }
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
@@ -79,11 +82,6 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         parameter_rows={name: _height(f) for name, f in parameters.items()},
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
     )
-
-
-def is_streamed(frame: pl.LazyFrame) -> bool:
-    """Whether *frame* reads a file each time it is collected, rather than a table in memory."""
-    return 'SCAN' in frame.explain(optimized=False)
 
 
 def _height(frame: pl.DataFrame | pl.LazyFrame) -> int:

@@ -37,7 +37,7 @@ from specsolve.relational.result import ConstraintRow, Diagnostics, Result
 from specsolve.relational.sinks.solvers.base import Basis
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 
     import numpy as np
     from mathspec import program
@@ -131,8 +131,13 @@ class Engine:
     # build
     # ------------------------------------------------------------------
 
-    def build(self, program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> None:
+    def build(
+        self, program: program.Program, sources: Mapping[str, pl.LazyFrame], streamed: Collection[str] = ()
+    ) -> None:
         """Attach *sources*, then build every declaration into the model frames.
+
+        A parameter named in *streamed* is read from its file each time the
+        build needs it, rather than held in memory.
 
         A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve.relational.sinks.solvers.base.Solver.structure]
@@ -145,7 +150,7 @@ class Engine:
         self._solved = None
         self._measured = Measured()
         with _clocked(self._seconds, 'attach'):
-            attached = attach(program, sources)
+            attached = attach(program, sources, streamed)
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
         with _clocked(self._seconds, 'build'):

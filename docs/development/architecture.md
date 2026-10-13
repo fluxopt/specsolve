@@ -203,6 +203,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `relational/collect.py` | how polars materialises a frame |
 | `relational/parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `sources.py` | the door: caller data into tidy tables |
+| `streamed.py` | which large parquet parameters the build streams, and the copies it streams them from |
 | `assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `frames.py` | caller tables in, via the Arrow PyCapsule protocol |
 | `types.py` | public: every type a call returns |

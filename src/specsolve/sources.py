@@ -24,6 +24,7 @@ from specsolve.relational.answer_layout import BASIS_STATUSES
 from specsolve.relational.collect import collected, collected_all, in_memory
 from specsolve.relational.names import POSITION, VALUE
 from specsolve.relational.result import Start
+from specsolve.streamed import is_large
 
 if TYPE_CHECKING:
     from mathspec.program import (
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
     )
 
     from specsolve.inputs import Label, Source
+    from specsolve.streamed import Copies
 
 
 def attachable(program: Program) -> dict[str, ParameterDeclaration | DimensionDeclaration | RelationDeclaration]:
@@ -53,7 +55,7 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
         raise DataError(_unknown_source_keys_message(unknown, known))
 
 
-def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def tidy_sources(program: Program, data: Mapping[str, Source], copies: Copies | None = None) -> dict[str, pl.LazyFrame]:
     """Read the caller's ``sources`` into the frames both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
@@ -76,13 +78,13 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             method's conditions on its breakpoints among them.
     """
     refuse_unknown_sources(program, data)
-    sources = _read(program, data)
+    sources = _read(program, data, copies)
     validate_assumptions(program, sources)
     return sources
 
 
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def _read(program: Program, data: Mapping[str, Source], copies: Copies | None) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
     [`validate_assumptions`][] runs
@@ -90,7 +92,8 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
-    data = _read_paths_at_once(program, data)
+    large = {name for name in program.parameters if copies is not None and name in data and is_large(data[name])}
+    data = _read_paths_at_once(program, data, large)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
@@ -109,7 +112,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        streamed = _streamed_parameter(pname, pdef, data[pname], sources)
+        streamed = _streamed_parameter(pname, pdef, data[pname], sources, copies) if pname in large else None
         sources[pname] = streamed if streamed is not None else _checked_parameter(pname, pdef, sources[pname], sources)
 
     for dname in program.dimensions:
@@ -119,7 +122,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     return sources
 
 
-def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[str, Source]:
+def _read_paths_at_once(program: Program, data: Mapping[str, Source], large: Collection[str]) -> dict[str, Source]:
     """*data* with every index and relation given as a parquet path read into memory, the files in one concurrent pass.
 
     A parameter's file is left to [`_streamed_parameter`][], which reads it
@@ -138,7 +141,7 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     scans: dict[str, pl.LazyFrame] = {}
     for name, source in data.items():
         if (
-            name not in program.parameters
+            name not in large
             and isinstance(source, (str, Path))
             and (table := as_frame(source)) is not None
             and set(wanted[name]) <= set(table.collect_schema().names())
@@ -739,17 +742,18 @@ def _checked_parameter(
 
 
 def _streamed_parameter(
-    name: str, p: ParameterDeclaration, source: Source, sources: Mapping[str, pl.LazyFrame]
+    name: str, p: ParameterDeclaration, source: Source, sources: Mapping[str, pl.LazyFrame], copies: Copies | None
 ) -> pl.LazyFrame | None:
-    """*source*, a parquet path, as a scan the build streams, once one streaming pass has checked it.
+    """A scan of *copies*' copy of *source*, a large parquet path, once one streaming pass has checked it.
 
-    The pass asks [`_checked_parameter`][]'s questions as aggregates, so the
-    file is never held whole. ``None`` where *source* is no parquet path,
-    where a dim holds datetimes, or where a check fails: the eager reader then
-    reads the file and names the defect.
+    The pass asks [`_checked_parameter`][]'s questions of the copy as
+    aggregates, so the file is never held whole. ``None`` where a dim holds
+    datetimes or a check fails: the eager reader then reads *source* and names
+    the defect.
     """
-    if not isinstance(source, (str, Path)) or (scan := as_frame(source)) is None:
+    if copies is None or not isinstance(source, (str, Path)):
         return None
+    scan = cast('pl.LazyFrame', as_frame(copies.take(name, source)))
     schema = scan.collect_schema()
     wanted = [*p.dims, VALUE]
     if not set(wanted) <= set(schema.names()) or schema[VALUE] not in ACCEPTED_VALUE_TYPES[p.dtype]:
@@ -774,6 +778,7 @@ def _streamed_parameter(
         return None
     if not all(answers[f'#known {d}'] for d in known):
         return None
+    copies.keep(name)
     return scan.select(wanted)
 
 
