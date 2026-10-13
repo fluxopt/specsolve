@@ -710,7 +710,7 @@ class TestTheLabelSpace:
 
         A solver vector is positional in the same index the labels are, so a
         declaration's share of it is a slice — but only if its labels are a dense
-        run and the runs tile the whole index. Both are how `labels.frame` numbers
+        run and the runs tile the whole index. Both are how `labels.frames` numbers
         a declaration, and neither is visible from the frames: a block
         that started one late would report a neighbour's numbers under this
         declaration's coordinates, with nothing out of range and nothing null.

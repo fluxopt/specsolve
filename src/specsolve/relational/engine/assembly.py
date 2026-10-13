@@ -323,12 +323,14 @@ class Assembly:
         memory of the network benchmark at 10M variables by about a fifth (#2022).
         """
         constraints = [_Constraint.compiled(self.compiler, name, c) for name, c in ordered]
-        framed = labels.frames(self.scope, [con.domain for con in constraints], 'row')
-        frames = [self._labelled(con, labelled) for con, labelled in zip(constraints, framed, strict=True)]
+        frames = labels.frames(self.scope, [con.domain for con in constraints], 'row')
         for con, frame in zip(constraints, frames, strict=True):
-            coverage.refuse_gaps(
-                self.scope, frame.lazy(), con.consts, con.declaration, con.subject, self.measured.sparse
-            )
+            c, pieces = con.declaration, [p for p, _ in con.consts]
+            if con.restrictions and (declared := labels.declared_height(self.scope, c.dims, c.where)) > frame.height:
+                self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - frame.height
+            divisors = program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs))
+            coverage.refuse_null_constants(coverage.narrowed_to_rows(frame.lazy(), pieces), divisors, con.subject)
+            coverage.refuse_short_constants(self.scope, frame.lazy(), pieces, c, con.subject, self.measured.sparse)
         sides = collected_all(
             coverage.constant_side(self.scope, frame.lazy(), con.consts, con.declaration)
             for con, frame in zip(constraints, frames, strict=True)
@@ -338,14 +340,6 @@ class Assembly:
             self._block(con, frame, coverage.refuse_uncovered(side, con.declaration, con.subject), terms.pop(0))
             for con, frame, side in zip(constraints, frames, sides, strict=True)
         ]
-
-    def _labelled(self, con: _Constraint, labelled: pl.DataFrame) -> pl.DataFrame:
-        """*con*'s labelled block, counting the rows its restrictions removed as omitted."""
-        if con.restrictions:
-            c = con.declaration
-            if (declared := labels.declared_height(self.scope, c.dims, c.where)) > labelled.height:
-                self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - labelled.height
-        return labelled
 
     def _terms(self, con: _Constraint, frame: pl.DataFrame) -> pl.LazyFrame:
         """*con*'s linear terms as ``(row, col, coeff)``, on its own rows; no rows where it has none."""
@@ -394,7 +388,7 @@ class Assembly:
         """The row a coordinate lands on in a block built over the whole product of *dims*.
 
         Such a block numbers its rows row-major over the declared ordinals
-        ([`labels.frame`][specsolve.relational.engine.labels.frame]), so a term
+        ([`labels.frames`][specsolve.relational.engine.labels.frames]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.

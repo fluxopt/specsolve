@@ -67,27 +67,21 @@ class Domain:
     restrictions: Sequence[Presence] = ()
 
 
-def frame(scope: Scope, domain: Domain, label: str) -> pl.DataFrame:
-    """*domain*'s coordinates with a dense *label* from 0, in the solver's order.
+def frames(scope: Scope, domains: Sequence[Domain], label: str) -> list[pl.DataFrame]:
+    """Each of *domains*' coordinates with a dense *label* from 0, in the solver's order.
 
     A label is row-major over the dims' declared ordinals, so it is the
-    solver's own index once its declaration's offset is added.
+    solver's own index once its declaration's offset is added. A polars query
+    costs a fixed time that a small domain never earns back, so the domains
+    are collected in one pass, and in one pass before it for the masks
+    [`_factored`][] reads. Every path orders a domain's coordinates by
+    [`POSITION`][], and a label is the row in that order.
 
     Returns:
-        ``(dims…, label)`` in that column order and in label order. With no
-        dims it is ``([`UNIT`][], label)``, the column a reader keys a scalar
-        on, since selecting nothing drops the empty product's one row.
-    """
-    return frames(scope, [domain], label)[0]
-
-
-def frames(scope: Scope, domains: Sequence[Domain], label: str) -> list[pl.DataFrame]:
-    """Each of *domains* as [`frame`][] gives it, read together.
-
-    A polars query costs a fixed time that a small domain never earns back, so
-    the domains are collected in one pass, and in one pass before it for the
-    masks [`_factored`][] reads. Every path orders a domain's coordinates by
-    [`POSITION`][], and a label is the row in that order.
+        One frame per domain, ``(dims…, label)`` in that column order and in
+        label order. With no dims it is ``([`UNIT`][], label)``, the column a
+        reader keys a scalar on, since selecting nothing drops the empty
+        product's one row.
     """
     free = {
         i: n
