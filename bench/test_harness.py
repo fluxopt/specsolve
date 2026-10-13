@@ -26,8 +26,8 @@ import numpy as np
 import pytest
 import yaml
 
+from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
-from bench import crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import results as bench_results
 from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
 from bench.ab.grid import SHAPES, spec, tables
@@ -1993,3 +1993,167 @@ def test_the_checkouts_are_removed_after_the_run() -> None:
         paths = [path for _, path in trees]
         assert all((path / 'src' / 'specsolve').is_dir() for path in paths)
     assert not any(path.exists() for path in paths), 'a worktree left behind holds a gigabyte and a branch lock'
+
+
+# --------------------------------------------------------------------------
+# the pull request comment
+
+
+def _results(directory: Path, *timings: dict[str, Any], name: str = 'latest-highs-dispatch.jsonl') -> Path:
+    """A results directory holding one `.jsonl` file of *timings*, the shape `bench.results` reads verbatim."""
+    directory.mkdir(parents=True, exist_ok=True)
+    run = {'record': 'run', 'cpu': 'box', 'cores': 8, 'platform': 'Linux', 'python': '3.12', 'versions': {}}
+    (directory / name).write_text('\n'.join(json.dumps(r) for r in (run, *timings)) + '\n')
+    return directory
+
+
+def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """specsolve at 1 s and linopy at 4 s on one cell, so the ratio is 0.25x."""
+    return _timing('specsolve', sink='highs', **over), _timing('linopy', sink='highs', wall_seconds=4.0, **over)
+
+
+@pytest.mark.parametrize(
+    ('pr', 'base', 'shown'),
+    [
+        pytest.param(
+            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 5% or more**'], id='the same cell on both sides'
+        ),
+        pytest.param(
+            _pair(case='newcase'),
+            _pair(),
+            ['**newcase — highs**', '| m | — → 0.25x |'],
+            id='a model the base never ran',
+        ),
+        pytest.param(_pair(size='xl'), _pair(), ['| xl | — → 0.25x |', '| m | 0.25x → — |'], id='other rungs'),
+        pytest.param(
+            (*_pair(), _timing('newlib', sink='highs', wall_seconds=2.0)),
+            _pair(),
+            ['| rung | linopy | newlib |', '| m | 0.25x | — → 0.50x |'],
+            id='a library the base never ran',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=float('nan')), _pair()[1]),
+            _pair(),
+            ['| m | 0.25x → — |'],
+            id='a wall time that is not a number',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=None), _pair()[1]),
+            _pair(),
+            ['| m | 0.25x → — |'],
+            id='a wall time that is missing',
+        ),
+        pytest.param((_pair()[0],), _pair(), ['| m | 0.25x → — |'], id='a library dropped from the run'),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=1.25)),
+            _pair(),
+            ['**1 cell moved by 5% or more**', '| m | 🔴 0.25x → **0.80x** |'],
+            id='a library that caught up with specsolve',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.9)),
+            _pair(),
+            ['**No cell moved by 5% or more**', '| m | 0.26x |'],
+            id='a move inside the noise',
+        ),
+        pytest.param(
+            _pair(case='nodal'),
+            (*_pair(case='nodal'), *_pair()),
+            ['⚠️ **Committed but not in this run:** dispatch — highs'],
+            id='a model the run lost',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=250.0)),
+            _pair(),
+            ['| m | 🟢 0.25x → **0.004x** |', '| 🟢 | dispatch | highs | m | linopy | 0.25x | **0.004x** |'],
+            id='a ratio below a tenth keeps two figures',
+        ),
+        pytest.param(
+            (
+                _pair(case='gone')[0],
+                {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'linopy', 'budget': 30.0},
+            ),
+            _pair(case='gone'),
+            ['**gone — highs**', '| m | 0.25x → — |'],
+            id='a budget stop on a model the ladder no longer has',
+        ),
+        pytest.param(
+            (*_pair(), {**_timing('specsolve', sink='highs'), 'arm': None}),
+            _pair(),
+            ['| m | 0.25x |'],
+            id='a record with no library',
+        ),
+        pytest.param(
+            _pair(counts=None, size='xl'),
+            _pair(),
+            ['| m | 0.25x → — |', '| xl | — → 0.25x |'],
+            id='a record with no counts',
+        ),
+        pytest.param((_pair()[0],), (_pair()[0],), ['only specsolve was measured'], id='only specsolve on both sides'),
+    ],
+)
+def test_the_comment_renders_whatever_the_two_runs_hold(
+    tmp_path: Path, pr: tuple[dict[str, Any], ...], base: tuple[dict[str, Any], ...], shown: list[str]
+) -> None:
+    text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
+    missing = [line for line in shown if line not in text]
+    assert not missing, f'the comment lacks {missing}:\n{text}'
+
+
+@pytest.mark.parametrize(
+    ('setup', 'shown', 'named'),
+    [
+        pytest.param(
+            lambda pr, base: (pr / 'latest-gurobi-sector.json').write_text('{not json'),
+            '`latest-gurobi-sector.json`: JSONDecodeError',
+            True,
+            id='a results file that does not parse',
+        ),
+        pytest.param(
+            lambda pr, base: [p.unlink() for p in base.iterdir()],
+            'Committed: no committed results to compare against.',
+            False,
+            id='no committed results',
+        ),
+        pytest.param(
+            lambda pr, base: [p.unlink() for p in pr.iterdir()],
+            'This run left no results to compare.',
+            False,
+            id='a run that wrote nothing',
+        ),
+        pytest.param(
+            lambda pr, base: [p.unlink() for p in base.iterdir()] and base.rmdir(),
+            'Committed: no committed results to compare against.',
+            False,
+            id='no committed results directory at all',
+        ),
+    ],
+)
+def test_a_file_that_is_broken_or_absent_is_named_and_the_comment_still_renders(
+    tmp_path: Path, setup: Any, shown: str, named: bool
+) -> None:
+    pr, base = _results(tmp_path / 'pr', *_pair()), _results(tmp_path / 'base', *_pair())
+    setup(pr, base)
+    out = tmp_path / 'comment.md'
+    assert comment.main([str(pr), str(base), '--out', str(out)]) == 0, 'the comment never fails the job'
+    text = out.read_text()
+    assert shown in text
+    assert text.startswith(comment.MARKER), 'the workflow finds its comment again by the marker'
+    assert ('did not read' in text) is named, 'a file is named as unreadable only where one is there and broken'
+
+
+def test_the_comment_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
+    cases = [f'c{i:02d}' for i in range(comment.SHOWN + 3)]
+    pr = [t for c in cases for t in (_pair(case=c)[0], _timing('linopy', case=c, sink='highs', wall_seconds=1.0))]
+    base = [t for c in cases for t in _pair(case=c)]
+    text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
+    summary = text.split('<details>')[0]
+    assert summary.count('| 🔴 |') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
+    assert 'And 3 more, in the tables below.' in summary
+
+
+def test_a_comment_too_long_for_github_drops_the_full_tables(tmp_path: Path) -> None:
+    many = [t for i in range(1000) for t in _pair(case=f'case{i:04d}')]
+    text = comment.render(_results(tmp_path / 'pr', *many), _results(tmp_path / 'base'))
+    assert len(text) <= comment.LIMIT, f'{len(text)} characters is over the {comment.LIMIT} GitHub takes'
+    assert '<details>' not in text, 'the per-rung tables are the first thing to go'

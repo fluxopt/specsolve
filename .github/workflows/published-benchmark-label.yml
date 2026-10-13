@@ -1,0 +1,33 @@
+name: Published benchmark on a label
+
+# A pull request labelled trigger:published-bench dispatches published-benchmark.yml on its
+# branch, and that run comments the ratios on the pull request. This workflow only dispatches,
+# on a hosted runner: the run on the box stays a workflow_dispatch, which a fork cannot fire.
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    # A fork's branch is not a ref here, and its token could not dispatch anyway.
+    if: >-
+      ${{ github.event.label.name == 'trigger:published-bench' &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh workflow run published-benchmark.yml --repo "$REPO" --ref "$BRANCH" -f pr="$PR" || {
+            echo "::error::published-benchmark.yml on $BRANCH takes no pr input: merge main into the branch, then label again"
+            exit 1
+          }

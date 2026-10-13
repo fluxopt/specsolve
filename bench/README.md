@@ -129,6 +129,33 @@ thing that stops the bill and a teardown running on the machine it is deleting
 dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
+**A pull request labelled `trigger:published-bench` takes the same run** on its
+branch, then comments: each library's wall time against specsolve, against the
+committed ratio, the cells that moved by 5% or more first. Two runs are two
+servers, and that moves an unchanged ratio well past 5% (#2030), so a moved cell
+is a lead to check, not a verdict. `published-benchmark-label.yml` only
+dispatches `published-benchmark.yml` with the pull request's number, from a
+hosted runner, so the run on the box stays a `workflow_dispatch` that a fork
+cannot fire, and a fork's pull request is not dispatched at all.
+`bench.comment` writes the comment. It reads whatever the two runs hold, so a
+new case, other rungs or a library added or dropped prints `—` where one side
+has nothing, and the job does not fail. Ratios rather than wall times, because
+two runs are two machines, and one run is one. One comment per pull request,
+edited by each later run, and the label comes off when the run ends, so adding
+it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
+a third replaces the second.
+
+**A run that finished every case also opens a results pull request** from
+`bench-results/pr-<n>` into the pull request's branch: the run's result files
+and the two pages `report` and `plot` wrote on the box. Merge it to publish
+those numbers with the change, or close it to only look; its docs preview
+shows the page. A later run replaces that branch. The branch's code runs only
+in `render`, under a read-only token. `post` holds the write token and runs no
+code from the branch: it commits the artifact's `bench/results/*.json` and the
+two pages, and nothing else. GitHub refuses the pull request until the
+repository lets Actions open one (Settings → Actions → General); the comment
+is posted either way.
+
 The runner is installed as a *service* so a restored snapshot brings it up at
 boot with nothing to log into, and it is not `--ephemeral`, which would
 unregister it after its first job.
