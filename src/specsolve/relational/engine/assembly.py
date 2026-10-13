@@ -107,7 +107,6 @@ class Assembly:
         self.scope = Scope(program, attached, self.variables)
         self.compiler = Compiler(self.scope)
         self.n_cols = 0
-        self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
@@ -119,9 +118,11 @@ class Assembly:
 
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
-        each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
-        [`IN_MEMORY_REACH`][] collects [`in_memory`][].
+        each half. Each constraint builds on rows of its own from 0, and its
+        block is moved onto the model's rows here, once every block knows which
+        of its rows it kept. The matrix and ``rows`` leave in ``(row, col)``
+        order, as ``Handoff`` promises its sinks. A build whose [`_reach`][] is
+        at most [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
             cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
@@ -130,24 +131,28 @@ class Assembly:
             built = [self._build_constraint(name, c) for name, c in ordered]
             objective = self._build_objective(self.program.objective)
 
-        stacked = labels.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
-        matrix_starts = _row_starts(stacked, self.n_rows)
+        offsets = np.cumsum([0, *(rows.height for _, rows, _, _ in built)])
+        row_count = int(offsets[-1])
+        for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets.tolist(), strict=False):
+            self.constraints[name] = labels.Labelled(frame.with_columns(pl.col('row') + offset), offset, rows.height)
+        stacked = _on_model_rows([m for _, _, m, _ in built], offsets, _MATRIX)
+        matrix_starts = _row_starts(stacked, row_count)
         matrix = stacked.select('col', 'coeff').rechunk()
 
         self.measured.columns = self.n_cols
-        self.measured.rows = self.n_rows
+        self.measured.rows = row_count
         self.measured.nonzeros = matrix.height
         handoff = sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
-            qmatrix=labels.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), 'row'),
-            rows=labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
+            qmatrix=_on_model_rows([q for _, _, _, q in built], offsets, _QMATRIX),
+            rows=_on_model_rows([r for _, r, _, _ in built], offsets, _ROWS),
             matrix=matrix,
             sos=_stack(sets, _SOS),
             row_starts=matrix_starts,
             column_count=self.n_cols,
-            row_count=self.n_rows,
+            row_count=row_count,
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
@@ -252,12 +257,14 @@ class Assembly:
 
     def _build_constraint(
         self, name: str, c: program.ConstraintDeclaration
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
-        """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
+    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+        """One constraint as its labelled block, its ``rows``, its share of the matrix and its quadratic share.
 
-        The [`coverage`][] checks run in its table's order, before an aggregate
-        can hide a hole. A row is built where either matrix has a term, and the
-        labelled block narrows to the rows that survived.
+        All four are on the block's own rows, numbered from 0, which
+        [`run`][] moves onto the model's. The [`coverage`][] checks run in its
+        table's order, before an aggregate can hide a hole. A row is built
+        where either matrix has a term, and the labelled block narrows to the
+        rows that survived.
         """
         quadratic = declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
@@ -266,14 +273,11 @@ class Assembly:
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
         restrictions = absence_restrictions([p for p, _ in (*terms, *quads)])
-        start = self.n_rows
         declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
-        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+        labelled = labels.frame(self.scope, c.dims, c.where, 'row', 0, restrictions)
         if declared is not None and declared > labelled.height:
             self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
-        self.n_rows = start + labelled.height
         frame = labelled.lazy()
-        self.constraints[name] = labels.Labelled(frame, start, labelled.height)
 
         subject = f"constraint '{name}'"
         pieces = [p for p, _ in consts]
@@ -287,15 +291,15 @@ class Assembly:
 
         if not terms and not quads:
             none = pl.Series('row', [], dtype=_DTYPES['row'])
-            rows, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), none, start)
-            return rows, None, None
+            frame, rows, _ = self._drop_termless_rows(name, frame, rows, _stack([], _MATRIX), none)
+            return frame, rows, None, None
 
         pieces = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(terms) == 1 else None
         dense = c.where is None and not restrictions
         for p, sign in terms:
             if dense and set(p.dims) == set(c.dims):
-                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+                placed = p.frame.with_columns(self._dense_row(c.dims).alias('row'))
             else:
                 placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             pieces.append(
@@ -313,7 +317,7 @@ class Assembly:
         qmatrix = self._quadratic_share(frame, quads, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        rows, matrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, term_rows, start)
+        frame, rows, matrix = self._drop_termless_rows(name, frame, rows, matrix, term_rows)
         spread = _magnitude_range(matrix, 'coeff')
         if spread is not None:
             self.measured.coefficients[name] = spread
@@ -321,10 +325,10 @@ class Assembly:
             self.measured.rhs[name] = sides
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
-        return rows, matrix, qmatrix
+        return frame, rows, matrix, qmatrix
 
-    def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+    def _dense_row(self, dims: tuple[str, ...]) -> pl.Expr:
+        """The row a coordinate lands on in a block built over the whole product of *dims*.
 
         Such a block numbers its rows row-major over the declared ordinals
         ([`labels.frame`][specsolve.relational.engine.labels.frame]), so a term
@@ -332,7 +336,7 @@ class Assembly:
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
         """
-        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
+        return self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
         self, frame: pl.LazyFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
@@ -358,30 +362,27 @@ class Assembly:
         return share
 
     def _drop_termless_rows(
-        self, name: str, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series, start: int
-    ) -> tuple[pl.DataFrame, pl.DataFrame, int]:
-        """Rows that kept no variable term are not built, and the block closes up.
+        self, name: str, frame: pl.LazyFrame, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series
+    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame]:
+        """Rows that kept no variable term are not built, and the block closes up: the labelled block, ``rows`` and the matrix.
 
         *kept* is read before zeros are pruned, so a row whose every term is
-        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
+        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from 0,
         because the dual read-back reads a block by position.
         """
         if kept.len() == rows.height:
-            return rows, matrix, start + rows.height
+            return frame, rows, matrix
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
-        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        renumber = surviving.select('row').with_row_index('__new__')
         self.measured.omitted[name] = rows.height - surviving.height
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
-        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
-        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
-        kept_frame = (
-            self.constraints[name]
-            .frame.filter(pl.col('row').is_in(kept))
-            .with_columns(pl.col('row').replace_strict(remap))
+        rows = surviving.with_columns(pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row']))
+        matrix = matrix.with_columns(pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row']))
+        frame = frame.filter(pl.col('row').is_in(kept)).with_columns(
+            pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row'])
         )
-        self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
-        return rows, matrix, start + surviving.height
+        return frame, rows, matrix
 
     def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -580,6 +581,21 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
     starts = np.zeros(row_count + 1, dtype=np.int64)
     starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
     return np.cumsum(starts, out=starts)
+
+
+def _on_model_rows(
+    blocks: list[pl.DataFrame | None],
+    offsets: np.ndarray[tuple[int, ...], np.dtype[np.int64]],
+    columns: tuple[str, ...],
+) -> pl.DataFrame:
+    """*blocks*, each on its constraint's own rows, stacked onto the model's in row order: block *i* moves on by ``offsets[i]``.
+
+    A constraint without such a share is ``None``.
+    """
+    present = [(block, offset) for block, offset in zip(blocks, offsets, strict=False) if block is not None]
+    stacked = _stack([block for block, _ in present], columns)
+    shift = np.repeat([offset for _, offset in present], [block.height for block, _ in present]).astype(np.int64)
+    return labels.in_position_order(stacked.with_columns(pl.col('row') + pl.Series(shift)), 'row')
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
