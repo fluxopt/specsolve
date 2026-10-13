@@ -2043,6 +2043,18 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         ),
         pytest.param((_pair()[0],), _pair(), ['| m | 0.25x → — |'], id='a library dropped from the run'),
         pytest.param(
+            _pair(case='nodal'),
+            (*_pair(case='nodal'), *_pair()),
+            ['**Committed but not in this run**: dispatch — highs'],
+            id='a model the run lost',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=250.0)),
+            _pair(),
+            ['| m | 0.25x → 0.004x |'],
+            id='a ratio below a tenth keeps two figures',
+        ),
+        pytest.param(
             (
                 _pair(case='gone')[0],
                 {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'linopy', 'budget': 30.0},

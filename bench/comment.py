@@ -76,7 +76,8 @@ def _cell(side: Side, case: str, size: str, sink: str, arm: str) -> str:
         noisy = report.suspect(side.rows.get((case, size, sink, report.BASELINE))) or report.suspect(
             side.rows.get((case, size, sink, arm))
         )
-        return f'{ours / theirs:.2f}x' + (report.MARK if noisy else '')
+        ratio = ours / theirs
+        return (f'{ratio:.2f}x' if ratio >= 0.1 else f'{ratio:.2g}x') + (report.MARK if noisy else '')
     report.CEILINGS[:] = side.ceilings
     try:
         return report.over_budget(case, size, sink, arm) or '—'
@@ -129,6 +130,8 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     link = f' ([run]({run_url}))' if run_url else ''
     heading = f'{MARKER}\n## Published benchmark{link}'
     problems = [*_listed('This run', pr.problems), *_listed('Committed', base.problems)]
+    gone = sorted({(c, k) for c, _, k, _ in base.rows} - {(c, k) for c, _, k, _ in pr.rows})
+    missing = [f'**Committed but not in this run**: {", ".join(f"{c} — {k}" for c, k in gone)}'] if gone else []
     if not pr.rows:
         return '\n\n'.join(
             [heading, 'This run left no results to compare. The run log says where it stopped.', *problems]
@@ -150,11 +153,11 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     full = [_guarded(f'{c} — {k}', report.table, c, pr.rows, k) for c, k in pairs]
     details = '<details><summary>Every rung of this run, wall time and peak memory</summary>\n\n' + '\n\n'.join(full)
 
-    text = '\n\n'.join([heading, legend, machines, *tables, details + '\n\n</details>', *problems])
+    text = '\n\n'.join([heading, legend, machines, *tables, *missing, details + '\n\n</details>', *problems])
     if len(text) <= LIMIT:
         return text
     cut = "The full tables do not fit in a comment; they are in the run's `published-benchmark` artifact."
-    return '\n\n'.join([heading, legend, machines, *tables, cut, *problems])[:LIMIT]
+    return '\n\n'.join([heading, legend, machines, *tables, *missing, cut, *problems])[:LIMIT]
 
 
 def main(argv: list[str] | None = None) -> int:
