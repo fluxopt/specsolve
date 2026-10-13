@@ -117,11 +117,11 @@ HiGHS.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k variables</th><th>network<br>10k variables</th><th>nodal<br>3k variables</th><th>sector<br>3k variables</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.47 s</td><td class="own">0.52 s</td><td class="own">0.47 s</td><td class="own">0.47 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="0.974">0.45 s · 1.0x</td><td data-ratio="0.954">0.50 s · 1.0x</td><td data-ratio="0.988">0.47 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.091">0.97 s · 2.1x</td><td data-ratio="2.112">1.10 s · 2.1x</td><td data-ratio="2.000">0.94 s · 2.0x</td><td data-ratio="2.002">0.93 s · 2.0x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.493">0.69 s · 1.5x</td><td data-ratio="1.710">0.89 s · 1.7x</td><td data-ratio="1.431">0.67 s · 1.4x</td><td data-ratio="1.595">0.74 s · 1.6x</td></tr>
-<tr><td>highspy-matrix</td><td data-ratio="0.675">0.31 s · 0.7x</td><td data-ratio="0.612">0.32 s · 0.6x</td><td data-ratio="0.658">0.31 s · 0.7x</td><td data-ratio="0.682">0.32 s · 0.7x</td></tr>
+<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.49 s</td><td class="own">0.45 s</td><td class="own">0.47 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="0.988">0.45 s · 1.0x</td><td data-ratio="0.989">0.49 s · 1.0x</td><td data-ratio="1.022">0.46 s · 1.0x</td><td data-ratio="1.054">0.49 s · 1.1x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.066">0.94 s · 2.1x</td><td data-ratio="2.264">1.11 s · 2.3x</td><td data-ratio="2.062">0.92 s · 2.1x</td><td data-ratio="2.173">1.01 s · 2.2x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.458">0.66 s · 1.5x</td><td data-ratio="2.064">1.01 s · 2.1x</td><td data-ratio="1.454">0.65 s · 1.5x</td><td data-ratio="1.598">0.74 s · 1.6x</td></tr>
+<tr><td>highspy-matrix</td><td data-ratio="0.678">0.31 s · 0.7x</td><td data-ratio="0.677">0.33 s · 0.7x</td><td data-ratio="0.696">0.31 s · 0.7x</td><td data-ratio="0.686">0.32 s · 0.7x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->

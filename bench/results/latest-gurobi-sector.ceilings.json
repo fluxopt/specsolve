@@ -21,6 +21,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 30.2 s on sector/l, over the 30 s budget"
+  "reason": "gurobipy-loop took 30.3 s on sector/l, over the 30 s budget"
  }
 ]

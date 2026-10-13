@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 0.966 GB on sector/m, so the next rung projects to 19.3 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 0.965 GB on sector/m, so the next rung projects to 19.3 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.38 s on sector/m, so the next rung projects to 33.8 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 3.42 s on sector/m, so the next rung projects to 34.2 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -29,10 +29,10 @@
   "case": "sector",
   "ladder": "size",
   "sink": "",
-  "size": "m",
+  "size": "l",
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 3.03 s on sector/m, so the next rung projects to 30.3 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 30.8 s on sector/l, over the 30 s budget"
  }
 ]
