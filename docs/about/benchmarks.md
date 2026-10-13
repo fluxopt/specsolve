@@ -118,18 +118,18 @@ HiGHS.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k variables</th><th>network<br>10k variables</th><th>nodal<br>3k variables</th><th>sector<br>3k variables</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.39 s</td><td class="own">0.44 s</td><td class="own">0.38 s</td><td class="own">0.45 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.077">0.42 s · 1.1x</td><td data-ratio="1.058">0.46 s · 1.1x</td><td data-ratio="1.110">0.42 s · 1.1x</td><td data-ratio="1.038">0.47 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.242">0.86 s · 2.2x</td><td data-ratio="2.332">1.02 s · 2.3x</td><td data-ratio="2.240">0.85 s · 2.2x</td><td data-ratio="2.243">1.02 s · 2.2x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.537">0.59 s · 1.5x</td><td data-ratio="1.817">0.79 s · 1.8x</td><td data-ratio="1.508">0.57 s · 1.5x</td><td data-ratio="1.557">0.70 s · 1.6x</td></tr>
-<tr><td>highspy-matrix</td><td data-ratio="0.712">0.27 s · 0.7x</td><td data-ratio="0.691">0.30 s · 0.7x</td><td data-ratio="0.718">0.27 s · 0.7x</td><td data-ratio="0.661">0.30 s · 0.7x</td></tr>
+<tr><td>specsolve</td><td class="own">0.47 s</td><td class="own">0.52 s</td><td class="own">0.47 s</td><td class="own">0.47 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="0.974">0.45 s · 1.0x</td><td data-ratio="0.954">0.50 s · 1.0x</td><td data-ratio="0.988">0.47 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.091">0.97 s · 2.1x</td><td data-ratio="2.112">1.10 s · 2.1x</td><td data-ratio="2.000">0.94 s · 2.0x</td><td data-ratio="2.002">0.93 s · 2.0x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.493">0.69 s · 1.5x</td><td data-ratio="1.710">0.89 s · 1.7x</td><td data-ratio="1.431">0.67 s · 1.4x</td><td data-ratio="1.595">0.74 s · 1.6x</td></tr>
+<tr><td>highspy-matrix</td><td data-ratio="0.675">0.31 s · 0.7x</td><td data-ratio="0.612">0.32 s · 0.6x</td><td data-ratio="0.658">0.31 s · 0.7x</td><td data-ratio="0.682">0.32 s · 0.7x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
 
-A script that solves one small model with specsolve finishes in under half a
-second, under half of linopy's time
-([#2024](https://github.com/fluxopt/specsolve/pull/2024)).
+A script that solves one small model with specsolve finishes in about half a
+second, about half of linopy's time
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
 
 ## Not measured yet
 

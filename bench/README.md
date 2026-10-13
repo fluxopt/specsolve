@@ -41,10 +41,10 @@ whose fingerprint no longer describes it.
 
 The committed `results/latest-<sink>-<case>.json` are the provenance of the
 tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-38369479328, on `b646d61d`. It finished the size ladder of `dispatch`, `nodal`,
+38393347540, on `af1dac7d`. It finished the size ladder of `dispatch`, `nodal`,
 `network` and `sector` on both sinks, `3xs` to `l`. The budget stopped pyomo
-after `m`, or after `s` on `network` through HiGHS, and linopy and
-gurobipy-loop after `m` on `network`. `results.records` still reads the
+after `m`, or after `s` on `network`, and linopy and gurobipy-loop after `m` on
+`network`. `results.records` still reads the
 pre-pytest `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -128,6 +128,33 @@ deletes it — `if: always()`, on a hosted runner, because deleting is the only
 thing that stops the bill and a teardown running on the machine it is deleting
 dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
+
+**A pull request labelled `trigger:published-bench` takes the same run** on its
+branch, then comments: each library's wall time against specsolve, against the
+committed ratio, the cells that moved by 5% or more first. Two runs are two
+servers, and that moves an unchanged ratio well past 5% (#2030), so a moved cell
+is a lead to check, not a verdict. `published-benchmark-label.yml` only
+dispatches `published-benchmark.yml` with the pull request's number, from a
+hosted runner, so the run on the box stays a `workflow_dispatch` that a fork
+cannot fire, and a fork's pull request is not dispatched at all.
+`bench.comment` writes the comment. It reads whatever the two runs hold, so a
+new case, other rungs or a library added or dropped prints `—` where one side
+has nothing, and the job does not fail. Ratios rather than wall times, because
+two runs are two machines, and one run is one. One comment per pull request,
+edited by each later run, and the label comes off when the run ends, so adding
+it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
+a third replaces the second.
+
+**A run that finished every case also opens a results pull request** from
+`bench-results/pr-<n>` into the pull request's branch: the run's result files
+and the two pages `report` and `plot` wrote on the box. Merge it to publish
+those numbers with the change, or close it to only look; its docs preview
+shows the page. A later run replaces that branch. The branch's code runs only
+in `render`, under a read-only token. `post` holds the write token and runs no
+code from the branch: it commits the artifact's `bench/results/*.json` and the
+two pages, and nothing else. GitHub refuses the pull request until the
+repository lets Actions open one (Settings → Actions → General); the comment
+is posted either way.
 
 The runner is installed as a *service* so a restored snapshot brings it up at
 boot with nothing to log into, and it is not `--ephemeral`, which would
@@ -396,17 +423,22 @@ where a round takes over one or five seconds. The median beats
 the fastest round because a cell whose rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
-([#2024](https://github.com/fluxopt/specsolve/pull/2024)) 26 of 219 published
-cells have a mean above 1.10x their median, the worst at 17.22x: `dispatch/3xs`
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)) 41 of 218 published
+cells have a mean above 1.10x their median, the worst at 13.32x: `dispatch/3xs`
 on pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In
-24 of them the first round is the slowest of the nine, at 1.9 to 147.8 times the
-median of the other eight, so the median does not move. The other two are
-gurobipy-matrix cells at `2xs` on the `gurobi` sink. At `nodal/2xs` the rounds
-fall into two groups, 4.8 to 5.9 ms and 9.6 to 13.4 ms. At `network/2xs` one round takes 25.3 ms and the other eight
-9.8 to 11.2 ms.
+25 of them the first round is the slowest of the nine, at 1.7 to 112.2 times the
+median of the other eight, so the median does not move. The other 16 are
+matrix-floor and gurobipy-loop cells from `2xs` to `m`, and one cell each of
+linopy, pyomo and specsolve. In most of them the rounds fall into two groups,
+the slow one up to about twice the fast one: `nodal/xs` on gurobipy-loop on
+the `gurobi` sink takes either 17.8 to 19.4 ms or 37.1 to 39.3 ms.
 
-The median decides no cell of specsolve against another library on this run:
-in each, the library that has the fastest round also has the faster median.
+The median decides specsolve against another library in four cells on this
+run. In each, specsolve's fastest round is the faster one and its median is the
+slower. Three are against pyomo: `dispatch/2xs` on the `gurobi` sink, 18.2 ms
+against 19.1 ms fastest and 20.9 ms against 19.4 ms median, and `sector/2xs` on
+both sinks. The fourth is against gurobipy-loop at `sector/xs` on the `gurobi`
+sink: 31.4 ms against 32.9 ms fastest, 34.7 ms against 34.1 ms median.
 
 ### Peak memory
 

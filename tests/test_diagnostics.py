@@ -74,6 +74,32 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         )
 
 
+def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together():
+    """A restriction and a missing term can each remove a row of one constraint, and the report adds both.
+
+    ``p`` is absent at ``a``, so the restriction removes that row. ``k`` has no
+    value at ``b``, so that row has no term. Only ``c`` is built. The count of
+    rows with no term used to replace the count the restriction recorded.
+    """
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g']}},
+        'variables': {'p': {'dims': ['g'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 9}}},
+        'constraints': {'cap': {'dims': ['g'], 'expression': 'k * p <= 5'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
+    }
+    data = {
+        'g': ['a', 'b', 'c'],
+        'on': pl.DataFrame({'g': ['a', 'b', 'c'], 'value': [0.0, 1.0, 1.0]}),
+        'k': pl.DataFrame({'g': ['a', 'c'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(spec, data) as model:
+        assert model.diagnostics().rows == 1, 'only the row at c has a term'
+        assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'cap', 'rows_not_built': 2}], (
+            'the row the restriction removed and the row with no term are both counted'
+        )
+
+
 def test_diagnostics_say_where_the_time_went(tmp_path):
     """A run that is slower than it should be can say which phase the time went to.
 
