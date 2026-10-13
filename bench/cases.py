@@ -827,7 +827,7 @@ CASES: dict[str, Case] = {
             {'node': 50, 'tech': 12, 'carrier': 5},
             (20, 200, 2_000, 20_000, 80_000, 240_000),
             per_snapshot=850,
-            density=0.083,
+            density=0.25,
         ),
         write=_sector_data,
         coefficient='produces',

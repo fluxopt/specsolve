@@ -731,7 +731,7 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
@@ -797,7 +797,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
     """The objective test passes a model that differs only where the optimum does not look.
