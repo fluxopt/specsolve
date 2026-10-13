@@ -6,6 +6,7 @@ declaration built later reads what earlier ones produced.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, get_args
@@ -25,6 +26,8 @@ from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -131,9 +134,9 @@ class Assembly:
             built = [self._build_constraint(name, c) for name, c in ordered]
             objective = self._build_objective(self.program.objective)
 
-        offsets = np.cumsum([0, *(rows.height for _, rows, _, _ in built)])
-        row_count = int(offsets[-1])
-        for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets.tolist(), strict=False):
+        offsets = list(itertools.accumulate((rows.height for _, rows, _, _ in built), initial=0))
+        row_count = offsets[-1]
+        for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets, strict=False):
             self.constraints[name] = labels.Labelled(frame.with_columns(pl.col('row') + offset), offset, rows.height)
         stacked = _on_model_rows([m for _, _, m, _ in built], offsets, _MATRIX)
         matrix_starts = _row_starts(stacked, row_count)
@@ -583,19 +586,19 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
     return np.cumsum(starts, out=starts)
 
 
-def _on_model_rows(
-    blocks: list[pl.DataFrame | None],
-    offsets: np.ndarray[tuple[int, ...], np.dtype[np.int64]],
-    columns: tuple[str, ...],
-) -> pl.DataFrame:
+def _on_model_rows(blocks: list[pl.DataFrame | None], offsets: Sequence[int], columns: tuple[str, ...]) -> pl.DataFrame:
     """*blocks*, each on its constraint's own rows, stacked onto the model's in row order: block *i* moves on by ``offsets[i]``.
 
-    A constraint without such a share is ``None``.
+    A constraint without such a share is ``None``. A block moves by adding to
+    its ``row`` Series, because a polars query costs a fixed time a small
+    block never earns back.
     """
-    present = [(block, offset) for block, offset in zip(blocks, offsets, strict=False) if block is not None]
-    stacked = _stack([block for block, _ in present], columns)
-    shift = np.repeat([offset for _, offset in present], [block.height for block, _ in present]).astype(np.int64)
-    return labels.in_position_order(stacked.with_columns(pl.col('row') + pl.Series(shift)), 'row')
+    moved = [
+        block if not offset else pl.DataFrame([c + offset if c.name == 'row' else c for c in block.get_columns()])
+        for block, offset in zip(blocks, offsets, strict=False)
+        if block is not None
+    ]
+    return labels.in_position_order(_stack(moved, columns), 'row')
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
