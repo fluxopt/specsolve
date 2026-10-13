@@ -79,6 +79,7 @@ async function mount(root) {
   const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
     range: { from: STOPS[0], to: STOPS.at(-1) } };
   const inRange = r => decade(r[X]) >= state.range.from && decade(r[X]) <= state.range.to;
+  const chosen = r => Object.entries(state.filter).every(([k, v]) => r[k] === v);
 
   const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
   const isHero = r => r[SERIES] === HERO;
@@ -93,7 +94,7 @@ async function mount(root) {
     const cell = r => `${panelOf(r)}|${r[X]}`;
     const base = new Map(ROWS.filter(r => isHero(r) && r[m.y] != null).map(r => [cell(r), r[m.y]]));
     return ROWS
-      .filter(r => Object.entries(state.filter).every(([k, v]) => r[k] === v) && !state.hidden.has(r[SERIES]))
+      .filter(r => chosen(r) && !state.hidden.has(r[SERIES]))
       .map(r => {
         const value = r[m.y] ?? null, ours = base.get(cell(r)) ?? null;
         if (value == null) return { ...r, value, ours };
@@ -362,7 +363,7 @@ async function mount(root) {
           `against model size, one line per ${SERIES}` }));
     }
     table(rows, metric);
-    const present = new Set(ROWS.map(r => r[SERIES]));
+    const present = new Set(ROWS.filter(chosen).map(r => r[SERIES]));
     const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
     root.querySelector('#bench-legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
       `<button data-series="${n}" aria-pressed="${!state.hidden.has(n)}"${n === HERO ? ` disabled title="Every other line and cell is read against ${HERO}"` : ''}>` +

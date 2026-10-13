@@ -25,6 +25,8 @@ network
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
 <div class="bench-row">
+<span class="bench-label">Solver</span>
+<span class="bench-seg" data-key="sink"><button data-value="highs" aria-pressed="true">HiGHS</button><button data-value="gurobi" aria-pressed="false">Gurobi</button></span>
 <span class="bench-label">Show</span>
 <span class="bench-seg" data-key="metric"><button data-value="wall" aria-pressed="true">wall time</button><button data-value="peak" aria-pressed="false">peak RSS</button></span>
 <span class="bench-label">As</span>
@@ -46,8 +48,8 @@ network
 <script type="application/json" id="bench-spec">
 {
   "data": "../benchmarks.json",
-  "facet": ["model", "sink"],
-  "filter": { "ladder": "length" },
+  "facet": ["model"],
+  "filter": { "ladder": "length", "sink": "highs" },
   "x": { "field": "variables", "label": "variables", "format": "count" },
   "metrics": {
     "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
@@ -68,7 +70,8 @@ network
 
 ## Reading the charts
 
-Each panel is one model through one solver, and each line is one library.
+Each panel is one model, and each line is one library. **Solver** chooses the
+solver that every panel and the table run through.
 
 - **specsolve is the thick violet line.**
 - **The grey line is the matrix floor**: a hand-written matrix handed straight
