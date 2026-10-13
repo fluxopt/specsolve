@@ -145,7 +145,9 @@ def test_emit(
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
     Every arm starts from the same parquet and stops at the same seam, and pays
-    for its own data ingestion.
+    for its own data ingestion. A floor arm is the exception: it times its
+    ``load`` alone, the finished arrays built by ``load_setup`` in the spawned
+    child before the clock starts.
     """
     missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, sink)
     if missing:
@@ -153,7 +155,10 @@ def test_emit(
 
     module = ARMS[arm]
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
-    counts = _rounds(benchmark, request, module.build_and_emit, sink, prepared)
+    if hasattr(module, 'load'):
+        counts = _rounds(benchmark, request, module.load, setup=partial(module.load_setup, sink, prepared))
+    else:
+        counts = _rounds(benchmark, request, module.build_and_emit, sink, prepared)
     _record(benchmark, counts, case_name, size)
     ceiling.record(arm, case_name, size, sink, _measured(benchmark), _peak(benchmark))
 
@@ -320,6 +325,8 @@ def test_fresh(
     """
     if size not in FRESH_SIZES:
         pytest.skip(f'a fresh process is measured at {", ".join(FRESH_SIZES)}; above them the build is the cost')
+    if hasattr(ARMS[arm], 'load'):
+        pytest.skip(f'{arm} is a floor that times the handoff alone, and a process launched for it builds first')
     missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, f'fresh-{sink}')
     if missing:
         pytest.skip(missing)

@@ -28,7 +28,7 @@ REQUIRES = ('gurobipy',)
 
 
 class Prepared(NamedTuple):
-    """What the timed verbs need; the parquet is read inside the clock."""
+    """Where the parquet is; every verb reads it inside its call, the matrix floor's `load` excepted."""
 
     dialect: str
     case_name: str
@@ -40,45 +40,82 @@ def prepare(dialect: str, case_name: str, size: str, paths: dict[str, str], opti
     return Prepared(dialect, case_name, dict(paths))
 
 
-def _model(env: Any, dialect: str, case_name: str, tables: Mapping[str, Any]) -> Any:
-    """The model, however this dialect spells one.
+class Arrays(NamedTuple):
+    """The `gurobipy-matrix` model as `loadModel` takes it: the matrix by column, one sense byte per row."""
 
-    `gurobipy-loop` returns a `Model`. `gurobipy-matrix` returns the
-    solver-neutral `Lp`, loaded here in one `loadModel` call, the fastest
-    bulk API gurobipy has and the one specsolve's own `Gurobi` loads through.
-    `loadModel` reads the matrix by column, so the CSR is transposed first.
+    obj: Any
+    lb: Any
+    ub: Any
+    csc: tuple[Any, Any, Any]
+    sense: Any
+    rhs: Any
+
+
+def matrix_arrays(case_name: str, tables: Mapping[str, Any]) -> Arrays:
+    """The `gurobipy-matrix` formulation over *tables*, finished for `loadModel`.
+
+    `loadModel` reads the matrix by column, so the CSR is transposed here.
     """
-    import gurobipy as gp
     import numpy as np
 
     from bench.models import formulation
 
-    build = formulation(case_name, dialect).build
-    if dialect == 'gurobipy-loop':
-        return build(env, tables)
-    lp = build(tables)
+    lp = formulation(case_name, 'gurobipy-matrix').build(tables)
     matrix = lp.matrix.tocsc()
-    return gp.loadModel(
-        env=env,
-        numvars=len(lp.obj),
-        numconstrs=len(lp.rhs),
+    return Arrays(
         obj=lp.obj,
         lb=lp.lower,
         ub=lp.upper,
-        constr_csc=(matrix.data, matrix.indices, matrix.indptr),
+        csc=(matrix.data, matrix.indices, matrix.indptr),
         sense=np.asarray(lp.senses, dtype='S1'),
         rhs=lp.rhs,
     )
 
 
-def _built(prepared: Prepared) -> tuple[Any, Any]:
-    """The environment and a flushed model — every timed verb's whole body."""
+def matrix_loaded(env: Any, arrays: Arrays) -> Any:
+    """A model holding *arrays*, in one `loadModel` call.
+
+    The fastest bulk API gurobipy has, and the one specsolve's own `Gurobi`
+    loads through.
+    """
     import gurobipy as gp
+
+    return gp.loadModel(
+        env=env,
+        numvars=len(arrays.obj),
+        numconstrs=len(arrays.rhs),
+        obj=arrays.obj,
+        lb=arrays.lb,
+        ub=arrays.ub,
+        constr_csc=arrays.csc,
+        sense=arrays.sense,
+        rhs=arrays.rhs,
+    )
+
+
+def _model(env: Any, dialect: str, case_name: str, tables: Mapping[str, Any]) -> Any:
+    """The model, however this dialect spells one: a `Model` from `gurobipy-loop`, `loadModel` for `gurobipy-matrix`."""
+    from bench.models import formulation
+
+    if dialect == 'gurobipy-loop':
+        return formulation(case_name, dialect).build(env, tables)
+    return matrix_loaded(env, matrix_arrays(case_name, tables))
+
+
+def tables(prepared: Prepared) -> dict[str, Any]:
+    """The parquet, read into polars."""
     import polars as pl
 
-    tables = {name: pl.read_parquet(path) for name, path in prepared.paths.items()}
+    return {name: pl.read_parquet(path) for name, path in prepared.paths.items()}
+
+
+def _built(prepared: Prepared) -> tuple[Any, Any]:
+    """The environment and a flushed model, the parquet read inside the call."""
+    import gurobipy as gp
+
+    read = tables(prepared)
     env = gp.Env(params={'OutputFlag': 0})
-    model = _model(env, prepared.dialect, prepared.case_name, tables)
+    model = _model(env, prepared.dialect, prepared.case_name, read)
     model.update()
     return env, model
 
@@ -91,6 +128,19 @@ def _release(env: Any, model: Any) -> None:
     """Both, or the next round's peak is this round's high-water mark as well."""
     model.dispose()
     env.dispose()
+
+
+def matrix_load(arrays: Arrays) -> Counts:
+    """*arrays* loaded into a new environment and flushed, then released — the `gurobipy-matrix` floor's timed body."""
+    import gurobipy as gp
+
+    env = gp.Env(params={'OutputFlag': 0})
+    model = matrix_loaded(env, arrays)
+    model.update()
+    try:
+        return _counts(model)
+    finally:
+        _release(env, model)
 
 
 def build_and_emit(sink: str, prepared: Prepared) -> Counts:

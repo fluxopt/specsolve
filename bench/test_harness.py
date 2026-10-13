@@ -1512,6 +1512,8 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
         'window',
         'read_setup',
         'read',
+        'load_setup',
+        'load',
     ):
         target = getattr(module, verb, None)
         if target is None:
@@ -1533,6 +1535,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
         assert hasattr(module, 'read') == hasattr(module, 'read_setup'), (
             f'the {name} arm offers one half of the read pair — `read_setup` builds and answers '
             f'outside the clock, `read` is what is timed, and neither means anything alone'
+        )
+        assert hasattr(module, 'load') == hasattr(module, 'load_setup'), (
+            f'the {name} arm offers one half of the load pair — `load_setup` builds the arrays '
+            f'outside the clock, `load` is what is timed, and neither means anything alone'
         )
 
 
@@ -1563,6 +1569,51 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
             f'the {name} arm ships {len(blob)} bytes to the child, so it carries pre-built state — '
             f'the isolated rss would measure deserializing that, not the window'
         )
+
+
+def test_the_floor_arms_are_the_ones_that_time_a_load_alone() -> None:
+    """The page's matrix floor is the solver's handoff alone, so both matrix arms carry the load pair and no rival does."""
+    floors = sorted(name for name, module in ARMS.items() if hasattr(module, 'load'))
+    assert floors == ['gurobipy-matrix', 'highspy-matrix'], 'exactly the two matrix arms time a load alone'
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -> None:
+    """`load_setup` runs in the spawned child, so the arrays are built there and never pickled (#1617)."""
+    plugin = pytest.importorskip(
+        'pytest_benchmem.pytest_plugin',
+        reason='pytest-benchmem is not installed — bench/ runs through `pixi run -e bench`',
+    )
+
+    from bench.test_ladder import _CollectedSetup
+
+    module = ARMS[floor]
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    setup = _CollectedSetup(partial(module.load_setup, module.SINKS[0], prepared))
+    mem_setup, tracked = plugin._pedantic_action(module.load, (), {}, setup)
+    blob = pickle.dumps((tracked, mem_setup))
+    assert len(blob) < 1024 * 1024, (
+        f'the {floor} arm ships {len(blob)} bytes to the child, so the arrays travel pickled and the '
+        f'isolated rss measures deserializing them'
+    )
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'nodal', 'sector', 'network'])
+def test_a_floor_loads_the_model_its_build_loads(floor: str, case_name: str) -> None:
+    """`load` over `load_setup`'s arrays is the same model `build_and_emit` loads, so the floor moved only its clock."""
+    module = ARMS[floor]
+    reason = unmeasurable(floor, case_name, module.SINKS[0])
+    if reason:
+        pytest.skip(reason)
+    case = CASES[case_name]
+    smallest = case.ladder[0]
+    prepared = module.prepare(case_name, smallest.label, case.data(smallest), {})
+    args, kwargs = module.load_setup(module.SINKS[0], prepared)
+    assert module.load(*args, **kwargs) == module.build_and_emit(module.SINKS[0], prepared), (
+        'the load and the build hand over different columns, rows or nonzeros'
+    )
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
@@ -1722,7 +1773,7 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     """
     module = ARMS['specsolve']
     case = CASES['dispatch']
-    prepared = module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {})
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
 
     emitted = module.build_and_emit('lp', prepared)['phases']
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
@@ -2008,96 +2059,156 @@ def _results(directory: Path, *timings: dict[str, Any], name: str = 'latest-high
 
 
 def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-    """specsolve at 1 s and linopy at 4 s on one cell, so the ratio is 0.25x."""
+    """specsolve at 1 s and 1 GB, and linopy at 4 s, on one cell."""
     return _timing('specsolve', sink='highs', **over), _timing('linopy', sink='highs', wall_seconds=4.0, **over)
 
 
 @pytest.mark.parametrize(
-    ('pr', 'base', 'shown'),
+    ('pr', 'base', 'shown', 'absent'),
     [
         pytest.param(
-            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 5% or more**'], id='the same cell on both sides'
+            _pair(),
+            _pair(),
+            ['| m | 1k | 1 s → 1 s (1.00x) | 1 GB → 1 GB (1.00x) |', '**No specsolve cell moved by 5% or more**'],
+            ['linopy'],
+            id='the same cell on both sides',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=8.0)),
+            _pair(),
+            ['**No specsolve cell moved by 5% or more**', 'took 2.00x their committed time at the median cell'],
+            ['8 s'],
+            id='another library moved, which only the sentence on the servers says',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=0.5), _pair()[1]),
+            _pair(),
+            [
+                '**1 specsolve cell moved by 5% or more**',
+                '| dispatch | highs | m | 1k | 🟢 1 s → 500 ms (0.50x) | 1 GB → 1 GB (1.00x) |',
+                '| m | 1k | 🟢 1 s → 500 ms (0.50x) | 1 GB → 1 GB (1.00x) |',
+            ],
+            [],
+            id='specsolve got faster',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', peak_rss_bytes=1.2e9), _pair()[1]),
+            _pair(),
+            ['| dispatch | highs | m | 1k | 1 s → 1 s (1.00x) | 🔴 1 GB → 1.2 GB (1.20x) |'],
+            [],
+            id='specsolve took more memory',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=1.04), _pair()[1]),
+            _pair(),
+            ['**No specsolve cell moved by 5% or more**', '| m | 1k | 1 s → 1.04 s (1.04x) |'],
+            [],
+            id='a move inside the threshold',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=0.5, iqr=1.0), _pair()[1]),
+            _pair(),
+            ['The tables below hold 1 whose rounds spread too wide to quote', '🟢 1 s → 500 ms (0.50x)~'],
+            ['| dispatch | highs | m |'],
+            id='a noisy move stays out of the moved table',
+        ),
+        pytest.param(
+            (*_pair(), _timing('specsolve-in-memory', sink='highs', wall_seconds=0.5)),
+            (*_pair(), _timing('specsolve-in-memory', sink='highs')),
+            ['took 1.00x their committed time at the median cell, and 1.00x to 1.00x in the middle 1 of 1 cells'],
+            ['specsolve-in-memory', '0.50x'],
+            id='specsolve in memory is neither compared nor counted as another library',
         ),
         pytest.param(
             _pair(case='newcase'),
             _pair(),
-            ['**newcase — highs**', '| m | — → 0.25x |'],
+            ['**newcase — highs**', '| m | 1k | — → 1 s | — → 1 GB |'],
+            [],
             id='a model the base never ran',
         ),
-        pytest.param(_pair(size='xl'), _pair(), ['| xl | — → 0.25x |', '| m | 0.25x → — |'], id='other rungs'),
         pytest.param(
-            (*_pair(), _timing('newlib', sink='highs', wall_seconds=2.0)),
-            _pair(),
-            ['| rung | linopy | newlib |', '| m | 0.25x | — → 0.50x |'],
-            id='a library the base never ran',
+            _pair(size='xl'), _pair(), ['| xl | 1k | — → 1 s |', '| m | 1k | 1 s → — |'], [], id='other rungs'
         ),
         pytest.param(
             (_timing('specsolve', sink='highs', wall_seconds=float('nan')), _pair()[1]),
             _pair(),
-            ['| m | 0.25x → — |'],
+            ['| m | 1k | 1 s → — |'],
+            [],
             id='a wall time that is not a number',
         ),
         pytest.param(
             (_timing('specsolve', sink='highs', wall_seconds=None), _pair()[1]),
             _pair(),
-            ['| m | 0.25x → — |'],
+            ['| m | 1k | 1 s → — |'],
+            [],
             id='a wall time that is missing',
         ),
-        pytest.param((_pair()[0],), _pair(), ['| m | 0.25x → — |'], id='a library dropped from the run'),
         pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=1.25)),
+            (_pair()[0],),
             _pair(),
-            ['**1 cell moved by 5% or more**', '| m | 🔴 0.25x → **0.80x** |'],
-            id='a library that caught up with specsolve',
-        ),
-        pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.9)),
-            _pair(),
-            ['**No cell moved by 5% or more**', '| m | 0.26x |'],
-            id='a move inside the noise',
+            ['No other library ran on both sides, so nothing here says how far the two servers differ.'],
+            [],
+            id='a library dropped from the run',
         ),
         pytest.param(
             _pair(case='nodal'),
             (*_pair(case='nodal'), *_pair()),
             ['⚠️ **Committed but not in this run:** dispatch — highs'],
+            [],
             id='a model the run lost',
-        ),
-        pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=250.0)),
-            _pair(),
-            ['| m | 🟢 0.25x → **0.004x** |', '| 🟢 | dispatch | highs | m | linopy | 0.25x | **0.004x** |'],
-            id='a ratio below a tenth keeps two figures',
         ),
         pytest.param(
             (
                 _pair(case='gone')[0],
-                {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'linopy', 'budget': 30.0},
+                {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'specsolve', 'budget': 30.0},
             ),
             _pair(case='gone'),
-            ['**gone — highs**', '| m | 0.25x → — |'],
+            ['**gone — highs**', '| m | 1k | 1 s → 1 s (1.00x) |'],
+            [],
             id='a budget stop on a model the ladder no longer has',
         ),
         pytest.param(
             (*_pair(), {**_timing('specsolve', sink='highs'), 'arm': None}),
             _pair(),
-            ['| m | 0.25x |'],
+            ['| m | 1k | 1 s → 1 s (1.00x) |'],
+            [],
             id='a record with no library',
         ),
         pytest.param(
             _pair(counts=None, size='xl'),
             _pair(),
-            ['| m | 0.25x → — |', '| xl | — → 0.25x |'],
+            ['| m | 1k | 1 s → — |', '| xl | — | — → 1 s |'],
+            [],
             id='a record with no counts',
         ),
-        pytest.param((_pair()[0],), (_pair()[0],), ['only specsolve was measured'], id='only specsolve on both sides'),
+        pytest.param(
+            (*_pair(), _timing('linopy', case='other', sink='highs')),
+            (*_pair(), _timing('linopy', case='other', sink='highs')),
+            ['**dispatch — highs**'],
+            ['**other — highs**'],
+            id='a model only another library ran has no table',
+        ),
+        pytest.param(
+            (_pair()[1],),
+            _pair(),
+            ['This run left no specsolve results to compare.'],
+            ['<details>'],
+            id='a run with no specsolve cell',
+        ),
     ],
 )
 def test_the_comment_renders_whatever_the_two_runs_hold(
-    tmp_path: Path, pr: tuple[dict[str, Any], ...], base: tuple[dict[str, Any], ...], shown: list[str]
+    tmp_path: Path,
+    pr: tuple[dict[str, Any], ...],
+    base: tuple[dict[str, Any], ...],
+    shown: list[str],
+    absent: list[str],
 ) -> None:
     text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
     missing = [line for line in shown if line not in text]
     assert not missing, f'the comment lacks {missing}:\n{text}'
+    extra = [line for line in absent if line in text]
+    assert not extra, f'the comment holds {extra}, which it should not:\n{text}'
 
 
 @pytest.mark.parametrize(
@@ -2117,7 +2228,7 @@ def test_the_comment_renders_whatever_the_two_runs_hold(
         ),
         pytest.param(
             lambda pr, base: [p.unlink() for p in pr.iterdir()],
-            'This run left no results to compare.',
+            'This run left no specsolve results to compare.',
             False,
             id='a run that wrote nothing',
         ),
@@ -2144,12 +2255,12 @@ def test_a_file_that_is_broken_or_absent_is_named_and_the_comment_still_renders(
 
 def test_the_comment_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
     cases = [f'c{i:02d}' for i in range(comment.SHOWN + 3)]
-    pr = [t for c in cases for t in (_pair(case=c)[0], _timing('linopy', case=c, sink='highs', wall_seconds=1.0))]
-    base = [t for c in cases for t in _pair(case=c)]
+    pr = [_timing('specsolve', case=c, sink='highs', wall_seconds=2.0) for c in cases]
+    base = [_timing('specsolve', case=c, sink='highs') for c in cases]
     text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
     summary = text.split('<details>')[0]
-    assert summary.count('| 🔴 |') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
-    assert 'And 3 more, in the tables below.' in summary
+    assert summary.count('| 🔴 1 s → 2 s') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
+    assert 'The tables below hold 3 more.' in summary
 
 
 def test_a_comment_too_long_for_github_drops_the_full_tables(tmp_path: Path) -> None:
