@@ -26,6 +26,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
 - docs: the published benchmarks are re-measured with the sector-coupled model ([#2024](https://github.com/fluxopt/specsolve/pull/2024))
 - perf: a model with many variables and constraints builds in about half the time ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
+- docs: the published benchmarks are re-measured with the network model's pooled plants ([#2031](https://github.com/fluxopt/specsolve/pull/2031))
 
 ## 0.9.0 (2026-10-12)
 

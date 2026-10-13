@@ -41,10 +41,10 @@ whose fingerprint no longer describes it.
 
 The committed `results/latest-<sink>-<case>.json` are the provenance of the
 tables `docs/about/benchmarks.md` publishes *today*: Published benchmark run
-38369479328, on `b646d61d`. It finished the size ladder of `dispatch`, `nodal`,
+38393347540, on `af1dac7d`. It finished the size ladder of `dispatch`, `nodal`,
 `network` and `sector` on both sinks, `3xs` to `l`. The budget stopped pyomo
-after `m`, or after `s` on `network` through HiGHS, and linopy and
-gurobipy-loop after `m` on `network`. `results.records` still reads the
+after `m`, or after `s` on `network`, and linopy and gurobipy-loop after `m` on
+`network`. `results.records` still reads the
 pre-pytest `.jsonl` shape, though no such file is committed any more.
 
 **The published ladder measures what the page publishes**: `pixi run ladder`
@@ -387,17 +387,22 @@ best-of-nine beside a neighbour's best-of-forty. The median beats
 the fastest round because a cell whose nine rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
-([#2024](https://github.com/fluxopt/specsolve/pull/2024)) 26 of 219 published
-cells have a mean above 1.10x their median, the worst at 17.22x: `dispatch/3xs`
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)) 41 of 218 published
+cells have a mean above 1.10x their median, the worst at 13.32x: `dispatch/3xs`
 on pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In
-24 of them the first round is the slowest of the nine, at 1.9 to 147.8 times the
-median of the other eight, so the median does not move. The other two are
-gurobipy-matrix cells at `2xs` on the `gurobi` sink. At `nodal/2xs` the rounds
-fall into two groups, 4.8 to 5.9 ms and 9.6 to 13.4 ms. At `network/2xs` one round takes 25.3 ms and the other eight
-9.8 to 11.2 ms.
+25 of them the first round is the slowest of the nine, at 1.7 to 112.2 times the
+median of the other eight, so the median does not move. The other 16 are
+matrix-floor and gurobipy-loop cells from `2xs` to `m`, and one cell each of
+linopy, pyomo and specsolve. In most of them the rounds fall into two groups,
+the slow one up to about twice the fast one: `nodal/xs` on gurobipy-loop on
+the `gurobi` sink takes either 17.8 to 19.4 ms or 37.1 to 39.3 ms.
 
-The median decides no cell of specsolve against another library on this run:
-in each, the library that has the fastest round also has the faster median.
+The median decides specsolve against another library in four cells on this
+run. In each, specsolve's fastest round is the faster one and its median is the
+slower. Three are against pyomo: `dispatch/2xs` on the `gurobi` sink, 18.2 ms
+against 19.1 ms fastest and 20.9 ms against 19.4 ms median, and `sector/2xs` on
+both sinks. The fourth is against gurobipy-loop at `sector/xs` on the `gurobi`
+sink: 31.4 ms against 32.9 ms fastest, 34.7 ms against 34.1 ms median.
 
 ### Peak memory
 
