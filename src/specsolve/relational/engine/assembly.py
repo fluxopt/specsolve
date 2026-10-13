@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 import numpy as np
 import polars as pl
@@ -202,7 +202,8 @@ class Assembly:
                 'var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
             )
             bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
-        cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
+        vtype = pl.Series('vtype', [v.domain], dtype=_DTYPES['vtype']).new_from_index(0, bounded.height)
+        cols = pl.DataFrame([bounded.get_column('lb'), bounded.get_column('ub'), vtype])
 
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
             bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
@@ -522,7 +523,7 @@ def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
     The keys are labels, never negative, so each is a digit in a base one past
     its largest value.
     """
-    largest = stacked.select(pl.col(k).max() for k in keys).row(0)
+    largest = [cast('int', stacked.get_column(k).max()) for k in keys]
     if math.prod(value + 1 for value in largest) >= 2**63:
         return stacked.sort(*keys)
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
@@ -566,7 +567,7 @@ def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
     A pruned share no longer says which rows had terms, so
     [`Assembly._matrix_share`][] reads that set before pruning.
     """
-    if not matrix.select(pl.col('coeff').eq(0).any()).item():
+    if not matrix.get_column('coeff').eq(0).any():
         return matrix
     return matrix.filter(pl.col('coeff') != 0).rechunk()
 
