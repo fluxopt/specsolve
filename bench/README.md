@@ -23,7 +23,7 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 pixi run refresh
 
 # or a rung at a time — the same five tasks `refresh` depends on, in order
-pixi run ladder        # --sizes 3xs 2xs 2xs2 2xs5 xs … m5 l  -> bench/results/latest.json
+pixi run ladder        # --sizes 3xs 2xs 2xs5 xs xs5 … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
 pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
@@ -341,8 +341,8 @@ Not measured, deliberately: solve time (that is the solver, identical either
 way, and it would swamp the build), and anything about expressiveness.
 
 **An arm stops climbing a ladder it cannot afford.** A library that builds per
-entity costs about what the rung is wide, and each rung is two to two and a half
-times the one below — so one measurement settles the next one. After every cell
+entity costs about what the rung is wide, and each rung is two to five times
+the one below — so one measurement settles the next one. After every cell
 the harness projects the rung above it, and if that projection is over
 `--budget` (120 s by default) the arm skips the rest of that ladder with a
 sentence saying what it measured and what it projected. *That a library is far slower is the finding*; an hour spent

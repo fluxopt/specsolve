@@ -217,12 +217,10 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
         for case in ('dispatch', 'nodal', 'network', 'sector')
     ), 'every published case through both sinks, one file each'
     assert published['latest-highs-dispatch.json'] == {
-        *('3xs', '2xs', '2xs2', '2xs5', 'xs', 'xs2', 'xs5'),
-        *('s', 's2', 's5', 'm', 'm2', 'm5', 'l'),
+        *('3xs', '2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
     }, 'a case holds every rung of the size ladder it has'
     assert published['latest-highs-network.json'] == {
-        *('2xs', '2xs2', '2xs5', 'xs', 'xs2', 'xs5'),
-        *('s', 's2', 's5', 'm', 'm2', 'm5', 'l'),
+        *('2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
     }, 'a rung the case does not have is left out of its file'
     assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
@@ -652,26 +650,26 @@ def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
 @pytest.mark.parametrize(
     ('rungs', 'stops'),
     [
-        pytest.param(None, False, id='every-rung-climbs-to-s2'),
+        pytest.param(None, False, id='every-rung-climbs-to-s5'),
         pytest.param(('xs', 's', 'm'), True, id='decades-only-climb-to-m'),
     ],
 )
 def test_a_measurement_that_leaves_rungs_out_projects_to_the_next_it_takes(
     rungs: tuple[str, ...] | None, stops: bool
 ) -> None:
-    """`test_rebuild` skips `s2` and `s5`, so after `s` its next rung is `m`, ten times wider, not `s2`."""
-    ceiling = _ceiling(120.0, selected=('xs', 's', 's2', 's5', 'm'))
+    """`test_rebuild` skips `s5`, so after `s` its next rung is `m`, ten times wider, not `s5`."""
+    ceiling = _ceiling(120.0, selected=('xs', 's', 's5', 'm'))
     ceiling.record('pyomo', 'dispatch', 's', '', 20.0, rungs=rungs)
     assert (ceiling.reached('pyomo', 'dispatch', 's', '') is not None) == stops, (
-        '20 s projects to 40 s at s2, inside 120 s, and to 200 s at m, over it'
+        '20 s projects to 100 s at s5, inside 120 s, and to 200 s at m, over it'
     )
 
 
 @pytest.mark.parametrize(
     ('label', 'between'),
     [
-        *(pytest.param(s, True, id=s) for s in ('3xs2', '2xs5', 'xs2', 's5', 'm2', 'm5')),
-        *(pytest.param(s, False, id=s) for s in ('3xs', '2xs', 'xs', 'm', 'l', '2xl', 'd25', 'w10', 'n032')),
+        *(pytest.param(s, True, id=s) for s in ('3xs5', '2xs5', 'xs5', 's5', 'm5')),
+        *(pytest.param(s, False, id=s) for s in ('3xs', '2xs', 'xs', 'm', 'l', '2xl', 'xs2', 'd25', 'w10', 'n032')),
     ],
 )
 def test_the_rungs_between_decades_are_named_by_their_label(label: str, between: bool) -> None:
@@ -680,8 +678,8 @@ def test_the_rungs_between_decades_are_named_by_their_label(label: str, between:
 
 def test_every_rung_between_decades_is_one_the_ladder_made() -> None:
     made = {s.label for case in CASES.values() for s in case.ladder if between_decades(s.label)}
-    assert made == {'3xs2', '3xs5', '2xs2', '2xs5', 'xs2', 'xs5', 's2', 's5', 'm2', 'm5'}, (
-        'a rung twice and five times every decade from 3xs to m, and none elsewhere'
+    assert made == {'3xs5', '2xs5', 'xs5', 's5', 'm5'}, (
+        'a rung five times every decade from 3xs to m, and none elsewhere'
     )
 
 
@@ -1340,9 +1338,9 @@ def test_a_rung_expects_the_rung_below_grown_by_its_width() -> None:
     stash = pytest.Stash()
     assert expected_seconds(_node('xs', stash=stash)) is None, 'the first rung of a ladder has nothing to go on'
     remember(_node('xs', stash=stash), 0.4)
-    assert expected_seconds(_node('xs2', stash=stash)) == pytest.approx(0.8), 'xs2 is twice as wide as xs'
-    remember(_node('xs2', stash=stash), 0.8)
-    assert expected_seconds(_node('xs5', stash=stash)) == pytest.approx(2.0), 'and xs5 two and a half times xs2'
+    assert expected_seconds(_node('xs5', stash=stash)) == pytest.approx(2.0), 'xs5 is five times as wide as xs'
+    remember(_node('xs5', stash=stash), 2.0)
+    assert expected_seconds(_node('s', stash=stash)) == pytest.approx(4.0), 'and s twice as wide as xs5'
     assert expected_seconds(_node('xs5', arm='linopy', stash=stash)) is None, 'another arm is another cell'
 
 
