@@ -1,6 +1,6 @@
 """A parameter given as a large parquet path is streamed from a copy rather than held in memory.
 
-Every test lowers ``streamed.ROWS`` to 0, so the dispatch example's files stream.
+Every test lowers ``streamed.ROWS`` and ``streamed.BYTES`` to 0, so the dispatch example's files stream.
 """
 
 from __future__ import annotations
@@ -33,7 +33,12 @@ def paths(dispatch_frame_inputs, tmp_path) -> dict[str, str]:
 
 @pytest.fixture
 def stream_everything(monkeypatch) -> None:
+    _stream_everything(monkeypatch)
+
+
+def _stream_everything(monkeypatch) -> None:
     monkeypatch.setattr(streamed, 'ROWS', 0)
+    monkeypatch.setattr(streamed, 'BYTES', 0)
 
 
 def _written(dispatch_yaml: Path, sources: dict[str, str], out: Path) -> str:
@@ -44,7 +49,7 @@ def _written(dispatch_yaml: Path, sources: dict[str, str], out: Path) -> str:
 
 def test_a_streamed_parameter_builds_the_model_a_held_one_builds(dispatch_yaml, paths, tmp_path, monkeypatch):
     held = _written(dispatch_yaml, paths, tmp_path / 'held.lp')
-    monkeypatch.setattr(streamed, 'ROWS', 0)
+    _stream_everything(monkeypatch)
     with sps.build(dispatch_yaml, paths) as model:
         assert model._copies is not None
         assert model._copies.names == PARAMETERS, 'every parameter path streams at a threshold of zero rows'
@@ -117,7 +122,7 @@ def test_a_defect_in_a_streamed_parameter_is_named_as_a_held_one_is(dispatch_yam
     pl.DataFrame(p_max).write_parquet(paths['p_max'])
     with pytest.raises(DataError) as held:
         sps.build(dispatch_yaml, paths)
-    monkeypatch.setattr(streamed, 'ROWS', 0)
+    _stream_everything(monkeypatch)
     with pytest.raises(DataError) as streaming:
         sps.build(dispatch_yaml, paths)
     assert str(streaming.value) == str(held.value)
@@ -141,6 +146,17 @@ def test_a_parameter_over_datetimes_is_read_as_a_held_one_is(tmp_path, monkeypat
     sources = {'t': pl.DataFrame({'t': times}), 'cap': str(cap)}
     with sps.solve(Spec(**TIMED), sources) as held:
         expected = held.objective
-    monkeypatch.setattr(streamed, 'ROWS', 0)
+    _stream_everything(monkeypatch)
     with sps.solve(Spec(**TIMED), sources) as streaming:
         assert streaming.objective == pytest.approx(expected, rel=1e-12), 'every label met its index'
+
+
+def test_a_parameter_given_as_a_glob_of_files_is_held(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+    """A glob names no one file to measure, so the build holds what it matches, as it did before."""
+    (parts := tmp_path / 'load').mkdir()
+    load = dispatch_frame_inputs['load']
+    load.head(2).write_parquet(parts / 'a.parquet')
+    load.tail(load.height - 2).write_parquet(parts / 'b.parquet')
+    sources = {**dispatch_frame_inputs, 'load': str(parts / '*.parquet')}
+    with sps.solve(dispatch_yaml, sources) as globbed, sps.solve(dispatch_yaml, dispatch_frame_inputs) as held:
+        assert globbed.objective == pytest.approx(held.objective, rel=1e-12), 'the glob reads the same load'

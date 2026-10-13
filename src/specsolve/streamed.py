@@ -1,7 +1,8 @@
 """Which parameters a build streams from their parquet file, and the copies it streams them from.
 
-A parameter given as a parquet path of at least [`ROWS`][] rows is not held in
-memory: the build reads it from the file each time it needs it. It reads a
+A parameter given as a parquet file of at least [`ROWS`][] rows is not held in
+memory: the build reads it from the file each time it needs it. Below that a
+model fits in memory anyway, and streaming would only cost time. It reads a
 copy taken at the build, so a file rewritten afterwards reaches neither the
 model, an expression read off it, nor its archive. A smaller parameter is held
 in memory, where reading it again costs nothing.
@@ -25,22 +26,29 @@ if TYPE_CHECKING:
 
     from specsolve.inputs import Source
 
-__all__ = ['ROWS', 'Copies', 'large']
+__all__ = ['BYTES', 'ROWS', 'Copies', 'large']
 
-#: The rows from which a parameter streams.
-ROWS = 250_000
+#: The rows from which a parameter streams: where a model as large as its input passes 2 GB (#2018).
+ROWS = 10_000_000
+
+#: The bytes below which a file is not opened to count its rows, so a small model pays nothing.
+BYTES = 1_000_000
 
 
 def large(sources: Mapping[str, Source]) -> set[str]:
-    """The names in *sources* given as a parquet path of at least [`ROWS`][] rows.
+    """The names in *sources* given as a parquet file of at least [`ROWS`][] rows.
 
-    The rows are counted off each file's footer, every footer in one
-    concurrent pass, since opening a file costs a fixed time however small it is.
+    A file under [`BYTES`][] is not opened. The rest have their rows counted
+    off the footer, every footer in one concurrent pass, since opening a file
+    costs a fixed time however small it is.
     """
     scans = {
         name: scan
         for name, source in sources.items()
-        if isinstance(source, (str, Path)) and (scan := as_frame(source)) is not None
+        if isinstance(source, (str, Path))
+        and Path(source).is_file()
+        and Path(source).stat().st_size >= BYTES
+        and (scan := as_frame(source)) is not None
     }
     counts = collected_all(scan.select(pl.len()) for scan in scans.values())
     return {name for name, count in zip(scans, counts, strict=True) if count.item() >= ROWS}
