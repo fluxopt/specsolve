@@ -59,6 +59,7 @@ from specsolve.relational.engine.engine import Engine, expression_readers
 from specsolve.relational.result import Result, evaluated
 from specsolve.relational.sinks import solver, writer
 from specsolve.sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
+from specsolve.streamed import Copies
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -210,6 +211,8 @@ class Model:
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
+        #: The copies the last build streams its large parameters from.
+        self._copies: Copies | None = None
         self._engine = Engine()
         self._fill()
 
@@ -227,12 +230,15 @@ class Model:
         What the build read is kept for an archive: a one-shot iterator is
         spent by then, and a path may have been rewritten.
         """
+        copies = Copies()
         try:
-            self._tidied = tidy_sources(self._program, self._sources)
-            self._engine.build(self._program, self._tidied)
+            self._tidied = tidy_sources(self._program, self._sources, copies)
+            self._engine.build(self._program, self._tidied, copies.names)
         except BaseException:
+            self._copies = None
             self._engine.close()
             raise
+        self._copies = copies
 
     def update(self, sources: Mapping[str, Source]) -> Model:
         """Put new numbers on the same model, in place.
@@ -400,6 +406,7 @@ class Model:
             _spec=self._spec,
             _solved_at=datetime.now(UTC),
             _provenance=_provenance(solver_name, solver_options, record_options),
+            _reads_from=self._copies,
         )
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -551,6 +558,7 @@ class Model:
     def close(self) -> None:
         """Release the built model, and any solver still holding it."""
         self._engine.close()
+        self._copies = None
 
     def __enter__(self) -> Model:
         return self

@@ -398,6 +398,9 @@ class Result:
     #: [`_duals`][], carrying the certificate an infeasible solve left.
     #: Empty on every solve that was not infeasible.
     _dual_rays: Mapping[str, pl.LazyFrame] | None = None
+    #: What [`_evaluate`][] and [`_expressions`][] read a streamed parameter
+    #: from, held so it outlives the model that built it.
+    _reads_from: object = None
     #: Why there is no certificate — the status, or the solver setting that
     #: would have produced one. ``None`` whenever [`_dual_rays`][] holds it.
     _no_dual_ray: str | None = None
@@ -859,6 +862,7 @@ class Result:
         self._primals = self._duals = self._outputs = self._expressions = None
         self._dual_rays = None
         self._evaluate = None
+        self._reads_from = None
 
     def __enter__(self) -> Result:
         return self

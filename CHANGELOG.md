@@ -21,6 +21,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the guide to faster solves gives the gain from one polars thread as a rough estimate, and tells the reader to time their own model ([#2017](https://github.com/fluxopt/specsolve/pull/2017))
 - perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
+- perf: a parameter given as a parquet file of ten million rows or more streams from a copy rather than being held, so a model that large builds in less memory ([#2018](https://github.com/fluxopt/specsolve/pull/2018))
 
 ## 0.9.0 (2026-10-12)
 

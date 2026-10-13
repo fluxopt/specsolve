@@ -15,7 +15,7 @@ import polars as pl
 from specsolve.relational.collect import collected, in_memory
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from mathspec import program
 
@@ -44,17 +44,23 @@ class AttachedSources:
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
 
-def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
+def attach(
+    program: program.Program, sources: Mapping[str, pl.LazyFrame], streamed: Collection[str] = ()
+) -> AttachedSources:
     """Shape the door's frames into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
-    [`in_memory`][], since every read holds one table whole.
+    [`in_memory`][], since every read holds one table whole, except a
+    parameter named in *streamed*: it stays a scan of its file, and the build
+    reads it each time it needs it.
     """
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
-        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+        parameters = {
+            name: sources[name] if name in streamed else sources[name].pipe(collected) for name in program.parameters
+        }
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
@@ -73,9 +79,14 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         dimensions={d: f.lazy() for d, f in dimensions.items()},
         relations={name: f.lazy() for name, f in relations.items()},
         cardinality={d: f.height for d, f in dimensions.items()},
-        parameter_rows={name: f.height for name, f in parameters.items()},
+        parameter_rows={name: _height(f) for name, f in parameters.items()},
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
     )
+
+
+def _height(frame: pl.DataFrame | pl.LazyFrame) -> int:
+    """*frame*'s rows; a streamed parameter's are counted off its file."""
+    return frame.height if isinstance(frame, pl.DataFrame) else frame.select(pl.len()).pipe(collected).item()
 
 
 def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
@@ -92,9 +103,9 @@ def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
     return index.with_row_index('ord').select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
 
 
-def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:
+def _plain_strings(frame: pl.DataFrame | pl.LazyFrame, dims: tuple[str, ...]) -> pl.DataFrame | pl.LazyFrame:
     """Dim columns as plain strings, so a writer's own dictionary cannot block the cast into an ``Enum``."""
-    categorical = [d for d, dtype in frame.schema.items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
+    categorical = [d for d, dtype in frame.collect_schema().items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
     if not categorical:
         return frame
     return frame.with_columns(pl.col(d).cast(pl.String) for d in categorical)
