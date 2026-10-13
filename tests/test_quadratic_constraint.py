@@ -155,13 +155,13 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
         assert tables.linear_row_count == 1
 
 
-@pytest.mark.xfail(reason='the quadratic share keeps its old row numbers when a termless row closes up the block')
 def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
     """A row with no term closes up the block, and every quadratic entry moves with its row.
 
     ``k`` has no value at ``a``, so that row has no term and is not built, and
     ``b`` and ``c`` move up to rows 0 and 1. Each keeps its own pair:
-    ``p_b² <= 10`` and ``4·p_c² <= 10``.
+    ``p_b² <= 10`` and ``4·p_c² <= 10``. The quadratic share used to keep its
+    old row numbers: row ``c`` took ``b``'s pair and ``b`` lost its own.
     """
     sparse = {
         'dimensions': {'g': {'dtype': 'str'}},

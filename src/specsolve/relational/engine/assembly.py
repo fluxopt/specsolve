@@ -376,11 +376,9 @@ class Assembly:
         qmatrix = self._quadratic_share(frame, con.quads, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        frame, rows, matrix = self._drop_termless_rows(con.name, frame, rows, stacked, term_rows)
+        frame, rows, matrix, qmatrix = self._drop_termless_rows(con.name, frame, rows, stacked, qmatrix, term_rows)
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[con.name] = sides
-        if qmatrix is not None:
-            qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return frame, rows, matrix, qmatrix
 
     def _dense_row(self, dims: tuple[str, ...]) -> pl.Expr:
@@ -418,27 +416,35 @@ class Assembly:
         return share
 
     def _drop_termless_rows(
-        self, name: str, frame: pl.LazyFrame, rows: pl.DataFrame, matrix: pl.DataFrame, kept: pl.Series
-    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame]:
-        """Rows that kept no variable term are not built, and the block closes up: the labelled block, ``rows`` and the matrix.
+        self,
+        name: str,
+        frame: pl.LazyFrame,
+        rows: pl.DataFrame,
+        matrix: pl.DataFrame,
+        qmatrix: pl.DataFrame | None,
+        kept: pl.Series,
+    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+        """Rows that kept no variable term are not built, and the block closes up: the labelled block, ``rows`` and both shares.
 
         *kept* is read before zeros are pruned, so a row whose every term is
         zero stays: ``0 >= 10`` is infeasible. Survivors renumber from 0,
-        because the dual read-back reads a block by position.
+        because the dual read-back reads a block by position. Every row a share
+        holds is in *kept*, so each of its entries moves with its row.
         """
         if kept.len() == rows.height:
-            return frame, rows, matrix
+            return frame, rows, matrix, qmatrix
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
         renumber = surviving.select('row').with_row_index('__new__')
-        self.measured.omitted[name] = rows.height - surviving.height
+        self.measured.omitted[name] = self.measured.omitted.get(name, 0) + rows.height - surviving.height
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
-        rows = surviving.with_columns(pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row']))
-        matrix = matrix.with_columns(pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row']))
-        frame = frame.filter(pl.col('row').is_in(kept)).with_columns(
-            pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row'])
-        )
-        return frame, rows, matrix
+        renumbered = pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row'])
+        rows = surviving.with_columns(renumbered)
+        matrix = matrix.with_columns(renumbered)
+        if qmatrix is not None:
+            qmatrix = qmatrix.with_columns(renumbered)
+        frame = frame.filter(pl.col('row').is_in(kept)).with_columns(renumbered)
+        return frame, rows, matrix, qmatrix
 
     def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
