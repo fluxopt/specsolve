@@ -128,7 +128,7 @@ HiGHS.
 
 A script that solves one small model with specsolve finishes in about half a
 second, about half of linopy's time
-([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)).
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
 
 ## Not measured yet
 
