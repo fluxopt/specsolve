@@ -85,7 +85,7 @@ build on the default four threads
 
 On a 2-core machine there was no gain: a build of 10,000 variables took the
 same time on one thread as on two
-([#PR](https://github.com/fluxopt/specsolve/pull/PR)). Time your own model on
+([#2017](https://github.com/fluxopt/specsolve/pull/2017)). Time your own model on
 both settings, on the machine that runs it, in a process of its own for each.
 
 The workers of a [parallel sweep](parallel.md) inherit the setting. It changes
