@@ -11,6 +11,15 @@ Each arm module defines:
     objective(prepared) -> float
     written(prepared, path) -> None
 
+and, where the arm is a floor rather than a rival, both or neither of:
+
+    load_setup(sink, prepared) -> (args, kwargs)
+    load(*args, **kwargs) -> Counts
+
+``load_setup`` reads the parquet and builds the finished arrays outside the
+clock, and `test_emit` times ``load`` in place of ``build_and_emit``: what
+handing a finished model to the solver costs, and nothing before it.
+
 and, where the library has a sweep verb:
 
     sweep(sink, prepared) -> Counts

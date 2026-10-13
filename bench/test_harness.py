@@ -1512,6 +1512,8 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
         'window',
         'read_setup',
         'read',
+        'load_setup',
+        'load',
     ):
         target = getattr(module, verb, None)
         if target is None:
@@ -1533,6 +1535,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
         assert hasattr(module, 'read') == hasattr(module, 'read_setup'), (
             f'the {name} arm offers one half of the read pair — `read_setup` builds and answers '
             f'outside the clock, `read` is what is timed, and neither means anything alone'
+        )
+        assert hasattr(module, 'load') == hasattr(module, 'load_setup'), (
+            f'the {name} arm offers one half of the load pair — `load_setup` builds the arrays '
+            f'outside the clock, `load` is what is timed, and neither means anything alone'
         )
 
 
@@ -1563,6 +1569,51 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
             f'the {name} arm ships {len(blob)} bytes to the child, so it carries pre-built state — '
             f'the isolated rss would measure deserializing that, not the window'
         )
+
+
+def test_the_floor_arms_are_the_ones_that_time_a_load_alone() -> None:
+    """The page's matrix floor is the solver's handoff alone, so both matrix arms carry the load pair and no rival does."""
+    floors = sorted(name for name, module in ARMS.items() if hasattr(module, 'load'))
+    assert floors == ['gurobipy-matrix', 'highspy-matrix'], 'exactly the two matrix arms time a load alone'
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -> None:
+    """`load_setup` runs in the spawned child, so the arrays are built there and never pickled (#1617)."""
+    plugin = pytest.importorskip(
+        'pytest_benchmem.pytest_plugin',
+        reason='pytest-benchmem is not installed — bench/ runs through `pixi run -e bench`',
+    )
+
+    from bench.test_ladder import _CollectedSetup
+
+    module = ARMS[floor]
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    setup = _CollectedSetup(partial(module.load_setup, module.SINKS[0], prepared))
+    mem_setup, tracked = plugin._pedantic_action(module.load, (), {}, setup)
+    blob = pickle.dumps((tracked, mem_setup))
+    assert len(blob) < 1024 * 1024, (
+        f'the {floor} arm ships {len(blob)} bytes to the child, so the arrays travel pickled and the '
+        f'isolated rss measures deserializing them'
+    )
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'nodal', 'sector', 'network'])
+def test_a_floor_loads_the_model_its_build_loads(floor: str, case_name: str) -> None:
+    """`load` over `load_setup`'s arrays is the same model `build_and_emit` loads, so the floor moved only its clock."""
+    module = ARMS[floor]
+    reason = unmeasurable(floor, case_name, module.SINKS[0])
+    if reason:
+        pytest.skip(reason)
+    case = CASES[case_name]
+    smallest = case.ladder[0]
+    prepared = module.prepare(case_name, smallest.label, case.data(smallest), {})
+    args, kwargs = module.load_setup(module.SINKS[0], prepared)
+    assert module.load(*args, **kwargs) == module.build_and_emit(module.SINKS[0], prepared), (
+        'the load and the build hand over different columns, rows or nonzeros'
+    )
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
@@ -1722,7 +1773,7 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     """
     module = ARMS['specsolve']
     case = CASES['dispatch']
-    prepared = module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {})
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
 
     emitted = module.build_and_emit('lp', prepared)['phases']
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
