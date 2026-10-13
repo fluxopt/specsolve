@@ -19,6 +19,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
 - docs: the guide to faster solves says that a small model builds faster on one polars thread, and times it when the page is built ([#2016](https://github.com/fluxopt/specsolve/pull/2016))
 - docs: the guide to faster solves gives the gain from one polars thread as a rough estimate, and tells the reader to time their own model ([#2017](https://github.com/fluxopt/specsolve/pull/2017))
+- perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
 
 ## 0.9.0 (2026-10-12)

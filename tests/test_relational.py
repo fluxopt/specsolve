@@ -1719,6 +1719,47 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
         sps.build(Spec(**NETWORK), {'cap': wide})
 
 
+#: A dimension, a relation and a parameter, so each kind of source can come short of a column.
+MAPPED = {
+    'dimensions': {'g': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
+    'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
+    'parameters': {'p_max': {'dims': ['g']}},
+    'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, by=gen_bus, over=g, into=b) <= 10'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('name', 'short', 'match'),
+    [
+        pytest.param('g', {'gg': ['w', 's']}, "without a 'g' column", id='an-index'),
+        pytest.param(
+            'gen_bus',
+            {'g': ['w', 's'], 'bus': ['n', 'e']},
+            r"must carry a column per column it declares, \['g', 'b'\]",
+            id='a-relation',
+        ),
+        pytest.param('p_max', {'gg': ['w', 's'], 'value': [5.0, 5.0]}, 'is missing columns', id='a-parameter'),
+    ],
+)
+def test_a_parquet_path_short_of_a_column_is_refused_by_name(tmp_path, name, short, match):
+    """All parquet paths are read in one pass, and a file short of a column is left to the reader that names it."""
+    sources = {
+        'g': pl.DataFrame({'g': ['w', 's']}),
+        'b': pl.DataFrame({'b': ['n', 'e']}),
+        'gen_bus': pl.DataFrame({'g': ['w', 's'], 'b': ['n', 'e']}),
+        'p_max': pl.DataFrame({'g': ['w', 's'], 'value': [5.0, 5.0]}),
+    }
+    paths = {}
+    for key, frame in {**sources, name: pl.DataFrame(short)}.items():
+        frame.write_parquet(path := tmp_path / f'{key}.parquet')
+        paths[key] = str(path)
+
+    with pytest.raises(DataError, match=match):
+        tidy_sources(Spec(**MAPPED).program, paths)
+
+
 @pytest.mark.parametrize(
     'largest',
     [
