@@ -4,10 +4,9 @@
 
 It reads whatever the two directories hold and fails on none of it. A case,
 rung, sink or library that one side lacks prints `—`, and so does a number
-that is not finite. A file that does not read is named under the tables, and a
-table that does not render is replaced by its error. A change to what the
-benchmark measures — a new model, other rungs, a library added or dropped —
-changes the comment, not the exit status.
+that is not finite, and a file that does not read is named under the tables.
+A change to what the benchmark measures — a new model, other rungs, a library
+added or dropped — changes the comment, not the exit status.
 
 The ratios are what carries from one run to another: two runs on the benchmark
 server are two machines, but a library and specsolve measured side by side in
@@ -20,13 +19,10 @@ import argparse
 import math
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import NamedTuple
 
 from bench import report
 from bench import results as bench_results
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 #: Where the workflow finds its own comment again, so a second run edits the first.
 MARKER = '<!-- published-benchmark -->'
@@ -187,14 +183,6 @@ def _summary(moved: list[Move]) -> str:
     return '\n'.join(lines)
 
 
-def _guarded(label: str, render: Callable[..., str], *args: Any) -> str:
-    """*render*'s table, or its error in its place, so one table cannot take the comment down."""
-    try:
-        return render(*args)
-    except Exception as e:  # the comment is posted whatever one table does
-        return f'**{label}** did not render: `{type(e).__name__}: {e}`'
-
-
 def _listed(side: str, problems: list[str]) -> list[str]:
     """The files of one side that did not read, under a heading; nothing where every file read."""
     return [f'**{side}: files that did not read**\n\n' + '\n'.join(f'- {p}' for p in problems)] if problems else []
@@ -224,7 +212,7 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
         f'Committed: {report.provenance(base.runs) if base.runs else "no committed results to compare against."}'
     )
     pairs = sorted({(c, k) for c, _, k, _ in pr.rows})
-    tables = [_guarded(f'{c} — {k}', versus, c, k, pr, base) for c, k in pairs]
+    tables = [versus(c, k, pr, base) for c, k in pairs]
     details = '\n\n'.join(['<details><summary>Every model, library and rung</summary>', legend, *tables, '</details>'])
 
     top = [heading, _summary(moves(pr, base)), ratio, *missing]

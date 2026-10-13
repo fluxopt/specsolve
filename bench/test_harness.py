@@ -2142,7 +2142,7 @@ def test_a_file_that_is_broken_or_absent_is_named_and_the_comment_still_renders(
     assert ('did not read' in text) is named, 'a file is named as unreadable only where one is there and broken'
 
 
-def test_the_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
+def test_the_comment_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
     cases = [f'c{i:02d}' for i in range(comment.SHOWN + 3)]
     pr = [t for c in cases for t in (_pair(case=c)[0], _timing('linopy', case=c, sink='highs', wall_seconds=1.0))]
     base = [t for c in cases for t in _pair(case=c)]
