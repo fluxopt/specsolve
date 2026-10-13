@@ -8,6 +8,7 @@ this order: the first ones keep the answer, the later ones change it.
 | [Keep the model loaded](#keep-the-model-loaded) | yes | only data that moves no mask or label |
 | [Start from an earlier answer](#start-from-an-earlier-answer) | yes | can make a solve slower |
 | [Build many small models faster](#build-many-small-models-faster) | yes | only below 250,000 columns and rows |
+| [Build on one polars thread](#build-on-one-polars-thread) | yes | slows a large model |
 | [Accept a gap](#accept-a-gap) | within the gap | the answer is close, not optimal |
 | [Relax the integers](#relax-the-integers) | no, a bound | the schedule is fractional |
 | [Solve in windows](#solve-in-windows) | no | the windows cannot see past their end |
@@ -50,6 +51,30 @@ pl.Config.set_engine_affinity('in-memory')
 
 `POLARS_ENGINE_AFFINITY=in-memory` in the environment does the same, and the
 workers of a [parallel sweep](parallel.md) inherit it.
+
+## Build on one polars thread
+
+A small model can build faster on one polars thread, and a large model builds
+slower. Polars reads the setting when it is imported, so set it in the
+environment, or in `os.environ` before the first import of polars or
+specsolve:
+
+```bash
+POLARS_MAX_THREADS=1 python solve.py
+```
+
+The numbers that follow are rough estimates from one 4-core machine. One
+thread saved about a quarter of the build time up to 20,000 variables, and
+about a tenth from 100,000 to 200,000. At 1,000,000 variables the build took
+half as long again
+([#2016](https://github.com/fluxopt/specsolve/pull/2016)). On 2 cores, one
+thread saved nothing
+([#2017](https://github.com/fluxopt/specsolve/pull/2017)). For the best
+setting for your model, time both settings on the machine that runs it, each
+in a process of its own.
+
+The workers of a [parallel sweep](parallel.md) inherit the setting. It changes
+polars only, and the solver keeps its own threads.
 
 ## Accept a gap
 
