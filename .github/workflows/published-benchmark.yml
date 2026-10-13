@@ -285,7 +285,9 @@ jobs:
         run: |
           [ -f comment/comment.md ] || printf '<!-- published-benchmark -->\n## Published benchmark\n\nThe comment did not render. The [run](%s) holds the results.\n' "$RUN_URL" > comment/comment.md
           if [ -n "$RESULTS_PR" ]; then
-            printf '\n\nThis run is in %s, a pull request into `%s`: merge it to publish these numbers with this pull request, or close it.\n' "$RESULTS_PR" "$BRANCH" >> comment/comment.md
+            n=${RESULTS_PR##*/}
+            printf '\n\n📈 **[Charts of this run](https://specsolve--%s.org.readthedocs.build/en/%s/about/benchmarks/)**, in the docs preview of #%s once it has built. Merge #%s into `%s` to publish these numbers with this pull request, or close it.\n' \
+              "$n" "$n" "$n" "$n" "$BRANCH" >> comment/comment.md
           fi
           cat comment/comment.md >> "$GITHUB_STEP_SUMMARY"
           id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \

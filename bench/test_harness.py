@@ -2015,7 +2015,9 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
 @pytest.mark.parametrize(
     ('pr', 'base', 'shown'),
     [
-        pytest.param(_pair(), _pair(), ['| m | 0.25x → 0.25x |'], id='the same cell on both sides'),
+        pytest.param(
+            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 10% or more**'], id='the same cell on both sides'
+        ),
         pytest.param(
             _pair(case='newcase'),
             _pair(),
@@ -2026,7 +2028,7 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         pytest.param(
             (*_pair(), _timing('newlib', sink='highs', wall_seconds=2.0)),
             _pair(),
-            ['| rung | linopy | newlib |', '| m | 0.25x → 0.25x | — → 0.50x |'],
+            ['| rung | linopy | newlib |', '| m | 0.25x | — → 0.50x |'],
             id='a library the base never ran',
         ),
         pytest.param(
@@ -2043,15 +2045,27 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         ),
         pytest.param((_pair()[0],), _pair(), ['| m | 0.25x → — |'], id='a library dropped from the run'),
         pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=1.25)),
+            _pair(),
+            ['**1 cell moved by 10% or more**', '| m | 🔴 0.25x → **0.80x** |'],
+            id='a library that caught up with specsolve',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.8)),
+            _pair(),
+            ['**No cell moved by 10% or more**', '| m | 0.26x |'],
+            id='a move inside the noise',
+        ),
+        pytest.param(
             _pair(case='nodal'),
             (*_pair(case='nodal'), *_pair()),
-            ['**Committed but not in this run**: dispatch — highs'],
+            ['⚠️ **Committed but not in this run:** dispatch — highs'],
             id='a model the run lost',
         ),
         pytest.param(
             (_pair()[0], _timing('linopy', sink='highs', wall_seconds=250.0)),
             _pair(),
-            ['| m | 0.25x → 0.004x |'],
+            ['| m | 🟢 0.25x → **0.004x** |', '| 🟢 | dispatch | highs | m | linopy | 0.25x | **0.004x** |'],
             id='a ratio below a tenth keeps two figures',
         ),
         pytest.param(
@@ -2066,7 +2080,7 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         pytest.param(
             (*_pair(), {**_timing('specsolve', sink='highs'), 'arm': None}),
             _pair(),
-            ['| m | 0.25x → 0.25x |'],
+            ['| m | 0.25x |'],
             id='a record with no library',
         ),
         pytest.param(
@@ -2128,8 +2142,18 @@ def test_a_file_that_is_broken_or_absent_is_named_and_the_comment_still_renders(
     assert ('did not read' in text) is named, 'a file is named as unreadable only where one is there and broken'
 
 
+def test_the_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
+    cases = [f'c{i:02d}' for i in range(comment.SHOWN + 3)]
+    pr = [t for c in cases for t in (_pair(case=c)[0], _timing('linopy', case=c, sink='highs', wall_seconds=1.0))]
+    base = [t for c in cases for t in _pair(case=c)]
+    text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
+    summary = text.split('<details>')[0]
+    assert summary.count('| 🔴 |') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
+    assert 'And 3 more, in the tables below.' in summary
+
+
 def test_a_comment_too_long_for_github_drops_the_full_tables(tmp_path: Path) -> None:
-    many = [t for i in range(400) for t in _pair(case=f'case{i:03d}')]
+    many = [t for i in range(1000) for t in _pair(case=f'case{i:04d}')]
     text = comment.render(_results(tmp_path / 'pr', *many), _results(tmp_path / 'base'))
     assert len(text) <= comment.LIMIT, f'{len(text)} characters is over the {comment.LIMIT} GitHub takes'
     assert '<details>' not in text, 'the per-rung tables are the first thing to go'

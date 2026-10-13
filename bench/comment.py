@@ -34,6 +34,12 @@ MARKER = '<!-- published-benchmark -->'
 #: GitHub refuses a comment over 65,536 characters; the full tables are dropped before that.
 LIMIT = 60_000
 
+#: How far a ratio moves before the comment calls it moved. A guess at the run-to-run spread on the benchmark server.
+MOVED = 0.10
+
+#: Rows of the moved table; the rest are counted, and the full tables hold them.
+SHOWN = 15
+
 
 class Side(NamedTuple):
     """One directory of results: the best timing per cell, its runs, its ceilings, and the files that did not read."""
@@ -69,20 +75,68 @@ def _wall(side: Side, key: report.Key) -> float | None:
     return value if isinstance(value, (int, float)) and math.isfinite(value) and value > 0 else None
 
 
-def _cell(side: Side, case: str, size: str, sink: str, arm: str) -> str:
-    """specsolve's wall over *arm*'s, as the published tables print it; else the budget that stopped *arm*, else `—`."""
+def _ratio(side: Side, case: str, size: str, sink: str, arm: str) -> float | None:
+    """specsolve's wall over *arm*'s, as the published tables draw it; ``None`` where either is missing."""
     ours, theirs = _wall(side, (case, size, sink, report.BASELINE)), _wall(side, (case, size, sink, arm))
-    if ours is not None and theirs is not None:
-        noisy = report.suspect(side.rows.get((case, size, sink, report.BASELINE))) or report.suspect(
-            side.rows.get((case, size, sink, arm))
-        )
-        ratio = ours / theirs
-        return (f'{ratio:.2f}x' if ratio >= 0.1 else f'{ratio:.2g}x') + (report.MARK if noisy else '')
+    return ours / theirs if ours is not None and theirs is not None else None
+
+
+def _x(ratio: float) -> str:
+    """A ratio to two decimals, or to two figures below a tenth, where two decimals would print zero."""
+    return f'{ratio:.2f}x' if ratio >= 0.1 else f'{ratio:.2g}x'
+
+
+def _shown(side: Side, case: str, size: str, sink: str, arm: str) -> str:
+    """One side's cell: the ratio, marked where its rounds spread too wide; else the budget that stopped *arm*, else `—`."""
+    ratio = _ratio(side, case, size, sink, arm)
+    if ratio is not None:
+        noisy = any(report.suspect(side.rows.get((case, size, sink, a))) for a in (report.BASELINE, arm))
+        return _x(ratio) + (report.MARK if noisy else '')
     report.CEILINGS[:] = side.ceilings
     try:
         return report.over_budget(case, size, sink, arm) or '—'
     except Exception:  # a case the ladder no longer knows has no ceiling to show
         return '—'
+
+
+class Move(NamedTuple):
+    """A cell whose ratio moved by `MOVED` or more between the committed run and this one."""
+
+    case: str
+    sink: str
+    size: str
+    arm: str
+    before: float
+    after: float
+
+
+def _moved(before: float, after: float) -> bool:
+    return abs(after / before - 1) >= MOVED
+
+
+def _mark(before: float, after: float) -> str:
+    """🔴 where specsolve lost ground to the library, 🟢 where it gained."""
+    return '🔴' if after > before else '🟢'
+
+
+def moves(pr: Side, base: Side) -> list[Move]:
+    """Every cell both runs measured whose ratio moved by `MOVED` or more, the largest move first."""
+    pairs = ((key, _ratio(base, *key), _ratio(pr, *key)) for key in pr.rows if key[3] != report.BASELINE)
+    found = [
+        Move(case, sink, size, arm, before, after)
+        for (case, size, sink, arm), before, after in pairs
+        if before is not None and after is not None and _moved(before, after)
+    ]
+    return sorted(found, key=lambda m: (-abs(math.log(m.after / m.before)), m))
+
+
+def _cell(pr: Side, base: Side, case: str, size: str, sink: str, arm: str) -> str:
+    """This run's cell, with the committed one beside it only where they differ enough to matter."""
+    before, after = _ratio(base, case, size, sink, arm), _ratio(pr, case, size, sink, arm)
+    was, now = _shown(base, case, size, sink, arm), _shown(pr, case, size, sink, arm)
+    if before is not None and after is not None:
+        return f'{_mark(before, after)} {was} → **{now}**' if _moved(before, after) else now
+    return now if was == now else f'{was} → {now}'
 
 
 def _rungs(case: str, sink: str, *sides: Side) -> list[str]:
@@ -99,15 +153,37 @@ def _rungs(case: str, sink: str, *sides: Side) -> list[str]:
 
 
 def versus(case: str, sink: str, pr: Side, base: Side) -> str:
-    """One case through one sink: each library's ratio against specsolve, committed then this run."""
+    """One case through one sink: each library's ratio against specsolve at every rung."""
     arms = report.arms_in(k for k in (*pr.rows, *base.rows) if k[0] == case and k[2] == sink)
     others = [a for a in arms if a != report.BASELINE]
     if not others:
         return f'**{case} — {sink}**: only specsolve was measured, so there is no ratio to show.'
-    lines = [f'**{case} — {sink}**', '', '| rung | ' + ' | '.join(others) + ' |', '|---|' + '---|' * len(others)]
-    for size in _rungs(case, sink, pr, base):
-        cells = (f'{_cell(base, case, size, sink, a)} → {_cell(pr, case, size, sink, a)}' for a in others)
-        lines.append(f'| {size} | ' + ' | '.join(cells) + ' |')
+    rows = (
+        f'| {size} | ' + ' | '.join(_cell(pr, base, case, size, sink, a) for a in others) + ' |'
+        for size in _rungs(case, sink, pr, base)
+    )
+    return '\n'.join(
+        [f'**{case} — {sink}**', '', '| rung | ' + ' | '.join(others) + ' |', '|---|' + '---|' * len(others), *rows]
+    )
+
+
+def _summary(moved: list[Move]) -> str:
+    """The moved cells as one table, the largest first, cut at `SHOWN` rows."""
+    if not moved:
+        return f'**No cell moved by {MOVED:.0%} or more** against the committed results.'
+    lines = [
+        f'**{len(moved)} {"cell" if len(moved) == 1 else "cells"} moved by {MOVED:.0%} or more** against the '
+        'committed results: 🔴 specsolve lost ground to the library, 🟢 specsolve gained.',
+        '',
+        '| | model | solver | rung | library | committed | this run |',
+        '|---|---|---|---|---|---|---|',
+        *(
+            f'| {_mark(m.before, m.after)} | {m.case} | {m.sink} | {m.size} | {m.arm} | {_x(m.before)} | **{_x(m.after)}** |'
+            for m in moved[:SHOWN]
+        ),
+    ]
+    if len(moved) > SHOWN:
+        lines += ['', f'And {len(moved) - SHOWN} more, in the tables below.']
     return '\n'.join(lines)
 
 
@@ -130,18 +206,18 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     link = f' ([run]({run_url}))' if run_url else ''
     heading = f'{MARKER}\n## Published benchmark{link}'
     problems = [*_listed('This run', pr.problems), *_listed('Committed', base.problems)]
-    gone = sorted({(c, k) for c, _, k, _ in base.rows} - {(c, k) for c, _, k, _ in pr.rows})
-    missing = [f'**Committed but not in this run**: {", ".join(f"{c} — {k}" for c, k in gone)}'] if gone else []
     if not pr.rows:
         return '\n\n'.join(
             [heading, 'This run left no results to compare. The run log says where it stopped.', *problems]
         )
 
+    ratio = "Each number is specsolve's wall time over the library's, so below 1.00x specsolve is faster."
+    gone = sorted({(c, k) for c, _, k, _ in base.rows} - {(c, k) for c, _, k, _ in pr.rows})
+    missing = [f'⚠️ **Committed but not in this run:** {", ".join(f"{c} — {k}" for c, k in gone)}'] if gone else []
     legend = (
-        "Each cell is specsolve's wall time over the library's, so below 1.00x specsolve is faster. "
-        'The first number is the committed result on the base branch, the second is this run. '
-        '`—` is a cell that side did not measure, `>N s` or `>N GB` is the budget that stopped the library '
-        f'below that rung, and `{report.MARK}` marks a number whose rounds spread too wide to quote.'
+        f'A cell within {MOVED:.0%} of the committed one shows this run only. `—` is a cell that side did not '
+        'measure, `>N s` or `>N GB` the budget that stopped the library below that rung, and '
+        f'`{report.MARK}` a number whose rounds spread too wide to quote.'
     )
     machines = (
         f'This run: {report.provenance(pr.runs)}\n'
@@ -149,15 +225,14 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     )
     pairs = sorted({(c, k) for c, _, k, _ in pr.rows})
     tables = [_guarded(f'{c} — {k}', versus, c, k, pr, base) for c, k in pairs]
-    report.CEILINGS[:] = pr.ceilings
-    full = [_guarded(f'{c} — {k}', report.table, c, pr.rows, k) for c, k in pairs]
-    details = '<details><summary>Every rung of this run, wall time and peak memory</summary>\n\n' + '\n\n'.join(full)
+    details = '\n\n'.join(['<details><summary>Every model, library and rung</summary>', legend, *tables, '</details>'])
 
-    text = '\n\n'.join([heading, legend, machines, *tables, *missing, details + '\n\n</details>', *problems])
+    top = [heading, _summary(moves(pr, base)), ratio, *missing]
+    text = '\n\n'.join([*top, details, machines, *problems])
     if len(text) <= LIMIT:
         return text
-    cut = "The full tables do not fit in a comment; they are in the run's `published-benchmark` artifact."
-    return '\n\n'.join([heading, legend, machines, *tables, *missing, cut, *problems])[:LIMIT]
+    cut = "The tables of every rung do not fit in a comment; the run's `published-benchmark` artifact holds them."
+    return '\n\n'.join([*top, cut, machines, *problems])[:LIMIT]
 
 
 def main(argv: list[str] | None = None) -> int:
