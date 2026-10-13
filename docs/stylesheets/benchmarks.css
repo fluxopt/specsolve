@@ -93,6 +93,6 @@
 .md-typeset .bench .bench-heat tr.first td { border-top: 1px solid var(--hairline); }
 .md-typeset .bench .bench-heat td.own { background: var(--surface-2); }
 .md-typeset .bench .bench-heat td.none { color: var(--muted); }
-.md-typeset .bench .bench-heat td.floor { background: var(--surface-2); color: var(--fg2); }
-.md-typeset .bench .bench-heat th.floor { color: var(--muted); }
+.md-typeset .bench .bench-heat td.neutral { background: var(--surface-2); color: var(--fg2); }
+.md-typeset .bench .bench-heat th.neutral { color: var(--muted); }
 .bench .ts-chart-tooltip__row > span:nth-child(2) { white-space: nowrap; }

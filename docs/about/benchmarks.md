@@ -30,6 +30,8 @@ sector
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
 <div class="bench-row">
+<span class="bench-label">Solver</span>
+<span class="bench-seg" data-key="sink"><button data-value="highs" aria-pressed="true">HiGHS</button><button data-value="gurobi" aria-pressed="false">Gurobi</button></span>
 <span class="bench-label">Show</span>
 <span class="bench-seg" data-key="metric"><button data-value="wall" aria-pressed="true">wall time</button><button data-value="peak" aria-pressed="false">peak RSS</button></span>
 <span class="bench-label">As</span>
@@ -51,8 +53,8 @@ sector
 <script type="application/json" id="bench-spec">
 {
   "data": "../benchmarks.json",
-  "facet": ["model", "sink"],
-  "filter": { "ladder": "length" },
+  "facet": ["model"],
+  "filter": { "ladder": "length", "sink": "highs" },
   "x": { "field": "variables", "label": "variables", "format": "count" },
   "metrics": {
     "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
@@ -63,9 +65,10 @@ sector
     "refused": "refused",
     "highlight": "specsolve",
     "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
-    "domain": ["specsolve", "specsolve-in-memory", "linopy", "pyomo", "gurobipy-loop", "gurobipy-matrix", "highspy-matrix"],
-    "ink": ["var(--s1)", "var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--floor)", "var(--floor)"],
-    "paint": ["var(--s1)", "var(--p1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--floor)", "var(--floor)"]
+    "internal": ["specsolve-in-memory"],
+    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "specsolve-in-memory", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -73,7 +76,8 @@ sector
 
 ## Reading the charts
 
-Each panel is one model through one solver, and each line is one library.
+Each panel is one model, and each line is one library. **Solver** chooses the
+solver that every panel and the table run through.
 
 - **specsolve is the thick violet line.**
 - **The grey line is the matrix floor**: a hand-written matrix handed straight
@@ -97,8 +101,9 @@ Each panel is one model through one solver, and each line is one library.
   zero, a linear axis starts at zero; from a power of ten, it starts just below
   the smallest size shown.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
-  orange where the other library is, grey within ten per cent. `>30 s` and `>16 GB`
-  are sizes the harness refused.
+  orange where the other library is, grey within ten per cent. The
+  specsolve-in-memory and matrix floor columns are not shaded: they are
+  references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
 
 ## A script that solves one model
 
