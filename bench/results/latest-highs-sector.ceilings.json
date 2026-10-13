@@ -1,0 +1,26 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "sector",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 0.992 GB on sector/m, so the next rung projects to 19.8 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "sector",
+  "ladder": "size",
+  "sink": "",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "pyomo took 3.39 s on sector/m, so the next rung projects to 33.9 s \u2014 over the 30 s budget"
+ }
+]
