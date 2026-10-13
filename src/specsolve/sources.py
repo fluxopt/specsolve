@@ -8,6 +8,7 @@ on whether that data is usable is made here, once.
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import polars as pl
@@ -20,7 +21,7 @@ from specsolve.errors import DataError, SpecsolveError
 from specsolve.frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve.messages import coordinate_text, coordinates_text, unknown_name_message
 from specsolve.relational.answer_layout import BASIS_STATUSES
-from specsolve.relational.collect import collected, in_memory
+from specsolve.relational.collect import collected, collected_all, in_memory
 from specsolve.relational.names import POSITION, VALUE
 from specsolve.relational.result import Start
 
@@ -89,6 +90,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
+    data = _read_paths_at_once(program, data)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
@@ -114,6 +116,30 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
             raise DataError(_no_index_source_message(dname))
 
     return sources
+
+
+def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[str, Source]:
+    """*data* with every parquet path read into memory, the files in one concurrent pass.
+
+    Reading a file costs a fixed time however few rows it holds, and files read
+    one after the other add those times up. Each file is read for the columns
+    its declaration reads. A file short of one stays a path, so the reader that
+    names the missing column refuses it.
+    """
+    wanted = (
+        {name: [name] for name in program.dimensions}
+        | {name: list(relation.roles) for name, relation in program.relations.items()}
+        | {name: [*p.dims, VALUE] for name, p in program.parameters.items()}
+    )
+    scans: dict[str, pl.LazyFrame] = {}
+    for name, source in data.items():
+        if (
+            isinstance(source, (str, Path))
+            and (table := as_frame(source)) is not None
+            and set(wanted[name]) <= set(table.collect_schema().names())
+        ):
+            scans[name] = table.select(wanted[name])
+    return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
 
 
 def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
