@@ -14,6 +14,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
 - docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
 - docs: the published benchmarks are re-measured with the network and sparse models, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005))
+- docs: the benchmark charts project a refused size as a range that opens from the last measured step, and no longer count a fixed cost again at each step ([#2007](https://github.com/fluxopt/specsolve/pull/2007))
 
 ## 0.9.0 (2026-10-12)
 
