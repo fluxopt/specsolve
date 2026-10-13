@@ -129,6 +129,20 @@ thing that stops the bill and a teardown running on the machine it is deleting
 dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
+**A pull request labelled `trigger:published-bench` takes the same run** on its
+branch, then comments: each library's wall time against specsolve, the
+committed ratio beside this run's. `published-benchmark-label.yml` only
+dispatches `published-benchmark.yml` with the pull request's number, from a
+hosted runner, so the run on the box stays a `workflow_dispatch` that a fork
+cannot fire, and a fork's pull request is not dispatched at all.
+`bench.comment` writes the comment. It reads whatever the two runs hold, so a
+new case, other rungs or a library added or dropped prints `—` where one side
+has nothing, and the job does not fail. Ratios rather than wall times, because
+two runs are two machines, and one run is one. One comment per pull request,
+edited by each later run, and the label comes off when the run ends, so adding
+it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
+a third replaces the second.
+
 The runner is installed as a *service* so a restored snapshot brings it up at
 boot with nothing to log into, and it is not `--ephemeral`, which would
 unregister it after its first job.

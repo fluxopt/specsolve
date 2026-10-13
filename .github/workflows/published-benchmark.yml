@@ -16,6 +16,15 @@ on:
         description: 'GB a cell may take before its arm stops climbing. Blank uses the published value; a lower one is a diagnostic run that completes and reports what each cell actually took.'
         type: string
         default: ''
+      pr:
+        description: 'A pull request to comment the ratios on, which the trigger:published-bench label fills in. Blank comments nowhere.'
+        type: string
+        default: ''
+
+# One box, so one run at a time, and never cancelled half way.
+concurrency:
+  group: benchmark-box
+  cancel-in-progress: false
 
 jobs:
   provision:
@@ -155,3 +164,67 @@ jobs:
           hcloud primary-ip delete "$BOX" 2>/dev/null || true
           hcloud server list
           hcloud primary-ip list
+
+  comment:
+    name: comment on the pull request
+    needs: benchmark
+    if: ${{ always() && inputs.pr != '' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ inputs.pr }}
+      REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the base commit has to be reachable to read its committed results
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          run-install: false
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+      - run: pixi install -e bench
+
+      # Each case uploads as it finishes, so a box that died part way still leaves the cases before it.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: results-*-${{ github.run_id }}
+          path: pr-results
+          merge-multiple: true
+
+      - name: the base branch's committed results
+        run: |
+          mkdir -p base-results
+          base=$(gh pr view "$PR" --repo "$REPO" --json baseRefOid --jq .baseRefOid) || base=origin/main
+          git archive "$base" bench/results | tar -x -C base-results || true
+
+      - name: render
+        run: |
+          pixi run -e bench python -m bench.comment pr-results base-results/bench/results \
+            --run-url "$RUN_URL" --out comment.md \
+          || printf '<!-- published-benchmark -->\n## Published benchmark\n\nThe comment did not render. The [run](%s) holds the results.\n' "$RUN_URL" > comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per pull request, edited by every later run.
+      - name: post
+        run: |
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- published-benchmark -->")) | .id' | tail -n 1) || id=''
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md >/dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          fi || echo "::warning::the comment was not posted; the job summary holds it"
+
+      - name: hand the label back
+        if: always()
+        run: gh pr edit "$PR" --repo "$REPO" --remove-label 'trigger:published-bench' || true
