@@ -211,7 +211,9 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
     published = {p.name: rungs for p, rungs in harness.published_results().items()}
 
     assert sorted(published) == sorted(
-        f'latest-{sink}-{case}.json' for sink in ('highs', 'gurobi') for case in ('dispatch', 'nodal', 'network')
+        f'latest-{sink}-{case}.json'
+        for sink in ('highs', 'gurobi')
+        for case in ('dispatch', 'nodal', 'network', 'sector')
     ), 'every published case through both sinks, one file each'
     assert published['latest-highs-dispatch.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
         'a case holds every rung of the size ladder it has'
@@ -481,7 +483,7 @@ def test_the_reproduction_script_runs_what_the_task_runs() -> None:
     from bench import reproduce
 
     selection = ' '.join(reproduce.published())
-    for expected in ('--cases dispatch nodal network', '--budget 30', 'bench/results/latest.json'):
+    for expected in ('--cases dispatch nodal network sector', '--budget 30', 'bench/results/latest.json'):
         assert expected in selection, f'the reproduction lost `{expected}` from the task definition'
     assert 'PUBLISHED' not in Path(reproduce.__file__).read_text(), 'the selection is read, not repeated'
 
@@ -731,7 +733,7 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
@@ -797,7 +799,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
     """The objective test passes a model that differs only where the optimum does not look.

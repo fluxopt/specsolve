@@ -87,6 +87,13 @@ jobs:
       - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
         uses: ./.github/actions/ladder-case
         with:
+          sink: highs
+          case: sector
+          memory-budget: ${{ inputs.memory_budget }}
+          sizes: ${{ inputs.sizes }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
           sink: gurobi
           case: dispatch
           memory-budget: ${{ inputs.memory_budget }}
@@ -103,6 +110,13 @@ jobs:
         with:
           sink: gurobi
           case: network
+          memory-budget: ${{ inputs.memory_budget }}
+          sizes: ${{ inputs.sizes }}
+      - if: ${{ !cancelled() && inputs.mode != 'smoke' }}
+        uses: ./.github/actions/ladder-case
+        with:
+          sink: gurobi
+          case: sector
           memory-budget: ${{ inputs.memory_budget }}
           sizes: ${{ inputs.sizes }}
 

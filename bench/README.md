@@ -535,8 +535,10 @@ what an engine can exploit.
 
 **Measured, this sweep alone does not show it** — at a 1.2M coordinate product
 a dense array over it is ~10 MB and the fixed cost of the process dominates.
-`sector` runs the same sparsity at a 12M product. The page publishes `nodal`'s
-size ladder at a quarter. No published run has taken either sweep yet
+`sector` runs the same quarter portfolio against five carriers, so its
+`sum(p * produces, over=tech)` spans a coordinate product five times
+`nodal`'s. The page publishes `nodal`'s size ladder at a quarter. No published
+run has taken either sweep yet
 ([not measured yet](../docs/about/benchmarks.md#not-measured-yet)).
 
 `Shape.density` (technologies per node: 12 / 6 / 3 / 1) is swept at one model
@@ -887,7 +889,7 @@ them to. They render as their own table: sorting `w10` and `s` into one column
 would read as a single curve that is really two shapes.
 
 No published case carries a width ladder: the page publishes `dispatch`,
-`nodal` and `network`, and `pixi run ladder` takes no width rung. Ask for one
+`nodal`, `network` and `sector`, and `pixi run ladder` takes no width rung. Ask for one
 with `--sizes w1 w10 …` and a results file of your own.
 
 ## Adding a case

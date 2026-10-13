@@ -22,6 +22,11 @@ network
     portfolio installed at some buses only, and solar and wind availability
     per snapshot.
 
+sector
+:   `nodal`'s portfolio, where each technology delivers one of five carriers,
+    such as heat or hydrogen, at its own efficiency. A node has a balance only
+    for the carriers its technologies deliver.
+
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
 <div class="bench-row">
@@ -126,9 +131,10 @@ second, about half of linopy's time
 
 ## Not measured yet
 
-- **Sparsity other than a quarter.** `nodal` is the one sparse published
-  model, at one density. `pixi run density` sweeps it from dense to one pair in
-  twelve, and no published run has taken that sweep.
+- **Sparsity other than a quarter.** `nodal`, `network` and `sector` are
+  sparse at one density, a quarter of the node and technology pairs.
+  `pixi run density` sweeps `nodal` from dense to one pair in twelve, and no
+  published run has taken that sweep.
 - **Solve time.** Every number stops when the model reaches the solver.
 
 ## Method
