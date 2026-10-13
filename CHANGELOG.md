@@ -18,6 +18,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - docs: the benchmark charts project a refused size as a range that opens from the last measured step, and no longer count a fixed cost again at each step ([#2007](https://github.com/fluxopt/specsolve/pull/2007))
 - docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
 - docs: the guide to faster solves says that a small model builds faster on one polars thread, and times it when the page is built ([#2016](https://github.com/fluxopt/specsolve/pull/2016))
+- docs: the guide to faster solves gives the gain from one polars thread as a rough estimate, and tells the reader to time their own model ([#2017](https://github.com/fluxopt/specsolve/pull/2017))
 
 ## 0.9.0 (2026-10-12)
 
