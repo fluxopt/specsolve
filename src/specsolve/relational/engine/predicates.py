@@ -85,11 +85,11 @@ def compile_predicate(
     """``(frame with the mask's parameters joined, boolean expression)``.
 
     Walking joins the parameters, so the condition is built before the frame is
-    read. A name the mask is certain of ([`_certain_names`][]) is inner- or
+    read. A name the mask is certain of ([`certain_names`][]) is inner- or
     semi-joined rather than left-joined. No join maintains order: consumers
     verify it ([`labels.in_position_order`][]).
     """
-    certain = _certain_names(mask)
+    certain = certain_names(mask)
     carrier = Carrier(frame)
     serial = itertools.count()
 
@@ -284,7 +284,7 @@ def _pulled_back(scope: Scope, p: program.PulledBackPredicate, alias: str) -> pl
     return read
 
 
-def _certain_names(mask: program.Mask) -> frozenset[str]:
+def certain_names(mask: program.Mask) -> frozenset[str]:
     """Parameter and variable names whose absence alone makes the whole mask false.
 
     Only the ``AND`` spine counts: under ``OR`` or ``NOT`` an absent value can still leave the mask true.

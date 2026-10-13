@@ -107,6 +107,33 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         )
 
 
+@pytest.mark.parametrize(
+    ('where', 'asked'),
+    [
+        pytest.param('c', False, id='the mask requires c'),
+        pytest.param('c > 0', False, id='the mask compares c'),
+        pytest.param('w > 0', True, id='the mask requires another parameter'),
+    ],
+)
+def test_the_coverage_check_skips_a_parameter_the_mask_requires(monkeypatch, where, asked):
+    """A row the mask kept has a value of every parameter the mask requires, so that parameter is not asked."""
+    from specsolve.relational.engine import coverage
+
+    seen = []
+    real = coverage._uncovered_coordinates
+
+    def recorded(scope, rows, param, c, region):
+        seen.append(param)
+        return real(scope, rows, param, c, region)
+
+    monkeypatch.setattr(coverage, '_uncovered_coordinates', recorded)
+    data = {'t': [0, 1, 2], 'w': pd.Series({1: 1.0, 2: 1.0}), 'c': pd.Series({1: 4.0, 2: 5.0})}
+    masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': where})
+    with sps.build(masked, data):
+        pass
+    assert ('c' in seen) is asked, f'the coverage check asked of {seen}'
+
+
 def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     """A parameter added beside a variable term is a constant piece, and is checked (#1521).
 
