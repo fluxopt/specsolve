@@ -372,7 +372,7 @@ class Assembly:
         """
         c = con.declaration
         coverage.refuse_null_coefficients(stacked, con.subject, c.lhs, c.rhs)
-        term_rows = stacked.get_column('row').unique()
+        term_rows = _rows_with_terms(stacked.get_column('row'), rows.height)
         qmatrix = self._quadratic_share(frame, con.quads, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
@@ -610,6 +610,17 @@ def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
     if not rest:
         return now >= before
     return (now > before) | ((now == before) & _in_key_order(tuple(rest)))
+
+
+def _rows_with_terms(rows: pl.Series, count: int) -> pl.Series:
+    """The distinct *rows*, in ascending order, over a block's dense ``0..count-1`` rows.
+
+    Marked in one pass rather than hashed, since a block's terms arrive in no
+    order and can number in the millions.
+    """
+    seen = np.zeros(count, dtype=bool)
+    seen[rows.to_numpy()] = True
+    return pl.Series('row', np.flatnonzero(seen), dtype=_DTYPES['row'])
 
 
 def _repeats_a_label(labels: pl.Series, count: int) -> bool:
