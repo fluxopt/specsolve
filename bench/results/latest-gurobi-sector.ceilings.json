@@ -1,0 +1,14 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "pyomo",
+  "case": "sector",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "memory",
+  "reason": "pyomo took 1.19 GB on sector/m, so the next rung projects to 23.9 GB \u2014 over the 16 GB budget"
+ }
+]
