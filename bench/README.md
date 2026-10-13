@@ -387,7 +387,7 @@ best-of-nine beside a neighbour's best-of-forty. The median beats
 the fastest round because a cell whose nine rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
-([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)) 26 of 219 published
+([#2024](https://github.com/fluxopt/specsolve/pull/2024)) 26 of 219 published
 cells have a mean above 1.10x their median, the worst at 17.22x: `dispatch/3xs`
 on pyomo, on the `highs` [sink](../docs/reference/glossary.md#how-it-runs). In
 24 of them the first round is the slowest of the nine, at 1.9 to 147.8 times the
