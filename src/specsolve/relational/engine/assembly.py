@@ -99,19 +99,21 @@ class BuiltModel:
 
 
 @dataclass(frozen=True)
-class _Sides:
-    """A constraint with everything moved to its left: terms, quadratic terms and constants, each with its sign.
+class _Constraint:
+    """One constraint compiled, with everything moved to its left: terms, quadratic terms and constants, each with its sign.
 
     *restrictions* are the presences its rows must lie in, read off its terms.
     """
 
+    name: str
+    declaration: program.ConstraintDeclaration
     terms: list[tuple[Piece, float]]
     quads: list[tuple[Piece, float]]
     consts: list[tuple[Piece, float]]
     restrictions: list[Presence]
 
     @classmethod
-    def of(cls, compiler: Compiler, name: str, c: program.ConstraintDeclaration) -> _Sides:
+    def compiled(cls, compiler: Compiler, name: str, c: program.ConstraintDeclaration) -> _Constraint:
         """*c*'s two sides compiled, the right-hand side negated."""
         quadratic = declares_quadratic(c)
         lhs = compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
@@ -119,7 +121,15 @@ class _Sides:
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        return cls(terms, quads, consts, absence_restrictions([p for p, _ in (*terms, *quads)]))
+        return cls(name, c, terms, quads, consts, absence_restrictions([p for p, _ in (*terms, *quads)]))
+
+    @property
+    def subject(self) -> str:
+        return f"constraint '{self.name}'"
+
+    @property
+    def domain(self) -> labels.Domain:
+        return labels.Domain(self.declaration.dims, self.declaration.where, self.restrictions)
 
 
 class Assembly:
@@ -301,7 +311,7 @@ class Assembly:
 
     def _build_constraints(
         self, ordered: list[tuple[str, program.ConstraintDeclaration]]
-    ) -> list[tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]]:
+    ) -> list[tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]]:
         """Each constraint as [`_block`][] gives it, in *ordered*'s order.
 
         Every constraint's labels are read in one pass, its constant side in a
@@ -310,51 +320,38 @@ class Assembly:
         [`coverage`][] checks run in each table's order, before an aggregate
         can hide a hole.
         """
-        sides = [_Sides.of(self.compiler, name, c) for name, c in ordered]
-        domains = [
-            labels.Domain(c.dims, c.where, side.restrictions) for (_, c), side in zip(ordered, sides, strict=True)
-        ]
-        framed = labels.frames(self.scope, domains, 'row')
-        for (name, c), side, labelled in zip(ordered, sides, framed, strict=True):
-            if (
-                side.restrictions
-                and (declared := labels.declared_height(self.scope, c.dims, c.where)) > labelled.height
-            ):
-                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
-        frames = [labelled.lazy() for labelled in framed]
-
-        for (name, c), side, frame in zip(ordered, sides, frames, strict=True):
-            pieces = [p for p, _ in side.consts]
-            subject = f"constraint '{name}'"
-            coverage.refuse_null_constants(
-                coverage.narrowed_to_rows(frame, pieces),
-                program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
-                subject,
-            )
-            coverage.refuse_short_constants(self.scope, frame, pieces, c, subject, self.measured.sparse)
-        read = collected_all(
-            coverage.constant_side(self.scope, frame, side.consts, c)
-            for (_, c), side, frame in zip(ordered, sides, frames, strict=True)
+        constraints = [_Constraint.compiled(self.compiler, name, c) for name, c in ordered]
+        framed = labels.frames(self.scope, [con.domain for con in constraints], 'row')
+        frames = [self._labelled(con, labelled) for con, labelled in zip(constraints, framed, strict=True)]
+        for con, frame in zip(constraints, frames, strict=True):
+            coverage.refuse_gaps(self.scope, frame, con.consts, con.declaration, con.subject, self.measured.sparse)
+        sides = collected_all(
+            coverage.constant_side(self.scope, frame, con.consts, con.declaration)
+            for con, frame in zip(constraints, frames, strict=True)
         )
-        rows = [
-            coverage.refuse_uncovered(side, c, f"constraint '{name}'")
-            for (name, c), side in zip(ordered, read, strict=True)
-        ]
-
-        linear = [i for i, side in enumerate(sides) if side.terms]
-        terms = collected_all(self._terms(ordered[i][1], sides[i], frames[i]) for i in linear)
-        stacked: dict[int, pl.DataFrame] = dict(zip(linear, terms, strict=True))
+        terms = collected_all(self._terms(con, frame) for con, frame in zip(constraints, frames, strict=True))
         return [
-            self._block(name, c, side, frame, block_rows, stacked.get(i))
-            for i, ((name, c), side, frame, block_rows) in enumerate(zip(ordered, sides, frames, rows, strict=True))
+            self._block(con, frame, coverage.refuse_uncovered(side, con.declaration, con.subject), stacked)
+            for con, frame, side, stacked in zip(constraints, frames, sides, terms, strict=True)
         ]
 
-    def _terms(self, c: program.ConstraintDeclaration, side: _Sides, frame: pl.LazyFrame) -> pl.LazyFrame:
-        """A constraint's linear terms as ``(row, col, coeff)``, on its own rows."""
+    def _labelled(self, con: _Constraint, labelled: pl.DataFrame) -> pl.LazyFrame:
+        """*con*'s labelled block, counting the rows its restrictions removed as omitted."""
+        if con.restrictions:
+            c = con.declaration
+            if (declared := labels.declared_height(self.scope, c.dims, c.where)) > labelled.height:
+                self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - labelled.height
+        return labelled.lazy()
+
+    def _terms(self, con: _Constraint, frame: pl.LazyFrame) -> pl.LazyFrame:
+        """*con*'s linear terms as ``(row, col, coeff)``, on its own rows; no rows where it has none."""
+        if not con.terms:
+            return pl.LazyFrame(schema={name: _DTYPES[name] for name in _MATRIX})
+        c = con.declaration
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(con.terms) == 1 else None
+        dense = c.where is None and not con.restrictions
         pieces = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(side.terms) == 1 else None
-        dense = c.where is None and not side.restrictions
-        for p, sign in side.terms:
+        for p, sign in con.terms:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.frame.with_columns(self._dense_row(c.dims).alias('row'))
             else:
@@ -369,39 +366,24 @@ class Assembly:
         return pl.concat(pieces)
 
     def _block(
-        self,
-        name: str,
-        c: program.ConstraintDeclaration,
-        side: _Sides,
-        frame: pl.LazyFrame,
-        rows: pl.DataFrame,
-        stacked: pl.DataFrame | None,
-    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+        self, con: _Constraint, frame: pl.LazyFrame, rows: pl.DataFrame, stacked: pl.DataFrame
+    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
         """One constraint as its labelled block, its ``rows``, its share of the matrix and its quadratic share.
 
         All four are on the block's own rows, numbered from 0, which
         [`run`][] moves onto the model's. A row is built where either matrix
         has a term, and the labelled block narrows to the rows that survived.
         """
-        if not side.terms and not side.quads:
-            none = pl.Series('row', [], dtype=_DTYPES['row'])
-            frame, rows, _ = self._drop_termless_rows(name, frame, rows, _stack([], _MATRIX), none)
-            return frame, rows, None, None
-
-        matrix, term_rows = (
-            self._matrix_share(stacked, f"constraint '{name}'", c.lhs, c.rhs)
-            if stacked is not None
-            else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
-        )
-        qmatrix = self._quadratic_share(frame, side.quads, name, c)
+        c = con.declaration
+        matrix, term_rows = self._matrix_share(stacked, con.subject, c.lhs, c.rhs)
+        qmatrix = self._quadratic_share(frame, con.quads, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        frame, rows, matrix = self._drop_termless_rows(name, frame, rows, matrix, term_rows)
-        spread = _magnitude_range(matrix, 'coeff')
-        if spread is not None:
-            self.measured.coefficients[name] = spread
+        frame, rows, matrix = self._drop_termless_rows(con.name, frame, rows, matrix, term_rows)
+        if (spread := _magnitude_range(matrix, 'coeff')) is not None:
+            self.measured.coefficients[con.name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
-            self.measured.rhs[name] = sides
+            self.measured.rhs[con.name] = sides
         if qmatrix is not None:
             qmatrix = qmatrix.filter(pl.col('row').is_in(rows.get_column('row')))
         return frame, rows, matrix, qmatrix

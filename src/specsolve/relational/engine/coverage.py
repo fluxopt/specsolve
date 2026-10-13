@@ -122,6 +122,28 @@ def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.Laz
     ]
 
 
+def refuse_gaps(
+    scope: Scope,
+    rows: pl.LazyFrame,
+    consts: Sequence[tuple[Piece, float]],
+    c: program.ConstraintDeclaration,
+    subject: str,
+    sparse: Collection[str],
+) -> None:
+    """The questions a constraint's constant side is asked before it is read.
+
+    A divisor under a constant piece with no value at a built row
+    ([`refuse_null_constants`][]), and a parameter the rows owe a coordinate it
+    lacks ([`refuse_short_constants`][]).
+
+    Raises:
+        DataError: As either raises.
+    """
+    pieces = [p for p, _ in consts]
+    refuse_null_constants(narrowed_to_rows(rows, pieces), program.parameters_of(*divisors_of(c.lhs, c.rhs)), subject)
+    refuse_short_constants(scope, rows, pieces, c, subject, sparse)
+
+
 def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
