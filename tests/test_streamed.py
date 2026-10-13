@@ -68,7 +68,7 @@ def test_a_file_rewritten_after_the_build_reaches_neither_an_expression_nor_the_
             model.solve(archive=tmp_path / 'archive') as after,
             sps.solve(dispatch_yaml, dispatch_frame_inputs) as before,
         ):
-            assert after.objective == pytest.approx(before.objective, rel=1e-9)
+            assert after.objective == pytest.approx(before.objective, rel=1e-9), 'the solve reads the build'
             assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
                 before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
             ), 'an expression reads the cost the build read'
@@ -83,7 +83,7 @@ def test_a_result_reads_a_streamed_parameter_after_its_model_closes(dispatch_yam
     with sps.solve(dispatch_yaml, paths) as result, sps.solve(dispatch_yaml, dispatch_frame_inputs) as held:
         assert result.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
             held.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
-        )
+        ), 'the closed model left its result the copies to read'
 
 
 @pytest.mark.usefixtures('stream_everything')
@@ -143,4 +143,4 @@ def test_a_parameter_over_datetimes_is_read_as_a_held_one_is(tmp_path, monkeypat
         expected = held.objective
     monkeypatch.setattr(streamed, 'ROWS', 0)
     with sps.solve(Spec(**TIMED), sources) as streaming:
-        assert streaming.objective == pytest.approx(expected, rel=1e-12)
+        assert streaming.objective == pytest.approx(expected, rel=1e-12), 'every label met its index'
