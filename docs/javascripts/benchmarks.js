@@ -90,11 +90,11 @@ async function mount(root) {
 
   /* The rows the charts and the table read: the current filter and visible libraries, each with
      the chosen metric as `value`, its middle half as `lo`/`hi`, the highlighted library's value at
-     the same panel and size as `ours`, and the ratio of the two. */
+     the same filter, panel and size as `ours`, and the ratio of the two. */
   function rowsNow() {
     const m = SPEC.metrics[state.metric];
     const cell = r => `${panelOf(r)}|${r[X]}`;
-    const base = new Map(ROWS.filter(r => isHero(r) && r[m.y] != null).map(r => [cell(r), r[m.y]]));
+    const base = new Map(ROWS.filter(r => chosen(r) && isHero(r) && r[m.y] != null).map(r => [cell(r), r[m.y]]));
     return ROWS
       .filter(r => chosen(r) && !state.hidden.has(r[SERIES]))
       .map(r => {
@@ -369,7 +369,7 @@ async function mount(root) {
     const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
     root.querySelector('#bench-legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
       `<button data-series="${n}" aria-pressed="${!state.hidden.has(n)}"${n === HERO ? ` disabled title="Every other line and cell is read against ${HERO}"` : ''}>` +
-      `<i class="swatch${n === HERO ? ' hero' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('') +
+      `<i class="swatch${n === HERO ? ' ours' : ''}" style="background:${SPEC.series.paint[LIBRARIES.indexOf(n)]}"></i>${n}</button>`).join('') +
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
 
