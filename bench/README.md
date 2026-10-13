@@ -143,6 +143,17 @@ edited by each later run, and the label comes off when the run ends, so adding
 it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
 a third replaces the second.
 
+**A run that finished every case also opens a results pull request** from
+`bench-results/pr-<n>` into the pull request's branch: the run's result files
+and the two pages `report` and `plot` wrote on the box. Merge it to publish
+those numbers with the change, or close it to only look; its docs preview
+shows the page. A later run replaces that branch. The branch's code runs only
+in `render`, under a read-only token. `post` holds the write token and runs no
+code from the branch: it commits the artifact's `bench/results/*.json` and the
+two pages, and nothing else. GitHub refuses the pull request until the
+repository lets Actions open one (Settings → Actions → General); the comment
+is posted either way.
+
 The runner is installed as a *service* so a restored snapshot brings it up at
 boot with nothing to log into, and it is not `--ephemeral`, which would
 unregister it after its first job.
