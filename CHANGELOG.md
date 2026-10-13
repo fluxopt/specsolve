@@ -22,7 +22,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
 - perf: a model with several variables and constraints builds about a quarter faster ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
-- perf: a model with many constraints builds about a third faster again, as each constraint no longer sorts and sums its own terms
+- perf: a model with many constraints builds about a third faster again ([#2026](https://github.com/fluxopt/specsolve/pull/2026))
 
 ## 0.9.0 (2026-10-12)
 
