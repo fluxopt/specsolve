@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
 - docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
 - docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
 - docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
