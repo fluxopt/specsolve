@@ -40,6 +40,7 @@ reads the same parquet files. Every generator is feasible by construction.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -747,15 +748,26 @@ def _ladder(
     small enough to read in full. Both keep two snapshots at least, so a window
     one snapshot shorter still has one; a ``3xs`` that two snapshots would make
     as large as ``2xs`` is left out.
+
+    Between two rungs ten times apart or more, two more sit at twice and five
+    times the lower one, named after it — ``s2`` and ``s5`` between ``s`` and
+    ``m`` — so a scaling curve has a point every factor of two to two and a half.
     """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
     first = snapshots[0]
-    rungs = [('3xs', max(2, first // 100)), ('2xs', max(2, first // 10)), *zip(labels, snapshots, strict=False)]
-    return tuple(
-        Shape(label, {**sizes, 'snapshot': n}, n * per_snapshot, density)
-        for i, (label, n) in enumerate(rungs)
-        if i + 1 == len(rungs) or n < rungs[i + 1][1]
-    )
+    named = [('3xs', max(2, first // 100)), ('2xs', max(2, first // 10)), *zip(labels, snapshots, strict=False)]
+    rungs = [(label, n) for i, (label, n) in enumerate(named) if i + 1 == len(named) or n < named[i + 1][1]]
+    filled = []
+    for (label, n), (_, above) in zip(rungs, [*rungs[1:], (None, 0)], strict=True):
+        filled.append((label, n))
+        if above >= 10 * n:
+            filled += [(f'{label}2', 2 * n), (f'{label}5', 5 * n)]
+    return tuple(Shape(label, {**sizes, 'snapshot': n}, n * per_snapshot, density) for label, n in filled)
+
+
+def between_decades(label: str) -> bool:
+    """Whether *label* is a rung `_ladder` adds between two that are ten times apart."""
+    return re.fullmatch(r'(3xs|2xs|xs|s|m|l|xl)[25]', label) is not None
 
 
 def _width_ladder(

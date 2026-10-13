@@ -84,7 +84,8 @@ solver that every panel and the table run through.
 - **The grey line is the matrix floor**: a hand-written matrix handed straight
   to the solver's bulk API. Its distance from specsolve is what the modelling
   layer costs.
-- **The line is the median of nine rounds, and the whisker is the middle half.**
+- **The line is the median of nine rounds, or of five or three where a round
+  takes over one or five seconds, and the whisker is the middle half.**
   Overlapping whiskers are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
 - **A shaded funnel is a projection** past the time or memory budget. It opens

@@ -23,7 +23,7 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 pixi run refresh
 
 # or a rung at a time — the same five tasks `refresh` depends on, in order
-pixi run ladder        # --sizes 3xs 2xs xs s m l  -> bench/results/latest.json
+pixi run ladder        # --sizes 3xs 2xs 2xs2 2xs5 xs … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
 pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
@@ -341,11 +341,11 @@ Not measured, deliberately: solve time (that is the solver, identical either
 way, and it would swamp the build), and anything about expressiveness.
 
 **An arm stops climbing a ladder it cannot afford.** A library that builds per
-entity costs about what the rung is wide, and the rungs grow tenfold — so one
-measurement settles the next one. After every cell the harness projects the rung
-above it, and if that projection is over `--budget` (120 s by default) the arm
-skips the rest of that ladder with a sentence saying what it measured and what
-it projected. *That a library is far slower is the finding*; an hour spent
+entity costs about what the rung is wide, and each rung is two to two and a half
+times the one below — so one measurement settles the next one. After every cell
+the harness projects the rung above it, and if that projection is over
+`--budget` (120 s by default) the arm skips the rest of that ladder with a
+sentence saying what it measured and what it projected. *That a library is far slower is the finding*; an hour spent
 measuring it again to two decimal places is a machine kept busy for nothing.
 
 The projection is never recorded as a measurement — it is arithmetic on one
@@ -365,10 +365,20 @@ slow, which leaves no clean one to fall back on — #797 is the cell that was
 publication-ready at 2.33x wrong. A marked cell is one to re-take on an idle
 machine, never one to quote.
 
-**Nine rounds is the floor, and the harness sets it.** pytest-benchmark's own
-default is 5, and its calibration gives the fewest rounds to the slowest cells —
-exactly where sustained interference is most likely and a clean round hardest
-to come by. `--benchmark-min-rounds` still wins where a run wants more.
+**A cell gets nine rounds, or fewer where a round is slow, and the harness
+decides.** `rounds_for` in `conftest.py` reads what the same cell took on the
+last rung it measured, scales it by how much wider this rung is, and gives nine
+rounds below a second, five below five seconds, and three above. The slow cells are
+where the run spends its hours, and where a median moves least: on
+[#2024](https://github.com/fluxopt/specsolve/pull/2024)'s results, the median
+of the first three rounds of a cell over 0.1 s is within 3.8% of its nine-round
+median in nine cells of ten, and 9.0% at worst. The first rung of a ladder has
+nothing to go on and gets nine. `--benchmark-min-rounds` gives every cell the
+count it names.
+
+With three rounds, pytest-benchmark's IQR is three quarters of the range, so
+`~` marks a three-round cell whose rounds span more than a third of their
+median.
 
 **Every round starts with a full garbage collection.** A round otherwise
 inherits the last one's garbage, and on the gurobi sink that is a million
@@ -381,10 +391,9 @@ build.
 
 ### Why the median
 
-Every published number is the median of nine rounds. Every measurement gets
-the same nine, pinned rather than calibrated by duration, so no cell is a
-best-of-nine beside a neighbour's best-of-forty. The median beats
-the fastest round because a cell whose nine rounds all ran slow has no clean
+Every published number is the median of its rounds: nine, or five or three
+where a round takes over one or five seconds. The median beats
+the fastest round because a cell whose rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
 ([#2024](https://github.com/fluxopt/specsolve/pull/2024)) 26 of 219 published

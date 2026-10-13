@@ -12,6 +12,7 @@ pytest-benchmem can group by each.
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import tempfile
 import time
@@ -22,7 +23,7 @@ import pytest
 
 from bench.arms import ARMS
 from bench.cases import CASES
-from bench.published import files, ladder_of
+from bench.published import files, ladder_defaults, ladder_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -71,9 +72,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-#: Rounds every measurement gets at least, as `docs/about/benchmarks.md` publishes.
-#: pytest-benchmark's default of 5 left a minimum 2.33x wrong on a slow cell (#797).
-MIN_ROUNDS = 9
+#: Rounds a measurement gets, by how long one round is expected to take: nine
+#: below a second, five below five, three above. A slow cell's median moves least
+#: when rounds are dropped, and it is where the run spends its hours.
+ROUNDS = ((1.0, 9), (5.0, 5), (math.inf, 3))
 
 
 def flag_passed(config: pytest.Config, flag: str) -> bool:
@@ -81,14 +83,38 @@ def flag_passed(config: pytest.Config, flag: str) -> bool:
     return any(arg == flag or arg.startswith(f'{flag}=') for arg in config.invocation_params.args)
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    """Hold every measurement to the number of rounds the published method claims.
+def rounds_for(seconds: float | None) -> int:
+    """How many rounds a cell gets whose round is expected to take *seconds*; the most where nothing is known."""
+    return next(rounds for below, rounds in ROUNDS if seconds is None or seconds < below)
 
-    An explicit ``--benchmark-min-rounds`` still wins. Silent where
-    pytest-benchmark is absent.
+
+_PACE = pytest.StashKey[dict]()
+
+
+def _pace_key(node: Any) -> tuple:
+    """One cell's identity up to its rung: the test and every parameter but the size, and which ladder."""
+    params = node.callspec.params
+    rest = tuple(sorted((k, str(v)) for k, v in params.items() if k != 'size'))
+    return (node.originalname, rest, ladder_of(params['size']))
+
+
+def expected_seconds(node: Any) -> float | None:
+    """The last rung this same cell measured on its ladder, scaled by how much wider this rung is.
+
+    None until the cell has measured a rung of that ladder.
     """
-    if hasattr(config.option, 'benchmark_min_rounds') and not flag_passed(config, '--benchmark-min-rounds'):
-        config.option.benchmark_min_rounds = MIN_ROUNDS
+    last = node.config.stash.get(_PACE, {}).get(_pace_key(node))
+    if last is None:
+        return None
+    size, seconds = last
+    case_name, here = node.callspec.params['case_name'], node.callspec.params['size']
+    return seconds * shape_of(case_name, here).nominal_variables / shape_of(case_name, size).nominal_variables
+
+
+def remember(node: Any, seconds: float | None) -> None:
+    """Keep this cell's median, for `expected_seconds` at the rung above."""
+    if seconds is not None:
+        node.config.stash.setdefault(_PACE, {})[_pace_key(node)] = (node.callspec.params['size'], seconds)
 
 
 #: Machine-global, so a run from another worktree is refused too (#705).
@@ -163,18 +189,9 @@ def refuse_unless_idle(load1: float, cores: int) -> None:
 COPIES_HELD = 2
 
 
-def _ladder_defaults() -> dict[str, str]:
-    """The arguments `pixi run ladder` defaults to, read from the task that defines them."""
-    import tomllib
-
-    manifest = Path(__file__).resolve().parents[1] / 'pyproject.toml'
-    task = tomllib.loads(manifest.read_text())['tool']['pixi']['feature']['bench']['tasks']['ladder']
-    return {a['arg']: a['default'] for a in task['args'] if 'default' in a}
-
-
 def published_results() -> dict[Path, set[str]]:
     """The result files the published run writes, to the rungs each holds — derived from the task."""
-    defaults = _ladder_defaults()
+    defaults = ladder_defaults()
     return {
         (Path.cwd() / path).resolve(): set(rungs)
         for sink in defaults['sinks'].split()
@@ -367,15 +384,18 @@ class Ceiling:
         sink: str,
         seconds: float | None,
         peak_bytes: float | None = None,
+        rungs: Sequence[str] | None = None,
     ) -> None:
         """Take one measurement, and decide whether the next rung is worth taking.
 
-        Memory is checked before time: `transport/w100` on `linopy` takes 51 s
+        *rungs* is the part of the selection this measurement climbs, where it
+        leaves some out; the next rung is the next of those. Memory is checked before time: `transport/w100` on `linopy` takes 51 s
         and 31 GB, and the memory took the machine down (#1416).
         """
         key = (arm, case_name, ladder_of(size), sink)
+        growth = _growth(case_name, size, self.selected if rungs is None else rungs)
         if self.memory and peak_bytes:
-            self._memory(key, arm, case_name, size, peak_bytes)
+            self._memory(key, arm, case_name, size, peak_bytes, growth)
             if key in self.reasons:
                 return
         if not self.budget or seconds is None:
@@ -387,7 +407,7 @@ class Ceiling:
                 'time',
             )
             return
-        projected = seconds * _growth(case_name, size, self.selected)
+        projected = seconds * growth
         if projected > self.budget:
             self.reasons[key] = (
                 size,
@@ -396,7 +416,7 @@ class Ceiling:
                 'time',
             )
 
-    def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float) -> None:
+    def _memory(self, key: tuple, arm: str, case_name: str, size: str, peak_bytes: float, growth: float) -> None:
         """Stop the ladder when this rung, or the next, does not fit the machine."""
         peak = peak_bytes / 1e9
         if peak > self.memory:
@@ -406,7 +426,7 @@ class Ceiling:
                 'memory',
             )
             return
-        projected = peak * _growth(case_name, size, self.selected) * COPIES_HELD
+        projected = peak * growth * COPIES_HELD
         if projected > self.memory:
             self.reasons[key] = (
                 size,
