@@ -107,6 +107,82 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         )
 
 
+RHS_SPEC = {
+    'dimensions': {'t': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
+    'parameters': {'c': {'dims': ['t']}, 'd': {'dims': ['t', 'k']}, 'e': {'dims': ['t', 'k']}},
+    'variables': {'x': {'dims': ['t', 'k'], 'bounds': {'lower': 0, 'upper': 10}}},
+    'constraints': {'cap': {'dims': ['t', 'k'], 'expression': 'x <= d'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+RHS_DATA = {
+    't': [0, 1, 2],
+    'k': [0, 1],
+    'c': pd.Series({0: 1.0, 1: 2.0, 2: 3.0}),
+    'd': pl.DataFrame({'t': [0, 0, 1, 1, 2, 2], 'k': [0, 1] * 3, 'value': [1.0, 1.1, 2.0, 2.1, 3.0, 3.1]}),
+    'e': pl.DataFrame({'t': [2, 2, 1, 1, 0, 0], 'k': [1, 0] * 3, 'value': [3.1, 3.0, 2.1, 2.0, 1.1, 1.0]}),
+}
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'joined'),
+    [
+        pytest.param({'expression': 'x <= d'}, 0, id='coordinates are the rows'),
+        pytest.param({'expression': 'x <= d + d'}, 0, id='two pieces, both the rows'),
+        pytest.param({'expression': 'x <= e'}, 1, id='the rows in another order'),
+        pytest.param({'expression': 'x <= c'}, 1, id='broadcast along k'),
+        pytest.param({'expression': 'x <= d', 'where': 'd > 1.5'}, 1, id='a where keeps fewer rows'),
+        pytest.param({'expression': 'x <= d + c'}, 1, id='one piece of each'),
+    ],
+)
+def test_a_constant_side_is_attached_by_position_only_where_its_coordinates_are_the_rows(
+    monkeypatch, tmp_path, constraint, joined
+):
+    """Where a piece has one value per row, in row order, it is attached by position and gives the same file."""
+    from specsolve.relational.engine import coverage
+
+    spec = override(RHS_SPEC, **{'constraints.cap': {'dims': ['t', 'k'], **constraint}})
+    real = coverage.constant_scalar
+    summed = []
+    monkeypatch.setattr(coverage, 'constant_scalar', lambda piece: summed.append(piece) or real(piece))
+    with sps.build(spec, RHS_DATA) as model:
+        model.write(tmp_path / 'positional.lp')
+    assert len(summed) == joined, f'{len(summed)} piece(s) went through the sum and the join'
+
+    monkeypatch.setattr(coverage, '_aligned', lambda rows, piece: None)
+    with sps.build(spec, RHS_DATA) as model:
+        model.write(tmp_path / 'joined.lp')
+    assert (tmp_path / 'positional.lp').read_text() == (tmp_path / 'joined.lp').read_text(), (
+        'attaching by position wrote another model than the join'
+    )
+
+
+def test_a_sum_on_the_constant_side_is_never_attached_by_position(monkeypatch, tmp_path):
+    """A piece summed to no dims can carry as many rows as the constraint, and each row is owed the whole sum.
+
+    `sum(c, over=t)` over three values is a four-row piece, and `k` has four
+    labels, so the counts agree while the coordinates say nothing.
+    """
+    from specsolve.relational.engine import coverage
+
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
+        'parameters': {'c': {'dims': ['t']}},
+        'variables': {'x': {'dims': ['t', 'k'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'cap': {'dims': ['k'], 'expression': 'sum(x, over=t) <= sum(c, over=t)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    data = {'t': [0, 1, 2], 'k': [0, 1, 2, 3], 'c': pd.Series({0: 1.0, 1: 2.0, 2: 3.0})}
+    with sps.build(spec, data) as model:
+        model.write(tmp_path / 'built.lp')
+    monkeypatch.setattr(coverage, '_aligned', lambda rows, piece: None)
+    with sps.build(spec, data) as model:
+        model.write(tmp_path / 'joined.lp')
+    assert (tmp_path / 'built.lp').read_text() == (tmp_path / 'joined.lp').read_text(), (
+        'a summed piece was laid on the rows one value per row'
+    )
+
+
 def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     """A parameter added beside a variable term is a constant piece, and is checked (#1521).
 

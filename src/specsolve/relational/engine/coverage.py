@@ -19,6 +19,7 @@ is infinite, has no reading either. It is asked at the same two moments.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -141,11 +142,16 @@ def constant_side(
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     uncovered: pl.Expr | None = None
-    carrier = rows
+    built_rows = rows.pipe(collected)
+    carrier = built_rows.lazy()
     for i, (p, sign) in enumerate(consts):
         column = f'__const {i}__'
-        aggregated = constant_scalar(p).rename({'cval': column})
-        carrier = join_on(carrier, aggregated, p.dims, 'left')
+        piece = replace(p, frame=p.frame.pipe(collected).lazy())
+        aligned = _aligned(built_rows, piece) if p.dims else None
+        if aligned is not None:
+            carrier = carrier.with_columns(aligned.alias(column))
+        else:
+            carrier = join_on(carrier, constant_scalar(piece).rename({'cval': column}), p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         gap = pl.col(column).is_null()
         if p.region is not None:
@@ -169,6 +175,19 @@ def constant_side(
         names = ', '.join(sorted(program.parameters_of(c.lhs, c.rhs)))
         raise DataError(uncovered_constant_message(names, gaps, subject))
     return built.drop(gap_column)
+
+
+def _aligned(rows: pl.DataFrame, piece: Piece) -> pl.Series | None:
+    """*piece*'s value per row, by position, where its coordinates are the rows' own, in the rows' order.
+
+    Then each row has exactly one value, so [`constant_scalar`][pieces.constant_scalar]'s
+    sum and the join onto the rows change nothing but the cost. ``None`` where
+    the coordinates differ in any way, for the join to answer.
+    """
+    frame = piece.frame.pipe(collected)
+    if frame.height != rows.height or not frame.select(piece.dims).equals(rows.select(piece.dims)):
+        return None
+    return frame.get_column('cval')
 
 
 def refuse_short_constants(
