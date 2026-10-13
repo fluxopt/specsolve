@@ -9,8 +9,11 @@ the previous snapshot, and the first reaches none, which is the YAML's
 
     kron(I, own) + kron(P, previous)     where P[t, t-1] = 1 for t > 0
 
+The pool caps are ``kron(I, Q)`` over a pool x column block ``Q``, below both.
+
 `p_max`, `load` are read in file order, which `_network_data` writes
 snapshot-major, with the installed pairs and the buses in their tables' order.
+`pool_of` is joined to the installed pairs on (bus, tech).
 """
 
 from __future__ import annotations
@@ -62,11 +65,22 @@ def build(tables: Mapping[str, Any]) -> Lp:
     earlier = np.zeros((n_store, width))
     earlier[np.arange(n_store), state] = -1.0
 
+    pair_at = {pair: i for i, pair in enumerate(zip(installed['bus'], installed['tech'], strict=True))}
+    pool_at = {pool: i for i, pool in enumerate(tables['limit']['pool'])}
+    pool_of = tables['pool_of']
+    pooled = np.zeros((len(pool_at), width))
+    pooled[
+        [pool_at[pool] for pool in pool_of['pool']],
+        [pair_at[pair] for pair in zip(pool_of['bus'], pool_of['tech'], strict=True)],
+    ] = 1.0
+    limit = tables['limit']['value'].to_numpy()
+
     before = sparse.eye(n_snapshot, k=-1, format='csr')
     matrix = sparse.vstack(
         [
             sparse.kron(sparse.eye(n_snapshot), sparse.csr_matrix(balance), format='csr'),
             sparse.kron(sparse.eye(n_snapshot), own, format='csr') + sparse.kron(before, earlier, format='csr'),
+            sparse.kron(sparse.eye(n_snapshot), sparse.csr_matrix(pooled), format='csr'),
         ],
         format='csr',
     )
@@ -84,6 +98,6 @@ def build(tables: Mapping[str, Any]) -> Lp:
         upper=upper.reshape(-1),
         obj=np.tile(np.concatenate([pair_cost, np.zeros(n_line + 3 * n_store)]), n_snapshot),
         matrix=matrix,
-        senses=np.full(matrix.shape[0], '='),
-        rhs=np.concatenate([load, np.zeros(n_snapshot * n_store)]),
+        senses=np.concatenate([np.full(n_snapshot * (n_bus + n_store), '='), np.full(n_snapshot * len(limit), '<')]),
+        rhs=np.concatenate([load, np.zeros(n_snapshot * n_store), np.tile(limit, n_snapshot)]),
     )
