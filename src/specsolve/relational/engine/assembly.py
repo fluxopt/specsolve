@@ -173,7 +173,7 @@ class Assembly:
         offsets = list(itertools.accumulate((rows.height for _, rows, _, _ in built), initial=0))
         row_count = offsets[-1]
         for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets, strict=False):
-            self.constraints[name] = labels.Labelled(frame.with_columns(pl.col('row') + offset), offset, rows.height)
+            self.constraints[name] = labels.Labelled(_moved(frame, 'row', offset).lazy(), offset, rows.height)
         terms = _stack([_moved(m, 'row', o) for (_, _, m, _), o in zip(built, offsets, strict=False)], _MATRIX)
         names = [name for name, _ in ordered]
         with in_memory(small):
@@ -304,7 +304,7 @@ class Assembly:
 
     def _build_constraints(
         self, ordered: list[tuple[str, program.ConstraintDeclaration]]
-    ) -> list[tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]]:
+    ) -> list[tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]]:
         """Each constraint as [`_block`][] gives it, in *ordered*'s order.
 
         Every constraint's labels are read in one pass, its constant side in a
@@ -317,9 +317,11 @@ class Assembly:
         framed = labels.frames(self.scope, [con.domain for con in constraints], 'row')
         frames = [self._labelled(con, labelled) for con, labelled in zip(constraints, framed, strict=True)]
         for con, frame in zip(constraints, frames, strict=True):
-            coverage.refuse_gaps(self.scope, frame, con.consts, con.declaration, con.subject, self.measured.sparse)
+            coverage.refuse_gaps(
+                self.scope, frame.lazy(), con.consts, con.declaration, con.subject, self.measured.sparse
+            )
         sides = collected_all(
-            coverage.constant_side(self.scope, frame, con.consts, con.declaration)
+            coverage.constant_side(self.scope, frame.lazy(), con.consts, con.declaration)
             for con, frame in zip(constraints, frames, strict=True)
         )
         terms = collected_all(self._terms(con, frame) for con, frame in zip(constraints, frames, strict=True))
@@ -328,15 +330,15 @@ class Assembly:
             for con, frame, side, stacked in zip(constraints, frames, sides, terms, strict=True)
         ]
 
-    def _labelled(self, con: _Constraint, labelled: pl.DataFrame) -> pl.LazyFrame:
+    def _labelled(self, con: _Constraint, labelled: pl.DataFrame) -> pl.DataFrame:
         """*con*'s labelled block, counting the rows its restrictions removed as omitted."""
         if con.restrictions:
             c = con.declaration
             if (declared := labels.declared_height(self.scope, c.dims, c.where)) > labelled.height:
                 self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - labelled.height
-        return labelled.lazy()
+        return labelled
 
-    def _terms(self, con: _Constraint, frame: pl.LazyFrame) -> pl.LazyFrame:
+    def _terms(self, con: _Constraint, frame: pl.DataFrame) -> pl.LazyFrame:
         """*con*'s linear terms as ``(row, col, coeff)``, on its own rows; no rows where it has none."""
         if not con.terms:
             return pl.LazyFrame(schema={name: _DTYPES[name] for name in _MATRIX})
@@ -348,7 +350,7 @@ class Assembly:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.frame.with_columns(self._dense_row(c.dims).alias('row'))
             else:
-                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
+                placed = join_on(frame.lazy(), p.frame, p.dims, 'inner', maintain_order=carried_order)
             pieces.append(
                 placed.select(
                     'row',
@@ -359,8 +361,8 @@ class Assembly:
         return pl.concat(pieces)
 
     def _block(
-        self, con: _Constraint, frame: pl.LazyFrame, rows: pl.DataFrame, stacked: pl.DataFrame
-    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+        self, con: _Constraint, frame: pl.DataFrame, rows: pl.DataFrame, stacked: pl.DataFrame
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
         """One constraint as its labelled block, its ``rows``, its linear terms and its quadratic share.
 
         All four are on the block's own rows, numbered from 0, which
@@ -393,7 +395,7 @@ class Assembly:
         return self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
+        self, frame: pl.DataFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -403,7 +405,7 @@ class Assembly:
         if not quads:
             return None
         pieces = [
-            join_on(frame, p.frame, p.dims, 'inner').select(
+            join_on(frame.lazy(), p.frame, p.dims, 'inner').select(
                 'row',
                 *_ordered_pair(),
                 (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
@@ -418,12 +420,12 @@ class Assembly:
     def _drop_termless_rows(
         self,
         name: str,
-        frame: pl.LazyFrame,
+        frame: pl.DataFrame,
         rows: pl.DataFrame,
         matrix: pl.DataFrame,
         qmatrix: pl.DataFrame | None,
         kept: pl.Series,
-    ) -> tuple[pl.LazyFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
         """Rows that kept no variable term are not built, and the block closes up: the labelled block, ``rows`` and both shares.
 
         *kept* is read before zeros are pruned, so a row whose every term is
