@@ -2016,7 +2016,7 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     ('pr', 'base', 'shown'),
     [
         pytest.param(
-            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 10% or more**'], id='the same cell on both sides'
+            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 5% or more**'], id='the same cell on both sides'
         ),
         pytest.param(
             _pair(case='newcase'),
@@ -2047,13 +2047,13 @@ def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         pytest.param(
             (_pair()[0], _timing('linopy', sink='highs', wall_seconds=1.25)),
             _pair(),
-            ['**1 cell moved by 10% or more**', '| m | 🔴 0.25x → **0.80x** |'],
+            ['**1 cell moved by 5% or more**', '| m | 🔴 0.25x → **0.80x** |'],
             id='a library that caught up with specsolve',
         ),
         pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.8)),
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.9)),
             _pair(),
-            ['**No cell moved by 10% or more**', '| m | 0.26x |'],
+            ['**No cell moved by 5% or more**', '| m | 0.26x |'],
             id='a move inside the noise',
         ),
         pytest.param(

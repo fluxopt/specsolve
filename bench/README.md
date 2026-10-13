@@ -130,8 +130,10 @@ dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
-branch, then comments: each library's wall time against specsolve, the
-committed ratio beside this run's. `published-benchmark-label.yml` only
+branch, then comments: each library's wall time against specsolve, against the
+committed ratio, the cells that moved by 5% or more first. Two runs are two
+servers, and that moves an unchanged ratio well past 5% (#2030), so a moved cell
+is a lead to check, not a verdict. `published-benchmark-label.yml` only
 dispatches `published-benchmark.yml` with the pull request's number, from a
 hosted runner, so the run on the box stays a `workflow_dispatch` that a fork
 cannot fire, and a fork's pull request is not dispatched at all.

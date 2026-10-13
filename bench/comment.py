@@ -30,8 +30,10 @@ MARKER = '<!-- published-benchmark -->'
 #: GitHub refuses a comment over 65,536 characters; the full tables are dropped before that.
 LIMIT = 60_000
 
-#: How far a ratio moves before the comment calls it moved. A guess at the run-to-run spread on the benchmark server.
-MOVED = 0.10
+#: How far a ratio moves before the comment calls it moved. Two runs are two servers, and between two
+#: published runs a ratio of two unchanged libraries moved 16.5% at the median (#2030), so a moved
+#: cell is a lead to check rather than a verdict.
+MOVED = 0.05
 
 #: Rows of the moved table; the rest are counted, and the full tables hold them.
 SHOWN = 15
@@ -203,7 +205,8 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     gone = sorted({(c, k) for c, _, k, _ in base.rows} - {(c, k) for c, _, k, _ in pr.rows})
     missing = [f'⚠️ **Committed but not in this run:** {", ".join(f"{c} — {k}" for c, k in gone)}'] if gone else []
     legend = (
-        f'A cell within {MOVED:.0%} of the committed one shows this run only. `—` is a cell that side did not '
+        f'A cell within {MOVED:.0%} of the committed one shows this run only. The two runs ran on two servers, '
+        'so a moved cell is a lead to check, not a verdict. `—` is a cell that side did not '
         'measure, `>N s` or `>N GB` the budget that stopped the library below that rung, and '
         f'`{report.MARK}` a number whose rounds spread too wide to quote.'
     )
