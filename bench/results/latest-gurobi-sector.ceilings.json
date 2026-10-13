@@ -9,6 +9,18 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "pyomo took 1.19 GB on sector/m, so the next rung projects to 23.9 GB \u2014 over the 16 GB budget"
+  "reason": "pyomo took 1.17 GB on sector/m, so the next rung projects to 23.5 GB \u2014 over the 16 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "gurobipy-loop",
+  "case": "sector",
+  "ladder": "size",
+  "sink": "gurobi",
+  "size": "l",
+  "budget": 30.0,
+  "memory_budget": 16.0,
+  "stopped_by": "time",
+  "reason": "gurobipy-loop took 30.2 s on sector/l, over the 30 s budget"
  }
 ]

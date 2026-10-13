@@ -8,7 +8,7 @@
   "size": "m",
   "budget": 30.0,
   "memory_budget": 16.0,
-  "stopped_by": "memory",
-  "reason": "pyomo took 0.819 GB on nodal/m, so the next rung projects to 16.4 GB \u2014 over the 16 GB budget"
+  "stopped_by": "time",
+  "reason": "pyomo took 13 s on nodal/m, so the next rung projects to 130 s \u2014 over the 30 s budget"
  }
 ]

@@ -39,8 +39,8 @@ which states the math and checks it before any data exists.
   of runs reads as one set of tables.
   [Archiving a solve →](https://specsolve.readthedocs.io/en/latest/howto/archiving/)
 - **Fast from the first call.** A script that solves one small model finishes
-  in under half a second, under half of linopy's time
-  ([#2024](https://github.com/fluxopt/specsolve/pull/2024)). The solver stays
+  in about half a second, about half of linopy's time
+  ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM)). The solver stays
   loaded: `update()` puts new numbers on it, and the next solve carries on from
   where the last one ended.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
