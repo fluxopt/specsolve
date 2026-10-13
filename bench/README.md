@@ -392,20 +392,17 @@ slow, which leaves no clean one to fall back on — #797 is the cell that was
 publication-ready at 2.33x wrong. A marked cell is one to re-take on an idle
 machine, never one to quote.
 
-**A cell gets nine rounds, or fewer where a round is slow, and the harness
+**A cell gets nine rounds, or five where a round is slow, and the harness
 decides.** `rounds_for` in `conftest.py` reads what the same cell took on the
 last rung it measured, scales it by how much wider this rung is, and gives nine
-rounds below a second, five below five seconds, and three above. The slow cells are
-where the run spends its hours, and where a median moves least: on
-[#2024](https://github.com/fluxopt/specsolve/pull/2024)'s results, the median
-of the first three rounds of a cell over 0.1 s is within 3.8% of its nine-round
-median in nine cells of ten, and 9.0% at worst. The first rung of a ladder has
-nothing to go on and gets nine. `--benchmark-min-rounds` gives every cell the
-count it names.
-
-With three rounds, pytest-benchmark's IQR is three quarters of the range, so
-`~` marks a three-round cell whose rounds span more than a third of their
-median.
+rounds below a second and five above. The slow cells are where the run spends
+its hours, and where a median moves least: on
+[#2031](https://github.com/fluxopt/specsolve/pull/2031)'s results, the median
+of the first five rounds of a cell over a second is within 1.2% of its
+nine-round median in nine cells of ten, and 2.4% at worst. Five is the floor,
+because with three the whisker's middle half is three quarters of the range.
+The first rung of a ladder has nothing to go on and gets nine.
+`--benchmark-min-rounds` gives every cell the count it names.
 
 **Every round starts with a full garbage collection.** A round otherwise
 inherits the last one's garbage, and on the gurobi sink that is a million
@@ -418,8 +415,8 @@ build.
 
 ### Why the median
 
-Every published number is the median of its rounds: nine, or five or three
-where a round takes over one or five seconds. The median beats
+Every published number is the median of its rounds: nine, or five where a
+round takes over a second. The median beats
 the fastest round because a cell whose rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run

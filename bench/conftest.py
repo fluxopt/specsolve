@@ -73,9 +73,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 #: Rounds a measurement gets, by how long one round is expected to take: nine
-#: below a second, five below five, three above. A slow cell's median moves least
-#: when rounds are dropped, and it is where the run spends its hours.
-ROUNDS = ((1.0, 9), (5.0, 5), (math.inf, 3))
+#: below a second, five above. A slow cell's median moves least when rounds are
+#: dropped, and it is where the run spends its hours.
+ROUNDS = ((1.0, 9), (math.inf, 5))
 
 
 def flag_passed(config: pytest.Config, flag: str) -> bool:

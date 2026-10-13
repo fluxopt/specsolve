@@ -1316,9 +1316,7 @@ def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
         pytest.param(None, 9, id='nothing-measured-yet'),
         pytest.param(0.01, 9, id='a-fast-round'),
         pytest.param(1.0, 5, id='a-second'),
-        pytest.param(4.9, 5, id='just-under-five-seconds'),
-        pytest.param(5.0, 3, id='five-seconds'),
-        pytest.param(120.0, 3, id='two-minutes'),
+        pytest.param(120.0, 5, id='two-minutes'),
     ],
 )
 def test_a_slower_round_gets_fewer_rounds(seconds: float | None, expected: int) -> None:
@@ -1359,7 +1357,7 @@ class _Benchmark:
 @pytest.mark.parametrize(
     ('args', 'expected'),
     [
-        pytest.param((), [9, 3], id='by-how-long-the-rung-below-took'),
+        pytest.param((), [9, 5], id='by-how-long-the-rung-below-took'),
         pytest.param(('--benchmark-min-rounds=7',), [7, 7], id='an-explicit-flag-wins'),
         pytest.param(('--benchmark-min-rounds', '7'), [7, 7], id='an-explicit-flag-wins-when-spaced'),
     ],
@@ -1376,7 +1374,7 @@ def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[st
         benchmark = _Benchmark(median=2.0)
         _rounds(benchmark, SimpleNamespace(config=node.config, node=node), lambda: None)
         asked.append(benchmark.asked)
-    assert asked == expected, 'xs knows nothing and gets nine; s is ten times a 2 s xs, so it gets three'
+    assert asked == expected, 'xs knows nothing and gets nine; s is ten times a 2 s xs, so it gets five'
 
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
