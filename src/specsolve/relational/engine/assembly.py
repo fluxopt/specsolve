@@ -318,7 +318,9 @@ class Assembly:
         second and its linear terms in a third
         ([`labels.frames`][specsolve.relational.engine.labels.frames]). The
         [`coverage`][] checks run in each table's order, before an aggregate
-        can hide a hole.
+        can hide a hole. Each constraint's raw terms are let go as soon as its
+        block has summed them: held through every block, they raised the peak
+        memory of the network benchmark at 10M variables by about a fifth (#2022).
         """
         constraints = [_Constraint.compiled(self.compiler, name, c) for name, c in ordered]
         framed = labels.frames(self.scope, [con.domain for con in constraints], 'row')
@@ -333,8 +335,8 @@ class Assembly:
         )
         terms = collected_all(self._terms(con, frame) for con, frame in zip(constraints, frames, strict=True))
         return [
-            self._block(con, frame, coverage.refuse_uncovered(side, con.declaration, con.subject), stacked)
-            for con, frame, side, stacked in zip(constraints, frames, sides, terms, strict=True)
+            self._block(con, frame, coverage.refuse_uncovered(side, con.declaration, con.subject), terms.pop(0))
+            for con, frame, side in zip(constraints, frames, sides, strict=True)
         ]
 
     def _labelled(self, con: _Constraint, labelled: pl.DataFrame) -> pl.DataFrame:
