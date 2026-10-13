@@ -121,3 +121,26 @@ def test_a_defect_in_a_streamed_parameter_is_named_as_a_held_one_is(dispatch_yam
     with pytest.raises(DataError) as streaming:
         sps.build(dispatch_yaml, paths)
     assert str(streaming.value) == str(held.value)
+
+
+#: One datetime dimension, so a parameter's labels have a time unit to agree on with its index.
+TIMED = {
+    'dimensions': {'t': {'dtype': 'datetime'}},
+    'parameters': {'cap': {'dims': ['t']}},
+    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+def test_a_parameter_over_datetimes_is_read_as_a_held_one_is(tmp_path, monkeypatch):
+    """The held reader puts a datetime label in microseconds; a file in nanoseconds must meet its index there."""
+    from mathspec import Spec
+
+    times = pl.datetime_range(pl.datetime(2030, 1, 1), pl.datetime(2030, 1, 3), '1d', time_unit='ns', eager=True)
+    pl.DataFrame({'t': times, 'value': [1.0, 2.0, 4.0]}).write_parquet(cap := tmp_path / 'cap.parquet')
+    sources = {'t': pl.DataFrame({'t': times}), 'cap': str(cap)}
+    with sps.solve(Spec(**TIMED), sources) as held:
+        expected = held.objective
+    monkeypatch.setattr(streamed, 'ROWS', 0)
+    with sps.solve(Spec(**TIMED), sources) as streaming:
+        assert streaming.objective == pytest.approx(expected, rel=1e-12)
