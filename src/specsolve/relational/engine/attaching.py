@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from specsolve.relational.collect import collected, in_memory
+from specsolve.relational.collect import collected_all, in_memory
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -52,9 +52,12 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     [`in_memory`][], since every read holds one table whole.
     """
     with in_memory():
-        dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
-        relations = {name: sources[name].pipe(collected) for name in program.relations}
-        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+        frames = [_ordinal_frame(d, sources[d]) for d in program.dimensions]
+        frames += [sources[name] for name in (*program.relations, *program.parameters)]
+        read = iter(collected_all(frames))
+        dimensions = {d: next(read) for d in program.dimensions}
+        relations = {name: next(read) for name in program.relations}
+        parameters = {name: next(read) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
