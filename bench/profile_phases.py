@@ -22,7 +22,7 @@ from typing import Any
 from bench import cases as bench_cases
 
 #: Wrapped per build rather than per collect, so the overhead is three calls.
-PHASES = ('_build_variable', '_build_constraint', '_build_objective')
+PHASES = ('_build_variables', '_build_constraints', '_build_objective')
 
 
 def main(argv: list[str] | None = None) -> int:

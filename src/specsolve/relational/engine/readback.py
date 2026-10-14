@@ -358,7 +358,8 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
 
     pieces = compiled.consts
     dims = compiler.scope.spanned(pieces)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
+    domain = labels.Domain(dims, None, absence_restrictions(pieces))
+    carrier = labels.frames(compiler.scope, [domain], _EXPRESSION_ROW)[0].lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)

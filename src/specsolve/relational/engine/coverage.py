@@ -127,17 +127,13 @@ def constant_side(
     rows: pl.LazyFrame,
     consts: Sequence[tuple[Piece, float]],
     c: program.ConstraintDeclaration,
-    subject: str,
-) -> pl.DataFrame:
-    """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.
+) -> pl.LazyFrame:
+    """One constraint's rows as ``(row, sense, rhs)``, and where a constant piece left a row uncovered.
 
-    A coordinate a piece has no row for contributes zero, and the coverage
-    check rides on the same pass. A piece built under a ``cases:`` region is
-    owed only inside it. A gap an aggregation summed away is
-    [`refuse_short_constants`][]' question.
-
-    Raises:
-        DataError: A constant piece with no value at a row it is owed.
+    A coordinate a piece has no row for contributes zero. A piece built under a
+    ``cases:`` region is owed only inside it. Where any piece is owed, the plan
+    carries the column [`refuse_uncovered`][] reads; a gap an aggregation
+    summed away is [`refuse_short_constants`][]' question.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     uncovered: pl.Expr | None = None
@@ -155,20 +151,31 @@ def constant_side(
             gap = gap & pl.col(inside).fill_null(False)
         uncovered = gap if uncovered is None else uncovered | gap
 
-    gap_column = '__uncovered__'
-    built = carrier.select(
+    return carrier.select(
         'row',
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
-        *([uncovered.alias(gap_column)] if uncovered is not None else []),
-    ).pipe(collected)
-    if uncovered is None:
+        *([uncovered.alias(_UNCOVERED)] if uncovered is not None else []),
+    )
+
+
+def refuse_uncovered(built: pl.DataFrame, c: program.ConstraintDeclaration, subject: str) -> pl.DataFrame:
+    """*built*, a [`constant_side`][] read, without its gap column, once no row is left uncovered.
+
+    Raises:
+        DataError: A constant piece with no value at a row it is owed.
+    """
+    if _UNCOVERED not in built.columns:
         return built
-    gaps = int(built.get_column(gap_column).sum())
+    gaps = int(built.get_column(_UNCOVERED).sum())
     if gaps:
         names = ', '.join(sorted(program.parameters_of(c.lhs, c.rhs)))
         raise DataError(uncovered_constant_message(names, gaps, subject))
-    return built.drop(gap_column)
+    return built.drop(_UNCOVERED)
+
+
+#: The column [`constant_side`][] marks an uncovered row in.
+_UNCOVERED = '__uncovered__'
 
 
 def refuse_short_constants(
