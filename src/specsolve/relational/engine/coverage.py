@@ -147,7 +147,7 @@ def constant_side(
     for i, (p, sign) in enumerate(consts):
         column = f'__const {i}__'
         piece = replace(p, frame=p.frame.pipe(collected).lazy())
-        aligned = _aligned(built_rows, piece) if p.dims else None
+        aligned = _aligned(built_rows, piece) if set(p.dims) == set(c.dims) else None
         if aligned is not None:
             carrier = carrier.with_columns(aligned.alias(column))
         else:
@@ -180,9 +180,13 @@ def constant_side(
 def _aligned(rows: pl.DataFrame, piece: Piece) -> pl.Series | None:
     """*piece*'s value per row, by position, where its coordinates are the rows' own, in the rows' order.
 
-    Then each row has exactly one value, so [`constant_scalar`][pieces.constant_scalar]'s
-    sum and the join onto the rows change nothing but the cost. ``None`` where
-    the coordinates differ in any way, for the join to answer.
+    Asked only of a piece over every dim of the constraint. The rows are one
+    per coordinate, so a match row for row leaves each row exactly one value,
+    and [`constant_scalar`][pieces.constant_scalar]'s sum and the join onto
+    the rows change nothing but the cost. A piece over fewer dims can match
+    on those dims and still hold a row per label it summed away, each owed to
+    the same row. ``None`` where the coordinates differ in any way, for the
+    join to answer.
     """
     frame = piece.frame.pipe(collected)
     if frame.height != rows.height or not frame.select(piece.dims).equals(rows.select(piece.dims)):

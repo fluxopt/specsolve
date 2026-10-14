@@ -183,12 +183,14 @@ def test_a_sum_on_the_constant_side_is_never_attached_by_position(monkeypatch, t
     )
 
 
-@pytest.mark.xfail(reason='a partial sum keeps one row per summed label, and its t column can equal the rows')
 def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
     """`sum(f, over=s)` keeps a row per `(t, s)` under dims `(t,)`, and `s` has as many labels as `k`.
 
     So the piece's `t` column is the rows' `t` column, row for row, while each
-    row is owed the sum of two values rather than one of them.
+    row is owed the sum of two values rather than one of them. A position
+    match on the piece's own dims took it as aligned and gave each row one
+    summand, 66 for 132, until only a piece over every dim of the constraint
+    was asked.
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int'}, 'k': {'dtype': 'int'}, 's': {'dtype': 'int'}},
