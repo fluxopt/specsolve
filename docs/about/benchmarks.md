@@ -7,6 +7,17 @@ Every rival model is hand-written in
 and CI solves each against ours, so nothing here is fast because it built a
 different model.
 
+<!-- bench:models -->
+
+| model | dimensions | density | variables | constraints | nonzeros |
+| --- | --- | ---: | ---: | ---: | ---: |
+| dispatch | generator 100 × snapshot 2–100k | 100% | 200–10M | 2–100k | 200–10M |
+| network | bus 50 × tech 12 × line 100 × store 50 × snapshot 2–25k | 25% | 800–10M | 300–3.75M | 1.55k–20M |
+| nodal | node 50 × tech 12 × snapshot 2–20k | 25% | 300–3M | 100–1M | 300–3M |
+| sector | node 50 × tech 12 × carrier 5 × snapshot 2–20k | 25% | 300–3M | 252–2.5M | 300–3M |
+
+<!-- bench:/models -->
+
 dispatch
 :   Meets a demand from a fleet of units: bounds and one balance. The shape an
     array library is built for, so the comparison least in specsolve's favour.

@@ -904,6 +904,33 @@ def test_the_report_renders_from_the_committed_results() -> None:
     assert '| variables |' in out.getvalue(), 'the default target is bench/results, and it renders a table'
 
 
+@pytest.mark.parametrize(
+    ('values', 'printed'),
+    [
+        pytest.param([50, 50], '50', id='a-dimension-that-stays'),
+        pytest.param([2, 100_000], '2\N{EN DASH}100k', id='a-dimension-that-grows'),
+        pytest.param([1_550, 19_999_900], '1.55k\N{EN DASH}20M', id='three-figures-not-six'),
+    ],
+)
+def test_a_model_size_prints_as_one_count_or_its_range(values: list[float], printed: str) -> None:
+    assert report._span(values) == printed, f'{values} prints as {printed!r}'
+
+
+def test_the_model_table_has_a_row_per_published_model() -> None:
+    """The table is read off the committed results and the case ladders, so no count is typed into the page."""
+    timings = [r for path in bench_results.files(Path('bench/results')) for r in report.load(path)[2]]
+    lines = report.models(report.best(timings)).splitlines()
+    assert lines[0] == '| model | dimensions | density | variables | constraints | nonzeros |', (
+        'the header names what a reader compares'
+    )
+    names = [line.split('|')[1].strip() for line in lines[2:]]
+    assert names == ['dispatch', 'network', 'nodal', 'sector'], 'one row per published model, sorted by name'
+    nodal = next(line for line in lines if line.startswith('| nodal |'))
+    assert '| 25% |' in nodal and 'node 50 \N{MULTIPLICATION SIGN} tech 12 \N{MULTIPLICATION SIGN} snapshot' in nodal, (
+        "the density and the dimensions are the ladder's"
+    )
+
+
 def test_the_long_table_renders_from_the_committed_results() -> None:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):

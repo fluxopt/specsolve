@@ -534,6 +534,43 @@ def declarations(rows: dict[Key, Row]) -> str:
 
 
 #: The published page, and the only file `--write` touches.
+def _span(values: list[float]) -> str:
+    """One count, or the range from the smallest to the largest, to three figures: a size, not a measurement."""
+
+    def short(n: float) -> str:
+        return next((f'{n / scale:.3g}{unit}' for unit, scale in (('M', 1e6), ('k', 1e3)) if n >= scale), f'{n:.0f}')
+
+    lo, hi = min(values), max(values)
+    return short(lo) if lo == hi else f'{short(lo)}\N{EN DASH}{short(hi)}'
+
+
+def models(rows: dict[Key, Row]) -> str:
+    """Each model on the size ladder as one row: its dimensions, its density, and how large it is built.
+
+    The counts are `BASELINE`'s, so they are the model as built, over every rung
+    and sink it measured. The dimensions and the density are the case's own
+    ladder at those rungs, and a dimension that grows with the ladder prints as
+    the range it spans. Nothing in the table is typed into the page.
+    """
+    from bench.cases import CASES
+
+    ours = {k: r for k, r in rows.items() if k[3] == BASELINE and _sweep_of(k[1]) is None}
+    lines = [
+        '| model | dimensions | density | variables | constraints | nonzeros |',
+        '| --- | --- | ---: | ---: | ---: | ---: |',
+    ]
+    for case in sorted({c for c, _, _, _ in ours}):
+        measured = {s for c, s, _, _ in ours if c == case}
+        shapes = [s for s in CASES[case].ladder if s.label in measured]
+        counts = [r['counts'] for k, r in ours.items() if k[0] == case]
+        dims = ' \N{MULTIPLICATION SIGN} '.join(f'{d} {_span([s.sizes[d] for s in shapes])}' for d in shapes[0].sizes)
+        built = ' | '.join(
+            _span([c[n] for c in counts if c.get(n) is not None]) for n in ('columns', 'rows', 'nonzeros')
+        )
+        lines.append(f'| {case} | {dims} | {shapes[0].density:.0%} | {built} |')
+    return '\n'.join(lines) if len(lines) > 2 else ''
+
+
 PAGE = Path('docs/about/benchmarks.md')
 
 
@@ -630,6 +667,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(f'<!-- {" ".join(k for k in key if k)}: {error} -->')
 
     fragments = {
+        'models': models(rows),
         'results': '\n'.join(results),
         'fresh': fresh(best(started)),
         'marginal': marginal(loop),
