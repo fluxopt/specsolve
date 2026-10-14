@@ -113,6 +113,7 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         pytest.param('c', False, id='the mask requires c'),
         pytest.param('c > 0', False, id='the mask compares c'),
         pytest.param('w > 0', True, id='the mask requires another parameter'),
+        pytest.param('c or w > 0', True, id='c only under an or'),
     ],
 )
 def test_the_coverage_check_skips_a_parameter_the_mask_requires(monkeypatch, where, asked):
