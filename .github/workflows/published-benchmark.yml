@@ -53,6 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0  # the version a result records is counted from the nearest tag
           persist-credentials: false
       # A warmed box carries a pixi binary that setup-pixi refuses to overwrite.
       - run: rm -f ~/.pixi/bin/pixi
