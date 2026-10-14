@@ -89,6 +89,8 @@ class Case:
     generate_spec: Callable[[Shape], str] | None = None
     #: A parameter that multiplies a variable inside a constraint, so new values of it move the matrix.
     coefficient: str | None = None
+    #: What the model is for, in one line on the benchmarks page; a case the page does not publish has none.
+    about: str = ''
 
     def spec_path(self, shape: Shape, cache: Path = DEFAULT_CACHE) -> Path:
         """The YAML *shape* builds — ``spec``, unless the case generates one per rung.
@@ -826,6 +828,7 @@ CASES: dict[str, Case] = {
         spec=MODELS / 'dispatch' / 'spec.yaml',
         ladder=_ladder({'generator': 100}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
         write=_dispatch_data,
+        about='bounds and one balance: the shape an array library suits best',
     ),
     'commitment': Case(
         name='commitment',
@@ -856,6 +859,7 @@ CASES: dict[str, Case] = {
             *_density_sweep({'node': 50, 'tech': 12}, 2_000, 600, (1.0, 0.5, 0.25, 0.083)),
         ),
         write=_nodal_data,
+        about='dispatch at nodes, where a technology exists only where it is installed',
     ),
     'sector': Case(
         name='sector',
@@ -868,6 +872,7 @@ CASES: dict[str, Case] = {
         ),
         write=_sector_data,
         coefficient='produces',
+        about='each technology delivers one of five carriers, such as heat or hydrogen',
     ),
     'profiled': Case(
         name='profiled',
@@ -897,6 +902,7 @@ CASES: dict[str, Case] = {
         ),
         write=_network_data,
         coefficient='eta',
+        about='a small PyPSA model: lines, stores, solar and wind, and pooled caps',
     ),
     'milp': Case(
         name='milp',
