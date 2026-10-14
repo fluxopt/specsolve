@@ -7,20 +7,33 @@ Every rival model is hand-written in
 and CI solves each against ours, so nothing here is fast because it built a
 different model.
 
+Sizes on this page count **columns** and **rows**: the variables and the
+constraints that reach the solver, one for each value. A model declares a
+variable once, with its dimensions, such as `p[snapshot, generator]` in
+`dispatch`. The solver receives one column for every combination of those
+dimensions that exists, and one row for every combination of a constraint's.
+Every variable and constraint below also runs over `snapshot`, and a model grows
+by its snapshots alone.
+
 <!-- bench:models -->
 
-| model | dimensions | density | grouped sums | snapshots | variables per snapshot | constraints per snapshot | nonzeros per snapshot |
-| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
-| dispatch | generator 100 | 100% | — | 2–100k | 100 | 1 | 100 |
-| network | bus 50 × tech 12 × line 100 × store 50 | 25% | line → bus, store → bus, bus × tech → pool | 2–25k | 400 | 150 | 800 |
-| nodal | node 50 × tech 12 | 25% | — | 2–20k | 150 | 50 | 150 |
-| sector | node 50 × tech 12 × carrier 5 | 25% | — | 2–20k | 150 | 125 | 150 |
+| | dispatch | network | nodal | sector |
+| --- | --- | --- | --- | --- |
+| variables | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
+| constraints | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
+| grouped sums | — | line → bus, store → bus, bus × tech → pool | — | — |
+| dimensions | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
+| density | 100% | 25% | 25% | 25% |
+| snapshots | 2–100k | 2–25k | 2–20k | 2–20k |
+| columns per snapshot | 100 | 400 | 150 | 150 |
+| rows per snapshot | 1 | 150 | 50 | 125 |
+| nonzeros per snapshot | 100 | 800 | 150 | 150 |
 
 <!-- bench:/models -->
 
-From 100k variables up, linopy's peak memory stays within 1.3× of specsolve's
+From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
 on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.8× at 1M variables, 1.76 GB against 0.63 GB, and the memory
+There it is 2.8× at 1M columns, 1.76 GB against 0.63 GB, and the memory
 budget stops linopy at that size
 ([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
 
@@ -30,8 +43,8 @@ dispatch
 
 nodal
 :   Dispatch at nodes, where a technology exists only at the nodes it is
-    installed at: a quarter of the node and technology pairs have a variable.
-    The chart counts the variables that exist, not the pairs.
+    installed at: a quarter of the node and technology pairs exist, and only
+    those reach the solver as columns.
 
 network
 :   A small PyPSA dispatch model: buses joined by lines, a store at every bus
@@ -72,7 +85,7 @@ sector
   "data": "../benchmarks.json",
   "facet": ["model"],
   "filter": { "ladder": "length", "sink": "highs" },
-  "x": { "field": "variables", "label": "variables", "format": "count" },
+  "x": { "field": "variables", "label": "columns", "format": "count" },
   "metrics": {
     "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
     "peak": { "label": "peak RSS", "y": "peak_gb", "format": "gigabytes" }
@@ -110,7 +123,7 @@ solver that every panel and the table run through.
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
 - **A shaded funnel is a projection** past the time or memory budget. It opens
   from the last measured point. One edge carries the last step's cost per
-  variable forward, and the other keeps the last step's growth rate. A wide
+  column forward, and the other keeps the last step's growth rate. A wide
   funnel is a guess the measurements do not narrow.
 - **÷ specsolve divides each point by specsolve's at the same size**, so
   specsolve is the line at 1× and a line above it is that many times slower or
@@ -137,7 +150,7 @@ HiGHS.
 <!-- bench:fresh -->
 
 <div class="bench"><div class="bench-table"><table class="bench-heat">
-<thead><tr><th>launch to exit</th><th>dispatch<br>10k variables</th><th>network<br>10k variables</th><th>nodal<br>3k variables</th><th>sector<br>3k variables</th></tr></thead>
+<thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
 <tr><td>specsolve</td><td class="own">0.47 s</td><td class="own">0.52 s</td><td class="own">0.47 s</td><td class="own">0.47 s</td></tr>
 <tr><td>specsolve-in-memory</td><td data-ratio="0.974">0.45 s · 1.0x</td><td data-ratio="0.954">0.50 s · 1.0x</td><td data-ratio="0.988">0.47 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td></tr>

@@ -419,7 +419,7 @@ def fresh(rows: dict[Key, Row]) -> str:
     columns = {
         c: next(r for (cc, s, _, _), r in rows.items() if (cc, s) == (c, rung[c]))['counts']['columns'] for c in cases
     }
-    head = ''.join(f'<th>{c}<br>{_si(columns[c])} variables</th>' for c in cases)
+    head = ''.join(f'<th>{c}<br>{_si(columns[c])} columns</th>' for c in cases)
     body = []
     marked = False
     for arm in arms_in(rows):
@@ -558,36 +558,64 @@ def grouped_sums(spec: Path | None) -> str:
     return ', '.join(found) or '\N{EM DASH}'
 
 
-def models(rows: dict[Key, Row]) -> str:
-    """Each model on the size ladder as one row: its shape, and its size per snapshot.
+def declared(spec: Path | None, kind: str) -> str:
+    """The *kind* (``variables`` or ``constraints``) a spec declares, each with its dimensions but ``snapshot``."""
+    import yaml
 
-    Every ladder grows along ``snapshot`` alone, so a model is its fixed
-    dimensions, its density and its grouped sums, plus what one snapshot adds:
-    variables, constraints and nonzeros, read off `BASELINE`'s largest
-    measurement, the model as built. The snapshots column is the range the
-    ladder measured. The grouped sums are read off the case's spec. Nothing in
-    the table is typed into the page.
+    block = (yaml.safe_load(spec.read_text()) if spec else {}).get(kind) or {}
+    named = []
+    for name, body in block.items():
+        dims = [d for d in body.get('dims', []) if d != 'snapshot']
+        named.append(f'{name}[{", ".join(dims)}]' if dims else name)
+    return ', '.join(named) or '\N{EM DASH}'
+
+
+def models(rows: dict[Key, Row]) -> str:
+    """Each model on the size ladder as one column: what it declares, and what one snapshot sends to the solver.
+
+    Every ladder grows along ``snapshot`` alone, and every declaration runs over
+    it, so a model is its declarations, its fixed dimensions, its density and its
+    grouped sums, plus the columns, rows and nonzeros one snapshot adds: read off
+    `BASELINE`'s largest measurement, the model as built. The snapshots row is
+    the range the ladder measured. Declarations and grouped sums are read off the
+    case's spec. Nothing in the table is typed into the page.
     """
     from bench.cases import CASES
 
     ours = {k: r for k, r in rows.items() if k[3] == BASELINE and _sweep_of(k[1]) is None}
-    lines = [
-        '| model | dimensions | density | grouped sums | snapshots | variables per snapshot '
-        '| constraints per snapshot | nonzeros per snapshot |',
-        '| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |',
-    ]
-    for case in sorted({c for c, _, _, _ in ours}):
+    cases = sorted({c for c, _, _, _ in ours})
+    if not cases:
+        return ''
+    cells: dict[str, list[str]] = {}
+    for case in cases:
         counts = {k[1]: r['counts'] for k, r in ours.items() if k[0] == case}
         shapes = {s.label: s for s in CASES[case].ladder if s.label in counts}
         largest = max(counts, key=lambda size: counts[size]['columns'])
         snapshots = shapes[largest].sizes['snapshot']
-        dims = ' \N{MULTIPLICATION SIGN} '.join(f'{d} {n}' for d, n in shapes[largest].sizes.items() if d != 'snapshot')
-        each = ' | '.join(_span([counts[largest][n] / snapshots]) for n in ('columns', 'rows', 'nonzeros'))
-        ladder = _span([s.sizes['snapshot'] for s in shapes.values()])
-        lines.append(
-            f'| {case} | {dims} | {shapes[largest].density:.0%} | {grouped_sums(CASES[case].spec)} | {ladder} | {each} |'
-        )
-    return '\n'.join(lines) if len(lines) > 2 else ''
+        spec = CASES[case].spec
+        cells[case] = [
+            declared(spec, 'variables'),
+            declared(spec, 'constraints'),
+            grouped_sums(spec),
+            ', '.join(f'{d} {n}' for d, n in shapes[largest].sizes.items() if d != 'snapshot'),
+            f'{shapes[largest].density:.0%}',
+            _span([s.sizes['snapshot'] for s in shapes.values()]),
+            *(_span([counts[largest][n] / snapshots]) for n in ('columns', 'rows', 'nonzeros')),
+        ]
+    labels = (
+        'variables',
+        'constraints',
+        'grouped sums',
+        'dimensions',
+        'density',
+        'snapshots',
+        'columns per snapshot',
+        'rows per snapshot',
+        'nonzeros per snapshot',
+    )
+    lines = [f'| | {" | ".join(cases)} |', f'| --- |{" --- |" * len(cases)}']
+    lines += [f'| {label} | {" | ".join(cells[c][i] for c in cases)} |' for i, label in enumerate(labels)]
+    return '\n'.join(lines)
 
 
 PAGE = Path('docs/about/benchmarks.md')
