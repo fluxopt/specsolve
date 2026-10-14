@@ -17,7 +17,7 @@ requirements = [
     { name = "pyomo", specifier = ">=6.7" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-benchmem", specifier = ">=0.5" },
-    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=af1dac7d3" },
+    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=fbc735a5b" },
 ]
 
 [[package]]
@@ -1085,8 +1085,8 @@ wheels = [
 
 [[package]]
 name = "specsolve"
-version = "0.9.1.dev23+gaf1dac7d3"
-source = { git = "https://github.com/fluxopt/specsolve?rev=af1dac7d3#af1dac7d36457b0c5c169f6347588eae09caae0d" }
+version = "0.9.1.dev31+gfbc735a5b"
+source = { git = "https://github.com/fluxopt/specsolve?rev=fbc735a5b#fbc735a5b972ffdc9699a0db19ec620ae623deaa" }
 dependencies = [
     { name = "highspy" },
     { name = "mathspec" },
