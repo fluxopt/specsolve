@@ -1,7 +1,7 @@
 name: Published benchmark on a label
 
 # A pull request labelled trigger:published-bench dispatches published-benchmark.yml on its
-# branch, and that run comments the ratios on the pull request. This workflow only dispatches,
+# branch, and that run comments specsolve's numbers on the pull request. This workflow only dispatches,
 # on a hosted runner: the run on the box stays a workflow_dispatch, which a fork cannot fire.
 
 on:

@@ -33,13 +33,14 @@ from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdic
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
-    MIN_ROUNDS,
     _holder_if_alive,
-    flag_passed,
+    expected_seconds,
     pytest_benchmark_update_machine_info,
     refuse_unless_idle,
+    remember,
+    rounds_for,
     take_lock,
 )
 from bench.test_ladder import RELOADS, _fresh
@@ -215,12 +216,12 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
         for sink in ('highs', 'gurobi')
         for case in ('dispatch', 'nodal', 'network', 'sector')
     ), 'every published case through both sinks, one file each'
-    assert published['latest-highs-dispatch.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
-        'a case holds every rung of the size ladder it has'
-    )
-    assert published['latest-highs-network.json'] == {'2xs', 'xs', 's', 'm', 'l'}, (
-        'a rung the case does not have is left out of its file'
-    )
+    assert published['latest-highs-dispatch.json'] == {
+        *('3xs', '2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
+    }, 'a case holds every rung of the size ladder it has'
+    assert published['latest-highs-network.json'] == {
+        *('2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
+    }, 'a rung the case does not have is left out of its file'
     assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
 
@@ -303,15 +304,24 @@ def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
     assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
-def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
-    """`ladder-ci` falls back to the published memory budget, which therefore
-    exists twice and must not drift."""
+@pytest.mark.parametrize(
+    ('arg', 'variable'),
+    [
+        pytest.param('memory', 'BENCH_MEMORY_BUDGET', id='memory-budget'),
+        pytest.param('sizes', 'BENCH_SIZES', id='sizes'),
+    ],
+)
+def test_the_ci_ladder_defaults_to_the_published_ladder(arg: str, variable: str) -> None:
+    """`ladder-ci` falls back to the published memory budget and rungs, which
+    therefore exist twice and must not drift."""
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
-    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'memory')
-    fallback = tasks['ladder-ci']['cmd'].split('BENCH_MEMORY_BUDGET:-', 1)[1].split('}', 1)[0]
-    assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == arg)
+    fallback = tasks['ladder-ci']['cmd'].split(f'{variable}:-', 1)[1].split('}', 1)[0]
+    assert fallback == published, (
+        f'ladder-ci falls back to {fallback!r} for {arg}, the published ladder to {published!r}'
+    )
 
 
 def _committed(path: str) -> list[str]:
@@ -635,6 +645,42 @@ def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
     reason = ceiling.reached('pyomo', 'dispatch', 'xs', 'lp')
     assert reason is not None, 'a projection over budget stops the ladder'
     assert '200 s' in reason and '20 s' in reason, 'the reason carries the measurement and the projection'
+
+
+@pytest.mark.parametrize(
+    ('rungs', 'stops'),
+    [
+        pytest.param(None, False, id='every-rung-climbs-to-s5'),
+        pytest.param(('xs', 's', 'm'), True, id='decades-only-climb-to-m'),
+    ],
+)
+def test_a_measurement_that_leaves_rungs_out_projects_to_the_next_it_takes(
+    rungs: tuple[str, ...] | None, stops: bool
+) -> None:
+    """`test_rebuild` skips `s5`, so after `s` its next rung is `m`, ten times wider, not `s5`."""
+    ceiling = _ceiling(120.0, selected=('xs', 's', 's5', 'm'))
+    ceiling.record('pyomo', 'dispatch', 's', '', 20.0, rungs=rungs)
+    assert (ceiling.reached('pyomo', 'dispatch', 's', '') is not None) == stops, (
+        '20 s projects to 100 s at s5, inside 120 s, and to 200 s at m, over it'
+    )
+
+
+@pytest.mark.parametrize(
+    ('label', 'between'),
+    [
+        *(pytest.param(s, True, id=s) for s in ('3xs5', '2xs5', 'xs5', 's5', 'm5')),
+        *(pytest.param(s, False, id=s) for s in ('3xs', '2xs', 'xs', 'm', 'l', '2xl', 'xs2', 'd25', 'w10', 'n032')),
+    ],
+)
+def test_the_rungs_between_decades_are_named_by_their_label(label: str, between: bool) -> None:
+    assert between_decades(label) is between, f'{label} is {"" if between else "not "}a rung between two decades'
+
+
+def test_every_rung_between_decades_is_one_the_ladder_made() -> None:
+    made = {s.label for case in CASES.values() for s in case.ladder if between_decades(s.label)}
+    assert made == {'3xs5', '2xs5', 'xs5', 's5', 'm5'}, (
+        'a rung five times every decade from 3xs to m, and none elsewhere'
+    )
 
 
 def test_a_rung_inside_budget_lets_the_ladder_continue() -> None:
@@ -1265,42 +1311,70 @@ def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
 
 
 @pytest.mark.parametrize(
-    ('args', 'given', 'expected'),
+    ('seconds', 'expected'),
     [
-        pytest.param((), 5, MIN_ROUNDS, id='the-plugin-default-becomes-the-documented-nine'),
-        pytest.param(('--benchmark-min-rounds=3',), 3, 3, id='an-explicit-flag-wins'),
-        pytest.param(('--benchmark-min-rounds', '3'), 3, 3, id='an-explicit-flag-wins-when-spaced'),
+        pytest.param(None, 9, id='nothing-measured-yet'),
+        pytest.param(0.01, 9, id='a-fast-round'),
+        pytest.param(1.0, 5, id='a-second'),
+        pytest.param(120.0, 5, id='two-minutes'),
     ],
 )
-def test_the_rounds_default_is_the_documented_one_and_an_explicit_flag_wins(
-    args: tuple[str, ...], given: int, expected: int
-) -> None:
-    config = SimpleNamespace(
-        invocation_params=SimpleNamespace(args=args),
-        option=SimpleNamespace(benchmark_min_rounds=given),
+def test_a_slower_round_gets_fewer_rounds(seconds: float | None, expected: int) -> None:
+    assert rounds_for(seconds) == expected, f'a round expected to take {seconds} s gets {expected} rounds'
+
+
+def _node(size: str, arm: str = 'specsolve', stash: pytest.Stash | None = None) -> SimpleNamespace:
+    """What `expected_seconds` reads off a collected `test_emit` cell."""
+    return SimpleNamespace(
+        originalname='test_emit',
+        callspec=SimpleNamespace(params={'case_name': 'dispatch', 'size': size, 'arm': arm, 'sink': 'highs'}),
+        config=SimpleNamespace(stash=pytest.Stash() if stash is None else stash),
     )
-    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
-    assert config.option.benchmark_min_rounds == expected, (
-        'docs/about/benchmarks.md publishes nine rounds per measurement; a run that asks for another count keeps it'
-    )
 
 
-def test_the_rounds_default_is_silent_where_the_plugin_is_absent() -> None:
-    """The CodSpeed job runs this same suite under a plugin with no such option."""
-    config = SimpleNamespace(invocation_params=SimpleNamespace(args=()), option=SimpleNamespace())
-    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
-    assert not hasattr(config.option, 'benchmark_min_rounds'), 'nothing to set, so nothing is set'
+def test_a_rung_expects_the_rung_below_grown_by_its_width() -> None:
+    stash = pytest.Stash()
+    assert expected_seconds(_node('xs', stash=stash)) is None, 'the first rung of a ladder has nothing to go on'
+    remember(_node('xs', stash=stash), 0.4)
+    assert expected_seconds(_node('xs5', stash=stash)) == pytest.approx(2.0), 'xs5 is five times as wide as xs'
+    remember(_node('xs5', stash=stash), 2.0)
+    assert expected_seconds(_node('s', stash=stash)) == pytest.approx(4.0), 'and s twice as wide as xs5'
+    assert expected_seconds(_node('xs5', arm='linopy', stash=stash)) is None, 'another arm is another cell'
 
 
-def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureRequest) -> None:
-    """The session applies the default."""
-    if not hasattr(request.config.option, 'benchmark_min_rounds'):
-        pytest.skip('pytest-benchmark is not installed — bench/ runs through `pixi run -e bench`')
-    if flag_passed(request.config, '--benchmark-min-rounds'):
-        pytest.skip('this session asked for a round count of its own')
-    assert request.config.option.benchmark_min_rounds == MIN_ROUNDS, (
-        'the documented command has to reproduce the documented method'
-    )
+class _Benchmark:
+    """The part of pytest-benchmark's fixture `_rounds` uses, keeping the rounds it was asked for."""
+
+    def __init__(self, median: float) -> None:
+        self.asked: int | None = None
+        self.stats = SimpleNamespace(stats=SimpleNamespace(median=median))
+
+    def pedantic(self, fn: Any, **kwargs: Any) -> Any:
+        self.asked = kwargs['rounds']
+        return fn(*kwargs['args'])
+
+
+@pytest.mark.parametrize(
+    ('args', 'expected'),
+    [
+        pytest.param((), [9, 5], id='by-how-long-the-rung-below-took'),
+        pytest.param(('--benchmark-min-rounds=7',), [7, 7], id='an-explicit-flag-wins'),
+        pytest.param(('--benchmark-min-rounds', '7'), [7, 7], id='an-explicit-flag-wins-when-spaced'),
+    ],
+)
+def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[str, ...], expected: list[int]) -> None:
+    from bench.test_ladder import _rounds
+
+    stash = pytest.Stash()
+    asked = []
+    for size in ('xs', 's'):
+        node = _node(size, stash=stash)
+        node.config.invocation_params = SimpleNamespace(args=args)
+        node.config.option = SimpleNamespace(benchmark_min_rounds=7)
+        benchmark = _Benchmark(median=2.0)
+        _rounds(benchmark, SimpleNamespace(config=node.config, node=node), lambda: None)
+        asked.append(benchmark.asked)
+    assert asked == expected, 'xs knows nothing and gets nine; s is ten times a 2 s xs, so it gets five'
 
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
@@ -1512,6 +1586,8 @@ def test_every_verb_an_isolated_pass_measures_can_be_pickled(named_arm: str) -> 
         'window',
         'read_setup',
         'read',
+        'load_setup',
+        'load',
     ):
         target = getattr(module, verb, None)
         if target is None:
@@ -1533,6 +1609,10 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
         assert hasattr(module, 'read') == hasattr(module, 'read_setup'), (
             f'the {name} arm offers one half of the read pair — `read_setup` builds and answers '
             f'outside the clock, `read` is what is timed, and neither means anything alone'
+        )
+        assert hasattr(module, 'load') == hasattr(module, 'load_setup'), (
+            f'the {name} arm offers one half of the load pair — `load_setup` builds the arrays '
+            f'outside the clock, `load` is what is timed, and neither means anything alone'
         )
 
 
@@ -1563,6 +1643,51 @@ def test_the_window_payload_an_isolated_pass_ships_can_be_pickled() -> None:
             f'the {name} arm ships {len(blob)} bytes to the child, so it carries pre-built state — '
             f'the isolated rss would measure deserializing that, not the window'
         )
+
+
+def test_the_floor_arms_are_the_ones_that_time_a_load_alone() -> None:
+    """The page's matrix floor is the solver's handoff alone, so both matrix arms carry the load pair and no rival does."""
+    floors = sorted(name for name, module in ARMS.items() if hasattr(module, 'load'))
+    assert floors == ['gurobipy-matrix', 'highspy-matrix'], 'exactly the two matrix arms time a load alone'
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -> None:
+    """`load_setup` runs in the spawned child, so the arrays are built there and never pickled (#1617)."""
+    plugin = pytest.importorskip(
+        'pytest_benchmem.pytest_plugin',
+        reason='pytest-benchmem is not installed — bench/ runs through `pixi run -e bench`',
+    )
+
+    from bench.test_ladder import _CollectedSetup
+
+    module = ARMS[floor]
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    setup = _CollectedSetup(partial(module.load_setup, module.SINKS[0], prepared))
+    mem_setup, tracked = plugin._pedantic_action(module.load, (), {}, setup)
+    blob = pickle.dumps((tracked, mem_setup))
+    assert len(blob) < 1024 * 1024, (
+        f'the {floor} arm ships {len(blob)} bytes to the child, so the arrays travel pickled and the '
+        f'isolated rss measures deserializing them'
+    )
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+@pytest.mark.parametrize('case_name', ['dispatch', 'nodal', 'sector', 'network'])
+def test_a_floor_loads_the_model_its_build_loads(floor: str, case_name: str) -> None:
+    """`load` over `load_setup`'s arrays is the same model `build_and_emit` loads, so the floor moved only its clock."""
+    module = ARMS[floor]
+    reason = unmeasurable(floor, case_name, module.SINKS[0])
+    if reason:
+        pytest.skip(reason)
+    case = CASES[case_name]
+    smallest = case.ladder[0]
+    prepared = module.prepare(case_name, smallest.label, case.data(smallest), {})
+    args, kwargs = module.load_setup(module.SINKS[0], prepared)
+    assert module.load(*args, **kwargs) == module.build_and_emit(module.SINKS[0], prepared), (
+        'the load and the build hand over different columns, rows or nonzeros'
+    )
 
 
 def test_a_timing_record_says_which_rung_it_came_off(tmp_path: Path) -> None:
@@ -1722,7 +1847,7 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     """
     module = ARMS['specsolve']
     case = CASES['dispatch']
-    prepared = module.prepare('dispatch', 'xs', case.data(case.shape('xs')), {})
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
 
     emitted = module.build_and_emit('lp', prepared)['phases']
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
@@ -2008,96 +2133,156 @@ def _results(directory: Path, *timings: dict[str, Any], name: str = 'latest-high
 
 
 def _pair(**over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-    """specsolve at 1 s and linopy at 4 s on one cell, so the ratio is 0.25x."""
+    """specsolve at 1 s and 1 GB, and linopy at 4 s, on one cell."""
     return _timing('specsolve', sink='highs', **over), _timing('linopy', sink='highs', wall_seconds=4.0, **over)
 
 
 @pytest.mark.parametrize(
-    ('pr', 'base', 'shown'),
+    ('pr', 'base', 'shown', 'absent'),
     [
         pytest.param(
-            _pair(), _pair(), ['| m | 0.25x |', '**No cell moved by 5% or more**'], id='the same cell on both sides'
+            _pair(),
+            _pair(),
+            ['| m | 1k | 1 s → 1 s (1.00x) | 1 GB → 1 GB (1.00x) |', '**No specsolve cell moved by 5% or more**'],
+            ['linopy'],
+            id='the same cell on both sides',
+        ),
+        pytest.param(
+            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=8.0)),
+            _pair(),
+            ['**No specsolve cell moved by 5% or more**', 'took 2.00x their committed time at the median cell'],
+            ['8 s'],
+            id='another library moved, which only the sentence on the servers says',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=0.5), _pair()[1]),
+            _pair(),
+            [
+                '**1 specsolve cell moved by 5% or more**',
+                '| dispatch | highs | m | 1k | 🟢 1 s → 500 ms (0.50x) | 1 GB → 1 GB (1.00x) |',
+                '| m | 1k | 🟢 1 s → 500 ms (0.50x) | 1 GB → 1 GB (1.00x) |',
+            ],
+            [],
+            id='specsolve got faster',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', peak_rss_bytes=1.2e9), _pair()[1]),
+            _pair(),
+            ['| dispatch | highs | m | 1k | 1 s → 1 s (1.00x) | 🔴 1 GB → 1.2 GB (1.20x) |'],
+            [],
+            id='specsolve took more memory',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=1.04), _pair()[1]),
+            _pair(),
+            ['**No specsolve cell moved by 5% or more**', '| m | 1k | 1 s → 1.04 s (1.04x) |'],
+            [],
+            id='a move inside the threshold',
+        ),
+        pytest.param(
+            (_timing('specsolve', sink='highs', wall_seconds=0.5, iqr=1.0), _pair()[1]),
+            _pair(),
+            ['The tables below hold 1 whose rounds spread too wide to quote', '🟢 1 s → 500 ms (0.50x)~'],
+            ['| dispatch | highs | m |'],
+            id='a noisy move stays out of the moved table',
+        ),
+        pytest.param(
+            (*_pair(), _timing('specsolve-in-memory', sink='highs', wall_seconds=0.5)),
+            (*_pair(), _timing('specsolve-in-memory', sink='highs')),
+            ['took 1.00x their committed time at the median cell, and 1.00x to 1.00x in the middle 1 of 1 cells'],
+            ['specsolve-in-memory', '0.50x'],
+            id='specsolve in memory is neither compared nor counted as another library',
         ),
         pytest.param(
             _pair(case='newcase'),
             _pair(),
-            ['**newcase — highs**', '| m | — → 0.25x |'],
+            ['**newcase — highs**', '| m | 1k | — → 1 s | — → 1 GB |'],
+            [],
             id='a model the base never ran',
         ),
-        pytest.param(_pair(size='xl'), _pair(), ['| xl | — → 0.25x |', '| m | 0.25x → — |'], id='other rungs'),
         pytest.param(
-            (*_pair(), _timing('newlib', sink='highs', wall_seconds=2.0)),
-            _pair(),
-            ['| rung | linopy | newlib |', '| m | 0.25x | — → 0.50x |'],
-            id='a library the base never ran',
+            _pair(size='xl'), _pair(), ['| xl | 1k | — → 1 s |', '| m | 1k | 1 s → — |'], [], id='other rungs'
         ),
         pytest.param(
             (_timing('specsolve', sink='highs', wall_seconds=float('nan')), _pair()[1]),
             _pair(),
-            ['| m | 0.25x → — |'],
+            ['| m | 1k | 1 s → — |'],
+            [],
             id='a wall time that is not a number',
         ),
         pytest.param(
             (_timing('specsolve', sink='highs', wall_seconds=None), _pair()[1]),
             _pair(),
-            ['| m | 0.25x → — |'],
+            ['| m | 1k | 1 s → — |'],
+            [],
             id='a wall time that is missing',
         ),
-        pytest.param((_pair()[0],), _pair(), ['| m | 0.25x → — |'], id='a library dropped from the run'),
         pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=1.25)),
+            (_pair()[0],),
             _pair(),
-            ['**1 cell moved by 5% or more**', '| m | 🔴 0.25x → **0.80x** |'],
-            id='a library that caught up with specsolve',
-        ),
-        pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=3.9)),
-            _pair(),
-            ['**No cell moved by 5% or more**', '| m | 0.26x |'],
-            id='a move inside the noise',
+            ['No other library ran on both sides, so nothing here says how far the two servers differ.'],
+            [],
+            id='a library dropped from the run',
         ),
         pytest.param(
             _pair(case='nodal'),
             (*_pair(case='nodal'), *_pair()),
             ['⚠️ **Committed but not in this run:** dispatch — highs'],
+            [],
             id='a model the run lost',
-        ),
-        pytest.param(
-            (_pair()[0], _timing('linopy', sink='highs', wall_seconds=250.0)),
-            _pair(),
-            ['| m | 🟢 0.25x → **0.004x** |', '| 🟢 | dispatch | highs | m | linopy | 0.25x | **0.004x** |'],
-            id='a ratio below a tenth keeps two figures',
         ),
         pytest.param(
             (
                 _pair(case='gone')[0],
-                {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'linopy', 'budget': 30.0},
+                {'record': 'ceiling', 'case': 'gone', 'size': 's', 'sink': 'highs', 'arm': 'specsolve', 'budget': 30.0},
             ),
             _pair(case='gone'),
-            ['**gone — highs**', '| m | 0.25x → — |'],
+            ['**gone — highs**', '| m | 1k | 1 s → 1 s (1.00x) |'],
+            [],
             id='a budget stop on a model the ladder no longer has',
         ),
         pytest.param(
             (*_pair(), {**_timing('specsolve', sink='highs'), 'arm': None}),
             _pair(),
-            ['| m | 0.25x |'],
+            ['| m | 1k | 1 s → 1 s (1.00x) |'],
+            [],
             id='a record with no library',
         ),
         pytest.param(
             _pair(counts=None, size='xl'),
             _pair(),
-            ['| m | 0.25x → — |', '| xl | — → 0.25x |'],
+            ['| m | 1k | 1 s → — |', '| xl | — | — → 1 s |'],
+            [],
             id='a record with no counts',
         ),
-        pytest.param((_pair()[0],), (_pair()[0],), ['only specsolve was measured'], id='only specsolve on both sides'),
+        pytest.param(
+            (*_pair(), _timing('linopy', case='other', sink='highs')),
+            (*_pair(), _timing('linopy', case='other', sink='highs')),
+            ['**dispatch — highs**'],
+            ['**other — highs**'],
+            id='a model only another library ran has no table',
+        ),
+        pytest.param(
+            (_pair()[1],),
+            _pair(),
+            ['This run left no specsolve results to compare.'],
+            ['<details>'],
+            id='a run with no specsolve cell',
+        ),
     ],
 )
 def test_the_comment_renders_whatever_the_two_runs_hold(
-    tmp_path: Path, pr: tuple[dict[str, Any], ...], base: tuple[dict[str, Any], ...], shown: list[str]
+    tmp_path: Path,
+    pr: tuple[dict[str, Any], ...],
+    base: tuple[dict[str, Any], ...],
+    shown: list[str],
+    absent: list[str],
 ) -> None:
     text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
     missing = [line for line in shown if line not in text]
     assert not missing, f'the comment lacks {missing}:\n{text}'
+    extra = [line for line in absent if line in text]
+    assert not extra, f'the comment holds {extra}, which it should not:\n{text}'
 
 
 @pytest.mark.parametrize(
@@ -2117,7 +2302,7 @@ def test_the_comment_renders_whatever_the_two_runs_hold(
         ),
         pytest.param(
             lambda pr, base: [p.unlink() for p in pr.iterdir()],
-            'This run left no results to compare.',
+            'This run left no specsolve results to compare.',
             False,
             id='a run that wrote nothing',
         ),
@@ -2144,12 +2329,12 @@ def test_a_file_that_is_broken_or_absent_is_named_and_the_comment_still_renders(
 
 def test_the_comment_moved_table_stops_at_its_row_limit_and_counts_the_rest(tmp_path: Path) -> None:
     cases = [f'c{i:02d}' for i in range(comment.SHOWN + 3)]
-    pr = [t for c in cases for t in (_pair(case=c)[0], _timing('linopy', case=c, sink='highs', wall_seconds=1.0))]
-    base = [t for c in cases for t in _pair(case=c)]
+    pr = [_timing('specsolve', case=c, sink='highs', wall_seconds=2.0) for c in cases]
+    base = [_timing('specsolve', case=c, sink='highs') for c in cases]
     text = comment.render(_results(tmp_path / 'pr', *pr), _results(tmp_path / 'base', *base))
     summary = text.split('<details>')[0]
-    assert summary.count('| 🔴 |') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
-    assert 'And 3 more, in the tables below.' in summary
+    assert summary.count('| 🔴 1 s → 2 s') == comment.SHOWN, f'the moved table holds {comment.SHOWN} rows'
+    assert 'The tables below hold 3 more.' in summary
 
 
 def test_a_comment_too_long_for_github_drops_the_full_tables(tmp_path: Path) -> None:
