@@ -81,9 +81,12 @@ Each panel is one model, and each line is one library. **Solver** chooses the
 solver that every panel and the table run through.
 
 - **specsolve is the thick violet line.**
-- **The grey line is the matrix floor**: a hand-written matrix handed straight
-  to the solver's bulk API. Its distance from specsolve is what the modelling
-  layer costs.
+- **The grey line is the matrix floor**: the time to hand a finished matrix to
+  the solver in one bulk call, `passModel` for HiGHS and `loadModel` for
+  Gurobi. The floor builds its arrays before the clock starts, so it reads no
+  parquet and builds nothing. Its distance from specsolve is everything
+  specsolve does before the solver holds the model. Its peak RSS includes the
+  arrays as well as the solver's copy of them.
 - **The line is the median of nine rounds, or of five where a round takes
   over a second, and the whisker is the middle half.**
   Overlapping whiskers are numbers this run cannot tell apart

@@ -1,28 +1,32 @@
-"""The pull request comment for a published run: each library against specsolve, on the base branch and in the PR.
+"""The pull request comment for a published run: specsolve's time and peak, committed against this run.
 
     pixi run -e bench python -m bench.comment <pr-results> <base-results> [--run-url URL] [--out comment.md]
 
 It reads whatever the two directories hold and fails on none of it. A case,
-rung, sink or library that one side lacks prints `—`, and so does a number
-that is not finite, and a file that does not read is named under the tables.
-A change to what the benchmark measures — a new model, other rungs, a library
-added or dropped — changes the comment, not the exit status.
+rung or sink that one side lacks prints `—`, and so does a number that is not
+finite, and a file that does not read is named under the tables. A change to
+what the benchmark measures — a new model, other rungs, a library added or
+dropped — changes the comment, not the exit status.
 
-The ratios are what carries from one run to another: two runs on the benchmark
-server are two machines, but a library and specsolve measured side by side in
-one run share one. So each cell is the committed ratio, then this run's.
+Only specsolve's own cells are compared. The other libraries do not change with
+a pull request, so what they moved between the two runs is the difference
+between the two servers, and the comment gives it one sentence.
 """
 
 from __future__ import annotations
 
 import argparse
 import math
+import statistics
 import sys
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from bench import report
 from bench import results as bench_results
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: Where the workflow finds its own comment again, so a second run edits the first.
 MARKER = '<!-- published-benchmark -->'
@@ -30,13 +34,16 @@ MARKER = '<!-- published-benchmark -->'
 #: GitHub refuses a comment over 65,536 characters; the full tables are dropped before that.
 LIMIT = 60_000
 
-#: How far a ratio moves before the comment calls it moved. Two runs are two servers, and between two
-#: published runs a ratio of two unchanged libraries moved 16.5% at the median (#2030), so a moved
-#: cell is a lead to check rather than a verdict.
+#: How far specsolve's time or peak moves before the comment calls it moved. Between the
+#: committed run and #2022's (#2033), the other libraries' wall times moved by 0.92x to 1.05x in
+#: the middle 80% of cells, so a 5% move is a lead to check against that sentence, not a verdict.
 MOVED = 0.05
 
 #: Rows of the moved table; the rest are counted, and the full tables hold them.
 SHOWN = 15
+
+#: specsolve's own arms, which a pull request can change; every other arm says how far the servers differ.
+OURS = ('specsolve', 'specsolve-in-memory')
 
 
 class Side(NamedTuple):
@@ -67,45 +74,27 @@ def read(directory: Path | None) -> Side:
     return Side(report.best(timings), runs, list(report.CEILINGS), problems)
 
 
-def _wall(side: Side, key: report.Key) -> float | None:
-    """The cell's wall time, or ``None`` where it is absent, zero or not finite."""
-    value = (side.rows.get(key) or {}).get('wall_seconds')
+def _number(side: Side, key: report.Key, field: str) -> float | None:
+    """The cell's *field*, or ``None`` where it is absent, zero or not finite."""
+    value = (side.rows.get(key) or {}).get(field)
     return value if isinstance(value, (int, float)) and math.isfinite(value) and value > 0 else None
 
 
-def _ratio(side: Side, case: str, size: str, sink: str, arm: str) -> float | None:
-    """specsolve's wall over *arm*'s, as the published tables draw it; ``None`` where either is missing."""
-    ours, theirs = _wall(side, (case, size, sink, report.BASELINE)), _wall(side, (case, size, sink, arm))
-    return ours / theirs if ours is not None and theirs is not None else None
+def _seconds(value: float) -> str:
+    """A wall time in milliseconds below a second, else in seconds."""
+    return f'{value * 1000:.3g} ms' if value < 1 else f'{value:.3g} s'
 
 
-def _x(ratio: float) -> str:
-    """A ratio to two decimals, or to two figures below a tenth, where two decimals would print zero."""
-    return f'{ratio:.2f}x' if ratio >= 0.1 else f'{ratio:.2g}x'
+def _gb(value: float) -> str:
+    return f'{value / 1e9:.3g} GB'
 
 
-def _shown(side: Side, case: str, size: str, sink: str, arm: str) -> str:
-    """One side's cell: the ratio, marked where its rounds spread too wide; else the budget that stopped *arm*, else `—`."""
-    ratio = _ratio(side, case, size, sink, arm)
-    if ratio is not None:
-        noisy = any(report.suspect(side.rows.get((case, size, sink, a))) for a in (report.BASELINE, arm))
-        return _x(ratio) + (report.MARK if noisy else '')
-    report.CEILINGS[:] = side.ceilings
-    try:
-        return report.over_budget(case, size, sink, arm) or '—'
-    except Exception:  # a case the ladder no longer knows has no ceiling to show
-        return '—'
+#: The two numbers compared per cell, each with how it prints.
+MEASURES = (('wall_seconds', _seconds), ('peak_rss_bytes', _gb))
 
 
-class Move(NamedTuple):
-    """A cell whose ratio moved by `MOVED` or more between the committed run and this one."""
-
-    case: str
-    sink: str
-    size: str
-    arm: str
-    before: float
-    after: float
+def _x(factor: float) -> str:
+    return f'{factor:.2f}x'
 
 
 def _moved(before: float, after: float) -> bool:
@@ -113,28 +102,90 @@ def _moved(before: float, after: float) -> bool:
 
 
 def _mark(before: float, after: float) -> str:
-    """🔴 where specsolve lost ground to the library, 🟢 where it gained."""
+    """🔴 where specsolve took more time or memory than the committed run, 🟢 where it took less."""
     return '🔴' if after > before else '🟢'
 
 
+def _missing(side: Side, key: report.Key) -> str:
+    """Why a side has no number for a cell: the budget that stopped specsolve below it, else `—`."""
+    report.CEILINGS[:] = side.ceilings
+    try:
+        return report.over_budget(*key) or '—'
+    except Exception:  # a case the ladder no longer knows has no ceiling to show
+        return '—'
+
+
+def _cell(pr: Side, base: Side, key: report.Key, field: str, shown: Callable[[float], str]) -> str:
+    """Committed, then this run, then the factor between them; a moved cell carries its mark."""
+    before, after = _number(base, key, field), _number(pr, key, field)
+    if before is None or after is None:
+        was = shown(before) if before is not None else _missing(base, key)
+        now = shown(after) if after is not None else _missing(pr, key)
+        return f'{was} → {now}'
+    noisy = field == 'wall_seconds' and any(report.suspect(s.rows.get(key)) for s in (pr, base))
+    text = f'{shown(before)} → {shown(after)} ({_x(after / before)}){report.MARK if noisy else ""}'
+    return f'{_mark(before, after)} {text}' if _moved(before, after) else text
+
+
+class Move(NamedTuple):
+    """A specsolve cell whose wall time or peak moved by `MOVED` or more between the committed run and this one."""
+
+    size: float
+    key: report.Key
+    noisy: bool
+
+
 def moves(pr: Side, base: Side) -> list[Move]:
-    """Every cell both runs measured whose ratio moved by `MOVED` or more, the largest move first."""
-    pairs = ((key, _ratio(base, *key), _ratio(pr, *key)) for key in pr.rows if key[3] != report.BASELINE)
-    found = [
-        Move(case, sink, size, arm, before, after)
-        for (case, size, sink, arm), before, after in pairs
-        if before is not None and after is not None and _moved(before, after)
-    ]
-    return sorted(found, key=lambda m: (-abs(math.log(m.after / m.before)), m))
+    """Every specsolve cell both runs measured that moved by `MOVED` or more, the largest move first."""
+    found = []
+    for key in pr.rows:
+        if key[3] != report.BASELINE:
+            continue
+        factors = [
+            after / before
+            for field, _ in MEASURES
+            if (before := _number(base, key, field)) is not None and (after := _number(pr, key, field)) is not None
+        ]
+        if any(abs(f - 1) >= MOVED for f in factors):
+            noisy = any(report.suspect(s.rows.get(key)) for s in (pr, base))
+            found.append(Move(max(abs(math.log(f)) for f in factors), key, noisy))
+    return sorted(found, key=lambda m: (-m.size, m.key))
 
 
-def _cell(pr: Side, base: Side, case: str, size: str, sink: str, arm: str) -> str:
-    """This run's cell, with the committed one beside it only where they differ enough to matter."""
-    before, after = _ratio(base, case, size, sink, arm), _ratio(pr, case, size, sink, arm)
-    was, now = _shown(base, case, size, sink, arm), _shown(pr, case, size, sink, arm)
-    if before is not None and after is not None:
-        return f'{_mark(before, after)} {was} → **{now}**' if _moved(before, after) else now
-    return now if was == now else f'{was} → {now}'
+def servers(pr: Side, base: Side) -> str:
+    """One sentence on how far the libraries a pull request does not change moved between the two runs."""
+    factors = sorted(
+        after / before
+        for key in pr.rows
+        if key[3] not in OURS
+        and (before := _number(base, key, 'wall_seconds')) is not None
+        and (after := _number(pr, key, 'wall_seconds')) is not None
+    )
+    if not factors:
+        return 'No other library ran on both sides, so nothing here says how far the two servers differ.'
+    middle = factors[len(factors) // 10 : len(factors) - len(factors) // 10] or factors
+    return (
+        f'The other libraries, which this pull request does not change, took {_x(statistics.median(factors))} '
+        f'their committed time at the median cell, and {_x(middle[0])} to {_x(middle[-1])} in the middle '
+        f'{len(middle)} of {len(factors)} cells. That is how far the two servers differ.'
+    )
+
+
+def _variables(pr: Side, base: Side, key: report.Key) -> str:
+    """The columns the model built at this cell, from whichever side has a count."""
+    for side in (pr, base):
+        columns = ((side.rows.get(key) or {}).get('counts') or {}).get('columns')
+        if isinstance(columns, (int, float)) and math.isfinite(columns):
+            return report._si(columns)
+    return '—'
+
+
+def _row(pr: Side, base: Side, key: report.Key, *lead: str) -> str:
+    cells = [*lead, _variables(pr, base, key), *(_cell(pr, base, key, f, shown) for f, shown in MEASURES)]
+    return '| ' + ' | '.join(cells) + ' |'
+
+
+_COLUMNS = ['variables', 'wall: committed → this run', 'peak: committed → this run']
 
 
 def _rungs(case: str, sink: str, *sides: Side) -> list[str]:
@@ -150,38 +201,37 @@ def _rungs(case: str, sink: str, *sides: Side) -> list[str]:
     return sorted(width, key=lambda s: (width[s], s))
 
 
-def versus(case: str, sink: str, pr: Side, base: Side) -> str:
-    """One case through one sink: each library's ratio against specsolve at every rung."""
-    arms = report.arms_in(k for k in (*pr.rows, *base.rows) if k[0] == case and k[2] == sink)
-    others = [a for a in arms if a != report.BASELINE]
-    if not others:
-        return f'**{case} — {sink}**: only specsolve was measured, so there is no ratio to show.'
-    rows = (
-        f'| {size} | ' + ' | '.join(_cell(pr, base, case, size, sink, a) for a in others) + ' |'
-        for size in _rungs(case, sink, pr, base)
-    )
-    return '\n'.join(
-        [f'**{case} — {sink}**', '', '| rung | ' + ' | '.join(others) + ' |', '|---|' + '---|' * len(others), *rows]
-    )
+def table(case: str, sink: str, pr: Side, base: Side) -> str:
+    """One case through one sink: specsolve at every rung, committed against this run."""
+    rows = (_row(pr, base, (case, size, sink, report.BASELINE), size) for size in _rungs(case, sink, pr, base))
+    head = ['rung', *_COLUMNS]
+    return '\n'.join([f'**{case} — {sink}**', '', '| ' + ' | '.join(head) + ' |', '|---' * len(head) + '|', *rows])
 
 
-def _summary(moved: list[Move]) -> str:
-    """The moved cells as one table, the largest first, cut at `SHOWN` rows."""
+def _summary(pr: Side, base: Side, moved: list[Move]) -> str:
+    """The moved cells whose rounds can be quoted, as one table, the largest first, cut at `SHOWN` rows."""
+    clean = [m for m in moved if not m.noisy]
+    noisy = len(moved) - len(clean)
     if not moved:
-        return f'**No cell moved by {MOVED:.0%} or more** against the committed results.'
+        return f'**No specsolve cell moved by {MOVED:.0%} or more** in wall time or peak against the committed run.'
     lines = [
-        f'**{len(moved)} {"cell" if len(moved) == 1 else "cells"} moved by {MOVED:.0%} or more** against the '
-        'committed results: 🔴 specsolve lost ground to the library, 🟢 specsolve gained.',
-        '',
-        '| | model | solver | rung | library | committed | this run |',
-        '|---|---|---|---|---|---|---|',
-        *(
-            f'| {_mark(m.before, m.after)} | {m.case} | {m.sink} | {m.size} | {m.arm} | {_x(m.before)} | **{_x(m.after)}** |'
-            for m in moved[:SHOWN]
-        ),
+        f'**{len(moved)} specsolve {"cell" if len(moved) == 1 else "cells"} moved by {MOVED:.0%} or more** in wall '
+        'time or peak: 🟢 this run took less than the committed one, 🔴 more.'
     ]
-    if len(moved) > SHOWN:
-        lines += ['', f'And {len(moved) - SHOWN} more, in the tables below.']
+    if clean:
+        head = ['model', 'solver', 'rung', *_COLUMNS]
+        lines += [
+            '',
+            '| ' + ' | '.join(head) + ' |',
+            '|---' * len(head) + '|',
+            *(_row(pr, base, m.key, m.key[0], m.key[2], m.key[1]) for m in clean[:SHOWN]),
+        ]
+    rest = [
+        *([f'{len(clean) - SHOWN} more'] if len(clean) > SHOWN else []),
+        *([f'{noisy} whose rounds spread too wide to quote, marked `{report.MARK}`'] if noisy else []),
+    ]
+    if rest:
+        lines += ['', f'The tables below hold {", and ".join(rest)}.']
     return '\n'.join(lines)
 
 
@@ -196,29 +246,29 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
     link = f' ([run]({run_url}))' if run_url else ''
     heading = f'{MARKER}\n## Published benchmark{link}'
     problems = [*_listed('This run', pr.problems), *_listed('Committed', base.problems)]
-    if not pr.rows:
+    if not any(k[3] == report.BASELINE for k in pr.rows):
         return '\n\n'.join(
-            [heading, 'This run left no results to compare. The run log says where it stopped.', *problems]
+            [heading, 'This run left no specsolve results to compare. The run log says where it stopped.', *problems]
         )
 
-    ratio = "Each number is specsolve's wall time over the library's, so below 1.00x specsolve is faster."
     gone = sorted({(c, k) for c, _, k, _ in base.rows} - {(c, k) for c, _, k, _ in pr.rows})
     missing = [f'⚠️ **Committed but not in this run:** {", ".join(f"{c} — {k}" for c, k in gone)}'] if gone else []
     legend = (
-        f'A cell within {MOVED:.0%} of the committed one shows this run only. The two runs ran on two servers, '
-        'so a moved cell is a lead to check, not a verdict. `—` is a cell that side did not '
-        'measure, `>N s` or `>N GB` the budget that stopped the library below that rung, and '
-        f'`{report.MARK}` a number whose rounds spread too wide to quote.'
+        f'A factor below 1.00x is less time or memory than the committed run. A cell that moved by {MOVED:.0%} '
+        'or more carries 🟢 or 🔴. `—` is a cell that side did not measure, `>N s` or `>N GB` the budget that '
+        f'stopped specsolve below that rung, and `{report.MARK}` a wall time whose rounds spread too wide to quote.'
     )
     machines = (
         f'This run: {report.provenance(pr.runs)}\n'
         f'Committed: {report.provenance(base.runs) if base.runs else "no committed results to compare against."}'
     )
-    pairs = sorted({(c, k) for c, _, k, _ in pr.rows})
-    tables = [versus(c, k, pr, base) for c, k in pairs]
-    details = '\n\n'.join(['<details><summary>Every model, library and rung</summary>', legend, *tables, '</details>'])
+    pairs = sorted({(c, k) for c, _, k, a in pr.rows if a == report.BASELINE})
+    tables = [table(c, k, pr, base) for c, k in pairs]
+    details = '\n\n'.join(
+        ['<details><summary>specsolve at every model and rung</summary>', legend, *tables, '</details>']
+    )
 
-    top = [heading, _summary(moves(pr, base)), ratio, *missing]
+    top = [heading, _summary(pr, base, moves(pr, base)), servers(pr, base), *missing]
     text = '\n\n'.join([*top, details, machines, *problems])
     if len(text) <= LIMIT:
         return text

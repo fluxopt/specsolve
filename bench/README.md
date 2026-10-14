@@ -130,19 +130,19 @@ dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
-branch, then comments: each library's wall time against specsolve, against the
-committed ratio, the cells that moved by 5% or more first. Two runs are two
-servers, and that moves an unchanged ratio well past 5% (#2030), so a moved cell
-is a lead to check, not a verdict. `published-benchmark-label.yml` only
-dispatches `published-benchmark.yml` with the pull request's number, from a
-hosted runner, so the run on the box stays a `workflow_dispatch` that a fork
-cannot fire, and a fork's pull request is not dispatched at all.
-`bench.comment` writes the comment. It reads whatever the two runs hold, so a
-new case, other rungs or a library added or dropped prints `—` where one side
-has nothing, and the job does not fail. Ratios rather than wall times, because
-two runs are two machines, and one run is one. One comment per pull request,
-edited by each later run, and the label comes off when the run ends, so adding
-it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
+branch, then comments: specsolve's wall time and peak at every rung, committed
+against this run, the cells that moved by 5% or more first. The other libraries
+do not change with a pull request, so the comment gives them one sentence: how
+far their wall times moved between the two runs, which is how far the two
+servers differ. A moved cell is a lead to check against that sentence, not a
+verdict. `published-benchmark-label.yml` only dispatches
+`published-benchmark.yml` with the pull request's number, from a hosted runner,
+so the run on the box stays a `workflow_dispatch` that a fork cannot fire, and a
+fork's pull request is not dispatched at all. `bench.comment` writes the
+comment. It reads whatever the two runs hold, so a new case, other rungs or a
+library added or dropped prints `—` where one side has nothing, and the job does
+not fail. One comment per pull request, edited by each later run, and the label
+comes off when the run ends, so adding it again re-runs. Runs wait for the one box, and GitHub keeps one waiting run:
 a third replaces the second.
 
 **A run that finished every case also opens a results pull request** from
@@ -299,14 +299,23 @@ against each other. Publish a whole ladder or none of it.
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
-| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC | — |
-| `highspy-matrix` | — | one `addCols` + one `addRows` over the same CSR | — | — |
+| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built before the clock | — |
+| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built before the clock | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
 CSR, a sense per row, right-hand side — and the arm pushes that into its own
 solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
+
+**The two matrix arms time the handoff alone.** Every other arm reads the
+parquet inside the clock. A matrix arm instead has `load_setup`, which reads the
+parquet and builds the finished arrays in the spawned child before the clock
+starts, and `test_emit` times its `load`: a new solver, one bulk call, and the
+teardown. So the published floor is what handing a finished model to the
+solver costs, and nothing before it. `test_fresh` skips both arms, because a
+process launched for them has to build the arrays first. Their other verbs,
+`build_only`, `objective` and `written`, still read and build inside the call.
 
 `gurobi` is opt-in (`--sinks gurobi`): it needs the `[gurobi]` extra, where the
 other two need nothing a contributor does not already have. So are `mps`, the
