@@ -594,6 +594,7 @@ def models(rows: dict[Key, Row]) -> str:
         snapshots = shapes[largest].sizes['snapshot']
         spec = CASES[case].spec
         cells[case] = [
+            CASES[case].about or '\N{EM DASH}',
             declared(spec, 'variables'),
             declared(spec, 'constraints'),
             grouped_sums(spec),
@@ -603,6 +604,7 @@ def models(rows: dict[Key, Row]) -> str:
             *(_span([counts[largest][n] / snapshots]) for n in ('columns', 'rows', 'nonzeros')),
         ]
     labels = (
+        'for',
         'variables',
         'constraints',
         'grouped sums',

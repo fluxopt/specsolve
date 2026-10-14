@@ -923,6 +923,7 @@ def test_the_model_table_has_a_column_per_published_model() -> None:
     assert lines[0] == '| | dispatch | network | nodal | sector |', 'one column per published model, sorted by name'
     table = {line.split('|')[1].strip(): [c.strip() for c in line.split('|')[2:-1]] for line in lines[2:]}
     assert list(table) == [
+        'for',
         'variables',
         'constraints',
         'grouped sums',
@@ -933,6 +934,7 @@ def test_the_model_table_has_a_column_per_published_model() -> None:
         'rows per snapshot',
         'nonzeros per snapshot',
     ], 'what a model declares, then what one snapshot sends to the solver'
+    assert all(table['for']) and '\N{EM DASH}' not in table['for'], 'every published model says what it is for'
     assert table['variables'][0] == 'p[generator]', 'dispatch declares one variable, shown without snapshot'
     assert table['constraints'][1] == 'balance[bus], soc_balance[store], pool_cap[pool]', 'network declares three'
     assert (table['columns per snapshot'][1], table['rows per snapshot'][1]) == ('400', '150'), (

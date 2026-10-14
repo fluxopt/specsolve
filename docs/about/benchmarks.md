@@ -1,62 +1,9 @@
 # Benchmarks
 
-What it costs to build a model and hand it to a solver, in specsolve and in
-four other ways of writing the same model. No number includes solve time.
-Every rival model is hand-written in
-[`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models),
-and CI solves each against ours, so nothing here is fast because it built a
-different model.
-
-Sizes on this page count **columns** and **rows**: the variables and the
-constraints that reach the solver, one for each value. A model declares a
-variable once, with its dimensions, such as `p[snapshot, generator]` in
-`dispatch`. The solver receives one column for every combination of those
-dimensions that exists, and one row for every combination of a constraint's.
-Every variable and constraint below also runs over `snapshot`, and a model grows
-by its snapshots alone.
-
-<!-- bench:models -->
-
-| | dispatch | network | nodal | sector |
-| --- | --- | --- | --- | --- |
-| variables | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
-| constraints | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
-| grouped sums | — | line → bus, store → bus, bus × tech → pool | — | — |
-| dimensions | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
-| density | 100% | 25% | 25% | 25% |
-| snapshots | 2–100k | 2–25k | 2–20k | 2–20k |
-| columns per snapshot | 100 | 400 | 150 | 150 |
-| rows per snapshot | 1 | 150 | 50 | 125 |
-| nonzeros per snapshot | 100 | 800 | 150 | 150 |
-
-<!-- bench:/models -->
-
-From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
-on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.8× at 1M columns, 1.76 GB against 0.63 GB, and the memory
-budget stops linopy at that size
-([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
-
-dispatch
-:   Meets a demand from a fleet of units: bounds and one balance. The shape an
-    array library is built for, so the comparison least in specsolve's favour.
-
-nodal
-:   Dispatch at nodes, where a technology exists only at the nodes it is
-    installed at: a quarter of the node and technology pairs exist, and only
-    those reach the solver as columns.
-
-network
-:   A small PyPSA dispatch model: buses joined by lines, a store at every bus
-    that carries its charge from each snapshot to the next, a technology
-    portfolio installed at some buses only, and solar and wind availability
-    per snapshot. Each plant draws from one of fifty pools, such as a fuel
-    contract, and a pool caps what its plants generate together.
-
-sector
-:   `nodal`'s portfolio, where each technology delivers one of five carriers,
-    such as heat or hydrogen, at its own efficiency. A node has a balance only
-    for the carriers its technologies deliver.
+Time and memory to build each model and hand it to the solver, in specsolve and
+four other libraries. Nothing is solved, and CI checks that every library builds
+the same model
+([`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models)).
 
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
@@ -106,9 +53,10 @@ sector
 
 ## Reading the charts
 
-Each panel is one model, and each line is one library. Every panel has the
-same axes, so a height or a size reads the same in each. **Solver** chooses the
-solver that every panel and the table run through.
+Each panel is one model, and each line is one library. The x axis counts
+**columns**: the variables that reach the solver, one per value that exists.
+Every panel has the same axes, so a height or a size reads the same in each.
+**Solver** chooses the solver that every panel and the table run through.
 
 - **specsolve is the thick violet line.**
 - **The grey line is the matrix floor**: the time to hand a finished matrix to
@@ -140,6 +88,35 @@ solver that every panel and the table run through.
   orange where the other library is, grey within ten per cent. The
   specsolve-in-memory and matrix floor columns are not shaded: they are
   references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
+
+## The models
+
+Columns and rows count the variables and the constraints that reach the solver,
+one per value that exists. Every variable and constraint also runs over
+`snapshot`, and a model grows by its snapshots alone.
+
+<!-- bench:models -->
+
+| | dispatch | network | nodal | sector |
+| --- | --- | --- | --- | --- |
+| for | bounds and one balance: the shape an array library suits best | a small PyPSA model: lines, stores, solar and wind, and pooled caps | dispatch at nodes, where a technology exists only where it is installed | each technology delivers one of five carriers, such as heat or hydrogen |
+| variables | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
+| constraints | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
+| grouped sums | — | line → bus, store → bus, bus × tech → pool | — | — |
+| dimensions | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
+| density | 100% | 25% | 25% | 25% |
+| snapshots | 2–100k | 2–25k | 2–20k | 2–20k |
+| columns per snapshot | 100 | 400 | 150 | 150 |
+| rows per snapshot | 1 | 150 | 50 | 125 |
+| nonzeros per snapshot | 100 | 800 | 150 | 150 |
+
+<!-- bench:/models -->
+
+From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
+on HiGHS, except on `network`, the one model that sums through a grouping.
+There it is 2.8× at 1M columns, 1.76 GB against 0.63 GB, and the memory
+budget stops linopy at that size
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
 
 ## A script that solves one model
 
