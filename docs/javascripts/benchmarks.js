@@ -73,20 +73,10 @@ async function mount(root) {
     ratio: v => v >= 10 ? `${v.toFixed(0)}×` : v >= 1 ? `${trim(v, 1)}×` : `${trim(v, 2)}×`,
   };
 
-  /* The size range is chosen in stops at one and five times a power of ten, where the ladders put
-     their sizes. A size counts at the stop nearest it on a log axis: `dispatch` at 10k and
-     `network` at 21k are one choice, and 50k is the next. A stop is the log of its size. Below the
-     smallest is zero, which cuts nothing and keeps a linear axis on its origin. */
-  const FIVE = Math.log10(5);
-  const sizeAt = d => +(10 ** d).toPrecision(3);
-  const stop = v => {
-    const e = Math.floor(Math.log10(v)), f = Math.log10(v) - e;
-    return +(e + [0, FIVE, 1].reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a))).toFixed(6);
-  };
-  const STOPS = [-Infinity, ...new Set(ROWS.map(r => stop(r[X])).sort((a, b) => a - b))];
-  const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
-    range: { from: STOPS[0], to: STOPS.at(-1) }, values: { lo: null, hi: null } };
-  const inRange = r => stop(r[X]) >= state.range.from && stop(r[X]) <= state.range.to;
+  /* A zoom is the box last dragged on a chart, in data units: a size range `x` and a value range
+     `y`, either null where the box left that axis alone. The size range also narrows the table. */
+  const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(), zoom: null };
+  const inRange = r => !state.zoom?.x || (r[X] >= state.zoom.x[0] && r[X] <= state.zoom.x[1]);
   const chosen = r => Object.entries(state.filter).every(([k, v]) => r[k] === v);
 
   const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
@@ -133,35 +123,36 @@ async function mount(root) {
     return full.filter((_, i) => i % step === 0);
   }
 
-  /* The y axis under the shared switch, over `values`. Linear starts at zero, log ticks on 1–2–5.
-     An end of the value range, where one is chosen, is that end of the axis exactly, so a fine
-     choice is not rounded away. There log ticks on 1–2–5 inside the axis, or, where a narrow
-     range leaves fewer than three, on d3's own log ticks. */
-  function axis(values, fmt, { lo, hi }) {
+  /* The y axis under the shared switch, over `values`: linear from zero, log on 1–2–5 ticks with
+     the ends snapped to them. */
+  function axis(values, fmt) {
     if (state.scale === 'linear') {
-      const scale = scaleLinear().domain([lo ?? 0, hi ?? Math.max(...values)]);
-      return { scale: hi == null ? scale.nice(5) : scale, grid: true, axis: { ticks: { count: 5, format: fmt } } };
+      return { scale: scaleLinear().domain([0, Math.max(...values)]).nice(5), grid: true,
+        axis: { ticks: { count: 5, format: fmt } } };
     }
-    const snapped = logTicks(values);
-    if (lo == null && hi == null) {
-      return { scale: scaleLog().domain([snapped[0], snapped.at(-1)]), grid: true, axis: { ticks: { values: snapped, format: fmt } } };
-    }
-    const scale = scaleLog().domain([lo ?? snapped[0], hi ?? snapped.at(-1)]), [from, to] = scale.domain();
-    const inside = logTicks([from, to]).filter(t => t >= from && t <= to);
-    return { scale, grid: true, axis: { ticks: { values: inside.length > 2 ? inside : scale.ticks(5), format: fmt } } };
+    const ticks = logTicks(values);
+    return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { ticks: { values: ticks, format: fmt } } };
   }
 
-  /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
-     and a single size in the middle. Linear starts at zero when `fromZero`, else below the smallest
-     size by at most half of it, so it stays off zero; log ticks on the powers of ten inside the
-     frame, or on 1–2–5 where fewer than two powers fit. */
-  function xAxis(sizes, fromZero) {
+  /* An axis over a zoomed range exactly, so the box is what the panels show: log ticks on 1–2–5
+     inside it, or d3's own log ticks where a narrow range leaves fewer than three. */
+  function exact([from, to], format, label) {
+    if (state.scale === 'linear') {
+      return { scale: scaleLinear().domain([from, to]), grid: true, axis: { label, ticks: { count: 5, format } } };
+    }
+    const scale = scaleLog().domain([from, to]), inside = logTicks([from, to]).filter(t => t >= from && t <= to);
+    return { scale, grid: true, axis: { label, ticks: { values: inside.length > 2 ? inside : scale.ticks(5), format } } };
+  }
+
+  /* The x axis: a zoomed size range exactly, else the sizes in view with room past the outermost,
+     so no dot sits on the frame, and a single size in the middle. Linear starts at zero; log ticks
+     on the powers of ten inside the frame, or on 1–2–5 where fewer than two powers fit. */
+  function xAxis(sizes) {
     const label = SPEC.x.label, format = FORMAT[SPEC.x.format];
+    if (state.zoom?.x) return { ...exact(state.zoom.x, format, label), grid: state.scale === 'linear' };
     const lo = sizes[0], hi = sizes.at(-1), one = sizes.length === 1;
     if (state.scale === 'linear') {
-      const pad = one ? hi : (hi - (fromZero ? 0 : lo)) * 0.06;
-      return { scale: scaleLinear().domain([fromZero || one ? 0 : lo - Math.min(pad, lo / 2), hi + pad]), grid: true,
-        axis: { label, ticks: { count: 5, format } } };
+      return { scale: scaleLinear().domain([0, hi + (one ? hi : hi * 0.06)]), grid: true, axis: { label, ticks: { count: 5, format } } };
     }
     const pad = one ? 3 : 1.25, [from, to] = [lo / pad, hi * pad], powers = [];
     for (let e = Math.ceil(Math.log10(from)); 10 ** e <= to; e++) powers.push(10 ** e);
@@ -255,7 +246,10 @@ async function mount(root) {
   const WINDOW = { linear: [0, 5], log: [0.1, 50] };
   const WINDOW_TICKS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
 
+  const windowNow = () => state.zoom?.y ?? WINDOW[state.scale];
+
   function windowAxis() {
+    if (state.zoom?.y) return exact(state.zoom.y, FORMAT.ratio);
     const [lo, hi] = WINDOW[state.scale];
     if (state.scale === 'linear') {
       return { scale: scaleLinear().domain([lo, hi]), grid: true, axis: { ticks: { count: 5, format: FORMAT.ratio } } };
@@ -298,19 +292,77 @@ async function mount(root) {
   }
 
   /* One x and one y axis for every panel, over the points they all show, so a height or a size
-     reads the same in each; an end of the value range, where one is chosen, overrides the data's.
-     Built once per panel, since a chart sets its own scale's range. */
+     reads the same in each. A zoom's ranges replace the data's. */
   function sharedScales(views, metric) {
     const measured = views.flatMap(v => v.measured).flatMap(r => [r.lo, r.hi]);
     const sizes = [...new Set(views.flatMap(v => [...v.measured, ...v.ahead]).map(r => r[X]))].sort((a, b) => a - b);
-    const { lo, hi } = state.values, ends = [lo ?? Math.min(...measured), hi ?? Math.max(...measured)];
-    return () => ({
-      x: xAxis(sizes, state.range.from === STOPS[0]),
-      y: state.view === 'relative' ? windowAxis() : axis(ends, FORMAT[metric.format], state.values),
-    });
+    const fmt = FORMAT[metric.format];
+    return {
+      x: xAxis(sizes),
+      y: state.view === 'relative' ? windowAxis() : state.zoom?.y ? exact(state.zoom.y, fmt) : axis(measured, fmt),
+    };
   }
 
-  function definition({ measured, ahead }, metric, scales) {
+  /* A control that draws nothing and keeps the panel's resolved scales in `read`, where its zoom
+     box turns a drag in pixels into data. */
+  const reader = read => ({ id: 'zoom-reader', resolve: ({ scales }) => { read.scales = scales; return { nodes: [] }; } });
+
+  /* Drag a box on a panel to zoom every panel to it: its width sets the size range and its height
+     the value range, and a side under 8 px leaves that axis as it was. A double-click zooms out.
+     The box is kept inside the plot, and drawn in every panel while it is dragged: the panels share
+     their axes and their size, so the same pixels are the same range in each. Tooltips are hidden
+     meanwhile, so they do not cover it. */
+  const boxes = [];
+  function zoomBox(host, read) {
+    const box = document.createElement('div');
+    box.className = 'bench-zoom';
+    box.hidden = true;
+    host.append(box);
+    boxes.push(box);
+    let start = null;
+    const at = ev => {
+      const { x, y } = read.scales, r = host.getBoundingClientRect();
+      const clamp = (v, s) => { const [a, b] = s.domain.map(s.map).sort((p, q) => p - q); return Math.min(Math.max(v, a), b); };
+      return [clamp(ev.clientX - r.left, x), clamp(ev.clientY - r.top, y)];
+    };
+    const end = () => {
+      start = null;
+      boxes.forEach(b => { b.hidden = true; });
+      root.querySelector('#bench-facets').classList.remove('zooming');
+    };
+    host.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0 || !read.scales) return;
+      start = at(ev);
+      host.setPointerCapture(ev.pointerId);
+      root.querySelector('#bench-facets').classList.add('zooming');
+    });
+    host.addEventListener('pointermove', ev => {
+      if (!start) return;
+      const [x, y] = at(ev);
+      boxes.forEach(b => {
+        Object.assign(b.style, { left: `${Math.min(x, start[0])}px`, top: `${Math.min(y, start[1])}px`,
+          width: `${Math.abs(x - start[0])}px`, height: `${Math.abs(y - start[1])}px` });
+        b.hidden = false;
+      });
+    });
+    host.addEventListener('pointerup', ev => {
+      if (!start) return;
+      const [x, y] = at(ev), [x0, y0] = start, { scales } = read;
+      end();
+      const span = (a, b, s) => [s.invert(a), s.invert(b)].sort((p, q) => p - q);
+      const wide = Math.abs(x - x0) >= 8, tall = Math.abs(y - y0) >= 8;
+      if (wide || tall) zoomTo({ x: wide ? span(x0, x, scales.x) : state.zoom?.x ?? null, y: tall ? span(y0, y, scales.y) : state.zoom?.y ?? null });
+    });
+    host.addEventListener('pointercancel', end);
+    host.addEventListener('dblclick', () => zoomTo(null));
+  }
+
+  function zoomTo(zoom) {
+    state.zoom = zoom?.x || zoom?.y ? zoom : null;
+    draw();
+  }
+
+  function definition({ measured, ahead }, metric, scales, read) {
     const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
     const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
     const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
@@ -333,7 +385,7 @@ async function mount(root) {
       scales,
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 },
-      controls: [...heroLabel([...ours, ...oursAhead], scales.y.scale.domain()), ...(relative ? outside(measured, WINDOW[state.scale]) : [])],
+      controls: [...heroLabel([...ours, ...oursAhead], scales.y.scale.domain()), ...(relative ? outside(measured, windowNow()) : []), reader(read)],
       focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
       tooltip: grouped(metric.format),
     });
@@ -380,6 +432,7 @@ async function mount(root) {
   function draw() {
     hosts.forEach(h => h.destroy());
     hosts = [];
+    boxes.length = 0;
     const metric = SPEC.metrics[state.metric];
     const rows = rowsNow();
     const grid = root.querySelector('#bench-facets');
@@ -388,16 +441,18 @@ async function mount(root) {
       .filter(([, view]) => view.measured.length);
     const scales = sharedScales(panels.map(([, view]) => view), metric);
     for (const [title, view] of panels) {
+      const read = {};
       const fig = document.createElement('div');
       fig.className = 'bench-panel';
       fig.innerHTML = `<div class="bench-caption">${title}</div><div></div>`;
       grid.appendChild(fig);
-      hosts.push(mountChart(fig.lastElementChild, { definition: definition(view, metric, scales()), height: 240,
+      hosts.push(mountChart(fig.lastElementChild, { definition: definition(view, metric, scales, read), height: 240,
         ariaLabel: `${title}: ${metric.label}${state.view === 'absolute' ? '' : ` relative to ${HERO}`} ` +
           `against model size, one line per ${SERIES}` }));
+      zoomBox(fig.lastElementChild, read);
     }
     table(rows, metric);
-    root.querySelectorAll('[data-values]').forEach(el => { el.hidden = state.view === 'relative'; });
+    root.querySelector('[data-zoom-reset]').hidden = !state.zoom;
     const present = new Set(ROWS.filter(chosen).map(r => r[SERIES]));
     const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
     root.querySelector('#bench-legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
@@ -406,97 +461,8 @@ async function mount(root) {
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
 
-  /* A range as a slider on an axis of its own: a tick per stop, the chosen span shaded, a handle at
-     each end, and a drag along the axis that brushes a new span; a click moves the nearer end. Each
-     end snaps to a stop and stays one short of the other. `labels` are the ticks' text, empty
-     where a tick has none, and `names` what a hover and a screen reader say for each stop.
-     `pick(lo, hi)` gets the chosen ends as indices, and the slider starts on its whole axis. The
-     element is replaced, so a slider built again leaves no listener behind. */
-  function rangeSlider(old, labels, names, noun, pick) {
-    const slider = old.cloneNode(false);
-    old.replaceWith(slider);
-    const last = labels.length - 1, at = i => `${(i / last) * 100}%`;
-    let [lo, hi] = [0, last], brush = null;
-    slider.hidden = last < 1;
-    if (last < 1) return;
-    slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
-      labels.map((t, i) => `<span class="bench-tick" style="left:${at(i)}" title="${names[i]}">${t}</span>`).join('') +
-      '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${last}" step="1" ` +
-        `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} ${noun} shown">`).join('');
-    const track = slider.querySelector('.bench-track');
-    const handle = end => slider.querySelector(`input[data-end="${end}"]`);
-    const show = () => {
-      [['from', lo], ['to', hi]].forEach(([end, i]) => {
-        handle(end).value = i;
-        handle(end).setAttribute('aria-valuetext', names[i]);
-      });
-      Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / last) * 100}%` });
-      slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));
-    };
-    const move = (a, b) => {
-      const changed = a !== lo || b !== hi;
-      [lo, hi] = [a, b];
-      show();
-      if (changed) pick(lo, hi);
-    };
-    slider.addEventListener('input', ev => {
-      const v = +ev.target.value;
-      if (ev.target.dataset.end === 'from') move(Math.min(v, hi - 1), hi);
-      else move(lo, Math.max(v, lo + 1));
-    });
-    const nearest = ev => {
-      const r = track.getBoundingClientRect();
-      return Math.round(Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1) * last);
-    };
-    slider.addEventListener('pointerdown', ev => {
-      if (ev.target.matches('input')) return;
-      brush = { start: nearest(ev), moved: false };
-      slider.setPointerCapture(ev.pointerId);
-    });
-    slider.addEventListener('pointermove', ev => {
-      if (!brush) return;
-      const i = nearest(ev);
-      if (i === brush.start) return;
-      brush.moved = true;
-      move(Math.min(i, brush.start), Math.max(i, brush.start));
-    });
-    slider.addEventListener('pointerup', () => {
-      if (brush && !brush.moved) {
-        const i = brush.start;
-        if (Math.abs(i - lo) <= Math.abs(i - hi)) move(Math.min(i, hi - 1), hi);
-        else move(lo, Math.max(i, lo + 1));
-      }
-      brush = null;
-    });
-    show();
-  }
-
-  /* The size range: zero, then a stop at one and five times each power of ten, labelled at the
-     powers, which leaves room for the labels. */
-  rangeSlider(root.querySelector('.bench-range[data-range="x"]'),
-    STOPS.map(d => (d === -Infinity || Number.isInteger(d) ? FORMAT.count(sizeAt(d)) : '')),
-    STOPS.map(d => `${FORMAT.count(sizeAt(d))} ${SPEC.x.label}`), 'model',
-    (lo, hi) => { state.range = { from: STOPS[lo], to: STOPS[hi] }; draw(); });
-
-  /* The value range of the chosen measure: a stop at one to nine times each power of ten its
-     measurements reach, as on a log ruler, labelled at the powers. At an outer stop the axis fits
-     the data at that end, so the slider changes nothing until it is moved. It starts over when
-     the measure changes, since the unit does. */
-  function valueSlider() {
-    const m = SPEC.metrics[state.metric], fmt = FORMAT[m.format];
-    const measured = ROWS.flatMap(r => [r[m.y], ...(m.band ?? []).map(k => r[k])]).filter(v => v > 0);
-    const [first, last] = [Math.floor(Math.log10(Math.min(...measured))), Math.ceil(Math.log10(Math.max(...measured)))];
-    const stops = [];
-    for (let e = first; e < last; e++) for (let k = 1; k <= 9; k++) stops.push(+(k * 10 ** e).toPrecision(12));
-    stops.push(10 ** last);
-    state.values = { lo: null, hi: null };
-    root.querySelector('#bench-values-label').textContent = m.label;
-    rangeSlider(root.querySelector('.bench-range[data-range="y"]'), stops.map((v, i) => (i % 9 ? '' : fmt(v))),
-      stops.map(fmt), m.label,
-      (lo, hi) => { state.values = { lo: lo ? stops[lo] : null, hi: hi < stops.length - 1 ? stops[hi] : null }; draw(); });
-  }
-
   root.addEventListener('click', ev => {
+    if (ev.target.closest('[data-zoom-reset]')) return zoomTo(null);
     const lib = ev.target.closest('#bench-legend button');
     if (lib && !lib.disabled) {
       const names = 'floor' in lib.dataset ? FLOOR.members : [lib.dataset.series];
@@ -510,10 +476,9 @@ async function mount(root) {
     if (['metric', 'view', 'scale'].includes(key)) state[key] = b.dataset.value;
     else state.filter[key] = b.dataset.value;
     b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    if (key === 'metric') valueSlider();
+    if (key === 'metric' || key === 'view') state.zoom = null;
     draw();
   });
 
-  valueSlider();
   draw();
 }
