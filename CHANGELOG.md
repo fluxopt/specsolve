@@ -8,6 +8,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - perf(engine): a constraint whose where requires a parameter no longer checks that parameter covers its rows ([#2035](https://github.com/fluxopt/specsolve/pull/2035))
+- docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
+- docs(benchmarks): the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
 - fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
 - fix(engine): a quadratic row keeps its own pair when a row before it has no term ([#2028](https://github.com/fluxopt/specsolve/pull/2028))
 - docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
