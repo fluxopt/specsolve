@@ -73,14 +73,20 @@ async function mount(root) {
     ratio: v => v >= 10 ? `${v.toFixed(0)}×` : v >= 1 ? `${trim(v, 1)}×` : `${trim(v, 2)}×`,
   };
 
-  /* The size range is chosen in decades, since every ladder steps tenfold: `dispatch` at 10k and
-     `transport` at 9.8k are one choice. Below the smallest is zero, which cuts nothing and keeps a
-     linear axis on its origin. */
-  const decade = v => Math.round(Math.log10(v));
-  const STOPS = [-Infinity, ...new Set(ROWS.map(r => decade(r[X])).sort((a, b) => a - b))];
+  /* The size range is chosen in stops at one and five times a power of ten, where the ladders put
+     their sizes. A size counts at the stop nearest it on a log axis: `dispatch` at 10k and
+     `network` at 21k are one choice, and 50k is the next. A stop is the log of its size. Below the
+     smallest is zero, which cuts nothing and keeps a linear axis on its origin. */
+  const FIVE = Math.log10(5);
+  const sizeAt = d => +(10 ** d).toPrecision(3);
+  const stop = v => {
+    const e = Math.floor(Math.log10(v)), f = Math.log10(v) - e;
+    return +(e + [0, FIVE, 1].reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a))).toFixed(6);
+  };
+  const STOPS = [-Infinity, ...new Set(ROWS.map(r => stop(r[X])).sort((a, b) => a - b))];
   const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
     range: { from: STOPS[0], to: STOPS.at(-1) } };
-  const inRange = r => decade(r[X]) >= state.range.from && decade(r[X]) <= state.range.to;
+  const inRange = r => stop(r[X]) >= state.range.from && stop(r[X]) <= state.range.to;
   const chosen = r => Object.entries(state.filter).every(([k, v]) => r[k] === v);
 
   const panelOf = r => SPEC.facet.map(k => r[k]).join(' — ');
@@ -115,14 +121,16 @@ async function mount(root) {
   }
 
   /* Log ticks on 1–2–5 and a domain snapped to them, so a panel inside half a decade is not drawn
-     on a two-decade axis. */
+     on a two-decade axis. The domain runs on to the next tick at the same step, so the last two
+     ticks are as far apart as the rest and their labels do not collide. */
   function logTicks(values) {
     const lo = Math.min(...values), hi = Math.max(...values), all = [];
-    for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)); e++)
+    for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)) + 1; e++)
       for (const k of [1, 2, 5]) all.push(+(k * 10 ** e).toPrecision(12));
-    const full = all.slice(all.findLastIndex(v => v <= lo), all.findIndex(v => v >= hi) + 1);
-    const step = Math.ceil(full.length / 6);
-    return full.filter((_, i) => i % step === 0 || i === full.length - 1);
+    const first = all.findLastIndex(v => v <= lo), past = all.findIndex(v => v >= hi);
+    const step = Math.ceil((past - first + 1) / 6);
+    const full = all.slice(first, first + Math.ceil((past - first) / step) * step + 1);
+    return full.filter((_, i) => i % step === 0);
   }
 
   /* The y axis under the shared switch. Linear starts at zero, log ticks on 1–2–5. */
@@ -137,7 +145,8 @@ async function mount(root) {
 
   /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
      and a single size in the middle. Linear starts at zero when `fromZero`, else below the smallest
-     size by at most half of it, so it stays off zero; log ticks on the sizes themselves. */
+     size by at most half of it, so it stays off zero; log ticks on the powers of ten inside the
+     frame, or on 1–2–5 where fewer than two powers fit. */
   function xAxis(sizes, fromZero) {
     const label = SPEC.x.label, format = FORMAT[SPEC.x.format];
     const lo = sizes[0], hi = sizes.at(-1), one = sizes.length === 1;
@@ -146,8 +155,10 @@ async function mount(root) {
       return { scale: scaleLinear().domain([fromZero || one ? 0 : lo - Math.min(pad, lo / 2), hi + pad]), grid: true,
         axis: { label, ticks: { count: 5, format } } };
     }
-    const pad = one ? 3 : 1.25;
-    return { scale: scaleLog().domain([lo / pad, hi * pad]), axis: { label, ticks: { values: sizes, format } } };
+    const pad = one ? 3 : 1.25, [from, to] = [lo / pad, hi * pad], powers = [];
+    for (let e = Math.ceil(Math.log10(from)); 10 ** e <= to; e++) powers.push(10 ** e);
+    return { scale: scaleLog().domain([from, to]),
+      axis: { label, ticks: { values: powers.length > 1 ? powers : logTicks(sizes).filter(t => t >= from && t <= to), format } } };
   }
 
   /* Where each refused size could land, as a range from `lo` to `hi`: between two continuations
@@ -271,12 +282,24 @@ async function mount(root) {
     }) }) }];
   }
 
-  /* A projection is taken from the whole panel and then cut to the size range, so its slope does
-     not move with the range. */
-  function definition(rows, metric) {
-    const fmt = FORMAT[metric.format];
-    const measured = viewed(rows.filter(r => r.value != null && inRange(r)));
-    const ahead = viewed(projections(rows).filter(inRange));
+  /* A panel's points in the size range: measured, and projected past the budget. A projection is
+     taken from the whole panel and then cut to the range, so its slope does not move with it. */
+  function inView(rows) {
+    return { measured: viewed(rows.filter(r => r.value != null && inRange(r))), ahead: viewed(projections(rows).filter(inRange)) };
+  }
+
+  /* One x and one y axis for every panel, over the points they all show, so a height or a size
+     reads the same in each. Built once per panel, since a chart sets its own scale's range. */
+  function sharedScales(views, metric) {
+    const measured = views.flatMap(v => v.measured);
+    const sizes = [...new Set(views.flatMap(v => [...v.measured, ...v.ahead]).map(r => r[X]))].sort((a, b) => a - b);
+    return () => ({
+      x: xAxis(sizes, state.range.from === STOPS[0]),
+      y: state.view === 'relative' ? windowAxis() : axis(measured.flatMap(r => [r.lo, r.hi]), FORMAT[metric.format]),
+    });
+  }
+
+  function definition({ measured, ahead }, metric, scales) {
     const split = data => [data.filter(r => !isHero(r)), data.filter(isHero)];
     const [others, ours] = split(measured), [theirsAhead, oursAhead] = split(ahead);
     const theirs = others.filter(r => !isFloor(r)), floor = others.filter(isFloor);
@@ -287,7 +310,6 @@ async function mount(root) {
       lineY(data, { ...enc, y: 'lo', strokeWidth: 1 }), lineY(data, { ...enc, y: 'hi', strokeWidth: 1 })];
     const whiskers = (data, strokeWidth) => link(data.filter(r => r.hi > r.lo),
       { x1: X, x2: X, y1: 'lo', y2: 'hi', color: SERIES, strokeWidth, lineCap: 'round' });
-    const sizes = [...new Set([...measured, ...ahead].map(r => r[X]))].sort((a, b) => a - b);
     const relative = state.view === 'relative';
     return defineChart({
       marks: [
@@ -297,10 +319,7 @@ async function mount(root) {
         points(floor, 2.5), points(theirs, 3.5), points(ours, 5),
         crosshair({ y: false }),
       ],
-      scales: {
-        x: xAxis(sizes, state.range.from === STOPS[0]),
-        y: relative ? windowAxis() : axis(measured.flatMap(r => [r.lo, r.hi]), fmt),
-      },
+      scales,
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 },
       controls: [...heroLabel([...ours, ...oursAhead]), ...(relative ? outside(measured, WINDOW[state.scale]) : [])],
@@ -354,13 +373,15 @@ async function mount(root) {
     const rows = rowsNow();
     const grid = root.querySelector('#bench-facets');
     grid.replaceChildren();
-    for (const [title, panel] of Map.groupBy(rows, panelOf)) {
-      if (!panel.some(r => r.value != null && inRange(r))) continue;
+    const panels = [...Map.groupBy(rows, panelOf)].map(([title, panel]) => [title, inView(panel)])
+      .filter(([, view]) => view.measured.length);
+    const scales = sharedScales(panels.map(([, view]) => view), metric);
+    for (const [title, view] of panels) {
       const fig = document.createElement('div');
       fig.className = 'bench-panel';
       fig.innerHTML = `<div class="bench-caption">${title}</div><div></div>`;
       grid.appendChild(fig);
-      hosts.push(mountChart(fig.lastElementChild, { definition: definition(panel, metric), height: 240,
+      hosts.push(mountChart(fig.lastElementChild, { definition: definition(view, metric, scales()), height: 240,
         ariaLabel: `${title}: ${metric.label}${state.view === 'absolute' ? '' : ` relative to ${HERO}`} ` +
           `against model size, one line per ${SERIES}` }));
     }
@@ -373,14 +394,16 @@ async function mount(root) {
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
 
-  /* The size range as a slider on an axis of its own: zero, then a tick per decade, the chosen span
+  /* The size range as a slider on an axis of its own: zero, then a tick per stop, labelled at the
+     powers of ten, which leaves room for the labels; the chosen span
      shaded, a handle at each end, and a drag along the axis that brushes a new span; a click moves
      the nearer end. Each end snaps to a stop and stays one short of the other. */
   const slider = root.querySelector('.bench-range');
   const LAST = STOPS.length - 1;
   const at = i => `${(i / LAST) * 100}%`;
   slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
-    STOPS.map((d, i) => `<span class="bench-tick" style="left:${at(i)}">${FORMAT.count(10 ** d)}</span>`).join('') +
+    STOPS.map((d, i) => `<span class="bench-tick" style="left:${at(i)}" title="${FORMAT.count(sizeAt(d))}">` +
+      `${d === -Infinity || Number.isInteger(d) ? FORMAT.count(sizeAt(d)) : ''}</span>`).join('') +
     '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${LAST}" step="1" ` +
       `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} model shown">`).join('');
   const track = slider.querySelector('.bench-track');
@@ -391,7 +414,7 @@ async function mount(root) {
     const [lo, hi] = span();
     [['from', lo], ['to', hi]].forEach(([end, i]) => {
       handle(end).value = i;
-      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(10 ** STOPS[i])} ${SPEC.x.label}`);
+      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(sizeAt(STOPS[i]))} ${SPEC.x.label}`);
     });
     Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / LAST) * 100}%` });
     slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));

@@ -77,7 +77,8 @@ sector
 
 ## Reading the charts
 
-Each panel is one model, and each line is one library. **Solver** chooses the
+Each panel is one model, and each line is one library. Every panel has the
+same axes, so a height or a size reads the same in each. **Solver** chooses the
 solver that every panel and the table run through.
 
 - **specsolve is the thick violet line.**
@@ -97,14 +98,14 @@ solver that every panel and the table run through.
   funnel is a guess the measurements do not narrow.
 - **÷ specsolve divides each point by specsolve's at the same size**, so
   specsolve is the line at 1× and a line above it is that many times slower or
-  larger. It applies to wall time and to peak RSS. Every panel shares one
-  window, 0× to 5× on linear axes and 0.1× to 50× on log axes, and a point
-  outside it is named with its ratio at the edge it crosses.
+  larger. It applies to wall time and to peak RSS. The window is 0× to 5× on
+  linear axes and 0.1× to 50× on log axes, and a point outside it is named with
+  its ratio at the edge it crosses.
 - **Variables narrows every panel and the table to a range of model sizes**, on
   either axes. Drag a handle, or drag along the axis to select a new range. Each
-  end is zero or a power of ten, and a rung counts at the nearest power. From
-  zero, a linear axis starts at zero; from a power of ten, it starts just below
-  the smallest size shown.
+  end is zero, or one or five times a power of ten, and a model size counts at
+  the nearest of them. From zero, a linear axis starts at zero; from any other
+  end, it starts just below the smallest size shown.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
   orange where the other library is, grey within ten per cent. The
   specsolve-in-memory and matrix floor columns are not shaded: they are
