@@ -1682,7 +1682,7 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
             f'outside the clock, `read` is what is timed, and neither means anything alone'
         )
         assert hasattr(module, 'load') == hasattr(module, 'load_setup'), (
-            f'the {name} arm offers one half of the load pair — `load_setup` builds the arrays '
+            f'the {name} arm offers one half of the load pair — `load_setup` reads the finished arrays '
             f'outside the clock, `load` is what is timed, and neither means anything alone'
         )
 
@@ -1724,7 +1724,7 @@ def test_the_floor_arms_are_the_ones_that_time_a_load_alone() -> None:
 
 @pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
 def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -> None:
-    """`load_setup` runs in the spawned child, so the arrays are built there and never pickled (#1617)."""
+    """`load_setup` runs in the spawned child, so the arrays are read there and never pickled (#1617)."""
     plugin = pytest.importorskip(
         'pytest_benchmem.pytest_plugin',
         reason='pytest-benchmem is not installed — bench/ runs through `pixi run -e bench`',
@@ -1742,6 +1742,25 @@ def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -
         f'the {floor} arm ships {len(blob)} bytes to the child, so the arrays travel pickled and the '
         f'isolated rss measures deserializing them'
     )
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+def test_a_floor_child_reads_its_arrays_and_not_the_parquet(floor: str, tmp_path: Path) -> None:
+    """The isolated pass's peak is the published floor, so nothing of the build may run in its child.
+
+    A `load_setup` that read the parquet and ran the formulation put that
+    build's peak, and the garbage it left in the allocator, under the floor's
+    published memory. Deleting the parquet after `prepare` leaves `load_setup`
+    nothing to build from.
+    """
+    module = ARMS[floor]
+    case = CASES['dispatch']
+    paths = case.data(case.shape('3xs'), cache=tmp_path)
+    prepared = module.prepare('dispatch', '3xs', paths, {})
+    for path in paths.values():
+        Path(path).unlink()
+    (arrays,), _ = module.load_setup(module.SINKS[0], prepared)
+    assert all(len(field) for field in arrays), 'every array of the model came back from the file alone'
 
 
 @pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])

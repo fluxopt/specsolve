@@ -299,8 +299,8 @@ against each other. Publish a whole ladder or none of it.
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
-| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built before the clock | — |
-| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built before the clock | — | — |
+| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built in `prepare` | — |
+| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built in `prepare` | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
@@ -308,12 +308,16 @@ CSR, a sense per row, right-hand side — and the arm pushes that into its own
 solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
 
-**The two matrix arms time the handoff alone.** Every other arm reads the
-parquet inside the clock. A matrix arm instead has `load_setup`, which reads the
-parquet and builds the finished arrays in the spawned child before the clock
-starts, and `test_emit` times its `load`: a new solver, one bulk call, and the
-teardown. So the published floor is what handing a finished model to the
-solver costs, and nothing before it. `test_fresh` skips both arms, because a
+**The two matrix arms measure the handoff alone.** Every other arm reads the
+parquet inside the clock. A matrix arm builds the finished arrays in `prepare`,
+in the pytest process, and writes them beside the parquet as one `.npz` per
+arm. Its `load_setup` reads them back in the spawned child, and `test_emit`
+times its `load`: a new solver, one bulk call, and the teardown. So the
+published floor is what handing a finished model to the solver costs, and
+nothing before it. The same holds for its peak. The child never reads the
+parquet or runs the formulation, so its peak holds the interpreter, the
+arrays and the solver's copy of them, and no garbage from a build. Every array
+is read in whole, so all of it is resident, as a caller's arrays would be. `test_fresh` skips both arms, because a
 process launched for them has to build the arrays first. Their other verbs,
 `build_only`, `objective` and `written`, still read and build inside the call.
 
