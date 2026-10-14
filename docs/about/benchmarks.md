@@ -87,7 +87,8 @@ solver that every panel and the table run through.
   parquet and builds nothing. Its distance from specsolve is everything
   specsolve does before the solver holds the model. Its peak RSS includes the
   arrays as well as the solver's copy of them.
-- **The line is the median of nine rounds, and the whisker is the middle half.**
+- **The line is the median of nine rounds, or of five where a round takes
+  over a second, and the whisker is the middle half.**
   Overlapping whiskers are numbers this run cannot tell apart
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
 - **A shaded funnel is a projection** past the time or memory budget. It opens

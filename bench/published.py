@@ -29,6 +29,15 @@ def ladder_of(size: str) -> str:
     return next((name for name, pattern in _LADDERS if pattern.match(size)), 'size')
 
 
+def ladder_defaults() -> dict[str, str]:
+    """The arguments `pixi run ladder` defaults to, read from the task that defines them."""
+    import tomllib
+
+    manifest = Path(__file__).resolve().parents[1] / 'pyproject.toml'
+    task = tomllib.loads(manifest.read_text())['tool']['pixi']['feature']['bench']['tasks']['ladder']
+    return {a['arg']: a['default'] for a in task['args'] if 'default' in a}
+
+
 def files(sink: str, case: str, sizes: list[str]) -> dict[Path, list[str]]:
     """Each file *case* writes through *sink*, to the rungs of *sizes* it holds.
 

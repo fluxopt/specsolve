@@ -1,8 +1,7 @@
 """The ladder: one model, two lanes, one seam — measured by whichever plugin is loaded.
 
     pixi run refresh    # every rung, then both writers, in order — or by hand:
-    pixi run -e bench pytest bench --benchmark-memory --benchmark-json=bench/results/latest.json \\
-        --sizes 3xs 2xs xs s m l
+    pixi run ladder     # the size ladder alone, at the rungs pyproject.toml names
     pixi run -e bench python -m bench.report bench/results/latest.json    # -> markdown
     pixi run -e bench python -m bench.plot                                # -> the chart page
 
@@ -33,8 +32,8 @@ from typing import Any
 import pytest
 
 from bench.arms import ARMS, WRITERS, unmeasurable
-from bench.cases import CASES, rescaled, shortened
-from bench.conftest import shape_of
+from bench.cases import CASES, between_decades, rescaled, shortened
+from bench.conftest import expected_seconds, flag_passed, remember, rounds_for, shape_of
 
 #: The rungs a sweep is measured at. Above them the solver is the sweep's cost.
 SWEPT_SIZES = ('2xs', 'xs', 's')
@@ -52,19 +51,23 @@ def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any,
     Without it a round inherits the last one's garbage: on `dispatch/m` the
     gurobi sink put 0.45 s and 0.67 s in one distribution (#1288).
 
-    Pedantic mode takes its rounds from the caller, so `--benchmark-min-rounds`
-    is read here. Under CodSpeed there is no such option. A setup still goes
-    in pedantic form there: its instruments call the target more than once —
-    a warm-up, then the measured call — and only the pedantic form runs the
-    setup before each, so a window that consumes its model starts from it
-    every time.
+    The rounds come from `rounds_for`, on what the last rung took, unless
+    ``--benchmark-min-rounds`` names a count. Under CodSpeed there is no such
+    option. A setup still goes in pedantic form there: its instruments call the
+    target more than once — a warm-up, then the measured call — and only the
+    pedantic form runs the setup before each, so a window that consumes its
+    model starts from it every time.
     """
-    rounds = getattr(request.config.option, 'benchmark_min_rounds', None)
-    if rounds is None:
+    config = request.config
+    if not hasattr(config.option, 'benchmark_min_rounds'):
         if setup is not None:
             return benchmark.pedantic(fn, setup=setup)
         return benchmark(fn, *args)
-    return benchmark.pedantic(
+    if flag_passed(config, '--benchmark-min-rounds'):
+        rounds = config.option.benchmark_min_rounds
+    else:
+        rounds = rounds_for(expected_seconds(request.node))
+    result = benchmark.pedantic(
         fn,
         args=() if setup is not None else args,
         setup=_collected if setup is None else _CollectedSetup(setup),
@@ -72,6 +75,8 @@ def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any,
         iterations=1,
         warmup_rounds=0,
     )
+    remember(request.node, _median(benchmark))
+    return result
 
 
 def _collected() -> None:
@@ -120,6 +125,12 @@ def _measured(benchmark: Any) -> float | None:
     """The fastest round, in seconds — or None under CodSpeed, where the budget does not apply."""
     stats = getattr(getattr(benchmark, 'stats', None), 'stats', None)
     return float(stats.min) if stats is not None else None
+
+
+def _median(benchmark: Any) -> float | None:
+    """The median round, in seconds — or None where no statistics were kept."""
+    stats = getattr(getattr(benchmark, 'stats', None), 'stats', None)
+    return float(stats.median) if stats is not None else None
 
 
 def _peak(benchmark: Any) -> float | None:
@@ -350,11 +361,14 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
     First is the first build in a process that has imported its library already
     (`test_fresh` adds the import); steady is what a rolling horizon pays for
     every build after it. Not `isolate=True` and
-    sink-free, because repeated builds in one process are the question.
+    sink-free, because repeated builds in one process are the question. Not at
+    the rungs between decades: its table is a row per rung, not a curve.
     `conftest.py` deselects it under CodSpeed.
     """
     if builds < 1:
         pytest.skip('--builds 0')
+    if between_decades(size):
+        pytest.skip('a first build against a steady one is measured where the ladder is ten times apart')
     missing = unmeasurable(arm, case_name, ARMS[arm].SINKS[0]) or ceiling.reached(arm, case_name, size, '')
     if missing:
         pytest.skip(missing)
@@ -368,4 +382,5 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
         warmup_rounds=0,
     )
     _record(benchmark, counts, case_name, size)
-    ceiling.record(arm, case_name, size, '', _measured(benchmark))
+    rungs = [s for s in ceiling.selected if not between_decades(s)]
+    ceiling.record(arm, case_name, size, '', _measured(benchmark), rungs=rungs)
