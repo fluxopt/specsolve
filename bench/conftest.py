@@ -355,8 +355,27 @@ class Ceiling:
         self.selected = selected
 
     def reached(self, arm: str, case_name: str, size: str, sink: str) -> str | None:
-        found = self.reasons.get((arm, case_name, ladder_of(size), sink))
-        return found[1] if found else None
+        """Why this cell is not measured, or None.
+
+        A sink-free cell, which only `test_rebuild` measures, is also refused
+        above a rung where any sink of the same arm and ladder ran out of
+        memory. It builds in the pytest process with no isolated pass, so it
+        has no peak of its own to project, and a kill there loses every cell
+        of the results file. The rung the memory ceiling was recorded at was
+        measured, so it still runs.
+        """
+        ladder = ladder_of(size)
+        found = self.reasons.get((arm, case_name, ladder, sink))
+        if found:
+            return found[1]
+        if sink:
+            return None
+        order = [s.label for s in CASES[case_name].ladder]
+        for (owner, case, rungs, _), (stopped_at, reason, stopped_by) in self.reasons.items():
+            above = order.index(size) > order.index(stopped_at)
+            if (owner, case, rungs, stopped_by) == (arm, case_name, ladder, 'memory') and above:
+                return reason
+        return None
 
     def rows(self) -> list[dict[str, Any]]:
         """Every ceiling as a record, for the file beside the measurements; ``stopped_by`` names the budget."""

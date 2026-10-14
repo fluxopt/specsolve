@@ -618,6 +618,36 @@ def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
     assert '60 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
 
 
+@pytest.mark.parametrize(
+    ('library', 'size', 'destination', 'refused'),
+    [
+        pytest.param('linopy', 'm', '', True, id='above-the-ceiling'),
+        pytest.param('linopy', 's', '', False, id='the-rung-that-was-measured'),
+        pytest.param('specsolve', 'm', '', False, id='another-arm'),
+        pytest.param('linopy', 'm', 'lp', False, id='another-sink-keeps-its-own-ceiling'),
+    ],
+)
+def test_a_rebuild_above_a_memory_ceiling_is_refused(library: str, size: str, destination: str, refused: bool) -> None:
+    """`test_rebuild` runs in the pytest process, so a rebuild too big for the box takes every result with it.
+
+    It has no isolated pass and so no peak of its own. A memory ceiling that
+    any sink of the arm hit on the same ladder refuses the rungs above it.
+    Without that, `linopy` built `network/l` in the pytest process after
+    `test_emit` had refused every rung above `m`.
+    """
+    ceiling = _ceiling(0.0, memory=16.0)
+    ceiling.record('linopy', 'dispatch', 's', 'highs', 1.0, 3e9)
+    reason = ceiling.reached(library, 'dispatch', size, destination)
+    assert (reason is not None) == refused, f'{library} at {size} on {destination!r}: refused={refused}, got {reason!r}'
+
+
+def test_a_time_ceiling_does_not_refuse_a_rebuild() -> None:
+    """A rebuild has its own time ceiling, so only memory carries over from the other cells."""
+    ceiling = _ceiling(1.0)
+    ceiling.record('pyomo', 'dispatch', 's', 'highs', 20.0)
+    assert ceiling.reached('pyomo', 'dispatch', 'm', '') is None, 'a time ceiling is no reason to fear memory'
+
+
 def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
     ceiling = _ceiling(0.0, memory=16.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 31e9)

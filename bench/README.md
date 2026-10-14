@@ -391,6 +391,12 @@ reasons print together under `over budget` when the run ends, which is the one
 place a skipped cell can still say something. `--budget 0` measures everything,
 which is what to pass when the slow number is the point.
 
+**`test_rebuild` has no peak of its own.** It builds in the pytest process,
+with no isolated pass, so the memory budget has nothing to project from. It
+skips every rung above one where any sink of the same arm ran out of memory.
+A rebuild too large for the box would otherwise be killed with the pytest
+process, and every cell of its results file with it.
+
 **A number the run cannot stand behind is marked, not dropped.** Every
 measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
 result file beside the minimum the tables publish, and `bench.report` appends
