@@ -85,7 +85,7 @@ async function mount(root) {
   };
   const STOPS = [-Infinity, ...new Set(ROWS.map(r => stop(r[X])).sort((a, b) => a - b))];
   const state = { metric: 'wall', view: 'absolute', filter: { ...SPEC.filter }, scale: 'log', hidden: new Set(),
-    range: { from: STOPS[0], to: STOPS.at(-1) } };
+    range: { from: STOPS[0], to: STOPS.at(-1) }, values: { lo: null, hi: null } };
   const inRange = r => stop(r[X]) >= state.range.from && stop(r[X]) <= state.range.to;
   const chosen = r => Object.entries(state.filter).every(([k, v]) => r[k] === v);
 
@@ -133,14 +133,15 @@ async function mount(root) {
     return full.filter((_, i) => i % step === 0);
   }
 
-  /* The y axis under the shared switch. Linear starts at zero, log ticks on 1–2–5. */
-  function axis(values, fmt, label) {
+  /* The y axis under the shared switch. Linear starts at `from`, zero unless a value range is
+     chosen; log ticks on 1–2–5. */
+  function axis(values, fmt, from = 0) {
     if (state.scale === 'linear') {
-      return { scale: scaleLinear().domain([0, Math.max(...values)]).nice(5), grid: true,
-        axis: { label, ticks: { count: 5, format: fmt } } };
+      return { scale: scaleLinear().domain([from, Math.max(...values)]).nice(5), grid: true,
+        axis: { ticks: { count: 5, format: fmt } } };
     }
     const ticks = logTicks(values);
-    return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { label, ticks: { values: ticks, format: fmt } } };
+    return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { ticks: { values: ticks, format: fmt } } };
   }
 
   /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
@@ -289,13 +290,15 @@ async function mount(root) {
   }
 
   /* One x and one y axis for every panel, over the points they all show, so a height or a size
-     reads the same in each. Built once per panel, since a chart sets its own scale's range. */
+     reads the same in each; an end of the value range, where one is chosen, overrides the data's.
+     Built once per panel, since a chart sets its own scale's range. */
   function sharedScales(views, metric) {
-    const measured = views.flatMap(v => v.measured);
+    const measured = views.flatMap(v => v.measured).flatMap(r => [r.lo, r.hi]);
     const sizes = [...new Set(views.flatMap(v => [...v.measured, ...v.ahead]).map(r => r[X]))].sort((a, b) => a - b);
+    const { lo, hi } = state.values, ends = [lo ?? Math.min(...measured), hi ?? Math.max(...measured)];
     return () => ({
       x: xAxis(sizes, state.range.from === STOPS[0]),
-      y: state.view === 'relative' ? windowAxis() : axis(measured.flatMap(r => [r.lo, r.hi]), FORMAT[metric.format]),
+      y: state.view === 'relative' ? windowAxis() : axis(ends, FORMAT[metric.format], lo ?? 0),
     });
   }
 
@@ -386,6 +389,7 @@ async function mount(root) {
           `against model size, one line per ${SERIES}` }));
     }
     table(rows, metric);
+    root.querySelectorAll('[data-values]').forEach(el => { el.hidden = state.view === 'relative'; });
     const present = new Set(ROWS.filter(chosen).map(r => r[SERIES]));
     const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
     root.querySelector('#bench-legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
@@ -394,70 +398,94 @@ async function mount(root) {
       `<button data-floor aria-pressed="${!floorHidden}"><i class="swatch" style="background:var(--floor)"></i>${FLOOR.label}</button>`;
   }
 
-  /* The size range as a slider on an axis of its own: zero, then a tick per stop, labelled at the
-     powers of ten, which leaves room for the labels; the chosen span
-     shaded, a handle at each end, and a drag along the axis that brushes a new span; a click moves
-     the nearer end. Each end snaps to a stop and stays one short of the other. */
-  const slider = root.querySelector('.bench-range');
-  const LAST = STOPS.length - 1;
-  const at = i => `${(i / LAST) * 100}%`;
-  slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
-    STOPS.map((d, i) => `<span class="bench-tick" style="left:${at(i)}" title="${FORMAT.count(sizeAt(d))}">` +
-      `${d === -Infinity || Number.isInteger(d) ? FORMAT.count(sizeAt(d)) : ''}</span>`).join('') +
-    '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${LAST}" step="1" ` +
-      `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} model shown">`).join('');
-  const track = slider.querySelector('.bench-track');
-  const handle = end => slider.querySelector(`input[data-end="${end}"]`);
-  const span = () => [STOPS.indexOf(state.range.from), STOPS.indexOf(state.range.to)];
-
-  function showRange() {
-    const [lo, hi] = span();
-    [['from', lo], ['to', hi]].forEach(([end, i]) => {
-      handle(end).value = i;
-      handle(end).setAttribute('aria-valuetext', `${FORMAT.count(sizeAt(STOPS[i]))} ${SPEC.x.label}`);
+  /* A range as a slider on an axis of its own: a tick per stop, the chosen span shaded, a handle at
+     each end, and a drag along the axis that brushes a new span; a click moves the nearer end. Each
+     end snaps to a stop and stays one short of the other. `labels` are the ticks' text, empty
+     where a tick has none, and `names` what a hover and a screen reader say for each stop.
+     `pick(lo, hi)` gets the chosen ends as indices, and the slider starts on its whole axis. The
+     element is replaced, so a slider built again leaves no listener behind. */
+  function rangeSlider(old, labels, names, noun, pick) {
+    const slider = old.cloneNode(false);
+    old.replaceWith(slider);
+    const last = labels.length - 1, at = i => `${(i / last) * 100}%`;
+    let [lo, hi] = [0, last], brush = null;
+    slider.hidden = last < 1;
+    if (last < 1) return;
+    slider.innerHTML = '<div class="bench-track"><div class="bench-band"></div>' +
+      labels.map((t, i) => `<span class="bench-tick" style="left:${at(i)}" title="${names[i]}">${t}</span>`).join('') +
+      '</div>' + ['from', 'to'].map(end => `<input type="range" data-end="${end}" min="0" max="${last}" step="1" ` +
+        `aria-label="${end === 'from' ? 'Smallest' : 'Largest'} ${noun} shown">`).join('');
+    const track = slider.querySelector('.bench-track');
+    const handle = end => slider.querySelector(`input[data-end="${end}"]`);
+    const show = () => {
+      [['from', lo], ['to', hi]].forEach(([end, i]) => {
+        handle(end).value = i;
+        handle(end).setAttribute('aria-valuetext', names[i]);
+      });
+      Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / last) * 100}%` });
+      slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));
+    };
+    const move = (a, b) => {
+      const changed = a !== lo || b !== hi;
+      [lo, hi] = [a, b];
+      show();
+      if (changed) pick(lo, hi);
+    };
+    slider.addEventListener('input', ev => {
+      const v = +ev.target.value;
+      if (ev.target.dataset.end === 'from') move(Math.min(v, hi - 1), hi);
+      else move(lo, Math.max(v, lo + 1));
     });
-    Object.assign(slider.querySelector('.bench-band').style, { left: at(lo), width: `${((hi - lo) / LAST) * 100}%` });
-    slider.querySelectorAll('.bench-tick').forEach((t, i) => t.classList.toggle('in', i >= lo && i <= hi));
+    const nearest = ev => {
+      const r = track.getBoundingClientRect();
+      return Math.round(Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1) * last);
+    };
+    slider.addEventListener('pointerdown', ev => {
+      if (ev.target.matches('input')) return;
+      brush = { start: nearest(ev), moved: false };
+      slider.setPointerCapture(ev.pointerId);
+    });
+    slider.addEventListener('pointermove', ev => {
+      if (!brush) return;
+      const i = nearest(ev);
+      if (i === brush.start) return;
+      brush.moved = true;
+      move(Math.min(i, brush.start), Math.max(i, brush.start));
+    });
+    slider.addEventListener('pointerup', () => {
+      if (brush && !brush.moved) {
+        const i = brush.start;
+        if (Math.abs(i - lo) <= Math.abs(i - hi)) move(Math.min(i, hi - 1), hi);
+        else move(lo, Math.max(i, lo + 1));
+      }
+      brush = null;
+    });
+    show();
   }
 
-  function setRange(lo, hi) {
-    const changed = lo !== span()[0] || hi !== span()[1];
-    state.range = { from: STOPS[lo], to: STOPS[hi] };
-    showRange();
-    if (changed) draw();
+  /* The size range: zero, then a stop at one and five times each power of ten, labelled at the
+     powers, which leaves room for the labels. */
+  rangeSlider(root.querySelector('.bench-range[data-range="x"]'),
+    STOPS.map(d => (d === -Infinity || Number.isInteger(d) ? FORMAT.count(sizeAt(d)) : '')),
+    STOPS.map(d => `${FORMAT.count(sizeAt(d))} ${SPEC.x.label}`), 'model',
+    (lo, hi) => { state.range = { from: STOPS[lo], to: STOPS[hi] }; draw(); });
+
+  /* The value range of the chosen measure: a stop at one and five times each power of ten its
+     measurements reach, labelled at the powers, as the size range is. At an outer stop the axis
+     fits the data at that end, so the slider changes nothing until it is moved. It starts over
+     when the measure changes, since the unit does. */
+  function valueSlider() {
+    const m = SPEC.metrics[state.metric], fmt = FORMAT[m.format];
+    const measured = ROWS.flatMap(r => [r[m.y], ...(m.band ?? []).map(k => r[k])]).filter(v => v > 0);
+    const [first, last] = [Math.floor(Math.log10(Math.min(...measured))), Math.ceil(Math.log10(Math.max(...measured)))];
+    const stops = [];
+    for (let e = first; e <= last; e++) stops.push(10 ** e, ...(e < last ? [5 * 10 ** e] : []));
+    state.values = { lo: null, hi: null };
+    root.querySelector('#bench-values-label').textContent = m.label;
+    rangeSlider(root.querySelector('.bench-range[data-range="y"]'), stops.map((v, i) => (i % 2 ? '' : fmt(v))),
+      stops.map(fmt), m.label,
+      (lo, hi) => { state.values = { lo: lo ? stops[lo] : null, hi: hi < stops.length - 1 ? stops[hi] : null }; draw(); });
   }
-
-  slider.addEventListener('input', ev => {
-    const [lo, hi] = span(), v = +ev.target.value;
-    if (ev.target.dataset.end === 'from') setRange(Math.min(v, hi - 1), hi);
-    else setRange(lo, Math.max(v, lo + 1));
-  });
-
-  const nearest = ev => {
-    const r = track.getBoundingClientRect();
-    return Math.round(Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1) * LAST);
-  };
-  let brush = null;
-  slider.addEventListener('pointerdown', ev => {
-    if (ev.target.matches('input')) return;
-    brush = { start: nearest(ev), moved: false };
-    slider.setPointerCapture(ev.pointerId);
-  });
-  slider.addEventListener('pointermove', ev => {
-    if (!brush) return;
-    const i = nearest(ev);
-    if (i === brush.start) return;
-    brush.moved = true;
-    setRange(Math.min(i, brush.start), Math.max(i, brush.start));
-  });
-  slider.addEventListener('pointerup', () => {
-    if (brush && !brush.moved) {
-      const [lo, hi] = span(), i = brush.start;
-      if (Math.abs(i - lo) <= Math.abs(i - hi)) setRange(Math.min(i, hi - 1), hi);
-      else setRange(lo, Math.max(i, lo + 1));
-    }
-    brush = null;
-  });
 
   root.addEventListener('click', ev => {
     const lib = ev.target.closest('#bench-legend button');
@@ -473,10 +501,10 @@ async function mount(root) {
     if (['metric', 'view', 'scale'].includes(key)) state[key] = b.dataset.value;
     else state.filter[key] = b.dataset.value;
     b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (key === 'metric') valueSlider();
     draw();
   });
 
-  slider.hidden = LAST < 1;
-  if (LAST >= 1) showRange();
+  valueSlider();
   draw();
 }

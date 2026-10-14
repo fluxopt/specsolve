@@ -50,7 +50,7 @@
 .bench .bench-track::before { content: ""; position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: var(--hairline); }
 .bench .bench-band { position: absolute; top: 7px; height: 8px; border-radius: 4px; background: var(--s1); opacity: .3; }
 .bench .bench-tick { position: absolute; top: 20px; transform: translateX(-50%); font-size: .6rem; color: var(--muted);
-  font-variant-numeric: tabular-nums; }
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bench .bench-tick::before { content: ""; position: absolute; left: 50%; top: -6px; width: 1px; height: 4px; background: var(--hairline); }
 .bench .bench-tick.in { color: var(--fg); font-weight: 650; }
 .bench .bench-range input { position: absolute; left: 8px; right: 8px; top: 3px; width: calc(100% - 16px); height: 16px; margin: 0;

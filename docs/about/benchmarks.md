@@ -40,7 +40,9 @@ sector
 <span class="bench-label">Axes</span>
 <span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
 <span class="bench-label">Variables</span>
-<div class="bench-range" role="group" aria-label="Range of model sizes shown"></div>
+<div class="bench-range" data-range="x" role="group" aria-label="Range of model sizes shown"></div>
+<span class="bench-label" id="bench-values-label" data-values>wall time</span>
+<div class="bench-range" data-range="y" data-values role="group" aria-label="Range of values shown"></div>
 </div>
 <div class="bench-row">
 <span class="bench-label">Libraries</span>
@@ -106,6 +108,11 @@ solver that every panel and the table run through.
   end is zero, or one or five times a power of ten, and a model size counts at
   the nearest of them. From zero, a linear axis starts at zero; from any other
   end, it starts just below the smallest size shown.
+- **Wall time or peak RSS beside it sets the value axis** of every panel to a
+  range, at one or five times a power of ten. A line outside the range is cut
+  off at its edge. At either outer stop the axis fits the measurements at that
+  end. It is hidden under ÷ specsolve, which has its own window, and it does not
+  narrow the table.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
   orange where the other library is, grey within ten per cent. The
   specsolve-in-memory and matrix floor columns are not shaded: they are

@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs: the benchmark charts share one pair of axes across every model, and the size range can stop at five times each power of ten ([#2040](https://github.com/fluxopt/specsolve/pull/2040))
+- docs: the benchmark charts share one pair of axes across every model, and both the model size and the measured value can be narrowed to a range ([#2040](https://github.com/fluxopt/specsolve/pull/2040))
 - docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
 - docs(benchmarks): the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
 - fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
