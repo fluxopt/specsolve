@@ -538,7 +538,7 @@ def _span(values: list[float]) -> str:
     """One count, or the range from the smallest to the largest, to three figures: a size, not a measurement."""
 
     def short(n: float) -> str:
-        return next((f'{n / scale:.3g}{unit}' for unit, scale in (('M', 1e6), ('k', 1e3)) if n >= scale), f'{n:.0f}')
+        return next((f'{n / scale:.3g}{unit}' for unit, scale in (('M', 1e6), ('k', 1e3)) if n >= scale), f'{n:.3g}')
 
     lo, hi = min(values), max(values)
     return short(lo) if lo == hi else f'{short(lo)}\N{EN DASH}{short(hi)}'
@@ -559,30 +559,34 @@ def grouped_sums(spec: Path | None) -> str:
 
 
 def models(rows: dict[Key, Row]) -> str:
-    """Each model on the size ladder as one row: its dimensions, its density, its grouped sums, and how large it is built.
+    """Each model on the size ladder as one row: its shape, and its size per snapshot.
 
-    The counts are `BASELINE`'s, so they are the model as built, over every rung
-    and sink it measured. The dimensions and the density are the case's own
-    ladder at those rungs, and a dimension that grows with the ladder prints as
-    the range it spans. The grouped sums are read off the case's spec. Nothing
-    in the table is typed into the page.
+    Every ladder grows along ``snapshot`` alone, so a model is its fixed
+    dimensions, its density and its grouped sums, plus what one snapshot adds:
+    variables, constraints and nonzeros, read off `BASELINE`'s largest
+    measurement, the model as built. The snapshots column is the range the
+    ladder measured. The grouped sums are read off the case's spec. Nothing in
+    the table is typed into the page.
     """
     from bench.cases import CASES
 
     ours = {k: r for k, r in rows.items() if k[3] == BASELINE and _sweep_of(k[1]) is None}
     lines = [
-        '| model | dimensions | density | grouped sums | variables | constraints | nonzeros |',
-        '| --- | --- | ---: | --- | ---: | ---: | ---: |',
+        '| model | dimensions | density | grouped sums | snapshots | variables per snapshot '
+        '| constraints per snapshot | nonzeros per snapshot |',
+        '| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |',
     ]
     for case in sorted({c for c, _, _, _ in ours}):
-        measured = {s for c, s, _, _ in ours if c == case}
-        shapes = [s for s in CASES[case].ladder if s.label in measured]
-        counts = [r['counts'] for k, r in ours.items() if k[0] == case]
-        dims = ' \N{MULTIPLICATION SIGN} '.join(f'{d} {_span([s.sizes[d] for s in shapes])}' for d in shapes[0].sizes)
-        built = ' | '.join(
-            _span([c[n] for c in counts if c.get(n) is not None]) for n in ('columns', 'rows', 'nonzeros')
+        counts = {k[1]: r['counts'] for k, r in ours.items() if k[0] == case}
+        shapes = {s.label: s for s in CASES[case].ladder if s.label in counts}
+        largest = max(counts, key=lambda size: counts[size]['columns'])
+        snapshots = shapes[largest].sizes['snapshot']
+        dims = ' \N{MULTIPLICATION SIGN} '.join(f'{d} {n}' for d, n in shapes[largest].sizes.items() if d != 'snapshot')
+        each = ' | '.join(_span([counts[largest][n] / snapshots]) for n in ('columns', 'rows', 'nonzeros'))
+        ladder = _span([s.sizes['snapshot'] for s in shapes.values()])
+        lines.append(
+            f'| {case} | {dims} | {shapes[largest].density:.0%} | {grouped_sums(CASES[case].spec)} | {ladder} | {each} |'
         )
-        lines.append(f'| {case} | {dims} | {shapes[0].density:.0%} | {grouped_sums(CASES[case].spec)} | {built} |')
     return '\n'.join(lines) if len(lines) > 2 else ''
 
 

@@ -9,12 +9,12 @@ different model.
 
 <!-- bench:models -->
 
-| model | dimensions | density | grouped sums | variables | constraints | nonzeros |
-| --- | --- | ---: | --- | ---: | ---: | ---: |
-| dispatch | generator 100 × snapshot 2–100k | 100% | — | 200–10M | 2–100k | 200–10M |
-| network | bus 50 × tech 12 × line 100 × store 50 × snapshot 2–25k | 25% | line → bus, store → bus, bus × tech → pool | 800–10M | 300–3.75M | 1.55k–20M |
-| nodal | node 50 × tech 12 × snapshot 2–20k | 25% | — | 300–3M | 100–1M | 300–3M |
-| sector | node 50 × tech 12 × carrier 5 × snapshot 2–20k | 25% | — | 300–3M | 252–2.5M | 300–3M |
+| model | dimensions | density | grouped sums | snapshots | variables per snapshot | constraints per snapshot | nonzeros per snapshot |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| dispatch | generator 100 | 100% | — | 2–100k | 100 | 1 | 100 |
+| network | bus 50 × tech 12 × line 100 × store 50 | 25% | line → bus, store → bus, bus × tech → pool | 2–25k | 400 | 150 | 800 |
+| nodal | node 50 × tech 12 | 25% | — | 2–20k | 150 | 50 | 150 |
+| sector | node 50 × tech 12 × carrier 5 | 25% | — | 2–20k | 150 | 125 | 150 |
 
 <!-- bench:/models -->
 

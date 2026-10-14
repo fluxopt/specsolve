@@ -920,13 +920,16 @@ def test_the_model_table_has_a_row_per_published_model() -> None:
     """The table is read off the committed results and the case ladders, so no count is typed into the page."""
     timings = [r for path in bench_results.files(Path('bench/results')) for r in report.load(path)[2]]
     lines = report.models(report.best(timings)).splitlines()
-    assert lines[0] == '| model | dimensions | density | grouped sums | variables | constraints | nonzeros |', (
-        'the header names what a reader compares'
-    )
+    assert lines[0] == (
+        '| model | dimensions | density | grouped sums | snapshots | variables per snapshot '
+        '| constraints per snapshot | nonzeros per snapshot |'
+    ), 'the header names what a reader compares'
     names = [line.split('|')[1].strip() for line in lines[2:]]
     assert names == ['dispatch', 'network', 'nodal', 'sector'], 'one row per published model, sorted by name'
+    network = next(line for line in lines if line.startswith('| network |'))
+    assert '| 400 | 150 |' in network, 'network adds 400 variables and 150 constraints per snapshot at every size'
     nodal = next(line for line in lines if line.startswith('| nodal |'))
-    assert '| 25% |' in nodal and 'node 50 \N{MULTIPLICATION SIGN} tech 12 \N{MULTIPLICATION SIGN} snapshot' in nodal, (
+    assert '| 25% |' in nodal and 'node 50 \N{MULTIPLICATION SIGN} tech 12 |' in nodal, (
         "the density and the dimensions are the ladder's"
     )
 
