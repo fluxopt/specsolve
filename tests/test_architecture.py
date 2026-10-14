@@ -298,6 +298,22 @@ def test_no_fork_can_reach_a_runner_we_own():
     )
 
 
+@pytest.mark.parametrize('workflow', sorted((REPO / '.github' / 'workflows').glob('*.y*ml')), ids=lambda w: w.name)
+def test_every_workflow_parses(workflow: Path) -> None:
+    """GitHub reads a workflow it cannot parse as one with no triggers.
+
+    An apostrophe inside a single-quoted description made `published-benchmark.yml`
+    unreadable, and the label's dispatch failed with HTTP 422: the workflow has
+    no `workflow_dispatch` trigger.
+    """
+    import yaml
+
+    try:
+        yaml.safe_load(workflow.read_text())
+    except yaml.YAMLError as error:
+        pytest.fail(f'GitHub cannot read {workflow.name}, so none of its triggers fire:\n{error}')
+
+
 def test_every_repository_path_a_workflow_names_exists():
     """A workflow step reads files by path, and a move makes it read nothing.
 
