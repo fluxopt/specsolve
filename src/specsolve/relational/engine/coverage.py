@@ -28,7 +28,7 @@ from specsolve.errors import DataError
 from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from specsolve.relational.collect import collected, collected_all
 from specsolve.relational.engine.pieces import constant_scalar
-from specsolve.relational.engine.predicates import masked
+from specsolve.relational.engine.predicates import certain_names, masked
 from specsolve.relational.engine.scope import join_on
 from specsolve.relational.sinks.handoff import SENSE
 
@@ -183,12 +183,18 @@ def refuse_short_constants(
 
     Asked of the parameter, because once a piece is summed its gap is a row
     that was never there, not a null a join can find. Only names in *sparse*,
-    the parameters short of their coordinate product, are read.
+    the parameters short of their coordinate product, are read. A parameter
+    the constraint's ``where`` requires on its ``AND`` spine is not read either:
+    the mask kept only rows where it has a value, and the loader refuses a
+    ``where`` that reads a dim outside the constraint's, so nothing is owed.
 
     Raises:
         DataError: Naming the first short parameter, in name order.
     """
-    owed = sorted({(name, i) for i, p in enumerate(consts) for name in p.parameters if name in sparse})
+    required = certain_names(c.where) if c.where is not None else frozenset()
+    owed = sorted(
+        {(name, i) for i, p in enumerate(consts) for name in p.parameters if name in sparse and name not in required}
+    )
     for name, i in owed:
         missing = _uncovered_coordinates(scope, rows, name, c, consts[i].region)
         if missing:
