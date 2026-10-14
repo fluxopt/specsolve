@@ -39,8 +39,6 @@ sector
 <span class="bench-seg" data-key="view"><button data-value="absolute" aria-pressed="true">measured</button><button data-value="relative" aria-pressed="false">÷ specsolve</button></span>
 <span class="bench-label">Axes</span>
 <span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
-<span class="bench-seg"><button data-zoom-reset hidden>reset zoom</button></span>
-<span class="bench-hint">drag on a chart to zoom</span>
 </div>
 <div class="bench-row">
 <span class="bench-label">Libraries</span>
@@ -48,6 +46,7 @@ sector
 <span class="bench-hint">click to hide</span>
 </div>
 </div>
+<div class="bench-zoombar"><span class="bench-hint">drag on a chart to zoom every chart</span><button data-zoom-reset disabled>Reset zoom</button></div>
 <div id="bench-facets"></div>
 <div id="bench-scale" class="bench-scale"></div>
 <div class="bench-table"><table id="bench-heat" class="bench-heat"></table></div>
@@ -103,9 +102,10 @@ solver that every panel and the table run through.
   its ratio at the edge it crosses.
 - **Drag a box on any chart to zoom every panel to it**: its width sets the
   range of model sizes, and its height the range of values. A drag along one
-  side zooms only that axis. The table keeps only the sizes inside the box. A
-  double-click on a chart, or **reset zoom**, shows everything again. Switching
-  between wall time and peak RSS, or to and from ÷ specsolve, zooms out too.
+  side zooms only that axis. The table keeps only the sizes inside the box.
+  **Reset zoom** above the charts, or a double-click on one, shows everything
+  again. Switching between wall time and peak RSS, or to and from ÷ specsolve,
+  zooms out too.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
   orange where the other library is, grey within ten per cent. The
   specsolve-in-memory and matrix floor columns are not shaded: they are

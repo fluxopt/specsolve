@@ -53,10 +53,15 @@
 .bench .swatch.ours { width: 20px; height: 4px; }
 
 /* `minmax(0, 1fr)` rather than `1fr`: the zero lets a track be narrower than its content. */
-.bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .8rem; }
+.bench .bench-zoombar { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; margin-top: .6rem; }
+.bench .bench-zoombar button { font: inherit; font-size: .66rem; color: var(--fg2); background: var(--surface);
+  border: 1px solid var(--hairline); border-radius: 6px; padding: .25rem .6rem; cursor: pointer; }
+.bench .bench-zoombar button:disabled { opacity: .45; cursor: default; }
+.bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .6rem;
+  -webkit-user-select: none; user-select: none; }
 @media (max-width: 44.9375em) { .bench #bench-facets { grid-template-columns: minmax(0, 1fr); } }
 .bench .bench-panel { min-width: 0; color: var(--fg2); border: 1px solid var(--hairline); border-radius: 8px; padding: .5rem .6rem .2rem; }
-.bench .bench-panel > div:last-child { position: relative; cursor: crosshair; user-select: none; touch-action: pan-y; }
+.bench .bench-panel > div:last-child { position: relative; cursor: crosshair; touch-action: pan-y; }
 .bench #bench-facets.zooming .ts-chart-tooltip { visibility: hidden; }
 .bench .bench-zoom { position: absolute; pointer-events: none; border: 1px solid var(--s1); background: var(--s1); opacity: .15; }
 .bench .bench-caption { font-size: .7rem; font-weight: 700; color: var(--fg); margin-bottom: .2rem; }

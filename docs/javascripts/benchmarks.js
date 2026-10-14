@@ -311,7 +311,8 @@ async function mount(root) {
      the value range, and a side under 8 px leaves that axis as it was. A double-click zooms out.
      The box is kept inside the plot, and drawn in every panel while it is dragged: the panels share
      their axes and their size, so the same pixels are the same range in each. Tooltips are hidden
-     meanwhile, so they do not cover it. */
+     meanwhile, so they do not cover it. A press on a chart starts no text selection, so neither a
+     drag nor a double-click selects text on the page. */
   const boxes = [];
   function zoomBox(host, read) {
     const box = document.createElement('div');
@@ -354,6 +355,7 @@ async function mount(root) {
       if (wide || tall) zoomTo({ x: wide ? span(x0, x, scales.x) : state.zoom?.x ?? null, y: tall ? span(y0, y, scales.y) : state.zoom?.y ?? null });
     });
     host.addEventListener('pointercancel', end);
+    host.addEventListener('mousedown', ev => ev.preventDefault());
     host.addEventListener('dblclick', () => zoomTo(null));
   }
 
@@ -452,7 +454,7 @@ async function mount(root) {
       zoomBox(fig.lastElementChild, read);
     }
     table(rows, metric);
-    root.querySelector('[data-zoom-reset]').hidden = !state.zoom;
+    root.querySelector('[data-zoom-reset]').disabled = !state.zoom;
     const present = new Set(ROWS.filter(chosen).map(r => r[SERIES]));
     const floorHidden = FLOOR.members.every(n => state.hidden.has(n));
     root.querySelector('#bench-legend').innerHTML = LIBRARIES.filter(n => present.has(n) && !FLOOR.members.includes(n)).map(n =>
