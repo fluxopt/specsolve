@@ -183,6 +183,33 @@ def test_a_sum_on_the_constant_side_is_never_attached_by_position(monkeypatch, t
     )
 
 
+@pytest.mark.xfail(reason='a partial sum keeps one row per summed label, and its t column can equal the rows')
+def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
+    """`sum(f, over=s)` keeps a row per `(t, s)` under dims `(t,)`, and `s` has as many labels as `k`.
+
+    So the piece's `t` column is the rows' `t` column, row for row, while each
+    row is owed the sum of two values rather than one of them.
+    """
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}, 'k': {'dtype': 'int'}, 's': {'dtype': 'int'}},
+        'parameters': {'f': {'dims': ['t', 's']}},
+        'variables': {'x': {'dims': ['t', 'k'], 'bounds': {'lower': 0, 'upper': 100}}},
+        'constraints': {'cap': {'dims': ['t', 'k'], 'expression': 'x <= sum(f, over=s)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    data = {
+        't': [0, 1, 2],
+        'k': [0, 1],
+        's': [0, 1],
+        'f': pl.DataFrame({'t': [0, 0, 1, 1, 2, 2], 's': [0, 1] * 3, 'value': [1.0, 10.0, 2.0, 20.0, 3.0, 30.0]}),
+    }
+    with sps.build(spec, data) as model:
+        result = model.solve()
+    assert result.objective == pytest.approx(2 * (11.0 + 22.0 + 33.0), rel=RTOL), (
+        'each (t, k) row is bounded by the sum over s, twice over k'
+    )
+
+
 def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     """A parameter added beside a variable term is a constant piece, and is checked (#1521).
 
