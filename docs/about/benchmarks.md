@@ -110,11 +110,11 @@ solver that every panel and the table run through.
   specsolve-in-memory and matrix floor columns are not shaded: they are
   references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
 
-## A script that solves one model
+## A script that builds one model
 
 The charts leave out what a script pays to start: the interpreter, the import
-and the first build. This table times a new process from launch to exit, on
-HiGHS.
+and the first build. This table times a new process from launch to exit. The
+process builds the model, hands it to HiGHS and exits, without a solve.
 
 <!-- bench:fresh -->
 
@@ -130,8 +130,8 @@ HiGHS.
 
 <!-- bench:/fresh -->
 
-A script that solves one small model with specsolve finishes in about half a
-second, about half of linopy's time
+A script that builds one small model with specsolve and hands it to the solver
+finishes in about half a second, about half of linopy's time
 ([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
 
 ## Not measured yet

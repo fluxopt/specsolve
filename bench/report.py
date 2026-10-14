@@ -400,7 +400,7 @@ FRESH_SINK = 'highs'
 
 
 def fresh(rows: dict[Key, Row]) -> str:
-    """What a script that solves one model pays, launch to exit, on `FRESH_SINK`, as a heat table.
+    """What a script that builds one model pays, launch to exit, on `FRESH_SINK`, as a heat table.
 
     One row per arm and one column per case, each case at the largest rung the
     fresh phase measured, so a reader compares libraries down a column. Wall
