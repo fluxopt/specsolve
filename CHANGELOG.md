@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
 - docs: the benchmarks page opens on its charts, counts sizes as the columns and rows that reach the solver, and tables what each model declares ([#2042](https://github.com/fluxopt/specsolve/pull/2042))
 - docs: the benchmark charts share one pair of axes across every model, and a box dragged on any chart zooms all of them ([#2040](https://github.com/fluxopt/specsolve/pull/2040))
 - docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))

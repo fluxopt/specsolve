@@ -17,7 +17,7 @@ on:
         type: string
         default: ''
       pr:
-        description: 'A pull request to comment specsolve's numbers on, which the trigger:published-bench label fills in. Blank comments nowhere.'
+        description: 'A pull request to comment specsolve''s numbers on, which the trigger:published-bench label fills in. Blank comments nowhere.'
         type: string
         default: ''
 
