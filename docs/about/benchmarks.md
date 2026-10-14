@@ -101,9 +101,9 @@ one per value that exists. Every variable and constraint also runs over
 
 From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
 on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.8× at 1M columns, 1.76 GB against 0.63 GB, and the memory
+There it is 2.7× at 1M columns, 1.75 GB against 0.65 GB, and the memory
 budget stops linopy at that size
-([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
+([#2039](https://github.com/fluxopt/specsolve/pull/2039)).
 
 ## A script that solves one model
 
