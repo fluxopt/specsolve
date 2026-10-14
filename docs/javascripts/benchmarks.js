@@ -133,15 +133,22 @@ async function mount(root) {
     return full.filter((_, i) => i % step === 0);
   }
 
-  /* The y axis under the shared switch. Linear starts at `from`, zero unless a value range is
-     chosen; log ticks on 1–2–5. */
-  function axis(values, fmt, from = 0) {
+  /* The y axis under the shared switch, over `values`. Linear starts at zero, log ticks on 1–2–5.
+     An end of the value range, where one is chosen, is that end of the axis exactly, so a fine
+     choice is not rounded away. There log ticks on 1–2–5 inside the axis, or, where a narrow
+     range leaves fewer than three, on d3's own log ticks. */
+  function axis(values, fmt, { lo, hi }) {
     if (state.scale === 'linear') {
-      return { scale: scaleLinear().domain([from, Math.max(...values)]).nice(5), grid: true,
-        axis: { ticks: { count: 5, format: fmt } } };
+      const scale = scaleLinear().domain([lo ?? 0, hi ?? Math.max(...values)]);
+      return { scale: hi == null ? scale.nice(5) : scale, grid: true, axis: { ticks: { count: 5, format: fmt } } };
     }
-    const ticks = logTicks(values);
-    return { scale: scaleLog().domain([ticks[0], ticks.at(-1)]), grid: true, axis: { ticks: { values: ticks, format: fmt } } };
+    const snapped = logTicks(values);
+    if (lo == null && hi == null) {
+      return { scale: scaleLog().domain([snapped[0], snapped.at(-1)]), grid: true, axis: { ticks: { values: snapped, format: fmt } } };
+    }
+    const scale = scaleLog().domain([lo ?? snapped[0], hi ?? snapped.at(-1)]), [from, to] = scale.domain();
+    const inside = logTicks([from, to]).filter(t => t >= from && t <= to);
+    return { scale, grid: true, axis: { ticks: { values: inside.length > 2 ? inside : scale.ticks(5), format: fmt } } };
   }
 
   /* The x axis over the sizes in view, with room past the outermost so no dot sits on the frame,
@@ -231,10 +238,11 @@ async function mount(root) {
      without whiskers.
      Each measured point is a dot ringed in the surface colour, so
      crossing points stay apart. */
-  /* The highlighted library's name, right of its last point. A control rather than a text mark:
-     the marks share one clip, which would cut the name off in the right margin it sits in. */
-  function heroLabel(ours) {
-    const end = ours.toSorted((a, b) => a[X] - b[X]).at(-1);
+  /* The highlighted library's name, right of its last point inside the y axis `[lo, hi]`, and
+     none where no point is. A control rather than a text mark: the marks share one clip, which
+     would cut the name off in the right margin it sits in, so the y axis is checked here. */
+  function heroLabel(ours, [lo, hi]) {
+    const end = ours.filter(r => r.value >= lo && r.value <= hi).toSorted((a, b) => a[X] - b[X]).at(-1);
     if (!end) return [];
     return [{ id: 'hero-label', resolve: ({ scales }) => ({ nodes: [{
       kind: 'label', key: 'hero-label', x: scales.x.map(end[X]) + 9, y: scales.y.map(end.value), text: HERO,
@@ -298,7 +306,7 @@ async function mount(root) {
     const { lo, hi } = state.values, ends = [lo ?? Math.min(...measured), hi ?? Math.max(...measured)];
     return () => ({
       x: xAxis(sizes, state.range.from === STOPS[0]),
-      y: state.view === 'relative' ? windowAxis() : axis(ends, FORMAT[metric.format], lo ?? 0),
+      y: state.view === 'relative' ? windowAxis() : axis(ends, FORMAT[metric.format], state.values),
     });
   }
 
@@ -325,7 +333,7 @@ async function mount(root) {
       scales,
       color: { domain: LIBRARIES, range: SPEC.series.paint },
       clip: true, margin: { right: 76 },
-      controls: [...heroLabel([...ours, ...oursAhead]), ...(relative ? outside(measured, WINDOW[state.scale]) : [])],
+      controls: [...heroLabel([...ours, ...oursAhead], scales.y.scale.domain()), ...(relative ? outside(measured, WINDOW[state.scale]) : [])],
       focus: 'group-x', maxFocusDistance: Number.POSITIVE_INFINITY,
       tooltip: grouped(metric.format),
     });
@@ -470,19 +478,20 @@ async function mount(root) {
     STOPS.map(d => `${FORMAT.count(sizeAt(d))} ${SPEC.x.label}`), 'model',
     (lo, hi) => { state.range = { from: STOPS[lo], to: STOPS[hi] }; draw(); });
 
-  /* The value range of the chosen measure: a stop at one and five times each power of ten its
-     measurements reach, labelled at the powers, as the size range is. At an outer stop the axis
-     fits the data at that end, so the slider changes nothing until it is moved. It starts over
-     when the measure changes, since the unit does. */
+  /* The value range of the chosen measure: a stop at one to nine times each power of ten its
+     measurements reach, as on a log ruler, labelled at the powers. At an outer stop the axis fits
+     the data at that end, so the slider changes nothing until it is moved. It starts over when
+     the measure changes, since the unit does. */
   function valueSlider() {
     const m = SPEC.metrics[state.metric], fmt = FORMAT[m.format];
     const measured = ROWS.flatMap(r => [r[m.y], ...(m.band ?? []).map(k => r[k])]).filter(v => v > 0);
     const [first, last] = [Math.floor(Math.log10(Math.min(...measured))), Math.ceil(Math.log10(Math.max(...measured)))];
     const stops = [];
-    for (let e = first; e <= last; e++) stops.push(10 ** e, ...(e < last ? [5 * 10 ** e] : []));
+    for (let e = first; e < last; e++) for (let k = 1; k <= 9; k++) stops.push(+(k * 10 ** e).toPrecision(12));
+    stops.push(10 ** last);
     state.values = { lo: null, hi: null };
     root.querySelector('#bench-values-label').textContent = m.label;
-    rangeSlider(root.querySelector('.bench-range[data-range="y"]'), stops.map((v, i) => (i % 2 ? '' : fmt(v))),
+    rangeSlider(root.querySelector('.bench-range[data-range="y"]'), stops.map((v, i) => (i % 9 ? '' : fmt(v))),
       stops.map(fmt), m.label,
       (lo, hi) => { state.values = { lo: lo ? stops[lo] : null, hi: hi < stops.length - 1 ? stops[hi] : null }; draw(); });
   }

@@ -109,10 +109,10 @@ solver that every panel and the table run through.
   the nearest of them. From zero, a linear axis starts at zero; from any other
   end, it starts just below the smallest size shown.
 - **Wall time or peak RSS beside it sets the value axis** of every panel to a
-  range, at one or five times a power of ten. A line outside the range is cut
-  off at its edge. At either outer stop the axis fits the measurements at that
-  end. It is hidden under ÷ specsolve, which has its own window, and it does not
-  narrow the table.
+  range, in steps of one to nine times a power of ten, and the axis ends where
+  the range does. A line outside the range is cut off at its edge. At either
+  outer stop the axis fits the measurements at that end. It is hidden under ÷
+  specsolve, which has its own window, and it does not narrow the table.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
   orange where the other library is, grey within ten per cent. The
   specsolve-in-memory and matrix floor columns are not shaded: they are
