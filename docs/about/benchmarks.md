@@ -53,41 +53,28 @@ the same model
 
 ## Reading the charts
 
-Each panel is one model, and each line is one library. The x axis counts
-**columns**: the variables that reach the solver, one per value that exists.
-Every panel has the same axes, so a height or a size reads the same in each.
-**Solver** chooses the solver that every panel and the table run through.
+One panel per model, one line per library. The x axis counts columns: the
+variables that reach the solver. **Solver** picks the solver for every panel
+and the table.
 
 - **specsolve is the thick violet line.**
-- **The grey line is the matrix floor**: the time to hand a finished matrix to
-  the solver in one bulk call, `passModel` for HiGHS and `loadModel` for
-  Gurobi. The floor builds its arrays before the clock starts, so it reads no
-  parquet and builds nothing. Its distance from specsolve is everything
-  specsolve does before the solver holds the model. Its peak RSS includes the
-  arrays as well as the solver's copy of them.
-- **The line is the median of nine rounds, or of five where a round takes
-  over a second, and the whisker is the middle half.**
-  Overlapping whiskers are numbers this run cannot tell apart
+- **The grey line is the matrix floor**: a finished matrix handed to the solver
+  in one call, `passModel` for HiGHS and `loadModel` for Gurobi. Its gap to
+  specsolve is everything specsolve does before the solver holds the model.
+  Its memory includes its own copy of the arrays.
+- **A point is a median, and its whisker is the middle half of the rounds.**
+  Overlapping whiskers are a tie
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
-- **A shaded funnel is a projection** past the time or memory budget. It opens
-  from the last measured point. One edge carries the last step's cost per
-  column forward, and the other keeps the last step's growth rate. A wide
-  funnel is a guess the measurements do not narrow.
-- **÷ specsolve divides each point by specsolve's at the same size**, so
-  specsolve is the line at 1× and a line above it is that many times slower or
-  larger. It applies to wall time and to peak RSS. The window is 0× to 5× on
-  linear axes and 0.1× to 50× on log axes, and a point outside it is named with
-  its ratio at the edge it crosses.
-- **Drag a box on any chart to zoom every panel to it**: its width sets the
-  range of model sizes, and its height the range of values. A drag along one
-  side zooms only that axis. The table keeps only the sizes inside the box.
-  **Reset zoom** above the charts, or a double-click on one, shows everything
-  again. Switching between wall time and peak RSS, or to and from ÷ specsolve,
-  zooms out too.
+- **A shaded funnel is a projection** past the 30 s or 16 GB budget. A wide
+  funnel is a guess.
+- **÷ specsolve puts specsolve at 1×**, so a line at 3× is three times slower
+  or larger. A point outside the window is named at the edge it crosses.
+- **Drag a box on any chart to zoom them all**, and the table with them. A drag
+  along one side zooms one axis. Double-click or **Reset zoom** to see
+  everything.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
-  orange where the other library is, grey within ten per cent. The
-  specsolve-in-memory and matrix floor columns are not shaded: they are
-  references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
+  orange where the other library is, and grey within 10%. `>30 s` and `>16 GB`
+  are sizes the budget refused.
 
 ## The models
 
@@ -153,7 +140,10 @@ second, about half of linopy's time
 ## Method
 
 Each measurement runs in its own process, with import excluded and teardown
-included, on an idle machine. Peak memory is `ru_maxrss`.
+included, on an idle machine. A point is the median of nine rounds, or of five
+where a round takes over a second. Peak memory is `ru_maxrss`. A projection's
+two edges carry the last measured step forward, one at its cost per column and
+one at its growth rate.
 `uv run --locked bench/reproduce.py` runs it again with every version pinned,
 and [the harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
 has every flag and caveat, such as the allocator cost on polars' peak
