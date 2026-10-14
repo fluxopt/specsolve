@@ -920,7 +920,7 @@ def test_the_model_table_has_a_row_per_published_model() -> None:
     """The table is read off the committed results and the case ladders, so no count is typed into the page."""
     timings = [r for path in bench_results.files(Path('bench/results')) for r in report.load(path)[2]]
     lines = report.models(report.best(timings)).splitlines()
-    assert lines[0] == '| model | dimensions | density | variables | constraints | nonzeros |', (
+    assert lines[0] == '| model | dimensions | density | grouped sums | variables | constraints | nonzeros |', (
         'the header names what a reader compares'
     )
     names = [line.split('|')[1].strip() for line in lines[2:]]
@@ -929,6 +929,22 @@ def test_the_model_table_has_a_row_per_published_model() -> None:
     assert '| 25% |' in nodal and 'node 50 \N{MULTIPLICATION SIGN} tech 12 \N{MULTIPLICATION SIGN} snapshot' in nodal, (
         "the density and the dimensions are the ladder's"
     )
+
+
+@pytest.mark.parametrize(
+    ('case', 'printed'),
+    [
+        pytest.param('dispatch', '\N{EM DASH}', id='no-grouping'),
+        pytest.param(
+            'network',
+            'line \N{RIGHTWARDS ARROW} bus, store \N{RIGHTWARDS ARROW} bus, '
+            'bus \N{MULTIPLICATION SIGN} tech \N{RIGHTWARDS ARROW} pool',
+            id='lines-stores-and-pools',
+        ),
+    ],
+)
+def test_a_model_names_the_sums_it_groups_through_a_relation(case: str, printed: str) -> None:
+    assert report.grouped_sums(CASES[case].spec) == printed, f'{case} groups {printed!r}, once each, in spec order'
 
 
 def test_the_long_table_renders_from_the_committed_results() -> None:

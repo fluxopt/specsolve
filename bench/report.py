@@ -544,20 +544,35 @@ def _span(values: list[float]) -> str:
     return short(lo) if lo == hi else f'{short(lo)}\N{EN DASH}{short(hi)}'
 
 
+#: A sum that groups its terms through a relation, as a spec writes it: what is summed over, and into what.
+_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*by=\w+,\s*over=(\[[^\]]*\]|\w+),\s*into=(\w+)\s*\)')
+
+
+def grouped_sums(spec: Path | None) -> str:
+    """Each distinct grouped sum in *spec*, as ``over → into``, or a dash where it has none."""
+    found = []
+    for over, into in _GROUPED.findall(spec.read_text() if spec else ''):
+        dims = ' \N{MULTIPLICATION SIGN} '.join(d.strip() for d in over.strip('[]').split(','))
+        if (pair := f'{dims} \N{RIGHTWARDS ARROW} {into}') not in found:
+            found.append(pair)
+    return ', '.join(found) or '\N{EM DASH}'
+
+
 def models(rows: dict[Key, Row]) -> str:
-    """Each model on the size ladder as one row: its dimensions, its density, and how large it is built.
+    """Each model on the size ladder as one row: its dimensions, its density, its grouped sums, and how large it is built.
 
     The counts are `BASELINE`'s, so they are the model as built, over every rung
     and sink it measured. The dimensions and the density are the case's own
     ladder at those rungs, and a dimension that grows with the ladder prints as
-    the range it spans. Nothing in the table is typed into the page.
+    the range it spans. The grouped sums are read off the case's spec. Nothing
+    in the table is typed into the page.
     """
     from bench.cases import CASES
 
     ours = {k: r for k, r in rows.items() if k[3] == BASELINE and _sweep_of(k[1]) is None}
     lines = [
-        '| model | dimensions | density | variables | constraints | nonzeros |',
-        '| --- | --- | ---: | ---: | ---: | ---: |',
+        '| model | dimensions | density | grouped sums | variables | constraints | nonzeros |',
+        '| --- | --- | ---: | --- | ---: | ---: | ---: |',
     ]
     for case in sorted({c for c, _, _, _ in ours}):
         measured = {s for c, s, _, _ in ours if c == case}
@@ -567,7 +582,7 @@ def models(rows: dict[Key, Row]) -> str:
         built = ' | '.join(
             _span([c[n] for c in counts if c.get(n) is not None]) for n in ('columns', 'rows', 'nonzeros')
         )
-        lines.append(f'| {case} | {dims} | {shapes[0].density:.0%} | {built} |')
+        lines.append(f'| {case} | {dims} | {shapes[0].density:.0%} | {grouped_sums(CASES[case].spec)} | {built} |')
     return '\n'.join(lines) if len(lines) > 2 else ''
 
 
