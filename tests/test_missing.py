@@ -77,6 +77,12 @@ def test_a_relation_short_of_a_key_is_refused_by_default_and_the_key_is_named():
             11.0,
             id='absent-bound-leaves-that-side-open',
         ),
+        pytest.param(
+            {'constraints.c': {'dims': [], 'expression': 'sum(x, over=f) <= sum(cap, over=f)'}},
+            4.0,
+            4.0,
+            id='absent-summand-on-a-constant-side-is-not-owed',
+        ),
     ],
 )
 def test_an_absent_row_is_absence_in_every_position(patch, value, objective):
