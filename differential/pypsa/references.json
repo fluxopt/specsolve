@@ -15629,7 +15629,26 @@
       }
     },
     "structural": {
-      "error": "IndexError: index 0 is out of bounds for axis 0 with size 0"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Kirchhoff-Voltage-Law",
+        "Line-fix-s-lower",
+        "Line-fix-s-lower-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-fix-s-upper",
+        "Line-fix-s-upper-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-s",
+        "Link-fix-p-lower",
+        "Link-fix-p-upper",
+        "Link-p"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
+      },
+      "region": []
     }
   },
   "rung_57_scenario_nom_set": {
@@ -17819,7 +17838,23 @@
       }
     },
     "structural": {
-      "error": "IndexError: index 0 is out of bounds for axis 0 with size 0"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Kirchhoff-Voltage-Law",
+        "Line-fix-s-lower",
+        "Line-fix-s-lower-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-fix-s-upper",
+        "Line-fix-s-upper-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-s"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
+      },
+      "region": []
     }
   },
   "rung_67_linearized_link_process": {
@@ -18628,7 +18663,23 @@
       }
     },
     "structural": {
-      "error": "IndexError: index 0 is out of bounds for axis 0 with size 0"
+      "equal": [
+        "Bus-nodal_balance",
+        "Generator-fix-p-lower",
+        "Generator-fix-p-upper",
+        "Generator-p",
+        "Kirchhoff-Voltage-Law",
+        "Line-fix-s-lower",
+        "Line-fix-s-lower-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-fix-s-upper",
+        "Line-fix-s-upper-security-for-{c}-outage-in-sub-network-{n}",
+        "Line-s"
+      ],
+      "mismatch": [],
+      "recorded": {
+        "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
+      },
+      "region": []
     }
   },
   "rung_69_storage_retires_before_close": {

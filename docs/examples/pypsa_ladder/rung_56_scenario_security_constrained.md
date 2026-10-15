@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-56--a-security-constrained-run-per-scenario): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **18205.0** on both sides; structure ✔ 10 constraints · 3 variables, name for name; size ✔ 216 rows · ✔ 56 columns · ✔ 272 nonzeros; duals ✔ 216 rows; objective only — the linopy oracle (`tests/linopy_lane`) stops at `IndexError: index 0 is out of bounds for axis 0 with size 0`.
+> ✔ Verified against pypsa master at 51986084 — objective **18205.0** on both sides; structure ✔ 10 constraints · 3 variables, name for name; size ✔ 216 rows · ✔ 56 columns · ✔ 272 nonzeros; duals ✔ 216 rows; **model for model**: 13 blocks equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
