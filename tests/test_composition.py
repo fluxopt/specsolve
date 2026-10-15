@@ -89,6 +89,16 @@ def test_a_merged_spec_solves_to_the_cost_a_hand_computes():
             "'supply'",
             id='a-variable-another-file-declares',
         ),
+        pytest.param(
+            {
+                'dimensions': {'f': {'dtype': 'str'}},
+                'given': {'masks': {'on': {'dims': ['f']}}},
+                'variables': {'x': {'dims': ['f'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 1}}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+            },
+            "'on'",
+            id='a-mask-another-file-declares',
+        ),
     ],
 )
 def test_a_fragment_on_its_own_is_refused_naming_what_it_reads(fragment, reads):
