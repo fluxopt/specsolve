@@ -82,6 +82,7 @@ UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'di
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
+KNOWN_FAILING_FILE = HERE / 'known_failing.yaml'
 #: Where a patched rung's file is written: the patch its script names laid over ``pypsa.yaml``.
 COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
 #: A patched file's name -> the patch it lays over ``pypsa.yaml``.
@@ -1000,6 +1001,7 @@ def shaped(parity: dict) -> bool:
 
 
 REASONS: dict = yaml.safe_load(DEVIATIONS.read_text()) or {} if DEVIATIONS.exists() else {}
+KNOWN_FAILING: dict[str, str] = yaml.safe_load(KNOWN_FAILING_FILE.read_text()) or {}
 
 
 def settled(committed: object, fresh: object) -> object:
@@ -1075,6 +1077,7 @@ def main() -> int:
             shutil.rmtree(folder)
     stamped: dict[str, dict] = {}
     broken = []
+    fixed = []
     for stem in ladder:
         parity, structural, good = lanes(stem)
         if 'unattached' in parity:
@@ -1114,8 +1117,10 @@ def main() -> int:
             else f'{len(shape_["differences"])} of {len(shape_["per_name"]["rows"]) + len(shape_["per_name"]["columns"])} names differ'
         )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
-        if not good:
+        if not good and stem not in KNOWN_FAILING:
             broken.append(stem)
+        if good and stem in KNOWN_FAILING:
+            fixed.append(stem)
     # the full file's inventory and the conjunct verdicts feed `coverage` below and are not committed
     recorded = {
         stem: record | {'parity': {key: v for key, v in record['parity'].items() if key not in UNCOMMITTED}}
@@ -1148,6 +1153,7 @@ def main() -> int:
         [gap for gap in found if gap not in known]
         + [f'untested.txt: a rung tests this now, so the line goes — {line}' for line in known if line not in found]
         + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+        + [f'known_failing.yaml: {stem} matches now, so its line goes — {KNOWN_FAILING[stem]}' for stem in fixed]
     )
     for gap in gaps:
         print(gap, file=sys.stderr)

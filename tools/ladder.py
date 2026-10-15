@@ -394,7 +394,9 @@ def index(stamped: dict) -> str:
         " rung's own spec attached to the tables `prep.py` makes of it."
         ' A difference in structure, duals or the linopy lane is allowed only'
         ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
-        ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
+        ' no rung needs. A rung the pinned corpus gets wrong is listed in `differential/pypsa/known_failing.yaml` with'
+        ' the issue that fixes it, and stays UNEXPLAINED here until the corpus carries the fix.'
+        ' A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
         'One kind of reason is checked rather than excused. Where the file states a row as PyPSA writes it negated —'
         ' a storage balance with the charge on the left, a ramp written the other way about — the dual is the'
