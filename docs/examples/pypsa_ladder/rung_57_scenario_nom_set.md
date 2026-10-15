@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-57--a-fixed-build-per-scenario): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **4800.0** on both sides; structure ≠ `Generator-p_nom_set` 2 vs 1 — the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57); size ≠ 86 vs 85 rows · ✔ 33 columns · ≠ 118 vs 117 nonzeros; duals ≠ 86 rows, `Generator-p_nom_set` off by 95.0 — PyPSA's identical pins, one per scenario, share one dual in any split, and the file's one pin carries their sum (rung 57); **model for model**: 12 blocks equal, 0 documented splits, 2 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **4800.0** on both sides; structure ≠ `Generator-p_nom_set` 2 vs 1 — the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57); size ≠ 86 vs 85 rows · ✔ 33 columns · ≠ 118 vs 117 nonzeros; duals ✔ 86 rows, 1 inside PyPSA's range; **model for model**: 12 blocks equal, 0 documented splits, 2 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-55--a-transformer-cycle-per-scenario): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **13105.0** on both sides; structure ✔ 8 constraints · 3 variables, name for name; size ✔ 152 rows · ✔ 56 columns · ✔ 208 nonzeros; duals ≠ 152 rows, `Bus-nodal_balance` off by 72.0 — UNEXPLAINED; `Generator-fix-p-lower` off by 72.0 — UNEXPLAINED; `Kirchhoff-Voltage-Law` off by 0.108 — UNEXPLAINED; `Transformer-fix-s-upper` off by 108.0 — UNEXPLAINED; **model for model**: 11 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **13105.0** on both sides; structure ✔ 8 constraints · 3 variables, name for name; size ✔ 152 rows · ✔ 56 columns · ✔ 208 nonzeros; duals ✔ 152 rows, 8 inside PyPSA's range; **model for model**: 11 blocks equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

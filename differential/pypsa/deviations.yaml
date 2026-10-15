@@ -67,4 +67,3 @@ Line-loss_secants-neg:
 Generator-p_nom_set:
   structure: the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57)
   blocks: the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57)
-  duals: PyPSA's identical pins, one per scenario, share one dual in any split, and the file's one pin carries their sum (rung 57)

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-45--ramp-limits-per-snapshot): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **10996.0** on both sides; structure ✔ 13 constraints · 3 variables, name for name; size ✔ 83 rows · ✔ 28 columns · ✔ 126 nonzeros; duals ✔ 83 rows, 2 negated; **model for model**: 16 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **10996.0** on both sides; structure ✔ 13 constraints · 3 variables, name for name; size ✔ 83 rows · ✔ 28 columns · ✔ 126 nonzeros; duals ✔ 83 rows, 3 negated; **model for model**: 16 blocks equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

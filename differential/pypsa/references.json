@@ -4,48 +4,63 @@
       "duals": {
         "compared": 45,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-p_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-p_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -161,117 +176,154 @@
       "duals": {
         "compared": 103,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-p_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-state_of_charge_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-e_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -506,6 +558,7 @@
       "duals": {
         "compared": 184,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
@@ -514,291 +567,387 @@
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-e_sum_max": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-e_sum_min": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 3
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-p_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 3
           },
           "Link-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-p_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-ext-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-ext-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-p_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-e_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "Store-ext-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-ext-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-ext-e_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-ext-e_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "tech_capacity_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 5
           },
           "transmission_expansion_cost_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -1288,63 +1437,82 @@
       "duals": {
         "compared": 64,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 3
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 3
           },
           "Link-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           }
         }
@@ -1474,111 +1642,146 @@
       "duals": {
         "compared": 102,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "operational_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           }
         }
@@ -1825,108 +2028,143 @@
       "duals": {
         "compared": 123,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Line-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-s_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-s_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "tech_capacity_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "transmission_expansion_cost_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -2637,36 +2875,47 @@
       "duals": {
         "compared": 92,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 28
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -2768,36 +3017,47 @@
       "duals": {
         "compared": 60,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -2898,78 +3158,103 @@
       "duals": {
         "compared": 468,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 90
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 60
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 60
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 70
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 70
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 7
           },
           "Link-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 40
           },
           "Link-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 40
           },
           "Link-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -3173,134 +3458,177 @@
       "duals": {
         "compared": 128,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-com-down-time": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Generator-com-p-before": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-p-current": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-com-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-com-partly-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-partly-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-status-min_up_time_must_stay_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-com-transition-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-com-transition-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-com-up-time": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 7
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 7
           },
           "Generator-shut_down-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-start_up-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-status-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -3535,108 +3863,143 @@
       "duals": {
         "compared": 150,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-loss_tangents-1--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-loss_tangents-1-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-loss_tangents-2--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-loss_tangents-2-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Line-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -3868,78 +4231,103 @@
       "duals": {
         "compared": 87,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "CVaR-def": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "CVaR-excess-calm": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "CVaR-excess-stormy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -4094,66 +4482,87 @@
       "duals": {
         "compared": 80,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Carrier-growth_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -4297,36 +4706,47 @@
       "duals": {
         "compared": 52,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -4428,96 +4848,129 @@
       "duals": {
         "compared": 70,
         "differences": {},
-        "negated": {},
+        "inside": 0,
+        "negated": {
+          "Process-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
+        },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Process-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Process-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Process-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Process-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
-            "negated": false,
+            "negated": true,
+            "outside": 0,
             "rows": 3
           },
           "Process-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-p_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Process-p_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -4703,102 +5156,135 @@
       "duals": {
         "compared": 106,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Transformer-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-s_nom_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-s_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -5023,96 +5509,127 @@
       "duals": {
         "compared": 150,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-loss_secants-neg": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Line-loss_secants-pos": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Line-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -5330,66 +5847,87 @@
       "duals": {
         "compared": 88,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -5547,117 +6085,154 @@
       "duals": {
         "compared": 74,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Carrier-growth_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-ext-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-ext-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Store-ext-e_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -5892,174 +6467,231 @@
       "duals": {
         "compared": 174,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-1--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-1-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-2--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-2-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-3--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_tangents-3-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-loss_tangents-1--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_tangents-1-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_tangents-2--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_tangents-2-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_tangents-3--1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_tangents-3-1": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -6382,126 +7014,167 @@
       "duals": {
         "compared": 142,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_secants-neg": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_secants-pos": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-loss_secants-neg": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Transformer-loss_secants-pos": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Transformer-loss_upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -8479,6 +9152,7 @@
       "duals": {
         "compared": 212,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
@@ -8486,93 +9160,123 @@
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 6
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 16
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           }
         }
@@ -8772,210 +9476,279 @@
       "duals": {
         "compared": 240,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-lower-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-lower-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s-upper-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-upper-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-lower-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-fix-s-lower-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-fix-s-upper-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-lower-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-ext-s-lower-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s-upper-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-ext-s-upper-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-lower-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-fix-s-lower-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-fix-s-upper-security-for-Transformer-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -9252,87 +10025,114 @@
       "duals": {
         "compared": 92,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -10924,99 +11724,130 @@
       "duals": {
         "compared": 155,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 8
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "operational_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -11216,111 +12047,146 @@
       "duals": {
         "compared": 84,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -11547,117 +12413,154 @@
       "duals": {
         "compared": 76,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-p_dispatch_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "StorageUnit-p_store_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-p_set": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -11885,48 +12788,63 @@
       "duals": {
         "compared": 104,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Process-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Process-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -12049,62 +12967,81 @@
       "duals": {
         "compared": 44,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Carrier-growth_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Store-ext-e_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Store-ext-e_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -12248,66 +13185,87 @@
       "duals": {
         "compared": 86,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -12470,36 +13428,47 @@
       "duals": {
         "compared": 96,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           }
         }
@@ -12601,60 +13570,79 @@
       "duals": {
         "compared": 84,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -12791,99 +13779,130 @@
       "duals": {
         "compared": 80,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -13345,87 +14364,115 @@
       "duals": {
         "compared": 83,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
-          "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
+          "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
+          "Process-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 2
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 2
           },
           "Link-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
-            "negated": false,
+            "negated": true,
+            "outside": 0,
             "rows": 2
           },
           "Process-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           }
         }
@@ -13915,116 +14962,153 @@
       "duals": {
         "compared": 179,
         "differences": {},
+        "inside": 0,
         "negated": {
           "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-com-p-before": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-p-current": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-com-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-com-partly-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-partly-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Generator-com-transition-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-com-transition-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-p-ramp_limit_down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 13
           },
           "Generator-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 10
           },
           "Generator-shut_down-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-start_up-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-status-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -14388,60 +15472,79 @@
       "duals": {
         "compared": 42,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -14578,36 +15681,47 @@
       "duals": {
         "compared": 32,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -14709,54 +15823,71 @@
       "duals": {
         "compared": 26,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Carrier-growth_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -14879,66 +16010,87 @@
       "duals": {
         "compared": 86,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Link-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "transmission_expansion_cost_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -15082,54 +16234,71 @@
       "duals": {
         "compared": 70,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-ext-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-ext-s_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Line-ext-s_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "transmission_volume_expansion_limit": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           }
         }
@@ -15258,72 +16427,72 @@
     "parity": {
       "duals": {
         "compared": 152,
-        "differences": {
-          "Bus-nodal_balance": {
-            "max_abs_diff": 72.0,
-            "reason": null
-          },
-          "Generator-fix-p-lower": {
-            "max_abs_diff": 72.0,
-            "reason": null
-          },
-          "Kirchhoff-Voltage-Law": {
-            "max_abs_diff": 0.108,
-            "reason": null
-          },
-          "Transformer-fix-s-upper": {
-            "max_abs_diff": 108.0,
-            "reason": null
-          }
-        },
+        "differences": {},
+        "inside": 8,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
-            "matches": false,
+            "inside": 2,
+            "matches": true,
             "max_abs_diff": 72.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-lower": {
-            "matches": false,
+            "inside": 2,
+            "matches": true,
             "max_abs_diff": 72.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Kirchhoff-Voltage-Law": {
-            "matches": false,
+            "inside": 2,
+            "matches": true,
             "max_abs_diff": 0.108,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Transformer-fix-s-upper": {
-            "matches": false,
+            "inside": 2,
+            "matches": true,
             "max_abs_diff": 108.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           }
         }
@@ -15453,66 +16622,87 @@
       "duals": {
         "compared": 216,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-fix-s-lower-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Line-fix-s-upper-security-for-Line-outage-in-sub-network-2": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -15655,72 +16845,88 @@
     "parity": {
       "duals": {
         "compared": 86,
-        "differences": {
-          "Generator-p_nom_set": {
-            "max_abs_diff": 95.0,
-            "reason": "PyPSA's identical pins, one per scenario, share one dual in any split, and the file's one pin carries their sum (rung 57)"
-          }
-        },
+        "differences": {},
+        "inside": 1,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-p_nom_set": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 95.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
@@ -16065,128 +17271,169 @@
       "duals": {
         "compared": 133,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -16435,102 +17682,135 @@
       "duals": {
         "compared": 176,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 32
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 24
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 20
           },
           "Line-v_ang-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-v_ang-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Transformer-v_ang-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-v_ang-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-v_ang-var-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Transformer-v_ang-var-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -17692,54 +18972,71 @@
       "duals": {
         "compared": 62,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 10
           },
           "Line-fix-s-lower-security-for-Line-outage-in-sub-network-0-period-2030": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 10
           },
           "Line-fix-s-upper-security-for-Line-outage-in-sub-network-0-period-2030": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           }
         }
@@ -17861,267 +19158,323 @@
     "parity": {
       "duals": {
         "compared": 184,
-        "differences": {
-          "Link-com-partly-shut-down": {
-            "max_abs_diff": 384.791666667,
-            "reason": null
-          },
-          "Link-p-ramp_limit_down": {
-            "compared": "negated",
-            "max_abs_diff": 384.791666667,
-            "reason": null
-          },
-          "Process-com-p-before": {
-            "max_abs_diff": 33.291666667,
-            "reason": null
-          },
-          "Process-com-p-lower": {
-            "max_abs_diff": 33.291666667,
-            "reason": null
-          },
-          "Process-com-partly-shut-down": {
-            "max_abs_diff": 420.333333333,
-            "reason": null
-          },
-          "Process-p-ramp_limit_down": {
-            "max_abs_diff": 1094.541666667,
-            "reason": null
-          }
+        "differences": {},
+        "inside": 6,
+        "negated": {
+          "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
+          "Process-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
-        "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 12
           },
           "Link-com-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-ext-p-lower-nonneg": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-ext-p-upper-bigM": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-ext-p-upper-cap": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-p-before": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-com-p-current": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-com-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-com-partly-shut-down": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 384.791666667,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-com-partly-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-com-transition-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-com-transition-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-com-up-time": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Link-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-p-ramp_limit_down": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 384.791666667,
             "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Link-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Link-shut_down-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-start_up-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-status-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Process-com-p-before": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 33.291666667,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-com-p-current": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-com-p-lower": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 33.291666667,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-com-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-com-partly-shut-down": {
-            "matches": false,
+            "inside": 1,
+            "matches": true,
             "max_abs_diff": 420.333333333,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-com-partly-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-com-transition-shut-down": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-com-transition-start-up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-com-up-time": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 3
           },
           "Process-p-ramp_limit_down": {
-            "matches": false,
-            "max_abs_diff": 1094.541666667,
-            "negated": false,
+            "inside": 1,
+            "matches": true,
+            "max_abs_diff": 453.625,
+            "negated": true,
+            "outside": 0,
             "rows": 4
           },
           "Process-p-ramp_limit_up": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-shut_down-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-start_up-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Process-status-p-fixed-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -18517,54 +19870,71 @@
       "duals": {
         "compared": 46,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Kirchhoff-Voltage-Law": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Line-fix-s-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Line-fix-s-lower-security-for-Line-outage-in-sub-network-0-period-2020": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Line-fix-s-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 6
           },
           "Line-fix-s-upper-security-for-Line-outage-in-sub-network-0-period-2020": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           }
         }
@@ -18687,93 +20057,122 @@
       "duals": {
         "compared": 33,
         "differences": {},
+        "inside": 0,
         "negated": {
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 4
           },
           "StorageUnit-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-p_dispatch-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-p_dispatch-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-p_store-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-p_store-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-state_of_charge-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "StorageUnit-fix-state_of_charge-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Store-energy_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": true,
+            "outside": 0,
             "rows": 2
           },
           "Store-fix-e-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Store-fix-e-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "primary_energy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           }
         }
@@ -18966,78 +20365,103 @@
       "duals": {
         "compared": 87,
         "differences": {},
+        "inside": 0,
         "negated": {},
         "per_name": {
           "Bus-nodal_balance": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "CVaR-def": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "CVaR-excess-calm": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "CVaR-excess-stormy": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 1
           },
           "Generator-ext-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Generator-ext-p_nom-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-ext-p_nom-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 2
           },
           "Generator-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Generator-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 16
           },
           "Link-fix-p-lower": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           },
           "Link-fix-p-upper": {
+            "inside": 0,
             "matches": true,
             "max_abs_diff": 0.0,
             "negated": false,
+            "outside": 0,
             "rows": 8
           }
         }
