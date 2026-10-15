@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import pandas as pd
 import polars as pl
 import pytest
 
 from tests.conftest import override
 from tests.differential import RTOL, both_lanes_refuse, differential
+from tests.oracle import pd
 
 BASE: dict[str, Any] = {
     'dimensions': {'f': {'dtype': 'str'}},
