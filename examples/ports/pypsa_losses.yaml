@@ -9,6 +9,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -21,6 +22,7 @@ dimensions:
   segment:
     description: the tangent points the loss curve is approximated at
     dtype: int
+    ordered: true
 
 relations:
   gen_bus:
@@ -55,6 +57,7 @@ parameters:
       carried as a column because a bound takes a name or a number, and given
       only for the lines that dissipate anything
     dims: [line]
+    missing: absent
   loss_slope:
     description: >-
       the slope of this segment's half-plane — how much loss the flow buys
@@ -62,11 +65,13 @@ parameters:
       the model's: a tangent to the loss curve and a secant across it both
       arrive here as a slope and an offset.
     dims: [line, segment]
+    missing: absent
   loss_offset:
     description: >-
       where this segment's half-plane meets the loss axis, negative for a curve
       through the origin
     dims: [line, segment]
+    missing: absent
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -93,7 +98,7 @@ variables:
       their rows.
     dims: [snapshot, line]
     where: loss_max
-    absence: zero
+    missing: neutral
     bounds:
       lower: 0
       upper: loss_max
@@ -106,9 +111,9 @@ constraints:
       a branch dissipates half at either end
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=to, over=line, into=bus) - sum(f, by=from, over=line, into=bus)
-      - 0.5 * sum(loss, by=from, over=line, into=bus) - 0.5 * sum(loss, by=to, over=line, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus])
+      - 0.5 * sum(loss, over=line, by=from[bus]) - 0.5 * sum(loss, over=line, by=to[bus])
       == load
 
   within_rating_forward:

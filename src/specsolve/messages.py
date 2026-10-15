@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
-from mathspec import did_you_mean
+from mathspec.errors import did_you_mean
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -49,14 +49,32 @@ def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> s
     return '; '.join(coordinate_text(dict(zip(dims, row, strict=True))) for row in rows)
 
 
+def missing_row_message(kind: str, name: str, coordinate: str, missing: int) -> str:
+    """The message for a parameter or a relation with no row at a coordinate, where the spec refuses a missing row."""
+    more = f', and {missing - 1} more coordinates have no row' if missing > 1 else ''
+    if kind == 'relation':
+        ways = '  Declare `missing: absent` on the relation, if a key with no row is meant.'
+    else:
+        ways = (
+            '  Declare `missing: absent`, if the parameter does not exist there.\n'
+            '  Declare `missing: neutral`, if a missing row contributes nothing.\n'
+            '  Declare `missing: <value>`, if a missing row reads as one value.'
+        )
+    return (
+        f"{kind} '{name}' has no row at {coordinate}{more}. The spec does not declare `missing:` "
+        f'for it, so a missing row is refused.\n'
+        f'  Supply the missing rows, if the data lost them.\n{ways}'
+    )
+
+
 def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """The message for a constant side covering fewer coordinates than its rows."""
     return (
         f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
-        f'built here. A missing row is read as 0, and on the constant side that zero is a '
+        f'built here. A missing neutral row is read as 0, and on the constant side that zero is a '
         f'bound rather than an absence — the row still exists, and it binds.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
-        f'  Mask them out with a where, if the row should not exist there.\n'
+        f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
         f'  Drop the declaration, if the spec has no such quantity at all.'
     )
 
@@ -68,7 +86,7 @@ def sparse_divisor_message(name: str, missing: int) -> str:
         f'coordinates than it is indexed over. A missing row means a zero '
         f'coefficient everywhere else, and zero is not a divisor: the term '
         f'would drop and the constraint would silently stop constraining.\n'
-        f'  Supply the missing rows, or mask the coordinates out with a where.'
+        f'  Supply the missing rows, or declare the parameter `missing: absent` to drop those rows.'
     )
 
 
@@ -89,6 +107,7 @@ def null_bounds_message(name: str, rows: int) -> str:
         f'values for some coordinates. The two ways out build different models, so the '
         f'language will not pick one:\n'
         f'  supply the value           the variable exists there, bounded (`inf` is a value)\n'
+        f'  missing: absent            the variable exists there, and that side is open\n'
         f'  where: "<the parameter>"   the variable does not exist there at all'
     )
 

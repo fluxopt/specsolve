@@ -179,9 +179,9 @@ def compile_predicate(
             on = scope.in_declaration_order(p.dims)
             alias = join_reduction(f'shift {p.along}', lambda a: _translated(scope, p, on, a), on)
             return falsy_if_null(pl.col(alias))
-        if isinstance(p, program.PulledBackPredicate):
+        if isinstance(p, program.JoinedPredicate):
             on = scope.in_declaration_order(p.dims)
-            alias = join_reduction(f'at {p.direction.name}', lambda a: _pulled_back(scope, p, a), on)
+            alias = join_reduction(f'at {p.columns.name}', lambda a: _joined(scope, p, a), on)
             return falsy_if_null(pl.col(alias))
         if isinstance(p, program.DimensionComparison):
             refuse_outside_frame(f"dimension '{p.name}'", p.name)
@@ -203,7 +203,17 @@ def compile_predicate(
         if isinstance(p, program.RelationDefined):
             return pl.col(join_relation(p.name, p.dims, None)).is_not_null()
         if isinstance(p, program.ParameterDefined):
-            return _defined(pl.col(join_param(p.name)), scope.program.parameters[p.name].dtype)
+            dtype = scope.program.parameters[p.name].dtype
+            defined = _defined(pl.col(join_param(p.name)), dtype)
+            if dtype == 'bool' or p.name not in scope.data.given:
+                return defined
+            given = carrier.once(
+                f'__where given {p.name}__',
+                lambda f, alias: join_on(
+                    f, scope.data.given[p.name].with_columns(pl.lit(value=True).alias(alias)), p.dims, 'left'
+                ),
+            )
+            return falsy_if_null(pl.col(given)) & defined
         if isinstance(p, program.VariableDefined):
             on = list(scope.program.variables[p.name].dims)
             coordinates = scope.variables[p.name].frame.select(*on)
@@ -219,6 +229,8 @@ def compile_predicate(
             return falsy_if_null(pl.col(flag))
         if isinstance(p, program.BooleanLiteral):
             return pl.lit(value=p.value)
+        if isinstance(p, program.NamedMask):
+            return walk(p.body)
         if isinstance(p, program.And):
             return walk(p.left) & walk(p.right)
         if isinstance(p, program.Or):
@@ -273,14 +285,14 @@ def _translated(scope: Scope, p: program.TranslatedPredicate, dims: tuple[str, .
     return translate_rows(scope, admitted, dims, [alias], p.along, p.offset)
 
 
-def _pulled_back(scope: Scope, p: program.PulledBackPredicate, alias: str) -> pl.LazyFrame:
+def _joined(scope: Scope, p: program.JoinedPredicate, alias: str) -> pl.LazyFrame:
     """Where the operand holds at the coarse coordinate the relation maps each fine one to, true-only.
 
     A fine coordinate the relation has no row for is a missing row, which reads as false.
     """
     dims = scope.in_declaration_order(p.operand.dims)
     admitted = masked(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
-    read, _ = walk_join(admitted, mapping(scope.data.relations, p.direction), p, dims, [alias])
+    read, _ = walk_join(admitted, mapping(scope.data.relations, p.columns), p.columns, dims, [alias])
     return read
 
 

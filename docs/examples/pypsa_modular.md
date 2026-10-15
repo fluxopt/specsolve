@@ -47,6 +47,26 @@ PyPSA modular capacity expansion: a technology bought in whole units. The capaci
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom,mod}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
+```
+
+**`n_mod`**
+
+```math
+n^{\mathrm{mod}}_{g} \ge 0, n^{\mathrm{mod}}_{g} \in \mathbb{Z} \qquad \forall\, g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -73,26 +93,6 @@ p^{\mathrm{nom}}_{g} = n^{\mathrm{mod}}_{g} \cdot \mathrm{p}^{\mathrm{nom,mod}}_
 \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
-```
-
-**`n_mod`**
-
-```math
-n^{\mathrm{mod}}_{g} \ge 0, n^{\mathrm{mod}}_{g} \in \mathbb{Z} \qquad \forall\, g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -111,6 +111,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -176,7 +177,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nodal_balance:
         description: what is generated at a bus meets the load there
         dims: [snapshot, bus]
-        expression: sum(p, by=gen_bus, over=generator, into=bus) == load
+        expression: sum(p, over=generator, by=gen_bus[bus]) == load
 
     objective:
       sense: minimize

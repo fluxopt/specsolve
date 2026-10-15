@@ -50,7 +50,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | $`\mathrm{gen}^{\mathrm{p,nom}}`$ | `gen_p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{L}`$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
-| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$ — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$, `neutral` where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 
 #### Variables
@@ -61,20 +61,6 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{gen}^{\mathrm{p,nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{gen}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
-#### Objective
-
-```math
-\min \sum_{g \in \mathcal{G}} \mathit{gen}_{g} \cdot \mathrm{marginal\_cost}_{g}
-```
-
-#### Subject to
-
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
-```
 
 #### Variable domains
 
@@ -88,6 +74,20 @@ Upright is what the data supplies — a parameter such as $`\mathrm{gen}^{\mathr
 
 ```math
 0 \le p_{l} \le \mathrm{p}^{\mathrm{nom}}_{l} \qquad \forall\, l \in \mathcal{L}
+```
+
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G}} \mathit{gen}_{g} \cdot \mathrm{marginal\_cost}_{g}
+```
+
+#### Subject to
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
 ```
 
 </details>
@@ -136,6 +136,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
           columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
+        missing: neutral
       load:
         description: demand at each bus
         dims: [bus]
@@ -165,7 +166,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           rows name — three ends or two, the expression never says.
         dims: [bus]
         expression: >-
-          sum(gen, by=gen_bus, over=generator, into=bus)
+          sum(gen, over=generator, by=gen_bus[bus])
           + sum(incidence * p, over=link)
           == load
 

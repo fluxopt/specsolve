@@ -1,6 +1,6 @@
 """A relation's table as a call reads it — the one place a role becomes a column.
 
-A `Direction` names roles; an operand carries its coordinates under dimension
+A `JoinColumns` names roles; an operand carries its coordinates under dimension
 names. Nothing here reads data or holds state.
 """
 
@@ -43,47 +43,46 @@ def group_column(role: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# a group or a pullback
+# a join
 # ---------------------------------------------------------------------------
 
 
-def mapping(relations: Mapping[str, pl.LazyFrame], direction: program.Direction) -> pl.LazyFrame:
-    """The table a group or a pullback joins against — the relation, read as the direction names it.
+def mapping(relations: Mapping[str, pl.LazyFrame], columns: program.JoinColumns) -> pl.LazyFrame:
+    """The table a join matches against — the relation, read as *columns* names it.
 
-    Consumed and joined columns arrive under their dimensions, produced ones
-    under [`landing`][]. A key the direction does not map has no row.
+    The columns joined on arrive under their dimensions, the columns it adds
+    under [`landing`][]. A key the relation has no row for has no row.
     """
-    table = relations[direction.name]
+    table = relations[columns.name]
     return table.select(
-        *(pl.col(role).alias(direction.dim(role)) for role in (*direction.consumed, *direction.joined)),
-        *(pl.col(role).alias(landing(direction.dim(role))) for role in direction.produced),
+        *(pl.col(role).alias(columns.dim(role)) for role in columns.joined),
+        *(pl.col(role).alias(landing(columns.dim(role))) for role in columns.added),
     )
 
 
-def landed(mapping: pl.LazyFrame, node: program.GroupSum | program.Pullback) -> pl.LazyFrame:
-    """*mapping* at the coordinates it lands on: the joined dimensions and the produced ones, under their names."""
-    joined = node.direction.joined_dims
-    return mapping.select(*joined, *(pl.col(landing(d)).alias(d) for d in node.direction.produced_dims))
+def landed(mapping: pl.LazyFrame, columns: program.JoinColumns) -> pl.LazyFrame:
+    """*mapping* at the coordinates it lands on: the kept dimensions and the added ones, under their names."""
+    kept = tuple(columns.dim(role) for role in columns.kept)
+    return mapping.select(*kept, *(pl.col(landing(d)).alias(d) for d in columns.added_dims))
 
 
 def walk_join(
     frame: pl.LazyFrame,
     mapping: pl.LazyFrame,
-    node: program.GroupSum | program.Pullback | program.PulledBackPredicate,
+    columns: program.JoinColumns,
     have: Sequence[str],
-    columns: Sequence[str] = (),
+    carried: Sequence[str] = (),
 ) -> tuple[pl.LazyFrame, tuple[str, ...]]:
     """*frame* traded through *mapping*: one inner equi-join, and the dimensions the result is over.
 
-    The result keeps *have* less the consumed dims, gains the produced ones, and
-    keeps *columns*. A self-map consumes and produces one dimension, so the two
-    are traded in a single select.
+    The result keeps *have* less the dropped dims, gains the added ones, and
+    keeps *carried*. A self-map drops and adds one dimension, so the two are
+    traded in a single select.
     """
-    direction = node.direction
-    gained = direction.produced_dims
-    keep = [d for d in have if d not in direction.consumed_dims]
-    traded = frame.join(mapping, on=[*direction.consumed_dims, *direction.joined_dims], how='inner').select(
-        *keep, *(pl.col(landing(d)).alias(d) for d in gained), *columns
+    gained = columns.added_dims
+    keep = [d for d in have if d not in columns.dropped_dims]
+    traded = frame.join(mapping, on=list(columns.joined_dims), how='inner').select(
+        *keep, *(pl.col(landing(d)).alias(d) for d in gained), *carried
     )
     return traded, (*keep, *gained)
 
@@ -130,11 +129,11 @@ class Grouping:
         """Rank the dimension *partition* steps along inside the groups its ``within=`` columns make."""
         dimension = partition.along_dim
         joined = partition.joined_dims
-        groups = tuple(group_column(role) for role in partition.group)
+        groups = tuple(group_column(role) for role in partition.grouped)
         rows = data.relations[partition.name].select(
             pl.col(partition.along).alias('val'),
             *(pl.col(role).alias(dim) for role, dim in zip(partition.joined, joined, strict=True)),
-            *(pl.col(role).alias(column) for role, column in zip(partition.group, groups, strict=True)),
+            *(pl.col(role).alias(column) for role, column in zip(partition.grouped, groups, strict=True)),
         )
         key = [*joined, *groups]
         table = (
@@ -145,7 +144,7 @@ class Grouping:
                 pl.len().over(key).cast(pl.Int64).alias(GROUP_SIZE),
             )
         )
-        return cls(dimension, joined, groups, tuple(partition.dim(role) for role in partition.group), table)
+        return cls(dimension, joined, groups, tuple(partition.dim(role) for role in partition.grouped), table)
 
     @property
     def key(self) -> tuple[str, ...]:

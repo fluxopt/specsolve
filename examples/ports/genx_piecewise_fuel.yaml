@@ -13,12 +13,15 @@ dimensions:
   hour:
     description: hours of a representative day that repeats
     dtype: int
+    ordered: true
   segment:
     description: a piece of the fuel curve
     dtype: int
+    ordered: true
   step:
     description: a block of demand that may be shed, each dearer than the last
     dtype: int
+    ordered: true
   commitment_mode:
     description: the ways a plant may be committed
     dtype: str
@@ -58,12 +61,15 @@ parameters:
   fuel_slope:
     description: fuel per unit of output on one piece of the curve
     dims: [plant, segment]
+    missing: absent
   fuel_intercept:
     description: no-load fuel of one piece, charged per committed unit
     dims: [plant, segment]
+    missing: absent
   heat_rate:
     description: fuel per unit of output for a plant with no curve
     dims: [plant]
+    missing: absent
   start_fuel:
     description: fuel burned per unit of capacity started
     dims: [plant]
@@ -77,6 +83,7 @@ parameters:
   start_cost:
     description: what starting one unit of capacity costs
     dims: [plant]
+    missing: neutral
   weight:
     description: how many real hours an hour of the representative day stands for
     dims: [hour]

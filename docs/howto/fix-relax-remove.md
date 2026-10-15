@@ -99,7 +99,7 @@ units = {'generator': generators['generator'], 'snapshot': load['snapshot'], 'lo
 mip = sps.solve(UNITS, units)
 
 fixable = to_spec(UNITS).to_dict()
-fixable['parameters']['on_fixed'] = {'dims': ['snapshot', 'generator']}
+fixable['parameters']['on_fixed'] = {'dims': ['snapshot', 'generator'], 'missing': 'absent'}
 fixable['variables']['on'] |= {'domain': 'continuous', 'bounds': {'lower': 'on_fixed', 'upper': 'on_fixed'}}
 
 priced = sps.solve(fixable, units | {'on_fixed': mip.primal('on')})
@@ -117,6 +117,7 @@ keeping gas on.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 ramped = to_spec(MODEL).to_dict()
+ramped['dimensions']['snapshot']['ordered'] = True
 ramped['parameters']['ramp_max'] = {'dims': ['generator']}
 ramped['constraints']['ramp_up'] = {
     'dims': ['snapshot', 'generator'],

@@ -54,20 +54,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{
 
 $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
 
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ e \in \mathcal{E}} p_{t,e} \cdot \mathrm{marginal\_cost}_{e}
-```
-
-#### Subject to
-
-**`nodal_balance`**
-
-```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
 #### Variable domains
 
 **`p`**
@@ -80,6 +66,20 @@ $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`
 
 ```math
 0 \le g_{t,l} \le \mathrm{link\_p\_nom}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+```
+
+#### Objective
+
+```math
+\min \sum_{t \in \mathcal{T},\ e \in \mathcal{E}} p_{t,e} \cdot \mathrm{marginal\_cost}_{e}
+```
+
+#### Subject to
+
+**`nodal_balance`**
+
+```math
+\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 </details>
@@ -102,6 +102,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -171,9 +172,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           snapshot to have taken anything in.
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, by=link_to, over=link, into=bus)
-          - sum(g, by=link_from, over=link, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link_to[bus])
+          - sum(g, over=link, by=link_from[bus])
           == load
 
     objective:

@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import xarray as xr
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
     from specsolve.inputs import Label
     from specsolve.relational.answer_layout import FrameWriter, Output

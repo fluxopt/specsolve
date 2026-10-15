@@ -7,9 +7,11 @@ dimensions:
   snapshot:
     description: dispatch periods, each falling in one investment period
     dtype: int
+    ordered: true
   period:
     description: investment periods, the grouping capacity is decided over
     dtype: int
+    ordered: true
   generator:
     description: generating units
     dtype: str
@@ -51,7 +53,7 @@ constraints:
   within_cap:
     description: output in a snapshot is capped by the capacity of the period it falls in
     dims: [snapshot, generator]
-    expression: p <= at(p_nom, by=period_of, over=period, into=snapshot)
+    expression: p <= at(p_nom, by=period_of[period])
   balance:
     dims: [snapshot]
     expression: sum(p, over=generator) == load

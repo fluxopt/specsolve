@@ -57,7 +57,7 @@ def test_the_dump_is_stable(path: Path):
 def test_a_dict_built_model_gets_a_file():
     """A model built as a dict gets a reviewable file, and it is the same spec."""
     built = {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'cost': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'cap': {'dims': ['t'], 'expression': 'x <= 4'}},
@@ -74,7 +74,7 @@ def test_a_dict_built_model_gets_a_file():
 def test_a_declared_version_survives():
     """`version:` is not a default when the file states it — a dumped model has
     to keep saying which surface it targets (#67)."""
-    text = to_spec({'version': 0, 'dimensions': {'t': {'dtype': 'int'}}}).to_yaml()
+    text = to_spec({'version': 0, 'dimensions': {'t': {'dtype': 'int', 'ordered': True}}}).to_yaml()
     assert 'version: 0' in text
 
 
@@ -93,7 +93,7 @@ def test_absence_is_dropped_and_values_are_kept():
     """The whole rule, both halves: absence is dropped, every value is kept, default or not."""
     text = to_spec(
         {
-            'dimensions': {'t': {'dtype': 'int'}},
+            'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
             'variables': {'x': {'dims': ['t']}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
         }
@@ -113,7 +113,7 @@ def test_json_carries_a_model_too():
     """
     spec = to_spec(
         {
-            'dimensions': {'t': {'dtype': 'int'}},
+            'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
             'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}, 'y': {'dims': ['t']}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(y)'},
         }

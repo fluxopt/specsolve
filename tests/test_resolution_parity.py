@@ -76,7 +76,7 @@ ACCEPTED = [
     'p_max > cost',
     'p_max >= 0.5 * p_max',
     'count(load, over=snapshot) >= 1',
-    'p_max OR shift(p_max, along=generator, offset=1)',
+    'p_max > 0 OR shift(load > 100, along=snapshot, offset=1)',
 ]
 
 #: Predicates this sweep cannot host, with the test that checks each instead. A
@@ -87,7 +87,8 @@ COVERED_ELSEWHERE = {
     'RelationComparison': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
     'RelationPairComparison': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
     'RelationDefined': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
-    'PulledBackPredicate': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
+    'JoinedPredicate': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
+    'NamedMask': 'tests/test_resolution_parity.py::test_a_named_mask_builds_the_model_its_where_builds',
 }
 
 
@@ -99,9 +100,19 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_spec_inputs, where):
     is not the claim here, and neither lane is asked to make every mask
     feasible.
     """
-    data = dispatch_spec_inputs
-    path = dispatch_spec_path(tmp_path, **{'variables.p.where': where})
+    _both_lanes_agree(dispatch_spec_path(tmp_path, **{'variables.p.where': where}), dispatch_spec_inputs, where)
 
+
+def test_a_named_mask_builds_the_model_its_where_builds(tmp_path, dispatch_spec_inputs):
+    """A `masks:` entry read by name masks what its `where` masks, on both lanes."""
+    named = dispatch_spec_path(
+        tmp_path, **{'masks.generates': {'where': 'p_max > 150'}, 'variables.p.where': 'NOT generates'}
+    )
+    _both_lanes_agree(named, dispatch_spec_inputs, 'NOT generates')
+
+
+def _both_lanes_agree(path, data, where):
+    """Both lanes build the same number of `p` variables from *path*, and end in the same status."""
     m = specsolve_linopy.build(path, data)
     linopy_rows = int((m.variables['p'].labels != -1).sum())
     linopy_status = m.solve(solver_name='highs')[1]
@@ -173,7 +184,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_spec_inputs)
 #: constants alone.
 EMPTY_AXIS_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'int'}},
-    'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool'}},
+    'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool', 'missing': 'neutral'}},
     'variables': {
         'w': {'dims': ['g', 'k'], 'where': 'exists', 'bounds': {'lower': 0, 'upper': 1}},
         'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -217,8 +228,8 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
 #: members, its expression summing over one that has some — PyPSA's
 #: Kirchhoff voltage law on a network with no cycles.
 EMPTY_FOREACH_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}, 'cycle': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
-    'parameters': {'w': {'dims': ['cycle', 'line']}, 'cost': {'dims': ['line']}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'cycle': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
+    'parameters': {'w': {'dims': ['cycle', 'line'], 'missing': 'neutral'}, 'cost': {'dims': ['line']}},
     'variables': {'s': {'dims': ['t', 'line'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'kvl': {'dims': ['t', 'cycle'], 'expression': 'sum(w * s, over=line) == 0'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(cost * s)'},
@@ -252,8 +263,8 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
 
 
 BOOL_MASK_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'active': {'dims': ['t'], 'dtype': 'bool'}, 'cap': {'dims': ['t']}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'active': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'floor': {'dims': ['t'], 'expression': 'x >= cap', 'where': 'active'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
@@ -325,7 +336,7 @@ def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objecti
 
 
 DATETIME_SPEC = {
-    'dimensions': {'snapshot': {'dtype': 'datetime'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'datetime', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
     'variables': {'p': {'dims': ['snapshot', 'generator'], 'where': "snapshot > '2030-01-02'", 'bounds': {'lower': 0}}},
     'constraints': {

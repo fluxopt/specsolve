@@ -57,8 +57,8 @@ from specsolve.sweep import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
 
-    from mathspec import Spec
     from mathspec.program import Expression
+    from mathspec.spec import Spec
 
     from specsolve.axes import Axis
     from specsolve.inputs import Buildable, Label, Source

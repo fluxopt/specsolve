@@ -21,8 +21,8 @@ from tests.conftest import by_coord
 def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
     return {
         'dimensions': {
-            'snapshot': {'dtype': 'int'},
-            'period': {'dtype': 'int'},
+            'snapshot': {'dtype': 'int', 'ordered': True},
+            'period': {'dtype': 'int', 'ordered': True},
         },
         'relations': {'period_of': {'key': 'snapshot', 'values': 'period'}},
         'parameters': {'load': {'dims': ['snapshot']}},
@@ -81,8 +81,8 @@ def test_a_by_typo_is_offered_the_relations_it_could_have_meant():
     spec = _spec()
     spec['dimensions']['bus'] = {'dtype': 'str'}
     spec['relations']['bus_of'] = {'key': 'snapshot', 'values': 'bus'}
-    spec['constraints']['c'] = {'dims': ['bus'], 'expression': 'sum(x, by=bus_ov, over=snapshot, into=bus) >= load'}
-    with pytest.raises(SpecsolveError, match=r'by=bus_ov\) does not name a relation') as caught:
+    spec['constraints']['c'] = {'dims': ['bus'], 'expression': 'sum(x, over=snapshot, by=bus_ov[bus]) >= load'}
+    with pytest.raises(SpecsolveError, match=r'by=bus_ov\[...\]\) does not name a relation') as caught:
         sps.check(spec)
     assert "'bus_of'" in str(caught.value), 'a typo is answered with the relations that were declared'
 
@@ -113,7 +113,7 @@ def test_a_dimension_grouped_into_draws_no_advice():
         'constraints': {'c': {'dims': ['generator'], 'expression': 'p <= 1'}},
         'objective': {
             'sense': 'minimize',
-            'expression': 'sum(sum(p * cost, by=gen_bus, over=generator, into=bus), over=bus)',
+            'expression': 'sum(sum(p * cost, over=generator, by=gen_bus[bus]), over=bus)',
         },
     }
     with warnings.catch_warnings():
@@ -145,8 +145,8 @@ def _unused_target_spec(month: dict) -> dict:
     """
     return {
         'dimensions': {
-            'snapshot': {'dtype': 'int'},
-            'period': {'dtype': 'int'},
+            'snapshot': {'dtype': 'int', 'ordered': True},
+            'period': {'dtype': 'int', 'ordered': True},
             'month': month,
         },
         'relations': {
@@ -156,7 +156,7 @@ def _unused_target_spec(month: dict) -> dict:
         'parameters': {'cap': {'dims': ['period']}},
         'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {
-            'budget': {'dims': ['period'], 'expression': 'sum(p, by=period_of, over=snapshot, into=period) <= cap'}
+            'budget': {'dims': ['period'], 'expression': 'sum(p, over=snapshot, by=period_of[period]) <= cap'}
         },
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=snapshot)'},
     }
@@ -175,8 +175,10 @@ def _unused_target_sources() -> dict:
 @pytest.mark.parametrize(
     ('month', 'extra'),
     [
-        pytest.param({'dtype': 'str'}, {'month': pl.DataFrame({'month': ['jan', 'feb']})}, id='a-table'),
-        pytest.param({'dtype': 'str'}, {'month': ['jan', 'feb']}, id='a-bare-sequence'),
+        pytest.param(
+            {'dtype': 'str', 'ordered': True}, {'month': pl.DataFrame({'month': ['jan', 'feb']})}, id='a-table'
+        ),
+        pytest.param({'dtype': 'str', 'ordered': True}, {'month': ['jan', 'feb']}, id='a-bare-sequence'),
     ],
 )
 def test_a_relation_may_target_a_dimension_nothing_spans_yet(month, extra):
@@ -193,7 +195,7 @@ def test_an_unused_target_still_checks_containment(lane):
     build = sps.build if lane == 'relational' else specsolve_linopy.build
     short = {'month': pl.DataFrame({'month': ['jan']})}
     with pytest.raises(DataError, match="not 'month' labels"):
-        build(_unused_target_spec({'dtype': 'str'}), _unused_target_sources() | short)
+        build(_unused_target_spec({'dtype': 'str', 'ordered': True}), _unused_target_sources() | short)
 
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
@@ -203,7 +205,7 @@ def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane)
 
     build = sps.build if lane == 'relational' else specsolve_linopy.build
     with pytest.raises(DataError, match='no index of its own') as caught:
-        build(_unused_target_spec({'dtype': 'str'}), _unused_target_sources())
+        build(_unused_target_spec({'dtype': 'str', 'ordered': True}), _unused_target_sources())
     assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
 
 
@@ -239,7 +241,7 @@ NETWORK = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {'dtype': 'str'}, 'kv': {'dtype': 'int'}},
     'relations': {
         'send': {'key': 'line', 'values': 'bus'},
-        'recv': {'key': 'line', 'values': 'bus'},
+        'recv': {'key': 'line', 'values': 'bus', 'missing': 'absent'},
         'voltage': {'key': 'line', 'values': 'kv'},
     },
     'parameters': {'cap': {'dims': ['line']}, 'price': {'dims': ['line']}},
@@ -278,12 +280,8 @@ NETWORK_SOURCES = {
         pytest.param('recv', ['loop', 'ring_a', 'ring_b'], id='a-bare-relation-is-the-partial-case'),
         pytest.param('NOT voltage == 220', ['ring_b', 'spur'], id='negated'),
         pytest.param('voltage == 380 AND send != recv', ['ring_b'], id='conjoined-with-a-pair-comparison'),
-        pytest.param(
-            "at(bus == 'north', by=send, over=bus, into=line)", ['loop', 'ring_a', 'spur'], id='a-predicate-read-at'
-        ),
-        pytest.param(
-            "at(bus == 'north', by=recv, over=bus, into=line)", ['loop', 'ring_b'], id='read-at-a-partial-relation'
-        ),
+        pytest.param("at(bus == 'north', by=send[bus])", ['loop', 'ring_a', 'spur'], id='a-predicate-read-at'),
+        pytest.param("at(bus == 'north', by=recv[bus])", ['loop', 'ring_b'], id='read-at-a-partial-relation'),
     ],
 )
 def test_a_where_reads_a_relation(where, kept):
@@ -310,13 +308,9 @@ def test_a_where_reads_a_relation(where, kept):
         # the linopy lane's null exclusion: numpy answers `None != 'north'` with True
         pytest.param("recv != 'north'", 10.0, id='not-equal-over-a-null-value'),
         pytest.param('recv != send', 30.0, id='not-equal-between-two-relations'),
-        pytest.param("at(bus == 'north', by=send, over=bus, into=line)", 80.0, id='a-predicate-read-at'),
-        pytest.param(
-            "NOT at(bus == 'south', by=recv, over=bus, into=line)", 90.0, id='negated-read-at-a-partial-relation'
-        ),
-        pytest.param(
-            "at(bus == 'north', by=recv, over=bus, into=line) AND voltage == 220", 30.0, id='read-at-conjoined'
-        ),
+        pytest.param("at(bus == 'north', by=send[bus])", 80.0, id='a-predicate-read-at'),
+        pytest.param("NOT at(bus == 'south', by=recv[bus])", 90.0, id='negated-read-at-a-partial-relation'),
+        pytest.param("at(bus == 'north', by=recv[bus]) AND voltage == 220", 30.0, id='read-at-conjoined'),
     ],
 )
 def test_a_relation_where_agrees_with_the_oracle(where, objective):
@@ -358,11 +352,13 @@ def test_a_where_on_a_relation_outside_the_frame_is_refused():
             'ceiling': {
                 'dims': ['bus'],
                 'where': 'voltage == 220',
-                'expression': 'sum(f, by=send, over=line, into=bus) <= 100',
+                'expression': 'sum(f, over=line, by=send[bus]) <= 100',
             }
         },
     }
-    with pytest.raises(SpecsolveError, match=r"where-relation 'voltage' reads dims \['line'\] outside the frame"):
+    with pytest.raises(
+        SpecsolveError, match=r"where-relation 'voltage' reads dims \['line'\] outside the declared dims"
+    ):
         to_spec(spec)
 
 
@@ -459,10 +455,10 @@ LOAD = [5.0, 4.0]
 
 BASE = {
     'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus', 'missing': 'absent'}},
     'parameters': {'cost': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
-    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, by=gen_bus, over=generator, into=bus) >= load'}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=gen_bus[bus]) >= load'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
@@ -562,6 +558,7 @@ def test_a_where_reads_a_map_that_leaves_a_label_out():
     the constraint is placed only where the map says something.
     """
     spec = _spec()
+    spec['relations']['period_of']['missing'] = 'absent'
     spec['constraints']['c']['where'] = 'period_of == 1'
     sources = {
         'snapshot': [0, 1, 2],
@@ -651,7 +648,7 @@ TWO_MAPS = {
     },
     'parameters': {'flow_max': {'dims': ['line']}, 'load': {'dims': ['bus']}},
     'variables': {'f': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 'flow_max'}}},
-    'constraints': {'served': {'dims': ['bus'], 'expression': 'sum(f, by=line_to, over=line, into=bus) >= load'}},
+    'constraints': {'served': {'dims': ['bus'], 'expression': 'sum(f, over=line, by=line_to[bus]) >= load'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(f, over=line)'},
 }
 
@@ -683,7 +680,7 @@ def test_the_second_map_is_checked_as_hard_as_the_first():
 #: index's row order — the order a map joined onto it must not disturb. `cap`
 #: pins the solution to `t = 0` alone, so the objective *is* that label's cost.
 POSITIONAL = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
     'relations': {'g_of': {'key': 't', 'values': 'g'}},
     'parameters': {'cost': {'dims': ['t']}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -719,7 +716,11 @@ def test_a_supplied_map_does_not_reorder_the_index_it_joins_onto():
 def _walked(relations: dict, expression: str) -> dict:
     """A model whose one constraint walks *relations*, with both ends named."""
     return {
-        'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int'}},
+        'dimensions': {
+            'generator': {'dtype': 'str'},
+            'bus': {'dtype': 'str'},
+            'period': {'dtype': 'int', 'ordered': True},
+        },
         'relations': relations,
         'parameters': {'load': {'dims': ['bus']}},
         'variables': {'p': {'dims': ['generator', 'period'], 'bounds': {'lower': 0, 'upper': 10}}},
@@ -733,17 +734,17 @@ def _walked(relations: dict, expression: str) -> dict:
     [
         pytest.param(
             {'gen_bus': {'key': 'generator', 'values': 'bus'}},
-            'sum(p, by=gen_bus, over=generator, into=bus) >= load',
+            'sum(p, over=generator, by=gen_bus[bus]) >= load',
             id='a-map-keyed-by-one-column',
         ),
         pytest.param(
-            {'gen_bus': {'key': ['generator', 'bus']}},
-            'sum(p, by=gen_bus, over=generator, into=bus) >= load',
+            {'gen_bus': {'key': ['generator', 'bus'], 'missing': 'absent'}},
+            'sum(p, over=generator, by=gen_bus[bus]) >= load',
             id='a-bare-relation',
         ),
         pytest.param(
             {'zone_of': {'key': ['generator', 'period'], 'values': 'bus'}},
-            'sum(p, by=zone_of, over=generator, into=bus) >= load',
+            'sum(p, over=generator, by=zone_of[bus]) >= load',
             id='a-map-keyed-by-two-columns',
         ),
     ],

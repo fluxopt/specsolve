@@ -53,6 +53,20 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -71,20 +85,6 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 
 ```math
 \sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
 ```
 
 </details>
@@ -107,9 +107,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, each falling in one investment period
         dtype: int
+        ordered: true
       period:
         description: investment periods, the grouping capacity is decided and paid over
         dtype: int
+        ordered: true
       generator:
         description: generating units, each existing in some periods and not others
         dtype: str
@@ -167,7 +169,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           all in a period it does not exist in — the activity is read down onto the
           snapshot through the period relation
         dims: [snapshot, generator]
-        expression: p <= p_nom * at(activity, by=period_of, over=period, into=snapshot)
+        expression: p <= p_nom * at(activity, by=period_of[period])
 
       power_balance:
         description: what exists in this snapshot meets the load
@@ -181,7 +183,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         period it falls in — capacity once per period the asset stands in, which is
         why an asset alive in both is paid for twice
       expression: >-
-        sum(p * opex * at(period_weight, by=period_of, over=period, into=snapshot))
+        sum(p * opex * at(period_weight, by=period_of[period]))
         + sum(p_nom * capex * activity * period_weight)
     ```
 
@@ -261,7 +263,7 @@ relation, so `p <= p_nom * 0` holds it at zero. Same optimum and same duals, sin
 a variable pinned to `[0, 0]` contributes nothing, but not the same model on
 paper.
 
-Writing the absence exactly would need `where: at(activity, by=period_of, over=period, into=snapshot)` on
+Writing the absence exactly would need `where: at(activity, by=period_of[period])` on
 the variable, and a `where:` cannot call `at()`: its grammar compares a name
 against a literal. A second table keyed by `(snapshot, generator)` would state
 one fact twice. [#982](https://github.com/fluxopt/specsolve/issues/982) asks

@@ -53,7 +53,10 @@ def _spec() -> dict[str, Any]:
     spec = law_spec('x <= 100', dims=['f', 't'])
     spec['dimensions']['s'] = {'dtype': 'str'}
     spec['parameters']['lead'] = {'dims': ['f'], 'dtype': 'int'}
-    spec['relations'] = {'season_of': {'key': 't', 'values': 's'}, 'tariff_of': {'key': 't', 'values': 's'}}
+    spec['relations'] = {
+        'season_of': {'key': 't', 'values': 's'},
+        'tariff_of': {'key': 't', 'values': 's', 'missing': 'absent'},
+    }
     spec['variables']['z'] = {'dims': [], 'bounds': {'lower': 0, 'upper': 1}}
     return spec
 
@@ -153,21 +156,21 @@ OPERATORS = [
     pytest.param('shift(y, along=t, offset=2)', id='shift-a-masked-variable-past-most-of-the-axis'),
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=t)', id='sum-a-vacated-edge-beside-a-present-term'),
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=f)', id='sum-across-a-vacated-edge'),
-    pytest.param('shift(x, along=t, offset=1, by=season_of, within=s)', id='shift-within-a-group'),
+    pytest.param('shift(x, along=t, offset=1, within=season_of[s])', id='shift-within-a-group'),
     pytest.param(
-        'sum(shift(x, along=t, offset=1, by=tariff_of, within=s) + x, over=t)',
+        'sum(shift(x, along=t, offset=1, within=tariff_of[s]) + x, over=t)',
         id='sum-a-shift-within-a-partial-group-beside-a-present-term',
     ),
     pytest.param('sum_back(x, along=t, window=2)', id='sum-back'),
     pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-masked-variable'),
     pytest.param('sum_back(x, along=t, window=lead)', id='sum-back-by-a-parameter-window'),
-    pytest.param('sum_back(x, along=t, window=2, by=season_of, within=s)', id='sum-back-within-a-group'),
+    pytest.param('sum_back(x, along=t, window=2, within=season_of[s])', id='sum-back-within-a-group'),
     pytest.param(
-        'sum(sum_back(x, along=t, window=2, by=tariff_of, within=s) + x, over=t)',
+        'sum(sum_back(x, along=t, window=2, within=tariff_of[s]) + x, over=t)',
         id='sum-a-sum-back-within-a-partial-group-beside-a-present-term',
     ),
-    pytest.param('sum(x, by=season_of, over=t, into=s)', id='sum-by-a-relation'),
-    pytest.param('sum(y, by=season_of, over=t, into=s)', id='sum-a-masked-variable-by-a-relation'),
+    pytest.param('sum(x, over=t, by=season_of[s])', id='sum-by-a-relation'),
+    pytest.param('sum(y, over=t, by=season_of[s])', id='sum-a-masked-variable-by-a-relation'),
     pytest.param('sum(y * w + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-masked-term'),
     pytest.param(
         'sum(shift(x, along=t, offset=1) + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-vacated-edge'

@@ -42,13 +42,13 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 | $`\mathrm{min\_output}`$ | `min_output` over $`\mathcal{P}`$ — share of unit size a committed unit must produce |
 | $`\mathrm{ramp}`$ | `ramp` over $`\mathcal{P}`$ — share of unit size output may change by from one hour to the next |
 | $`\mathrm{start\_headroom}`$ | `start_headroom` over $`\mathcal{P} \times \mathcal{H}`$ — share of unit size a unit may reach in the hour it starts |
-| $`\mathrm{fuel\_slope}`$ | `fuel_slope` over $`\mathcal{P} \times \mathcal{S}`$ — fuel per unit of output on one piece of the curve |
-| $`\mathrm{fuel\_intercept}`$ | `fuel_intercept` over $`\mathcal{P} \times \mathcal{S}`$ — no-load fuel of one piece, charged per committed unit |
-| $`\mathrm{heat\_rate}`$ | `heat_rate` over $`\mathcal{P}`$ — fuel per unit of output for a plant with no curve |
+| $`\mathrm{fuel\_slope}`$ | `fuel_slope` over $`\mathcal{P} \times \mathcal{S}`$, `absent` where the data has no row — fuel per unit of output on one piece of the curve |
+| $`\mathrm{fuel\_intercept}`$ | `fuel_intercept` over $`\mathcal{P} \times \mathcal{S}`$, `absent` where the data has no row — no-load fuel of one piece, charged per committed unit |
+| $`\mathrm{heat\_rate}`$ | `heat_rate` over $`\mathcal{P}`$, `absent` where the data has no row — fuel per unit of output for a plant with no curve |
 | $`\mathrm{start\_fuel}`$ | `start_fuel` over $`\mathcal{P}`$ — fuel burned per unit of capacity started |
 | $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{P} \times \mathcal{H}`$ — what a unit of the plant's fuel costs in that hour |
 | $`\mathrm{run\_cost}`$ | `run_cost` over $`\mathcal{P}`$ — variable cost of one unit of output, fuel aside |
-| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$ — what starting one unit of capacity costs |
+| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$, `neutral` where the data has no row — what starting one unit of capacity costs |
 | $`\mathrm{weight}`$ | `weight` over $`\mathcal{H}`$ — how many real hours an hour of the representative day stands for |
 | $`\mathrm{emitted}`$ | `emitted` over $`\mathcal{P}`$ — net CO2 per unit of fuel burned after capture, negative where the fuel took it up |
 | $`\mathrm{emitted}^{\mathrm{start}}`$ | `emitted_start` over $`\mathcal{P}`$ — net CO2 per unit of start-up fuel burned |
@@ -82,6 +82,70 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 Upright is what the data supplies — a parameter such as $`\mathrm{unit\_size}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{output}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+
+#### Variable domains
+
+**`output`**
+
+```math
+\mathit{output}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`burned`**
+
+```math
+\mathit{burned}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`burned_starting`**
+
+```math
+\mathit{burned}^{\mathrm{starting}}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`committed`**
+
+```math
+\mathit{committed}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`starting`**
+
+```math
+\mathit{starting}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`shutting`**
+
+```math
+\mathit{shutting}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`shed`**
+
+```math
+\mathit{shed}_{t,h} \ge 0 \qquad \forall\, t \in \mathcal{T},\ h \in \mathcal{H}
+```
+
+**`units`**
+
+```math
+0 \le \mathit{units}_{p} \le \mathrm{units}^{\mathrm{available}}_{p} \qquad \forall\, p \in \mathcal{P}
+```
+
+#### Definitions
+
+**`started_recently`**
+
+```math
+\mathit{started\_recently}_{p,h} = \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
+
+**`shut_recently`**
+
+```math
+\mathit{shut\_recently}_{p,h} = \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+```
 
 #### Objective
 
@@ -181,70 +245,6 @@ $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size 
 \sum_{p \in \mathcal{P}} \sum_{h \in \mathcal{H}} \left( \mathit{burned}_{p,h} \cdot \mathrm{emitted}_{p} \cdot \mathrm{weight}_{h} + \mathit{burned}^{\mathrm{starting}}_{p,h} \cdot \mathrm{emitted}^{\mathrm{start}}_{p} \cdot \mathrm{weight}_{h} \right) \le \mathrm{carbon\_cap}
 ```
 
-#### Definitions
-
-**`started_recently`**
-
-```math
-\mathit{started\_recently}_{p,h} = \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`shut_recently`**
-
-```math
-\mathit{shut\_recently}_{p,h} = \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-#### Variable domains
-
-**`output`**
-
-```math
-\mathit{output}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`burned`**
-
-```math
-\mathit{burned}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`burned_starting`**
-
-```math
-\mathit{burned}^{\mathrm{starting}}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`committed`**
-
-```math
-\mathit{committed}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`starting`**
-
-```math
-\mathit{starting}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`shutting`**
-
-```math
-\mathit{shutting}_{p,h} \ge 0 \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
-```
-
-**`shed`**
-
-```math
-\mathit{shed}_{t,h} \ge 0 \qquad \forall\, t \in \mathcal{T},\ h \in \mathcal{H}
-```
-
-**`units`**
-
-```math
-0 \le \mathit{units}_{p} \le \mathrm{units}^{\mathrm{available}}_{p} \qquad \forall\, p \in \mathcal{P}
-```
-
 </details>
 <!-- math:end -->
 
@@ -268,12 +268,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       hour:
         description: hours of a representative day that repeats
         dtype: int
+        ordered: true
       segment:
         description: a piece of the fuel curve
         dtype: int
+        ordered: true
       step:
         description: a block of demand that may be shed, each dearer than the last
         dtype: int
+        ordered: true
       commitment_mode:
         description: the ways a plant may be committed
         dtype: str
@@ -313,12 +316,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       fuel_slope:
         description: fuel per unit of output on one piece of the curve
         dims: [plant, segment]
+        missing: absent
       fuel_intercept:
         description: no-load fuel of one piece, charged per committed unit
         dims: [plant, segment]
+        missing: absent
       heat_rate:
         description: fuel per unit of output for a plant with no curve
         dims: [plant]
+        missing: absent
       start_fuel:
         description: fuel burned per unit of capacity started
         dims: [plant]
@@ -332,6 +338,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_cost:
         description: what starting one unit of capacity costs
         dims: [plant]
+        missing: neutral
       weight:
         description: how many real hours an hour of the representative day stands for
         dims: [hour]

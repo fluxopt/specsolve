@@ -26,10 +26,10 @@ from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import specsolve_linopy
 
 CAPPED_BY_REGION = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {
-        'flag': {'dims': ['t'], 'dtype': 'bool'},
-        'hi': {'dims': ['t']},
+        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'},
+        'hi': {'dims': ['t'], 'missing': 'neutral'},
         'cost': {'dims': ['t']},
     },
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1000}}},
@@ -139,9 +139,9 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
 
 
 CARRIED_IN = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {
-        'switchable': {'dims': ['g'], 'dtype': 'bool'},
+        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'},
         'before': {'dims': ['g']},
         'cap': {'dims': ['g']},
         'step': {'dims': ['g']},
@@ -310,7 +310,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
@@ -327,7 +327,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t']}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
@@ -337,7 +337,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
 #: per flagged step, and none for the steps the `otherwise` carries.
 SUMMED_BY_REGION = CAPPED_BY_REGION | {
     'dimensions': CAPPED_BY_REGION['dimensions'] | {'g': {'dtype': 'str'}},
-    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g']}},
+    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 'neutral'}},
     'expressions': {
         'cap': {
             'dims': ['t'],
@@ -363,7 +363,7 @@ def test_a_region_narrows_what_a_summed_constant_side_owes():
 #: The whole cased quantity under the sum, rather than a sum inside a region:
 #: `bound` is cased over `(k, t)` and the row reads its total over `t`.
 SUMMED_CASES = {
-    'dimensions': {'k': {'dtype': 'str'}, 't': {}},
+    'dimensions': {'k': {'dtype': 'str'}, 't': {'ordered': True}},
     'parameters': {'hi': {'dims': ['k', 't']}, 'lo': {'dims': ['k', 't']}},
     'variables': {'x': {'dims': ['k'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {
@@ -392,12 +392,14 @@ def test_a_cased_quantity_summed_onto_a_constant_side_builds():
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
 
 
-def test_a_hole_the_summed_region_reads_is_still_refused():
-    """A hole under the sum inside the region is refused (#1465)."""
+def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
+    """A neutral hole under the sum inside the region contributes nothing (#1465).
+
+    Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
+    """
     holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
-    both_lanes_refuse(
-        SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed}), match=r"parameter 'hi' covers 1 fewer coordinate"
-    )
+    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed})) as run:
+        assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the flagged steps cap at 40 and 30, the rest at 5'
 
 
 #: The flow an outage takes off its line: the line's flow where it stands,
@@ -407,14 +409,14 @@ OUTAGE_FLOW = {
     'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
     'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
     'parameters': {
-        'active': {'dims': ['line'], 'dtype': 'bool'},
-        'share': {'dims': ['line', 'outage']},
+        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': 'neutral'},
+        'share': {'dims': ['line', 'outage'], 'missing': 'neutral'},
         'cap': {'dims': ['line']},
     },
     'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {
         'monitored': {'dims': ['line'], 'cases': {'standing': {'when': 'active', 'expression': 's'}}, 'otherwise': 0},
-        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line, over=line, into=outage)'},
+        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line[line])'},
     },
     'constraints': {
         'after': {'dims': ['line', 'outage'], 'expression': 'monitored + share * outage_s <= cap'},

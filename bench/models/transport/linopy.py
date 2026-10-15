@@ -1,6 +1,6 @@
 """`transport` as a linopy user writes it.
 
-Each of the YAML's `sum(x, by=rel, over=key, into=bus)` is linopy's
+Each of the YAML's `sum(x, over=key, by=rel[bus])` is linopy's
 `x.groupby(rel).sum()`, with the relation as a key -> bus array. A grouped sum
 has a row only for a bus the relation reaches, so `reindex(bus=buses)` puts the
 other buses back and `fillna(0)` makes them contribute zero, as the YAML means.

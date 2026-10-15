@@ -6,6 +6,7 @@ a variable is built has to see its frame.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,13 @@ class Scope:
     data: AttachedSources
     variables: Mapping[str, Labelled]
 
+    def absent(self, param: str) -> bool:
+        """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
+        declaration = self.program.parameters[param]
+        if declaration.missing != 'absent':
+            return False
+        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in declaration.dims)
+
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.
 
@@ -87,13 +95,18 @@ class Scope:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
         A parameter over a dim the frame lacks would be reduced over it, so that is
-        refused, naming *subject*.
+        refused, naming *subject*. A left join of a parameter over no dims keeps
+        every row of *frame*, reading null where the parameter has no row, which a
+        cross join with its empty table would not.
         """
         declaration = self.program.parameters[param]
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
         table = self.data.parameters[param].rename({VALUE: alias})
+        if not declaration.dims and how == 'left':
+            null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
+            table = pl.concat([table, null]).head(1)
         return join_on(frame, table, declaration.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:

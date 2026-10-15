@@ -545,7 +545,7 @@ def _span(values: list[float]) -> str:
 
 
 #: A sum that groups its terms through a relation, as a spec writes it: what is summed over, and into what.
-_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*by=\w+,\s*over=(\[[^\]]*\]|\w+),\s*into=(\w+)\s*\)')
+_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*over=(\[[^\]]*\]|\w+),\s*by=\w+\[(\w+)\]\s*\)')
 
 
 def grouped_sums(spec: Path | None) -> str:

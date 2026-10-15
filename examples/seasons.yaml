@@ -7,9 +7,11 @@ dimensions:
   snapshot:
     description: dispatch periods in order
     dtype: int
+    ordered: true
   season:
     description: the blocks the store cycles over
     dtype: str
+    ordered: true
 
 relations:
   season_of:
@@ -45,7 +47,7 @@ constraints:
       season's first snapshot carries from that season's own last — so each
       season ends where it began and hands the next one nothing
     dims: [snapshot]
-    expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', by=season_of, within=season) + inflow - release
+    expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=season_of[season]) + inflow - release
 
 objective:
   sense: maximize

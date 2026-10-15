@@ -1,11 +1,13 @@
 """Is the data there where a declaration needs it? The two positions that ask.
 
-Everything else in this lane reads an absent parameter row as a zero
-coefficient (the absence rules). These are the two places that reading has no
-answer for: **a divisor**, where zero is not a divisor at all, and **a constant
-side**, where zero is the bound rather than the absence of one. Both are
-decided against the rows the declaration actually builds, so a ``where`` that
-removed the coordinate has already answered. The walk itself is
+Everything else in this lane reads a missing ``neutral`` parameter row as a
+zero coefficient (the absence rules). These are the two places that reading
+has no answer for: **a divisor**, where zero is not a divisor at all, and **a
+constant side**, where zero is the bound rather than the absence of one. Both
+are decided against the rows the declaration actually builds, so a ``where``
+that removed the coordinate has already answered. A ``missing: absent``
+parameter is never asked: its missing row removes the row it would have
+reached (:func:`~tests.linopy_lane.absence.combined`). The walk itself is
 ``program.children`` and ``program.parameters_of``, so "which names can reach a
 divisor" is answered once for both lanes.
 """
@@ -57,7 +59,7 @@ def check_constant_side_covers(
     answered the question.
     """
     found = [pair for side in (row.lhs, row.rhs) for pair in _constant_leaves(side, ctx, mask, coefficient=False)]
-    for param, narrowed in sorted(found, key=itemgetter(0)):
+    for param, narrowed in sorted((pair for pair in found if not ctx.absent(pair[0])), key=itemgetter(0)):
         missing = gaps_under(ctx.dataset[param], narrowed)
         if missing:
             raise DataError(uncovered_constant_message(param, missing, name))
@@ -69,14 +71,15 @@ def _constant_leaves(
     """Every parameter standing as a constant piece under *node*, with the rows it must cover.
 
     A constant piece is a parameter in a variable-free additive position — `hi`
-    in `x + hi`, or in `sum(x) + sum(hi)`. A parameter a variable stands with in
+    in `x + hi`. Under a sum a missing neutral row is one summand fewer, so a
+    reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
     absence rules allow, so ``coefficient`` records having passed through such a
     product on the way down and suppresses the parameters below it. Additive
     structure, a reduction and a division by it leave the flag as it was; a
     ``cases:`` region narrows the mask as it does for the whole walk.
     """
-    if isinstance(node, program.Variable):
+    if isinstance(node, (program.Variable, program.Sum, program.WindowSum)):
         return
     if isinstance(node, program.Parameter):
         if not coefficient:
@@ -153,7 +156,7 @@ def check_divisors_cover(
             for variable in sorted(program.variables_of(quotient.numerator)):
                 present = absence.present(ctx.model, variable)
                 needed = present if needed is None else (needed & present)
-            for param in sorted(params):
+            for param in sorted(p for p in params if not ctx.absent(p)):
                 missing = gaps_under(ctx.dataset[param], needed)
                 if missing:
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')

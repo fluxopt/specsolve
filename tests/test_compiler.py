@@ -3,7 +3,7 @@
 This is the only place query shape is asserted. Every property here can
 regress while every model still solves to the right answer:
 
-- ``AGGREGATE`` absent from ``Sum`` and ``GroupSum``; duplicates collapse once,
+- ``AGGREGATE`` absent from ``Sum``, through a relation or not; duplicates collapse once,
   in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
 - ``OVER`` absent from a translation, which joins the dim table twice instead.
 - the modulo appearing only when a translation wraps.
@@ -51,15 +51,15 @@ PROGRAM = program.Program(
     constraints={},
     objective=program.ObjectiveDeclaration('minimize', program.Variable('p')),
     dimensions={
-        'snapshot': program.DimensionDeclaration(),
+        'snapshot': program.DimensionDeclaration(ordered=True),
         'generator': program.DimensionDeclaration(),
         'bus': program.DimensionDeclaration(),
     },
     relations={'gen_bus': GEN_BUS},
 )
 
-#: The direction every grouping case here reads: out of `generator`, into `bus`.
-GEN_BUS_DIRECTION = program.Direction('gen_bus', GEN_BUS, ('generator',), ('bus',), ())
+#: The join every grouping case here reads: out of `generator`, into `bus`.
+GEN_BUS_JOIN = program.JoinColumns('gen_bus', GEN_BUS, joined=('generator',), grouped=('bus',))
 
 CARDINALITY = {'snapshot': 24, 'generator': 3, 'bus': 2}
 
@@ -88,6 +88,7 @@ def attached() -> AttachedSources:
         cardinality=CARDINALITY,
         parameter_rows={},
         consecutive={},
+        given={},
     )
 
 
@@ -171,7 +172,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     """The aggregate lives in the terminal assembly, not in the piece."""
-    compiled = compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
+    compiled = compiler().expression(program.Sum(program.Variable('p'), (program.Axis('generator'),)), 'test')
     piece = compiled.terms[0]
     assert piece.dims == ('snapshot',)
     assert columns(piece.frame) == ['snapshot', 'var_label', 'coeff']
@@ -203,32 +204,32 @@ def test_a_reduction_carries_absence_between_pieces_and_not_into_the_one_it_came
     given, so a lone masked term costs no join.
     """
     both = masked_compiler().expression(
-        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
+        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), (program.Axis('generator'),)), 'test'
     )
     assert [joins(t.frame) for t in both.terms] == [1, 1]
     assert all('SEMI JOIN' in query(t.frame) for t in both.terms)
 
-    alone = masked_compiler().expression(program.Sum(program.Variable('p'), ('generator',)), 'test')
+    alone = masked_compiler().expression(program.Sum(program.Variable('p'), (program.Axis('generator'),)), 'test')
     assert joins(alone.terms[0].frame) == 0
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
     compiled = masked_compiler().expression(
-        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), ('generator',)), 'test'
+        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), (program.Axis('generator'),)), 'test'
     )
     assert 'UNIQUE' not in query(compiled.terms[0].frame)
 
 
 def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     """Linopy parity: summing a snapshot-only term over `generator` repeats it."""
-    inner = program.Sum(program.Variable('p'), ('generator',))
-    compiled = compiler().expression(program.Sum(inner, ('generator',)), 'test')
+    inner = program.Sum(program.Variable('p'), (program.Axis('generator'),))
+    compiled = compiler().expression(program.Sum(inner, (program.Axis('generator'),)), 'test')
     assert '3' in query(compiled.terms[0].frame)
 
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
-    node = program.GroupSum(program.Variable('p'), GEN_BUS_DIRECTION)
+    node = program.Sum(program.Join(program.Variable('p'), GEN_BUS_JOIN), GEN_BUS_JOIN.axes)
     piece = compiler().expression(node, 'test').terms[0]
     assert piece.dims == ('snapshot', 'bus')
     assert columns(piece.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
@@ -407,6 +408,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         cardinality={'snapshot': 3},
         parameter_rows={'load': 3},
         consecutive={'snapshot': 0},
+        given={},
     )
     q = Compiler(Scope(PROGRAM, sources, VARIABLES))
     shifted = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)

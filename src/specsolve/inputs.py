@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import polars as pl
-    from mathspec import Spec
     from mathspec.program import Expression
+    from mathspec.spec import Spec
 
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
 #: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
@@ -151,7 +151,7 @@ def lowered(spec: Buildable) -> Program:
     program = declared(spec).program
     if program.given:
         given = program.given
-        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions})
+        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions, *given.masks})
         raise LanguageError(
             f'this spec reads {", ".join(repr(name) for name in read)} under given:, which another file declares, '
             f'so it is a fragment of a model rather than the whole of one. Compose it with the files that declare '

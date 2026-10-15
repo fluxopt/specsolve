@@ -34,9 +34,11 @@ parameters:
       smallest delivery a connection accepts — rail carries between 10 and 50
       tonnes per delivery, and road is unconstrained
     dims: [connection]
+    missing: absent
   max_load:
     description: largest delivery a connection accepts
     dims: [connection]
+    missing: absent
   total_to_move:
     description: tonnes that have to leave the depots altogether
     dims: []
@@ -52,7 +54,7 @@ variables:
 constraints:
   within_stock:
     dims: [depot]
-    expression: sum(moved, by=origin, over=connection, into=depot) <= stock
+    expression: sum(moved, over=connection, by=origin[depot]) <= stock
 
   move_the_lot:
     dims: []

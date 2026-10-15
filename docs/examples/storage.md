@@ -48,26 +48,6 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 
 $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
-#### Objective
-
-```math
-\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
-```
-
-#### Subject to
-
-**`power_balance`**
-
-```math
-\sum_{g \in \mathcal{G}} p_{s,g} + \mathrm{discharge}_{s} - \mathrm{charge}_{s} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
-```
-
-**`soc_balance`**
-
-```math
-\mathrm{soc}_{s} = \mathrm{soc}_{s \ominus 1} + \mathrm{charge}_{s} \cdot 0.9 - \mathrm{discharge}_{s} \qquad \forall\, s \in \mathcal{S}
-```
-
 #### Variable domains
 
 **`p`**
@@ -94,6 +74,26 @@ $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size 
 0 \le \mathrm{soc}_{s} \le 100 \qquad \forall\, s \in \mathcal{S}
 ```
 
+#### Objective
+
+```math
+\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+```
+
+#### Subject to
+
+**`power_balance`**
+
+```math
+\sum_{g \in \mathcal{G}} p_{s,g} + \mathrm{discharge}_{s} - \mathrm{charge}_{s} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
+```
+
+**`soc_balance`**
+
+```math
+\mathrm{soc}_{s} = \mathrm{soc}_{s \ominus 1} + \mathrm{charge}_{s} \cdot 0.9 - \mathrm{discharge}_{s} \qquad \forall\, s \in \mathcal{S}
+```
+
 </details>
 <!-- math:end -->
 
@@ -110,6 +110,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, cyclic at the horizon
         dtype: int
+        ordered: true
       generator:
         description: generating units
         dtype: str

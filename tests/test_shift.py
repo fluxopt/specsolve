@@ -170,7 +170,7 @@ def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_ther
 #: entity, and a shift closed inside a group. Each reaches the edge through its
 #: own out-of-range mask.
 BY_PARAMETER = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
     'variables': {
         'level': {'dims': ['g', 't'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
@@ -184,13 +184,13 @@ BY_PARAMETER = {
 }
 
 IN_GROUPS = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, by=season_of, within=season)', grouped=True
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True
 )
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence frame of its own (#1061).
 IN_GROUPS_UNMASKED = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, by=season_of, within=season)', grouped=True, masked=False
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, masked=False
 )
 
 #: A fourth snapshot the relation sends nowhere, for both models above.
@@ -247,7 +247,8 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
     is the null a partial relation gets everywhere else (#969, `sum(by=)`,
     `at()`).
     """
-    with differential(IN_GROUPS_UNMASKED, GROUPLESS_SOURCES, lp=True) as run:
+    partial = override(IN_GROUPS_UNMASKED, **{'relations.season_of.missing': 'absent'})
+    with differential(partial, GROUPLESS_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, (
             "each season's opening row and the one reading a live slot — not the group-less snapshot"
         )
@@ -261,7 +262,8 @@ def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing(
     from the grouped labels; a mask removing nothing decides no row.
     """
     sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
-    with differential(IN_GROUPS, sources, lp=True) as run:
+    partial = override(IN_GROUPS, **{'relations.season_of.missing': 'absent'})
+    with differential(partial, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'a mask that removes nothing changes no row'
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
@@ -269,7 +271,7 @@ def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing(
 #: A nonzero edge over a variable-free operand, reached with a per-entity
 #: offset: the other reader of the edge frame, and the other half of #1049.
 BY_PARAMETER_CONSTANT = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'eff': {'dims': ['g', 't']}},
     'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'link': {'dims': ['g', 't'], 'expression': 'x * shift(eff, along=t, offset=lead, edge=1) <= 10'}},
@@ -299,14 +301,14 @@ def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
 #: which is a parameter declared over the dimension the partition groups into.
 #: A period's own construction lead time, on a flat snapshot axis (#1161).
 PER_GROUP_OFFSET = {
-    'dimensions': {'t': {'dtype': 'int'}, 'period': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'period': {'dtype': 'int', 'ordered': True}},
     'relations': {'period_of': {'key': 't', 'values': 'period'}},
     'parameters': {'lead': {'dims': ['period'], 'dtype': 'int'}, 'v': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': -100, 'upper': 100}}},
     'constraints': {
         'reads': {
             'dims': ['t'],
-            'expression': 'p == shift(v, along=t, offset=lead, by=period_of, within=period, edge=0)',
+            'expression': 'p == shift(v, along=t, offset=lead, within=period_of[period], edge=0)',
         }
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -316,8 +318,8 @@ PER_GROUP_OFFSET = {
 #: rather than a number written into a frame — and one snapshot the relation
 #: sends nowhere, which no lag reaches and no edge speaks for.
 PER_GROUP_OFFSET_TERMS = {
-    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'relations': {'season_of': {'key': 't', 'values': 'season'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
+    'relations': {'season_of': {'key': 't', 'values': 'season', 'missing': 'absent'}},
     'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'cap': {'dims': ['t']}},
     'variables': {
         'level': {'dims': ['t'], 'bounds': {'lower': 'cap', 'upper': 'cap'}},
@@ -326,7 +328,7 @@ PER_GROUP_OFFSET_TERMS = {
     'constraints': {
         'link': {
             'dims': ['t'],
-            'expression': 'take <= shift(level, along=t, offset=lead, by=season_of, within=season, edge=0)',
+            'expression': 'take <= shift(level, along=t, offset=lead, within=season_of[season], edge=0)',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t)'},
@@ -335,14 +337,14 @@ PER_GROUP_OFFSET_TERMS = {
 #: Per entity *and* per group at once: one key the frame carries and one it
 #: reaches through the relation, in the same join.
 PER_ENTITY_AND_PER_GROUP = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
     'relations': {'season_of': {'key': 't', 'values': 'season'}},
     'parameters': {'lead': {'dims': ['g', 'season'], 'dtype': 'int'}, 'v': {'dims': ['g', 't']}},
     'variables': {'p': {'dims': ['g', 't'], 'bounds': {'lower': -100, 'upper': 100}}},
     'constraints': {
         'reads': {
             'dims': ['g', 't'],
-            'expression': 'p == shift(v, along=t, offset=lead, by=season_of, within=season, edge=0)',
+            'expression': 'p == shift(v, along=t, offset=lead, within=season_of[season], edge=0)',
         }
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -492,7 +494,7 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
 
 
 FILL_IDENTITY_SPEC = """
-dimensions: {t: {dtype: int}}
+dimensions: {t: {dtype: int, ordered: true}}
 parameters:
   eff: {dims: [t]}
 variables:
@@ -521,7 +523,7 @@ def test_the_fill_a_product_wants_is_one_not_zero():
 
 
 EDGE_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}, 'wrap': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'wrap': {'dtype': 'str'}},
     'parameters': {'c': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t', 'wrap'], 'bounds': {'lower': 0, 'upper': 5}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * c)'},
@@ -555,7 +557,7 @@ def test_a_bare_wrap_names_a_dimension_and_is_refused():
     with pytest.raises(ValueError) as exc:
         sps.check(_with('x - shift(x, along=t, offset=1, edge=wrap) <= 1'))
 
-    assert 'bare name where a keyword belongs' in str(exc.value)
+    assert 'has no quotes' in str(exc.value)
     assert "edge='wrap'" in str(exc.value), 'the refusal has to name the rewrite'
 
 
@@ -564,7 +566,7 @@ def test_a_quoted_keyword_outside_a_kwarg_does_not_parse():
     with pytest.raises(ValueError) as exc:
         sps.check(_with("x - 'wrap' <= 1"))
 
-    assert 'Failed to parse expression' in str(exc.value)
+    assert 'Cannot parse the expression' in str(exc.value)
 
 
 def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[str, object]:
@@ -573,7 +575,7 @@ def _shift_over_data(where: str | None = None, edge: str | None = None) -> dict[
     if where is not None:
         constraint['where'] = where
     return {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'c': constraint},
@@ -630,7 +632,7 @@ def test_a_nested_shift_agrees_with_the_oracle(rhs: str):
     variable sits at its upper bound.
     """
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str', 'ordered': True}},
         'parameters': {'c': {'dims': ['g']}},
         'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'k': {'dims': ['t', 'g'], 'expression': f'p <= 0.5 * {rhs} + 1'}},
@@ -655,7 +657,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
     spec = {
         'dimensions': {
             'g': {'dtype': 'str'},
-            't': {'dtype': 'int'},
+            't': {'dtype': 'int', 'ordered': True},
         },
         'parameters': {
             'lead': {'dims': ['g'], 'dtype': 'int'},
@@ -700,7 +702,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     The two edges that write their own answer are allowed.
     """
     spec = {
-        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
         'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
         'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'dims': ['g', 't'], 'expression': 'x >= shift(x, along=t, offset=lead)'}},
@@ -712,7 +714,7 @@ def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
 
 def _reindexed_parameter_spec(op: str) -> dict:
     return {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'dt': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
         'constraints': {'r': {'dims': ['t'], 'expression': f'x <= {op}'}},
@@ -773,7 +775,7 @@ def test_an_offset_with_no_dimensions_is_one_offset_for_every_position(edge: str
     refused the join.
     """
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'k': {'dims': [], 'dtype': 'int'}, 'p': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
         'constraints': {'c': {'dims': ['t'], 'expression': f'x >= shift(p, along=t, offset=k, {edge})'}},

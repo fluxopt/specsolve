@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.selectors as cs
-from mathspec import did_you_mean
+from mathspec.errors import did_you_mean
 from mathspec.program import ParameterDeclaration
 
 from specsolve.assumptions import validate_assumptions
@@ -742,11 +742,12 @@ def _check_one_row_per_coordinate(
     still missing is refused once every source is in.
     """
     if not p.dims:
-        if frame.height != 1:
+        if frame.height > 1 or (frame.height == 0 and p.missing == 'refused'):
             raise DataError(
                 f"{kind} '{name}' is declared with no dims, which means one value "
                 f'broadcast everywhere — but its source has {frame.height} rows. '
-                f'Declare the dims it is indexed by, or reduce the source to a single row.'
+                f'Declare the dims it is indexed by, reduce the source to a single row, or declare '
+                f'`missing:` to say what no row means.'
             )
         return
 

@@ -65,8 +65,8 @@ from specsolve.sweep import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
 
-    from mathspec import Spec
     from mathspec.program import Program
+    from mathspec.spec import Spec
 
     from specsolve.api import Model
     from specsolve.inputs import Buildable, Label, Source

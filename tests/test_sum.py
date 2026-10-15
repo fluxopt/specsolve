@@ -31,7 +31,7 @@ def _spec(budget: str, *, where: str | None = None) -> dict:
     if where is not None:
         variable['where'] = where
     return {
-        'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
         'parameters': {
             'p_max': {'dims': ['generator']},
             'cost': {'dims': ['generator']},

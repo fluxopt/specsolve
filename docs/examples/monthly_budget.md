@@ -48,6 +48,14 @@ A cap on what each technology may generate per calendar month — an aggregate o
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \bar p_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -68,14 +76,6 @@ A cap on what each technology may generate per calendar month — an aggregate o
 \sum_{t \in \mathcal{T} \,:\, \mathrm{month\_of}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\, m \in \mathcal{M},\ g \in \mathcal{G}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \bar p_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -92,9 +92,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, each falling in one month
         dtype: datetime
+        ordered: true
       month:
         description: the grouping the budget is stated over
         dtype: str
+        ordered: true
       generator:
         description: generating units
         dtype: str
@@ -134,7 +136,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       monthly_budget:
         description: what a generator produces across a month stays inside that month's budget
         dims: [month, generator]
-        expression: sum(p, by=month_of, over=snapshot, into=month) <= monthly_cap
+        expression: sum(p, over=snapshot, by=month_of[month]) <= monthly_cap
 
     objective:
       sense: minimize

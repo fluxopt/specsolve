@@ -9,6 +9,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: generating units, some of which are committed rather than merely dispatched
     dtype: str
@@ -26,6 +27,7 @@ parameters:
       its own — the capacity ceiling times the availability, and present only for
       the units that are committed at all
     dims: [generator]
+    missing: absent
   marginal_cost:
     description: cost of one unit of output
     dims: [generator]

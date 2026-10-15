@@ -23,7 +23,7 @@ nothing: a relation is a per-row column, and four snapshots in 2030 beside two i
 ## Both directions of one mapping
 
 Grouping reads the relation one way:
-`sum(p, by=period_of, over=snapshot, into=period)` is a per-period CO₂ budget, and
+`sum(p, over=snapshot, by=period_of[period])` is a per-period CO₂ budget, and
 [monthly_budget](monthly_budget.md) is the same construct on a different
 relation.
 
@@ -33,7 +33,7 @@ each `snapshot`, so a coarse quantity is pulled onto a fine one:
 ```yaml
 within_cap:
   dims: [snapshot, generator]
-  expression: p <= at(p_nom, by=period_of, over=period, into=snapshot)
+  expression: p <= at(p_nom, by=period_of[period])
 ```
 
 `at` and `sum(by=)` take the same argument: the relation names one table, and
@@ -75,6 +75,20 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\, e \in \mathcal{E},\ g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -95,20 +109,6 @@ p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \
 \sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\, e \in \mathcal{E},\ g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -126,9 +126,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, each falling in one investment period
         dtype: int
+        ordered: true
       period:
         description: investment periods, the grouping capacity is decided over
         dtype: int
+        ordered: true
       generator:
         description: generating units
         dtype: str
@@ -170,7 +172,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       within_cap:
         description: output in a snapshot is capped by the capacity of the period it falls in
         dims: [snapshot, generator]
-        expression: p <= at(p_nom, by=period_of, over=period, into=snapshot)
+        expression: p <= at(p_nom, by=period_of[period])
       balance:
         dims: [snapshot]
         expression: sum(p, over=generator) == load

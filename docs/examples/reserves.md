@@ -34,12 +34,12 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$, `line_from` is `absent` where the data has no row, `line_to` is `absent` where the data has no row — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{gen\_of}: \mathcal{O} \to \mathcal{G}`$ — generating units, each sitting on one bus |
 | $`\mathcal{M}`$ | index $`m`$ — `market` with $`\mathrm{market\_of}: \mathcal{O} \to \mathcal{M}`$ — reserve markets, each with a requirement to fill |
 | $`\mathcal{T}`$ | index $`t`$ — `tranche` with $`\mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}`$ — how fast a reserve has to be deliverable |
 | $`\mathcal{Z}`$ | index $`z`$ — `zone` — reserve zones, which overlap |
-| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — transmission lines, which may have an open end |
+| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$, `line_from` is `absent` where the data has no row, `line_to` is `absent` where the data has no row — transmission lines, which may have an open end |
 | $`\mathcal{O}`$ | index $`o`$ — `offer` with $`\mathrm{gen\_of}: \mathcal{O} \to \mathcal{G},\ \mathrm{market\_of}: \mathcal{O} \to \mathcal{M},\ \mathrm{tranche\_of}: \mathcal{O} \to \mathcal{T}`$ — one generator's bid into one market at one tranche |
 
 #### Parameters
@@ -55,7 +55,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | $`\mathrm{offer\_cost}`$ | `offer_cost` over $`\mathcal{O}`$ — cost of holding one unit of reserve on an offer |
 | $`\mathrm{req}`$ | `req` over $`\mathcal{M}`$ — reserve a market has to be filled with |
 | $`\mathrm{tranche\_frac}`$ | `tranche_frac` over $`\mathcal{T}`$ — share of capacity a generator may offer at a tranche |
-| $`\mathrm{zone\_share}`$ | `zone_share` over $`\mathcal{G} \times \mathcal{Z}`$ — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a relation over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
+| $`\mathrm{zone\_share}`$ | `zone_share` over $`\mathcal{G} \times \mathcal{Z}`$, `neutral` where the data has no row — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a relation over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
 | $`\mathrm{zone\_req}`$ | `zone_req` over $`\mathcal{Z}`$ — reserve a zone has to be covered by |
 
 #### Variables
@@ -73,6 +73,34 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | $`\mathit{reserve\_of}`$ | `reserve_of` over $`\mathcal{G}`$ — all the reserve a generator holds, across every offer it made |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+p_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
+```
+
+**`f`**
+
+```math
+\mathrm{neg\_cap}_{l} \le f_{l} \le \mathrm{cap}_{l} \qquad \forall\, l \in \mathcal{L}
+```
+
+**`r`**
+
+```math
+r_{o} \ge 0 \qquad \forall\, o \in \mathcal{O}
+```
+
+#### Definitions
+
+**`reserve_of`**
+
+```math
+\mathit{reserve\_of}_{g} = \sum_{o \in \mathcal{O} \,:\, \mathrm{gen\_of}(o) = g} r_{o} \qquad \forall\, g \in \mathcal{G}
+```
 
 #### Objective
 
@@ -118,34 +146,6 @@ r_{o} \le \mathrm{tranche\_frac}_{\mathrm{tranche\_of}(o)} \cdot \mathrm{p}^{\ma
 \sum_{g \in \mathcal{G}} \mathrm{zone\_share}_{g,z} \cdot \mathit{reserve\_of}_{g} \ge \mathrm{zone\_req}_{z} \qquad \forall\, z \in \mathcal{Z}
 ```
 
-#### Definitions
-
-**`reserve_of`**
-
-```math
-\mathit{reserve\_of}_{g} = \sum_{o \in \mathcal{O} \,:\, \mathrm{gen\_of}(o) = g} r_{o} \qquad \forall\, g \in \mathcal{G}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-p_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
-```
-
-**`f`**
-
-```math
-\mathrm{neg\_cap}_{l} \le f_{l} \le \mathrm{cap}_{l} \qquad \forall\, l \in \mathcal{L}
-```
-
-**`r`**
-
-```math
-r_{o} \ge 0 \qquad \forall\, o \in \mathcal{O}
-```
-
 </details>
 <!-- math:end -->
 
@@ -185,8 +185,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     relations:
       gen_bus: {key: generator, values: bus, description: "the bus a generator sits on"}
-      line_from: {key: line, values: bus, description: "the bus a line leaves, null where the end is open"}
-      line_to: {key: line, values: bus, description: "the bus a line arrives at, null where the end is open"}
+      line_from: {key: line, values: bus, description: "the bus a line leaves, null where the end is open", missing: absent}
+      line_to: {key: line, values: bus, description: "the bus a line arrives at, null where the end is open", missing: absent}
       gen_of: {key: offer, values: generator, description: "the generator behind an offer"}
       market_of: {key: offer, values: market, description: "the market an offer is made into"}
       tranche_of: {key: offer, values: tranche, description: "the tranche an offer is made at"}
@@ -226,6 +226,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the generator, which is single-valued per label; rows are absent where a
           generator backs no part of a zone
         dims: [generator, zone]
+        missing: neutral
       zone_req:
         description: reserve a zone has to be covered by
         dims: [zone]
@@ -250,7 +251,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     expressions:
       reserve_of:
-        expression: sum(r, by=gen_of, over=offer, into=generator)
+        expression: sum(r, over=offer, by=gen_of[generator])
         description: all the reserve a generator holds, across every offer it made
 
     constraints:
@@ -258,18 +259,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the lines meets the load there
         dims: [bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(f, by=line_to, over=line, into=bus)
-          - sum(f, by=line_from, over=line, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(f, over=line, by=line_to[bus])
+          - sum(f, over=line, by=line_from[bus])
           == load
       export_cap:
         description: a line carries no more than the bus it leaves is allowed to export
         dims: [line]
-        expression: f <= at(bus_cap, by=line_from, over=bus, into=line)
+        expression: f <= at(bus_cap, by=line_from[bus])
       requirement:
         description: the offers made into a market fill its requirement
         dims: [market]
-        expression: sum(r, by=market_of, over=offer, into=market) >= req
+        expression: sum(r, over=offer, by=market_of[market]) >= req
       headroom:
         description: a generator's output plus the reserve it holds stays inside its capacity
         dims: [generator]
@@ -280,7 +281,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           two other dimensions' parameters pulled back through two legs of one edge
           set
         dims: [offer]
-        expression: r <= at(tranche_frac, by=tranche_of, over=tranche, into=offer) * at(p_max, by=gen_of, over=generator, into=offer)
+        expression: r <= at(tranche_frac, by=tranche_of[tranche]) * at(p_max, by=gen_of[generator])
       zone_cover:
         description: the weighted reserve of the generators backing a zone covers its requirement
         dims: [zone]

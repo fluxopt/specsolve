@@ -18,7 +18,7 @@ from specsolve.errors import SpecsolveError
 from specsolve.relational.sinks import SOLVERS
 
 SHORT = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'tech': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'tech': {'dtype': 'str'}},
     'parameters': {'demand': {'dims': ['snapshot']}, 'cap': {'dims': ['tech']}},
     'variables': {'p': {'dims': ['snapshot', 'tech'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {
@@ -71,7 +71,7 @@ def test_the_subsystem_is_the_row_and_the_bounds_that_conflict(solver_name: str)
 
 #: Two rows that cannot both hold at snapshot 0, with no bound in the argument.
 TWO_ROWS = {
-    'dimensions': {'snapshot': {'dtype': 'int'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'need': {'dims': ['snapshot']}, 'cap': {'dims': ['snapshot']}},
     'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
     'constraints': {

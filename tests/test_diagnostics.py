@@ -24,7 +24,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     labels close up around it, so every solver loads the narrower matrix.
     """
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
         'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t', 'g'], 'where': 't > 0', 'bounds': {'lower': 0, 'upper': 100}}},
         'constraints': {'balance': {'dims': ['t'], 'expression': 'sum(p, over=g) == load'}},
@@ -52,7 +52,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
     """A row deleted by absence travelling out of ``y`` is reported too (#944)."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
+        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g'], 'missing': 'absent'}},
         'variables': {
             'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
             'y': {'dims': ['g'], 'where': 'extra', 'bounds': {'lower': 0, 'upper': 0}},
@@ -83,7 +83,7 @@ def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together(
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g']}},
+        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g'], 'missing': 'neutral'}},
         'variables': {'p': {'dims': ['g'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 9}}},
         'constraints': {'cap': {'dims': ['g'], 'expression': 'k * p <= 5'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
@@ -260,8 +260,8 @@ def test_a_model_with_no_objective_has_no_objective_range():
 
 #: A coefficient short of its dims, and a bound that is not.
 SPARSE_SOURCE = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
-    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g'], 'missing': 'neutral'}},
     'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'capped': {'dims': ['t', 'g'], 'expression': 'p * avail <= 1'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -308,7 +308,7 @@ def test_the_sparsity_report_survives_the_model_being_released():
 #: the assembly refuses it, which is a raise *after* the attach has succeeded.
 UNDEFINED_DIVISOR = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f']}},
+    'parameters': {'d': {'dims': ['f'], 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'dims': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},

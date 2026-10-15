@@ -18,14 +18,17 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
-from mathspec import Spec, to_spec
+from mathspec import to_spec
 
 import specsolve as sps
 from specsolve.relational.engine.engine import Engine
 from specsolve.sources import tidy_sources
+
+if TYPE_CHECKING:
+    from mathspec.spec import Spec
 
 HERE = Path(__file__).parent
 SPEC = HERE / 'walkthrough.yaml'

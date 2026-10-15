@@ -2,8 +2,8 @@
 
     python differential/pypsa/parity.py <mathspec checkout>
 
-The corpus is mathspec's — `examples/pypsa.yaml` and its quadratic sibling,
-and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
+The corpus is mathspec's — `examples/pypsa.yaml`, the patches a rung lays
+over it, and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
@@ -12,7 +12,8 @@ pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
         --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
-        --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=2.0" \
+        --with "pypsa @ git+https://github.com/PyPSA/PyPSA@51986084bfb68d38e5b64021649cb339448112cb" \
+        --with "highspy==1.15.1" --with "polars>=2.0" \
         python differential/pypsa/parity.py ../mathspec
 
 Per rung, from the same network:
@@ -60,9 +61,11 @@ import math
 import re
 import shutil
 import sys
+import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import polars as pl
@@ -79,6 +82,11 @@ UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'di
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
+KNOWN_FAILING_FILE = HERE / 'known_failing.yaml'
+#: Where a patched rung's file is written: the patch its script names laid over ``pypsa.yaml``.
+COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
+#: A patched file's name -> the patch it lays over ``pypsa.yaml``.
+PATCHES: dict[str, Path] = {}
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy oracle in tests/
@@ -88,6 +96,7 @@ import mathspec  # noqa: E402
 import prep  # noqa: E402  the prep, beside this file
 import projection  # noqa: E402
 import yaml  # noqa: E402
+from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
@@ -144,8 +153,38 @@ def intended(stem: str) -> float:
 
 
 def spec_of(stem: str) -> Path:
-    """The spec file the rung names: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
-    return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
+    """The spec file the rung reads: ``pypsa.yaml``, or the patch its script names as ``PATCH`` laid over it.
+
+    A patched file is written once under :data:`COMPOSED`, named as its patch
+    and with the base's symbols beside it, so it reads as a file of its own.
+    """
+    base = CORPUS / 'examples' / 'pypsa.yaml'
+    patch = getattr(importlib.import_module(stem), 'PATCH', None)
+    if patch is None:
+        return base
+    path = COMPOSED / Path(patch).name
+    if path.name not in PATCHES:
+        PATCHES[path.name] = CORPUS / 'examples' / patch
+        path.write_text(mathspec.override(base, [PATCHES[path.name]]).to_yaml())
+        (COMPOSED / 'symbols').mkdir(exist_ok=True)
+        shutil.copy(base.parent / 'symbols' / base.name, COMPOSED / 'symbols' / path.name)
+    return path
+
+
+def spec_named(name: str) -> Path:
+    """The spec file a stamp names — a patched one under :data:`COMPOSED`, else the corpus's own."""
+    return COMPOSED / name if name in PATCHES else CORPUS / 'examples' / name
+
+
+def owned(name: str) -> set[str] | None:
+    """The declarations a patched file's own rungs answer for — those its patch writes; ``None`` for the base, which answers for all.
+
+    The rest of a patched file is the base's, and the base's rungs cover it.
+    """
+    if name not in PATCHES:
+        return None
+    raw = yaml.safe_load(PATCHES[name].read_text())
+    return {key for section in raw.values() if isinstance(section, dict) for key in section}
 
 
 def stands_for(description: str | None, model=None) -> str:
@@ -168,10 +207,14 @@ def stands_for(description: str | None, model=None) -> str:
 
 
 def templated(name: str) -> re.Pattern | None:
-    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension."""
+    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension.
+
+    Under ``multi_investment_periods`` PyPSA appends ``-period-{p}`` to a
+    family it writes per period, so the pattern takes that suffix too.
+    """
     if not re.search(r'\{\w+\}', name):
         return None
-    return re.compile('^' + re.sub(r'\\\{\w+\\\}', '([^-]+)', re.escape(name)) + '$')
+    return re.compile('^' + re.sub(r'\\\{\w+\\\}', '([^-]+)', re.escape(name)) + '(?:-period-[^-]+)?$')
 
 
 def template_dims(declared, model) -> dict[str, str]:
@@ -380,11 +423,17 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
     return out
 
 
-def _gc_dual(dual, label: str) -> pd.DataFrame:
+def _dual_rows(constraint) -> pd.DataFrame:
+    """A PyPSA constraint's dual per coordinate, with the label of the row that carries it."""
+    if not constraint.dual.ndim:
+        return pd.DataFrame({'dual': [float(constraint.dual)], 'row': [int(constraint.labels)]})
+    frame = constraint.dual.to_dataframe('dual')
+    return frame.assign(row=constraint.labels.to_series().reindex(frame.index).to_numpy()).reset_index()
+
+
+def _gc_dual(constraint, label: str) -> pd.DataFrame:
     """One global constraint's dual as rows — one, or one per scenario where the network has scenarios."""
-    if not dual.ndim:
-        return pd.DataFrame({'name': [label], 'dual': [float(dual)]})
-    return dual.to_dataframe('dual').reset_index().assign(name=label)
+    return _dual_rows(constraint).assign(name=label)
 
 
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
@@ -398,6 +447,10 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     A name the file writes as PyPSA's row negated carries a ``negated:`` reason
     in ``deviations.yaml`` and is compared against the negative. A ``duals:``
     reason excuses a difference no comparison can express.
+
+    A row whose dual differs still agrees when ours lies in the range of duals
+    PyPSA's own model admits there (`slope_ranges`), which PyPSA's dual must
+    lie in too.
     """
     try:
         result.dual(next(iter(declared.constraints)))
@@ -410,6 +463,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             'differences': {},
         }
     per_name: dict[str, dict] = {}
+    differing: list[tuple[str, int, float, float]] = []
     templates = template_dims(declared, n.model)
     pairs = []
     for block_name, block in declared.constraints.items():
@@ -435,8 +489,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         if their_name[0].isupper():
             if their_name not in n.model.constraints:
                 continue
-            dual = n.model.constraints[their_name].dual
-            theirs = dual.to_dataframe('dual').reset_index() if dual.ndim else pd.DataFrame({'dual': [float(dual)]})
+            theirs = _dual_rows(n.model.constraints[their_name])
             if 'timestep' in theirs.columns:
                 theirs = theirs.drop(columns=['period', 'snapshot'], errors='ignore')
             theirs = theirs.rename(columns=AXES)
@@ -448,13 +501,20 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
             theirs = pd.concat(
-                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'].dual, label) for label in labels]
-                or [pd.DataFrame({'name': [], 'dual': []})]
+                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'], label) for label in labels]
+                or [pd.DataFrame({'name': [], 'dual': [], 'row': []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
         entry = per_name.setdefault(
-            their_name, {'rows': 0, 'max_abs_diff': 0.0, 'negated': bool(reasons.get(their_name, {}).get('negated'))}
+            their_name,
+            {
+                'rows': 0,
+                'max_abs_diff': 0.0,
+                'negated': bool(reasons.get(their_name, {}).get('negated')),
+                'inside': 0,
+                'outside': 0,
+            },
         )
         missing = [k for k in keys if k not in theirs.columns]
         if missing:
@@ -469,9 +529,18 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             print(f'  {block_name} vs {their_name}:\n{off.to_string(index=False)}', file=sys.stderr)
         entry['rows'] += len(joined)
         entry['max_abs_diff'] = round(max(entry['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
+        sign = -1.0 if entry['negated'] else 1.0
+        differing.extend((their_name, int(r.row), sign * r.ours, r.dual) for r in joined[gaps > 1e-6].itertuples())
+    ranges = slope_ranges(n.model, {row for _, row, _, _ in differing}) if differing else {}
+    for their_name, row, ours, theirs in differing:
+        assert inside(theirs, ranges[row]), (
+            f"PyPSA's own dual {theirs} on row {row} of {their_name} lies outside the slopes {ranges[row]} "
+            f'its model shows there, so the measurement is wrong'
+        )
+        per_name[their_name]['inside' if inside(ours, ranges[row]) else 'outside'] += 1
     differences = {}
     for name, entry in per_name.items():
-        entry['matches'] = entry['max_abs_diff'] <= 1e-6 and 'note' not in entry
+        entry['matches'] = entry['outside'] == 0 and 'note' not in entry
         if not entry['matches']:
             differences[name] = {
                 'max_abs_diff': entry['max_abs_diff'],
@@ -481,6 +550,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             }
     return {
         'compared': sum(e['rows'] for e in per_name.values()),
+        'inside': sum(e['inside'] for e in per_name.values()),
         'negated': {
             name: reasons[name]['negated'] for name, e in sorted(per_name.items()) if e['negated'] and e['matches']
         },
@@ -573,7 +643,9 @@ def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
 
     The pairs are sorted, and a row whose first nonzero coefficient is negative
     is flipped whole, its sense with it. Coefficients and constants are
-    rounded to nine places, as the builders may differ in the last ulp.
+    rounded to nine places, as the builders may differ in the last ulp. A
+    label with no nonzero coefficient is not a row: linopy's `flat` holds no
+    entry for it, and its LP writer and its row count skip it.
     """
     terms = defaultdict(list)
     meta = {}
@@ -583,7 +655,7 @@ def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
     rows = {}
     flipped = {'<=': '>=', '>=': '<=', '=': '='}
     for key, label in _keyed(labels).items():
-        if int(label) == -1:
+        if int(label) not in meta:
             continue
         sign, rhs = meta[int(label)]
         pairs = tuple(sorted(terms[int(label)]))
@@ -900,7 +972,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 
 def diverging(bug: int, stamps: dict, result, target: float) -> tuple:
     """The stamps of a rung that records a PyPSA bug: its objective against the oracle's, and what it built."""
-    reason = f'PyPSA/PyPSA#{bug} — PyPSA 1.3.0 gets this network wrong, so the objective is held to the oracle and no model is compared'
+    reason = f'PyPSA/PyPSA#{bug} — the pinned PyPSA gets this network wrong, so the objective is held to the oracle and no model is compared'
     parity = {
         'specsolve_objective': round(float(result.objective), 6),
         'matches': math.isclose(float(result.objective), target, rel_tol=1e-9, abs_tol=1e-6),
@@ -929,6 +1001,7 @@ def shaped(parity: dict) -> bool:
 
 
 REASONS: dict = yaml.safe_load(DEVIATIONS.read_text()) or {} if DEVIATIONS.exists() else {}
+KNOWN_FAILING: dict[str, str] = yaml.safe_load(KNOWN_FAILING_FILE.read_text()) or {}
 
 
 def settled(committed: object, fresh: object) -> object:
@@ -951,7 +1024,10 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised."""
+    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
+
+    A patched file is held only to what its patch declares, as `owned` says.
+    """
     gaps = []
     by_file: dict[str, list[dict]] = defaultdict(list)
     for stem in sorted(stamped):
@@ -959,9 +1035,16 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
             continue
         by_file[stamped[stem]['parity']['spec']].append(stamped[stem]['parity'])
     for name, stamps in by_file.items():
-        declared = mathspec.to_spec(CORPUS / 'examples' / name)
+        declared = mathspec.to_spec(spec_named(name))
+        mine = owned(name)
+
+        def answers(n: str, mine: set[str] | None = mine) -> bool:
+            return mine is None or n in mine
+
         for kind, blocks in (('built_rows', declared.constraints), ('built_columns', declared.variables)):
             for block_name, block in blocks.items():
+                if not answers(block_name):
+                    continue
                 counts = [stamp[kind][block_name] for stamp in stamps]
                 if not sum(counts):
                     gaps.append(f'{name}: no rung builds {block_name}')
@@ -972,9 +1055,16 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
                     gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
         fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
-            f'{name}: no rung feeds {unfed}' for unfed in sorted({*declared.parameters, *declared.relations} - fed)
+            f'{name}: no rung feeds {unfed}'
+            for unfed in sorted({*declared.parameters, *declared.relations} - fed)
+            if answers(unfed)
         )
-        gaps.extend(untested_conjuncts(name, mathspec.to_spec(CORPUS / 'examples' / name).program, stamps))
+        program = declared.program
+        own = SimpleNamespace(
+            constraints={n: b for n, b in program.constraints.items() if answers(n)},
+            variables={n: b for n, b in program.variables.items() if answers(n)},
+        )
+        gaps.extend(untested_conjuncts(name, own, stamps))
     return gaps
 
 
@@ -987,6 +1077,7 @@ def main() -> int:
             shutil.rmtree(folder)
     stamped: dict[str, dict] = {}
     broken = []
+    fixed = []
     for stem in ladder:
         parity, structural, good = lanes(stem)
         if 'unattached' in parity:
@@ -1009,6 +1100,7 @@ def main() -> int:
         priced_ = (
             f'duals on {duals_["compared"]} rows'
             + (f', {len(duals_["negated"])} negated' if duals_['negated'] else '')
+            + (f", {duals_['inside']} inside PyPSA's range" if duals_.get('inside') else '')
             + (f', {len(duals_["differences"])} names differ' if duals_['differences'] else '')
             if duals_['compared']
             else f'no duals — {duals_["skipped"]}'
@@ -1025,8 +1117,10 @@ def main() -> int:
             else f'{len(shape_["differences"])} of {len(shape_["per_name"]["rows"]) + len(shape_["per_name"]["columns"])} names differ'
         )
         print(f'{stem}: {"MATCH" if parity["matches"] else "DIFFER"} · {shaped_} · {priced_} · {proof}')
-        if not good:
+        if not good and stem not in KNOWN_FAILING:
             broken.append(stem)
+        if good and stem in KNOWN_FAILING:
+            fixed.append(stem)
     # the full file's inventory and the conjunct verdicts feed `coverage` below and are not committed
     recorded = {
         stem: record | {'parity': {key: v for key, v in record['parity'].items() if key not in UNCOMMITTED}}
@@ -1059,6 +1153,7 @@ def main() -> int:
         [gap for gap in found if gap not in known]
         + [f'untested.txt: a rung tests this now, so the line goes — {line}' for line in known if line not in found]
         + [f'deviations.yaml: {name} records a reason no rung needs' for name in stale]
+        + [f'known_failing.yaml: {stem} matches now, so its line goes — {KNOWN_FAILING[stem]}' for stem in fixed]
     )
     for gap in gaps:
         print(gap, file=sys.stderr)

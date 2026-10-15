@@ -7,6 +7,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -35,11 +36,13 @@ parameters:
       most energy a generator may deliver over the whole horizon, for the
       generators that have such a limit
     dims: [generator]
+    missing: absent
   e_sum_min:
     description: >-
       least energy a generator must deliver over the whole horizon, for the
       generators that owe one
     dims: [generator]
+    missing: absent
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -56,7 +59,7 @@ constraints:
   nodal_balance:
     description: what is generated at a bus meets the load there
     dims: [snapshot, bus]
-    expression: sum(p, by=gen_bus, over=generator, into=bus) == load
+    expression: sum(p, over=generator, by=gen_bus[bus]) == load
 
   energy_cap:
     description: >-

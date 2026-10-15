@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
 
 def _question(archive: sps.types.ResultArchive | sps.types.SweepArchive) -> tuple[Spec, Mapping[str, object]]:
@@ -334,7 +334,7 @@ def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Pa
 
 def test_the_archive_lands_whole(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, monkeypatch) -> None:
     """The archive is renamed into place: a missing parent is made, and a failure leaves nothing."""
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
     out = tmp_path / 'nested' / 'dispatch.zip'
     _archived(dispatch_yaml, dispatch_frame_inputs, out)
@@ -491,7 +491,7 @@ _CATALOGED = {
         'load': {'dims': ['bus']},
     },
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'load': {'dims': ['bus'], 'expression': 'sum(p, by=sited, over=generator, into=at) == load'}},
+    'constraints': {'load': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=sited[at]) == load'}},
     'expressions': {'spend': {'expression': 'sum(p * cost)', 'description': 'what the dispatch costs'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
@@ -551,7 +551,7 @@ def test_a_parameter_passed_in_another_column_order_is_catalogued_as_its_tidy_ta
     """A parameter passed as a path in another column order is archived as its tidy table, in the spec's order."""
     spec = to_spec(
         {
-            'dimensions': {'generator': {'dtype': 'str'}, 'snapshot': {'dtype': 'int'}},
+            'dimensions': {'generator': {'dtype': 'str'}, 'snapshot': {'dtype': 'int', 'ordered': True}},
             'parameters': {'p_max': {'dims': ['generator', 'snapshot']}},
             'variables': {'p': {'dims': ['generator', 'snapshot'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
             'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -1032,7 +1032,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     """
     from tests.test_strategy import WINDOW, horizon_sources
 
-    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t']}}}
+    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t'], 'missing': 'neutral'}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t', carry={'soc_initial': 'soc'})
     sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}

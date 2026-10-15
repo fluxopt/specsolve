@@ -58,7 +58,7 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{distance}`$ | `distance` over $`\mathcal{F} \times \mathcal{T}`$ — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
+| $`\mathrm{distance}`$ | `distance` over $`\mathcal{F} \times \mathcal{T}`$, `absent` where the data has no row — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
 | $`\mathrm{n}`$ | `n` (scalar) — the number of cities, which is the big-M the ordering rows need |
 
 #### Variables
@@ -69,6 +69,20 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 | $`u`$ | `u` over $`\mathcal{C}`$ — position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{distance}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{travel}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`travel`**
+
+```math
+\mathit{travel}_{f,t} \in \{0, 1\} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, \mathrm{distance}_{f,t} \text{ is defined}
+```
+
+**`u`**
+
+```math
+1 \le u_{c} \le 17 \qquad \forall\, c \in \mathcal{C}
+```
 
 #### Objective
 
@@ -94,20 +108,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{distance}`$,
 
 ```math
 \sum_{c \in \mathcal{C} \,:\, \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \,:\, \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}
-```
-
-#### Variable domains
-
-**`travel`**
-
-```math
-\mathit{travel}_{f,t} \in \{0, 1\} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, \mathrm{distance}_{f,t} \text{ is defined}
-```
-
-**`u`**
-
-```math
-1 \le u_{c} \le 17 \qquad \forall\, c \in \mathcal{C}
 ```
 
 </details>
@@ -140,6 +140,7 @@ parameters:
       distance along an arc, with no row on the diagonal — a city has no
       distance to itself, so no arc variable exists there
     dims: [from_city, to_city]
+    missing: absent
   n:
     description: the number of cities, which is the big-M the ordering rows need
     dims: []
@@ -177,8 +178,8 @@ constraints:
     dims: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, by=as_from, over=city, into=from_city)
-      - sum(u, by=as_to, over=city, into=to_city)
+      sum(u, over=city, by=as_from[from_city])
+      - sum(u, over=city, by=as_to[to_city])
       + n * travel
       <= n - 1
 
@@ -201,7 +202,7 @@ relations:
   as_to: {key: city, values: to_city}
 ```
 
-and `sum(u, by=as_from, over=city, into=from_city)` becomes a **relabel** rather than a reduction. Each
+and `sum(u, over=city, by=as_from[from_city])` becomes a **relabel** rather than a reduction. Each
 city keys one row and each `from_city` is named once, so nothing is added up:
 `u` moves from the `city` axis onto the `from_city` axis. Doing it twice with
 different relations puts the same variable at both ends of one row. A relation

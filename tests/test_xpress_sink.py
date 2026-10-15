@@ -153,7 +153,7 @@ def test_a_set_reaches_the_solver_natively() -> None:
 #: every constraint, so ``rhs - slack`` and ``rhs`` agree there and the
 #: subtraction is invisible — this is the model that separates them.
 SLACK = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}, 'price': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'lim': {'dims': ['t'], 'expression': 'p <= cap'}},

@@ -1,4 +1,4 @@
-"""``sum(x, by=r, over=c, into=[l, m])``: one grouping onto a pair of dimensions.
+"""``sum(x, over=c, by=r[l, m])``: one grouping onto a pair of dimensions.
 
 The call walks to two columns of one relation and lands terms on a product of
 dimensions, as a capacity limit per location and technology asks (PyPSA's
@@ -10,7 +10,7 @@ which a groupby sorts and the dim table keeps as declared.
 from __future__ import annotations
 
 import pytest
-from mathspec.program import GroupSum, Variable
+from mathspec.program import Join, Sum, Variable
 
 from specsolve.errors import SchemaError
 from tests.conftest import by_coord, override, raw_of, schema_of
@@ -45,7 +45,7 @@ variables:
 constraints:
   technology_at_bus:
     dims: [bus, technology]
-    expression: sum(p, by=gen_placement, over=generator, into=[bus, technology]) <= limit
+    expression: sum(p, over=generator, by=gen_placement[bus, technology]) <= limit
     description: output of one technology at one bus stays under its limit
   meet_demand:
     dims: []
@@ -150,7 +150,7 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
                 'description': 'capacity left unused at one bus in one technology',
             },
             'constraints.technology_at_bus.expression': (
-                'sum(p, by=gen_placement, over=generator, into=[bus, technology]) + headroom <= limit'
+                'sum(p, over=generator, by=gen_placement[bus, technology]) + headroom <= limit'
             ),
             'objective.expression': 'sum(p * cost, over=generator) - sum(sum(headroom, over=bus), over=technology)',
         },
@@ -221,14 +221,15 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
     have nothing left to group.
     """
     (limit, _demand) = schema_of(SPEC).program.constraints.values()
-    assert isinstance(limit.lhs, GroupSum)
-    assert limit.lhs.operand == Variable('p')
-    direction = limit.lhs.direction
-    assert (direction.consumed_dims, direction.name, direction.produced_dims) == (
+    assert isinstance(limit.lhs, Sum)
+    assert isinstance(limit.lhs.operand, Join)
+    assert limit.lhs.operand.operand == Variable('p')
+    columns = limit.lhs.operand.columns
+    assert (columns.dropped_dims, columns.name, columns.added_dims) == (
         ('generator',),
         'gen_placement',
         ('bus', 'technology'),
-    ), 'one node carrying one direction, each column read paired with the dimension it lands on'
+    ), 'one join carrying one set of columns, each column read paired with the dimension it lands on'
 
 
 # ---------------------------------------------------------------------------
@@ -240,9 +241,7 @@ def test_a_call_walks_one_table_and_says_so():
     """A pair of dimensions comes from one relation's two columns, not from two relations."""
     patch = {
         'relations.gen_bus': {'key': 'generator', 'values': 'bus'},
-        'constraints.technology_at_bus.expression': (
-            'sum(p, by=[gen_placement, gen_bus], over=generator, into=[bus, technology]) <= limit'
-        ),
+        'constraints.technology_at_bus.expression': ('sum(p, over=generator, by=[gen_placement, gen_bus]) <= limit'),
     }
-    with pytest.raises(SchemaError, match=r'names 2 relations, and one call reads one table'):
+    with pytest.raises(SchemaError, match=r'takes columns of one relation'):
         schema_of(SPEC, **patch)

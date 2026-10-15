@@ -26,7 +26,7 @@ SPEC = """
 description: a storage level carried across a horizon, seeded at its first position
 
 dimensions:
-  snapshot: {dtype: int, description: dispatch periods in order}
+  snapshot: {dtype: int, description: dispatch periods in order, ordered: true}
 
 parameters:
   soc_initial: {dims: [], description: the level carried in from before the horizon}
@@ -190,12 +190,12 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     where-comparison meets is the one that speaks.
     """
     spec = SPEC.replace(
-        'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}',
-        'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order}\n'
-        '  other: {dtype: int, description: a second axis}',
+        'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order, ordered: true}',
+        'dimensions:\n  snapshot: {dtype: int, description: dispatch periods in order, ordered: true}\n'
+        '  other: {dtype: int, description: a second axis, ordered: true}',
     ).replace('"position(snapshot) == 0"', '"position(other) == 0"')
     with pytest.raises(
-        SpecsolveError, match=r"where-dimension 'other' reads dims \['other'\] outside the frame \['snapshot'\]"
+        SpecsolveError, match=r"where-dimension 'other' reads dims \['other'\] outside the declared dims \['snapshot'\]"
     ):
         schema_of(spec)
 
@@ -217,11 +217,11 @@ GROUPED_PERIODS = [0, 0, 1, 1, 1, None]
 
 MASK = """
 dimensions:
-  snapshot: {dtype: int}
-  period: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
+  period: {dtype: int, ordered: true}
 
 relations:
-  period_of: {key: snapshot, values: period}
+  period_of: {key: snapshot, values: period, missing: absent}
 
 parameters:
   price: {dims: [snapshot]}
@@ -270,7 +270,7 @@ def _masked(where: str) -> list[int]:
 
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
-    assert _masked('position(snapshot, by=period_of, within=period) == 0') == [10, 20], (
+    assert _masked('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
         "each period's first snapshot, not just the horizon's"
     )
     assert _masked('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
@@ -282,7 +282,7 @@ def test_a_negative_position_is_each_group_s_last():
     With periods of different lengths there is no single position that is the
     last of both.
     """
-    assert _masked('position(snapshot, by=period_of, within=period) == -1') == [11, 22]
+    assert _masked('position(snapshot, within=period_of[period]) == -1') == [11, 22]
 
 
 def test_a_comparator_reads_the_same_grouped_as_ungrouped():
@@ -293,18 +293,18 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     wraps to a huge positive number instead — which `==` cannot see and every
     other comparator reads backwards.
     """
-    assert _masked('position(snapshot, by=period_of, within=period) >= 1') == [11, 21, 22], (
+    assert _masked('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
         "everything from each period's second snapshot on"
     )
-    assert _masked('position(snapshot, by=period_of, within=period) < 1') == [10, 20], 'and its complement'
+    assert _masked('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
 
 
 @pytest.mark.parametrize(
     'where',
     [
-        pytest.param('position(snapshot, by=period_of, within=period) == 0', id='first'),
-        pytest.param('position(snapshot, by=period_of, within=period) == -1', id='last'),
-        pytest.param('position(snapshot, by=period_of, within=period) >= 0', id='everything'),
+        pytest.param('position(snapshot, within=period_of[period]) == 0', id='first'),
+        pytest.param('position(snapshot, within=period_of[period]) == -1', id='last'),
+        pytest.param('position(snapshot, within=period_of[period]) >= 0', id='everything'),
     ],
 )
 def test_a_coordinate_in_no_group_has_no_boundary(where):
@@ -323,7 +323,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    spec = MASK.replace('WHERE', 'position(snapshot, by=period_of, within=period) == 2')
+    spec = MASK.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
     path = tmp_path / 'spec.yaml'
     path.write_text(spec)
     sources = _grouped_sources()
@@ -340,14 +340,14 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 @pytest.mark.parametrize(
     ('by', 'match'),
     [
-        pytest.param('price', r'position\(by=price\) does not name a relation', id='by-a-parameter'),
-        pytest.param('period', r"'period' is a dimension, and by= takes a relation", id='by-a-dimension'),
-        pytest.param('nowhere', r'position\(by=nowhere\) does not name a relation', id='by-nothing'),
+        pytest.param('price', r'position\(within=price\[\.\.\.\]\) does not name a relation', id='by-a-parameter'),
+        pytest.param('period', r"'period' is a dimension, not a relation", id='by-a-dimension'),
+        pytest.param('nowhere', r'position\(within=nowhere\[\.\.\.\]\) does not name a relation', id='by-nothing'),
     ],
 )
 def test_by_takes_a_relation(by, match):
-    """`by=` is the same word it is in `sum(by=)` and `at(by=)`, or it is nothing."""
-    spec = MASK.replace('WHERE', f'position(snapshot, by={by}) == 0')
+    """`within=` names a relation and its columns, as `by=` does in `sum(by=)` and `at(by=)`, or it is nothing."""
+    spec = MASK.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
     with pytest.raises(LanguageError, match=match):
         schema_of(spec)
 
@@ -359,11 +359,13 @@ def test_a_relation_over_another_dimension_carries_no_position():
     so there is no position within a group for the clause to be about.
     """
     spec = (
-        MASK.replace('WHERE', 'position(snapshot, by=plant_period, within=period) == 0')
-        .replace('  period: {dtype: int}', '  period: {dtype: int}\n  plant: {dtype: str}')
+        MASK.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
         .replace(
-            '  period_of: {key: snapshot, values: period}',
-            '  period_of: {key: snapshot, values: period}\n  plant_period: {key: plant, values: period}',
+            '  period: {dtype: int, ordered: true}', '  period: {dtype: int, ordered: true}\n  plant: {dtype: str}'
+        )
+        .replace(
+            '  period_of: {key: snapshot, values: period, missing: absent}',
+            '  period_of: {key: snapshot, values: period, missing: absent}\n  plant_period: {key: plant, values: period}',
         )
     )
     with pytest.raises(LanguageError, match=r"'plant_period' has no key column over 'snapshot'"):
@@ -420,11 +422,11 @@ def test_the_seasons_page_number():
 #: constraint at all, and an unbounded lane has no optimum to agree on.
 PARTITIONED = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   season: {dtype: str}
 
 relations:
-  season_of: {key: snapshot, values: season}
+  season_of: {key: snapshot, values: season, missing: absent}
 
 parameters:
   inflow: {dims: [snapshot]}
@@ -455,7 +457,7 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
     Bare, the vacated position is absent and takes its row with it, and with
     `by=` the position vacated is each *season's* first rather than the axis's.
     """
-    spec = _partitioned('by=season_of, within=season')
+    spec = _partitioned('within=season_of[season]')
     with differential(spec, _seasons_sources()) as run:
         assert run.result.is_ok, 'both lanes reach the same answer with two rows missing from it'
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
@@ -465,7 +467,7 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
 
 def test_a_filled_partitioned_edge_builds_every_row():
     """`edge=0` per group: the row survives and its first snapshot starts empty."""
-    spec = _partitioned('edge=0, by=season_of, within=season')
+    spec = _partitioned('edge=0, within=season_of[season]')
     with differential(spec, _seasons_sources()) as run:
         held = by_coord(run.result, 'soc', 'snapshot')
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
@@ -484,16 +486,16 @@ def test_the_axis_wrap_is_a_different_model():
         held = by_coord(run.result, 'soc', 'snapshot')
     assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
 
-    with differential(_partitioned("edge='wrap', by=season_of, within=season"), _seasons_sources()) as run:
+    with differential(_partitioned("edge='wrap', within=season_of[season]"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(74.0, rel=RTOL), 'each season closed on itself, and 6 poorer for it'
 
 
 @pytest.mark.parametrize(
     ('edge', 'omissions'),
     [
-        pytest.param("edge='wrap', by=season_of, within=season", 2, id='wrap'),
-        pytest.param('edge=0, by=season_of, within=season', 2, id='zero'),
-        pytest.param('by=season_of, within=season', 4, id='bare'),
+        pytest.param("edge='wrap', within=season_of[season]", 2, id='wrap'),
+        pytest.param('edge=0, within=season_of[season]', 2, id='zero'),
+        pytest.param('within=season_of[season]', 4, id='bare'),
     ],
 )
 def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
@@ -529,7 +531,7 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
 def test_a_relation_over_another_dimension_cannot_partition_a_translation():
     """`by=` groups the axis being walked, or no coordinate has a neighbour in one."""
     spec = (
-        _partitioned("edge='wrap', by=plant_season, within=season")
+        _partitioned("edge='wrap', within=plant_season[season]")
         .replace(
             'relations:\n  season_of:',
             'relations:\n  plant_season: {key: plant, values: season}\n  season_of:',

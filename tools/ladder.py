@@ -27,6 +27,8 @@ PAGES = ROOT / 'docs' / 'examples' / 'pypsa_ladder'
 INDEX = ROOT / 'docs' / 'examples' / 'pypsa_ladder.md'
 CORPUS_SITE = 'https://mathspec.readthedocs.io/en/latest/examples/'
 CORPUS_PAGE = f'{CORPUS_SITE}pypsa/'
+#: The PyPSA the rungs are verified against — the commit the corpus's reference script pins.
+PYPSA = 'pypsa master at 51986084'
 
 #: Where each rung sits on mathspec's PyPSA pages. The anchors are that site's
 #: headings, which name a rung in mathspec's words rather than this ladder's;
@@ -84,12 +86,20 @@ CORPUS_RUNGS = {
     51: 'pypsa/#rung-51--a-growth-limit-after-an-asset-retires',
     52: 'pypsa/#rung-52--a-transmission-cost-limit-per-scenario',
     53: 'pypsa/#rung-53--a-transmission-volume-limit-per-scenario-and-period',
-    54: 'pypsa/#rung-54--a-delay-per-scenario',
     55: 'pypsa/#rung-55--a-transformer-cycle-per-scenario',
     56: 'pypsa/#rung-56--a-security-constrained-run-per-scenario',
     57: 'pypsa/#rung-57--a-fixed-build-per-scenario',
     58: 'pypsa/#rung-58--a-committable-unit-per-scenario',
     60: 'pypsa/#rung-60--efficiencies-per-snapshot',
+    61: 'pypsa/#rung-61--voltage-angle-limits',
+    62: 'pypsa/#rung-62--a-start-up-cost-per-snapshot',
+    63: 'pypsa/#rung-63--modular-branches-and-storage',
+    64: 'pypsa/#rung-64--commitment-edges',
+    66: 'pypsa/#rung-66--cycles-per-period',
+    67: 'pypsa_linearized_uc/#rung-67--a-committable-link-and-process-relaxed',
+    68: 'pypsa/#rung-68--outage-factors-per-period',
+    69: 'pypsa/#rung-69--storage-that-retires-before-the-close',
+    70: 'pypsa/#rung-70--a-risk-preference-of-weight-zero',
 }
 
 
@@ -158,7 +168,7 @@ def specsolve_tab(stem: str, projection: dict, record: dict) -> str:
 def pypsa_tab(stem: str, record: dict) -> str:
     script = (RUNGS / f'{stem}.py').read_text().rstrip()
     said = (
-        f'wrong in pypsa 1.3.0, PyPSA/PyPSA#{record["parity"]["diverges"]}'
+        f'wrong in {PYPSA}, PyPSA/PyPSA#{record["parity"]["diverges"]}'
         if 'diverges' in record['parity']
         else repr(record['pypsa_objective'])
     )
@@ -186,8 +196,8 @@ def _verdict(record: dict) -> str:
     parity, structural = record['parity'], record['structural']
     if 'diverges' in parity:
         return (
-            f'> {"✔" if parity["matches"] else "✘"} Verified against pypsa 1.3.0 — objective'
-            f' **{parity["specsolve_objective"]}**, held to the corpus oracle, because PyPSA 1.3.0 solves this network'
+            f'> {"✔" if parity["matches"] else "✘"} Verified against {PYPSA} — objective'
+            f' **{parity["specsolve_objective"]}**, held to the corpus oracle, because {PYPSA} solves this network'
             f' wrongly ({_issue(parity)}); no model is compared.'
         )
     priced = _cell_duals(parity)
@@ -208,7 +218,7 @@ def _verdict(record: dict) -> str:
         for name, c in shape['columns'].items()
     )
     return (
-        f'> {"✔" if parity["matches"] else "✘"} Verified against pypsa 1.3.0 — objective **{parity["specsolve_objective"]}**'
+        f'> {"✔" if parity["matches"] else "✘"} Verified against {PYPSA} — objective **{parity["specsolve_objective"]}**'
         f' on both sides; structure {_cell_structure(parity)}; size {_cell_size(parity)}; duals {priced}; {proof}.\n\n'
         '<details markdown="1">\n<summary>Rows and columns, PyPSA against specsolve, name for name</summary>\n\n'
         f'| row | PyPSA | specsolve |\n| --- | ---: | ---: |\n{rows}\n\n'
@@ -275,6 +285,7 @@ def _cell_duals(parity: dict) -> str:
     if not duals['compared']:
         return '— integer model, no duals'
     negated = f', {len(duals["negated"])} negated' if duals['negated'] else ''
+    negated += f", {duals['inside']} inside PyPSA's range" if duals.get('inside') else ''
     if not duals['differences']:
         return f'✔ {duals["compared"]} rows{negated}'
     reasons = '; '.join(
@@ -300,7 +311,7 @@ def _cell_size(parity: dict) -> str:
 
 def _cell_structure(parity: dict) -> str:
     if 'diverges' in parity:
-        return f'— PyPSA 1.3.0 solves this network wrongly, {_issue(parity)}; the objective is held to the oracle'
+        return f'— {PYPSA} solves this network wrongly, {_issue(parity)}; the objective is held to the oracle'
     shape = parity['structure']
     names = {n: d for n, d in shape['differences'].items() if d.get('kind') != 'solver'}
     if not names:
@@ -375,19 +386,28 @@ def index(stamped: dict) -> str:
         '| **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros |'
         ' the model handed to HiGHS is the same size on both sides |\n'
         "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
-        ' 1e-6 — against the negative where the file writes the row negated; an integer model has none |\n'
+        " 1e-6, or inside the range of duals PyPSA's model admits on that row — against the negative where the"
+        ' file writes the row negated; an integer model has none |\n'
         '| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the"
         " rung's own spec attached to the tables `prep.py` makes of it."
         ' A difference in structure, duals or the linopy lane is allowed only'
         ' with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason'
-        ' no rung needs. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
+        ' no rung needs. A rung the pinned corpus gets wrong is listed in `differential/pypsa/known_failing.yaml` with'
+        ' the issue that fixes it, and stays UNEXPLAINED here until the corpus carries the fix.'
+        ' A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals'
         ' (an optimum need not be unique).\n\n'
         'One kind of reason is checked rather than excused. Where the file states a row as PyPSA writes it negated —'
         ' a storage balance with the charge on the left, a ramp written the other way about — the dual is the'
         " negative of PyPSA's, exactly, so the runner compares it against the negative at the same tolerance and the"
         ' claim is under test. Those names are marked `negated` below; a difference surviving the negation is red.\n\n'
+        'A dual that differs is not yet a difference. Where the optimum is degenerate — a unit at its cap exactly'
+        ' as the load reaches it — a row has a range of optimal duals, and the two solvers may return different'
+        " ones. The runner moves that row's right-hand side in PyPSA's own model by 0.001 down and up and"
+        " measures the objective's slope on each side; every value between the two slopes is an optimal dual."
+        " Ours counts as equal if it lies in that range, and PyPSA's must lie there too, or the run stops. The"
+        " count is shown as `inside PyPSA's range`.\n\n"
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"

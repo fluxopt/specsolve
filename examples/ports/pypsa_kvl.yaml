@@ -7,6 +7,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -53,6 +54,7 @@ parameters:
       may belong to several cycles, so this is a parameter over both dimensions
       rather than a coordinate, and rows are absent where a line is in no cycle
     dims: [cycle, line]
+    missing: neutral
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -78,9 +80,9 @@ constraints:
     description: what is generated at a bus plus what arrives over the lines meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=line_to, over=line, into=bus)
-      - sum(f, by=line_from, over=line, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=line, by=line_to[bus])
+      - sum(f, over=line, by=line_from[bus])
       == load
 
   kirchhoff_voltage_law:

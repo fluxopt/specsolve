@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-29--storage-per-investment-period): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa 1.3.0 — objective **7438.461538** on both sides; structure ≠ `CVaR` 0 vs 1 — the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it; `CVaR-a` 0 vs 1 — the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it; `CVaR-theta` 0 vs 1 — the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it; size ✔ 212 rows · ≠ 96 vs 99 columns · ✔ 356 nonzeros; duals ✔ 212 rows, 3 negated; **model for model**: 21 blocks equal, 0 documented splits, 4 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **7438.461538** on both sides; structure ✔ 15 constraints · 6 variables, name for name; size ✔ 212 rows · ✔ 96 columns · ✔ 356 nonzeros; duals ✔ 212 rows, 3 negated; **model for model**: 21 blocks equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -29,9 +29,6 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 
 | column | PyPSA | specsolve |
 | --- | ---: | ---: |
-| `CVaR` | 0 | ≠ 1 |
-| `CVaR-a` | 0 | ≠ 1 |
-| `CVaR-theta` | 0 | ≠ 1 |
 | `Generator-p` | 16 | 16 |
 | `StorageUnit-p_dispatch` | 16 | 16 |
 | `StorageUnit-p_store` | 16 | 16 |
@@ -46,7 +43,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-A plain `n.optimize()`, and its multi-period and stochastic classes, in one file. Every second-stage quantity spans a `scenario` (a future dispatch is chosen in) and every asset stands in the investment `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it per scenario. Capacity is chosen once, before the future is known, and paid once per active period at its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights, with a share priced at the tail through the CVaR rows, which stand only where that share is positive. A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses to the standard one. A security-constrained run copies each branch flow limit once per outage in an `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight, and the outage factors are data prep.
+A plain `n.optimize()`, and its multi-period and stochastic classes, in one file. Every second-stage quantity spans a `scenario` (a future dispatch is chosen in) and every asset stands in the investment `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it per scenario. Capacity is chosen once, before the future is known, and paid once per active period at its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights, with a share priced at the tail through the CVaR rows, which stand only where a risk preference is set. A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses to the standard one. A security-constrained run copies each branch flow limit once per outage in an `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight, and the outage factors are data prep.
 
 #### Sets
 
@@ -54,8 +51,12 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 |---|---|
 | $`\Xi`$ | index $`\xi`$ — `scenario` — the futures dispatch is chosen in, each with a weight |
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{snapshot\_period}: \mathcal{T} \to \mathcal{Y}`$ — dispatch periods |
-| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N},\ \mathrm{StorageUnit\_bus}: \mathcal{S} \to \mathcal{N},\ \mathrm{Store\_bus}: \mathcal{V} \to \mathcal{N}`$ — network nodes |
+| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N},\ \mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N},\ \mathrm{StorageUnit\_bus}: \mathcal{S} \to \mathcal{N},\ \mathrm{Store\_bus}: \mathcal{V} \to \mathcal{N}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N}`$ — generating units, each on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L}`$ — controllable connections, each from one bus to the buses it delivers to |
+| $`\mathcal{O}`$ | index $`o`$ — `link_output` with $`\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N}`$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
+| $`\mathcal{J}`$ | index $`j`$ — `process` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J}`$ — generalized multi-port converters, each with an internal power that every port draws or delivers at its own rate |
+| $`\mathcal{R}`$ | index $`r`$ — `process_output` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N}`$ — a process's ports, one label per port a process declares — PyPSA's `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in the balance, data prep |
 | $`\mathcal{D}`$ | index $`d`$ — `load` with $`\mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}`$ — demands, each on one bus |
 | $`\mathcal{S}`$ | index $`s`$ — `storage_unit` with $`\mathrm{StorageUnit\_bus}: \mathcal{S} \to \mathcal{N}`$ — storage units, dispatch and store behind one bus connection |
 | $`\mathcal{V}`$ | index $`v`$ — `store` with $`\mathrm{Store\_bus}: \mathcal{V} \to \mathcal{N}`$ — pure energy stores, each on one bus |
@@ -72,24 +73,31 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\overline{\mathrm{p}}`$ | `Generator_p_max_pu` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — most output, per unit of nominal power — an availability profile |
 | $`\mathrm{c}`$ | `Generator_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
-| $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
+| $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$ — most output in the snapshot a unit starts, per unit of nominal power |
-| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$ — most output in the snapshot before a unit stops, per unit of nominal power |
+| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the data has no row — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the data has no row — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — most output in the snapshot a unit starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — most output in the snapshot before a unit stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{u}^{0}`$ | `Generator_status_initial` over $`\Xi \times \mathcal{G}`$ — one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
-| $`\mathrm{p}^{0}`$ | `Generator_p_init` over $`\Xi \times \mathcal{G}`$ — the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot |
-| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$ — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{p}^{0}`$ | `Generator_p_init` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot |
+| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\eta`$ | `Link_efficiency` over $`\Xi \times \mathcal{T} \times \mathcal{O}`$ — share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`, … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1498`) |
+| $`\mathrm{d}^{f}`$ | `Link_output_delay` over $`\mathcal{O}`$ — snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for a port that delivers at once. A port has the same delay in every scenario, because PyPSA refuses a delay that differs by scenario (`constants.py:52`) |
+| $`\mathrm{cyc}^{f}`$ | `Link_output_cyclic_delay` over $`\mathcal{O}`$ — whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`, `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots is lost. The flag is the same in every scenario, as the delay is |
+| $`\alpha`$ | `Process_rate` over $`\Xi \times \mathcal{T} \times \mathcal{R}`$ — the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`, … read long — negative where the port withdraws, positive where it injects; a link is a process whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`) |
+| $`\mathrm{d}^{z}`$ | `Process_output_delay` over $`\mathcal{R}`$ — snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`, … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for a port that transfers at once. A port has the same delay in every scenario, as a link's port has |
+| $`\mathrm{cyc}^{z}`$ | `Process_output_cyclic_delay` over $`\mathcal{R}`$ — whether a delayed port's transfer wraps from the end of its investment period — PyPSA's `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's first snapshots is lost. The flag is the same in every scenario, as the delay is |
 | $`\mathrm{load}`$ | `Load_p_set` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — demand |
-| $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
-| $`\mathrm{on}^{\mathrm{load}}`$ | `Load_active` over $`\mathcal{D}`$ — whether a load stands in the model — PyPSA's `active`. A load has no build year and no lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`consistency.py:1195`) |
+| $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`) |
+| $`\mathrm{on}^{\mathrm{load}}`$ | `Load_active` over $`\mathcal{D}`$ — whether a load stands in the model — PyPSA's `active`. A load has no build year and no lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\pi`$ | `scenario_weight` over $`\Xi`$ — PyPSA's `scenario_weightings.weight` — the probability of a future |
-| $`\omega`$ | `CVaR_omega` (scalar) — PyPSA's `risk_preference['omega']` — the share of operating cost priced at the tail rather than in expectation; zero recovers the risk-neutral model |
-| $`\mathrm{w}^{y}`$ | `period_weight_objective` over $`\mathcal{Y}`$ — PyPSA's `investment_period_weightings.objective` — what a period's cost weighs |
+| $`\mathrm{w}^{y}`$ | `period_weight_objective` over $`\mathcal{Y}`$ — PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column holds (`optimize.py:205-207`, `:264-266`) |
 | $`\mathrm{on}`$ | `Generator_active` over $`\mathcal{T} \times \mathcal{G}`$ — whether a generator stands in a snapshot's period — PyPSA's `active`, from build year and lifetime, data prep |
+| $`\mathrm{on}^{f}`$ | `Link_active` over $`\mathcal{T} \times \mathcal{L}`$ — whether a link stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{h}`$ | `StorageUnit_active` over $`\mathcal{T} \times \mathcal{S}`$ — whether a storage unit stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{e}`$ | `Store_active` over $`\mathcal{T} \times \mathcal{V}`$ — whether a store stands in a snapshot's period — PyPSA's `active`, data prep |
+| $`\mathrm{on}^{z}`$ | `Process_active` over $`\mathcal{T} \times \mathcal{J}`$ — whether a process stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{w}^{\mathrm{sto}}`$ | `snapshot_weightings_stores` over $`\mathcal{T}`$ — PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance |
 | $`\mathrm{h}^{\mathrm{nom}}`$ | `StorageUnit_p_nom` over $`\Xi \times \mathcal{S}`$ — nominal power |
 | $`\mathrm{ext}^{h}`$ | `StorageUnit_p_nom_extendable` over $`\mathcal{S}`$ — whether the nominal power is a decision |
@@ -98,7 +106,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{T}^{h}`$ | `StorageUnit_max_hours` over $`\Xi \times \mathcal{S}`$ — energy capacity, as hours of dispatch at nominal power |
 | $`\eta^{-}`$ | `StorageUnit_efficiency_store` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — share of the power drawn from the bus that becomes charge |
 | $`\eta^{+}`$ | `StorageUnit_efficiency_dispatch` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — share of the charge drawn down that reaches the bus |
-| $`\mathrm{sgn}^{h}`$ | `StorageUnit_sign` over $`\mathcal{S}`$ — the sign net dispatch enters its bus's balance with — PyPSA's `sign`, `1` unless given. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
+| $`\mathrm{sgn}^{h}`$ | `StorageUnit_sign` over $`\mathcal{S}`$ — the sign net dispatch enters its bus's balance with — PyPSA's `sign`, `1` unless given. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\rho`$ | `StorageUnit_retention` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — share of charge kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`, data prep |
 | $`\mathrm{inflow}`$ | `StorageUnit_inflow` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — energy arriving per hour, a river into a reservoir |
 | $`\mathrm{soc}^{0}`$ | `StorageUnit_state_of_charge_initial` over $`\Xi \times \mathcal{S}`$ — charge held before the first snapshot |
@@ -114,7 +122,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{ext}^{e}`$ | `Store_e_nom_extendable` over $`\mathcal{V}`$ — whether the nominal energy capacity is a decision |
 | $`\underline{\mathrm{e}}`$ | `Store_e_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — least energy held, per unit of nominal capacity — negative for a store that may go short |
 | $`\overline{\mathrm{e}}`$ | `Store_e_max_pu` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — most energy held, per unit of nominal capacity |
-| $`\mathrm{sgn}^{q}`$ | `Store_sign` over $`\mathcal{V}`$ — the sign the power a store delivers enters its bus's balance with — PyPSA's `sign`, `1` unless given. PyPSA refuses one that differs by scenario (`consistency.py:1187`) |
+| $`\mathrm{sgn}^{q}`$ | `Store_sign` over $`\mathcal{V}`$ — the sign the power a store delivers enters its bus's balance with — PyPSA's `sign`, `1` unless given. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\rho^{e}`$ | `Store_retention` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — share of energy kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`, data prep |
 | $`\mathrm{e}^{0}`$ | `Store_e_initial` over $`\Xi \times \mathcal{V}`$ — energy held before the first snapshot |
 | $`\mathrm{cyc}^{e}`$ | `Store_e_cyclic` over $`\Xi \times \mathcal{V}`$ — whether the horizon closes on itself instead of opening on the initial energy |
@@ -126,6 +134,14 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{q,(2)}`$ | `Store_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of the square of the net power delivered, so charging costs as much as delivering |
 | $`\mathrm{c}^{e}`$ | `Store_marginal_cost_storage` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of one unit of energy held over one snapshot |
 
+#### Masks
+
+| Symbol | Meaning |
+|---|---|
+| $`\mathrm{Generator\_committed}`$ | `Generator_committed` over $`\mathcal{T} \times \mathcal{G}`$ — a committable generator that stands in the snapshot's period — every unit-commitment row's set |
+| $`\mathrm{Generator\_ramps\_from\_previous}`$ | `Generator_ramps_from_previous` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — a snapshot whose ramp reads a previous output — any snapshot but its period's first, and the horizon's first where the generator comes in off or carries an initial output |
+| $`\mathrm{StorageUnit\_fix}`$ | `StorageUnit_fix` over $`\mathcal{T} \times \mathcal{S}`$ — a storage unit with a fixed build that stands in the snapshot's period — PyPSA's `fix` rows |
+
 #### Variables
 
 | Symbol | Meaning |
@@ -136,291 +152,73 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{soc}`$ | `StorageUnit_state_of_charge` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — `StorageUnit-state_of_charge` — energy held at the end of a snapshot |
 | $`e`$ | `Store_e` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-e` — energy held at the end of a snapshot |
 | $`q`$ | `Store_p` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-p` — power delivered to the bus; charging is negative |
-| $`a`$ | `CVaR_a` over $`\Xi`$ — `CVaR-a` — how far a scenario's operating cost exceeds the tail's start; nothing where it does not |
-| $`\theta`$ | `CVaR_theta` (scalar) — `CVaR-theta` — where the tail starts, the value at risk |
-| $`CVaR`$ | `CVaR` (scalar) — `CVaR` — the tail's average cost, what the objective prices at `omega` |
 | $`u`$ | `Generator_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-status` — how much of a committable unit is on: an integer the rows below cap at one, or at the module count where the build is modular |
 | $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
 #### Definitions
 
 | Symbol | Meaning |
 |---|---|
+| $`\mathit{Generator\_previous\_status}`$ | `Generator_previous_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the commitment state a generator carries into a snapshot — off at the first snapshot it stands in past the first of the horizon, as PyPSA reads a status it did not build (`constraints.py:298`), and the state carried over otherwise |
+| $`\mathit{Generator\_status\_carried\_over}`$ | `Generator_status_carried_over` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the state a generator carries over into a snapshot — the state it brought into the horizon at the first, the previous snapshot's after that |
 | $`\mathit{Generator\_previous\_p}`$ | `Generator_previous_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the output a generator carries into a snapshot — at the first, the `p_init` it brought in where it came in running and nothing where it came in off; the previous snapshot's after that |
-| $`\mathit{Generator\_ramp\_up\_allowance}`$ | `Generator_ramp_up_allowance` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — how far a generator may raise output between two snapshots — its ramp limit of the build while it stays on, plus its start-up ramp in the snapshot it turns on |
-| $`\mathit{Generator\_ramp\_down\_allowance}`$ | `Generator_ramp_down_allowance` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — how far a generator may lower output between two snapshots — its ramp limit of the build while it stays on, plus its shut-down ramp in the snapshot it turns off |
-| $`\mathit{StorageUnit\_charge\_carried\_in}`$ | `StorageUnit_charge_carried_in` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — the charge a unit opens a snapshot with — at the first snapshot it stands in, its last such snapshot's less standing loss where it is cyclic and the given initial charge, which no standing loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A unit built in a later period opens in that period, and a cyclic one that retires closes on its own last snapshot. Per period, the same holds with each investment period as the horizon |
-| $`\mathit{Store\_energy\_carried\_in}`$ | `Store_energy_carried_in` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — the energy a store opens a snapshot with — at the first snapshot it stands in, its last such snapshot's less standing loss where it is cyclic and the given initial energy, which no standing loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A store built in a later period opens in that period, and a cyclic one that retires closes on its own last snapshot. Per period, the same holds with each investment period as the horizon |
-| $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
-| $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
-| $`\mathit{Generator\_previous\_status}`$ | `Generator_previous_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the commitment state a generator carries into a snapshot — the state it brought into the horizon at the first, the previous snapshot's after that |
 | $`\mathit{Generator\_p\_nom\_effective}`$ | `Generator_p_nom_effective` over $`\Xi \times \mathcal{G}`$ — the build a generator's limits are taken against — the chosen one where it is extendable, the given one otherwise |
 | $`\mathrm{Generator\_ramp\_up\_rate}`$ | `Generator_ramp_up_rate` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the ramp limit a unit's up row reads — PyPSA's `ramp_limit_up`, or the full build where it has none, since a start-up ramp alone builds the row |
 | $`\mathrm{Generator\_ramp\_down\_rate}`$ | `Generator_ramp_down_rate` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — the ramp limit a unit's down row reads — PyPSA's `ramp_limit_down`, or the full build where it has none, since a shut-down ramp alone builds the row |
 | $`\mathrm{Generator\_start\_up\_rate}`$ | `Generator_start_up_rate` over $`\Xi \times \mathcal{G}`$ — the start-up ramp a unit's up row reads — PyPSA's `ramp_limit_start_up`, or the full build where it has none |
 | $`\mathrm{Generator\_shut\_down\_rate}`$ | `Generator_shut_down_rate` over $`\Xi \times \mathcal{G}`$ — the shut-down ramp a unit's down row reads — PyPSA's `ramp_limit_shut_down`, or the full build where it has none |
 | $`\mathrm{Generator\_p\_nom\_committed}`$ | `Generator_p_nom_committed` over $`\Xi \times \mathcal{G}`$ — the build a committed unit's ramp rows are taken against — one module where the build is extendable and modular, the given build otherwise |
-| $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{scenario\_opex}`$ | `scenario_opex` over $`\Xi`$ — what a future costs to run — every operating term, weighted by the snapshot's hours and its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted, as PyPSA adds them (`optimize.py:414-429`) |
-| $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1537-1538`) |
+| $`\mathit{Generator\_ramp\_up\_allowance}`$ | `Generator_ramp_up_allowance` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — how far a generator may raise output between two snapshots — its ramp limit of the build while it stays on, plus its start-up ramp in the snapshot it turns on |
+| $`\mathit{Generator\_ramp\_down\_allowance}`$ | `Generator_ramp_down_allowance` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — how far a generator may lower output between two snapshots — its ramp limit of the build while it stays on, plus its shut-down ramp in the snapshot it turns off |
+| $`\mathit{StorageUnit\_charge\_carried\_in}`$ | `StorageUnit_charge_carried_in` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — the charge a unit opens a snapshot with — at the first snapshot it stands in, its last such snapshot's less standing loss where it is cyclic and the given initial charge, which no standing loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A unit built in a later period opens in that period, and a cyclic one that retires closes on its own last snapshot. Per period, the same holds with each investment period as the horizon |
+| $`\mathit{Store\_energy\_carried\_in}`$ | `Store_energy_carried_in` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — the energy a store opens a snapshot with — at the first snapshot it stands in, its last such snapshot's less standing loss where it is cyclic and the given initial energy, which no standing loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A store built in a later period opens in that period, and a cyclic one that retires closes on its own last snapshot. Per period, the same holds with each investment period as the horizon |
+| $`\mathit{Link\_output\_arrival}`$ | `Link_output_arrival` over $`\Xi \times \mathcal{T} \times \mathcal{O}`$ — what a link delivers to an output port at a snapshot — its flow delayed by the port's `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives; where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay` zero) delivers its flow unshifted, cyclic or not |
+| $`\mathit{Process\_output\_arrival}`$ | `Process_output_arrival` over $`\Xi \times \mathcal{T} \times \mathcal{R}`$ — what a process transfers at a port at a snapshot — its internal power delayed by the port's `delay` within its investment period, times the port's rate at the snapshot the transfer arrives; where the port is `cyclic_delay` the delayed transfer wraps from the period's end, and where it is not the energy still in transit at the period's first snapshots is lost. A port that does not delay (`delay` zero) transfers at once, cyclic or not |
 | $`\mathit{Generator\_opex}`$ | `Generator_opex` over $`\Xi`$ |
 | $`\mathit{StorageUnit\_opex}`$ | `StorageUnit_opex` over $`\Xi`$ |
 | $`\mathit{Store\_opex}`$ | `Store_opex` over $`\Xi`$ |
+| $`\mathit{scenario\_opex}`$ | `scenario_opex` over $`\Xi`$ — what a future costs to run — every operating term, weighted by the snapshot's hours and its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted, as PyPSA adds them (`optimize.py:415-432`) |
+| $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
+| $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
+| $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
 
 $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
 
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(by=relation)`), so a term never crosses out of its own group.
+$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+
+$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
 
 $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
 
 $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ counts within the group a relation puts $`t`$ in: the subscript names the map, $`\mathcal{T}_{\mathrm{relation}(t)}`$ is the group it lands in, and that group has a first position of its own.
 
-#### Objective
+#### Masks
+
+**`Generator_committed`**
 
 ```math
-\min \mathit{total\_cost}
+\mathrm{Generator\_committed}_{t,g} \iff \mathrm{com}_{g} \wedge \mathrm{on}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
-#### Subject to
-
-**`Generator_fix_p_lower`**
+**`Generator_ramps_from_previous`**
 
 ```math
-p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+\mathrm{Generator\_ramps\_from\_previous}_{\xi,t,g} \iff \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) > 0 \vee \mathrm{pos}(t) = 0 \wedge \left( \mathrm{u}^{0}_{\xi,g} = 0 \vee \mathrm{p}^{0}_{\xi,g} \text{ is defined} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
-**`Generator_fix_p_upper`**
+**`StorageUnit_fix`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
-```
-
-**`StorageUnit_fix_p_dispatch_lower`**
-
-```math
-h^{+}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`StorageUnit_fix_p_dispatch_upper`**
-
-```math
-h^{+}_{\xi,t,s} \le \overline{\mathrm{h}}_{\xi,t,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`StorageUnit_fix_p_store_lower`**
-
-```math
-h^{-}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`StorageUnit_fix_p_store_upper`**
-
-```math
-h^{-}_{\xi,t,s} \le -\underline{\mathrm{h}}_{\xi,t,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`StorageUnit_fix_state_of_charge_lower`**
-
-```math
-\mathit{soc}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`StorageUnit_fix_state_of_charge_upper`**
-
-```math
-\mathit{soc}_{\xi,t,s} \le \mathrm{T}^{h}_{\xi,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s}
-```
-
-**`Generator_p_ramp_limit_up`**
-
-```math
-p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_ramp\_up\_allowance}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( \mathrm{ru}_{\xi,t,g} \text{ is defined} \vee \mathrm{ru}^{\mathrm{up}}_{\xi,g} \text{ is defined} \right) \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right) \wedge \left( \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) > 0 \vee \mathrm{pos}(t) = 0 \wedge \left( \mathrm{u}^{0}_{\xi,g} = 0 \vee \mathrm{p}^{0}_{\xi,g} \text{ is defined} \right) \right) \wedge \mathrm{on}_{t,g}
-```
-
-**`Generator_p_ramp_limit_down`**
-
-```math
-\mathit{Generator\_previous\_p}_{\xi,t,g} - p_{\xi,t,g} \le \mathit{Generator\_ramp\_down\_allowance}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( \mathrm{rd}_{\xi,t,g} \text{ is defined} \vee \mathrm{rd}^{\mathrm{dn}}_{\xi,g} \text{ is defined} \right) \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right) \wedge \left( \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) > 0 \vee \mathrm{pos}(t) = 0 \wedge \left( \mathrm{u}^{0}_{\xi,g} = 0 \vee \mathrm{p}^{0}_{\xi,g} \text{ is defined} \right) \right) \wedge \mathrm{on}_{t,g}
-```
-
-**`StorageUnit_energy_balance`**
-
-```math
-\mathit{soc}_{\xi,t,s} = \mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} + \eta^{-}_{\xi,t,s} \cdot h^{-}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} - \frac{h^{+}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t}}{\eta^{+}_{\xi,t,s}} + \mathrm{inflow}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{on}^{h}_{t,s}
-```
-
-**`Store_fix_e_lower`**
-
-```math
-e_{\xi,t,v} \ge \underline{\mathrm{e}}_{\xi,t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
-```
-
-**`Store_fix_e_upper`**
-
-```math
-e_{\xi,t,v} \le \overline{\mathrm{e}}_{\xi,t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
-```
-
-**`Store_energy_balance`**
-
-```math
-e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \mathrm{on}^{e}_{t,v}
-```
-
-**`Bus_nodal_balance`**
-
-```math
-\mathit{Bus\_injection}_{\xi,t,n} = 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-#### Definitions
-
-**`Generator_previous_p`**
-
-```math
-\mathit{Generator\_previous\_p}_{\xi,t,g} = \begin{cases} \mathrm{u}^{0}_{\xi,g} \cdot \mathrm{p}^{0}_{\xi,g} & \text{if } \mathrm{pos}(t) = 0 \\ p_{\xi,t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`Generator_ramp_up_allowance`**
-
-```math
-\mathit{Generator\_ramp\_up\_allowance}_{\xi,t,g} = \begin{cases} \mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \mathit{Generator\_previous\_status}_{\xi,t,g} + \mathrm{Generator\_start\_up\_rate}_{\xi,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \left( u_{\xi,t,g} - \mathit{Generator\_previous\_status}_{\xi,t,g} \right) & \text{if } \mathrm{com}_{g} \\ \mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} \cdot \mathit{Generator\_p\_nom\_effective}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`Generator_ramp_down_allowance`**
-
-```math
-\mathit{Generator\_ramp\_down\_allowance}_{\xi,t,g} = \begin{cases} \mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot u_{\xi,t,g} + \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \left( \mathit{Generator\_previous\_status}_{\xi,t,g} - u_{\xi,t,g} \right) & \text{if } \mathrm{com}_{g} \\ \mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} \cdot \mathit{Generator\_p\_nom\_effective}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`StorageUnit_charge_carried_in`**
-
-```math
-\mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} = \begin{cases} \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,\left( t \ominus \mathrm{idle} \right) \ominus 1,s} & \text{if } \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \neg \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,s} & \text{if } \mathrm{cyc}^{y}_{\xi,s} \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \mathrm{reset}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S}
-```
-
-**`Store_energy_carried_in`**
-
-```math
-\mathit{Store\_energy\_carried\_in}_{\xi,t,v} = \begin{cases} \rho^{e}_{\xi,t,v} \cdot e_{\xi,\left( t \ominus \mathrm{idle}^{e} \right) \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \neg \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,v} & \text{if } \mathrm{cyc}^{e,y}_{\xi,v} \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \mathrm{reset}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V}
-```
-
-**`total_cost`**
-
-```math
-\mathit{total\_cost} = \mathit{risk\_weighted\_opex}
-```
-
-**`Bus_injection`**
-
-```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{StorageUnit\_injection}_{\xi,t,n} + \mathit{Store\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-**`Generator_previous_status`**
-
-```math
-\mathit{Generator\_previous\_status}_{\xi,t,g} = \begin{cases} \mathrm{u}^{0}_{\xi,g} & \text{if } \mathrm{pos}(t) = 0 \\ u_{\xi,t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`Generator_p_nom_effective`**
-
-```math
-\mathit{Generator\_p\_nom\_effective}_{\xi,g} = \begin{cases} P_{g} & \text{if } \mathrm{ext}_{g} \\ \mathrm{p}^{\mathrm{nom}}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
-```
-
-**`Generator_ramp_up_rate`**
-
-```math
-\mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} = \begin{cases} \mathrm{ru}_{\xi,t,g} & \text{if } \mathrm{ru}_{\xi,t,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`Generator_ramp_down_rate`**
-
-```math
-\mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} = \begin{cases} \mathrm{rd}_{\xi,t,g} & \text{if } \mathrm{rd}_{\xi,t,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`Generator_start_up_rate`**
-
-```math
-\mathrm{Generator\_start\_up\_rate}_{\xi,g} = \begin{cases} \mathrm{ru}^{\mathrm{up}}_{\xi,g} & \text{if } \mathrm{ru}^{\mathrm{up}}_{\xi,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
-```
-
-**`Generator_shut_down_rate`**
-
-```math
-\mathrm{Generator\_shut\_down\_rate}_{\xi,g} = \begin{cases} \mathrm{rd}^{\mathrm{dn}}_{\xi,g} & \text{if } \mathrm{rd}^{\mathrm{dn}}_{\xi,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
-```
-
-**`Generator_p_nom_committed`**
-
-```math
-\mathrm{Generator\_p\_nom\_committed}_{\xi,g} = \begin{cases} \mathrm{p}^{\mathrm{mod}}_{g} & \text{if } \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \\ \mathrm{p}^{\mathrm{nom}}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
-```
-
-**`risk_weighted_opex`**
-
-```math
-\mathit{risk\_weighted\_opex} = \left( 1 - \omega \right) \cdot \left( \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi} \right) + \omega \cdot CVaR
-```
-
-**`Generator_injection`**
-
-```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-**`Load_injection`**
-
-```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-**`StorageUnit_injection`**
-
-```math
-\mathit{StorageUnit\_injection}_{\xi,t,n} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-**`Store_injection`**
-
-```math
-\mathit{Store\_injection}_{\xi,t,n} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
-```
-
-**`scenario_opex`**
-
-```math
-\mathit{scenario\_opex}_{\xi} = \mathit{Generator\_opex}_{\xi} + \mathit{StorageUnit\_opex}_{\xi} + \mathit{Store\_opex}_{\xi} \qquad \forall\, \xi \in \Xi
-```
-
-**`Load_demand`**
-
-```math
-\mathrm{Load\_demand}_{\xi,t,d} = \begin{cases} \mathrm{sgn}^{\mathrm{load}}_{d} \cdot \mathrm{load}_{\xi,t,d} & \text{if } \mathrm{on}^{\mathrm{load}}_{d} \\ 0 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ d \in \mathcal{D}
-```
-
-**`Generator_opex`**
-
-```math
-\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
-```
-
-**`StorageUnit_opex`**
-
-```math
-\mathit{StorageUnit\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h,(2)}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{c}^{\mathrm{soc}}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
-```
-
-**`Store_opex`**
-
-```math
-\mathit{Store\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot \mathrm{c}^{q}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot q_{\xi,t,v} \cdot \mathrm{c}^{q,(2)}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} e_{\xi,t,v} \cdot \mathrm{c}^{e}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathrm{StorageUnit\_fix}_{t,s} \iff \neg \mathrm{ext}^{h}_{s} \wedge \mathrm{on}^{h}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 #### Variable domains
@@ -461,34 +259,302 @@ e_{\xi,t,v} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v 
 q_{\xi,t,v} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \mathrm{on}^{e}_{t,v}
 ```
 
-**`CVaR_a`**
-
-```math
-a_{\xi} \ge 0 \qquad \forall\, \xi \in \Xi
-```
-
-**`CVaR_theta`**
-
-```math
-\theta \in \mathbb{R}
-```
-
-**`CVaR`**
-
-```math
-CVaR \in \mathbb{R}
-```
-
 **`Generator_status`**
 
 ```math
-u_{\xi,t,g} \ge 0, u_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+u_{\xi,t,g} \ge 0, u_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
 ```
 
 **`Generator_p_nom_ext`**
 
 ```math
 P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
+```
+
+**`Link_p`**
+
+```math
+f_{\xi,t,l} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{on}^{f}_{t,l}
+```
+
+**`Process_p`**
+
+```math
+z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{on}^{z}_{t,j}
+```
+
+#### Definitions
+
+**`Generator_previous_status`**
+
+```math
+\mathit{Generator\_previous\_status}_{\xi,t,g} = \begin{cases} 0 & \text{if } \mathrm{pos}(t) > 0 \wedge \neg \mathrm{on}_{t - 1,g} \\ \mathit{Generator\_status\_carried\_over}_{\xi,t,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_status_carried_over`**
+
+```math
+\mathit{Generator\_status\_carried\_over}_{\xi,t,g} = \begin{cases} \mathrm{u}^{0}_{\xi,g} & \text{if } \mathrm{pos}(t) = 0 \\ u_{\xi,t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_previous_p`**
+
+```math
+\mathit{Generator\_previous\_p}_{\xi,t,g} = \begin{cases} \mathrm{u}^{0}_{\xi,g} \cdot \mathrm{p}^{0}_{\xi,g} & \text{if } \mathrm{pos}(t) = 0 \\ p_{\xi,t - 1,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_p_nom_effective`**
+
+```math
+\mathit{Generator\_p\_nom\_effective}_{\xi,g} = \begin{cases} P_{g} & \text{if } \mathrm{ext}_{g} \\ \mathrm{p}^{\mathrm{nom}}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
+```
+
+**`Generator_ramp_up_rate`**
+
+```math
+\mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} = \begin{cases} \mathrm{ru}_{\xi,t,g} & \text{if } \mathrm{ru}_{\xi,t,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_ramp_down_rate`**
+
+```math
+\mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} = \begin{cases} \mathrm{rd}_{\xi,t,g} & \text{if } \mathrm{rd}_{\xi,t,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_start_up_rate`**
+
+```math
+\mathrm{Generator\_start\_up\_rate}_{\xi,g} = \begin{cases} \mathrm{ru}^{\mathrm{up}}_{\xi,g} & \text{if } \mathrm{ru}^{\mathrm{up}}_{\xi,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
+```
+
+**`Generator_shut_down_rate`**
+
+```math
+\mathrm{Generator\_shut\_down\_rate}_{\xi,g} = \begin{cases} \mathrm{rd}^{\mathrm{dn}}_{\xi,g} & \text{if } \mathrm{rd}^{\mathrm{dn}}_{\xi,g} \text{ is defined} \\ 1 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
+```
+
+**`Generator_p_nom_committed`**
+
+```math
+\mathrm{Generator\_p\_nom\_committed}_{\xi,g} = \begin{cases} \mathrm{p}^{\mathrm{mod}}_{g} & \text{if } \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \\ \mathrm{p}^{\mathrm{nom}}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G}
+```
+
+**`Generator_ramp_up_allowance`**
+
+```math
+\mathit{Generator\_ramp\_up\_allowance}_{\xi,t,g} = \begin{cases} \mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \mathit{Generator\_previous\_status}_{\xi,t,g} + \mathrm{Generator\_start\_up\_rate}_{\xi,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \left( u_{\xi,t,g} - \mathit{Generator\_previous\_status}_{\xi,t,g} \right) & \text{if } \mathrm{com}_{g} \\ \mathrm{Generator\_ramp\_up\_rate}_{\xi,t,g} \cdot \mathit{Generator\_p\_nom\_effective}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`Generator_ramp_down_allowance`**
+
+```math
+\mathit{Generator\_ramp\_down\_allowance}_{\xi,t,g} = \begin{cases} \mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot u_{\xi,t,g} + \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cdot \mathrm{Generator\_p\_nom\_committed}_{\xi,g} \cdot \left( \mathit{Generator\_previous\_status}_{\xi,t,g} - u_{\xi,t,g} \right) & \text{if } \mathrm{com}_{g} \\ \mathrm{Generator\_ramp\_down\_rate}_{\xi,t,g} \cdot \mathit{Generator\_p\_nom\_effective}_{\xi,g} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`StorageUnit_charge_carried_in`**
+
+```math
+\mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} = \begin{cases} \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,\left( t \ominus \mathrm{idle} \right) \ominus 1,s} & \text{if } \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \neg \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,s} & \text{if } \mathrm{cyc}^{y}_{\xi,s} \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \mathrm{reset}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+**`Store_energy_carried_in`**
+
+```math
+\mathit{Store\_energy\_carried\_in}_{\xi,t,v} = \begin{cases} \rho^{e}_{\xi,t,v} \cdot e_{\xi,\left( t \ominus \mathrm{idle}^{e} \right) \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \neg \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,v} & \text{if } \mathrm{cyc}^{e,y}_{\xi,v} \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \mathrm{reset}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V}
+```
+
+**`Link_output_arrival`**
+
+```math
+\mathit{Link\_output\_arrival}_{\xi,t,o} = \begin{cases} f_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{if } \mathrm{cyc}^{f}_{o} \\ f_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ o \in \mathcal{O}
+```
+
+**`Process_output_arrival`**
+
+```math
+\mathit{Process\_output\_arrival}_{\xi,t,r} = \begin{cases} z_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{if } \mathrm{cyc}^{z}_{r} \\ z_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ r \in \mathcal{R}
+```
+
+**`Generator_opex`**
+
+```math
+\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`StorageUnit_opex`**
+
+```math
+\mathit{StorageUnit\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h,(2)}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{c}^{\mathrm{soc}}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`Store_opex`**
+
+```math
+\mathit{Store\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot \mathrm{c}^{q}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot q_{\xi,t,v} \cdot \mathrm{c}^{q,(2)}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} e_{\xi,t,v} \cdot \mathrm{c}^{e}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+```
+
+**`scenario_opex`**
+
+```math
+\mathit{scenario\_opex}_{\xi} = \mathit{Generator\_opex}_{\xi} + \mathit{StorageUnit\_opex}_{\xi} + \mathit{Store\_opex}_{\xi} \qquad \forall\, \xi \in \Xi
+```
+
+**`risk_weighted_opex`**
+
+```math
+\mathit{risk\_weighted\_opex} = \sum_{\xi \in \Xi} \pi_{\xi} \cdot \mathit{scenario\_opex}_{\xi}
+```
+
+**`total_cost`**
+
+```math
+\mathit{total\_cost} = \mathit{risk\_weighted\_opex}
+```
+
+**`Load_demand`**
+
+```math
+\mathrm{Load\_demand}_{\xi,t,d} = \begin{cases} \mathrm{sgn}^{\mathrm{load}}_{d} \cdot \mathrm{load}_{\xi,t,d} & \text{if } \mathrm{on}^{\mathrm{load}}_{d} \\ 0 & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ d \in \mathcal{D}
+```
+
+**`Generator_injection`**
+
+```math
+\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`Link_injection`**
+
+```math
+\mathit{Link\_injection}_{\xi,t,n} = \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`Load_injection`**
+
+```math
+\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`Process_injection`**
+
+```math
+\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`StorageUnit_injection`**
+
+```math
+\mathit{StorageUnit\_injection}_{\xi,t,n} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`Store_injection`**
+
+```math
+\mathit{Store\_injection}_{\xi,t,n} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+**`Bus_injection`**
+
+```math
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} + \mathit{StorageUnit\_injection}_{\xi,t,n} + \mathit{Store\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+```
+
+#### Objective
+
+```math
+\min \mathit{total\_cost}
+```
+
+#### Subject to
+
+**`Generator_fix_p_lower`**
+
+```math
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+```
+
+**`Generator_fix_p_upper`**
+
+```math
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \neg \mathrm{ext}_{g} \wedge \neg \mathrm{com}_{g} \wedge \mathrm{on}_{t,g}
+```
+
+**`StorageUnit_fix_p_dispatch_lower`**
+
+```math
+h^{+}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`StorageUnit_fix_p_dispatch_upper`**
+
+```math
+h^{+}_{\xi,t,s} \le \overline{\mathrm{h}}_{\xi,t,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`StorageUnit_fix_p_store_lower`**
+
+```math
+h^{-}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`StorageUnit_fix_p_store_upper`**
+
+```math
+h^{-}_{\xi,t,s} \le -\underline{\mathrm{h}}_{\xi,t,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`StorageUnit_fix_state_of_charge_lower`**
+
+```math
+\mathit{soc}_{\xi,t,s} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`StorageUnit_fix_state_of_charge_upper`**
+
+```math
+\mathit{soc}_{\xi,t,s} \le \mathrm{T}^{h}_{\xi,s} \cdot \mathrm{h}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_fix}_{t,s}
+```
+
+**`Generator_p_ramp_limit_up`**
+
+```math
+p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_ramp\_up\_allowance}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( \mathrm{ru}_{\xi,t,g} \text{ is defined} \vee \mathrm{ru}^{\mathrm{up}}_{\xi,g} \text{ is defined} \right) \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right) \wedge \mathrm{Generator\_ramps\_from\_previous}_{\xi,t,g} \wedge \mathrm{on}_{t,g}
+```
+
+**`Generator_p_ramp_limit_down`**
+
+```math
+\mathit{Generator\_previous\_p}_{\xi,t,g} - p_{\xi,t,g} \le \mathit{Generator\_ramp\_down\_allowance}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \left( \mathrm{rd}_{\xi,t,g} \text{ is defined} \vee \mathrm{rd}^{\mathrm{dn}}_{\xi,g} \text{ is defined} \right) \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right) \wedge \mathrm{Generator\_ramps\_from\_previous}_{\xi,t,g} \wedge \mathrm{on}_{t,g}
+```
+
+**`StorageUnit_energy_balance`**
+
+```math
+\mathit{soc}_{\xi,t,s} = \mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} + \eta^{-}_{\xi,t,s} \cdot h^{-}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} - \frac{h^{+}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t}}{\eta^{+}_{\xi,t,s}} + \mathrm{inflow}_{\xi,t,s} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{on}^{h}_{t,s}
+```
+
+**`Store_fix_e_lower`**
+
+```math
+e_{\xi,t,v} \ge \underline{\mathrm{e}}_{\xi,t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
+```
+
+**`Store_fix_e_upper`**
+
+```math
+e_{\xi,t,v} \le \overline{\mathrm{e}}_{\xi,t,v} \cdot \mathrm{e}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \neg \mathrm{ext}^{e}_{v} \wedge \mathrm{on}^{e}_{t,v}
+```
+
+**`Store_energy_balance`**
+
+```math
+e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot \mathrm{w}^{\mathrm{sto}}_{t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V} \,:\, \mathrm{on}^{e}_{t,v}
+```
+
+**`Bus_nodal_balance`**
+
+```math
+\mathit{Bus\_injection}_{\xi,t,n} = 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 </details>
@@ -503,23 +569,40 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
       `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it
       per scenario. Capacity is chosen once, before the future is known, and paid once per active period at
       its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights,
-      with a share priced at the tail through the CVaR rows, which stand only where that share is positive.
+      with a share priced at the tail through the CVaR rows, which stand only where a risk preference is set.
       A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses
       to the standard one. A security-constrained run copies each branch flow limit once per outage in an
       `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight,
       and the outage factors are data prep.
     dimensions:
       scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
-      snapshot: {description: dispatch periods, dtype: datetime}
+      snapshot: {description: dispatch periods, dtype: datetime, ordered: true}
       bus: {description: network nodes}
       generator: {description: 'generating units, each on one bus'}
+      link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
+      link_output: {description: 'a link''s output ports, one label per port a link declares — PyPSA''s `bus1`,
+          `bus2`, … columns read long, so a link of any number of output ports is one term in the balance,
+          data prep'}
+      process: {description: 'generalized multi-port converters, each with an internal power that every port
+          draws or delivers at its own rate'}
+      process_output: {description: 'a process''s ports, one label per port a process declares — PyPSA''s
+          `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in
+          the balance, data prep'}
       load: {description: 'demands, each on one bus'}
       storage_unit: {description: 'storage units, dispatch and store behind one bus connection'}
       store: {description: 'pure energy stores, each on one bus'}
-      period: {description: investment periods — PyPSA's `investment_periods`, dtype: int}
+      period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
     relations:
       snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
       Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
+      Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
+      Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
+          A link of three output ports is three labels here rather than a third relation, so the file states
+          any number of them', key: link_output, values: bus}
+      Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
+      Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
+          … columns. A process of three ports is three labels here rather than a third relation, so the file
+          states any number of them', key: process_output, values: bus}
       Load_bus: {description: the bus a load sits on, key: load, values: bus}
       StorageUnit_bus: {description: the bus a storage unit sits on, key: storage_unit, values: bus}
       Store_bus: {description: the bus a store sits on, key: store, values: bus}
@@ -548,7 +631,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         dims: [scenario, snapshot, generator]
       Generator_sign:
         description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
-          for a unit that draws power. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+          for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`)
         dims: [generator]
       Generator_committable:
         description: whether output is gated by an on/off status decision
@@ -558,16 +641,22 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, generator]
+        missing: neutral
       Generator_ramp_limit_down:
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, generator]
+        missing: neutral
       Generator_ramp_limit_start_up:
-        description: most output in the snapshot a unit starts, per unit of nominal power
+        description: most output in the snapshot a unit starts, per unit of nominal power; no value means
+          no limit
         dims: [scenario, generator]
+        missing: neutral
       Generator_ramp_limit_shut_down:
-        description: most output in the snapshot before a unit stops, per unit of nominal power
+        description: most output in the snapshot before a unit stops, per unit of nominal power; no value
+          means no limit
         dims: [scenario, generator]
+        missing: neutral
       Generator_status_initial:
         description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
           > 0`, data prep
@@ -577,35 +666,76 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
           came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
         dims: [scenario, generator]
+        missing: neutral
       Generator_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [generator]
+        missing: neutral
+      Link_efficiency:
+        description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
+          … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow
+          arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1498`)
+        dims: [scenario, snapshot, link_output]
+      Link_output_delay:
+        description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
+          long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for
+          a port that delivers at once. A port has the same delay in every scenario, because PyPSA refuses
+          a delay that differs by scenario (`constants.py:52`)
+        dims: [link_output]
+        dtype: int
+      Link_output_cyclic_delay:
+        description: whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`,
+          `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots
+          is lost. The flag is the same in every scenario, as the delay is
+        dims: [link_output]
+        dtype: bool
+      Process_rate:
+        description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
+          … read long — negative where the port withdraws, positive where it injects; a link is a process
+          whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot
+          the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`)
+        dims: [scenario, snapshot, process_output]
+      Process_output_delay:
+        description: snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`,
+          … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep;
+          zero for a port that transfers at once. A port has the same delay in every scenario, as a link's
+          port has
+        dims: [process_output]
+        dtype: int
+      Process_output_cyclic_delay:
+        description: whether a delayed port's transfer wraps from the end of its investment period — PyPSA's
+          `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's
+          first snapshots is lost. The flag is the same in every scenario, as the delay is
+        dims: [process_output]
+        dtype: bool
       Load_p_set:
         description: demand
         dims: [scenario, snapshot, load]
       Load_sign:
         description: the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless
-          given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+          given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`)
         dims: [load]
       Load_active:
         description: whether a load stands in the model — PyPSA's `active`. A load has no build year and no
-          lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`consistency.py:1195`)
+          lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`)
         dims: [load]
         dtype: bool
       scenario_weight:
         description: PyPSA's `scenario_weightings.weight` — the probability of a future
         dims: [scenario]
-      CVaR_omega:
-        description: PyPSA's `risk_preference['omega']` — the share of operating cost priced at the tail rather
-          than in expectation; zero recovers the risk-neutral model
-        dims: []
       period_weight_objective:
-        description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs
+        description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
+          reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
+          holds (`optimize.py:205-207`, `:264-266`)
         dims: [period]
       Generator_active:
         description: whether a generator stands in a snapshot's period — PyPSA's `active`, from build year
           and lifetime, data prep
         dims: [snapshot, generator]
+        dtype: bool
+      Link_active:
+        description: whether a link stands in a snapshot's period — PyPSA's `active`, data prep
+        dims: [snapshot, link]
         dtype: bool
       StorageUnit_active:
         description: whether a storage unit stands in a snapshot's period — PyPSA's `active`, data prep
@@ -614,6 +744,10 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
       Store_active:
         description: whether a store stands in a snapshot's period — PyPSA's `active`, data prep
         dims: [snapshot, store]
+        dtype: bool
+      Process_active:
+        description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
+        dims: [snapshot, process]
         dtype: bool
       snapshot_weightings_stores:
         description: PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance
@@ -642,7 +776,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         dims: [scenario, snapshot, storage_unit]
       StorageUnit_sign:
         description: the sign net dispatch enters its bus's balance with — PyPSA's `sign`, `1` unless given.
-          PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+          PyPSA refuses one that differs by scenario (`constants.py:43`)
         dims: [storage_unit]
       StorageUnit_retention:
         description: share of charge kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
@@ -705,7 +839,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         dims: [scenario, snapshot, store]
       Store_sign:
         description: the sign the power a store delivers enters its bus's balance with — PyPSA's `sign`, `1`
-          unless given. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+          unless given. PyPSA refuses one that differs by scenario (`constants.py:43`)
         dims: [store]
       Store_retention:
         description: share of energy kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
@@ -775,22 +909,11 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         description: '`Store-p` — power delivered to the bus; charging is negative'
         dims: [scenario, snapshot, store]
         where: Store_active
-      CVaR_a:
-        description: '`CVaR-a` — how far a scenario''s operating cost exceeds the tail''s start; nothing where
-          it does not'
-        dims: [scenario]
-        bounds: {lower: 0}
-      CVaR_theta:
-        description: '`CVaR-theta` — where the tail starts, the value at risk'
-        dims: []
-      CVaR:
-        description: '`CVaR` — the tail''s average cost, what the objective prices at `omega`'
-        dims: []
       Generator_status:
         description: '`Generator-status` — how much of a committable unit is on: an integer the rows below
           cap at one, or at the module count where the build is modular'
         dims: [scenario, snapshot, generator]
-        where: Generator_committable AND Generator_active
+        where: Generator_committed
         domain: integer
         bounds: {lower: 0}
       Generator_p_nom_ext:
@@ -798,6 +921,16 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
           PyPSA name carries the fixed regime'
         dims: [generator]
         where: Generator_p_nom_extendable
+      Link_p:
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+          withdraws there and injects at every bus the link''s output ports deliver to'
+        dims: [scenario, snapshot, link]
+        where: Link_active
+      Process_p:
+        description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its
+          own rate, withdrawing where the rate is negative and injecting where it is positive'
+        dims: [scenario, snapshot, process]
+        where: Process_active
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
@@ -812,34 +945,34 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
       StorageUnit_fix_p_dispatch_lower:
         description: '`StorageUnit-fix-p_dispatch-lower` — dispatch is non-negative'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_p_dispatch >= 0
       StorageUnit_fix_p_dispatch_upper:
         description: '`StorageUnit-fix-p_dispatch-upper` — a fixed unit dispatches at most its nominal power'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_p_dispatch <= StorageUnit_p_max_pu * StorageUnit_p_nom
       StorageUnit_fix_p_store_lower:
         description: '`StorageUnit-fix-p_store-lower` — storing is non-negative'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_p_store >= 0
       StorageUnit_fix_p_store_upper:
         description: '`StorageUnit-fix-p_store-upper` — a fixed unit stores at most its nominal power, the
           minimum-per-unit column carrying that cap negated'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_p_store <= -StorageUnit_p_min_pu * StorageUnit_p_nom
       StorageUnit_fix_state_of_charge_lower:
         description: '`StorageUnit-fix-state_of_charge-lower` — charge is non-negative'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_state_of_charge >= 0
       StorageUnit_fix_state_of_charge_upper:
         description: '`StorageUnit-fix-state_of_charge-upper` — a fixed unit holds at most its hours at nominal
           power'
         dims: [scenario, snapshot, storage_unit]
-        where: not StorageUnit_p_nom_extendable AND StorageUnit_active
+        where: StorageUnit_fix
         expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
       Generator_p_ramp_limit_up:
         description: '`Generator-p-ramp_limit_up` — a generator raises output no faster than its ramp limit
@@ -849,8 +982,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
           — nor does any unit a big M releases instead'
         dims: [scenario, snapshot, generator]
         where: (Generator_ramp_limit_up OR Generator_ramp_limit_start_up) AND NOT (Generator_committable AND
-          Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND (position(snapshot, by=snapshot_period,
-          within=period) > 0 OR (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init)))
+          Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND Generator_ramps_from_previous
           AND Generator_active
         expression: Generator_p - Generator_previous_p <= Generator_ramp_up_allowance
       Generator_p_ramp_limit_down:
@@ -861,8 +993,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
           — nor does any unit a big M releases instead'
         dims: [scenario, snapshot, generator]
         where: (Generator_ramp_limit_down OR Generator_ramp_limit_shut_down) AND NOT (Generator_committable
-          AND Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND (position(snapshot, by=snapshot_period,
-          within=period) > 0 OR (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init)))
+          AND Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND Generator_ramps_from_previous
           AND Generator_active
         expression: Generator_previous_p - Generator_p <= Generator_ramp_down_allowance
       StorageUnit_energy_balance:
@@ -894,12 +1025,28 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
           they deliver to, each process port drawing or delivering at its own rate and each passive branch
           carrying its flow, meets the load there, less half of every incident line''s and transformer''s
           loss — PyPSA dissipates a branch''s loss half at either end. Each generator, storage unit, store
-          and load term enters with its component''s `sign` (`constraints.py:1428-1429`, `:1538`), and an
+          and load term enters with its component''s `sign` (`constraints.py:1404-1405`, `:1514`), and an
           inactive load not at all. A bus nothing is attached to has no row; PyPSA refuses one that carries
           load, and this file does not yet.'
         dims: [scenario, snapshot, bus]
         expression: Bus_injection == 0
     expressions:
+      Generator_previous_status:
+        description: the commitment state a generator carries into a snapshot — off at the first snapshot
+          it stands in past the first of the horizon, as PyPSA reads a status it did not build (`constraints.py:298`),
+          and the state carried over otherwise
+        dims: [scenario, snapshot, generator]
+        cases:
+          opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Generator_active, along=snapshot, offset=1)',
+            expression: 0}
+        otherwise: Generator_status_carried_over
+      Generator_status_carried_over:
+        description: the state a generator carries over into a snapshot — the state it brought into the horizon
+          at the first, the previous snapshot's after that
+        dims: [scenario, snapshot, generator]
+        cases:
+          opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
+        otherwise: shift(Generator_status, along=snapshot, offset=1)
       Generator_previous_p:
         description: the output a generator carries into a snapshot — at the first, the `p_init` it brought
           in where it came in running and nothing where it came in off; the previous snapshot's after that
@@ -907,80 +1054,6 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         cases:
           opening: {when: position(snapshot) == 0, expression: Generator_status_initial * Generator_p_init}
         otherwise: shift(Generator_p, along=snapshot, offset=1)
-      Generator_ramp_up_allowance:
-        description: how far a generator may raise output between two snapshots — its ramp limit of the build
-          while it stays on, plus its start-up ramp in the snapshot it turns on
-        dims: [scenario, snapshot, generator]
-        cases:
-          committed: {when: Generator_committable, expression: Generator_ramp_up_rate * Generator_p_nom_committed
-              * Generator_previous_status + Generator_start_up_rate * Generator_p_nom_committed * (Generator_status
-              - Generator_previous_status)}
-        otherwise: Generator_ramp_up_rate * Generator_p_nom_effective
-      Generator_ramp_down_allowance:
-        description: how far a generator may lower output between two snapshots — its ramp limit of the build
-          while it stays on, plus its shut-down ramp in the snapshot it turns off
-        dims: [scenario, snapshot, generator]
-        cases:
-          committed: {when: Generator_committable, expression: Generator_ramp_down_rate * Generator_p_nom_committed
-              * Generator_status + Generator_shut_down_rate * Generator_p_nom_committed * (Generator_previous_status
-              - Generator_status)}
-        otherwise: Generator_ramp_down_rate * Generator_p_nom_effective
-      StorageUnit_charge_carried_in:
-        description: the charge a unit opens a snapshot with — at the first snapshot it stands in, its last
-          such snapshot's less standing loss where it is cyclic and the given initial charge, which no standing
-          loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A unit
-          built in a later period opens in that period, and a cyclic one that retires closes on its own last
-          snapshot. Per period, the same holds with each investment period as the horizon
-        dims: [scenario, snapshot, storage_unit]
-        cases:
-          cyclic: {when: StorageUnit_cyclic_state_of_charge AND NOT StorageUnit_cyclic_state_of_charge_per_period
-              AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
-            expression: 'StorageUnit_retention * shift(shift(StorageUnit_state_of_charge, along=snapshot,
-              offset=1, edge=''wrap''), along=snapshot, offset=StorageUnit_inactive_snapshots, edge=''wrap'')'}
-          opening: {when: NOT StorageUnit_cyclic_state_of_charge AND NOT StorageUnit_cyclic_state_of_charge_per_period
-              AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
-            expression: StorageUnit_state_of_charge_initial}
-          period_cyclic: {when: StorageUnit_cyclic_state_of_charge_per_period, expression: 'StorageUnit_retention
-              * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', by=snapshot_period,
-              within=period)'}
-          period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
-              AND position(snapshot, by=snapshot_period, within=period) == 0', expression: StorageUnit_state_of_charge_initial}
-        otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
-      Store_energy_carried_in:
-        description: the energy a store opens a snapshot with — at the first snapshot it stands in, its last
-          such snapshot's less standing loss where it is cyclic and the given initial energy, which no standing
-          loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A store
-          built in a later period opens in that period, and a cyclic one that retires closes on its own last
-          snapshot. Per period, the same holds with each investment period as the horizon
-        dims: [scenario, snapshot, store]
-        cases:
-          cyclic: {when: Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
-              AND (position(snapshot) == 0 OR Store_opens_late), expression: 'Store_retention * shift(shift(Store_e,
-              along=snapshot, offset=1, edge=''wrap''), along=snapshot, offset=Store_inactive_snapshots, edge=''wrap'')'}
-          opening: {when: NOT Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
-              AND (position(snapshot) == 0 OR Store_opens_late), expression: Store_e_initial}
-          period_cyclic: {when: Store_e_cyclic_per_period, expression: 'Store_retention * shift(Store_e, along=snapshot,
-              offset=1, edge=''wrap'', by=snapshot_period, within=period)'}
-          period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
-              by=snapshot_period, within=period) == 0', expression: Store_e_initial}
-        otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
-      total_cost:
-        dims: []
-        expression: risk_weighted_opex
-        description: what the system costs — capacity once per active period at its expected cost over the
-          scenarios, operation in expectation over the scenarios, and a share of it at the tail
-      Bus_injection:
-        dims: [scenario, snapshot, bus]
-        expression: ((Generator_injection + Load_injection) + StorageUnit_injection) + Store_injection
-        description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
-          term into the balance, and a load on its right-hand side
-      Generator_previous_status:
-        description: the commitment state a generator carries into a snapshot — the state it brought into
-          the horizon at the first, the previous snapshot's after that
-        dims: [scenario, snapshot, generator]
-        cases:
-          opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
-        otherwise: shift(Generator_status, along=snapshot, offset=1)
       Generator_p_nom_effective:
         description: the build a generator's limits are taken against — the chosen one where it is extendable,
           the given one otherwise
@@ -1023,45 +1096,144 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
         cases:
           modular_build: {when: Generator_p_nom_extendable AND Generator_p_nom_mod > 0, expression: Generator_p_nom_mod}
         otherwise: Generator_p_nom
-      risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
-          + CVaR_omega * CVaR'}
-      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
-          into=bus)'}
-      Load_injection: {expression: 'sum(Load_demand, by=Load_bus, over=load, into=bus)'}
-      StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
-          by=StorageUnit_bus, over=storage_unit, into=bus)'}
-      Store_injection: {expression: 'sum(Store_sign * Store_p, by=Store_bus, over=store, into=bus)'}
+      Generator_ramp_up_allowance:
+        description: how far a generator may raise output between two snapshots — its ramp limit of the build
+          while it stays on, plus its start-up ramp in the snapshot it turns on
+        dims: [scenario, snapshot, generator]
+        cases:
+          committed: {when: Generator_committable, expression: Generator_ramp_up_rate * Generator_p_nom_committed
+              * Generator_previous_status + Generator_start_up_rate * Generator_p_nom_committed * (Generator_status
+              - Generator_previous_status)}
+        otherwise: Generator_ramp_up_rate * Generator_p_nom_effective
+      Generator_ramp_down_allowance:
+        description: how far a generator may lower output between two snapshots — its ramp limit of the build
+          while it stays on, plus its shut-down ramp in the snapshot it turns off
+        dims: [scenario, snapshot, generator]
+        cases:
+          committed: {when: Generator_committable, expression: Generator_ramp_down_rate * Generator_p_nom_committed
+              * Generator_status + Generator_shut_down_rate * Generator_p_nom_committed * (Generator_previous_status
+              - Generator_status)}
+        otherwise: Generator_ramp_down_rate * Generator_p_nom_effective
+      StorageUnit_charge_carried_in:
+        description: the charge a unit opens a snapshot with — at the first snapshot it stands in, its last
+          such snapshot's less standing loss where it is cyclic and the given initial charge, which no standing
+          loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A unit
+          built in a later period opens in that period, and a cyclic one that retires closes on its own last
+          snapshot. Per period, the same holds with each investment period as the horizon
+        dims: [scenario, snapshot, storage_unit]
+        cases:
+          cyclic: {when: StorageUnit_cyclic_state_of_charge AND NOT StorageUnit_cyclic_state_of_charge_per_period
+              AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
+            expression: 'StorageUnit_retention * shift(shift(StorageUnit_state_of_charge, along=snapshot,
+              offset=1, edge=''wrap''), along=snapshot, offset=StorageUnit_inactive_snapshots, edge=''wrap'')'}
+          opening: {when: NOT StorageUnit_cyclic_state_of_charge AND NOT StorageUnit_cyclic_state_of_charge_per_period
+              AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
+            expression: StorageUnit_state_of_charge_initial}
+          period_cyclic: {when: StorageUnit_cyclic_state_of_charge_per_period, expression: 'StorageUnit_retention
+              * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot_period[period])'}
+          period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
+              AND position(snapshot, within=snapshot_period[period]) == 0', expression: StorageUnit_state_of_charge_initial}
+        otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
+      Store_energy_carried_in:
+        description: the energy a store opens a snapshot with — at the first snapshot it stands in, its last
+          such snapshot's less standing loss where it is cyclic and the given initial energy, which no standing
+          loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A store
+          built in a later period opens in that period, and a cyclic one that retires closes on its own last
+          snapshot. Per period, the same holds with each investment period as the horizon
+        dims: [scenario, snapshot, store]
+        cases:
+          cyclic: {when: Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
+              AND (position(snapshot) == 0 OR Store_opens_late), expression: 'Store_retention * shift(shift(Store_e,
+              along=snapshot, offset=1, edge=''wrap''), along=snapshot, offset=Store_inactive_snapshots, edge=''wrap'')'}
+          opening: {when: NOT Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
+              AND (position(snapshot) == 0 OR Store_opens_late), expression: Store_e_initial}
+          period_cyclic: {when: Store_e_cyclic_per_period, expression: 'Store_retention * shift(Store_e, along=snapshot,
+              offset=1, edge=''wrap'', within=snapshot_period[period])'}
+          period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
+              within=snapshot_period[period]) == 0', expression: Store_e_initial}
+        otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
+      Link_output_arrival:
+        description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
+          `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives;
+          where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not
+          the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay`
+          zero) delivers its flow unshifted, cyclic or not
+        dims: [scenario, snapshot, link_output]
+        cases:
+          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+              along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+        otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+          edge=0, within=snapshot_period[period]) * Link_efficiency
+      Process_output_arrival:
+        description: what a process transfers at a port at a snapshot — its internal power delayed by the
+          port's `delay` within its investment period, times the port's rate at the snapshot the transfer
+          arrives; where the port is `cyclic_delay` the delayed transfer wraps from the period's end, and
+          where it is not the energy still in transit at the period's first snapshots is lost. A port that
+          does not delay (`delay` zero) transfers at once, cyclic or not
+        dims: [scenario, snapshot, process_output]
+        cases:
+          wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+              * Process_rate'}
+        otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+          edge=0, within=snapshot_period[period]) * Process_rate
+      Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+          * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot_period[period]), over=generator), over=snapshot)'}
+      StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
+          sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
+          over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
+      Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot) + sum(sum((((Store_p
+          * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot_period[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=store),
+          over=snapshot)'}
       scenario_opex:
         dims: [scenario]
         expression: (Generator_opex + StorageUnit_opex) + Store_opex
         description: what a future costs to run — every operating term, weighted by the snapshot's hours and
           its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
-          as PyPSA adds them (`optimize.py:414-429`)
+          as PyPSA adds them (`optimize.py:415-432`)
+      risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+      total_cost:
+        dims: []
+        expression: risk_weighted_opex
+        description: what the system costs — capacity once per active period at its expected cost over the
+          scenarios, operation in expectation over the scenarios, and a share of it at the tail
       Load_demand:
         description: what a load draws from its bus's balance — its demand times its sign where it is active,
-          nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1537-1538`)
+          nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`)
         dims: [scenario, snapshot, load]
         cases:
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
-      Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
-          over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
-          over=snapshot)'}
-      StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=storage_unit),
-          over=snapshot) + sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
-          into=snapshot), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period, over=period,
-          into=snapshot), over=storage_unit), over=snapshot)'}
-      Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
-          + sum(sum((((Store_p * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)
-          + sum(sum(((Store_e * Store_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period, over=period, into=snapshot), over=store), over=snapshot)'}
+      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+      Link_injection: {expression: 'sum(Link_output_arrival, over=link_output, by=Link_output_bus[bus])'}
+      Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+      Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+      StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
+          over=storage_unit, by=StorageUnit_bus[bus])'}
+      Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
+      Bus_injection:
+        dims: [scenario, snapshot, bus]
+        expression: ((((Generator_injection + Link_injection) + Load_injection) + Process_injection) + StorageUnit_injection)
+          + Store_injection
+        description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
+          term into the balance, and a load on its right-hand side
+    masks:
+      Generator_committed: {description: a committable generator that stands in the snapshot's period — every
+          unit-commitment row's set, where: Generator_committable AND Generator_active}
+      Generator_ramps_from_previous: {description: 'a snapshot whose ramp reads a previous output — any snapshot
+          but its period''s first, and the horizon''s first where the generator comes in off or carries an
+          initial output', where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
+          == 0 AND (Generator_status_initial == 0 OR Generator_p_init))'}
+      StorageUnit_fix: {description: a storage unit with a fixed build that stands in the snapshot's period
+          — PyPSA's `fix` rows, where: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
     objective: {sense: minimize, expression: total_cost}
     ```
 
@@ -1081,7 +1253,7 @@ P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
                 for component, dim in DIM.items()
             },
             **scenarios(n),
-            **periods(n),
+            **periods(n, multi),
             **carriers(n, multi),
         'Generator_bus': relation(n, 'Generator', 'bus'),
         'Load_bus': relation(n, 'Load', 'bus'),

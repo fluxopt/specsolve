@@ -12,14 +12,14 @@ spec: examples/walkthrough/walkthrough.yaml
 
 [2] expand macros -> core AST  (Spec.program)
     written      'sum(weighted_sum(p, cost, over=generator))'
-    core AST     Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',))
+    core AST     Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=(Axis(dimension='generator', column=None),)), over=(Axis(dimension='snapshot', column=None),))
                  ^ the macro is gone: sum(p * cost, over=generator)
 
 [3] a spec -> the program both lanes build from  (Spec.program)
     Program(
-      p: VariableDeclaration(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0), upper=Parameter(name='p_max'), domain='continuous', absence='undefined', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
-      power_balance: ConstraintDeclaration(dims=('snapshot',), lhs=Named(name='total_supply', body=Sum(operand=Variable(name='p'), over=('generator',))), sense='==', rhs=Parameter(name='load'), where=None, description='the fleet meets the load exactly in every snapshot')
-      ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)), description='total cost of generation over the horizon')
+      p: VariableDeclaration(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0), upper=Parameter(name='p_max'), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
+      power_balance: ConstraintDeclaration(dims=('snapshot',), lhs=NamedExpression(name='total_supply', body=Sum(operand=Variable(name='p'), over=(Axis(dimension='generator', column=None),))), sense='==', rhs=Parameter(name='load'), where=None, description='the fleet meets the load exactly in every snapshot')
+      ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=(Axis(dimension='generator', column=None),)), over=(Axis(dimension='snapshot', column=None),)), description='total cost of generation over the horizon')
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
@@ -99,7 +99,7 @@ spec: examples/walkthrough/walkthrough.yaml
 
     variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine":
     caught by check() as SchemaError
-      The objective: this product is degree 3. The language takes degree 2 and nothing above it.
-      Multiply by a parameter instead, or give the inner product a name — a variable constrained to equal it is degree 1 wherever it is used.
+      The objective: this product is degree 3, and the limit is degree 2.
+      Multiply by a parameter instead, or declare a variable constrained to equal the inner product.
 
 docs/development/architecture.md has the rules these stages enforce.

@@ -19,7 +19,7 @@ SPEC = """
 description: each snapshot priced at the snapshot that represents it
 
 dimensions:
-  snapshot: {dtype: int, description: a step of the horizon}
+  snapshot: {dtype: int, description: a step of the horizon, ordered: true}
 
 relations:
   rep_of:
@@ -39,7 +39,7 @@ variables:
 constraints:
   capped:
     dims: [snapshot]
-    expression: p <= at(price, by=rep_of, over=rep, into=snapshot)
+    expression: p <= at(price, by=rep_of[rep])
     description: output stays under the price of the snapshot that represents this one
 
 objective:
@@ -63,7 +63,7 @@ def _inputs() -> dict[str, object]:
 
 
 def test_a_pullback_through_a_self_map_reads_the_representative():
-    """`at(price, by=rep_of, over=rep, into=snapshot)` is the price at the snapshot that stands for this one (#1652)."""
+    """`at(price, by=rep_of[rep])` is the price at the snapshot that stands for this one (#1652)."""
     with differential(SPEC, _inputs()) as run:
         assert run.oracle == pytest.approx(1 * 1.0 + 1 * 2.0 + 3 * 3.0, rel=RTOL), (
             'each snapshot capped at its representative price, both lanes agreeing'
@@ -76,7 +76,7 @@ def test_a_pullback_through_a_self_map_reads_the_representative():
 
 
 def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
-    """`sum(p, by=rep_of, over=snapshot, into=rep)` adds each snapshot's output into its representative's row.
+    """`sum(p, over=snapshot, by=rep_of[rep])` adds each snapshot's output into its representative's row.
 
     The adjoint of the pullback above (#1652).
     """
@@ -86,7 +86,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
             'parameters.cap': {'dims': ['snapshot']},
             'constraints.capped': {
                 'dims': ['snapshot'],
-                'expression': 'sum(p, by=rep_of, over=snapshot, into=rep) <= cap',
+                'expression': 'sum(p, over=snapshot, by=rep_of[rep]) <= cap',
             },
         },
     )

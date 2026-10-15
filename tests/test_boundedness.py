@@ -15,7 +15,7 @@ from tests.conftest import EXAMPLES_DIR
 #: The issue's variant 1, as a mapping the cases below vary one key of:
 #: ``slack`` is unbounded below, is in the objective, and no constraint names it.
 FREE_SLACK = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}, 'cost': {'dims': ['t']}},
     'variables': {
         'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}},

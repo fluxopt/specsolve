@@ -23,12 +23,15 @@ from __future__ import annotations
 
 import itertools
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import polars as pl
-import pypsa
 from pypsa.descriptors import get_switchable_as_dense
+
+if TYPE_CHECKING:
+    import pypsa
 
 #: PyPSA component -> the dimension the file declares for it.
 DIM = {
@@ -119,11 +122,14 @@ def varying(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
 
 
 def relation(n: pypsa.Network, component: str, attr: str, into: str = 'bus') -> pd.DataFrame:
-    """What a component's *attr* names, as the relation the file declares over it *into* a dimension; a blank names none."""
+    """What a component's *attr* names, as the relation the file declares over it *into* a dimension.
+
+    The file refuses a component with no row, so a blank is a label of its
+    own, as PyPSA reads a blank carrier: one that matches no other.
+    """
     table = first_scenario(n.static(component))
     named = table[attr].astype(str) if attr in table.columns else pd.Series('', index=table.index, dtype=str)
-    out = pd.DataFrame({DIM[component]: table.index.astype(str), into: named.to_numpy()})
-    return out[out[into] != '']
+    return pd.DataFrame({DIM[component]: table.index.astype(str), into: named.to_numpy()})
 
 
 def per_component(component: str, values: pd.Series, dtype: object = float) -> pd.DataFrame:
@@ -227,16 +233,23 @@ def ports(n: pypsa.Network, component: str) -> dict[str, object]:
     naming a bus in one, so a component of any port count is as many labels
     here and one term in the balance. The label is the component and the
     column the port came from.
+
+    PyPSA counts a delay in elapsed hours of generator weightings and delivers
+    from the latest snapshot that far back, so the delay in whole snapshots is
+    the hours over the weighting, rounded up. The file refuses uneven
+    weightings under a delayed port, so the first snapshot's weighting is every
+    snapshot's.
     """
     dim, port_dim = DIM[component], f'{DIM[component]}_output'
     table = n.static(component)
     blank = pd.Series('', index=table.index, dtype=str)
+    hours = float(n.snapshot_weightings['generators'].iloc[0])
     statics, coefficients = [], []
     for port, bus_column, coefficient in _ports(n, component):
         delay_attr, cyclic_attr = _delay_attrs(component, coefficient)
         buses = table.get(bus_column, blank).astype(str)
         declared = buses.to_numpy() != ''
-        delays = table.get(delay_attr, pd.Series(0, index=table.index)).fillna(0).astype(int)
+        delays = np.ceil(table.get(delay_attr, pd.Series(0, index=table.index)).fillna(0) / hours).astype(int)
         cyclic = table.get(cyclic_attr, pd.Series(True, index=table.index)).fillna(True).astype(bool)
         keys = keyed(table.index, dim)
         frame = pd.DataFrame(
@@ -270,17 +283,17 @@ def ports(n: pypsa.Network, component: str) -> dict[str, object]:
 
 
 def _remaining(n: pypsa.Network, component: str, before: str, minimum: str) -> pd.DataFrame:
-    """True while the up or down time a unit brought into the horizon still binds — PyPSA's ``min - before`` snapshots, where ``before > 0``."""
+    """True while the up or down time a unit brought into the horizon still binds — PyPSA's ``min - before`` snapshots, where ``before > 0`` — and false at every other snapshot."""
     table = n.static(component)
+    stamps = list(timesteps(n))
     rows = []
     for key, unit in table.iterrows():
-        if not unit['committable'] or unit[before] <= 0:
-            continue
-        remaining = int(min(max(unit[minimum] - unit[before], 0), len(n.snapshots)))
+        binds = bool(unit['committable']) and unit[before] > 0
+        remaining = int(min(max(unit[minimum] - unit[before], 0), len(stamps))) if binds else 0
         scenario = {'scenario': key[0]} if table.index.nlevels > 1 else {}
         name = key[1] if table.index.nlevels > 1 else key
         rows.extend(
-            scenario | {'snapshot': t, DIM[component]: str(name), 'value': True} for t in timesteps(n)[:remaining]
+            scenario | {'snapshot': t, DIM[component]: str(name), 'value': k < remaining} for k, t in enumerate(stamps)
         )
     columns = [*(['scenario'] if table.index.nlevels > 1 else []), 'snapshot', DIM[component], 'value']
     return pd.DataFrame(rows, columns=columns).astype({'value': bool})
@@ -298,13 +311,13 @@ def _modules_installed(n: pypsa.Network, component: str) -> pd.DataFrame:
     return per_component(component, counts)
 
 
-def _big_m(n: pypsa.Network, component: str) -> pd.DataFrame:
-    """PyPSA's own big-M for a committable extendable build — the build cap at full availability."""
+def _big_m(n: pypsa.Network, component: str, committable_big_m: float | None) -> pd.DataFrame:
+    """PyPSA's own big-M for a committable extendable build, under the ``committable_big_m`` the run passes."""
     c = n.components[component]
     applies = c.committables.intersection(c.extendables)
     if applies.empty:
         return pd.DataFrame({DIM[component]: [], 'value': []}).astype({DIM[component]: str, 'value': float})
-    values = c.get_committable_big_m_values(names=applies).to_series()
+    values = c.get_committable_big_m_values(names=applies, committable_big_m=committable_big_m).to_series()
     return (
         per_component(component, values)
         if values.index.nlevels == 1
@@ -319,7 +332,7 @@ def maintenance(n: pypsa.Network, component: str) -> dict[str, object]:
     weightings reach the duration — PyPSA's first window end whose cumulative
     weighting meets ``maintenance_duration`` less a relative ``1e-6``. A start
     is blocked where its window runs past the horizon or into a snapshot the
-    unit does not stand in.
+    unit does not stand in, and never for a unit that is not maintainable.
     """
     dim = DIM[component]
     table = n.static(component)
@@ -332,10 +345,11 @@ def maintenance(n: pypsa.Network, component: str) -> dict[str, object]:
     active = active_by_snapshot(n, component)
     covers, blocked = [], []
     for key, unit in table.iterrows():
-        if not maintainable.loc[key]:
-            continue
         scenario = {'scenario': key[0]} if table.index.nlevels > 1 else {}
         name = str(key[1] if table.index.nlevels > 1 else key)
+        if not maintainable.loc[key]:
+            blocked.extend(scenario | {'snapshot': t, dim: name, 'value': False} for t in stamps)
+            continue
         ends = np.searchsorted(cum, float(unit['maintenance_duration']) * (1 - 1e-6) + cum_prev)
         standing_ = active[name].to_numpy() if name in active.columns else np.ones(total, dtype=bool)
         for start, end in enumerate(ends):
@@ -366,7 +380,7 @@ def maintenance(n: pypsa.Network, component: str) -> dict[str, object]:
     }
 
 
-def dispatchable(n: pypsa.Network, component: str) -> dict[str, object]:
+def dispatchable(n: pypsa.Network, component: str, optimize: dict) -> dict[str, object]:
     """Commitment, ramps, modules, maintenance and costs of a generator, link or process — PyPSA treats the three alike."""
     p = component
     table = n.static(component)
@@ -401,19 +415,16 @@ def dispatchable(n: pypsa.Network, component: str) -> dict[str, object]:
         ).dropna(),
         f'{p}_must_stay_up': _remaining(n, component, 'up_time_before', 'min_up_time'),
         f'{p}_must_stay_down': _remaining(n, component, 'down_time_before', 'min_down_time'),
-        f'{p}_start_up_cost': static(n, component, 'start_up_cost', 0.0),
-        f'{p}_shut_down_cost': static(n, component, 'shut_down_cost', 0.0),
+        f'{p}_start_up_cost': varying(n, component, 'start_up_cost'),
+        f'{p}_shut_down_cost': varying(n, component, 'shut_down_cost'),
         f'{p}_stand_by_cost': varying(n, component, 'stand_by_cost'),
         f'{p}_p_nom_mod': static(n, component, 'p_nom_mod', 0.0).query('value > 0'),
         f'{p}_modules_installed': _modules_installed(n, component),
-        f'{p}_big_m': _big_m(n, component),
+        f'{p}_big_m': _big_m(n, component, optimize.get('committable_big_m')),
         f'{p}_p_min_pu_nonneg': per_component(
             component,
             (min_pu >= 0).all().groupby(level='name').all() if min_pu.columns.nlevels > 1 else (min_pu >= 0).all(),
             bool,
-        ),
-        f'{p}_partly_tightened': per_component(
-            component, first_scenario(table['start_up_cost'] == table['shut_down_cost']), bool
         ),
         **maintenance(n, component),
         **standing(n, component),
@@ -461,6 +472,7 @@ def storage(n: pypsa.Network, multi: bool) -> dict[str, object]:
     return {
         'StorageUnit_p_nom': static(n, 'StorageUnit', 'p_nom'),
         'StorageUnit_p_nom_extendable': static(n, 'StorageUnit', 'p_nom_extendable'),
+        'StorageUnit_p_nom_mod': static(n, 'StorageUnit', 'p_nom_mod', 0.0).query('value > 0'),
         'StorageUnit_p_min_pu': varying(n, 'StorageUnit', 'p_min_pu'),
         'StorageUnit_p_max_pu': varying(n, 'StorageUnit', 'p_max_pu'),
         'StorageUnit_max_hours': static(n, 'StorageUnit', 'max_hours'),
@@ -493,6 +505,7 @@ def storage(n: pypsa.Network, multi: bool) -> dict[str, object]:
         **late_opening(n, 'StorageUnit'),
         'Store_e_nom': static(n, 'Store', 'e_nom'),
         'Store_e_nom_extendable': static(n, 'Store', 'e_nom_extendable'),
+        'Store_e_nom_mod': static(n, 'Store', 'e_nom_mod', 0.0).query('value > 0'),
         'Store_e_min_pu': varying(n, 'Store', 'e_min_pu'),
         'Store_e_max_pu': varying(n, 'Store', 'e_max_pu'),
         'Store_sign': per_component('Store', first_scenario(n.static('Store')['sign'])),
@@ -520,58 +533,85 @@ def storage(n: pypsa.Network, multi: bool) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def _cycle_weights(n: pypsa.Network) -> dict[str, object]:
-    """The KVL rows PyPSA itself writes, per branch — ``n.cycle_matrix(apply_weights=True)``, times the 1e5 PyPSA scales every cycle row by for conditioning.
+def _everywhere(table: pd.DataFrame, labels: dict[str, list]) -> pd.DataFrame:
+    """*table* with a zero at every combination of *labels* it has no row for — a table the file refuses to find short."""
+    product = pd.MultiIndex.from_product(list(labels.values()), names=list(labels)).to_frame(index=False)
+    return product.merge(table, on=list(labels), how='left').fillna({'value': 0.0}).astype({'value': float})
 
-    A branch whose weight is NaN — an extendable one at zero nominal rating,
-    whose per-unit reactance is infinite — has no term: linopy drops it.
+
+def _cycle_periods(n: pypsa.Network, multi: bool) -> list[tuple[object, object]]:
+    """``(label, investment_period)`` per period PyPSA builds cycles for — every period under ``multi_investment_periods``, else the one with no period, which takes every branch."""
+    return [(p, p) for p in period_labels(n)] if multi else [(PLAIN_PERIOD, None)]
+
+
+def _cycle_weights(n: pypsa.Network, multi: bool) -> dict[str, object]:
+    """The KVL rows PyPSA itself writes, per period and branch — ``n.cycle_matrix(apply_weights=True)``, times the 1e5 PyPSA scales every cycle row by for conditioning.
+
+    Each period has its own basis, of the branches standing in it, so a cycle
+    label is a position in its period's basis. A branch whose weight is NaN — an
+    extendable one at zero nominal rating, whose per-unit reactance is infinite
+    — has no term: linopy drops it.
 
     A transformer's phase shift enters the same rows: a fixed one as a constant
-    in radians at each snapshot, a varying one as the shift decision times its
-    cycle sign and π/180. PyPSA builds the basis from the first scenario only.
-    The constant is written at every snapshot, transformer and cycle, zero
-    where nothing shifts, because a constant summed over transformers is owed
-    each one.
+    in radians at each snapshot of the period, a varying one as the shift
+    decision times its cycle sign and π/180. PyPSA builds the basis from the
+    first scenario only, and adds a shift only for a transformer that stands;
+    a fixed shift of zero adds nothing and has no row.
     """
     n.determine_network_topology()
     n.calculate_dependent_values()
-    weighted = n.cycle_matrix(apply_weights=True) * 1e5
-    plain = n.cycle_matrix(apply_weights=False)
-    rows: dict[str, list[dict]] = {'Line': [], 'Transformer': []}
-    for (kind, name), weights in weighted.iterrows():
-        rows.setdefault(kind, [])
-        rows[kind].extend(
-            {DIM[kind]: str(name), 'cycle': str(cycle), 'value': float(w)}
-            for cycle, w in weights.items()
-            if w and not math.isnan(w)
-        )
     transformers = first_scenario(n.static('Transformer'))
     varying_ = transformers['phase_shift_min'] < transformers['phase_shift_max']
-    shift_rows, decision_rows = [], []
-    signs = plain.loc['Transformer'] if 'Transformer' in plain.index.get_level_values(0) else pd.DataFrame()
     dense = get_switchable_as_dense(n, 'Transformer', 'phase_shift').set_axis(timesteps(n), axis=0)
     if dense.columns.nlevels > 1:
         dense = dense.T.groupby(level='name').first().T
-    for name in transformers.index:
-        for cycle in plain.columns:
-            sign = float(signs.at[name, cycle]) if name in signs.index else 0.0
-            if varying_.get(name, False):
-                if sign:
-                    decision_rows.append(
-                        {'transformer': str(name), 'cycle': str(cycle), 'value': sign * math.pi / 180 * 1e5}
-                    )
-                sign = 0.0
-            shift_rows.extend(
-                {
-                    'snapshot': t,
-                    'transformer': str(name),
-                    'cycle': str(cycle),
-                    'value': sign * float(shift) * math.pi / 180 * 1e5,
-                }
-                for t, shift in dense[name].items()
+    active = active_by_snapshot(n, 'Transformer')
+    stamps = pd.Series(period_of(n) if multi else PLAIN_PERIOD, index=timesteps(n))
+    rows: dict[str, list[dict]] = {'Line': [], 'Transformer': []}
+    shift_rows, decision_rows = [], []
+    for label, period in _cycle_periods(n, multi):
+        weighted = n.cycle_matrix(investment_period=period, apply_weights=True) * 1e5
+        if weighted.empty:
+            continue
+        for (kind, name), weights in weighted.iterrows():
+            rows.setdefault(kind, [])
+            rows[kind].extend(
+                {'period': label, DIM[kind]: str(name), 'cycle': str(cycle), 'value': float(w)}
+                for cycle, w in weights.items()
+                if w and not math.isnan(w)
             )
-    line = pd.DataFrame(rows['Line'], columns=['line', 'cycle', 'value']).astype({'value': float})
-    transformer = pd.DataFrame(rows['Transformer'], columns=['transformer', 'cycle', 'value']).astype({'value': float})
+        plain = n.cycle_matrix(investment_period=period, apply_weights=False)
+        if 'Transformer' not in plain.index.get_level_values(0):
+            continue
+        snapshots = stamps.index[stamps.to_numpy() == label]
+        for name, signs in plain.loc['Transformer'].iterrows():
+            for cycle, sign in signs.items():
+                if not sign:
+                    continue
+                if varying_.get(name, False):
+                    decision_rows.append(
+                        {
+                            'period': label,
+                            'transformer': str(name),
+                            'cycle': str(cycle),
+                            'value': sign * math.pi / 180 * 1e5,
+                        }
+                    )
+                    continue
+                shift_rows.extend(
+                    {
+                        'snapshot': t,
+                        'transformer': str(name),
+                        'cycle': str(cycle),
+                        'value': float(sign) * float(dense.at[t, name]) * math.pi / 180 * 1e5,
+                    }
+                    for t in snapshots
+                    if dense.at[t, name] and active.at[t, name]
+                )
+    line = pd.DataFrame(rows['Line'], columns=['period', 'line', 'cycle', 'value']).astype({'value': float})
+    transformer = pd.DataFrame(rows['Transformer'], columns=['period', 'transformer', 'cycle', 'value']).astype(
+        {'value': float}
+    )
     cycles = list(pd.unique(pd.concat([line['cycle'], transformer['cycle']])))
     return {
         'cycle': pl.Series('cycle', cycles, dtype=pl.String),
@@ -580,12 +620,18 @@ def _cycle_weights(n: pypsa.Network) -> dict[str, object]:
         'Transformer_phase_shift_weight': pd.DataFrame(
             shift_rows, columns=['snapshot', 'transformer', 'cycle', 'value']
         ).astype({'value': float}),
-        'Transformer_phase_shift_cycle_weight': pd.DataFrame(
-            decision_rows, columns=['transformer', 'cycle', 'value']
-        ).astype({'value': float}),
+        'Transformer_phase_shift_cycle_weight': _everywhere(
+            pd.DataFrame(decision_rows, columns=['period', 'transformer', 'cycle', 'value']),
+            {
+                'period': [label for label, _ in _cycle_periods(n, multi)],
+                'transformer': list(transformers.index.astype(str)),
+                'cycle': cycles,
+            },
+        ),
         'Transformer_phase_shift_varying': per_component('Transformer', varying_, bool),
         'Transformer_phase_shift_min': per_component('Transformer', transformers['phase_shift_min']),
         'Transformer_phase_shift_max': per_component('Transformer', transformers['phase_shift_max']),
+        'Transformer_phase_shift_fixed': long('Transformer', dense),
     }
 
 
@@ -598,12 +644,16 @@ def _loss_cuts(n: pypsa.Network, component: str, losses: dict) -> dict[str, obje
     secant joins consecutive breakpoints ``a, b`` of PyPSA's
     `define_secant_loss_constraints`, slope ``2 * sqrt(atol * r) * (a + b)`` and
     offset ``-4 * atol * a * b`` in its factors; a branch without resistance
-    takes every cut at zero.
+    takes every cut at zero, and its loss at rating is zero at any rating —
+    also where its ``r_pu_eff`` is undefined, at a zero ``s_nom``.
+
+    The file refuses a branch with no loss at rating, so a lossless run
+    writes it too, and no cut.
     """
     dim = DIM[component]
     table = n.static(component)
     empty = pd.DataFrame({'snapshot': [], dim: [], 'value': []})
-    if table.empty or not losses:
+    if table.empty:
         return {'max': empty, 'slope': empty.assign(segment=[]), 'offset': empty.assign(segment=[]), 'segments': []}
     n.calculate_dependent_values()
     top = get_switchable_as_dense(n, component, 's_max_pu').set_axis(timesteps(n), axis=0)
@@ -646,8 +696,10 @@ def _loss_cuts(n: pypsa.Network, component: str, losses: dict) -> dict[str, obje
             slopes.append(melt(2 * r * p_k).assign(segment=k))
             offsets.append(melt(r * p_k**2 - 2 * r * p_k * p_k).assign(segment=k))
         segments = list(range(1, count + 1))
+    at_rating = r * top**2
+    at_rating.loc[:, (table['r'] == 0).to_numpy()] = 0.0
     return {
-        'max': melt(r * top**2),
+        'max': melt(at_rating),
         'slope': pd.concat(slopes, ignore_index=True) if slopes else empty.assign(segment=[]),
         'offset': pd.concat(offsets, ignore_index=True) if offsets else empty.assign(segment=[]),
         'segments': segments,
@@ -708,43 +760,41 @@ def outage_label(component: str, name: str) -> str:
     return f'{component}-{name}'
 
 
-def _first_grid(n: pypsa.Network) -> pypsa.Network:
-    """The buses and passive branches of *n*'s first scenario, as a network with none — what PyPSA can find sub-networks in."""
-    grid = pypsa.Network()
-    for component in ('Bus', 'Line', 'Transformer'):
-        static = first_scenario(n.static(component))
-        attrs = n.components[component].defaults.query('status.str.startswith("Input")', engine='python').index
-        given = [a for a in static.columns if a in attrs and a != 'name']
-        if len(static):
-            grid.add(component, static.index, **{a: static[a] for a in given})
-    return grid
+def security(n: pypsa.Network, outages: object, multi: bool) -> dict[str, object]:
+    """The outages and each branch's share of an outaged branch's flow — PyPSA's BODF per period and sub-network.
 
-
-def security(n: pypsa.Network, outages: object) -> dict[str, object]:
-    """The outages and each branch's share of an outaged branch's flow — PyPSA's BODF per sub-network.
-
-    On a network with scenarios PyPSA finds no branch in a sub-network, so the
-    BODF is read off the first scenario, which is what a share over
-    ``[line, outage]`` with no scenario states.
+    PyPSA finds each period's sub-networks among the branches standing in it,
+    and the plain run's among every branch. On a network with scenarios it
+    reads the topology of the first scenario, which is what a share with no
+    scenario states.
     """
     taken = _outage_list(n, outages)
     rows: dict[str, list[dict]] = {'Line': [], 'Transformer': []}
     if taken:
-        single = _first_grid(n) if n.has_scenarios else n
-        single.determine_network_topology()
-        single.calculate_dependent_values()
-        for sub_network in single.c.sub_networks.static.obj:
-            branches = sub_network.branches_i()
-            inside = [(c, name) for c, name in taken if (c, name) in branches]
-            if not inside:
-                continue
-            sub_network.calculate_BODF()
-            bodf = pd.DataFrame(sub_network.BODF, index=branches, columns=branches)
-            for c_out, out in inside:
-                for (c_aff, affected), share in bodf[(c_out, out)].items():
-                    rows[c_aff].append(
-                        {DIM[c_aff]: str(affected), 'outage': outage_label(c_out, out), 'value': float(share)}
-                    )
+        single = n.get_scenario(n.scenarios[0]) if n.has_scenarios else n
+        for label, period in _cycle_periods(n, multi):
+            if period is None:
+                single.determine_network_topology()
+            else:
+                single.determine_network_topology(investment_period=period, skip_isolated_buses=True)
+            single.calculate_dependent_values()
+            for sub_network in single.c.sub_networks.static.obj:
+                branches = sub_network.branches_i()
+                inside = [(c, name) for c, name in taken if (c, name) in branches]
+                if not inside:
+                    continue
+                sub_network.calculate_BODF()
+                bodf = pd.DataFrame(sub_network.BODF, index=branches, columns=branches)
+                for c_out, out in inside:
+                    for (c_aff, affected), share in bodf[(c_out, out)].items():
+                        rows[c_aff].append(
+                            {
+                                'period': label,
+                                DIM[c_aff]: str(affected),
+                                'outage': outage_label(c_out, out),
+                                'value': float(share),
+                            }
+                        )
     labels = [outage_label(c, name) for c, name in taken]
     return {
         'outage': pl.Series('outage', labels, dtype=pl.String),
@@ -760,20 +810,38 @@ def security(n: pypsa.Network, outages: object) -> dict[str, object]:
                 'transformer': [x for c, x in taken if c == 'Transformer'],
             }
         ),
-        'Line_BODF': pd.DataFrame(rows['Line'], columns=['line', 'outage', 'value']).astype({'value': float}),
-        'Transformer_BODF': pd.DataFrame(rows['Transformer'], columns=['transformer', 'outage', 'value']).astype(
-            {'value': float}
-        ),
+        'Line_BODF': pd.DataFrame(rows['Line'], columns=['period', 'line', 'outage', 'value']).astype({'value': float}),
+        'Transformer_BODF': pd.DataFrame(
+            rows['Transformer'], columns=['period', 'transformer', 'outage', 'value']
+        ).astype({'value': float}),
     }
 
 
+def _angle_limit(n: pypsa.Network, component: str) -> pd.DataFrame:
+    """A branch's ``v_ang_max`` where it is finite — PyPSA builds no angle row elsewhere, and none for a line that is not AC."""
+    limits = static(n, component, 'v_ang_max', float('inf'))
+    finite = np.isfinite(limits['value'].to_numpy(dtype=float))
+    if component == 'Line':
+        carriers = first_scenario(n.static('Line'))['carrier'].astype(str)
+        finite &= limits['line'].map(carriers).eq('AC').to_numpy()
+    return limits[finite]
+
+
 def branches(n: pypsa.Network) -> dict[str, object]:
+    """What a line and a transformer take, beyond their cycles, losses and outages.
+
+    ``x_pu_eff`` is PyPSA's own, from ``calculate_dependent_values``.
+    """
+    n.calculate_dependent_values()
     out: dict[str, object] = {}
     for component in ('Line', 'Transformer'):
         p = component
         out |= {
             f'{p}_s_nom': static(n, component, 's_nom'),
             f'{p}_s_nom_extendable': static(n, component, 's_nom_extendable'),
+            f'{p}_s_nom_mod': static(n, component, 's_nom_mod', 0.0).query('value > 0'),
+            f'{p}_v_ang_max': _angle_limit(n, component),
+            f'{p}_x_pu_eff': static(n, component, 'x_pu_eff'),
             f'{p}_s_max_pu': varying(n, component, 's_max_pu'),
             f'{p}_s_nom_min': static(n, component, 's_nom_min'),
             f'{p}_s_nom_max': static(n, component, 's_nom_max'),
@@ -793,25 +861,30 @@ def branches(n: pypsa.Network) -> dict[str, object]:
 
 
 def scenarios(n: pypsa.Network) -> dict[str, object]:
-    """The scenario dimension, its weights and the risk preference's two scalars — one scenario of weight one on a plain run, and no tail."""
+    """The scenario dimension, its weights and the risk preference's two scalars — one scenario of weight one on a plain run.
+
+    PyPSA builds the tail only where a risk preference is set, an ``omega`` of
+    zero included, so the scalars have a row there and none elsewhere.
+    """
     labels = scenario_labels(n)
     weights = n.scenario_weightings['weight'].to_numpy(dtype=float) if n.has_scenarios else [1.0]
-    risk = n.risk_preference or {}
+    risk = n.risk_preference
     return {
         'scenario': pl.Series('scenario', labels, dtype=pl.String),
         'scenario_weight': pd.DataFrame({'scenario': labels, 'value': weights}),
-        'CVaR_omega': float(risk.get('omega', 0.0)),
-        'CVaR_alpha': float(risk.get('alpha', 0.0)),
+        'CVaR_omega': pd.DataFrame({'value': [float(risk['omega'])] if risk else []}, dtype=float),
+        'CVaR_alpha': pd.DataFrame({'value': [float(risk['alpha'])] if risk else []}, dtype=float),
     }
 
 
-def periods(n: pypsa.Network) -> dict[str, object]:
-    """The investment periods, their weights and the period each snapshot falls in — one period of weight one on a plain run."""
+def periods(n: pypsa.Network, multi: bool) -> dict[str, object]:
+    """The investment periods, their weights and the period each snapshot falls in — weight one unless PyPSA reads the weights, under ``multi_investment_periods``."""
     labels = period_labels(n)
-    multi = n.snapshots.nlevels > 1
     return {
         'period': pl.Series('period', labels, dtype=pl.Int64),
-        'period_weight_objective': pd.DataFrame({'period': labels, 'value': period_weights(n, 'objective').to_numpy()}),
+        'period_weight_objective': pd.DataFrame(
+            {'period': labels, 'value': period_weights(n, 'objective').to_numpy() if multi else [1.0] * len(labels)}
+        ),
         'period_weight_years': pd.DataFrame(
             {'period': labels, 'value': period_weights(n, 'years').to_numpy() if multi else [1.0]}
         ),
@@ -825,7 +898,8 @@ def carriers(n: pypsa.Network, multi: bool) -> dict[str, object]:
     An infinite `max_growth` is no limit and no row; with scenarios, the
     strictest limit, as PyPSA takes it. PyPSA reads a growth limit only under
     ``multi_investment_periods``, so there is none otherwise. A carrier a
-    component names and the network does not declare is a label too.
+    component names and the network does not declare is a label too, with
+    PyPSA's default relative growth of zero.
     """
     table = n.carriers[['max_growth', 'max_relative_growth']]
     if table.index.nlevels > 1:
@@ -837,6 +911,7 @@ def carriers(n: pypsa.Network, multi: bool) -> dict[str, object]:
     named = set().union(*(set(frame['carrier']) for frame in relations.values()))
     labels = list(table.index.astype(str)) + sorted(named - set(table.index.astype(str)))
     growth = table['max_growth']
+    relative = table['max_relative_growth'].set_axis(table.index.astype(str))
     bounded = growth[(growth < float('inf')) & multi] if multi else growth.iloc[:0]
     return {
         'carrier': pl.Series('carrier', labels, dtype=pl.String),
@@ -845,7 +920,7 @@ def carriers(n: pypsa.Network, multi: bool) -> dict[str, object]:
             {'carrier': bounded.index.astype(str), 'value': bounded.to_numpy(dtype=float)}
         ),
         'Carrier_max_relative_growth': pd.DataFrame(
-            {'carrier': table.index.astype(str), 'value': table['max_relative_growth'].to_numpy(dtype=float)}
+            {'carrier': labels, 'value': relative.reindex(labels, fill_value=0.0).to_numpy(dtype=float)}
         ),
     }
 
@@ -1019,9 +1094,11 @@ def global_constraints(n: pypsa.Network, multi: bool) -> dict[str, object]:
             for component in ('Line', 'Link'):
                 members = _members(n, component, scenario)
                 stands = _stands_in(n, component, period, multi)
-                first_members = first_scenario(n.static(component))
                 cost = n.components[component].capital_cost
-                cost = first_scenario(cost) if isinstance(cost, pd.Series) else cost
+                if scenario is not None and scenario in cost.index.get_level_values('scenario'):
+                    cost = cost.xs(scenario, level='scenario')
+                elif cost.index.nlevels > 1:
+                    cost = first_scenario(cost)
                 by_period = active_by_period(n, component)
                 for name, unit in members.iterrows():
                     if not unit[f'{NOMINAL[component]}_extendable'] or unit['carrier'] not in carriers_:
@@ -1029,7 +1106,7 @@ def global_constraints(n: pypsa.Network, multi: bool) -> dict[str, object]:
                     if not stands.get(name, False):
                         continue
                     if kind == 'transmission_volume_expansion_limit':
-                        value = float(first_members.loc[name, 'length'])
+                        value = float(unit['length'])
                         table = f'{component}_volume_weight'
                     else:
                         share = 1.0
@@ -1107,7 +1184,7 @@ def sources(n: pypsa.Network, optimize: dict | None = None, outages: object = No
             for component, dim in DIM.items()
         },
         **scenarios(n),
-        **periods(n),
+        **periods(n, multi),
         **carriers(n, multi),
         'Generator_bus': relation(n, 'Generator', 'bus'),
         'Generator_sign': per_component('Generator', first_scenario(n.generators['sign'])),
@@ -1123,14 +1200,14 @@ def sources(n: pypsa.Network, optimize: dict | None = None, outages: object = No
         'snapshot_weightings_generators': weighting(n, 'generators'),
         'Generator_e_sum_min': static(n, 'Generator', 'e_sum_min'),
         'Generator_e_sum_max': static(n, 'Generator', 'e_sum_max'),
-        **{name: table for component in DISPATCHABLE for name, table in dispatchable(n, component).items()},
+        **{name: table for component in DISPATCHABLE for name, table in dispatchable(n, component, optimize).items()},
         **ports(n, 'Link'),
         **ports(n, 'Process'),
         **storage(n, multi),
         **branches(n),
-        **_cycle_weights(n),
+        **_cycle_weights(n, multi),
         **losses(n, optimize, outages),
-        **security(n, outages),
+        **security(n, outages, multi),
         **global_constraints(n, multi),
     }
 
