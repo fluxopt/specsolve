@@ -168,7 +168,7 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)
 
-    if isinstance(node, program.NamedMask):
+    if isinstance(node, program.MaskReference):
         return evaluate(node.body)
 
     if isinstance(node, program.Not):

@@ -58,8 +58,6 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 | $`\mathit{shipment}`$ | `shipment` over $`\mathcal{P} \times \mathcal{M}`$ — cases shipped from a plant to a market |
 | $`\mathit{scaled}`$ | `scaled` over $`\mathcal{P} \times \mathcal{M}`$ — what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{shipment}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`shipment`**

@@ -125,7 +125,7 @@ def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
     consts: Sequence[tuple[Piece, float]],
-    c: program.ConstraintDeclaration,
+    c: program.Constraint,
     subject: str,
 ) -> pl.DataFrame:
     """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.

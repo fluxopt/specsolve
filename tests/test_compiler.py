@@ -39,21 +39,21 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 #: A generator's bus: the single-valued map, keyed by the generator.
-GEN_BUS = program.RelationDeclaration((('generator', 'generator'), ('bus', 'bus')), ('generator',))
+GEN_BUS = program.Relation((('generator', 'generator'), ('bus', 'bus')), ('generator',))
 
 PROGRAM = program.Program(
     parameters={
-        'cost': program.ParameterDeclaration(('generator',)),
-        'load': program.ParameterDeclaration(('snapshot',)),
-        'available': program.ParameterDeclaration(('generator',)),
+        'cost': program.Parameter(('generator',)),
+        'load': program.Parameter(('snapshot',)),
+        'available': program.Parameter(('generator',)),
     },
-    variables={'p': program.VariableDeclaration(('snapshot', 'generator'))},
+    variables={'p': program.Variable(('snapshot', 'generator'))},
     constraints={},
-    objective=program.ObjectiveDeclaration('minimize', program.Variable('p')),
+    objective=program.Objective('minimize', program.VariableReference('p')),
     dimensions={
-        'snapshot': program.DimensionDeclaration(ordered=True),
-        'generator': program.DimensionDeclaration(),
-        'bus': program.DimensionDeclaration(),
+        'snapshot': program.Dimension(ordered=True),
+        'generator': program.Dimension(),
+        'bus': program.Dimension(),
     },
     relations={'gen_bus': GEN_BUS},
 )
@@ -124,7 +124,7 @@ def joins(frame: pl.LazyFrame) -> int:
 
 
 def test_a_variable_compiles_to_one_term_piece_over_its_dims():
-    compiled = compiler().expression(program.Variable('p'), 'test')
+    compiled = compiler().expression(program.VariableReference('p'), 'test')
     assert len(compiled.terms) == 1
     assert not compiled.consts
     piece = compiled.terms[0]
@@ -134,7 +134,7 @@ def test_a_variable_compiles_to_one_term_piece_over_its_dims():
 
 
 def test_a_parameter_is_a_constant_piece_not_a_term():
-    compiled = compiler().expression(program.Parameter('cost'), 'test')
+    compiled = compiler().expression(program.ParameterReference('cost'), 'test')
     assert not compiled.terms
     assert compiled.consts[0].dims == ('generator',)
     assert compiled.consts[0].kind == 'const'
@@ -143,12 +143,16 @@ def test_a_parameter_is_a_constant_piece_not_a_term():
 
 def test_addition_concatenates_pieces_rather_than_joining():
     """An LP row is a sum of terms, so ``+`` needs no query at all."""
-    compiled = compiler().expression(program.Add(program.Variable('p'), program.Variable('p')), 'test')
+    compiled = compiler().expression(
+        program.Add(program.VariableReference('p'), program.VariableReference('p')), 'test'
+    )
     assert len(compiled.terms) == 2
 
 
 def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
-    compiled = compiler().expression(program.Multiply(program.Variable('p'), program.Parameter('cost')), 'test')
+    compiled = compiler().expression(
+        program.Multiply(program.VariableReference('p'), program.ParameterReference('cost')), 'test'
+    )
     piece = compiled.terms[0]
     assert piece.dims == ('snapshot', 'generator')
     assert columns(piece.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
@@ -162,7 +166,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
     silently dropped.
     """
     with pytest.raises(AssertionError, match='quadratic product in a position compiled as affine'):
-        compiler().expression(program.Multiply(program.Variable('p'), program.Variable('p')), 'test')
+        compiler().expression(program.Multiply(program.VariableReference('p'), program.VariableReference('p')), 'test')
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +176,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     """The aggregate lives in the terminal assembly, not in the piece."""
-    compiled = compiler().expression(program.Sum(program.Variable('p'), (program.Axis('generator'),)), 'test')
+    compiled = compiler().expression(program.Sum(program.VariableReference('p'), (program.Axis('generator'),)), 'test')
     piece = compiled.terms[0]
     assert piece.dims == ('snapshot',)
     assert columns(piece.frame) == ['snapshot', 'var_label', 'coeff']
@@ -186,8 +190,8 @@ def masked_compiler() -> Compiler:
     masked = program.Program(
         parameters=PROGRAM.parameters,
         variables={
-            'p': program.VariableDeclaration(over, where=where),
-            'q': program.VariableDeclaration(over, where=where),
+            'p': program.Variable(over, where=where),
+            'q': program.Variable(over, where=where),
         },
         constraints={},
         objective=PROGRAM.objective,
@@ -204,32 +208,40 @@ def test_a_reduction_carries_absence_between_pieces_and_not_into_the_one_it_came
     given, so a lone masked term costs no join.
     """
     both = masked_compiler().expression(
-        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), (program.Axis('generator'),)), 'test'
+        program.Sum(
+            program.Add(program.VariableReference('p'), program.VariableReference('q')), (program.Axis('generator'),)
+        ),
+        'test',
     )
     assert [joins(t.frame) for t in both.terms] == [1, 1]
     assert all('SEMI JOIN' in query(t.frame) for t in both.terms)
 
-    alone = masked_compiler().expression(program.Sum(program.Variable('p'), (program.Axis('generator'),)), 'test')
+    alone = masked_compiler().expression(
+        program.Sum(program.VariableReference('p'), (program.Axis('generator'),)), 'test'
+    )
     assert joins(alone.terms[0].frame) == 0
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
     compiled = masked_compiler().expression(
-        program.Sum(program.Add(program.Variable('p'), program.Variable('q')), (program.Axis('generator'),)), 'test'
+        program.Sum(
+            program.Add(program.VariableReference('p'), program.VariableReference('q')), (program.Axis('generator'),)
+        ),
+        'test',
     )
     assert 'UNIQUE' not in query(compiled.terms[0].frame)
 
 
 def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     """Linopy parity: summing a snapshot-only term over `generator` repeats it."""
-    inner = program.Sum(program.Variable('p'), (program.Axis('generator'),))
+    inner = program.Sum(program.VariableReference('p'), (program.Axis('generator'),))
     compiled = compiler().expression(program.Sum(inner, (program.Axis('generator'),)), 'test')
     assert '3' in query(compiled.terms[0].frame)
 
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
-    node = program.Sum(program.Join(program.Variable('p'), GEN_BUS_JOIN), GEN_BUS_JOIN.axes)
+    node = program.Sum(program.Join(program.VariableReference('p'), GEN_BUS_JOIN), GEN_BUS_JOIN.axes)
     piece = compiler().expression(node, 'test').terms[0]
     assert piece.dims == ('snapshot', 'bus')
     assert columns(piece.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
@@ -241,7 +253,7 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
     piece = (
         compiler()
-        .expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=True), 'test')
+        .expression(program.Translate(program.VariableReference('p'), 'snapshot', offset=1, wrap=True), 'test')
         .terms[0]
     )
     assert piece.dims == ('snapshot', 'generator')
@@ -252,10 +264,14 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
 
 def test_wrapping_is_modulo_and_acyclic_is_not():
     cyclic = (
-        compiler().expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=True), 't').terms[0]
+        compiler()
+        .expression(program.Translate(program.VariableReference('p'), 'snapshot', offset=1, wrap=True), 't')
+        .terms[0]
     )
     acyclic = (
-        compiler().expression(program.Translate(program.Variable('p'), 'snapshot', offset=1, wrap=False), 't').terms[0]
+        compiler()
+        .expression(program.Translate(program.VariableReference('p'), 'snapshot', offset=1, wrap=False), 't')
+        .terms[0]
     )
     assert '%' in query(cyclic.frame)
     assert '%' not in query(acyclic.frame)
@@ -263,7 +279,9 @@ def test_wrapping_is_modulo_and_acyclic_is_not():
 
 def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
     with pytest.raises(SpecsolveError, match='shift'):
-        compiler().expression(program.Translate(program.Parameter('cost'), 'snapshot', offset=1, wrap=True), 'test')
+        compiler().expression(
+            program.Translate(program.ParameterReference('cost'), 'snapshot', offset=1, wrap=True), 'test'
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +391,7 @@ def test_a_mask_reading_every_dim_filters_instead():
 
 
 def test_a_parameter_bound_joins_on_the_variable_frame():
-    variable = program.VariableDeclaration(('snapshot', 'generator'), upper=program.Parameter('cost'))
+    variable = program.Variable(('snapshot', 'generator'), upper=program.ParameterReference('cost'))
     bounded = compiler().bounds(VARIABLES['p'].frame, 'p', variable)
     assert {'lb', 'ub'} <= set(columns(bounded))
     assert joins(bounded) == 1
@@ -387,7 +405,7 @@ def test_a_constant_bound_needs_no_join_at_all():
 
 def test_a_side_the_program_leaves_open_is_an_infinite_column():
     """A program says an open side is `None`, and a relational sink reads an infinity in `lb` and `ub`."""
-    variable = program.VariableDeclaration(('snapshot', 'generator'), lower=None, upper=None)
+    variable = program.Variable(('snapshot', 'generator'), lower=None, upper=None)
     frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'var_label': [0]})
     bounded = compiler().bounds(frame, 'p', variable).select('lb', 'ub').collect()
     assert bounded.row(0) == (float('-inf'), float('inf')), 'an open side is the infinity on that side'
@@ -411,12 +429,12 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
         given={},
     )
     q = Compiler(Scope(PROGRAM, sources, VARIABLES))
-    shifted = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=0.0)
+    shifted = program.Translate(program.ParameterReference('load'), 'snapshot', 1, wrap=False, fill=0.0)
 
     rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
     assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
     assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
-    bare = program.Translate(program.Parameter('load'), 'snapshot', 1, wrap=False, fill=None)
+    bare = program.Translate(program.ParameterReference('load'), 'snapshot', 1, wrap=False, fill=None)
     vacated = q.expression(bare, 'test').consts[0].frame.collect().sort('snapshot')
     assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

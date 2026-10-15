@@ -229,7 +229,7 @@ def compile_predicate(
             return falsy_if_null(pl.col(flag))
         if isinstance(p, program.BooleanLiteral):
             return pl.lit(value=p.value)
-        if isinstance(p, program.NamedMask):
+        if isinstance(p, program.MaskReference):
             return walk(p.body)
         if isinstance(p, program.And):
             return walk(p.left) & walk(p.right)

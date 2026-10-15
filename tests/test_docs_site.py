@@ -179,7 +179,7 @@ def test_the_translation_table_names_every_built_in_operator():
 
 def _gen_bus_lookup(program: Any) -> Any:
     """One map joined as a lookup, ``at(x, by=gen_bus[bus])``."""
-    gen_bus = program.RelationDeclaration((('g', 'g'), ('bus', 'bus')), ('g',))
+    gen_bus = program.Relation((('g', 'g'), ('bus', 'bus')), ('g',))
     return program.JoinColumns('gen_bus', gen_bus, joined=('bus',), grouped=('g',))
 
 
@@ -197,25 +197,25 @@ def test_the_plan_table_names_every_expression_node():
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
     rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
 
-    x = program.Variable('x')
+    x = program.VariableReference('x')
     nodes = {
         type(node).__name__: node
         for node in (
             program.Constant(1.0),
-            program.Parameter('p'),
+            program.ParameterReference('p'),
             x,
             program.Dual('c'),
             program.Negate(x),
             program.Add(x, x),
             program.Multiply(x, x),
-            program.Divide(x, program.Parameter('p')),
-            program.Power(program.Parameter('p'), program.Constant(2.0)),
+            program.Divide(x, program.ParameterReference('p')),
+            program.Power(program.ParameterReference('p'), program.Constant(2.0)),
             program.Sum(x, (program.Axis('t'),)),
             program.Join(x, _gen_bus_lookup(program)),
             program.Translate(x, 't', 1, wrap=False),
             program.WindowSum(x, 't', 3, wrap=False),
             program.Cases((program.Region(program.Mask(program.BooleanLiteral(True)), x),)),
-            program.NamedExpression('e', x),
+            program.ExpressionReference('e', x),
         )
     }
     assert set(nodes) == {c.__name__ for c in get_args(program.Expression)}, (

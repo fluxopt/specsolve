@@ -99,7 +99,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
-| a parameter or a relation with no row at a coordinate, under the default `missing: refused` | names the first such coordinate and how many more have no row ([a missing row](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#a-missing-row)) |
+| a parameter or a relation with no row at a coordinate, under the default `missing: refused` | names the first such coordinate and how many more have no row ([a missing row](https://mathspec.readthedocs.io/en/latest/reference/language/parameters-variables-constraints/#a-missing-row)) |
 | a `missing: neutral` divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
 | a comparison's whole constant side with no value where the row is built, from a `missing: neutral` parameter | names the constraint |
 | a `missing: neutral` bound parameter with no value where the variable exists | names the models the repairs build |

@@ -22,11 +22,11 @@ import polars as pl
 import pytest
 from mathspec.program import (
     Add,
+    ExpressionReference,
     Join,
-    NamedExpression,
     Negate,
     Sum,
-    Variable,
+    VariableReference,
 )
 
 import specsolve as sps
@@ -80,7 +80,7 @@ def _flatten(expr):
         return _flatten(expr.left) + _flatten(expr.right)
     if isinstance(expr, Negate):
         return _flatten(expr.operand)
-    if isinstance(expr, NamedExpression):
+    if isinstance(expr, ExpressionReference):
         return _flatten(expr.body)
     return [expr]
 
@@ -96,10 +96,10 @@ def test_sum_lowers_to_one_node_per_injection_term():
         for t in terms
         if isinstance(t, Sum) and isinstance(t.operand, Join)
     }
-    assert (Variable('p'), ('generator',), 'gen_bus', ('bus',)) in grouped, (
+    assert (VariableReference('p'), ('generator',), 'gen_bus', ('bus',)) in grouped, (
         'generation is grouped out of generator onto bus, through gen_bus and nothing else'
     )
-    assert (Variable('f'), ('line',), 'line_to', ('bus',)) in grouped, (
+    assert (VariableReference('f'), ('line',), 'line_to', ('bus',)) in grouped, (
         'inflow is grouped out of line onto bus, through line_to and nothing else'
     )
 

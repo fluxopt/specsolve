@@ -18,23 +18,23 @@ from mathspec.program import (
     Add,
     Axis,
     Constant,
-    ConstraintDeclaration,
-    DimensionDeclaration,
+    Constraint,
+    Dimension,
     Expression,
     Join,
     JoinColumns,
     Mask,
     Multiply,
     Negate,
-    ObjectiveDeclaration,
+    Objective,
     Parameter,
     ParameterComparison,
-    ParameterDeclaration,
+    ParameterReference,
     Program,
-    RelationDeclaration,
+    Relation,
     Sum,
     Variable,
-    VariableDeclaration,
+    VariableReference,
 )
 from mathspec.spec import Spec
 
@@ -85,30 +85,33 @@ def dispatch_data():
 def dispatch_program() -> Program:
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'load': ParameterDeclaration(('snapshot',)),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'load': Parameter(('snapshot',)),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
                 where=Mask(ParameterComparison('p_max', '>', 0, ('generator',))),
                 lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                upper=ParameterReference('p_max'),
             )
         },
         constraints={
-            'power_balance': ConstraintDeclaration(
+            'power_balance': Constraint(
                 ('snapshot',),
-                lhs=Sum(Variable('p'), over=(Axis('generator'),)),
+                lhs=Sum(VariableReference('p'), over=(Axis('generator'),)),
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load'),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
+        objective=Objective(
+            'minimize',
+            Sum(
+                Multiply(VariableReference('p'), ParameterReference('cost')), over=(Axis('generator'), Axis('snapshot'))
+            ),
         ),
-        dimensions={'snapshot': DimensionDeclaration(dtype='int', ordered=True), 'generator': DimensionDeclaration()},
+        dimensions={'snapshot': Dimension(dtype='int', ordered=True), 'generator': Dimension()},
     )
 
 
@@ -201,9 +204,9 @@ def dispatch_linopy_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 #: The transport network's wiring, as the three maps a nodal balance reads.
 WIRING = {
-    'gen_bus': RelationDeclaration((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
-    'from': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
-    'to': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'gen_bus': Relation((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
+    'from': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'to': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
 }
 
 
@@ -217,47 +220,50 @@ def _onto_bus(operand: Expression, name: str) -> Sum:
 def transport_program() -> Program:
     injection = Add(
         Add(
-            _onto_bus(Variable('p'), 'gen_bus'),
-            _onto_bus(Variable('f'), 'to'),
+            _onto_bus(VariableReference('p'), 'gen_bus'),
+            _onto_bus(VariableReference('f'), 'to'),
         ),
-        Negate(_onto_bus(Variable('f'), 'from')),
+        Negate(_onto_bus(VariableReference('f'), 'from')),
     )
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'cap': ParameterDeclaration(('line',)),
-            'cap_low': ParameterDeclaration(('line',)),
-            'load': ParameterDeclaration(('snapshot', 'bus')),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'cap': Parameter(('line',)),
+            'cap_low': Parameter(('line',)),
+            'load': Parameter(('snapshot', 'bus')),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
                 lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                upper=ParameterReference('p_max'),
             ),
-            'f': VariableDeclaration(
+            'f': Variable(
                 ('snapshot', 'line'),
-                lower=Parameter('cap_low'),
-                upper=Parameter('cap'),
+                lower=ParameterReference('cap_low'),
+                upper=ParameterReference('cap'),
             ),
         },
         constraints={
-            'balance': ConstraintDeclaration(
+            'balance': Constraint(
                 ('snapshot', 'bus'),
                 lhs=injection,
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load'),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
+        objective=Objective(
+            'minimize',
+            Sum(
+                Multiply(VariableReference('p'), ParameterReference('cost')), over=(Axis('generator'), Axis('snapshot'))
+            ),
         ),
         dimensions={
-            'snapshot': DimensionDeclaration(dtype='int', ordered=True),
-            'bus': DimensionDeclaration(),
-            'generator': DimensionDeclaration(),
-            'line': DimensionDeclaration(),
+            'snapshot': Dimension(dtype='int', ordered=True),
+            'bus': Dimension(),
+            'generator': Dimension(),
+            'line': Dimension(),
         },
         relations=WIRING,
     )

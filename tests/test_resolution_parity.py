@@ -88,7 +88,7 @@ COVERED_ELSEWHERE = {
     'RelationPairComparison': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
     'RelationDefined': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
     'JoinedPredicate': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
-    'NamedMask': 'tests/test_resolution_parity.py::test_a_named_mask_builds_the_model_its_where_builds',
+    'MaskReference': 'tests/test_resolution_parity.py::test_a_named_mask_builds_the_model_its_where_builds',
 }
 
 

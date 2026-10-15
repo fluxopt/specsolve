@@ -704,7 +704,7 @@ def sources_annotations(doors: dict[str, Any]) -> set[str]:
 
 def _gen_bus_joins(program: Any) -> tuple[Any, Any]:
     """One map joined both ways: a sum by ``gen_bus[bus]``, and a lookup ``at(x, by=gen_bus[bus])``."""
-    gen_bus = program.RelationDeclaration((('g', 'g'), ('bus', 'bus')), ('g',))
+    gen_bus = program.Relation((('g', 'g'), ('bus', 'bus')), ('g',))
     return (
         program.JoinColumns('gen_bus', gen_bus, joined=('g',), grouped=('bus',)),
         program.JoinColumns('gen_bus', gen_bus, joined=('bus',), grouped=('g',)),
@@ -720,7 +720,7 @@ def test_every_shape_operator_declares_its_fan_in():
 
     from specsolve.relational.engine.pieces import fan_in
 
-    x = program.Variable('x')
+    x = program.VariableReference('x')
     grouping, lookup = _gen_bus_joins(program)
     declared = {
         label: fan_in(node)
