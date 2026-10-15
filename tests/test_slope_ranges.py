@@ -54,6 +54,7 @@ def test_measuring_the_range_leaves_the_model_as_it_was():
     [
         pytest.param(30.0, True, id='between-the-slopes'),
         pytest.param(10.0, True, id='on-an-end'),
+        pytest.param(50.00001, True, id='past-an-end-by-less-than-the-tolerance'),
         pytest.param(9.999, False, id='just-below'),
         pytest.param(50.01, False, id='just-above'),
     ],
