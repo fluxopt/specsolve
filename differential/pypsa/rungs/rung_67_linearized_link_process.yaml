@@ -1,0 +1,997 @@
+version: 0
+description: '`n.optimize(linearized_unit_commitment=True)`, as a patch over `examples/pypsa.yaml`. The
+  status, its starts and its stops of a committable generator, link and process are shares in [0, 1] rather
+  than integers, and four rows PyPSA adds only under the keyword tighten the relaxation of a unit with
+  a fixed build whose start and stop cost the same in every snapshot and every scenario (`constraints.py:599-699`).
+  A modular committable unit is refused, as PyPSA refuses it. Every other row is the integer run''s.'
+dimensions:
+  scenario: {dtype: str, description: 'the futures dispatch is chosen in, each with a weight'}
+  snapshot: {dtype: datetime, ordered: true, description: dispatch periods}
+  bus: {dtype: str, description: network nodes}
+  generator: {dtype: str, description: 'generating units, each on one bus'}
+  link: {dtype: str, description: 'controllable connections, each from one bus to the buses it delivers
+      to'}
+  link_output: {dtype: str, description: 'a link''s output ports, one label per port a link declares —
+      PyPSA''s `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term
+      in the balance, data prep'}
+  process: {dtype: str, description: 'generalized multi-port converters, each with an internal power that
+      every port draws or delivers at its own rate'}
+  process_output: {dtype: str, description: 'a process''s ports, one label per port a process declares
+      — PyPSA''s `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is
+      one term in the balance, data prep'}
+  load: {dtype: str, description: 'demands, each on one bus'}
+  period: {dtype: int, ordered: true, description: investment periods — PyPSA's `investment_periods`}
+relations:
+  snapshot_period: {key: snapshot, values: period, description: the investment period a snapshot falls
+      in}
+  Generator_bus: {key: generator, values: bus, description: the bus a generator sits on}
+  Link_bus0: {key: link, values: bus, description: the bus a link leaves}
+  Link_output_link: {key: link_output, values: link, description: the link an output port belongs to}
+  Link_output_bus: {key: link_output, values: bus, description: 'the bus an output port delivers to —
+      PyPSA''s `bus1`, `bus2`, … columns. A link of three output ports is three labels here rather than
+      a third relation, so the file states any number of them'}
+  Process_output_process: {key: process_output, values: process, description: the process a port belongs
+      to}
+  Process_output_bus: {key: process_output, values: bus, description: 'the bus a port draws from or delivers
+      to — PyPSA''s `bus0`, `bus1`, … columns. A process of three ports is three labels here rather than
+      a third relation, so the file states any number of them'}
+  Load_bus: {key: load, values: bus, description: the bus a load sits on}
+parameters:
+  snapshot_weightings_objective:
+    dims: [snapshot]
+    dtype: float
+    description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
+  Generator_p_nom:
+    dims: [scenario, generator]
+    dtype: float
+    description: nominal power
+  Generator_p_nom_extendable:
+    dims: [generator]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Generator_p_min_pu:
+    dims: [scenario, snapshot, generator]
+    dtype: float
+    description: least output, per unit of nominal power
+  Generator_p_max_pu:
+    dims: [scenario, snapshot, generator]
+    dtype: float
+    description: most output, per unit of nominal power — an availability profile
+  Generator_marginal_cost:
+    dims: [scenario, snapshot, generator]
+    dtype: float
+    description: cost of one unit of output
+  Generator_marginal_cost_quadratic:
+    dims: [scenario, snapshot, generator]
+    dtype: float
+    description: cost of the square of one unit of output
+  Generator_sign:
+    dims: [generator]
+    dtype: float
+    description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
+      for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`)
+  Generator_committable:
+    dims: [generator]
+    dtype: bool
+    description: whether output is gated by an on/off status decision
+  Link_ramp_limit_up:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    missing: neutral
+    description: most a link may raise its flow between snapshots, per unit of nominal power; no value
+      means no limit — read at the later of the two snapshots, so the limit may change over time
+  Link_ramp_limit_down:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    missing: neutral
+    description: most a link may lower its flow between snapshots, per unit of nominal power; no value
+      means no limit — read at the later of the two snapshots, so the limit may change over time
+  Link_p_nom:
+    dims: [scenario, link]
+    dtype: float
+    description: nominal power
+  Link_p_nom_extendable:
+    dims: [link]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Link_p_min_pu:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: least flow, per unit of nominal power — negative for a link that carries both ways
+  Link_p_max_pu:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: most flow, per unit of nominal power
+  Link_efficiency:
+    dims: [scenario, snapshot, link_output]
+    dtype: float
+    description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
+      … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow
+      arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1498`)
+  Link_output_delay:
+    dims: [link_output]
+    dtype: int
+    description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
+      long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for
+      a port that delivers at once. A port has the same delay in every scenario, because PyPSA refuses
+      a delay that differs by scenario (`constants.py:52`)
+  Link_output_cyclic_delay:
+    dims: [link_output]
+    dtype: bool
+    description: whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots
+      is lost. The flag is the same in every scenario, as the delay is
+  Link_marginal_cost:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: cost of one unit of flow
+  Link_marginal_cost_quadratic:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: cost of the square of one unit of flow
+  Link_committable:
+    dims: [link]
+    dtype: bool
+    description: whether flow is gated by an on/off status decision
+  Link_ramp_limit_start_up:
+    dims: [scenario, link]
+    dtype: float
+    missing: neutral
+    description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
+      limit
+  Link_ramp_limit_shut_down:
+    dims: [scenario, link]
+    dtype: float
+    missing: neutral
+    description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
+      no limit
+  Link_min_up_time:
+    dims: [scenario, link]
+    dtype: int
+    description: least snapshots a link stays on once started
+  Link_status_initial:
+    dims: [scenario, link]
+    dtype: int
+    description: one where the link was on before the first snapshot, zero where off — PyPSA's `up_time_before
+      > 0`, data prep
+  Link_p_init:
+    dims: [scenario, link]
+    dtype: float
+    missing: neutral
+    description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
+      came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
+  Link_start_up_cost:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: cost of one start in this snapshot
+  Link_shut_down_cost:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: cost of one stop in this snapshot
+  Link_stand_by_cost:
+    dims: [scenario, snapshot, link]
+    dtype: float
+    description: cost of one snapshot spent on
+  Link_p_nom_mod:
+    dims: [link]
+    dtype: float
+    missing: neutral
+    description: the module size a build comes in whole numbers of; no value means the build is continuous
+  Link_modules_installed:
+    dims: [scenario, link]
+    dtype: float
+    description: 'how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod`
+      where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
+      whose nominal power is not a whole number of modules'
+  Link_big_m:
+    dims: [scenario, link]
+    dtype: float
+    missing: neutral
+    description: the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max`
+      times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m`
+      times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the
+      peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is
+      none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data
+      prep
+  Link_p_min_pu_nonneg:
+    dims: [link]
+    dtype: bool
+    description: true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu
+      >= 0).all()` over every snapshot and scenario, data prep
+  Process_p_nom:
+    dims: [scenario, process]
+    dtype: float
+    description: nominal internal power
+  Process_p_nom_extendable:
+    dims: [process]
+    dtype: bool
+    description: whether the nominal internal power is a decision
+  Process_p_min_pu:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: least internal power, per unit of nominal power — negative for a process that runs both
+      ways
+  Process_p_max_pu:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: most internal power, per unit of nominal power
+  Process_rate:
+    dims: [scenario, snapshot, process_output]
+    dtype: float
+    description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
+      … read long — negative where the port withdraws, positive where it injects; a link is a process
+      whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot
+      the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`)
+  Process_output_delay:
+    dims: [process_output]
+    dtype: int
+    description: snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`,
+      … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep;
+      zero for a port that transfers at once. A port has the same delay in every scenario, as a link's
+      port has
+  Process_output_cyclic_delay:
+    dims: [process_output]
+    dtype: bool
+    description: whether a delayed port's transfer wraps from the end of its investment period — PyPSA's
+      `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's
+      first snapshots is lost. The flag is the same in every scenario, as the delay is
+  Process_marginal_cost:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: cost of one unit of internal power
+  Process_marginal_cost_quadratic:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: cost of the square of one unit of internal power
+  Process_ramp_limit_up:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    missing: neutral
+    description: most a process may raise its internal power between snapshots, per unit of nominal power;
+      no value means no limit — read at the later of the two snapshots, so the limit may change over time
+  Process_ramp_limit_down:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    missing: neutral
+    description: most a process may lower its internal power between snapshots, per unit of nominal power;
+      no value means no limit — read at the later of the two snapshots, so the limit may change over time
+  Process_committable:
+    dims: [process]
+    dtype: bool
+    description: whether internal power is gated by an on/off status decision
+  Process_ramp_limit_start_up:
+    dims: [scenario, process]
+    dtype: float
+    missing: neutral
+    description: most internal power in the snapshot a process starts, per unit of nominal power; no value
+      means no limit
+  Process_ramp_limit_shut_down:
+    dims: [scenario, process]
+    dtype: float
+    missing: neutral
+    description: most internal power in the snapshot before a process stops, per unit of nominal power;
+      no value means no limit
+  Process_min_up_time:
+    dims: [scenario, process]
+    dtype: int
+    description: least snapshots a process stays on once started
+  Process_status_initial:
+    dims: [scenario, process]
+    dtype: int
+    description: one where the process was on before the first snapshot, zero where off — PyPSA's `up_time_before
+      > 0`, data prep
+  Process_p_init:
+    dims: [scenario, process]
+    dtype: float
+    missing: neutral
+    description: the internal power a process brought into the horizon — PyPSA's `p_init`, read only where
+      the process came in running; no value means it is unknown, so the process carries no ramp row at
+      the first snapshot
+  Process_start_up_cost:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: cost of one start in this snapshot
+  Process_shut_down_cost:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: cost of one stop in this snapshot
+  Process_stand_by_cost:
+    dims: [scenario, snapshot, process]
+    dtype: float
+    description: cost of one snapshot spent on
+  Process_p_nom_mod:
+    dims: [process]
+    dtype: float
+    missing: neutral
+    description: the module size a build comes in whole numbers of; no value means the build is continuous
+  Process_modules_installed:
+    dims: [scenario, process]
+    dtype: float
+    description: 'how many whole modules a committable build has in place: `Process_p_nom / Process_p_nom_mod`
+      where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
+      whose nominal power is not a whole number of modules'
+  Load_p_set:
+    dims: [scenario, snapshot, load]
+    dtype: float
+    description: demand
+  Load_sign:
+    dims: [load]
+    dtype: float
+    description: the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`)
+  Load_active:
+    dims: [load]
+    dtype: bool
+    description: whether a load stands in the model — PyPSA's `active`. A load has no build year and no
+      lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`)
+  scenario_weight:
+    dims: [scenario]
+    dtype: float
+    description: PyPSA's `scenario_weightings.weight` — the probability of a future
+  period_weight_objective:
+    dims: [period]
+    dtype: float
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
+      reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
+      holds (`optimize.py:205-207`, `:264-266`)
+  Generator_active:
+    dims: [snapshot, generator]
+    dtype: bool
+    description: whether a generator stands in a snapshot's period — PyPSA's `active`, from build year
+      and lifetime, data prep
+  Link_active:
+    dims: [snapshot, link]
+    dtype: bool
+    description: whether a link stands in a snapshot's period — PyPSA's `active`, data prep
+  Process_active:
+    dims: [snapshot, process]
+    dtype: bool
+    description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
+  Link_capital_weight:
+    dims: [link]
+    dtype: float
+    description: the sum of period weights a link stands in — PyPSA's `active * period_weighting`, summed,
+      data prep
+  Link_p_nom_min:
+    dims: [scenario, link]
+    dtype: float
+    description: least nominal power an extendable link may be built at
+  Link_p_nom_max:
+    dims: [scenario, link]
+    dtype: float
+    description: most nominal power an extendable link may be built at
+  Link_capital_cost:
+    dims: [scenario, link]
+    dtype: float
+    description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
+      `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
+      and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
+      data prep'
+variables:
+  Generator_p:
+    dims: [scenario, snapshot, generator]
+    where: Generator_active
+    domain: continuous
+    missing: absent
+    description: '`Generator-p` — output of a generator in a snapshot'
+  Link_p:
+    dims: [scenario, snapshot, link]
+    where: Link_active
+    domain: continuous
+    missing: absent
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+      withdraws there and injects at every bus the link''s output ports deliver to'
+  Process_p:
+    dims: [scenario, snapshot, process]
+    where: Process_active
+    domain: continuous
+    missing: absent
+    description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its
+      own rate, withdrawing where the rate is negative and injecting where it is positive'
+  Link_status:
+    dims: [scenario, snapshot, link]
+    where: Link_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Link-status` — how much of a committable link is on, a share in [0, 1] rather than
+      an integer: the relaxation the keyword solves (`variables.py:86-87`)'
+  Link_start_up:
+    dims: [scenario, snapshot, link]
+    where: Link_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Link-start_up` — how much of a committable link turns on this snapshot, a share in
+      [0, 1] (`variables.py:137-138`)'
+  Link_shut_down:
+    dims: [scenario, snapshot, link]
+    where: Link_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Link-shut_down` — how much of a committable link turns off this snapshot, a share in
+      [0, 1] (`variables.py:188-189`)'
+  Process_status:
+    dims: [scenario, snapshot, process]
+    where: Process_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Process-status` — how much of a committable process is on, a share in [0, 1] rather
+      than an integer: the relaxation the keyword solves (`variables.py:86-87`)'
+  Process_start_up:
+    dims: [scenario, snapshot, process]
+    where: Process_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Process-start_up` — how much of a committable process turns on this snapshot, a share
+      in [0, 1] (`variables.py:137-138`)'
+  Process_shut_down:
+    dims: [scenario, snapshot, process]
+    where: Process_committed
+    bounds: {lower: 0.0, upper: 1.0}
+    domain: continuous
+    missing: absent
+    description: '`Process-shut_down` — how much of a committable process turns off this snapshot, a share
+      in [0, 1] (`variables.py:188-189`)'
+  Link_p_nom_ext:
+    dims: [link]
+    where: Link_p_nom_extendable
+    domain: continuous
+    missing: absent
+    description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
+      name carries the fixed regime'
+  Process_p_nom_ext:
+    dims: [process]
+    where: Process_p_nom_extendable
+    domain: continuous
+    missing: absent
+    description: '`Process-p_nom` — nominal internal power where it is a decision; the parameter of the
+      same PyPSA name carries the fixed regime'
+constraints:
+  Generator_fix_p_lower:
+    dims: [scenario, snapshot, generator]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
+    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
+  Generator_fix_p_upper:
+    dims: [scenario, snapshot, generator]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
+    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
+  Link_fix_p_lower:
+    dims: [scenario, snapshot, link]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p >= Link_p_min_pu * Link_p_nom
+    description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
+      way'
+  Link_fix_p_upper:
+    dims: [scenario, snapshot, link]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p <= Link_p_max_pu * Link_p_nom
+    description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
+  Link_ext_p_nom_lower:
+    dims: [scenario, link]
+    where: Link_p_nom_extendable
+    expression: Link_p_nom_ext >= Link_p_nom_min
+    description: '`Link-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
+  Link_ext_p_nom_upper:
+    dims: [scenario, link]
+    where: Link_p_nom_extendable AND Link_p_nom_max
+    expression: Link_p_nom_ext <= Link_p_nom_max
+    description: '`Link-ext-p_nom-upper` — the chosen build is at most its cap in every scenario; a cap
+      of infinity is no row'
+  Link_com_p_lower:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND NOT Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0)
+    expression: Link_p >= (Link_p_min_pu * Link_p_nom) * Link_status
+    description: '`Link-com-p-lower` — a committed link flows at least its minimum; off, at least nothing'
+  Link_com_p_upper:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND NOT Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0)
+    expression: Link_p <= (Link_p_max_pu * Link_p_nom) * Link_status
+    description: '`Link-com-p-upper` — a committed link flows at most what is available; off, at most
+      nothing'
+  Link_com_transition_start_up:
+    dims: [scenario, snapshot, link]
+    where: Link_committed
+    expression: Link_start_up >= Link_status - Link_previous_status
+    description: '`Link-com-transition-start-up` — turning on is a start, counted against the state the
+      link carried into the snapshot'
+  Link_com_transition_shut_down:
+    dims: [scenario, snapshot, link]
+    where: Link_committed
+    expression: Link_shut_down >= Link_previous_status - Link_status
+    description: '`Link-com-transition-shut-down` — turning off is a stop, counted against the state the
+      link carried into the snapshot'
+  Link_com_up_time:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND Link_min_up_time > 0 AND position(snapshot) > 0
+    expression: sum_back(Link_start_up, along=snapshot, window=Link_min_up_time) <= Link_status
+    description: '`Link-com-up-time` — a link started within its own minimum up time is still on. The
+      first snapshot''s share of the window is the brought-in up time''s, which the must-stay-up mask
+      carries'
+  Link_com_ext_p_upper_cap:
+    dims: [scenario, snapshot, link]
+    where: Link_com_ext
+    expression: Link_p <= Link_p_max_pu * Link_p_nom_ext
+    description: '`Link-com-ext-p-upper-cap` — a committed extendable link flows at most what is available
+      of the chosen build, whatever its status'
+  Link_com_ext_p_upper_big_m:
+    dims: [scenario, snapshot, link]
+    where: Link_com_ext
+    expression: Link_p <= Link_big_m * Link_status
+    description: '`Link-com-ext-p-upper-bigM` — off, a link flows nothing; on, the big M is no bound'
+  Link_com_ext_p_lower:
+    dims: [scenario, snapshot, link]
+    where: Link_com_ext
+    expression: Link_p >= ((Link_p_min_pu * Link_p_nom_ext) + (Link_big_m * Link_status)) - Link_big_m
+    description: '`Link-com-ext-p-lower` — a committed extendable link flows at least its minimum of the
+      chosen build; off, the big M releases the row'
+  Link_com_ext_p_lower_nonneg:
+    dims: [scenario, snapshot, link]
+    where: Link_com_ext AND Link_p_min_pu_nonneg
+    expression: Link_p >= 0
+    description: '`Link-com-ext-p-lower-nonneg` — where no minimum-per-unit is negative, flow is also
+      plainly non-negative, a row the big-M lower cannot assert while the link is off'
+  Link_status_p_fixed_upper:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_status <= Link_modules_installed
+    description: '`Link-status-p-fixed-upper` — a status is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Link_start_up_p_fixed_upper:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_start_up <= Link_modules_installed
+    description: '`Link-start_up-p-fixed-upper` — a start is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Link_shut_down_p_fixed_upper:
+    dims: [scenario, snapshot, link]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_shut_down <= Link_modules_installed
+    description: '`Link-shut_down-p-fixed-upper` — a stop is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Process_com_p_lower:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND NOT Process_p_nom_extendable AND NOT (Process_p_nom_mod > 0)
+    expression: Process_p >= (Process_p_min_pu * Process_p_nom) * Process_status
+    description: '`Process-com-p-lower` — a committed process runs at least its minimum; off, at least
+      nothing'
+  Process_com_p_upper:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND NOT Process_p_nom_extendable AND NOT (Process_p_nom_mod > 0)
+    expression: Process_p <= (Process_p_max_pu * Process_p_nom) * Process_status
+    description: '`Process-com-p-upper` — a committed process runs at most what is available; off, at
+      most nothing'
+  Process_com_transition_start_up:
+    dims: [scenario, snapshot, process]
+    where: Process_committed
+    expression: Process_start_up >= Process_status - Process_previous_status
+    description: '`Process-com-transition-start-up` — turning on is a start, counted against the state
+      the process carried into the snapshot'
+  Process_com_transition_shut_down:
+    dims: [scenario, snapshot, process]
+    where: Process_committed
+    expression: Process_shut_down >= Process_previous_status - Process_status
+    description: '`Process-com-transition-shut-down` — turning off is a stop, counted against the state
+      the process carried into the snapshot'
+  Process_com_up_time:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND Process_min_up_time > 0 AND position(snapshot) > 0
+    expression: sum_back(Process_start_up, along=snapshot, window=Process_min_up_time) <= Process_status
+    description: '`Process-com-up-time` — a process started within its own minimum up time is still on.
+      The first snapshot''s share of the window is the brought-in up time''s, which the must-stay-up mask
+      carries'
+  Process_status_p_fixed_upper:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_status <= Process_modules_installed
+    description: '`Process-status-p-fixed-upper` — a status is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Process_start_up_p_fixed_upper:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_start_up <= Process_modules_installed
+    description: '`Process-start_up-p-fixed-upper` — a start is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Process_shut_down_p_fixed_upper:
+    dims: [scenario, snapshot, process]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_shut_down <= Process_modules_installed
+    description: '`Process-shut_down-p-fixed-upper` — a stop is at most the modules in place, an explicit
+      row as PyPSA writes it: one where the build is not modular, and the fixed build''s whole count of
+      modules where it is'
+  Link_p_ramp_limit_up:
+    dims: [scenario, snapshot, link]
+    where: (Link_ramp_limit_up OR Link_ramp_limit_start_up) AND NOT (Link_committable AND Link_p_nom_extendable
+      AND NOT (Link_p_nom_mod > 0)) AND Link_ramps_from_previous AND Link_active
+    expression: Link_p - Link_previous_p <= Link_ramp_up_allowance
+    description: '`Link-p-ramp_limit_up` — a link raises flow no faster than its ramp limit of the build,
+      and a committed one no further than its start-up ramp in the snapshot it turns on. A link that came
+      into the horizon running carries a row at the first snapshot only where its `p_init` gives the flow
+      it brought in, and no link carries one at the start of a later investment period — nor does any
+      link a big M releases instead'
+  Link_p_ramp_limit_down:
+    dims: [scenario, snapshot, link]
+    where: (Link_ramp_limit_down OR Link_ramp_limit_shut_down) AND NOT (Link_committable AND Link_p_nom_extendable
+      AND NOT (Link_p_nom_mod > 0)) AND Link_ramps_from_previous AND Link_active
+    expression: Link_previous_p - Link_p <= Link_ramp_down_allowance
+    description: '`Link-p-ramp_limit_down` — a link lowers flow no faster than its ramp limit of the build,
+      and a committed one no further than its shut-down ramp in the snapshot it turns off. A link that
+      came into the horizon running carries a row at the first snapshot only where its `p_init` gives
+      the flow it brought in, and no link carries one at the start of a later investment period — nor
+      does any link a big M releases instead'
+  Process_p_ramp_limit_up:
+    dims: [scenario, snapshot, process]
+    where: (Process_ramp_limit_up OR Process_ramp_limit_start_up) AND NOT (Process_committable AND Process_p_nom_extendable
+      AND NOT (Process_p_nom_mod > 0)) AND Process_ramps_from_previous AND Process_active
+    expression: Process_p - Process_previous_p <= Process_ramp_up_allowance
+    description: '`Process-p-ramp_limit_up` — a process raises internal power no faster than its ramp
+      limit of the build, and a committed one no further than its start-up ramp in the snapshot it turns
+      on. A process that came into the horizon running carries a row at the first snapshot only where
+      its `p_init` gives the internal power it brought in, and no process carries one at the start of
+      a later investment period — nor does any process a big M releases instead'
+  Process_p_ramp_limit_down:
+    dims: [scenario, snapshot, process]
+    where: (Process_ramp_limit_down OR Process_ramp_limit_shut_down) AND NOT (Process_committable AND
+      Process_p_nom_extendable AND NOT (Process_p_nom_mod > 0)) AND Process_ramps_from_previous AND Process_active
+    expression: Process_previous_p - Process_p <= Process_ramp_down_allowance
+    description: '`Process-p-ramp_limit_down` — a process lowers internal power no faster than its ramp
+      limit of the build, and a committed one no further than its shut-down ramp in the snapshot it turns
+      off. A process that came into the horizon running carries a row at the first snapshot only where
+      its `p_init` gives the internal power it brought in, and no process carries one at the start of
+      a later investment period — nor does any process a big M releases instead'
+  Bus_nodal_balance:
+    dims: [scenario, snapshot, bus]
+    expression: Bus_injection == 0
+    description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
+      less what the links take away, plus what arrives over them after losses and any delay at every port
+      they deliver to, each process port drawing or delivering at its own rate and each passive branch
+      carrying its flow, meets the load there, less half of every incident line''s and transformer''s
+      loss — PyPSA dissipates a branch''s loss half at either end. Each generator, storage unit, store
+      and load term enters with its component''s `sign` (`constraints.py:1404-1405`, `:1514`), and an
+      inactive load not at all. A bus nothing is attached to has no row; PyPSA refuses one that carries
+      load, and this file does not yet.'
+  Link_com_p_before:
+    dims: [scenario, snapshot, link]
+    where: Link_committable AND NOT Link_p_nom_extendable AND count(count(Link_start_up_cost != Link_shut_down_cost,
+      over=snapshot) > 0, over=scenario) == 0 AND Link_active
+    expression: shift(Link_p, along=snapshot, offset=1) - Link_shut_down_rate * Link_p_nom * shift(Link_status,
+      along=snapshot, offset=1) - (Link_p_max_pu * Link_p_nom - Link_shut_down_rate * Link_p_nom) * (Link_status
+      - Link_start_up) <= 0
+    description: '`Link-com-p-before` — the output a link had entering this snapshot fits the share of
+      it still on, less the share it is shutting down at the shut-down ramp (`constraints.py:635-649`).
+      The translated terms vacate the first snapshot, as PyPSA''s `sns[1:]` does'
+  Link_com_p_current:
+    dims: [scenario, snapshot, link]
+    where: Link_committable AND NOT Link_p_nom_extendable AND count(count(Link_start_up_cost != Link_shut_down_cost,
+      over=snapshot) > 0, over=scenario) == 0 AND position(snapshot) > 0 AND Link_active
+    expression: Link_p - Link_p_max_pu * Link_p_nom * Link_status + (Link_p_max_pu * Link_p_nom - Link_start_up_rate
+      * Link_p_nom) * Link_start_up <= 0
+    description: '`Link-com-p-current` — output fits the share on, and the share starting up only up to
+      the start-up ramp (`constraints.py:652-665`)'
+  Link_com_partly_start_up:
+    dims: [scenario, snapshot, link]
+    where: Link_committable AND NOT Link_p_nom_extendable AND count(count(Link_start_up_cost != Link_shut_down_cost,
+      over=snapshot) > 0, over=scenario) == 0 AND Link_active
+    expression: Link_p - shift(Link_p, along=snapshot, offset=1) - (Link_p_min_pu * Link_p_nom + Link_ramp_up_rate
+      * Link_p_nom) * Link_status + Link_p_min_pu * Link_p_nom * shift(Link_status, along=snapshot, offset=1)
+      + (Link_p_min_pu * Link_p_nom + Link_ramp_up_rate * Link_p_nom - Link_start_up_rate * Link_p_nom)
+      * Link_start_up <= 0
+    description: '`Link-com-partly-start-up` — raising output while a share is starting up is bounded
+      by the ramp of the share on and the start-up ramp of the share coming on (`constraints.py:667-682`)'
+  Link_com_partly_shut_down:
+    dims: [scenario, snapshot, link]
+    where: Link_committable AND NOT Link_p_nom_extendable AND count(count(Link_start_up_cost != Link_shut_down_cost,
+      over=snapshot) > 0, over=scenario) == 0 AND Link_active
+    expression: shift(Link_p, along=snapshot, offset=1) - Link_p - Link_shut_down_rate * Link_p_nom *
+      shift(Link_status, along=snapshot, offset=1) + (Link_shut_down_rate * Link_p_nom - Link_ramp_down_rate
+      * Link_p_nom) * Link_status - (Link_p_min_pu * Link_p_nom + Link_ramp_down_rate * Link_p_nom - Link_shut_down_rate
+      * Link_p_nom) * Link_start_up <= 0
+    description: '`Link-com-partly-shut-down` — lowering output while a share is shutting down is bounded
+      likewise, by the shut-down ramp (`constraints.py:684-699`)'
+  Process_com_p_before:
+    dims: [scenario, snapshot, process]
+    where: Process_committable AND NOT Process_p_nom_extendable AND count(count(Process_start_up_cost
+      != Process_shut_down_cost, over=snapshot) > 0, over=scenario) == 0 AND Process_active
+    expression: shift(Process_p, along=snapshot, offset=1) - Process_shut_down_rate * Process_p_nom *
+      shift(Process_status, along=snapshot, offset=1) - (Process_p_max_pu * Process_p_nom - Process_shut_down_rate
+      * Process_p_nom) * (Process_status - Process_start_up) <= 0
+    description: '`Process-com-p-before` — the output a process had entering this snapshot fits the share
+      of it still on, less the share it is shutting down at the shut-down ramp (`constraints.py:635-649`).
+      The translated terms vacate the first snapshot, as PyPSA''s `sns[1:]` does'
+  Process_com_p_current:
+    dims: [scenario, snapshot, process]
+    where: Process_committable AND NOT Process_p_nom_extendable AND count(count(Process_start_up_cost
+      != Process_shut_down_cost, over=snapshot) > 0, over=scenario) == 0 AND position(snapshot) > 0 AND
+      Process_active
+    expression: Process_p - Process_p_max_pu * Process_p_nom * Process_status + (Process_p_max_pu * Process_p_nom
+      - Process_start_up_rate * Process_p_nom) * Process_start_up <= 0
+    description: '`Process-com-p-current` — output fits the share on, and the share starting up only up
+      to the start-up ramp (`constraints.py:652-665`)'
+  Process_com_partly_start_up:
+    dims: [scenario, snapshot, process]
+    where: Process_committable AND NOT Process_p_nom_extendable AND count(count(Process_start_up_cost
+      != Process_shut_down_cost, over=snapshot) > 0, over=scenario) == 0 AND Process_active
+    expression: Process_p - shift(Process_p, along=snapshot, offset=1) - (Process_p_min_pu * Process_p_nom
+      + Process_ramp_up_rate * Process_p_nom) * Process_status + Process_p_min_pu * Process_p_nom * shift(Process_status,
+      along=snapshot, offset=1) + (Process_p_min_pu * Process_p_nom + Process_ramp_up_rate * Process_p_nom
+      - Process_start_up_rate * Process_p_nom) * Process_start_up <= 0
+    description: '`Process-com-partly-start-up` — raising output while a share is starting up is bounded
+      by the ramp of the share on and the start-up ramp of the share coming on (`constraints.py:667-682`)'
+  Process_com_partly_shut_down:
+    dims: [scenario, snapshot, process]
+    where: Process_committable AND NOT Process_p_nom_extendable AND count(count(Process_start_up_cost
+      != Process_shut_down_cost, over=snapshot) > 0, over=scenario) == 0 AND Process_active
+    expression: shift(Process_p, along=snapshot, offset=1) - Process_p - Process_shut_down_rate * Process_p_nom
+      * shift(Process_status, along=snapshot, offset=1) + (Process_shut_down_rate * Process_p_nom - Process_ramp_down_rate
+      * Process_p_nom) * Process_status - (Process_p_min_pu * Process_p_nom + Process_ramp_down_rate *
+      Process_p_nom - Process_shut_down_rate * Process_p_nom) * Process_start_up <= 0
+    description: '`Process-com-partly-shut-down` — lowering output while a share is shutting down is bounded
+      likewise, by the shut-down ramp (`constraints.py:684-699`)'
+expressions:
+  Link_p_nom_effective:
+    dims: [scenario, link]
+    description: the build a link's limits are taken against — the chosen one where it is extendable,
+      the given one otherwise
+    cases:
+      extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_ext}
+    otherwise: Link_p_nom
+  Link_previous_status:
+    dims: [scenario, snapshot, link]
+    description: the commitment state a link carries into a snapshot — off at the first snapshot it stands
+      in past the first of the horizon, as PyPSA reads a status it did not build (`constraints.py:298`),
+      and the state carried over otherwise
+    cases:
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Link_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Link_status_carried_over
+  Link_status_carried_over:
+    dims: [scenario, snapshot, link]
+    description: the state a link carries over into a snapshot — the state it brought into the horizon
+      at the first, the previous snapshot's after that
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Link_status_initial}
+    otherwise: shift(Link_status, along=snapshot, offset=1)
+  Link_previous_p:
+    dims: [scenario, snapshot, link]
+    description: the flow a link carries into a snapshot — at the first, the `p_init` it brought in where
+      it came in running and nothing where it came in off; the previous snapshot's after that
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Link_status_initial * Link_p_init}
+    otherwise: shift(Link_p, along=snapshot, offset=1)
+  Link_ramp_up_rate:
+    dims: [scenario, snapshot, link]
+    description: the ramp limit a link's up row reads — PyPSA's `ramp_limit_up`, or the full build where
+      it has none, since a start-up ramp alone builds the row
+    cases:
+      given: {when: Link_ramp_limit_up, expression: Link_ramp_limit_up}
+    otherwise: '1'
+  Link_ramp_down_rate:
+    dims: [scenario, snapshot, link]
+    description: the ramp limit a link's down row reads — PyPSA's `ramp_limit_down`, or the full build
+      where it has none, since a shut-down ramp alone builds the row
+    cases:
+      given: {when: Link_ramp_limit_down, expression: Link_ramp_limit_down}
+    otherwise: '1'
+  Link_start_up_rate:
+    dims: [scenario, link]
+    description: the start-up ramp a link's up row reads — PyPSA's `ramp_limit_start_up`, or the full
+      build where it has none
+    cases:
+      given: {when: Link_ramp_limit_start_up, expression: Link_ramp_limit_start_up}
+    otherwise: '1'
+  Link_shut_down_rate:
+    dims: [scenario, link]
+    description: the shut-down ramp a link's down row reads — PyPSA's `ramp_limit_shut_down`, or the full
+      build where it has none
+    cases:
+      given: {when: Link_ramp_limit_shut_down, expression: Link_ramp_limit_shut_down}
+    otherwise: '1'
+  Link_p_nom_committed:
+    dims: [scenario, link]
+    description: the build a committed link's ramp rows are taken against — one module where the build
+      is extendable and modular, the given build otherwise
+    cases:
+      modular_build: {when: Link_p_nom_extendable AND Link_p_nom_mod > 0, expression: Link_p_nom_mod}
+    otherwise: Link_p_nom
+  Link_ramp_up_allowance:
+    dims: [scenario, snapshot, link]
+    description: how far a link may raise flow between two snapshots — its ramp limit of the build while
+      it stays on, plus its start-up ramp in the snapshot it turns on
+    cases:
+      committed: {when: Link_committable, expression: Link_ramp_up_rate * Link_p_nom_committed * Link_previous_status
+          + Link_start_up_rate * Link_p_nom_committed * (Link_status - Link_previous_status)}
+    otherwise: Link_ramp_up_rate * Link_p_nom_effective
+  Link_ramp_down_allowance:
+    dims: [scenario, snapshot, link]
+    description: how far a link may lower flow between two snapshots — its ramp limit of the build while
+      it stays on, plus its shut-down ramp in the snapshot it turns off
+    cases:
+      committed: {when: Link_committable, expression: Link_ramp_down_rate * Link_p_nom_committed * Link_status
+          + Link_shut_down_rate * Link_p_nom_committed * (Link_previous_status - Link_status)}
+    otherwise: Link_ramp_down_rate * Link_p_nom_effective
+  Process_p_nom_effective:
+    dims: [scenario, process]
+    description: the build a process's limits are taken against — the chosen one where it is extendable,
+      the given one otherwise
+    cases:
+      extendable: {when: Process_p_nom_extendable, expression: Process_p_nom_ext}
+    otherwise: Process_p_nom
+  Process_previous_status:
+    dims: [scenario, snapshot, process]
+    description: the commitment state a process carries into a snapshot — off at the first snapshot it
+      stands in past the first of the horizon, as PyPSA reads a status it did not build (`constraints.py:298`),
+      and the state carried over otherwise
+    cases:
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Process_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Process_status_carried_over
+  Process_status_carried_over:
+    dims: [scenario, snapshot, process]
+    description: the state a process carries over into a snapshot — the state it brought into the horizon
+      at the first, the previous snapshot's after that
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Process_status_initial}
+    otherwise: shift(Process_status, along=snapshot, offset=1)
+  Process_previous_p:
+    dims: [scenario, snapshot, process]
+    description: the internal power a process carries into a snapshot — at the first, the `p_init` it
+      brought in where it came in running and nothing where it came in off; the previous snapshot's after
+      that
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Process_status_initial * Process_p_init}
+    otherwise: shift(Process_p, along=snapshot, offset=1)
+  Process_ramp_up_rate:
+    dims: [scenario, snapshot, process]
+    description: the ramp limit a process's up row reads — PyPSA's `ramp_limit_up`, or the full build
+      where it has none, since a start-up ramp alone builds the row
+    cases:
+      given: {when: Process_ramp_limit_up, expression: Process_ramp_limit_up}
+    otherwise: '1'
+  Process_ramp_down_rate:
+    dims: [scenario, snapshot, process]
+    description: the ramp limit a process's down row reads — PyPSA's `ramp_limit_down`, or the full build
+      where it has none, since a shut-down ramp alone builds the row
+    cases:
+      given: {when: Process_ramp_limit_down, expression: Process_ramp_limit_down}
+    otherwise: '1'
+  Process_start_up_rate:
+    dims: [scenario, process]
+    description: the start-up ramp a process's up row reads — PyPSA's `ramp_limit_start_up`, or the full
+      build where it has none
+    cases:
+      given: {when: Process_ramp_limit_start_up, expression: Process_ramp_limit_start_up}
+    otherwise: '1'
+  Process_shut_down_rate:
+    dims: [scenario, process]
+    description: the shut-down ramp a process's down row reads — PyPSA's `ramp_limit_shut_down`, or the
+      full build where it has none
+    cases:
+      given: {when: Process_ramp_limit_shut_down, expression: Process_ramp_limit_shut_down}
+    otherwise: '1'
+  Process_p_nom_committed:
+    dims: [scenario, process]
+    description: the build a committed process's ramp rows are taken against — one module where the build
+      is extendable and modular, the given build otherwise
+    cases:
+      modular_build: {when: Process_p_nom_extendable AND Process_p_nom_mod > 0, expression: Process_p_nom_mod}
+    otherwise: Process_p_nom
+  Process_ramp_up_allowance:
+    dims: [scenario, snapshot, process]
+    description: how far a process may raise internal power between two snapshots — its ramp limit of
+      the build while it stays on, plus its start-up ramp in the snapshot it turns on
+    cases:
+      committed: {when: Process_committable, expression: Process_ramp_up_rate * Process_p_nom_committed
+          * Process_previous_status + Process_start_up_rate * Process_p_nom_committed * (Process_status
+          - Process_previous_status)}
+    otherwise: Process_ramp_up_rate * Process_p_nom_effective
+  Process_ramp_down_allowance:
+    dims: [scenario, snapshot, process]
+    description: how far a process may lower internal power between two snapshots — its ramp limit of
+      the build while it stays on, plus its shut-down ramp in the snapshot it turns off
+    cases:
+      committed: {when: Process_committable, expression: Process_ramp_down_rate * Process_p_nom_committed
+          * Process_status + Process_shut_down_rate * Process_p_nom_committed * (Process_previous_status
+          - Process_status)}
+    otherwise: Process_ramp_down_rate * Process_p_nom_effective
+  Link_output_arrival:
+    dims: [scenario, snapshot, link_output]
+    description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
+      `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives;
+      where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not
+      the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay`
+      zero) delivers its flow unshifted, cyclic or not
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot_period[period]) * Link_efficiency
+  Process_output_arrival:
+    dims: [scenario, snapshot, process_output]
+    description: what a process transfers at a port at a snapshot — its internal power delayed by the
+      port's `delay` within its investment period, times the port's rate at the snapshot the transfer
+      arrives; where the port is `cyclic_delay` the delayed transfer wraps from the period's end, and
+      where it is not the energy still in transit at the period's first snapshots is lost. A port that
+      does not delay (`delay` zero) transfers at once, cyclic or not
+    cases:
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          * Process_rate'}
+    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot_period[period]) * Process_rate
+  Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      over=snapshot)'}
+  Link_commitment_opex: {expression: 'sum(sum(((Link_status * Link_stand_by_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=link), over=snapshot) + sum(sum(Link_start_up
+      * Link_start_up_cost, over=link), over=snapshot) + sum(sum(Link_shut_down * Link_shut_down_cost,
+      over=link), over=snapshot)'}
+  Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=process), over=snapshot)'}
+  Process_commitment_opex: {expression: 'sum(sum(((Process_status * Process_stand_by_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum(Process_start_up
+      * Process_start_up_cost, over=process), over=snapshot) + sum(sum(Process_shut_down * Process_shut_down_cost,
+      over=process), over=snapshot)'}
+  scenario_opex:
+    dims: [scenario]
+    expression: (((Generator_opex + Link_opex) + Link_commitment_opex) + Process_opex) + Process_commitment_opex
+    description: what a future costs to run — every operating term, weighted by the snapshot's hours and
+      its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
+      as PyPSA adds them (`optimize.py:415-432`)
+  Link_capex: {expression: sum(scenario_weight * Link_p_nom_ext * Link_capital_cost * Link_capital_weight)}
+  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+  total_cost:
+    dims: []
+    expression: Link_capex + risk_weighted_opex
+    description: what the system costs — capacity once per active period at its expected cost over the
+      scenarios, operation in expectation over the scenarios, and a share of it at the tail
+  Load_demand:
+    dims: [scenario, snapshot, load]
+    description: what a load draws from its bus's balance — its demand times its sign where it is active,
+      nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`)
+    cases:
+      active: {when: Load_active, expression: Load_sign * Load_p_set}
+    otherwise: '0'
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
+      over=link_output, by=Link_output_bus[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Bus_injection:
+    dims: [scenario, snapshot, bus]
+    expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
+    description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
+      term into the balance, and a load on its right-hand side
+masks:
+  Link_com_ext: {where: Link_committable AND Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0) AND Link_active,
+    description: 'a committable link with an extendable, non-modular build that stands in the snapshot''s
+      period — PyPSA''s `com-ext` rows, whose status is relaxed against the chosen build'}
+  Link_committed: {where: Link_committable AND Link_active, description: a committable link that stands
+      in the snapshot's period — every unit-commitment row's set}
+  Link_ramps_from_previous: {where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
+      == 0 AND (Link_status_initial == 0 OR Link_p_init))', description: 'a snapshot whose ramp reads
+      a previous output — any snapshot but its period''s first, and the horizon''s first where the link
+      comes in off or carries an initial output'}
+  Process_committed: {where: Process_committable AND Process_active, description: a committable process
+      that stands in the snapshot's period — every unit-commitment row's set}
+  Process_ramps_from_previous: {where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
+      == 0 AND (Process_status_initial == 0 OR Process_p_init))', description: 'a snapshot whose ramp
+      reads a previous output — any snapshot but its period''s first, and the horizon''s first where the
+      process comes in off or carries an initial output'}
+objective: {sense: minimize, expression: total_cost}

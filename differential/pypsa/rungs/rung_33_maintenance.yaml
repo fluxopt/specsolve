@@ -3,14 +3,14 @@ description: A plain `n.optimize()`, and its multi-period and stochastic classes
   `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it
   per scenario. Capacity is chosen once, before the future is known, and paid once per active period at
   its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights,
-  with a share priced at the tail through the CVaR rows, which stand only where that share is positive.
+  with a share priced at the tail through the CVaR rows, which stand only where a risk preference is set.
   A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses
   to the standard one. A security-constrained run copies each branch flow limit once per outage in an
   `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight,
   and the outage factors are data prep.
 dimensions:
   scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
-  snapshot: {description: dispatch periods, dtype: datetime}
+  snapshot: {description: dispatch periods, dtype: datetime, ordered: true}
   bus: {description: network nodes}
   generator: {description: 'generating units, each on one bus'}
   link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
@@ -23,7 +23,7 @@ dimensions:
       `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in
       the balance, data prep'}
   load: {description: 'demands, each on one bus'}
-  period: {description: investment periods — PyPSA's `investment_periods`, dtype: int}
+  period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
 relations:
   snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
   Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
@@ -46,6 +46,7 @@ relations:
       generator: generator
       start: snapshot
       covered: snapshot
+    missing: absent
   Link_maintenance_cover:
     description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
       the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
@@ -55,6 +56,7 @@ relations:
       link: link
       start: snapshot
       covered: snapshot
+    missing: absent
   Process_maintenance_cover:
     description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
       the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
@@ -64,6 +66,7 @@ relations:
       process: process
       start: snapshot
       covered: snapshot
+    missing: absent
 parameters:
   snapshot_weightings_objective:
     description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -89,7 +92,7 @@ parameters:
     dims: [scenario, snapshot, generator]
   Generator_sign:
     description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
-      for a unit that draws power. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+      for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`)
     dims: [generator]
   Generator_committable:
     description: whether output is gated by an on/off status decision
@@ -98,6 +101,7 @@ parameters:
   Generator_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [generator]
+    missing: neutral
   Generator_maintainable:
     description: whether a generator must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -132,21 +136,20 @@ parameters:
   Link_efficiency:
     description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
       … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow
-      arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1522`)
+      arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1498`)
     dims: [scenario, snapshot, link_output]
   Link_output_delay:
     description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
-      long, in `snapshot_weightings.generators` units, which the file states as whole snapshots; zero
-      for a port that delivers at once. Each scenario takes its own. PyPSA `1.3.0` groups the ports by
-      delay over all scenarios and shifts each group in every one, so a delay that differs by scenario
-      delivers the flow twice (`constraints.py:1269-1276`, PyPSA/PyPSA#1941)
-    dims: [scenario, link_output]
+      long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for
+      a port that delivers at once. A port has the same delay in every scenario, because PyPSA refuses
+      a delay that differs by scenario (`constants.py:52`)
+    dims: [link_output]
     dtype: int
   Link_output_cyclic_delay:
     description: whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`,
       `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots
-      is lost. Each scenario takes its own, as the delay
-    dims: [scenario, link_output]
+      is lost. The flag is the same in every scenario, as the delay is
+    dims: [link_output]
     dtype: bool
   Link_marginal_cost:
     description: cost of one unit of flow
@@ -161,6 +164,7 @@ parameters:
   Link_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [link]
+    missing: neutral
   Link_maintainable:
     description: whether a link must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -197,19 +201,20 @@ parameters:
     description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
       … read long — negative where the port withdraws, positive where it injects; a link is a process
       whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot
-      the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1522`)
+      the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`)
     dims: [scenario, snapshot, process_output]
   Process_output_delay:
     description: snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`,
-      … read long, in `snapshot_weightings.generators` units, which the file states as whole snapshots;
-      zero for a port that transfers at once. Each scenario takes its own, as a link's
-    dims: [scenario, process_output]
+      … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep;
+      zero for a port that transfers at once. A port has the same delay in every scenario, as a link's
+      port has
+    dims: [process_output]
     dtype: int
   Process_output_cyclic_delay:
     description: whether a delayed port's transfer wraps from the end of its investment period — PyPSA's
       `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's
-      first snapshots is lost. Each scenario takes its own, as the delay
-    dims: [scenario, process_output]
+      first snapshots is lost. The flag is the same in every scenario, as the delay is
+    dims: [process_output]
     dtype: bool
   Process_marginal_cost:
     description: cost of one unit of internal power
@@ -224,8 +229,10 @@ parameters:
     description: most nominal power an extendable process may be built at
     dims: [scenario, process]
   Process_capital_cost:
-    description: cost of one unit of nominal power — PyPSA's `capital_cost`, periodized as an annuity
-      in data prep
+    description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
+      `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
+      and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
+      data prep'
     dims: [scenario, process]
   Process_committable:
     description: whether internal power is gated by an on/off status decision
@@ -234,6 +241,7 @@ parameters:
   Process_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [process]
+    missing: neutral
   Process_maintainable:
     description: whether a process must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -257,22 +265,20 @@ parameters:
     dims: [scenario, snapshot, load]
   Load_sign:
     description: the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless
-      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`consistency.py:1187`)
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`)
     dims: [load]
   Load_active:
     description: whether a load stands in the model — PyPSA's `active`. A load has no build year and no
-      lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`consistency.py:1195`)
+      lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`)
     dims: [load]
     dtype: bool
   scenario_weight:
     description: PyPSA's `scenario_weightings.weight` — the probability of a future
     dims: [scenario]
-  CVaR_omega:
-    description: PyPSA's `risk_preference['omega']` — the share of operating cost priced at the tail rather
-      than in expectation; zero recovers the risk-neutral model
-    dims: []
   period_weight_objective:
-    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
+      reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
+      holds (`optimize.py:205-207`, `:264-266`)
     dims: [period]
   Generator_active:
     description: whether a generator stands in a snapshot's period — PyPSA's `active`, from build year
@@ -306,8 +312,10 @@ parameters:
     description: most nominal power an extendable generator may be built at
     dims: [scenario, generator]
   Generator_capital_cost:
-    description: cost of one unit of nominal power — PyPSA's `capital_cost`, periodized as an annuity
-      in data prep
+    description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
+      `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
+      and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
+      data prep'
     dims: [scenario, generator]
   Link_p_nom_min:
     description: least nominal power an extendable link may be built at
@@ -316,8 +324,10 @@ parameters:
     description: most nominal power an extendable link may be built at
     dims: [scenario, link]
   Link_capital_cost:
-    description: cost of one unit of nominal power — PyPSA's `capital_cost`, periodized as an annuity
-      in data prep
+    description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
+      `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
+      and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
+      data prep'
     dims: [scenario, link]
 variables:
   Generator_p:
@@ -339,63 +349,60 @@ variables:
       and one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_maintainable AND Generator_active
-    absence: zero
+    missing: neutral
     bounds: {lower: 0, upper: 1}
   Generator_maintenance_start:
     description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_maintainable AND Generator_active
-    absence: zero
+    missing: neutral
     domain: binary
   Generator_maintenance_capacity:
     description: '`Generator-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, generator]
-    where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable AND Generator_p_nom_mod
-      > 0) AND Generator_active
-    absence: zero
+    where: Generator_maint_ext
+    missing: neutral
     bounds: {lower: 0}
   Link_maintenance:
     description: '`Link-maintenance` — whether a maintainable link is in maintenance: continuous, and
       one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, link]
     where: Link_maintainable AND Link_active
-    absence: zero
+    missing: neutral
     bounds: {lower: 0, upper: 1}
   Link_maintenance_start:
     description: '`Link-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, link]
     where: Link_maintainable AND Link_active
-    absence: zero
+    missing: neutral
     domain: binary
   Link_maintenance_capacity:
     description: '`Link-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, link]
-    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-      0) AND Link_active
-    absence: zero
+    where: Link_maint_ext
+    missing: neutral
     bounds: {lower: 0}
   Process_maintenance:
     description: '`Process-maintenance` — whether a maintainable process is in maintenance: continuous,
       and one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, process]
     where: Process_maintainable AND Process_active
-    absence: zero
+    missing: neutral
     bounds: {lower: 0, upper: 1}
   Process_maintenance_start:
     description: '`Process-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, process]
     where: Process_maintainable AND Process_active
-    absence: zero
+    missing: neutral
     domain: binary
   Process_maintenance_capacity:
     description: '`Process-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, process]
-    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
-      > 0) AND Process_active
-    absence: zero
+    where: Process_maint_ext
+    missing: neutral
     bounds: {lower: 0}
   Generator_p_nom_ext:
     description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
@@ -412,17 +419,6 @@ variables:
       same PyPSA name carries the fixed regime'
     dims: [process]
     where: Process_p_nom_extendable
-  CVaR_a:
-    description: '`CVaR-a` — how far a scenario''s operating cost exceeds the tail''s start; nothing where
-      it does not'
-    dims: [scenario]
-    bounds: {lower: 0}
-  CVaR_theta:
-    description: '`CVaR-theta` — where the tail starts, the value at risk'
-    dims: []
-  CVaR:
-    description: '`CVaR` — the tail''s average cost, what the objective prices at `omega`'
-    dims: []
 constraints:
   Generator_fix_p_lower:
     description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
@@ -538,8 +534,7 @@ constraints:
       covers the snapshot; two events do not overlap, since the maintenance status is at most one'
     dims: [scenario, snapshot, generator]
     where: Generator_maintainable AND Generator_active
-    expression: Generator_maintenance == sum(Generator_maintenance_start, by=Generator_maintenance_cover,
-      over=start, into=covered)
+    expression: Generator_maintenance == sum(Generator_maintenance_start, over=start, by=Generator_maintenance_cover[covered])
   Generator_maint_start_horizon:
     description: '`Generator-maint-start-horizon` — no event starts where it could not run its whole duration'
     dims: [scenario, snapshot, generator]
@@ -549,28 +544,24 @@ constraints:
     description: '`Generator-maintcap_upper` — the build taken off is at most the chosen build in maintenance,
       and at most the build less its floor out of it'
     dims: [scenario, snapshot, generator]
-    where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable AND Generator_p_nom_mod
-      > 0) AND Generator_active
+    where: Generator_maint_ext
     expression: Generator_maintenance_capacity <= Generator_p_nom_ext - Generator_p_nom_min * (1 - Generator_maintenance)
   Generator_maintcap_upper_nommax:
     description: '`Generator-maintcap_upper_nommax` — out of maintenance, no build is taken off'
     dims: [scenario, snapshot, generator]
-    where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable AND Generator_p_nom_mod
-      > 0) AND Generator_active
+    where: Generator_maint_ext
     expression: Generator_maintenance_capacity <= Generator_p_nom_max * Generator_maintenance
   Generator_maintcap_lower_nommax:
     description: '`Generator-maintcap_lower_nommax` — in maintenance, the whole chosen build is taken
       off'
     dims: [scenario, snapshot, generator]
-    where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable AND Generator_p_nom_mod
-      > 0) AND Generator_active
+    where: Generator_maint_ext
     expression: Generator_maintenance_capacity >= Generator_p_nom_ext - Generator_p_nom_max * (1 - Generator_maintenance)
   Generator_maintcap_lower_nommin:
     description: '`Generator-maintcap_lower_nommin` — in maintenance, at least the floor of the build
       is taken off'
     dims: [scenario, snapshot, generator]
-    where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable AND Generator_p_nom_mod
-      > 0) AND Generator_active AND Generator_p_nom_min > 0
+    where: Generator_maint_ext AND Generator_p_nom_min > 0
     expression: Generator_maintenance_capacity >= Generator_p_nom_min * Generator_maintenance
   Link_maint_event_count:
     description: '`Link-maint-event-count` — a maintainable link holds its number of maintenance events
@@ -583,8 +574,7 @@ constraints:
       the snapshot; two events do not overlap, since the maintenance status is at most one'
     dims: [scenario, snapshot, link]
     where: Link_maintainable AND Link_active
-    expression: Link_maintenance == sum(Link_maintenance_start, by=Link_maintenance_cover, over=start,
-      into=covered)
+    expression: Link_maintenance == sum(Link_maintenance_start, over=start, by=Link_maintenance_cover[covered])
   Link_maint_start_horizon:
     description: '`Link-maint-start-horizon` — no event starts where it could not run its whole duration'
     dims: [scenario, snapshot, link]
@@ -594,27 +584,23 @@ constraints:
     description: '`Link-maintcap_upper` — the build taken off is at most the chosen build in maintenance,
       and at most the build less its floor out of it'
     dims: [scenario, snapshot, link]
-    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-      0) AND Link_active
+    where: Link_maint_ext
     expression: Link_maintenance_capacity <= Link_p_nom_ext - Link_p_nom_min * (1 - Link_maintenance)
   Link_maintcap_upper_nommax:
     description: '`Link-maintcap_upper_nommax` — out of maintenance, no build is taken off'
     dims: [scenario, snapshot, link]
-    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-      0) AND Link_active
+    where: Link_maint_ext
     expression: Link_maintenance_capacity <= Link_p_nom_max * Link_maintenance
   Link_maintcap_lower_nommax:
     description: '`Link-maintcap_lower_nommax` — in maintenance, the whole chosen build is taken off'
     dims: [scenario, snapshot, link]
-    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-      0) AND Link_active
+    where: Link_maint_ext
     expression: Link_maintenance_capacity >= Link_p_nom_ext - Link_p_nom_max * (1 - Link_maintenance)
   Link_maintcap_lower_nommin:
     description: '`Link-maintcap_lower_nommin` — in maintenance, at least the floor of the build is taken
       off'
     dims: [scenario, snapshot, link]
-    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-      0) AND Link_active AND Link_p_nom_min > 0
+    where: Link_maint_ext AND Link_p_nom_min > 0
     expression: Link_maintenance_capacity >= Link_p_nom_min * Link_maintenance
   Process_maint_event_count:
     description: '`Process-maint-event-count` — a maintainable process holds its number of maintenance
@@ -627,8 +613,7 @@ constraints:
       covers the snapshot; two events do not overlap, since the maintenance status is at most one'
     dims: [scenario, snapshot, process]
     where: Process_maintainable AND Process_active
-    expression: Process_maintenance == sum(Process_maintenance_start, by=Process_maintenance_cover, over=start,
-      into=covered)
+    expression: Process_maintenance == sum(Process_maintenance_start, over=start, by=Process_maintenance_cover[covered])
   Process_maint_start_horizon:
     description: '`Process-maint-start-horizon` — no event starts where it could not run its whole duration'
     dims: [scenario, snapshot, process]
@@ -638,27 +623,23 @@ constraints:
     description: '`Process-maintcap_upper` — the build taken off is at most the chosen build in maintenance,
       and at most the build less its floor out of it'
     dims: [scenario, snapshot, process]
-    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
-      > 0) AND Process_active
+    where: Process_maint_ext
     expression: Process_maintenance_capacity <= Process_p_nom_ext - Process_p_nom_min * (1 - Process_maintenance)
   Process_maintcap_upper_nommax:
     description: '`Process-maintcap_upper_nommax` — out of maintenance, no build is taken off'
     dims: [scenario, snapshot, process]
-    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
-      > 0) AND Process_active
+    where: Process_maint_ext
     expression: Process_maintenance_capacity <= Process_p_nom_max * Process_maintenance
   Process_maintcap_lower_nommax:
     description: '`Process-maintcap_lower_nommax` — in maintenance, the whole chosen build is taken off'
     dims: [scenario, snapshot, process]
-    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
-      > 0) AND Process_active
+    where: Process_maint_ext
     expression: Process_maintenance_capacity >= Process_p_nom_ext - Process_p_nom_max * (1 - Process_maintenance)
   Process_maintcap_lower_nommin:
     description: '`Process-maintcap_lower_nommin` — in maintenance, at least the floor of the build is
       taken off'
     dims: [scenario, snapshot, process]
-    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
-      > 0) AND Process_active AND Process_p_nom_min > 0
+    where: Process_maint_ext AND Process_p_nom_min > 0
     expression: Process_maintenance_capacity >= Process_p_nom_min * Process_maintenance
   Bus_nodal_balance:
     description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
@@ -666,34 +647,12 @@ constraints:
       they deliver to, each process port drawing or delivering at its own rate and each passive branch
       carrying its flow, meets the load there, less half of every incident line''s and transformer''s
       loss — PyPSA dissipates a branch''s loss half at either end. Each generator, storage unit, store
-      and load term enters with its component''s `sign` (`constraints.py:1428-1429`, `:1538`), and an
+      and load term enters with its component''s `sign` (`constraints.py:1404-1405`, `:1514`), and an
       inactive load not at all. A bus nothing is attached to has no row; PyPSA refuses one that carries
       load, and this file does not yet.'
     dims: [scenario, snapshot, bus]
     expression: Bus_injection == 0
 expressions:
-  total_cost:
-    dims: []
-    expression: ((Generator_capex + Link_capex) + Process_capex) + risk_weighted_opex
-    description: what the system costs — capacity once per active period at its expected cost over the
-      scenarios, operation in expectation over the scenarios, and a share of it at the tail
-  Bus_injection:
-    dims: [scenario, snapshot, bus]
-    expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
-    description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
-      term into the balance, and a load on its right-hand side
-  Generator_capex: {expression: sum(scenario_weight * Generator_p_nom_ext * Generator_capital_cost * Generator_capital_weight)}
-  Link_capex: {expression: sum(scenario_weight * Link_p_nom_ext * Link_capital_cost * Link_capital_weight)}
-  Process_capex: {expression: sum(scenario_weight * Process_p_nom_ext * Process_capital_cost * Process_capital_weight)}
-  risk_weighted_opex: {expression: '(1 - CVaR_omega) * sum(scenario_weight * scenario_opex, over=scenario)
-      + CVaR_omega * CVaR'}
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, by=Generator_bus, over=generator,
-      into=bus)'}
-  Link_injection: {expression: '-sum(Link_p, by=Link_bus0, over=link, into=bus) + sum(Link_output_arrival,
-      by=Link_output_bus, over=link_output, into=bus)'}
-  Load_injection: {expression: 'sum(Load_demand, by=Load_bus, over=load, into=bus)'}
-  Process_injection: {expression: 'sum(Process_output_arrival, by=Process_output_bus, over=process_output,
-      into=bus)'}
   Link_output_arrival:
     description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
       `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives;
@@ -702,11 +661,10 @@ expressions:
       zero) delivers its flow unshifted, cyclic or not
     dims: [scenario, snapshot, link_output]
     cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link, over=link,
-          into=link_output), along=snapshot, offset=Link_output_delay, edge=''wrap'', by=snapshot_period,
-          within=period) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link, over=link, into=link_output), along=snapshot, offset=Link_output_delay,
-      edge=0, by=snapshot_period, within=period) * Link_efficiency
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot_period[period]) * Link_efficiency
   Process_output_arrival:
     description: what a process transfers at a port at a snapshot — its internal power delayed by the
       port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -715,35 +673,66 @@ expressions:
       does not delay (`delay` zero) transfers at once, cyclic or not
     dims: [scenario, snapshot, process_output]
     cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process,
-          over=process, into=process_output), along=snapshot, offset=Process_output_delay, edge=''wrap'',
-          by=snapshot_period, within=period) * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process, over=process, into=process_output), along=snapshot,
-      offset=Process_output_delay, edge=0, by=snapshot_period, within=period) * Process_rate
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          * Process_rate'}
+    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot_period[period]) * Process_rate
+  Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      over=snapshot)'}
+  Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=process), over=snapshot)'}
   scenario_opex:
     dims: [scenario]
     expression: (Generator_opex + Link_opex) + Process_opex
     description: what a future costs to run — every operating term, weighted by the snapshot's hours and
       its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
-      as PyPSA adds them (`optimize.py:414-429`)
+      as PyPSA adds them (`optimize.py:415-432`)
+  Generator_capex: {expression: sum(scenario_weight * Generator_p_nom_ext * Generator_capital_cost * Generator_capital_weight)}
+  Link_capex: {expression: sum(scenario_weight * Link_p_nom_ext * Link_capital_cost * Link_capital_weight)}
+  Process_capex: {expression: sum(scenario_weight * Process_p_nom_ext * Process_capital_cost * Process_capital_weight)}
+  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+  total_cost:
+    dims: []
+    expression: ((Generator_capex + Link_capex) + Process_capex) + risk_weighted_opex
+    description: what the system costs — capacity once per active period at its expected cost over the
+      scenarios, operation in expectation over the scenarios, and a share of it at the tail
   Load_demand:
     description: what a load draws from its bus's balance — its demand times its sign where it is active,
-      nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1537-1538`)
+      nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`)
     dims: [scenario, snapshot, load]
     cases:
       active: {when: Load_active, expression: Load_sign * Load_p_set}
     otherwise: 0
-  Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
-      over=snapshot) + sum(sum((((Generator_p * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=generator),
-      over=snapshot)'}
-  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot) + sum(sum((((Link_p
-      * Link_p) * Link_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period, over=period, into=snapshot), over=link), over=snapshot)'}
-  Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=process), over=snapshot)
-      + sum(sum((((Process_p * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period, over=period, into=snapshot), over=process), over=snapshot)'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
+      over=link_output, by=Link_output_bus[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Bus_injection:
+    dims: [scenario, snapshot, bus]
+    expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
+    description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
+      term into the balance, and a load on its right-hand side
+masks:
+  Generator_maint_ext: {description: 'a maintainable generator with an extendable build, unless it is
+      committable and modular, that stands in the snapshot''s period — the maintenance rows against the
+      chosen build', where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable
+      AND Generator_p_nom_mod > 0) AND Generator_active}
+  Link_maint_ext: {description: 'a maintainable link with an extendable build, unless it is committable
+      and modular, that stands in the snapshot''s period — the maintenance rows against the chosen build',
+    where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
+      0) AND Link_active}
+  Process_maint_ext: {description: 'a maintainable process with an extendable build, unless it is committable
+      and modular, that stands in the snapshot''s period — the maintenance rows against the chosen build',
+    where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
+      > 0) AND Process_active}
 objective: {sense: minimize, expression: total_cost}

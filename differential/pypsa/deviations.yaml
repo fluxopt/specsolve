@@ -51,27 +51,18 @@ Link-p-ramp_limit_down:
 objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
-  structure: what the file states otherwise than PyPSA writes it — the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14)
+  structure: what the file states otherwise than PyPSA writes it — the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14), a fixed build's pin once rather than once per scenario (rung 57)
 objective:
   blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it
-Generator-status-p-fixed-upper:
-  duals: PyPSA bounds the status at 1 on the variable and writes the cap row as well, so a binding cap's dual may sit on the bound and leave the row at zero; the file states the row alone (rung 12, the linearized relaxation)
-Generator-com-status-min_up_time_must_stay_up:
-  duals: degenerate with PyPSA's duplicated cap — a unit held on has status pinned at 1 by this row from below and by the variable bound and the cap row from above, and HiGHS may put the dual on any of them
 Generator-p-ramp_limit_down:
   negated: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
-CVaR:
-  structure: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
-  blocks: the file declares the tail's average on every run; PyPSA adds it only under a risk preference, and without one the objective prices it at zero and no row reads it
-CVaR-a:
-  structure: the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it
-  blocks: the file declares each scenario's excess on every run; PyPSA adds it only under a risk preference, and without one no row reads it
-CVaR-theta:
-  structure: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
-  blocks: the file declares the tail's start on every run; PyPSA adds it only under a risk preference, and without one no row reads it
 Line-loss_secants-pos:
   structure: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
   blocks: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
 Line-loss_secants-neg:
   structure: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
   blocks: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
+Generator-p_nom_set:
+  structure: the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57)
+  blocks: the file pins a build once over the generator, where PyPSA writes the same pin once per scenario; PyPSA refuses a p_nom_set that differs by scenario (rung 57)
+  duals: PyPSA's identical pins, one per scenario, share one dual in any split, and the file's one pin carries their sum (rung 57)

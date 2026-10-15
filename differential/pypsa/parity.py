@@ -2,8 +2,8 @@
 
     python differential/pypsa/parity.py <mathspec checkout>
 
-The corpus is mathspec's — `examples/pypsa.yaml` and its quadratic sibling,
-and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
+The corpus is mathspec's — `examples/pypsa.yaml`, the patches a rung lays
+over it, and one `rung_*.py` per rung whose `build()` returns the PyPSA network with
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
@@ -12,7 +12,8 @@ pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
         --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
-        --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=2.0" \
+        --with "pypsa @ git+https://github.com/PyPSA/PyPSA@51986084bfb68d38e5b64021649cb339448112cb" \
+        --with "highspy==1.15.1" --with "polars>=2.0" \
         python differential/pypsa/parity.py ../mathspec
 
 Per rung, from the same network:
@@ -60,9 +61,11 @@ import math
 import re
 import shutil
 import sys
+import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import polars as pl
@@ -79,6 +82,10 @@ UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'di
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
+#: Where a patched rung's file is written: the patch its script names laid over ``pypsa.yaml``.
+COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
+#: A patched file's name -> the patch it lays over ``pypsa.yaml``.
+PATCHES: dict[str, Path] = {}
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy oracle in tests/
@@ -144,8 +151,38 @@ def intended(stem: str) -> float:
 
 
 def spec_of(stem: str) -> Path:
-    """The spec file the rung names: ``MODEL`` in its script where it names one, ``pypsa.yaml`` otherwise."""
-    return CORPUS / 'examples' / getattr(importlib.import_module(stem), 'MODEL', 'pypsa.yaml')
+    """The spec file the rung reads: ``pypsa.yaml``, or the patch its script names as ``PATCH`` laid over it.
+
+    A patched file is written once under :data:`COMPOSED`, named as its patch
+    and with the base's symbols beside it, so it reads as a file of its own.
+    """
+    base = CORPUS / 'examples' / 'pypsa.yaml'
+    patch = getattr(importlib.import_module(stem), 'PATCH', None)
+    if patch is None:
+        return base
+    path = COMPOSED / Path(patch).name
+    if path.name not in PATCHES:
+        PATCHES[path.name] = CORPUS / 'examples' / patch
+        path.write_text(mathspec.override(base, [PATCHES[path.name]]).to_yaml())
+        (COMPOSED / 'symbols').mkdir(exist_ok=True)
+        shutil.copy(base.parent / 'symbols' / base.name, COMPOSED / 'symbols' / path.name)
+    return path
+
+
+def spec_named(name: str) -> Path:
+    """The spec file a stamp names — a patched one under :data:`COMPOSED`, else the corpus's own."""
+    return COMPOSED / name if name in PATCHES else CORPUS / 'examples' / name
+
+
+def owned(name: str) -> set[str] | None:
+    """The declarations a patched file's own rungs answer for — those its patch writes; ``None`` for the base, which answers for all.
+
+    The rest of a patched file is the base's, and the base's rungs cover it.
+    """
+    if name not in PATCHES:
+        return None
+    raw = yaml.safe_load(PATCHES[name].read_text())
+    return {key for section in raw.values() if isinstance(section, dict) for key in section}
 
 
 def stands_for(description: str | None, model=None) -> str:
@@ -168,10 +205,14 @@ def stands_for(description: str | None, model=None) -> str:
 
 
 def templated(name: str) -> re.Pattern | None:
-    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension."""
+    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension.
+
+    Under ``multi_investment_periods`` PyPSA appends ``-period-{p}`` to a
+    family it writes per period, so the pattern takes that suffix too.
+    """
     if not re.search(r'\{\w+\}', name):
         return None
-    return re.compile('^' + re.sub(r'\\\{\w+\\\}', '([^-]+)', re.escape(name)) + '$')
+    return re.compile('^' + re.sub(r'\\\{\w+\\\}', '([^-]+)', re.escape(name)) + '(?:-period-[^-]+)?$')
 
 
 def template_dims(declared, model) -> dict[str, str]:
@@ -900,7 +941,7 @@ def lanes(stem: str) -> tuple[dict[str, object], dict[str, object], bool]:
 
 def diverging(bug: int, stamps: dict, result, target: float) -> tuple:
     """The stamps of a rung that records a PyPSA bug: its objective against the oracle's, and what it built."""
-    reason = f'PyPSA/PyPSA#{bug} — PyPSA 1.3.0 gets this network wrong, so the objective is held to the oracle and no model is compared'
+    reason = f'PyPSA/PyPSA#{bug} — the pinned PyPSA gets this network wrong, so the objective is held to the oracle and no model is compared'
     parity = {
         'specsolve_objective': round(float(result.objective), 6),
         'matches': math.isclose(float(result.objective), target, rel_tol=1e-9, abs_tol=1e-6),
@@ -951,7 +992,10 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised."""
+    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
+
+    A patched file is held only to what its patch declares, as `owned` says.
+    """
     gaps = []
     by_file: dict[str, list[dict]] = defaultdict(list)
     for stem in sorted(stamped):
@@ -959,9 +1003,16 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
             continue
         by_file[stamped[stem]['parity']['spec']].append(stamped[stem]['parity'])
     for name, stamps in by_file.items():
-        declared = mathspec.to_spec(CORPUS / 'examples' / name)
+        declared = mathspec.to_spec(spec_named(name))
+        mine = owned(name)
+
+        def answers(n: str, mine: set[str] | None = mine) -> bool:
+            return mine is None or n in mine
+
         for kind, blocks in (('built_rows', declared.constraints), ('built_columns', declared.variables)):
             for block_name, block in blocks.items():
+                if not answers(block_name):
+                    continue
                 counts = [stamp[kind][block_name] for stamp in stamps]
                 if not sum(counts):
                     gaps.append(f'{name}: no rung builds {block_name}')
@@ -972,9 +1023,16 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
                     gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
         fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
-            f'{name}: no rung feeds {unfed}' for unfed in sorted({*declared.parameters, *declared.relations} - fed)
+            f'{name}: no rung feeds {unfed}'
+            for unfed in sorted({*declared.parameters, *declared.relations} - fed)
+            if answers(unfed)
         )
-        gaps.extend(untested_conjuncts(name, mathspec.to_spec(CORPUS / 'examples' / name).program, stamps))
+        program = declared.program
+        own = SimpleNamespace(
+            constraints={n: b for n, b in program.constraints.items() if answers(n)},
+            variables={n: b for n, b in program.variables.items() if answers(n)},
+        )
+        gaps.extend(untested_conjuncts(name, own, stamps))
     return gaps
 
 

@@ -146,9 +146,10 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built.
 
     A cased quantity is kept whole, because only its regions' masks may say
-    whether a region applies. Expressions keep the file's order, so the output
-    is stable across processes. A variable a kept quantity names is declared
-    as written, even where the rung builds no column for it.
+    whether a region applies. Expressions and named masks keep the file's
+    order, so the output is stable across processes. A variable a kept
+    quantity or mask names is declared as written, even where the rung builds
+    no column for it.
     """
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
     fed = set(parity['attached_nonempty'])
@@ -171,15 +172,17 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):
         mentioned |= _mentions(block)
-    expressions: dict[str, Any] = {}
-    while reached := [n for n in survived if n in mentioned and n not in expressions]:
-        for name in reached:
-            expressions[name] = survived[name]
-            mentioned |= _mentions(survived[name])
-
-    variables |= {n: v for n, v in raw['variables'].items() if n in mentioned}
-    for block in variables.values():
-        mentioned |= _mentions(block)
+    masks = raw.get('masks', {})
+    kept: dict[str, dict[str, Any]] = {'expressions': {}, 'masks': {}, 'variables': variables}
+    sources = {'expressions': survived, 'masks': masks, 'variables': raw['variables']}
+    while reached := [
+        (kind, n) for kind, held in sources.items() for n in held if n in mentioned and n not in kept[kind]
+    ]:
+        for kind, name in reached:
+            kept[kind][name] = sources[kind][name]
+            mentioned |= _mentions(sources[kind][name])
+    expressions = {n: block for n, block in survived.items() if n in kept['expressions']}
+    named_masks = {n: block for n, block in masks.items() if n in kept['masks']}
     parameters = {n: p for n, p in raw['parameters'].items() if n in mentioned}
     relations = {n: lk for n, lk in raw.get('relations', {}).items() if n in mentioned}
     dims: set[str] = set()
@@ -199,6 +202,8 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     out['constraints'] = constraints
     if expressions:
         out['expressions'] = expressions
+    if named_masks:
+        out['masks'] = named_masks
     out['objective'] = objective
     return out
 

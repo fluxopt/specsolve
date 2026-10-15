@@ -1,167 +1,155 @@
 # What the PyPSA corpus leaves untested, one line per gap as the parity runner prints it.
 # The runner fails on a gap not listed here and on a listed one a rung now closes.
 # The rungs that would close them: energy-models/mathspec#830.
-pypsa.yaml: Process_com_transition_start_up is always all-or-nothing, so its mask is untested
-pypsa.yaml: Process_com_transition_shut_down is always all-or-nothing, so its mask is untested
 pypsa.yaml: Process_maint_event_count is always all-or-nothing, so its mask is untested
 pypsa.yaml: Process_maint_window is always all-or-nothing, so its mask is untested
+pypsa.yaml: Line_s_nom_modularity is always all-or-nothing, so its mask is untested
+pypsa.yaml: no rung builds Line_v_ang_lower
+pypsa.yaml: no rung builds Line_v_ang_upper
 pypsa.yaml: Line_loss_upper is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss_tangents_forward is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss_tangents_reverse is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_loss_upper is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_loss_tangents_forward is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_loss_tangents_reverse is always all-or-nothing, so its mask is untested
+pypsa.yaml: no rung builds Transformer_fix_s_lower
+pypsa.yaml: no rung builds Transformer_fix_s_upper
+pypsa.yaml: Transformer_ext_s_lower is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_ext_s_upper is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_ext_s_nom_lower is always all-or-nothing, so its mask is untested
+pypsa.yaml: no rung builds Transformer_ext_s_nom_upper
+pypsa.yaml: no rung builds Transformer_s_nom_set
+pypsa.yaml: Transformer_s_nom_modularity is always all-or-nothing, so its mask is untested
+pypsa.yaml: no rung builds Transformer_s_set
+pypsa.yaml: no rung builds Transformer_v_ang_lower
+pypsa.yaml: no rung builds Transformer_v_ang_upper
+pypsa.yaml: no rung builds Transformer_v_ang_var_lower
+pypsa.yaml: no rung builds Transformer_v_ang_var_upper
+pypsa.yaml: no rung builds Transformer_loss_upper
+pypsa.yaml: no rung builds Transformer_loss_tangents_forward
+pypsa.yaml: no rung builds Transformer_loss_tangents_reverse
+pypsa.yaml: no rung builds Line_ext_s_lower_security
+pypsa.yaml: no rung builds Line_ext_s_upper_security
+pypsa.yaml: no rung builds Transformer_fix_s_lower_security
+pypsa.yaml: no rung builds Transformer_fix_s_upper_security
+pypsa.yaml: no rung builds Transformer_ext_s_lower_security
+pypsa.yaml: no rung builds Transformer_ext_s_upper_security
+pypsa.yaml: StorageUnit_p_nom_modularity is always all-or-nothing, so its mask is untested
+pypsa.yaml: Store_e_nom_modularity is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR_excess is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR_def is always all-or-nothing, so its mask is untested
-pypsa.yaml: Link_p is always all-or-nothing, so its mask is untested
-pypsa.yaml: Process_p is always all-or-nothing, so its mask is untested
-pypsa.yaml: Process_status is always all-or-nothing, so its mask is untested
-pypsa.yaml: Process_start_up is always all-or-nothing, so its mask is untested
-pypsa.yaml: Process_shut_down is always all-or-nothing, so its mask is untested
 pypsa.yaml: Process_maintenance is always all-or-nothing, so its mask is untested
 pypsa.yaml: Process_maintenance_start is always all-or-nothing, so its mask is untested
-pypsa.yaml: Line_s is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss is always all-or-nothing, so its mask is untested
 pypsa.yaml: Transformer_s is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_loss is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_phase_shift is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung feeds Process_carrier
+pypsa.yaml: no rung builds Transformer_loss
+pypsa.yaml: no rung builds Transformer_phase_shift
+pypsa.yaml: Line_n_mod is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_s_nom_ext is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_n_mod is always all-or-nothing, so its mask is untested
+pypsa.yaml: StorageUnit_n_mod is always all-or-nothing, so its mask is untested
+pypsa.yaml: Store_n_mod is always all-or-nothing, so its mask is untested
+pypsa.yaml: CVaR_a is always all-or-nothing, so its mask is untested
+pypsa.yaml: CVaR_theta is always all-or-nothing, so its mask is untested
+pypsa.yaml: CVaR is always all-or-nothing, so its mask is untested
+pypsa.yaml: no rung feeds Line_v_ang_max
+pypsa.yaml: no rung feeds Outage_transformer
 pypsa.yaml: no rung feeds Process_tech_capacity_weight
-pypsa.yaml: Link_fix_p_lower is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_fix_p_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_ext_p_lower is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_ext_p_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_fix_p_lower is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_fix_p_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_ext_p_lower is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_ext_p_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Link_com_p_lower is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_p_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_transition_start_up is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_transition_shut_down is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_up_time is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_down_time is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_status_must_stay_up is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_status_must_stay_down is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_p_ramp_limit_up_run_big_m is never false at conjunct 5 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_p_ramp_limit_up_start_big_m is never false at conjunct 5 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_p_ramp_limit_down_run_big_m is never false at conjunct 5 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_p_ramp_limit_down_shut_big_m is never false at conjunct 5 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_ext_p_upper_cap is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_ext_p_upper_big_m is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_ext_p_lower is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_ext_p_lower_nonneg is never false at conjunct 4 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_mod_p_lower is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_com_mod_p_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_status_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_start_up_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_shut_down_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_status_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_start_up_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_shut_down_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_window is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_start_horizon is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintcap_upper is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintcap_upper_nommax is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintcap_lower_nommax is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintcap_lower_nommin is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_status_le_status is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_status_le_maint is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_status_lb is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_modstatus_le_status is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_modstatus_le_maint is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maint_modstatus_lb is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_com_p_lower is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_p_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_transition_start_up is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_transition_shut_down is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_up_time is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_down_time is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_status_must_stay_up is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_status_must_stay_down is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_p_ramp_limit_up_run_big_m is never false at conjunct 5 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_p_ramp_limit_up_start_big_m is never false at conjunct 5 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_p_ramp_limit_down_run_big_m is never false at conjunct 5 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_p_ramp_limit_down_shut_big_m is never false at conjunct 5 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_ext_p_upper_cap is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_ext_p_upper_big_m is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_ext_p_lower is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_ext_p_lower_nonneg is never false at conjunct 2 — ParameterDefined(name='Process_p_min_pu_nonneg', dims=('process',))
-pypsa.yaml: Process_com_ext_p_lower_nonneg is never false at conjunct 4 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_mod_p_lower is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_com_mod_p_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_status_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_start_up_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_shut_down_p_fixed_upper is never false at conjunct 2 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_status_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_start_up_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_shut_down_p_nom_variable_upper is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_window is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_start_horizon is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintcap_upper is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintcap_upper_nommax is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintcap_lower_nommax is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintcap_lower_nommin is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_status_le_status is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_status_le_maint is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_status_lb is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_modstatus_le_status is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_modstatus_le_maint is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maint_modstatus_lb is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Line_fix_s_lower is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_fix_s_upper is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_ext_s_lower is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_ext_s_upper is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_s_set is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_loss_upper is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_loss_tangents_forward is never false at conjunct 0 — ParameterDefined(name='transmission_losses', dims=())
-pypsa.yaml: Line_loss_tangents_forward is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_loss_tangents_reverse is never false at conjunct 0 — ParameterDefined(name='transmission_losses', dims=())
-pypsa.yaml: Line_loss_tangents_reverse is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
+pypsa.yaml: no rung feeds Transformer_BODF
+pypsa.yaml: no rung feeds Transformer_cycle_weight
+pypsa.yaml: no rung feeds Transformer_loss_offset
+pypsa.yaml: no rung feeds Transformer_loss_slope
+pypsa.yaml: no rung feeds Transformer_phase_shift_cycle_weight
+pypsa.yaml: no rung feeds Transformer_phase_shift_weight
+pypsa.yaml: no rung feeds Transformer_s_nom_set
+pypsa.yaml: no rung feeds Transformer_s_set
+pypsa.yaml: no rung feeds Transformer_v_ang_max
+pypsa.yaml: Process_com_ext_p_lower_nonneg is never false at conjunct 1 — ParameterDefined(name='Process_p_min_pu_nonneg', dims=('process',))
+pypsa.yaml: Line_s_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))), over='snapshot', op='>', value=0.0, dims=('line',))
+pypsa.yaml: Line_v_ang_lower is never true at conjunct 0 — ParameterDefined(name='Line_v_ang_max', dims=('scenario', 'line'))
+pypsa.yaml: Line_v_ang_upper is never true at conjunct 0 — ParameterDefined(name='Line_v_ang_max', dims=('scenario', 'line'))
+pypsa.yaml: Line_loss_tangents_forward is never false at conjunct 0 — NamedMask(name='Line_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))))
+pypsa.yaml: Line_loss_tangents_reverse is never false at conjunct 0 — NamedMask(name='Line_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))))
+pypsa.yaml: Transformer_fix_s_lower is never true at conjunct 0 — Not(operand=ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',)))
 pypsa.yaml: Transformer_fix_s_lower is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_fix_s_upper is never true at conjunct 0 — Not(operand=ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',)))
 pypsa.yaml: Transformer_fix_s_upper is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_ext_s_lower is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
 pypsa.yaml: Transformer_ext_s_lower is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_ext_s_upper is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
 pypsa.yaml: Transformer_ext_s_upper is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_ext_s_nom_lower is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_ext_s_nom_upper is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_ext_s_nom_upper is never true at conjunct 1 — ParameterDefined(name='Transformer_s_nom_max', dims=('scenario', 'transformer'))
+pypsa.yaml: Transformer_s_nom_set is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_s_nom_set is never true at conjunct 1 — ParameterDefined(name='Transformer_s_nom_set', dims=('transformer',))
+pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 1 — ParameterComparison(name='Transformer_s_nom_mod', op='>', value=0.0, dims=('transformer',))
+pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))), over='snapshot', op='>', value=0.0, dims=('transformer',))
+pypsa.yaml: Transformer_s_set is never true at conjunct 0 — ParameterDefined(name='Transformer_s_set', dims=('scenario', 'snapshot', 'transformer'))
 pypsa.yaml: Transformer_s_set is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss_upper is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss_tangents_forward is never false at conjunct 0 — ParameterDefined(name='transmission_losses', dims=())
-pypsa.yaml: Transformer_loss_tangents_forward is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss_tangents_reverse is never false at conjunct 0 — ParameterDefined(name='transmission_losses', dims=())
-pypsa.yaml: Transformer_loss_tangents_reverse is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Line_fix_s_lower_security is never false at conjunct 1 — ParameterDefined(name='Line_BODF', dims=('line', 'outage'))
-pypsa.yaml: Line_fix_s_upper_security is never false at conjunct 1 — ParameterDefined(name='Line_BODF', dims=('line', 'outage'))
-pypsa.yaml: Line_ext_s_lower_security is never false at conjunct 1 — ParameterDefined(name='Line_BODF', dims=('line', 'outage'))
-pypsa.yaml: Line_ext_s_upper_security is never false at conjunct 1 — ParameterDefined(name='Line_BODF', dims=('line', 'outage'))
-pypsa.yaml: Transformer_fix_s_lower_security is never false at conjunct 1 — ParameterDefined(name='Transformer_BODF', dims=('transformer', 'outage'))
-pypsa.yaml: Transformer_fix_s_upper_security is never false at conjunct 1 — ParameterDefined(name='Transformer_BODF', dims=('transformer', 'outage'))
-pypsa.yaml: Transformer_ext_s_lower_security is never false at conjunct 1 — ParameterDefined(name='Transformer_BODF', dims=('transformer', 'outage'))
-pypsa.yaml: Transformer_ext_s_upper_security is never false at conjunct 1 — ParameterDefined(name='Transformer_BODF', dims=('transformer', 'outage'))
-pypsa.yaml: Link_p_ramp_limit_up is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_p_ramp_limit_down is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_p_ramp_limit_up is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_p_ramp_limit_down is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Link_p_set is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_p_set is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Link_p is never false at conjunct 0 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_p is never false at conjunct 0 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Link_status is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_start_up is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_shut_down is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintenance is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintenance_start is never false at conjunct 1 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintenance_capacity is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Link_maintenance_status is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
-pypsa.yaml: Process_status is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_start_up is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_shut_down is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintenance is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintenance_start is never false at conjunct 1 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintenance_capacity is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Process_maintenance_status is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
-pypsa.yaml: Line_s is never false at conjunct 0 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
-pypsa.yaml: Line_loss is never false at conjunct 1 — ParameterDefined(name='Line_active', dims=('snapshot', 'line'))
+pypsa.yaml: Transformer_v_ang_lower is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
+pypsa.yaml: Transformer_v_ang_lower is never false at conjunct 1 — Not(operand=ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',)))
+pypsa.yaml: Transformer_v_ang_lower is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_v_ang_upper is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
+pypsa.yaml: Transformer_v_ang_upper is never false at conjunct 1 — Not(operand=ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',)))
+pypsa.yaml: Transformer_v_ang_upper is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_v_ang_var_lower is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
+pypsa.yaml: Transformer_v_ang_var_lower is never true at conjunct 1 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
+pypsa.yaml: Transformer_v_ang_var_lower is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_v_ang_var_upper is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
+pypsa.yaml: Transformer_v_ang_var_upper is never true at conjunct 1 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
+pypsa.yaml: Transformer_v_ang_var_upper is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_loss_upper is never true at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
+pypsa.yaml: Line_fix_s_lower_security is never false at conjunct 0 — Not(operand=ParameterDefined(name='Line_s_nom_extendable', dims=('line',)))
+pypsa.yaml: Line_fix_s_upper_security is never false at conjunct 0 — Not(operand=ParameterDefined(name='Line_s_nom_extendable', dims=('line',)))
+pypsa.yaml: Line_ext_s_lower_security is never true at conjunct 0 — ParameterDefined(name='Line_s_nom_extendable', dims=('line',))
+pypsa.yaml: Line_ext_s_upper_security is never true at conjunct 0 — ParameterDefined(name='Line_s_nom_extendable', dims=('line',))
+pypsa.yaml: StorageUnit_p_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='StorageUnit_active', dims=('snapshot', 'storage_unit'))), over='snapshot', op='>', value=0.0, dims=('storage_unit',))
+pypsa.yaml: Store_e_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Store_active', dims=('snapshot', 'store'))), over='snapshot', op='>', value=0.0, dims=('store',))
 pypsa.yaml: Transformer_s is never false at conjunct 0 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
+pypsa.yaml: Transformer_loss is never true at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
+pypsa.yaml: Transformer_phase_shift is never true at conjunct 0 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
 pypsa.yaml: Transformer_phase_shift is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa_linearized_uc.yaml: no rung builds Generator_maint_start_horizon
-pypsa_linearized_uc.yaml: Generator_maint_start_horizon is never true at conjunct 1 — ParameterDefined(name='Generator_maintenance_start_blocked', dims=('snapshot', 'generator'))
+pypsa.yaml: Line_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))), over='snapshot', op='>', value=0.0, dims=('line',))
+pypsa.yaml: Transformer_s_nom_ext is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_n_mod is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
+pypsa.yaml: Transformer_n_mod is never false at conjunct 1 — ParameterComparison(name='Transformer_s_nom_mod', op='>', value=0.0, dims=('transformer',))
+pypsa.yaml: Transformer_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))), over='snapshot', op='>', value=0.0, dims=('transformer',))
+pypsa.yaml: StorageUnit_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='StorageUnit_active', dims=('snapshot', 'storage_unit'))), over='snapshot', op='>', value=0.0, dims=('storage_unit',))
+pypsa.yaml: Store_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Store_active', dims=('snapshot', 'store'))), over='snapshot', op='>', value=0.0, dims=('store',))
+pypsa_linearized_uc.yaml: Process_status is always all-or-nothing, so its mask is untested
+pypsa_linearized_uc.yaml: Process_start_up is always all-or-nothing, so its mask is untested
+pypsa_linearized_uc.yaml: Process_shut_down is always all-or-nothing, so its mask is untested
+pypsa_linearized_uc.yaml: Generator_com_p_before is never false at conjunct 1 — Not(operand=ParameterDefined(name='Generator_p_nom_extendable', dims=('generator',)))
+pypsa_linearized_uc.yaml: Generator_com_p_before is never false at conjunct 3 — ParameterDefined(name='Generator_active', dims=('snapshot', 'generator'))
+pypsa_linearized_uc.yaml: Generator_com_p_current is never false at conjunct 1 — Not(operand=ParameterDefined(name='Generator_p_nom_extendable', dims=('generator',)))
+pypsa_linearized_uc.yaml: Generator_com_p_current is never false at conjunct 4 — ParameterDefined(name='Generator_active', dims=('snapshot', 'generator'))
+pypsa_linearized_uc.yaml: Generator_com_partly_start_up is never false at conjunct 1 — Not(operand=ParameterDefined(name='Generator_p_nom_extendable', dims=('generator',)))
+pypsa_linearized_uc.yaml: Generator_com_partly_start_up is never false at conjunct 3 — ParameterDefined(name='Generator_active', dims=('snapshot', 'generator'))
+pypsa_linearized_uc.yaml: Generator_com_partly_shut_down is never false at conjunct 1 — Not(operand=ParameterDefined(name='Generator_p_nom_extendable', dims=('generator',)))
+pypsa_linearized_uc.yaml: Generator_com_partly_shut_down is never false at conjunct 3 — ParameterDefined(name='Generator_active', dims=('snapshot', 'generator'))
+pypsa_linearized_uc.yaml: Link_com_p_before is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Link_start_up_cost'), op='!=', right=Parameter(name='Link_shut_down_cost'), dims=('scenario', 'snapshot', 'link'))), over='snapshot', op='>', value=0.0, dims=('link', 'scenario'))), over='scenario', op='==', value=0.0, dims=('link',))
+pypsa_linearized_uc.yaml: Link_com_p_before is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
+pypsa_linearized_uc.yaml: Link_com_p_current is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Link_start_up_cost'), op='!=', right=Parameter(name='Link_shut_down_cost'), dims=('scenario', 'snapshot', 'link'))), over='snapshot', op='>', value=0.0, dims=('link', 'scenario'))), over='scenario', op='==', value=0.0, dims=('link',))
+pypsa_linearized_uc.yaml: Link_com_p_current is never false at conjunct 4 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
+pypsa_linearized_uc.yaml: Link_com_partly_start_up is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Link_start_up_cost'), op='!=', right=Parameter(name='Link_shut_down_cost'), dims=('scenario', 'snapshot', 'link'))), over='snapshot', op='>', value=0.0, dims=('link', 'scenario'))), over='scenario', op='==', value=0.0, dims=('link',))
+pypsa_linearized_uc.yaml: Link_com_partly_start_up is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
+pypsa_linearized_uc.yaml: Link_com_partly_shut_down is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Link_start_up_cost'), op='!=', right=Parameter(name='Link_shut_down_cost'), dims=('scenario', 'snapshot', 'link'))), over='snapshot', op='>', value=0.0, dims=('link', 'scenario'))), over='scenario', op='==', value=0.0, dims=('link',))
+pypsa_linearized_uc.yaml: Link_com_partly_shut_down is never false at conjunct 3 — ParameterDefined(name='Link_active', dims=('snapshot', 'link'))
+pypsa_linearized_uc.yaml: Process_com_p_before is never false at conjunct 0 — ParameterDefined(name='Process_committable', dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_p_before is never false at conjunct 1 — Not(operand=ParameterDefined(name='Process_p_nom_extendable', dims=('process',)))
+pypsa_linearized_uc.yaml: Process_com_p_before is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Process_start_up_cost'), op='!=', right=Parameter(name='Process_shut_down_cost'), dims=('scenario', 'snapshot', 'process'))), over='snapshot', op='>', value=0.0, dims=('process', 'scenario'))), over='scenario', op='==', value=0.0, dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_p_before is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
+pypsa_linearized_uc.yaml: Process_com_p_current is never false at conjunct 0 — ParameterDefined(name='Process_committable', dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_p_current is never false at conjunct 1 — Not(operand=ParameterDefined(name='Process_p_nom_extendable', dims=('process',)))
+pypsa_linearized_uc.yaml: Process_com_p_current is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Process_start_up_cost'), op='!=', right=Parameter(name='Process_shut_down_cost'), dims=('scenario', 'snapshot', 'process'))), over='snapshot', op='>', value=0.0, dims=('process', 'scenario'))), over='scenario', op='==', value=0.0, dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_p_current is never false at conjunct 4 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
+pypsa_linearized_uc.yaml: Process_com_partly_start_up is never false at conjunct 0 — ParameterDefined(name='Process_committable', dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_partly_start_up is never false at conjunct 1 — Not(operand=ParameterDefined(name='Process_p_nom_extendable', dims=('process',)))
+pypsa_linearized_uc.yaml: Process_com_partly_start_up is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Process_start_up_cost'), op='!=', right=Parameter(name='Process_shut_down_cost'), dims=('scenario', 'snapshot', 'process'))), over='snapshot', op='>', value=0.0, dims=('process', 'scenario'))), over='scenario', op='==', value=0.0, dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_partly_start_up is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
+pypsa_linearized_uc.yaml: Process_com_partly_shut_down is never false at conjunct 0 — ParameterDefined(name='Process_committable', dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_partly_shut_down is never false at conjunct 1 — Not(operand=ParameterDefined(name='Process_p_nom_extendable', dims=('process',)))
+pypsa_linearized_uc.yaml: Process_com_partly_shut_down is never false at conjunct 2 — CountComparison(predicate=Mask(root=CountComparison(predicate=Mask(root=ExpressionComparison(left=Parameter(name='Process_start_up_cost'), op='!=', right=Parameter(name='Process_shut_down_cost'), dims=('scenario', 'snapshot', 'process'))), over='snapshot', op='>', value=0.0, dims=('process', 'scenario'))), over='scenario', op='==', value=0.0, dims=('process',))
+pypsa_linearized_uc.yaml: Process_com_partly_shut_down is never false at conjunct 3 — ParameterDefined(name='Process_active', dims=('snapshot', 'process'))
+pypsa_linearized_uc.yaml: Process_status is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
+pypsa_linearized_uc.yaml: Process_start_up is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
+pypsa_linearized_uc.yaml: Process_shut_down is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
