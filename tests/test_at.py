@@ -391,3 +391,30 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
         assert run.oracle == pytest.approx(40.0), (
             "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
         )
+
+
+def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
+    """A dimension with no labels gives the lookup nothing to read, so every row that reads it is absent.
+
+    A network with no transformers reads its outage factors this way. The oracle
+    once indexed the dimension's first label to stand in for the null reads, and
+    raised where there is none.
+    """
+    from tests.differential import differential
+
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
+        'relations': {'on': {'key': 'g', 'values': 'k', 'missing': 'absent'}},
+        'parameters': {'cap': {'dims': ['k']}},
+        'variables': {'y': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': {'dims': ['g'], 'expression': 'y <= at(cap, by=on[k])'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
+    }
+    sources = {
+        'g': ['a', 'b'],
+        'k': pl.DataFrame({'k': []}, schema={'k': pl.String}),
+        'on': pl.DataFrame({'g': [], 'k': []}, schema={'g': pl.String, 'k': pl.String}),
+        'cap': pl.DataFrame({'k': [], 'value': []}, schema={'k': pl.String, 'value': pl.Float64}),
+    }
+    with differential(spec, sources) as run:
+        assert run.oracle == pytest.approx(10.0), 'no row reads a cap, so each y runs to its bound of 5'

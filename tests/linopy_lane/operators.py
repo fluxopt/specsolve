@@ -141,8 +141,8 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     along a condition the operand already carries.
 
     A null value reads nothing and its row is absent, the same reading
-    ``sum`` gives a null group. It cannot be selected, so a declared label
-    stands in for it and the result is masked back out at exactly those
+    ``sum`` gives a null group. It cannot be selected, so a declared label, or
+    one made up where the dimension has none, stands in for it and the result is masked back out at exactly those
     coordinates, which leaves them holding the operand's own **absence**
     rather than a zero: absence propagates and takes the row with it, where a
     zero would leave a row asserting ``x <= 0`` at a coordinate the model said
@@ -160,9 +160,17 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     if bool(present.all()):
         return array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine)
 
+    for t in into:
+        if not array.sizes[t]:
+            array = array.reindex({t: [_STAND_IN]})
     stood_in = tuple(m.fillna(array.coords[t].to_numpy()[0]) for m, t in zip(mappings, into, strict=True))
     picked = array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine)
     return picked.where(present)
+
+
+#: The label a dimension with no labels takes for :func:`operator_at`, which reads it only at
+#: coordinates the mask then removes: with no label to read, every read is absent.
+_STAND_IN = '__no label__'
 
 
 @dataclass(frozen=True)
