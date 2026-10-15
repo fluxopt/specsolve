@@ -117,9 +117,9 @@ def test_every_negated_dual_is_checked_rather_than_excused():
         for name, reason in duals['negated'].items():
             assert reasons.get(name, {}).get('negated') == reason, f'{stem}: {name} negated for an unrecorded reason'
             entry = duals['per_name'][name]
-            assert entry['matches'] and entry['max_abs_diff'] <= 1e-6, (
-                f"{stem}: {name} is recorded negated but its dual is not the negative of PyPSA's, "
-                f'off by {entry["max_abs_diff"]} at the tolerance the runner compares at'
+            assert entry['matches'] and not entry.get('outside'), (
+                f"{stem}: {name} is recorded negated but its dual is neither the negative of PyPSA's nor inside "
+                f"the range of duals PyPSA's model admits, off by {entry['max_abs_diff']}"
             )
             assert f'`{name}' in index and reason in index, f'{name} and why it is negated are not on the index'
             checked.add(name)

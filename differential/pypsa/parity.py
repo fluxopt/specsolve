@@ -95,6 +95,7 @@ import mathspec  # noqa: E402
 import prep  # noqa: E402  the prep, beside this file
 import projection  # noqa: E402
 import yaml  # noqa: E402
+from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
@@ -421,11 +422,17 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
     return out
 
 
-def _gc_dual(dual, label: str) -> pd.DataFrame:
+def _dual_rows(constraint) -> pd.DataFrame:
+    """A PyPSA constraint's dual per coordinate, with the label of the row that carries it."""
+    if not constraint.dual.ndim:
+        return pd.DataFrame({'dual': [float(constraint.dual)], 'row': [int(constraint.labels)]})
+    frame = constraint.dual.to_dataframe('dual')
+    return frame.assign(row=constraint.labels.to_series().reindex(frame.index).to_numpy()).reset_index()
+
+
+def _gc_dual(constraint, label: str) -> pd.DataFrame:
     """One global constraint's dual as rows — one, or one per scenario where the network has scenarios."""
-    if not dual.ndim:
-        return pd.DataFrame({'name': [label], 'dual': [float(dual)]})
-    return dual.to_dataframe('dual').reset_index().assign(name=label)
+    return _dual_rows(constraint).assign(name=label)
 
 
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
@@ -439,6 +446,10 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
     A name the file writes as PyPSA's row negated carries a ``negated:`` reason
     in ``deviations.yaml`` and is compared against the negative. A ``duals:``
     reason excuses a difference no comparison can express.
+
+    A row whose dual differs still agrees when ours lies in the range of duals
+    PyPSA's own model admits there (`slope_ranges`), which PyPSA's dual must
+    lie in too.
     """
     try:
         result.dual(next(iter(declared.constraints)))
@@ -451,6 +462,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             'differences': {},
         }
     per_name: dict[str, dict] = {}
+    differing: list[tuple[str, int, float, float]] = []
     templates = template_dims(declared, n.model)
     pairs = []
     for block_name, block in declared.constraints.items():
@@ -476,8 +488,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         if their_name[0].isupper():
             if their_name not in n.model.constraints:
                 continue
-            dual = n.model.constraints[their_name].dual
-            theirs = dual.to_dataframe('dual').reset_index() if dual.ndim else pd.DataFrame({'dual': [float(dual)]})
+            theirs = _dual_rows(n.model.constraints[their_name])
             if 'timestep' in theirs.columns:
                 theirs = theirs.drop(columns=['period', 'snapshot'], errors='ignore')
             theirs = theirs.rename(columns=AXES)
@@ -489,13 +500,20 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         else:
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
             theirs = pd.concat(
-                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'].dual, label) for label in labels]
-                or [pd.DataFrame({'name': [], 'dual': []})]
+                [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'], label) for label in labels]
+                or [pd.DataFrame({'name': [], 'dual': [], 'row': []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
         entry = per_name.setdefault(
-            their_name, {'rows': 0, 'max_abs_diff': 0.0, 'negated': bool(reasons.get(their_name, {}).get('negated'))}
+            their_name,
+            {
+                'rows': 0,
+                'max_abs_diff': 0.0,
+                'negated': bool(reasons.get(their_name, {}).get('negated')),
+                'inside': 0,
+                'outside': 0,
+            },
         )
         missing = [k for k in keys if k not in theirs.columns]
         if missing:
@@ -510,9 +528,18 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             print(f'  {block_name} vs {their_name}:\n{off.to_string(index=False)}', file=sys.stderr)
         entry['rows'] += len(joined)
         entry['max_abs_diff'] = round(max(entry['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
+        sign = -1.0 if entry['negated'] else 1.0
+        differing.extend((their_name, int(r.row), sign * r.ours, r.dual) for r in joined[gaps > 1e-6].itertuples())
+    ranges = slope_ranges(n.model, {row for _, row, _, _ in differing}) if differing else {}
+    for their_name, row, ours, theirs in differing:
+        assert inside(theirs, ranges[row]), (
+            f"PyPSA's own dual {theirs} on row {row} of {their_name} lies outside the slopes {ranges[row]} "
+            f'its model shows there, so the measurement is wrong'
+        )
+        per_name[their_name]['inside' if inside(ours, ranges[row]) else 'outside'] += 1
     differences = {}
     for name, entry in per_name.items():
-        entry['matches'] = entry['max_abs_diff'] <= 1e-6 and 'note' not in entry
+        entry['matches'] = entry['outside'] == 0 and 'note' not in entry
         if not entry['matches']:
             differences[name] = {
                 'max_abs_diff': entry['max_abs_diff'],
@@ -522,6 +549,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             }
     return {
         'compared': sum(e['rows'] for e in per_name.values()),
+        'inside': sum(e['inside'] for e in per_name.values()),
         'negated': {
             name: reasons[name]['negated'] for name, e in sorted(per_name.items()) if e['negated'] and e['matches']
         },
@@ -1069,6 +1097,7 @@ def main() -> int:
         priced_ = (
             f'duals on {duals_["compared"]} rows'
             + (f', {len(duals_["negated"])} negated' if duals_['negated'] else '')
+            + (f", {duals_['inside']} inside PyPSA's range" if duals_.get('inside') else '')
             + (f', {len(duals_["differences"])} names differ' if duals_['differences'] else '')
             if duals_['compared']
             else f'no duals — {duals_["skipped"]}'

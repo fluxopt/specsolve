@@ -285,6 +285,7 @@ def _cell_duals(parity: dict) -> str:
     if not duals['compared']:
         return '— integer model, no duals'
     negated = f', {len(duals["negated"])} negated' if duals['negated'] else ''
+    negated += f", {duals['inside']} inside PyPSA's range" if duals.get('inside') else ''
     if not duals['differences']:
         return f'✔ {duals["compared"]} rows{negated}'
     reasons = '; '.join(
@@ -385,7 +386,8 @@ def index(stamped: dict) -> str:
         '| **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros |'
         ' the model handed to HiGHS is the same size on both sides |\n'
         "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
-        ' 1e-6 — against the negative where the file writes the row negated; an integer model has none |\n'
+        " 1e-6, or inside the range of duals PyPSA's model admits on that row — against the negative where the"
+        ' file writes the row negated; an integer model has none |\n'
         '| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the"
@@ -398,6 +400,12 @@ def index(stamped: dict) -> str:
         ' a storage balance with the charge on the left, a ramp written the other way about — the dual is the'
         " negative of PyPSA's, exactly, so the runner compares it against the negative at the same tolerance and the"
         ' claim is under test. Those names are marked `negated` below; a difference surviving the negation is red.\n\n'
+        'A dual that differs is not yet a difference. Where the optimum is degenerate — a unit at its cap exactly'
+        ' as the load reaches it — a row has a range of optimal duals, and the two solvers may return different'
+        " ones. The runner moves that row's right-hand side in PyPSA's own model by 0.001 down and up and"
+        " measures the objective's slope on each side; every value between the two slopes is an optimal dual."
+        " Ours counts as equal if it lies in that range, and PyPSA's must lie there too, or the run stops. The"
+        " count is shown as `inside PyPSA's range`.\n\n"
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
         " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"

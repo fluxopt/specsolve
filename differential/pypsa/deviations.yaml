@@ -48,6 +48,8 @@ Process-shut_down:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Link-p-ramp_limit_down:
   negated: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
+Process-p-ramp_limit_down:
+  negated: the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom — the same row negated, so its dual is the negative
 objective_constant:
   structure: PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it
 solver model:
