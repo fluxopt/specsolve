@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat!: specsolve requires mathspec 0.3.0, where a file says what a missing row means, a sum or a lookup names the columns of its relation, and a dimension declares whether its order counts ([#2047](https://github.com/fluxopt/specsolve/pull/2047))
 - docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))
 - docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
 - docs: the benchmarks page opens on its charts, counts sizes as the columns and rows that reach the solver, and tables what each model declares ([#2042](https://github.com/fluxopt/specsolve/pull/2042))
