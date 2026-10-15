@@ -10,7 +10,6 @@ position                       the gap looks like                   asked
 a divisor under a term         a null coefficient in the share      before the terminal aggregate reads it as 0
 a divisor under a constant     a null value in the piece            before [`constant_scalar`][pieces.constant_scalar] sums it away
 a constant piece the row sees  a null after the join onto the rows  on the rows pass itself
-a constant piece summed away   a coordinate the parameter lacks     of the parameter, the piece no longer showing it
 =============================  ===================================  ==========================================
 
 A coefficient that is not finite, from a divisor that is zero or a value that
@@ -133,14 +132,14 @@ def constant_side(
 
     A coordinate a piece has no row for contributes zero, and the coverage
     check rides on the same pass. A piece built under a ``cases:`` region is
-    owed only inside it. A gap an aggregation summed away is
-    [`refuse_short_constants`][]' question.
+    owed only inside it. A gap a reduction summed away is one summand fewer,
+    as it is for a ``missing: neutral`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant piece with no value at a row it is owed.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
-    uncovered: pl.Expr | None = None
+    gaps: list[str] = []
     carrier = rows
     for i, (p, sign) in enumerate(consts):
         column = f'__const {i}__'
@@ -153,67 +152,20 @@ def constant_side(
             claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
-        uncovered = gap if uncovered is None else uncovered | gap
+        carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
+        gaps.append(f'__gap {i}__')
 
-    gap_column = '__uncovered__'
     built = carrier.select(
         'row',
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
-        *([uncovered.alias(gap_column)] if uncovered is not None else []),
+        *gaps,
     ).pipe(collected)
-    if uncovered is None:
+    if not gaps:
         return built
-    gaps = int(built.get_column(gap_column).sum())
-    if gaps:
-        names = ', '.join(sorted(program.parameters_of(c.lhs, c.rhs)))
-        raise DataError(uncovered_constant_message(names, gaps, subject))
-    return built.drop(gap_column)
-
-
-def refuse_short_constants(
-    scope: Scope,
-    rows: pl.LazyFrame,
-    consts: Sequence[Piece],
-    c: program.ConstraintDeclaration,
-    subject: str,
-    sparse: Collection[str],
-) -> None:
-    """A parameter on a constant side must cover the coordinates the rows ask of it.
-
-    Asked of the parameter, because once a piece is summed its gap is a row
-    that was never there, not a null a join can find. Only names in *sparse*,
-    the parameters short of their coordinate product, are read.
-
-    Raises:
-        DataError: Naming the first short parameter, in name order.
-    """
-    owed = sorted({(name, i) for i, p in enumerate(consts) for name in p.parameters if name in sparse})
-    for name, i in owed:
-        missing = _uncovered_coordinates(scope, rows, name, c, consts[i].region)
-        if missing:
-            raise DataError(uncovered_constant_message(name, missing, subject))
-
-
-def _uncovered_coordinates(
-    scope: Scope,
-    rows: pl.LazyFrame,
-    param: str,
-    c: program.ConstraintDeclaration,
-    region: program.Mask | None,
-) -> int:
-    """How many coordinates *param* owes this constraint and has no row for.
-
-    Dims a reduction summed away are owed whole. A region narrows even where no
-    dim is shared, since one claiming no built row leaves nothing owed.
-    """
-    dims = scope.program.parameters[param].dims
-    shared = tuple(d for d in dims if d in c.dims)
-    summed = tuple(d for d in dims if d not in c.dims)
-    built = rows
-    if region is not None:
-        built = join_on(built, masked(scope, c.dims, region).select(*c.dims), c.dims, 'semi')
-    keys = built.select(*shared).unique() if shared else built.select('row').head(1)
-    needed = join_on(keys, masked(scope, summed, None).select(*summed), (), 'cross') if summed else keys
-    holes = needed.join(scope.data.parameters[param].select(*dims), on=list(dims), how='anti')
-    return int(holes.select(pl.len()).pipe(collected).item())
+    owed = [p.parameters for (p, _), column in zip(consts, gaps, strict=True) if built.get_column(column).any()]
+    if owed:
+        uncovered = int(built.select(pl.any_horizontal(gaps).sum()).item())
+        names = ', '.join(sorted(frozenset[str]().union(*owed)))
+        raise DataError(uncovered_constant_message(names, uncovered, subject))
+    return built.drop(gaps)

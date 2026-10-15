@@ -345,7 +345,8 @@ class Compiler:
         """A parameter as a constant part, keyed by its declared dims, present only at its rows under ``missing: absent``."""
         dims = self.scope.program.parameters[name].dims
         frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
-        presences = (Presence(frame.select(*dims), dims),) if self.scope.absent(name) else ()
+        present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
+        presences = (Presence(present, dims),) if self.scope.absent(name) else ()
         return Piece(dims, frame, 'const', presences=presences, parameters=frozenset({name}))
 
     def _variable_piece(self, name: str) -> Piece:
@@ -505,9 +506,9 @@ class Compiler:
         cannot tell the two apart, so the zero is written here: a dimension
         with no labels, a group its relation maps no member to, and a member a
         ``cases:`` region leaves out all land nowhere. Asked of the piece
-        rather than the relation for that last reason. A parameter short of a
-        member is [`coverage.refuse_short_constants`][]' question. Only for a
-        constant part: a row with no terms is not built.
+        rather than the relation for that last reason. A neutral parameter short
+        of a member is one summand fewer. Only for a constant part: a row with
+        no terms is not built.
         """
         if p.kind != 'const':
             return p

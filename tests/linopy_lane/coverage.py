@@ -71,14 +71,15 @@ def _constant_leaves(
     """Every parameter standing as a constant piece under *node*, with the rows it must cover.
 
     A constant piece is a parameter in a variable-free additive position — `hi`
-    in `x + hi`, or in `sum(x) + sum(hi)`. A parameter a variable stands with in
+    in `x + hi`. Under a sum a missing neutral row is one summand fewer, so a
+    reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
     absence rules allow, so ``coefficient`` records having passed through such a
     product on the way down and suppresses the parameters below it. Additive
     structure, a reduction and a division by it leave the flag as it was; a
     ``cases:`` region narrows the mask as it does for the whole walk.
     """
-    if isinstance(node, program.Variable):
+    if isinstance(node, (program.Variable, program.Sum, program.WindowSum)):
         return
     if isinstance(node, program.Parameter):
         if not coefficient:

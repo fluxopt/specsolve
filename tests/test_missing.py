@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
+import polars as pl
 import pytest
 
 from tests.conftest import override
@@ -134,3 +135,33 @@ def test_a_bool_that_declares_true_masks_in_where_the_data_has_no_row():
     )
     with differential(spec, {'f': ['a', 'b'], 'cap': _only_a(False)}) as run:
         assert run.oracle == pytest.approx(7.0, rel=RTOL), 'only b is built, and it stops at 7'
+
+
+SCALAR: dict[str, Any] = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'omega': {'dims': [], 'missing': 'neutral'}},
+    'variables': {
+        'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 10}},
+        'z': {'dims': [], 'where': 'omega', 'bounds': {'lower': 0, 'upper': 5}},
+    },
+    'constraints': {'c': {'dims': [], 'expression': 'sum(x, over=f) <= 4'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_masks():
+    """A parameter over no dims has one coordinate, so under `missing: neutral` an empty table is its missing row.
+
+    `z` exists only where `omega` has a row, so it is not built.
+    """
+    empty = pl.DataFrame({'value': []}, schema={'value': pl.Float64})
+    with differential(SCALAR, {'f': ['a', 'b'], 'omega': empty}) as run:
+        assert run.oracle == pytest.approx(4.0, rel=RTOL), 'the x sum to their cap of 4'
+        assert run.engine.diagnostics().columns == 2, 'the two x and no z'
+
+
+def test_a_dimensionless_parameter_with_no_row_is_refused_by_default():
+    """With no `missing:`, the one coordinate needs its row."""
+    spec = override(SCALAR, **{'parameters.omega': {'dims': []}})
+    empty = pl.DataFrame({'value': []}, schema={'value': pl.Float64})
+    both_lanes_refuse(spec, {'f': ['a', 'b'], 'omega': empty}, match="parameter 'omega' is declared with no dims")

@@ -84,7 +84,6 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
     'constraint',
     [
         pytest.param({'dims': ['t'], 'expression': 'w * x <= c'}, id='at the row key'),
-        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, id='under a sum'),
         pytest.param({'dims': ['t'], 'expression': 'w * x <= c + sum(c, over=t)'}, id='beside a sum of itself'),
     ],
 )
@@ -92,6 +91,23 @@ def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint)
     """A reduction between the parameter and the row does not hide the hole (#1465)."""
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'objective'),
+    [
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, 9.0, id='under-a-sum'),
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
+    ],
+)
+def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
+    """Inside a sum a missing `neutral` row contributes nothing, so the row is built from the rows the data has.
+
+    `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
+    """
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
+    with differential(spec, SPARSE_CONSTANT_DATA) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), f'the sum of c is 4 + 5, so {objective}'
 
 
 def test_a_where_is_the_escape_from_the_constant_side_check():
@@ -114,15 +130,6 @@ def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     `w * x <= 100 - c`.
     """
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
-
-
-def test_a_constant_piece_beside_a_term_is_refused_through_a_reduction():
-    """The same piece under a sum, which would sum the gap away (#1521)."""
-    spec = override(
-        SPARSE_COEFFICIENT_SPEC,
-        **{'constraints.cap': {'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 100'}},
-    )
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
@@ -250,20 +257,14 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_member_with_no_value_is_still_refused_through_a_group():
-    """A group short of a member's value keeps the refusal.
+def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
+    """A group short of a member's value sums the members it has, when the parameter is `neutral`.
 
-    Dropping `g2`'s row leaves `north`'s group with one member and a hole, not
-    with no members.
+    Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
-    with (
-        pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
-        differential(
-            override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'}),
-            _grouped_constant_sources(capacity=('g1',)),
-        ),
-    ):
-        pass
+    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'})
+    with differential(spec, _grouped_constant_sources(capacity=('g1',))) as run:
+        assert run.oracle == pytest.approx(3.0, rel=RTOL), 'north imports up to 3 and south up to 0'
 
 
 ABSENT_VARIABLE_SPEC = {

@@ -214,7 +214,11 @@ def load_parameters(
     """
     arrays: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        arr = _from_tidy(tidy[pname].collect(), pdef.dims)
+        frame = tidy[pname].collect()
+        if not pdef.dims and frame.is_empty():
+            arrays[pname] = xr.DataArray(_fill(pdef, pdef.dtype == 'bool'))
+            continue
+        arr = _from_tidy(frame, pdef.dims)
         if pdef.dims:
             if pdef.missing == 'refused':
                 _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)

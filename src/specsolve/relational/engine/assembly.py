@@ -282,8 +282,6 @@ class Assembly:
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        neutral = {n for n in self.measured.sparse if self.program.parameters[n].missing != 'absent'}
-        coverage.refuse_short_constants(self.scope, frame, pieces, c, subject, neutral)
         rows = coverage.constant_side(self.scope, frame, consts, c, subject)
 
         if not terms and not quads:

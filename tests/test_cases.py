@@ -392,12 +392,14 @@ def test_a_cased_quantity_summed_onto_a_constant_side_builds():
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
 
 
-def test_a_hole_the_summed_region_reads_is_still_refused():
-    """A hole under the sum inside the region is refused (#1465)."""
+def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
+    """A neutral hole under the sum inside the region contributes nothing (#1465).
+
+    Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
+    """
     holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
-    both_lanes_refuse(
-        SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed}), match=r"parameter 'hi' covers 1 fewer coordinate"
-    )
+    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed})) as run:
+        assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the flagged steps cap at 40 and 30, the rest at 5'
 
 
 #: The flow an outage takes off its line: the line's flow where it stands,

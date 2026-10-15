@@ -88,7 +88,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             )
     given: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        if not p.dims or p.missing in ('absent', 'neutral', None):
+        if p.missing in ('absent', 'neutral', None):
             continue
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
@@ -147,6 +147,8 @@ def _filled(
     frame: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.DataFrame:
     """*frame* with a row at every coordinate of *dims*, *value* where the data has none."""
+    if not dims:
+        return frame if frame.height else pl.DataFrame({VALUE: [value]}, schema={VALUE: frame.schema[VALUE]})
     product = _product(dims, lambda d: d, dimensions)
     filled = product.join(frame.lazy(), on=list(dims), how='left').with_columns(pl.col(VALUE).fill_null(value))
     return filled.select(*dims, pl.col(VALUE).cast(frame.schema[VALUE])).pipe(collected)
