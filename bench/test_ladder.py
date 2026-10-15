@@ -361,7 +361,9 @@ def test_rebuild(benchmark: Any, paths: Any, ceiling: Any, builds: int, case_nam
     First is the first build in a process that has imported its library already
     (`test_fresh` adds the import); steady is what a rolling horizon pays for
     every build after it. Not `isolate=True` and
-    sink-free, because repeated builds in one process are the question. Not at
+    sink-free, because repeated builds in one process are the question, so it
+    has no peak of its own: `Ceiling.reached` refuses it above a rung where
+    its arm ran out of memory on any sink. Not at
     the rungs between decades: its table is a row per rung, not a curve.
     `conftest.py` deselects it under CodSpeed.
     """
