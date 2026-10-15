@@ -157,8 +157,8 @@ def test_emit(
 
     Every arm starts from the same parquet and stops at the same seam, and pays
     for its own data ingestion. A floor arm is the exception: it times its
-    ``load`` alone, the finished arrays built by ``load_setup`` in the spawned
-    child before the clock starts.
+    ``load`` alone, over the finished arrays ``prepare`` wrote and
+    ``load_setup`` reads back in the spawned child.
     """
     missing = unmeasurable(arm, case_name, sink) or ceiling.reached(arm, case_name, size, sink)
     if missing:

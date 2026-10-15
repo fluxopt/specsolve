@@ -28,7 +28,7 @@ REQUIRES = ('gurobipy',)
 
 
 class Prepared(NamedTuple):
-    """Where the parquet is; every verb reads it inside its call, the matrix floor's `load` excepted."""
+    """Where the parquet is; every verb reads it inside its call, the matrix floor's `load_setup` excepted."""
 
     dialect: str
     case_name: str
@@ -46,7 +46,9 @@ class Arrays(NamedTuple):
     obj: Any
     lb: Any
     ub: Any
-    csc: tuple[Any, Any, Any]
+    data: Any
+    indices: Any
+    indptr: Any
     sense: Any
     rhs: Any
 
@@ -66,7 +68,9 @@ def matrix_arrays(case_name: str, tables: Mapping[str, Any]) -> Arrays:
         obj=lp.obj,
         lb=lp.lower,
         ub=lp.upper,
-        csc=(matrix.data, matrix.indices, matrix.indptr),
+        data=matrix.data,
+        indices=matrix.indices,
+        indptr=matrix.indptr,
         sense=np.asarray(lp.senses, dtype='S1'),
         rhs=lp.rhs,
     )
@@ -87,7 +91,7 @@ def matrix_loaded(env: Any, arrays: Arrays) -> Any:
         obj=arrays.obj,
         lb=arrays.lb,
         ub=arrays.ub,
-        constr_csc=arrays.csc,
+        constr_csc=(arrays.data, arrays.indices, arrays.indptr),
         sense=arrays.sense,
         rhs=arrays.rhs,
     )

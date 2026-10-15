@@ -2,9 +2,9 @@
 
 Raw solver API, no modelling layer: the `highs` counterpart of
 `gurobipy-matrix`, built from the same `bench/models/<case>/matrix.py`. The
-published number is `load`: one `passModel` over arrays `load_setup` built
-outside the clock, so it is what handing a model to HiGHS costs and nothing
-before that. The other verbs read the parquet and build inside their own call.
+published number is `load`: one `passModel` over the arrays `prepare` built
+and `load_setup` read back, so it is what handing a model to HiGHS costs and
+nothing before that. The other verbs read the parquet and build inside their own call.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ DIALECT = 'highspy-matrix'
 
 
 class Prepared(NamedTuple):
-    """Where the parquet is; every verb reads it, `load` excepted."""
+    """Where the parquet is; every verb reads it, `load_setup` excepted, which reads the finished arrays."""
 
     case_name: str
     paths: dict[str, str]
@@ -49,8 +49,13 @@ class Arrays(NamedTuple):
 
 
 def prepare(case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> Prepared:
+    """Where the parquet is, with the finished arrays built from it and written beside it."""
+    from bench.arms import write_finished
+
     del size, options
-    return Prepared(case_name, dict(paths))
+    prepared = Prepared(case_name, dict(paths))
+    write_finished(prepared.paths, DIALECT, _arrays(prepared))
+    return prepared
 
 
 def _row_bounds(lp: Any) -> tuple[Any, Any]:
@@ -137,9 +142,11 @@ def _counts(highs: Any) -> Counts:
 
 
 def load_setup(sink: str, prepared: Prepared) -> tuple[tuple[Arrays], dict[str, Any]]:
-    """The finished arrays `load` hands over, built before the clock starts."""
+    """The finished arrays `load` hands over, read back from where `prepare` wrote them."""
+    from bench.arms import read_finished
+
     del sink
-    return (_arrays(prepared),), {}
+    return (read_finished(prepared.paths, DIALECT, Arrays),), {}
 
 
 def load(arrays: Arrays) -> Counts:
