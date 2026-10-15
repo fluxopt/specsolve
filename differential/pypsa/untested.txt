@@ -4,33 +4,10 @@
 pypsa.yaml: Process_maint_event_count is always all-or-nothing, so its mask is untested
 pypsa.yaml: Process_maint_window is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_s_nom_modularity is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung builds Line_v_ang_lower
-pypsa.yaml: no rung builds Line_v_ang_upper
 pypsa.yaml: Line_loss_upper is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss_tangents_forward is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss_tangents_reverse is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung builds Transformer_fix_s_lower
-pypsa.yaml: no rung builds Transformer_fix_s_upper
-pypsa.yaml: Transformer_ext_s_lower is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_ext_s_upper is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_ext_s_nom_lower is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung builds Transformer_ext_s_nom_upper
-pypsa.yaml: no rung builds Transformer_s_nom_set
 pypsa.yaml: Transformer_s_nom_modularity is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung builds Transformer_s_set
-pypsa.yaml: no rung builds Transformer_v_ang_lower
-pypsa.yaml: no rung builds Transformer_v_ang_upper
-pypsa.yaml: no rung builds Transformer_v_ang_var_lower
-pypsa.yaml: no rung builds Transformer_v_ang_var_upper
-pypsa.yaml: no rung builds Transformer_loss_upper
-pypsa.yaml: no rung builds Transformer_loss_tangents_forward
-pypsa.yaml: no rung builds Transformer_loss_tangents_reverse
-pypsa.yaml: no rung builds Line_ext_s_lower_security
-pypsa.yaml: no rung builds Line_ext_s_upper_security
-pypsa.yaml: no rung builds Transformer_fix_s_lower_security
-pypsa.yaml: no rung builds Transformer_fix_s_upper_security
-pypsa.yaml: no rung builds Transformer_ext_s_lower_security
-pypsa.yaml: no rung builds Transformer_ext_s_upper_security
 pypsa.yaml: StorageUnit_p_nom_modularity is always all-or-nothing, so its mask is untested
 pypsa.yaml: Store_e_nom_modularity is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR_excess is always all-or-nothing, so its mask is untested
@@ -39,79 +16,33 @@ pypsa.yaml: Process_maintenance is always all-or-nothing, so its mask is unteste
 pypsa.yaml: Process_maintenance_start is always all-or-nothing, so its mask is untested
 pypsa.yaml: Line_loss is always all-or-nothing, so its mask is untested
 pypsa.yaml: Transformer_s is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung builds Transformer_loss
-pypsa.yaml: no rung builds Transformer_phase_shift
 pypsa.yaml: Line_n_mod is always all-or-nothing, so its mask is untested
-pypsa.yaml: Transformer_s_nom_ext is always all-or-nothing, so its mask is untested
 pypsa.yaml: Transformer_n_mod is always all-or-nothing, so its mask is untested
 pypsa.yaml: StorageUnit_n_mod is always all-or-nothing, so its mask is untested
 pypsa.yaml: Store_n_mod is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR_a is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR_theta is always all-or-nothing, so its mask is untested
 pypsa.yaml: CVaR is always all-or-nothing, so its mask is untested
-pypsa.yaml: no rung feeds Line_v_ang_max
-pypsa.yaml: no rung feeds Outage_transformer
 pypsa.yaml: no rung feeds Process_tech_capacity_weight
-pypsa.yaml: no rung feeds Transformer_BODF
-pypsa.yaml: no rung feeds Transformer_cycle_weight
-pypsa.yaml: no rung feeds Transformer_loss_offset
-pypsa.yaml: no rung feeds Transformer_loss_slope
-pypsa.yaml: no rung feeds Transformer_phase_shift_cycle_weight
-pypsa.yaml: no rung feeds Transformer_phase_shift_weight
-pypsa.yaml: no rung feeds Transformer_s_nom_set
-pypsa.yaml: no rung feeds Transformer_s_set
-pypsa.yaml: no rung feeds Transformer_v_ang_max
 pypsa.yaml: Process_com_ext_p_lower_nonneg is never false at conjunct 1 — ParameterDefined(name='Process_p_min_pu_nonneg', dims=('process',))
 pypsa.yaml: Line_s_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))), over='snapshot', op='>', value=0.0, dims=('line',))
-pypsa.yaml: Line_v_ang_lower is never true at conjunct 0 — ParameterDefined(name='Line_v_ang_max', dims=('scenario', 'line'))
-pypsa.yaml: Line_v_ang_upper is never true at conjunct 0 — ParameterDefined(name='Line_v_ang_max', dims=('scenario', 'line'))
 pypsa.yaml: Line_loss_tangents_forward is never false at conjunct 0 — NamedMask(name='Line_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))))
 pypsa.yaml: Line_loss_tangents_reverse is never false at conjunct 0 — NamedMask(name='Line_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))))
-pypsa.yaml: Transformer_fix_s_lower is never true at conjunct 0 — Not(operand=ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',)))
 pypsa.yaml: Transformer_fix_s_lower is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_fix_s_upper is never true at conjunct 0 — Not(operand=ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',)))
 pypsa.yaml: Transformer_fix_s_upper is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_ext_s_lower is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
 pypsa.yaml: Transformer_ext_s_lower is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_ext_s_upper is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
 pypsa.yaml: Transformer_ext_s_upper is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_ext_s_nom_lower is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_ext_s_nom_upper is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_ext_s_nom_upper is never true at conjunct 1 — ParameterDefined(name='Transformer_s_nom_max', dims=('scenario', 'transformer'))
-pypsa.yaml: Transformer_s_nom_set is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_s_nom_set is never true at conjunct 1 — ParameterDefined(name='Transformer_s_nom_set', dims=('transformer',))
-pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 1 — ParameterComparison(name='Transformer_s_nom_mod', op='>', value=0.0, dims=('transformer',))
 pypsa.yaml: Transformer_s_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))), over='snapshot', op='>', value=0.0, dims=('transformer',))
-pypsa.yaml: Transformer_s_set is never true at conjunct 0 — ParameterDefined(name='Transformer_s_set', dims=('scenario', 'snapshot', 'transformer'))
 pypsa.yaml: Transformer_s_set is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_v_ang_lower is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
-pypsa.yaml: Transformer_v_ang_lower is never false at conjunct 1 — Not(operand=ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',)))
 pypsa.yaml: Transformer_v_ang_lower is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_v_ang_upper is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
-pypsa.yaml: Transformer_v_ang_upper is never false at conjunct 1 — Not(operand=ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',)))
 pypsa.yaml: Transformer_v_ang_upper is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_v_ang_var_lower is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
-pypsa.yaml: Transformer_v_ang_var_lower is never true at conjunct 1 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
 pypsa.yaml: Transformer_v_ang_var_lower is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_v_ang_var_upper is never true at conjunct 0 — ParameterDefined(name='Transformer_v_ang_max', dims=('scenario', 'transformer'))
-pypsa.yaml: Transformer_v_ang_var_upper is never true at conjunct 1 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
 pypsa.yaml: Transformer_v_ang_var_upper is never false at conjunct 2 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss_upper is never true at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
-pypsa.yaml: Line_fix_s_lower_security is never false at conjunct 0 — Not(operand=ParameterDefined(name='Line_s_nom_extendable', dims=('line',)))
-pypsa.yaml: Line_fix_s_upper_security is never false at conjunct 0 — Not(operand=ParameterDefined(name='Line_s_nom_extendable', dims=('line',)))
-pypsa.yaml: Line_ext_s_lower_security is never true at conjunct 0 — ParameterDefined(name='Line_s_nom_extendable', dims=('line',))
-pypsa.yaml: Line_ext_s_upper_security is never true at conjunct 0 — ParameterDefined(name='Line_s_nom_extendable', dims=('line',))
 pypsa.yaml: StorageUnit_p_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='StorageUnit_active', dims=('snapshot', 'storage_unit'))), over='snapshot', op='>', value=0.0, dims=('storage_unit',))
 pypsa.yaml: Store_e_nom_modularity is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Store_active', dims=('snapshot', 'store'))), over='snapshot', op='>', value=0.0, dims=('store',))
 pypsa.yaml: Transformer_s is never false at conjunct 0 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
-pypsa.yaml: Transformer_loss is never true at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
-pypsa.yaml: Transformer_phase_shift is never true at conjunct 0 — ParameterDefined(name='Transformer_phase_shift_varying', dims=('transformer',))
 pypsa.yaml: Transformer_phase_shift is never false at conjunct 1 — ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))
 pypsa.yaml: Line_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Line_active', dims=('snapshot', 'line'))), over='snapshot', op='>', value=0.0, dims=('line',))
-pypsa.yaml: Transformer_s_nom_ext is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_n_mod is never false at conjunct 0 — ParameterDefined(name='Transformer_s_nom_extendable', dims=('transformer',))
-pypsa.yaml: Transformer_n_mod is never false at conjunct 1 — ParameterComparison(name='Transformer_s_nom_mod', op='>', value=0.0, dims=('transformer',))
 pypsa.yaml: Transformer_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))), over='snapshot', op='>', value=0.0, dims=('transformer',))
 pypsa.yaml: StorageUnit_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='StorageUnit_active', dims=('snapshot', 'storage_unit'))), over='snapshot', op='>', value=0.0, dims=('storage_unit',))
 pypsa.yaml: Store_n_mod is never false at conjunct 2 — CountComparison(predicate=Mask(root=ParameterDefined(name='Store_active', dims=('snapshot', 'store'))), over='snapshot', op='>', value=0.0, dims=('store',))
@@ -153,3 +84,13 @@ pypsa_linearized_uc.yaml: Process_com_partly_shut_down is never false at conjunc
 pypsa_linearized_uc.yaml: Process_status is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
 pypsa_linearized_uc.yaml: Process_start_up is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
 pypsa_linearized_uc.yaml: Process_shut_down is never false at conjunct 0 — NamedMask(name='Process_committed', body=And(left=ParameterDefined(name='Process_committable', dims=('process',)), right=ParameterDefined(name='Process_active', dims=('snapshot', 'process'))))
+pypsa.yaml: Transformer_loss_upper is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_loss_tangents_forward is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_loss_tangents_reverse is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_loss is always all-or-nothing, so its mask is untested
+pypsa.yaml: Transformer_loss_tangents_forward is never false at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
+pypsa.yaml: Transformer_loss_tangents_reverse is never false at conjunct 0 — NamedMask(name='Transformer_lossy', body=And(left=ParameterDefined(name='transmission_losses', dims=()), right=ParameterDefined(name='Transformer_active', dims=('snapshot', 'transformer'))))
+pypsa.yaml: Transformer_fix_s_lower_security is never false at conjunct 1 — JoinedPredicate(operand=Mask(root=ParameterDefined(name='Transformer_BODF', dims=('period', 'transformer', 'outage'))), columns=JoinColumns(name='snapshot_period', relation=RelationDeclaration(columns=(('snapshot', 'snapshot'), ('period', 'period')), key=('snapshot',), missing='refused', description='the investment period a snapshot falls in'), joined=('period',), grouped=('snapshot',)), dims=('outage', 'snapshot', 'transformer'))
+pypsa.yaml: Transformer_fix_s_upper_security is never false at conjunct 1 — JoinedPredicate(operand=Mask(root=ParameterDefined(name='Transformer_BODF', dims=('period', 'transformer', 'outage'))), columns=JoinColumns(name='snapshot_period', relation=RelationDeclaration(columns=(('snapshot', 'snapshot'), ('period', 'period')), key=('snapshot',), missing='refused', description='the investment period a snapshot falls in'), joined=('period',), grouped=('snapshot',)), dims=('outage', 'snapshot', 'transformer'))
+pypsa.yaml: Transformer_ext_s_lower_security is never false at conjunct 1 — JoinedPredicate(operand=Mask(root=ParameterDefined(name='Transformer_BODF', dims=('period', 'transformer', 'outage'))), columns=JoinColumns(name='snapshot_period', relation=RelationDeclaration(columns=(('snapshot', 'snapshot'), ('period', 'period')), key=('snapshot',), missing='refused', description='the investment period a snapshot falls in'), joined=('period',), grouped=('snapshot',)), dims=('outage', 'snapshot', 'transformer'))
+pypsa.yaml: Transformer_ext_s_upper_security is never false at conjunct 1 — JoinedPredicate(operand=Mask(root=ParameterDefined(name='Transformer_BODF', dims=('period', 'transformer', 'outage'))), columns=JoinColumns(name='snapshot_period', relation=RelationDeclaration(columns=(('snapshot', 'snapshot'), ('period', 'period')), key=('snapshot',), missing='refused', description='the investment period a snapshot falls in'), joined=('period',), grouped=('snapshot',)), dims=('outage', 'snapshot', 'transformer'))
