@@ -7,31 +7,43 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))
-- docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
-- docs: the benchmarks page opens on its charts, counts sizes as the columns and rows that reach the solver, and tables what each model declares ([#2042](https://github.com/fluxopt/specsolve/pull/2042))
-- docs: the benchmark charts share one pair of axes across every model, and a box dragged on any chart zooms all of them ([#2040](https://github.com/fluxopt/specsolve/pull/2040))
-- docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
-- docs(benchmarks): the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
-- fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
+## 0.9.1 (2026-10-15)
+
+**Two fixes to constraints that lose rows, a faster start for a small model
+read from files, and a rebuilt benchmarks page.** Model files and archives from
+0.9.0 work as before.
+
+Fixes:
+
 - fix(engine): a quadratic row keeps its own pair when a row before it has no term ([#2028](https://github.com/fluxopt/specsolve/pull/2028))
-- docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
-- docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
-- docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
-- docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
-- docs: the benchmark charts zoom to a range of model sizes, on log and linear axes ([#1993](https://github.com/fluxopt/specsolve/pull/1993))
-- docs: the benchmark charts show each library relative to specsolve, and the spread of each point ([#1994](https://github.com/fluxopt/specsolve/pull/1994))
-- docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
-- docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
-- docs: the published benchmarks are re-measured with the network and sparse models, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005))
-- docs: the benchmark charts project a refused size as a range that opens from the last measured step, and no longer count a fixed cost again at each step ([#2007](https://github.com/fluxopt/specsolve/pull/2007))
-- docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
-- docs: the guide to faster solves says that a small model builds faster on one polars thread, and times it when the page is built ([#2016](https://github.com/fluxopt/specsolve/pull/2016))
-- docs: the guide to faster solves gives the gain from one polars thread as a rough estimate, and tells the reader to time their own model ([#2017](https://github.com/fluxopt/specsolve/pull/2017))
+- fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
+
+Speed:
+
 - perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
+
+The benchmarks page:
+
+- docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
+- docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
 - docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
-- docs: the published benchmarks are re-measured with the sector-coupled model ([#2024](https://github.com/fluxopt/specsolve/pull/2024))
-- docs: the published benchmarks are re-measured with the network model's pooled plants ([#2031](https://github.com/fluxopt/specsolve/pull/2031))
+- docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
+- docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
+- docs: the published benchmarks are re-measured with each new model and size, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005), [#2024](https://github.com/fluxopt/specsolve/pull/2024), [#2031](https://github.com/fluxopt/specsolve/pull/2031), [#2039](https://github.com/fluxopt/specsolve/pull/2039))
+- docs: the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
+- docs: the benchmarks page opens on its charts, counts sizes as the columns and rows that reach the solver, and tables what each model declares ([#2042](https://github.com/fluxopt/specsolve/pull/2042))
+- docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
+- docs: the benchmark charts show each library relative to specsolve, and the spread of each point ([#1994](https://github.com/fluxopt/specsolve/pull/1994))
+- docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
+- docs: the benchmark charts project a refused size as a range that opens from the last measured step, and no longer count a fixed cost again at each step ([#2007](https://github.com/fluxopt/specsolve/pull/2007))
+- docs: the benchmark charts share one pair of axes across every model, and a box dragged on any chart zooms all of them ([#2040](https://github.com/fluxopt/specsolve/pull/2040), [#1993](https://github.com/fluxopt/specsolve/pull/1993))
+- docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
+- docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))
+
+Other docs:
+
+- docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
+- docs: the guide to faster solves says that a small model builds faster on one polars thread, gives the gain as a rough estimate, and times it when the page is built ([#2016](https://github.com/fluxopt/specsolve/pull/2016), [#2017](https://github.com/fluxopt/specsolve/pull/2017))
 
 ## 0.9.0 (2026-10-12)
 
