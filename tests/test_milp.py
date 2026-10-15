@@ -20,7 +20,7 @@ from tests.differential import differential
 
 COMMITMENT_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 
 parameters:

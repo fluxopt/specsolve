@@ -35,8 +35,8 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$ — the capacity a generator is to hold, for the generators whose capacity is already decided |
-| $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{T} \times \mathcal{G}`$ — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
+| $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$, `absent` where the data has no row — the capacity a generator is to hold, for the generators whose capacity is already decided |
+| $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -47,6 +47,20 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom,max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
+```
 
 #### Objective
 
@@ -80,20 +94,6 @@ p_{t,g} = \mathrm{p}^{\mathrm{set}}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g
 \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -112,6 +112,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -140,11 +141,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the capacity a generator is to hold, for the generators whose capacity is
           already decided
         dims: [generator]
+        missing: absent
       p_set:
         description: >-
           the output a generator is to deliver, for the snapshots in which it is
           scheduled rather than chosen
         dims: [snapshot, generator]
+        missing: absent
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -187,7 +190,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nodal_balance:
         description: what is generated at a bus meets the load there
         dims: [snapshot, bus]
-        expression: sum(p, by=gen_bus, over=generator, into=bus) == load
+        expression: sum(p, over=generator, by=gen_bus[bus]) == load
 
     objective:
       sense: minimize

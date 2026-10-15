@@ -27,7 +27,7 @@ description: a zonal limit where a generator's zone changes by period
 
 dimensions:
   generator: {dtype: str, description: a generating unit}
-  period: {dtype: int, description: a planning period}
+  period: {dtype: int, description: a planning period, ordered: true}
   zone: {dtype: str, description: a bidding zone}
 
 relations:
@@ -35,6 +35,7 @@ relations:
     key: [generator, period]
     values: zone
     description: the zone a generator bids into in one period
+    missing: absent
 
 parameters:
   cost: {dims: [generator], description: marginal cost of a unit of output}
@@ -50,7 +51,7 @@ variables:
 constraints:
   zonal:
     dims: [period, zone]
-    expression: sum(p, by=zone_of, over=generator, into=zone) <= zone_cap
+    expression: sum(p, over=generator, by=zone_of[zone]) <= zone_cap
     description: a zone's output stays under its cap, period by period
   meet_demand:
     dims: [period]
@@ -140,7 +141,7 @@ def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
         **{
             'constraints.zonal': {
                 'dims': ['generator', 'period'],
-                'expression': 'p <= at(zone_cap, by=zone_of, over=zone, into=generator)',
+                'expression': 'p <= at(zone_cap, by=zone_of[zone])',
             }
         },
     )
@@ -177,7 +178,7 @@ def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
 
 def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
     """A model whose one constraint walks *relations*, both ends named where the declaration leaves a choice."""
-    declared = {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int'}}
+    declared = {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int', 'ordered': True}}
     sides = [side for r in relations.values() for side in (r['key'], r.get('values', []))]
     over = [d for s in sides for d in (s.values() if isinstance(s, dict) else [s] if isinstance(s, str) else s)]
     used = {'generator', 'period', *dims, *over}
@@ -196,7 +197,7 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
     [
         pytest.param(
             {'season_of': {'key': ['generator', 'period'], 'values': 'bus'}},
-            'shift(p, along=period, offset=1, edge=0, by=season_of, within=bus) >= load',
+            'shift(p, along=period, offset=1, edge=0, within=season_of[bus]) >= load',
             ['generator', 'period'],
             r"a partition by 'season_of' groups by a map keyed by \['generator', 'period'\]",
             id='a-partition-by-a-conditioned-map',

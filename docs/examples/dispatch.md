@@ -42,6 +42,14 @@ Least-cost dispatch of a generator fleet against an hourly load.
 |---|---|
 | $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
 
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G} \,:\, \bar p_{g} > 0
+```
+
 #### Objective
 
 ```math
@@ -54,14 +62,6 @@ Least-cost dispatch of a generator fleet against an hourly load.
 
 ```math
 \sum_{g \in \mathcal{G}} p_{s,g} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G} \,:\, \bar p_{g} > 0
 ```
 
 </details>
@@ -78,6 +78,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units
 

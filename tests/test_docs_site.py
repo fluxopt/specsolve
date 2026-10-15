@@ -164,7 +164,7 @@ def _headings(page: Path) -> set[str]:
 
 def test_the_translation_table_names_every_built_in_operator():
     """`What a construct becomes` is a copy of the builder, so something checks it."""
-    from mathspec import BUILTIN_NAMES
+    from mathspec.spec import BUILTIN_NAMES
 
     page = (DOCS / 'development' / 'verification.md').read_text()
     section = page.split('### What a construct becomes')[1].split('### The same language')[0]
@@ -177,10 +177,10 @@ def test_the_translation_table_names_every_built_in_operator():
     )
 
 
-def _gen_bus_direction(program: Any) -> Any:
-    """One map read one way — what a `by=` node stands on, whichever operator takes it."""
+def _gen_bus_lookup(program: Any) -> Any:
+    """One map joined as a lookup, ``at(x, by=gen_bus[bus])``."""
     gen_bus = program.RelationDeclaration((('g', 'g'), ('bus', 'bus')), ('g',))
-    return program.Direction('gen_bus', gen_bus, ('g',), ('bus',), ())
+    return program.JoinColumns('gen_bus', gen_bus, joined=('bus',), grouped=('g',))
 
 
 def test_the_plan_table_names_every_expression_node():
@@ -210,13 +210,12 @@ def test_the_plan_table_names_every_expression_node():
             program.Multiply(x, x),
             program.Divide(x, program.Parameter('p')),
             program.Power(program.Parameter('p'), program.Constant(2.0)),
-            program.Sum(x, ('t',)),
-            program.GroupSum(x, _gen_bus_direction(program)),
-            program.Pullback(x, _gen_bus_direction(program)),
+            program.Sum(x, (program.Axis('t'),)),
+            program.Join(x, _gen_bus_lookup(program)),
             program.Translate(x, 't', 1, wrap=False),
             program.WindowSum(x, 't', 3, wrap=False),
             program.Cases((program.Region(program.Mask(program.BooleanLiteral(True)), x),)),
-            program.Named('e', x),
+            program.NamedExpression('e', x),
         )
     }
     assert set(nodes) == {c.__name__ for c in get_args(program.Expression)}, (

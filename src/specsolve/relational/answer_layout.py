@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
 #: What an answer carries only where the solve asked for it with ``outputs=``,
 #: beside the primal, the duals and the declared expressions it always

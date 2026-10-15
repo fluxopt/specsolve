@@ -7,6 +7,7 @@ dimensions:
   snapshot:
     description: dispatch periods, cyclic at the horizon
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -115,11 +116,11 @@ constraints:
       the stores, meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=link_to, over=link, into=bus)
-      - sum(f, by=link_from, over=link, into=bus)
-      + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-      - sum(p_store, by=storage_bus, over=storage, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=link, by=link_to[bus])
+      - sum(f, over=link, by=link_from[bus])
+      + sum(p_dispatch, over=storage, by=storage_bus[bus])
+      - sum(p_store, over=storage, by=storage_bus[bus])
       == load
 
   ramp_up:

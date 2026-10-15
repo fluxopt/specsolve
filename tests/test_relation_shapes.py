@@ -104,13 +104,13 @@ def _two_value_sources(demand: float) -> dict[str, Any]:
 
 
 def test_a_sum_through_one_relation_lands_on_a_product_of_dimensions(tmp_path):
-    """`sum(p, by=gen_bt, over=generator, into=[bus, technology])` is one walk onto both value columns.
+    """`sum(p, over=generator, by=gen_bt[bus, technology])` is one walk onto both value columns.
 
     (a, wind) caps `g1` at 10 and (a, sun) caps `g2` at 5, which is 15 of the
     20 demanded. The rest comes from (b, wind), shared by `g3` and `g4`, so
     the cheaper `g3` takes it: 10 + 10 + 15.
     """
-    spec = _two_value_spec('sum(p, by=gen_bt, over=generator, into=[bus, technology]) <= limit', demand=20)
+    spec = _two_value_spec('sum(p, over=generator, by=gen_bt[bus, technology]) <= limit', demand=20)
     objective, primals = _solved(spec, _two_value_sources(20), tmp_path)
     assert objective == pytest.approx(35.0, rel=RTOL), '10 at cost 1, 5 at cost 2, and 5 of the shared pair at cost 3'
     assert primals['p'] == pytest.approx({'g1': 10.0, 'g2': 5.0, 'g3': 5.0, 'g4': 0.0}), (
@@ -119,12 +119,12 @@ def test_a_sum_through_one_relation_lands_on_a_product_of_dimensions(tmp_path):
 
 
 def test_a_pullback_reads_a_two_column_slot_at_each_generator(tmp_path):
-    """`at(limit, by=gen_bt, over=[bus, technology], into=generator)` is the adjoint: each generator's own limit.
+    """`at(limit, by=gen_bt[bus, technology])` is the adjoint: each generator's own limit.
 
     Bounded one by one rather than as a group, `g3` and `g4` each take (b,
     wind)'s 7, so 24 is reachable: 10 + 5 + 7 + 2.
     """
-    spec = _two_value_spec('p <= at(limit, by=gen_bt, over=[bus, technology], into=generator)', demand=24)
+    spec = _two_value_spec('p <= at(limit, by=gen_bt[bus, technology])', demand=24)
     spec['constraints']['capped']['dims'] = ['generator']
     objective, primals = _solved(spec, _two_value_sources(24), tmp_path)
     assert objective == pytest.approx(10 * 1.0 + 5 * 2.0 + 7 * 3.0 + 2 * 4.0, rel=RTOL), (
@@ -141,7 +141,7 @@ def test_a_combination_no_member_lands_on_is_an_empty_sum_on_a_constant_side(tmp
     model for a constant side with no value where the row is built.
     """
     spec = _two_value_spec(
-        'headroom <= limit - sum(bonus, by=gen_bt, over=generator, into=[bus, technology])', demand=0, headroom=True
+        'headroom <= limit - sum(bonus, over=generator, by=gen_bt[bus, technology])', demand=0, headroom=True
     )
     objective, primals = _solved(spec, _two_value_sources(0), tmp_path)
     assert primals['headroom'][('b', 'sun')] == pytest.approx(1.0), 'the empty combination is worth its whole limit'
@@ -178,8 +178,10 @@ def test_a_walk_onto_a_dimension_the_operand_carries_is_refused_and_names_the_re
     agrees with — which is the same answer as multiplying outside, reached by a
     spelling that hides what the call adds.
     """
-    spec = _masked_sum_spec('sum(load * p, by=gen_bus, over=generator, into=bus) <= cap')
-    with pytest.raises(DimensionError, match=r"sum\(by=gen_bus\) lands on \['bus'\], which the expression already"):
+    spec = _masked_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
+    with pytest.raises(
+        DimensionError, match=r"sum\(by=gen_bus\[bus\]\) groups by \['bus'\], which the expression already carries"
+    ):
         sps.check(spec)
 
 
@@ -189,7 +191,7 @@ def test_the_factor_over_the_landed_dimension_multiplies_outside(tmp_path):
     Bus a holds `load_a * p1` and bus b holds `load_b * p2`, under caps of 4 —
     so 4 and 2.
     """
-    spec = _masked_sum_spec('load * sum(p, by=gen_bus, over=generator, into=bus) <= cap')
+    spec = _masked_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
     objective, primals = _solved(spec, MASKED_SUM_SOURCES, tmp_path)
     assert primals['p'] == pytest.approx({'g1': 4.0, 'g2': 2.0}), "each generator weighed by its own bus's load"
     assert objective == pytest.approx(6.0, rel=RTOL), '4 under a load of 1, and 2 under a load of 2'
@@ -206,11 +208,11 @@ CONNECTION = pl.DataFrame({'generator': ['g1', 'g1', 'g2'], 'bus': ['a', 'b', 'b
 def _bare_spec() -> dict[str, Any]:
     return {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-        'relations': {'connection': {'key': ['generator', 'bus']}},
+        'relations': {'connection': {'key': ['generator', 'bus'], 'missing': 'absent'}},
         'parameters': {'limit': {'dims': ['bus']}, 'w': {'dims': ['generator']}},
         'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {
-            'capped': {'dims': ['bus'], 'expression': 'sum(p, by=connection, over=generator, into=bus) <= limit'}
+            'capped': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=connection[bus]) <= limit'}
         },
         'objective': {'sense': 'maximize', 'expression': 'sum(p)'},
     }
@@ -244,7 +246,7 @@ def test_a_constant_summed_through_a_bare_relation_reads_zero_where_nothing_reac
     spec['variables']['x'] = {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}}
     spec['constraints']['under'] = {
         'dims': ['bus'],
-        'expression': 'x <= sum(w, by=connection, over=generator, into=bus)',
+        'expression': 'x <= sum(w, over=generator, by=connection[bus])',
     }
     spec['objective'] = {'sense': 'maximize', 'expression': 'sum(x)'}
     objective, primals = _solved(spec, _bare_sources(), tmp_path)
@@ -279,15 +281,15 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
     from tests.oracle import pd
 
     spec = {
-        'dimensions': {'snapshot': {'dtype': 'int'}},
-        'relations': {'cover': {'key': {'start': 'snapshot', 'covered': 'snapshot'}}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
+        'relations': {'cover': {'key': {'start': 'snapshot', 'covered': 'snapshot'}, 'missing': 'absent'}},
         'parameters': {'cost': {'dims': ['snapshot']}},
         'variables': {
             's': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}},
             'm': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}},
         },
         'constraints': {
-            'window': {'dims': ['snapshot'], 'expression': 'm == sum(s, by=cover, over=start, into=covered)'},
+            'window': {'dims': ['snapshot'], 'expression': 'm == sum(s, over=start, by=cover[covered])'},
             'once': {'dims': [], 'expression': 'sum(s) == 1'},
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(m * cost)'},
@@ -326,8 +328,12 @@ SEASON_OF = pl.DataFrame(
 
 def _conditioned_partition_spec(constraint: dict[str, Any]) -> dict[str, Any]:
     return {
-        'dimensions': {'generator': {'dtype': 'str'}, 'period': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-        'relations': {'season_of': {'key': ['generator', 'period'], 'values': 'season'}},
+        'dimensions': {
+            'generator': {'dtype': 'str'},
+            'period': {'dtype': 'int', 'ordered': True},
+            'season': {'dtype': 'str'},
+        },
+        'relations': {'season_of': {'key': ['generator', 'period'], 'values': 'season', 'missing': 'absent'}},
         'parameters': {},
         'variables': {'p': {'dims': ['generator', 'period'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'rule': constraint},
@@ -350,7 +356,7 @@ def test_a_shift_grouped_by_a_conditioned_map_stays_inside_each_generators_own_s
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'p <= shift(p, along=period, offset=1, edge=0, by=season_of, within=season) + 1',
+            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=season_of[season]) + 1',
         }
     )
     objective, primals = _solved(spec, _conditioned_partition_sources(), tmp_path)
@@ -369,7 +375,7 @@ def test_a_window_grouped_by_a_conditioned_map_stops_at_each_generators_own_seas
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'sum_back(p, along=period, window=2, by=season_of, within=season) <= 3',
+            'expression': 'sum_back(p, along=period, window=2, within=season_of[season]) <= 3',
         }
     )
     objective, _primals = _solved(spec, _conditioned_partition_sources(), tmp_path)
@@ -377,7 +383,7 @@ def test_a_window_grouped_by_a_conditioned_map_stops_at_each_generators_own_seas
 
 
 def test_a_position_grouped_by_a_conditioned_map_marks_each_generators_own_first_period(tmp_path):
-    """`position(period, by=season_of, within=season) == 0` is the first period of each (generator, season) group.
+    """`position(period, within=season_of[season]) == 0` is the first period of each (generator, season) group.
 
     Four of the eight coordinates are a group's first — `g1` at 1 and 3, `g2`
     at 1 and 2 — and the rule pins those to zero.
@@ -385,7 +391,7 @@ def test_a_position_grouped_by_a_conditioned_map_marks_each_generators_own_first
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'where': 'position(period, by=season_of, within=season) == 0',
+            'where': 'position(period, within=season_of[season]) == 0',
             'expression': 'p <= 0',
         }
     )
@@ -407,7 +413,7 @@ def test_a_pair_the_conditioned_partition_leaves_out_reaches_nothing(tmp_path):
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'p <= shift(p, along=period, offset=1, edge=0, by=season_of, within=season) + 1',
+            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=season_of[season]) + 1',
         }
     )
     objective, primals = _solved(spec, sources, tmp_path)
@@ -429,7 +435,7 @@ REP_OF = pl.DataFrame({'snapshot': SNAPSHOTS, 'rep': [0, 0, 2]})
 
 def _self_map_spec(constraints: dict[str, Any]) -> dict[str, Any]:
     return {
-        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
         'relations': {'rep_of': {'key': 'snapshot', 'values': {'rep': 'snapshot'}}},
         'parameters': {'price': {'dims': ['snapshot']}},
         'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 5}}},
@@ -456,7 +462,7 @@ def test_a_shift_partitioned_by_a_self_map_walks_inside_each_representatives_gro
         {
             'ramp': {
                 'dims': ['snapshot'],
-                'expression': 'p <= shift(p, along=snapshot, offset=1, edge=0, by=rep_of, within=rep) + 1',
+                'expression': 'p <= shift(p, along=snapshot, offset=1, edge=0, within=rep_of[rep]) + 1',
             }
         }
     )
@@ -479,15 +485,13 @@ def _ends_spec() -> dict[str, Any]:
         'relations': {'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}}},
         'parameters': {'load': {'dims': ['bus']}, 'cost': {'dims': ['bus']}},
         'variables': {
-            'f': {'dims': ['line'], 'where': 'ends.bus0 != ends.bus1', 'bounds': {'lower': 0, 'upper': 10}},
+            'f': {'dims': ['line'], 'where': 'ends[bus0] != ends[bus1]', 'bounds': {'lower': 0, 'upper': 10}},
             'gen': {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}},
         },
         'constraints': {
             'balance': {
                 'dims': ['bus'],
-                'expression': (
-                    'gen + sum(f, by=ends, over=line, into=bus1) - sum(f, by=ends, over=line, into=bus0) == load'
-                ),
+                'expression': ('gen + sum(f, over=line, by=ends[bus1]) - sum(f, over=line, by=ends[bus0]) == load'),
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(gen * cost)'},
@@ -517,6 +521,6 @@ def test_one_table_walked_to_each_of_its_two_ends_is_the_nodal_balance(tmp_path)
 
 
 def test_a_where_compares_two_columns_of_one_relation_row_by_row():
-    """`ends.bus0 != ends.bus1` excludes the self-loop and nothing else."""
+    """`ends[bus0] != ends[bus1]` excludes the self-loop and nothing else."""
     with sps.solve(_ends_spec(), _ends_sources()) as result:
         assert sorted(result.primal('f')['line'].to_list()) == ['l1', 'l2'], 'the self-loop `l3` has no column'

@@ -35,7 +35,7 @@ from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 SNAPSHOTS = list(range(40))
 GENERATORS = [f'g{i}' for i in range(6)]
 DISPATCH = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['snapshot', 'generator']},

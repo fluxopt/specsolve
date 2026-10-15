@@ -6,6 +6,7 @@ a variable is built has to see its frame.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,13 @@ class Scope:
     program: program.Program
     data: AttachedSources
     variables: Mapping[str, Labelled]
+
+    def absent(self, param: str) -> bool:
+        """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
+        declaration = self.program.parameters[param]
+        if declaration.missing != 'absent':
+            return False
+        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in declaration.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.

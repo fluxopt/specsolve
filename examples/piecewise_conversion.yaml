@@ -7,6 +7,7 @@ dimensions:
   time:
     description: dispatch periods
     dtype: int
+    ordered: true
   converter:
     description: units converting one carrier into others
     dtype: str
@@ -16,6 +17,7 @@ dimensions:
   bp:
     description: breakpoints, as many as the longest curve needs
     dtype: int
+    ordered: true
 
 relations:
   converter_of:
@@ -27,22 +29,27 @@ parameters:
   bp_rate:
     description: what each flow runs at, at each breakpoint of its converter's curve
     dims: [flow, bp]
+    missing: absent
   bp_present:
     description: how far each converter's curve runs
     dims: [converter, bp]
     dtype: bool
+    missing: neutral
   rate_max:
     description: what each flow runs at when its converter is at its last breakpoint
     dims: [flow]
   is_heat:
     description: which flows deliver heat
     dims: [flow]
+    missing: neutral
   is_power:
     description: which flows deliver power
     dims: [flow]
+    missing: neutral
   fuel_price:
     description: what a unit of each input flow costs
     dims: [flow]
+    missing: neutral
   heat_demand:
     description: heat to be delivered
     dims: [time]
@@ -85,7 +92,7 @@ constraints:
   on_the_curve:
     description: every flow reads its own value off its converter's weights
     dims: [flow, time]
-    expression: rate == sum(at(weight, by=converter_of, over=converter, into=flow) * bp_rate, over=bp)
+    expression: rate == sum(at(weight, by=converter_of[converter]) * bp_rate, over=bp)
   heat_balance:
     description: heat delivered meets the demand
     dims: [time]

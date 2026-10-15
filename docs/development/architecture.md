@@ -139,27 +139,26 @@ absence is pushed into the operand first
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row const piece |
 | `Parameter` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `absence: zero` |
+| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `missing: neutral` |
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
 | `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic piece |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
-| `Sum` | `sum(x)`, `sum(x, over=d)` | many-to-one | the summed dims projected away — no aggregate |
-| `GroupSum` | `sum(x, by=r, over=c, into=d)` | many-to-one | one inner join with the relation's table on the columns the direction consumes and joins on, the consumed dims traded for the produced ones; a bare relation fans a member out to every target |
-| `Pullback` | `at(x, by=r, over=d, into=c)` | one-to-one | the same table joined the other way, fanning out |
+| `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dims traded for the added ones, and a bare relation fans a member out to every group |
+| `Join` | `at(x, by=r[d])` | one-to-one | the relation's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the piece lists concatenated |
-| `Named` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
+| `NamedExpression` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 **The engine only builds.** Every refusal about the shape of a file is made
 upstream. The engine raises `DataError` about the data, and `SpecsolveError`
 for the one construct the language accepts and this lane cannot build (#1137).
 
-**Neither reduction aggregates.** A `Sum` drops columns, a `GroupSum` swaps
-them and a `WindowSum` replicates rows. Every duplicate collapses once, in the
+**Neither reduction aggregates.** A `Sum` drops columns or, through a
+relation, swaps them, and a `WindowSum` replicates rows. Every duplicate collapses once, in the
 terminal `SUM(coeff) GROUP BY row, col` at assembly.
 
 ## The relational lane

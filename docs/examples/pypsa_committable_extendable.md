@@ -45,7 +45,7 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 |---|---|
 | $`\mathrm{p}^{\mathrm{min,pu}}`$ | `p_min_pu` over $`\mathcal{G}`$ — share of its built capacity a committed unit must produce while on |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
-| $`\mathrm{big\_m}`$ | `big_m` over $`\mathcal{G}`$ — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
+| $`\mathrm{big\_m}`$ | `big_m` over $`\mathcal{G}`$, `absent` where the data has no row — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
@@ -59,6 +59,26 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 | $`\mathit{status}`$ | `status` over $`\mathcal{T} \times \mathcal{G}`$ — is this unit committed in this snapshot? Declared only for the units that carry a big-M, which is what marks a unit as committed rather than merely dispatched |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{min,pu}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
+```
+
+**`status`**
+
+```math
+\mathit{status}_{t,g} \in \{0, 1\} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{big\_m}_{g} \text{ is defined}
+```
 
 #### Objective
 
@@ -92,26 +112,6 @@ p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} - \mathrm{
 \sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
-```
-
-**`status`**
-
-```math
-\mathit{status}_{t,g} \in \{0, 1\} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{big\_m}_{g} \text{ is defined}
-```
-
 </details>
 <!-- math:end -->
 
@@ -131,6 +131,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units, some of which are committed rather than merely dispatched
         dtype: str
@@ -148,6 +149,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           its own — the capacity ceiling times the availability, and present only for
           the units that are committed at all
         dims: [generator]
+        missing: absent
       marginal_cost:
         description: cost of one unit of output
         dims: [generator]

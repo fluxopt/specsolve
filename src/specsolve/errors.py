@@ -14,10 +14,10 @@ Example::
         ...
 """
 
-from mathspec import DimensionError, LanguageError, SchemaError
+from mathspec.errors import DimensionError, LanguageError, SchemaError
 
 # An alias, not a subclass, so ``except SpecsolveError`` catches a ``LanguageError``.
-from mathspec import MathSpecError as SpecsolveError
+from mathspec.errors import MathSpecError as SpecsolveError
 
 
 class SpecsolveWarning(UserWarning):

@@ -42,7 +42,7 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a piece exists, and what keys it.
 
-    Not which rows the piece's frame has: a sparse parameter's missing rows
+    Not which rows the piece's frame has: a neutral parameter's missing rows
     are a zero coefficient, a masked variable's are absence, and the frame
     cannot tell them apart.
 
@@ -172,12 +172,10 @@ def absence_restrictions(pieces: Sequence[Piece]) -> list[Presence]:
 FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
 
 
-def acted_along(expression: program.Sum | program.GroupSum | program.WindowSum) -> tuple[str, ...]:
-    """The dims a node that is not one-to-one sums along."""
+def acted_along(expression: program.Sum | program.WindowSum) -> tuple[str, ...]:
+    """The dims a node that is not one-to-one sums along, a join's axis by the dimension it runs over."""
     if isinstance(expression, program.Sum):
-        return expression.over
-    if isinstance(expression, program.GroupSum):
-        return tuple(expression.direction.consumed_dims)
+        return tuple(axis.dimension for axis in expression.over)
     return (expression.along,)
 
 
@@ -187,9 +185,9 @@ def fan_in(expression: program.Expression) -> FanIn:
     Both classes other than ``'one-to-one'`` sum several input slots into an
     output row, so [`propagate_absence`][] runs before them.
     """
-    if isinstance(expression, program.Named):
+    if isinstance(expression, program.NamedExpression):
         return fan_in(expression.body)
-    if isinstance(expression, (program.Sum, program.GroupSum)):
+    if isinstance(expression, program.Sum):
         return 'many-to-one'
     if isinstance(expression, program.WindowSum):
         return 'one-to-many'
@@ -205,7 +203,7 @@ def fan_in(expression: program.Expression) -> FanIn:
             program.Multiply,
             program.Power,
             program.Divide,
-            program.Pullback,
+            program.Join,
             program.Translate,
             program.Cases,
         ),
@@ -286,6 +284,15 @@ def _paired(a: Piece, b: Piece, right: pl.LazyFrame, how: JoinStrategy) -> tuple
     return joined, a.dims + tuple(d for d in b.dims if d not in a.dims)
 
 
+def _keyed(p: Piece) -> tuple[Presence, ...]:
+    """*p*'s presences with their keys spelled out, before a product gives them a piece over more dims.
+
+    An implied key is the piece's own dims, and the product's are a superset,
+    so carried over unspelled it would name columns the frame does not hold.
+    """
+    return tuple(Presence(x.frame, x.keys(p.dims)) for x in p.presences)
+
+
 def join_mul(a: Piece, c: Piece, kind: Kind, divide: bool = False) -> Piece:
     """``a * c`` (or ``a / c``) where *c* is a const piece, broadcast over the dims not shared.
 
@@ -316,7 +323,7 @@ def join_mul(a: Piece, c: Piece, kind: Kind, divide: bool = False) -> Piece:
         dims=out_dims,
         frame=frame,
         kind=kind,
-        presences=a.presences + c.presences,
+        presences=_keyed(a) + _keyed(c),
         region=both_regions(a.region, c.region),
         parameters=parameters,
     )
@@ -336,7 +343,7 @@ def join_pow(a: Piece, b: Piece) -> Piece:
         out_dims,
         frame,
         'const',
-        presences=a.presences + b.presences,
+        presences=_keyed(a) + _keyed(b),
         region=both_regions(a.region, b.region),
         parameters=a.parameters | b.parameters,
     )
@@ -354,4 +361,4 @@ def join_quad(a: Piece, b: Piece) -> Piece:
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
         *out_dims, *carried_columns('quad')
     )
-    return Piece(out_dims, frame, 'quad', presences=a.presences + b.presences, region=both_regions(a.region, b.region))
+    return Piece(out_dims, frame, 'quad', presences=_keyed(a) + _keyed(b), region=both_regions(a.region, b.region))

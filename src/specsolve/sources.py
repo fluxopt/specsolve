@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import polars.selectors as cs
-from mathspec import did_you_mean
+from mathspec.errors import did_you_mean
 from mathspec.program import ParameterDeclaration
 
 from specsolve.assumptions import validate_assumptions

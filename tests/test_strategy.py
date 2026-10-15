@@ -45,7 +45,7 @@ DISPATCH = DISPATCH_SPEC
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: masked `soc_open` supplies it from a carried parameter.
 WINDOW = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -85,7 +85,7 @@ WINDOW = {
 #: cannot empty itself before the seam; otherwise every window ends at zero and
 #: carrying the state is indistinguishable from not carrying it.
 MULTI_STORE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'generator': {'dtype': 'str'}, 'storage': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}, 'storage': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},
@@ -681,7 +681,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     """
     spec = override(
         SPENDING,
-        **{'parameters.scale': {'dims': ['t']}, 'expressions.ratio': 'load / scale'},
+        **{'parameters.scale': {'dims': ['t'], 'missing': 'neutral'}, 'expressions.ratio': 'load / scale'},
     )
     sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
     with pytest.warns(sps.errors.SpecsolveWarning, match="'scale' has no rows for snapshot 1"):
@@ -1154,7 +1154,7 @@ def test_an_axis_reads_back_from_the_json_of_its_dict(axis):
 
 
 def test_an_axis_that_carries_nothing_writes_no_carry_key():
-    """The ``axis.json`` of an archive whose sweep carried nothing holds no ``carry``, as ``INPUTS_LAYOUT`` 1 has it."""
+    """The ``axis.json`` of an archive whose sweep carried nothing holds no ``carry``, as ``INPUTS_LAYOUT`` has it."""
     assert sps.EachCoordinate('period').to_dict() == {'each': 'coordinate', 'dim': 'period'}, (
         'no carry key where nothing is carried'
     )
@@ -1850,16 +1850,16 @@ def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
 
 
 def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
-    """`shift(..., by=day_of, within=day)` reaches within the groups the relation makes, and
+    """`shift(..., within=day_of[day])` reaches within the groups the relation makes, and
     whether a window cuts a group is nothing the driver computes."""
     spec = _horizon(
         {
             'dims': ['t', 'generator'],
-            'expression': 'p >= shift(p, along=t, offset=1, by=day_of, within=day, edge=0) - at(day_cap, by=day_of, over=day, into=t)',
+            'expression': 'p >= shift(p, along=t, offset=1, within=day_of[day], edge=0) - at(day_cap, by=day_of[day])',
         },
         day_cap={'dims': ['day']},
     )
-    spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int'}}
+    spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int', 'ordered': True}}
     spec['relations'] = {'day_of': {'key': 't', 'values': 'day'}}
     with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 'day_of'"):
         sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
@@ -1940,7 +1940,7 @@ def test_a_sweep_takes_every_source_shape_solve_takes(spec, sources, axis, plain
 
 
 def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
-    """`cost` stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
+    """`cost`, declared neutral, stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
 
     The warning comes before a slice is taken, naming the source, the
     coordinate it lacks, and a source that has it.
@@ -1948,7 +1948,11 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
     sources = myopic_sources()
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
     with pytest.warns(sps.errors.SpecsolveWarning, match=r"'cost' has no rows for period 3, which 'demand' has"):
-        runs = sps.solve_over(MYOPIC, sources, sps.EachCoordinate('period', carry={'existing': 'total'}))
+        runs = sps.solve_over(
+            override(MYOPIC, **{'parameters.cost.missing': 'neutral'}),
+            sources,
+            sps.EachCoordinate('period', carry={'existing': 'total'}),
+        )
     assert runs.record['objective'].to_list()[-1] == 0.0, 'the sweep still runs, and period 3 is free'
 
 
@@ -2025,7 +2029,8 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     What a worker receives is the document already read, so no slice reads
     the YAML again. Counted at the language's own front door.
     """
-    from mathspec import Spec, validation
+    from mathspec import validation
+    from mathspec.spec import Spec
 
     from specsolve import inputs
 

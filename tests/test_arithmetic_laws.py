@@ -170,7 +170,7 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
 
 
 def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows():
-    """``absence: zero`` builds the model the two complementary ``where`` blocks build."""
+    """``missing: neutral`` builds the model the two complementary ``where`` blocks build."""
     minimise_x = 'sum((-1) * x)'
     two_blocks = _objective_of(
         'x + y >= 60',
@@ -180,12 +180,12 @@ def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows()
     )
 
     spec = _spec('x + y >= 60', objective=minimise_x, dims=['f', 't'])
-    spec['variables']['y']['absence'] = 'zero'
+    spec['variables']['y']['missing'] = 'neutral'
     with differential(spec, DATA, lp=True) as run:
         declared = float(run.result.objective)
 
     assert declared == pytest.approx(two_blocks, rel=RTOL), (
-        'absence: zero builds the model the two complementary blocks build'
+        'missing: neutral builds the model the two complementary blocks build'
     )
     assert declared == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL), (
         'f=b keeps its row, and with y worth zero there x carries the whole 60 itself'
@@ -193,17 +193,17 @@ def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows()
 
 
 def test_absence_zero_does_not_disturb_a_reduction():
-    """A reduction sums the y's that exist, so ``absence: zero`` changes nothing there."""
+    """A reduction sums the y's that exist, so ``missing: neutral`` changes nothing there."""
     total = 'sum(y, over=f) <= 40'
     undefined = _objective_of(total, objective='sum(y)')
 
     spec = _spec(total, objective='sum(y)')
-    spec['variables']['y']['absence'] = 'zero'
+    spec['variables']['y']['missing'] = 'neutral'
     with differential(spec, DATA, lp=True) as run:
         zero = float(run.result.objective)
 
     assert zero == pytest.approx(undefined, rel=RTOL), (
-        'a reduction sums what exists under either reading — absence: zero adds zeros to it'
+        'a reduction sums what exists under either reading — missing: neutral adds zeros to it'
     )
 
 
@@ -241,13 +241,17 @@ PLAIN_COORDS = {'f': pd.Index(['a', 'b', 'c', 'd'], name='f'), 't': pd.Index([0,
 def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
     """The wide fixture solved through both lanes; ``g`` and ``grp`` only for the grouped cases (#488)."""
     grouped = 'g' in dims
-    dimensions = {'g': {}, 'f': {}, 't': {'dtype': 'int'}} if grouped else {'f': {}, 't': {'dtype': 'int'}}
+    dimensions = (
+        {'g': {}, 'f': {}, 't': {'dtype': 'int', 'ordered': True}}
+        if grouped
+        else {'f': {}, 't': {'dtype': 'int', 'ordered': True}}
+    )
     spec = {
         'dimensions': dimensions,
         **({'relations': {'grp': {'key': 'f', 'values': 'g'}}} if grouped else {}),
         'parameters': {
-            'gate': {'dims': ['f'], 'dtype': 'bool'},
-            'gate2': {'dims': ['f'], 'dtype': 'bool'},
+            'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+            'gate2': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
             'w': {'dims': ['f']},
         },
         'variables': {
@@ -264,10 +268,8 @@ def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
 
 def test_sum_does_not_distribute_over_addition_either():
     """A grouped `sum` is a reduction, so the non-law applies to it unchanged (#314)."""
-    together = _wide_objective_of('sum(x + y, by=grp, over=f, into=g) <= 120', dims=['g', 't'])
-    apart = _wide_objective_of(
-        'sum(x, by=grp, over=f, into=g) + sum(y, by=grp, over=f, into=g) <= 120', dims=['g', 't']
-    )
+    together = _wide_objective_of('sum(x + y, over=f, by=grp[g]) <= 120', dims=['g', 't'])
+    apart = _wide_objective_of('sum(x, over=f, by=grp[g]) + sum(y, over=f, by=grp[g]) <= 120', dims=['g', 't'])
 
     assert together == pytest.approx(640.0, rel=RTOL)
     assert apart == pytest.approx(480.0, rel=RTOL)
@@ -303,8 +305,8 @@ def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
     summand is absent for every `f`.
     """
     spec = {
-        'dimensions': {'f': {}, 't': {'dtype': 'int'}},
-        'parameters': {'tgate': {'dims': ['t'], 'dtype': 'bool'}},
+        'dimensions': {'f': {}, 't': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'tgate': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'}},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'dims': ['f', 't'], 'where': 'tgate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -328,7 +330,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
     can show; shifting ``x`` itself would let the ``t=1`` row mask the result.
     """
     spec = {
-        'dimensions': {'f': {}, 't': {'dtype': 'int'}},
+        'dimensions': {'f': {}, 't': {'dtype': 'int', 'ordered': True}},
         'parameters': {},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -348,7 +350,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
 #: The divisor fixture, varied per test by :func:`override`.
 DIVISOR_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f']}},
+    'parameters': {'d': {'dims': ['f'], 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'dims': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -442,7 +444,7 @@ def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
     spec = override(
         DIVISOR_SPEC,
         **{
-            'parameters.active': {'dims': ['f'], 'dtype': 'bool'},
+            'parameters.active': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
             'constraints.c.where': 'active',
         },
     )
@@ -579,7 +581,7 @@ def test_a_zero_divisor_has_the_escape_a_sparse_one_has(patch):
 #: `sum(w, over=g)` is 3, and no single summand is: a divisor, base or exponent
 #: taken summand by summand reads 1/2 + 1/1, 2² + 1² or 2² + 2¹ instead.
 WHOLE_SUM = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'w': {'dims': ['g']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
@@ -618,7 +620,7 @@ def test_a_sparse_divisor_under_a_summed_divisor_is_still_refused():
     spec = override(
         WHOLE_SUM,
         **{
-            'parameters.d': {'dims': ['g']},
+            'parameters.d': {'dims': ['g'], 'missing': 'neutral'},
             'constraints.c': {'dims': ['t'], 'expression': 'x / sum(w / d, over=g) >= 1'},
         },
     )

@@ -31,7 +31,8 @@ from typing import Any, NamedTuple, get_args
 
 import pytest
 import yaml
-from mathspec import Spec, to_spec
+from mathspec import to_spec
+from mathspec.spec import Spec
 
 import specsolve as sps
 from specsolve.api import Model

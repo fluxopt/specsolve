@@ -15,14 +15,18 @@ import specsolve as sps
 from specsolve.errors import LanguageError
 
 NETWORK = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'bus': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'bus': {'dtype': 'str'}},
     'given': {'expressions': {'Bus_injection': {'dims': ['snapshot', 'bus']}, 'total_cost': {'dims': []}}},
     'constraints': {'Bus_balance': {'dims': ['snapshot', 'bus'], 'expression': 'Bus_injection == 0'}},
     'objective': {'sense': 'minimize', 'expression': 'total_cost'},
 }
 
 GENERATOR = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'bus': {'dtype': 'str'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {
+        'snapshot': {'dtype': 'int', 'ordered': True},
+        'bus': {'dtype': 'str'},
+        'generator': {'dtype': 'str'},
+    },
     'relations': {'Generator_bus': {'key': 'generator', 'values': 'bus'}},
     'parameters': {'Generator_p_nom': {'dims': ['generator']}, 'Generator_marginal_cost': {'dims': ['generator']}},
     'variables': {
@@ -31,7 +35,7 @@ GENERATOR = {
     'given': {'expressions': {'Bus_injection': {'dims': ['snapshot', 'bus']}, 'total_cost': {'dims': []}}},
     'expressions': {
         'Generator_injection': {
-            'expression': 'sum(Generator_p, by=Generator_bus, over=generator, into=bus)',
+            'expression': 'sum(Generator_p, over=generator, by=Generator_bus[bus])',
             'adds_to': 'Bus_injection',
         },
         'Generator_cost': {'expression': 'sum(Generator_p * Generator_marginal_cost)', 'adds_to': 'total_cost'},
@@ -39,13 +43,13 @@ GENERATOR = {
 }
 
 LOAD = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
     'relations': {'Load_bus': {'key': 'load', 'values': 'bus'}},
     'parameters': {'Load_p_set': {'dims': ['snapshot', 'load']}},
     'given': {'expressions': {'Bus_injection': {'dims': ['snapshot', 'bus']}}},
     'expressions': {
         'Load_injection': {
-            'expression': '-sum(Load_p_set, by=Load_bus, over=load, into=bus)',
+            'expression': '-sum(Load_p_set, over=load, by=Load_bus[bus])',
             'adds_to': 'Bus_injection',
         },
     },
@@ -77,7 +81,7 @@ def test_a_merged_spec_solves_to_the_cost_a_hand_computes():
         pytest.param(LOAD, "'Bus_injection'", id='a-component-that-adds-a-term'),
         pytest.param(
             {
-                'dimensions': {'snapshot': {'dtype': 'int'}},
+                'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
                 'parameters': {'load': {'dims': ['snapshot']}},
                 'given': {'variables': {'supply': {'dims': ['snapshot']}}},
                 'constraints': {'meet': {'dims': ['snapshot'], 'expression': 'supply >= load'}},

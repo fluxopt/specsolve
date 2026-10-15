@@ -24,6 +24,7 @@ parameters:
       distance along an arc, with no row on the diagonal — a city has no
       distance to itself, so no arc variable exists there
     dims: [from_city, to_city]
+    missing: absent
   n:
     description: the number of cities, which is the big-M the ordering rows need
     dims: []
@@ -61,8 +62,8 @@ constraints:
     dims: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, by=as_from, over=city, into=from_city)
-      - sum(u, by=as_to, over=city, into=to_city)
+      sum(u, over=city, by=as_from[from_city])
+      - sum(u, over=city, by=as_to[to_city])
       + n * travel
       <= n - 1
 

@@ -25,7 +25,7 @@ BROADCAST_MASK_SPEC = {
         'carrier': {'dtype': 'str'},
     },
     'parameters': {
-        'produces': {'dims': ['tech', 'carrier']},
+        'produces': {'dims': ['tech', 'carrier'], 'missing': 'neutral'},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
         'installed': {'dims': ['node', 'tech']},
@@ -47,8 +47,8 @@ def _grid(dims, labels, values):
 
 
 SPARSE_COEFFICIENT_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'c': {'dims': ['t'], 'missing': 'neutral'}, 'w': {'dims': ['t'], 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -150,7 +150,7 @@ GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
@@ -182,13 +182,13 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
 #: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
-    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int'}},
+    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
     'variables': {'imports': {'dims': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
         'import_limit': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=snapshot)'},
@@ -223,7 +223,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus', 'technology'],
-            'expression': 'imports <= sum(capacity, by=gen_placement, over=generator, into=[bus, technology])',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_placement[bus, technology])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=technology)'},
@@ -258,14 +258,21 @@ def test_a_member_with_no_value_is_still_refused_through_a_group():
     """
     with (
         pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
-        differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(capacity=('g1',))),
+        differential(
+            override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'}),
+            _grouped_constant_sources(capacity=('g1',)),
+        ),
     ):
         pass
 
 
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -297,7 +304,11 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 #: One rule per block, so the two regimes are two named constraints.
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -329,7 +340,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'dims': ['f'], 'missing': 'neutral'}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 50}},

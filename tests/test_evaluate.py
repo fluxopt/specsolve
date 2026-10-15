@@ -16,7 +16,7 @@ from specsolve.relational.engine.compiler import Compiler
 
 SPEC = {
     'dimensions': {
-        'snapshot': {'dtype': 'int'},
+        'snapshot': {'dtype': 'int', 'ordered': True},
         'generator': {'dtype': 'str'},
         'node': {'dtype': 'str'},
     },
@@ -29,7 +29,7 @@ SPEC = {
         'cost_by_gen': 'dispatch * cost',
         'total_cost': 'sum(dispatch * cost)',
         'served': 'sum(dispatch, over=generator)',
-        'by_node': 'sum(dispatch, by=bus, over=generator, into=node)',
+        'by_node': 'sum(dispatch, over=generator, by=bus[node])',
     },
 }
 
@@ -73,7 +73,7 @@ def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
 def test_a_grouped_sum_relabels_through_a_relation():
     frame = evaluate('by_node').sort('snapshot', 'node')
     assert frame.columns == ['snapshot', 'node', 'value'], (
-        'sum(by=bus, over=generator, into=node) replaces generator with the node it maps to'
+        'sum(over=generator, by=bus[node]) replaces generator with the node it maps to'
     )
     got = {(s, n): v for s, n, v in frame.iter_rows()}
     assert got == pytest.approx(

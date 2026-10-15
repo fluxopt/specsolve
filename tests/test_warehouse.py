@@ -32,7 +32,7 @@ PAGE = Path(__file__).resolve().parent.parent / 'docs' / 'howto' / 'warehouse.md
 #: connected to two buses counts at both.
 SPEC: dict[str, Any] = {
     'dimensions': {
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
         'line': {'dtype': 'str'},
@@ -41,7 +41,7 @@ SPEC: dict[str, Any] = {
     'relations': {
         'sited': {'key': 'generator', 'values': 'bus'},
         'zone_of': {'key': ['generator', 't'], 'values': 'zone'},
-        'connection': {'key': ['generator', 'bus']},
+        'connection': {'key': ['generator', 'bus'], 'missing': 'absent'},
         'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}},
     },
     'parameters': {
@@ -57,12 +57,12 @@ SPEC: dict[str, Any] = {
     'constraints': {
         'balance': {
             'dims': ['t', 'bus'],
-            'expression': 'sum(p, by=sited, over=generator, into=bus)'
-            ' + sum(f, by=ends, over=line, into=bus1) - sum(f, by=ends, over=line, into=bus0) == load',
+            'expression': 'sum(p, over=generator, by=sited[bus])'
+            ' + sum(f, over=line, by=ends[bus1]) - sum(f, over=line, by=ends[bus0]) == load',
         },
-        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, by=zone_of, over=generator, into=zone) <= zone_cap'},
+        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, over=generator, by=zone_of[zone]) <= zone_cap'},
     },
-    'expressions': {'reach': {'dims': ['t', 'bus'], 'expression': 'sum(p, by=connection, over=generator, into=bus)'}},
+    'expressions': {'reach': {'dims': ['t', 'bus'], 'expression': 'sum(p, over=generator, by=connection[bus])'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
@@ -379,7 +379,7 @@ def test_every_member_of_the_folder_is_a_type_every_reader_agrees_on(runs: Path)
 
 
 REPRO: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}, 'weight': {'dims': ['t'], 'dtype': 'int'}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}}},
     'constraints': {'covered': {'dims': ['t'], 'expression': 'p >= load'}},
@@ -408,7 +408,7 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 ) -> None:
     """Each of these reached ``sources/`` and ``answer/`` as it arrived."""
     dtype = 'datetime' if labels.dtype.is_temporal() else 'int'
-    spec = {**REPRO, 'dimensions': {'t': {'dtype': dtype}}}
+    spec = {**REPRO, 'dimensions': {'t': {'dtype': dtype, 'ordered': True}}}
     steps = labels.alias('t')
     sources = {
         't': steps.to_frame(),

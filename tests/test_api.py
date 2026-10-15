@@ -18,7 +18,8 @@ from unittest import mock
 import numpy as np
 import polars as pl
 import pytest
-from mathspec import Spec, to_spec
+from mathspec import to_spec
+from mathspec.spec import Spec
 
 import specsolve as sps
 from specsolve.errors import DimensionError
@@ -168,7 +169,7 @@ def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispa
 
 #: One parameter over two dims — what a dict and a sequence cannot cover.
 _TWO_DIMS = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['g', 't']}},
     'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -295,7 +296,7 @@ def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
 @pytest.mark.parametrize(
     ('expression', 'match'),
     [
-        pytest.param('sum(p ** 2)', 'over variables', id='a-power-over-a-variable'),
+        pytest.param('sum(p ** 2)', 'has a variable in its base or exponent', id='a-power-over-a-variable'),
         pytest.param(
             'sum(p) * sum(p)',
             'sums of more than one term',
@@ -360,7 +361,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models."""
-    with pytest.raises(sps.errors.LanguageError, match='merge the declarations'):
+    with pytest.raises(sps.errors.LanguageError, match='Merge the declarations'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
 
@@ -368,7 +369,7 @@ def test_a_list_of_models_is_refused(dispatch_yaml):
 #: so a case pair can be introduced into any namespace in turn.
 def _named(**declared) -> dict:
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
@@ -437,12 +438,18 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
             id='a named expression',
         ),
         pytest.param(
-            {**_named(), 'relations': {'specsolve_next': {'key': {'here': 't'}, 'values': {'there': 't'}}}},
+            {
+                **_named(),
+                'relations': {'specsolve_next': {'key': {'here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
+            },
             "relation 'specsolve_next'",
             id='a relation',
         ),
         pytest.param(
-            {**_named(), 'relations': {'next': {'key': {'specsolve_here': 't'}, 'values': {'there': 't'}}}},
+            {
+                **_named(),
+                'relations': {'next': {'key': {'specsolve_here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
+            },
             "column 'specsolve_here' of relation 'next'",
             id='a column of a relation',
         ),
@@ -571,8 +578,8 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     them out; an expression that cannot be evaluated on this data is left out
     the same way, and `expression()` still says why."""
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t']}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
@@ -614,8 +621,8 @@ def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml,
 def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t']}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
@@ -657,8 +664,8 @@ def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_solution, dis
 def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     """An absence loads back as the sentence, not as an unknown name."""
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t']}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
@@ -785,9 +792,9 @@ def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expecte
 SCALAR_SOURCES = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
 
 
-def _masked_out(absence: str) -> dict:
-    """[`SCALAR_SPEC`][] with ``slack`` masked out under *absence*."""
-    slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'absence': absence}
+def _masked_out(missing: str) -> dict:
+    """[`SCALAR_SPEC`][] with ``slack`` masked out under *missing*."""
+    slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'missing': missing}
     return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
 
 
@@ -825,8 +832,10 @@ def _evaluated(expression):
         pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
         pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
-        pytest.param(_masked_out('zero'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-absence-zero'),
-        pytest.param(_masked_out('undefined'), _evaluated('2 * slack'), [], id='masked-out-absence-undefined'),
+        pytest.param(
+            _masked_out('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-neutral'
+        ),
+        pytest.param(_masked_out('absent'), _evaluated('2 * slack'), [], id='masked-out-missing-absent'),
     ],
 )
 def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate(spec, read, expected, tmp_path):
@@ -838,7 +847,7 @@ def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate
     """
     spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
     assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (
-        'the solved value, zero where absence reads zero, and no row where it is undefined'
+        'the solved value, zero where the variable is neutral, and no row where it is absent'
     )
 
 
@@ -981,7 +990,7 @@ def test_a_dataset_of_expressions_holds_every_one_this_data_evaluates():
 
 
 TWO_VARIABLE_SPEC = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['snapshot']}},
     'variables': {
         'p': {'dims': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}},

@@ -47,9 +47,9 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `to` bus |
 | $`\mathrm{neg\_s\_nom}`$ | `neg_s_nom` over $`\mathcal{L}`$ — most a line may carry the other way, negative by convention |
-| $`\mathrm{loss}^{\mathrm{max}}`$ | `loss_max` over $`\mathcal{L}`$ — the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
-| $`\mathrm{loss}^{\mathrm{slope}}`$ | `loss_slope` over $`\mathcal{L} \times \mathcal{S}`$ — the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
-| $`\mathrm{loss}^{\mathrm{offset}}`$ | `loss_offset` over $`\mathcal{L} \times \mathcal{S}`$ — where this segment's half-plane meets the loss axis, negative for a curve through the origin |
+| $`\mathrm{loss}^{\mathrm{max}}`$ | `loss_max` over $`\mathcal{L}`$, `absent` where the data has no row — the loss at a line's rating — the top of the curve being approximated, carried as a column because a bound takes a name or a number, and given only for the lines that dissipate anything |
+| $`\mathrm{loss}^{\mathrm{slope}}`$ | `loss_slope` over $`\mathcal{L} \times \mathcal{S}`$, `absent` where the data has no row — the slope of this segment's half-plane — how much loss the flow buys along it. Where the segments come from is the instance's business, not the model's: a tangent to the loss curve and a secant across it both arrive here as a slope and an offset. |
+| $`\mathrm{loss}^{\mathrm{offset}}`$ | `loss_offset` over $`\mathcal{L} \times \mathcal{S}`$, `absent` where the data has no row — where this segment's half-plane meets the loss axis, negative for a curve through the origin |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -58,9 +58,29 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow and its loss and so is a row rather than a bound |
-| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$ — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
+| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`f`**
+
+```math
+f_{t,l} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+```
+
+**`loss`**
+
+```math
+0 \le \mathit{loss}_{t,l} \le \mathrm{loss}^{\mathrm{max}}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}
+```
 
 #### Objective
 
@@ -100,26 +120,6 @@ f_{t,l} - \mathit{loss}_{t,l} \ge \mathrm{neg\_s\_nom}_{l} \qquad \forall\, t \i
 \mathit{loss}_{t,l} - \mathrm{loss}^{\mathrm{slope}}_{l,s} \cdot f_{t,l} \ge \mathrm{loss}^{\mathrm{offset}}_{l,s} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L},\ s \in \mathcal{S} \,:\, \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`f`**
-
-```math
-f_{t,l} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
-```
-
-**`loss`**
-
-```math
-0 \le \mathit{loss}_{t,l} \le \mathrm{loss}^{\mathrm{max}}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{loss}^{\mathrm{max}}_{l} \text{ is defined}
-```
-
 </details>
 <!-- math:end -->
 
@@ -139,6 +139,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -151,6 +152,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       segment:
         description: the tangent points the loss curve is approximated at
         dtype: int
+        ordered: true
 
     relations:
       gen_bus:
@@ -185,6 +187,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           carried as a column because a bound takes a name or a number, and given
           only for the lines that dissipate anything
         dims: [line]
+        missing: absent
       loss_slope:
         description: >-
           the slope of this segment's half-plane — how much loss the flow buys
@@ -192,11 +195,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the model's: a tangent to the loss curve and a secant across it both
           arrive here as a slope and an offset.
         dims: [line, segment]
+        missing: absent
       loss_offset:
         description: >-
           where this segment's half-plane meets the loss axis, negative for a curve
           through the origin
         dims: [line, segment]
+        missing: absent
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -223,7 +228,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           their rows.
         dims: [snapshot, line]
         where: loss_max
-        absence: zero
+        missing: neutral
         bounds:
           lower: 0
           upper: loss_max
@@ -236,9 +241,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           a branch dissipates half at either end
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(f, by=to, over=line, into=bus) - sum(f, by=from, over=line, into=bus)
-          - 0.5 * sum(loss, by=from, over=line, into=bus) - 0.5 * sum(loss, by=to, over=line, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus])
+          - 0.5 * sum(loss, over=line, by=from[bus]) - 0.5 * sum(loss, over=line, by=to[bus])
           == load
 
       within_rating_forward:
@@ -339,15 +344,15 @@ climb `10.00 → 85.78 → 90.00`: power is worth more the further it travels,
 which no objective figure shows. Across the lossless line the price does not
 move. `b3` differs from `b2` only because the local generator sets it.
 
-**The mask needs `absence: zero`.** `loss` is declared `where: loss_max`, so
+**The mask needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
 the resistanceless line has no loss variable. `loss` also appears as a bare
 term in the rating rows, `f + loss <= s_nom`, and a constraint naming a masked
-variable loses its row. Without `absence: zero` those two rows vanish for that
+variable loses its row. Without `missing: neutral` those two rows vanish for that
 line, it becomes uncapacitated, and the model reports a cheaper answer:
 
 | spelling | rows | `omissions` | objective |
 |---|---|---|---|
-| `where:` + `absence: zero` | 132 | 0 | **24114.24** ✔ |
+| `where:` + `missing: neutral` | 132 | 0 | **24114.24** ✔ |
 | `where:` alone | 120 | **2** | 17514.24 ✘ |
 
 Twenty-seven per cent low, with an optimal status. `diagnostics().omissions`

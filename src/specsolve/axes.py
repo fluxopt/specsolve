@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import polars as pl
 import polars.selectors as cs
-from mathspec import did_you_mean
+from mathspec.errors import did_you_mean
 
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 from specsolve.frames import as_frame

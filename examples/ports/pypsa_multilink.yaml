@@ -36,6 +36,7 @@ parameters:
       efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
       columns and the input's fixed minus one, tidied into rows
     dims: [link, bus]
+    missing: neutral
   load:
     description: demand at each bus
     dims: [bus]
@@ -65,7 +66,7 @@ constraints:
       rows name — three ends or two, the expression never says.
     dims: [bus]
     expression: >-
-      sum(gen, by=gen_bus, over=generator, into=bus)
+      sum(gen, over=generator, by=gen_bus[bus])
       + sum(incidence * p, over=link)
       == load
 

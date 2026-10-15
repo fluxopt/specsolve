@@ -43,7 +43,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `line_to` bus |
 | $`\mathrm{neg\_s\_nom}`$ | `neg_s_nom` over $`\mathcal{L}`$ — most a line may carry the other way, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{C} \times \mathcal{L}`$ — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
+| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{C} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -54,6 +54,20 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`f`**
+
+```math
+\mathrm{neg\_s\_nom}_{l} \le f_{t,l} \le \mathrm{s}^{\mathrm{nom}}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+```
 
 #### Objective
 
@@ -75,20 +89,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{
 \sum_{l \in \mathcal{L}} f_{t,l} \cdot \mathrm{cycle\_incidence}_{c,l} = 0 \qquad \forall\, t \in \mathcal{T},\ c \in \mathcal{C}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`f`**
-
-```math
-\mathrm{neg\_s\_nom}_{l} \le f_{t,l} \le \mathrm{s}^{\mathrm{nom}}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
-```
-
 </details>
 <!-- math:end -->
 
@@ -106,6 +106,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -152,6 +153,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           may belong to several cycles, so this is a parameter over both dimensions
           rather than a coordinate, and rows are absent where a line is in no cycle
         dims: [cycle, line]
+        missing: neutral
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -177,9 +179,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the lines meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(f, by=line_to, over=line, into=bus)
-          - sum(f, by=line_from, over=line, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(f, over=line, by=line_to[bus])
+          - sum(f, over=line, by=line_from[bus])
           == load
 
       kirchhoff_voltage_law:

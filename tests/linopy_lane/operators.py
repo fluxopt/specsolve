@@ -66,7 +66,7 @@ def operator_grouped_sum(
 ) -> Any:
     """Sum *array* through a declared relation, producing dimensions *into*.
 
-    YAML: ``sum(p, by=gen_bus, over=generator, into=bus)``. *mappings* are the
+    YAML: ``sum(p, over=generator, by=gen_bus[bus])``. *mappings* are the
     walked columns' values as arrays over the dimensions the relation's key
     names — one dimension for a plain map, and one more per condition where the
     key is several columns. The walked dimension is summed out and *into* holds
@@ -133,7 +133,7 @@ def _into_nothing(
 def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:
     """Read *array* through a declared relation — the adjoint of a group.
 
-    YAML: ``at(on, by=component, over=bus, into=line)``. *mappings* are the same
+    YAML: ``at(on, by=component[bus])``. *mappings* are the same
     arrays ``sum`` takes; grouping sums *along* them, this indexes *through*
     them, so the operand must carry every dim in ``into`` and the result carries
     the mappings' own dims. xarray's vectorised selection is the pullback exactly

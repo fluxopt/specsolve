@@ -702,10 +702,13 @@ def sources_annotations(doors: dict[str, Any]) -> set[str]:
     return {str(inspect.signature(door).parameters['sources'].annotation) for door in doors.values()}
 
 
-def _gen_bus_direction(program: Any) -> Any:
-    """One map read one way — the shape every operator below takes a `by=` in."""
+def _gen_bus_joins(program: Any) -> tuple[Any, Any]:
+    """One map joined both ways: a sum by ``gen_bus[bus]``, and a lookup ``at(x, by=gen_bus[bus])``."""
     gen_bus = program.RelationDeclaration((('g', 'g'), ('bus', 'bus')), ('g',))
-    return program.Direction('gen_bus', gen_bus, ('g',), ('bus',), ())
+    return (
+        program.JoinColumns('gen_bus', gen_bus, joined=('g',), grouped=('bus',)),
+        program.JoinColumns('gen_bus', gen_bus, joined=('bus',), grouped=('g',)),
+    )
 
 
 def test_every_shape_operator_declares_its_fan_in():
@@ -718,20 +721,21 @@ def test_every_shape_operator_declares_its_fan_in():
     from specsolve.relational.engine.pieces import fan_in
 
     x = program.Variable('x')
+    grouping, lookup = _gen_bus_joins(program)
     declared = {
-        type(node).__name__: fan_in(node)
-        for node in (
-            program.Sum(x, ('t',)),
-            program.GroupSum(x, _gen_bus_direction(program)),
-            program.Pullback(x, _gen_bus_direction(program)),
-            program.Translate(x, 't', 1, wrap=False),
-            program.WindowSum(x, 't', 3, wrap=False),
+        label: fan_in(node)
+        for label, node in (
+            ('Sum', program.Sum(x, (program.Axis('t'),))),
+            ('Sum through a relation', program.Sum(program.Join(x, grouping), grouping.axes)),
+            ('Join as a lookup', program.Join(x, lookup)),
+            ('Translate', program.Translate(x, 't', 1, wrap=False)),
+            ('WindowSum', program.WindowSum(x, 't', 3, wrap=False)),
         )
     }
     assert declared == {
         'Sum': 'many-to-one',
-        'GroupSum': 'many-to-one',
-        'Pullback': 'one-to-one',
+        'Sum through a relation': 'many-to-one',
+        'Join as a lookup': 'one-to-one',
         'Translate': 'one-to-one',
         'WindowSum': 'one-to-many',
     }, 'a fan-in moved — the absence pass now treats that operator differently, which is a semantic change'

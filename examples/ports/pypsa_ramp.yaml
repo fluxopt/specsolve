@@ -7,6 +7,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -73,9 +74,9 @@ constraints:
     description: what is generated at a bus plus what arrives over the links meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=link_to, over=link, into=bus)
-      - sum(f, by=link_from, over=link, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=link, by=link_to[bus])
+      - sum(f, over=link, by=link_from[bus])
       == load
 
   ramp_up:

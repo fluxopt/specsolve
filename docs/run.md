@@ -55,7 +55,7 @@ The check passes, so the block prints nothing. Now change the line of
 how to fix it:
 
 ```text
-DimensionError: Constraint 'power_balance': the expression carries dims ['generator'] that are not in its dims: ['snapshot'] — every stray dim multiplies the rows this constraint builds; add it to dims: if that is intended, or sum it out.
+DimensionError: Constraint 'power_balance': the expression carries dims ['generator'] that are not in its dims: ['snapshot']. Add them to dims:, or sum them out.
 ```
 
 The `sum` over `generator` fits `p` to one row per snapshot. Put it back.

@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the nodal balance. The YAML groups by relations it
-declared over the dimensions — ``sum(p, by=gen_bus, over=generator, into=bus)``
+declared over the dimensions — ``sum(p, over=generator, by=gen_bus[bus])``
 — where this script builds the bus x generator and bus x line incidence
 matrices and multiplies through them. Both say Kirchhoff's current law; one
 says it as a relation, the other as linear algebra.

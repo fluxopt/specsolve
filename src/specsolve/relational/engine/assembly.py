@@ -265,7 +265,7 @@ class Assembly:
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
         consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        restrictions = absence_restrictions([p for p, _ in (*terms, *quads)])
+        restrictions = absence_restrictions([p for p, _ in (*terms, *quads, *consts)])
         start = self.n_rows
         declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
         labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
@@ -282,7 +282,8 @@ class Assembly:
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        coverage.refuse_short_constants(self.scope, frame, pieces, c, subject, self.measured.sparse)
+        neutral = {n for n in self.measured.sparse if self.program.parameters[n].missing != 'absent'}
+        coverage.refuse_short_constants(self.scope, frame, pieces, c, subject, neutral)
         rows = coverage.constant_side(self.scope, frame, consts, c, subject)
 
         if not terms and not quads:

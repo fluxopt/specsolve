@@ -31,7 +31,7 @@ def up_time_spec(edge: str | None) -> dict:
     """
     window = 'sum_back(started, along=t, window=min_up' + (f", edge='{edge}'" if edge else '') + ')'
     return {
-        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
         'parameters': {
             'min_up': {'dims': ['g'], 'dtype': 'int'},
             'must_start': {'dims': ['g', 't']},
@@ -106,7 +106,7 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
     green if both lanes dropped every constant at once.
     """
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'p': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'w': {'dims': ['t'], 'expression': 'sum_back(x - p, along=t, window=2) >= 0'}},
@@ -155,7 +155,7 @@ def test_a_window_that_reaches_nothing_builds_no_row():
 
 
 ZERO_WIDTH = {
-    'dimensions': {'t': {'dtype': 'int'}, 'u': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'u': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['u'], 'dtype': 'int'}, 'need': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t', 'u'], 'bounds': {'lower': 0}}},
     'constraints': {
@@ -187,12 +187,12 @@ def test_a_window_whose_every_width_is_zero_builds_no_row():
 #: relation sends nowhere: the width is read through the relation, so the unmapped
 #: snapshot carries no width at all.
 UNMAPPED_WIDTH = {
-    'dimensions': {'t': {'dtype': 'int'}, 'season': {'dtype': 'str'}},
-    'relations': {'season_of': {'key': 't', 'values': 'season'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
+    'relations': {'season_of': {'key': 't', 'values': 'season', 'missing': 'absent'}},
     'parameters': {'w': {'dims': ['season'], 'dtype': 'int'}, 'price': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
     'constraints': {
-        'rolling': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w, by=season_of, within=season) <= 4'}
+        'rolling': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w, within=season_of[season]) <= 4'}
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(x * price, over=t)'},
 }
@@ -232,7 +232,7 @@ def test_a_masked_slot_the_window_reaches_is_a_zero_not_an_absence(window: str):
 #: The same question asked of a width that differs per entity: one unit's
 #: window is the masked slot alone, the other's reaches past it.
 PER_ENTITY_WINDOW = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'width': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
     'variables': {
         'level': {'dims': ['g', 't'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
@@ -272,8 +272,8 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
 #: start is forced *inside* a day, which is what the seam is read at.
 DAY_WINDOW = {
     'description': 'A minimum up time that stops at each representative day.',
-    'dimensions': {'t': {'dtype': 'int'}, 'day': {'dtype': 'str'}},
-    'relations': {'day_of': {'key': 't', 'values': 'day'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'day': {'dtype': 'str'}},
+    'relations': {'day_of': {'key': 't', 'values': 'day', 'missing': 'absent'}},
     'parameters': {'must_start': {'dims': ['t']}},
     'variables': {
         'started': {'dims': ['t'], 'domain': 'binary'},
@@ -316,7 +316,7 @@ def test_a_window_stops_at_the_edge_of_the_group_it_is_partitioned_by():
     its own group the window reaches back over positions that are its
     neighbours, and only that hour is held.
     """
-    spec, sources = day_window('sum_back(started, along=t, window=3, by=day_of, within=day)', starts=[0, 0, 1, 0, 0, 0])
+    spec, sources = day_window('sum_back(started, along=t, window=3, within=day_of[day])', starts=[0, 0, 1, 0, 0, 0])
     with differential(spec, sources) as run:
         assert _on(run.result) == [0.0, 0.0, 1.0, 0.0, 0.0, 0.0], (
             'the start holds its own hour on, and no hour of the day after it'
@@ -333,7 +333,7 @@ def test_a_partitioned_window_wraps_inside_its_own_group():
     contrast with the acyclic run above visible in one number.
     """
     spec, sources = day_window(
-        "sum_back(started, along=t, window=3, by=day_of, within=day, edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
+        "sum_back(started, along=t, window=3, within=day_of[day], edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
     )
     with differential(spec, sources) as run:
         assert _on(run.result) == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0], (
@@ -350,9 +350,7 @@ def test_a_window_width_may_be_read_per_group():
     group is reached by its own. The two days differ, which is what a single
     width cannot reproduce.
     """
-    spec, sources = day_window(
-        'sum_back(started, along=t, window=up, by=day_of, within=day)', starts=[0, 1, 0, 1, 0, 0]
-    )
+    spec, sources = day_window('sum_back(started, along=t, window=up, within=day_of[day])', starts=[0, 1, 0, 1, 0, 0])
     spec['parameters']['up'] = {'dims': ['day'], 'dtype': 'int'}
     sources['up'] = pd.Series([1, 3], index=pd.Index(['early', 'late'], name='day'))
     with differential(spec, sources) as run:
@@ -372,7 +370,7 @@ def test_an_hour_the_relation_places_in_no_day_reaches_nothing():
     else.
     """
     spec, sources = day_window(
-        'sum_back(started, along=t, window=3, by=day_of, within=day)',
+        'sum_back(started, along=t, window=3, within=day_of[day])',
         starts=[0, 0, 1, 0, 0, 0],
         days=[*DAYS[:5], None],
     )
@@ -392,7 +390,7 @@ def test_a_literal_width_is_a_whole_number_of_positions(width: str):
     """
     spec = up_time_spec(None)
     spec['constraints']['stays_up_its_own_time']['expression'] = f'sum_back(started, along=t, window={width}) <= on'
-    with pytest.raises(LanguageError, match='whole number of positions of at least 1'):
+    with pytest.raises(LanguageError, match='must be a whole number of at least 1'):
         sps.check(spec)
 
 
@@ -462,7 +460,7 @@ def test_a_window_wider_than_the_axis_counts_each_position_once():
 #: A width with no dimensions: one count the whole axis shares, as OSeMOSYS
 #: storage reads its daily time brackets.
 SCALAR_WIDTH = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'w': {'dims': [], 'dtype': 'int'}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
     'constraints': {'c': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w) >= 1'}},

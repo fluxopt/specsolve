@@ -47,6 +47,20 @@ Uncapacitated facility location, OR-Library instance cap71: 16 possible warehous
 
 Upright is what the data supplies — a parameter such as $`\mathrm{fixed\_cost}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{is\_open}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`is_open`**
+
+```math
+\mathit{is\_open}_{w} \in \{0, 1\} \qquad \forall\, w \in \mathcal{W}
+```
+
+**`serve`**
+
+```math
+0 \le \mathit{serve}_{w,c} \le 1 \qquad \forall\, w \in \mathcal{W},\ c \in \mathcal{C}
+```
+
 #### Objective
 
 ```math
@@ -65,20 +79,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{fixed\_cost}
 
 ```math
 \mathit{serve}_{w,c} - \mathit{is\_open}_{w} \le 0 \qquad \forall\, w \in \mathcal{W},\ c \in \mathcal{C}
-```
-
-#### Variable domains
-
-**`is_open`**
-
-```math
-\mathit{is\_open}_{w} \in \{0, 1\} \qquad \forall\, w \in \mathcal{W}
-```
-
-**`serve`**
-
-```math
-0 \le \mathit{serve}_{w,c} \le 1 \qquad \forall\, w \in \mathcal{W},\ c \in \mathcal{C}
 ```
 
 </details>

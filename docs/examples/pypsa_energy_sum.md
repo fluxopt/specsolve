@@ -35,8 +35,8 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 | $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$ — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
-| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$ — least energy a generator must deliver over the whole horizon, for the generators that owe one |
+| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
+| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over the whole horizon, for the generators that owe one |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -46,6 +46,14 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{weighting}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
 
 #### Objective
 
@@ -73,14 +81,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{weighting}`$
 \sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -98,6 +98,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -126,11 +127,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           most energy a generator may deliver over the whole horizon, for the
           generators that have such a limit
         dims: [generator]
+        missing: absent
       e_sum_min:
         description: >-
           least energy a generator must deliver over the whole horizon, for the
           generators that owe one
         dims: [generator]
+        missing: absent
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -147,7 +150,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nodal_balance:
         description: what is generated at a bus meets the load there
         dims: [snapshot, bus]
-        expression: sum(p, by=gen_bus, over=generator, into=bus) == load
+        expression: sum(p, over=generator, by=gen_bus[bus]) == load
 
       energy_cap:
         description: >-

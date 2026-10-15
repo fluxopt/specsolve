@@ -77,6 +77,20 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 
 $`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, and a position counted from the end prints against it — $`\lvert \mathcal{T} \rvert - 1`$ is the last position, one less than the size because the first is $`0`$.
 
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`op_cost`**
+
+```math
+\mathrm{cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -95,20 +109,6 @@ $`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, a
 
 ```math
 \left( p_{t,g},\ \mathrm{cost}_{t,g} \right) \in \mathrm{conv}_{k \in \mathcal{K}}(x_{g,k},\ y_{g,k}) \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`op_cost`**
-
-```math
-\mathrm{cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
 #### Assumptions
@@ -147,12 +147,14 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: dispatchable units
         dtype: str
       bp:
         description: breakpoints of the cost curve
         dtype: int
+        ordered: true
 
     parameters:
       p_max:

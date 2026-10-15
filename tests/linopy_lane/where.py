@@ -11,7 +11,7 @@ expression where this one answers with an array.
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -60,11 +60,18 @@ class EvaluationContext:
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
-    #: How a parameter reads where the data has no row. A coefficient is zero
-    #: there, which is what the row multiplies by; the side of a where
-    #: comparison is absent there, which is the false the language states for
-    #: a comparison over a value that is not supplied.
+    #: How a ``missing: neutral`` parameter reads where the data has no row. A
+    #: coefficient is zero there, which is what the row multiplies by; the side
+    #: of a where comparison is absent there, which is the false the language
+    #: states for a comparison over a value that is not supplied.
     absent_parameter: Callable[[Any], Any] = absence.coefficient
+    #: Where the data gave a row, for each numeric parameter a declared value
+    #: fills elsewhere (:func:`~tests.linopy_lane.loader.given_rows`).
+    given: Mapping[str, xr.DataArray] = field(default_factory=dict)
+
+    def absent(self, parameter: str) -> bool:
+        """Whether *parameter* declares ``missing: absent``, so a missing row stays NaN in every position."""
+        return self.program.parameters[parameter].missing == 'absent'
 
 
 def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.DataArray:
@@ -100,7 +107,8 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
         return xr.DataArray(node.value)
 
     if isinstance(node, program.ParameterDefined):
-        return _defined(dataset[node.name], ctx.program.parameters[node.name].dtype)
+        defined = _defined(dataset[node.name], ctx.program.parameters[node.name].dtype)
+        return defined & ctx.given[node.name] if node.name in ctx.given else defined
 
     if isinstance(node, program.VariableDefined):
         return absence.present(ctx.model, node.name)
@@ -115,7 +123,7 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
                 dims=[node.name],
             )
 
-        result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
+        result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value)) & arr.notnull()
         return result.fillna(False).astype(bool)
 
     if isinstance(node, program.ExpressionComparison):
@@ -131,14 +139,14 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
         operand = _along(evaluate(node.operand.root), node.along, master_coords)
         return operand.shift({node.along: node.offset}, fill_value=False)
 
-    if isinstance(node, program.PulledBackPredicate):
-        return _pulled_back(node, ctx)
+    if isinstance(node, program.JoinedPredicate):
+        return _joined(node, ctx)
 
     if isinstance(node, program.DimensionPosition):
         labels = master_coords[node.name]
         if node.partition is not None:
             by = node.partition.name
-            (column,) = node.partition.group
+            (column,) = node.partition.grouped
             arr = _group_offsets(node, by, bound_relation(by, column, ctx.relations), np.asarray(labels))
             return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
@@ -159,6 +167,9 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
 
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)
+
+    if isinstance(node, program.NamedMask):
+        return evaluate(node.body)
 
     if isinstance(node, program.Not):
         return ~evaluate(node.operand)
@@ -191,20 +202,21 @@ def _value(side: program.Expression, ctx: EvaluationContext) -> xr.DataArray:
     return value if isinstance(value, xr.DataArray) else xr.DataArray(value)
 
 
-def _pulled_back(node: program.PulledBackPredicate, ctx: EvaluationContext) -> xr.DataArray:
-    """Where the operand holds at the coarse coordinate the relation maps each fine one to.
+def _joined(node: program.JoinedPredicate, ctx: EvaluationContext) -> xr.DataArray:
+    """Where the operand holds at the coordinate the relation's row reads, for each row of the relation.
 
     The expression ``at`` answers, so the predicate is read through the relation
-    as an array is. A fine coordinate the relation has no row for reads the
+    as an array is. A coordinate the relation has no row for reads the
     absence ``at`` leaves there, which is false in a mask.
     """
     # in-function: the builder imports this module
     from tests.linopy_lane.builder import _walked_arrays
 
+    columns = node.columns
     operand = _eval_node(node.operand.root, ctx)
-    for dimension in node.direction.consumed_dims:
+    for dimension in columns.dropped_dims:
         operand = _along(operand, dimension, ctx.master_coords)
-    read = operator_at(operand, _walked_arrays(node, ctx), into=node.direction.consumed_dims)
+    read = operator_at(operand, _walked_arrays(columns, columns.dropped, ctx), into=columns.dropped_dims)
     return read.fillna(value=False).astype(bool)
 
 

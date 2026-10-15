@@ -1,6 +1,6 @@
 """Is the data there where a declaration needs it? The positions that ask.
 
-Elsewhere an absent parameter row reads as a zero coefficient. A divisor and a
+Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
 constant piece have no such reading, so each is asked at the last moment the
 gap is still visible:
 

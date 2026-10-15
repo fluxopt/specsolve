@@ -76,6 +76,32 @@ $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size 
 
 $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
 
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_dispatch`**
+
+```math
+0 \le p^{\mathrm{dispatch}}_{t,s} \le \mathrm{storage\_p\_nom}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+**`p_store`**
+
+```math
+0 \le p^{\mathrm{store}}_{t,s} \le \mathrm{storage\_p\_nom}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+**`soc`**
+
+```math
+0 \le \mathit{soc}_{t,s} \le \mathrm{soc}^{\mathrm{max}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
 #### Objective
 
 ```math
@@ -108,32 +134,6 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 \mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) = 0
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_dispatch`**
-
-```math
-0 \le p^{\mathrm{dispatch}}_{t,s} \le \mathrm{storage\_p\_nom}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
-
-**`p_store`**
-
-```math
-0 \le p^{\mathrm{store}}_{t,s} \le \mathrm{storage\_p\_nom}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
-
-**`soc`**
-
-```math
-0 \le \mathit{soc}_{t,s} \le \mathrm{soc}^{\mathrm{max}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
-
 </details>
 <!-- math:end -->
 
@@ -153,6 +153,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -232,9 +233,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus, plus what the stores give back, meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-          - sum(p_store, by=storage_bus, over=storage, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(p_dispatch, over=storage, by=storage_bus[bus])
+          - sum(p_store, over=storage, by=storage_bus[bus])
           == load
 
       energy_balance_cyclic:

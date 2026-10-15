@@ -70,46 +70,6 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 Upright is what the data supplies — a parameter such as $`\mathrm{probability}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p^{\mathrm{nom}}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
-#### Objective
-
-```math
-\min \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} + \sum_{s \in \mathcal{S}} \left( 1 - \mathrm{omega} \right) \cdot \mathrm{probability}_{s} \cdot \mathit{operating\_cost}_{s} + \mathrm{omega} \cdot \mathit{tail\_average}
-```
-
-#### Subject to
-
-**`within_capacity`**
-
-```math
-p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`power_balance`**
-
-```math
-\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
-```
-
-**`tail_excess`**
-
-```math
-\mathit{excess}_{s} \ge \mathit{operating\_cost}_{s} - \mathit{tail\_start} \qquad \forall\, s \in \mathcal{S}
-```
-
-**`tail_definition`**
-
-```math
-\left( 1 - \mathrm{alpha} \right) \cdot \left( \mathit{tail\_average} - \mathit{tail\_start} \right) \ge \sum_{s \in \mathcal{S}} \mathrm{probability}_{s} \cdot \mathit{excess}_{s}
-```
-
-#### Definitions
-
-**`operating_cost`**
-
-```math
-\mathit{operating\_cost}_{s} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \qquad \forall\, s \in \mathcal{S}
-```
-
 #### Variable domains
 
 **`p_nom`**
@@ -142,6 +102,46 @@ p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \
 \mathit{tail\_average} \in \mathbb{R}
 ```
 
+#### Definitions
+
+**`operating_cost`**
+
+```math
+\mathit{operating\_cost}_{s} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \qquad \forall\, s \in \mathcal{S}
+```
+
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} + \sum_{s \in \mathcal{S}} \left( 1 - \mathrm{omega} \right) \cdot \mathrm{probability}_{s} \cdot \mathit{operating\_cost}_{s} + \mathrm{omega} \cdot \mathit{tail\_average}
+```
+
+#### Subject to
+
+**`within_capacity`**
+
+```math
+p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`power_balance`**
+
+```math
+\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
+```
+
+**`tail_excess`**
+
+```math
+\mathit{excess}_{s} \ge \mathit{operating\_cost}_{s} - \mathit{tail\_start} \qquad \forall\, s \in \mathcal{S}
+```
+
+**`tail_definition`**
+
+```math
+\left( 1 - \mathrm{alpha} \right) \cdot \left( \mathit{tail\_average} - \mathit{tail\_start} \right) \ge \sum_{s \in \mathcal{S}} \mathrm{probability}_{s} \cdot \mathit{excess}_{s}
+```
+
 </details>
 <!-- math:end -->
 
@@ -165,6 +165,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, the same in every future
         dtype: int
+        ordered: true
       generator:
         description: generating units, each built once and run in every future
         dtype: str

@@ -20,7 +20,7 @@ from specsolve.relational.sinks import SOLVERS
 #: only by a lower bound of zero, which delivers nothing into the combination,
 #: so the certificate is the simple ``Σ weight * rhs > 0``.
 SHORT = {
-    'dimensions': {'snapshot': {'dtype': 'int'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'need': {'dims': ['snapshot']}, 'cap': {'dims': ['snapshot']}},
     'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
     'constraints': {

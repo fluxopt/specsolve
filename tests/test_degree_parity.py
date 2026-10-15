@@ -30,7 +30,7 @@ from tests.oracle import specsolve_linopy  # skips the module without the oracle
         ),
         pytest.param(
             {'objective.expression': 'sum(p ** 2)'},
-            'over variables',
+            'has a variable in its base or exponent',
             id='a-power-over-a-variable',
         ),
     ],

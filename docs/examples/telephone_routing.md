@@ -37,7 +37,7 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 |---|---|
 | $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{A}`$ — circuits an arc can carry |
 | $`\mathrm{demand}`$ | `demand` over $`\mathcal{C}`$ — circuits a city pair asked for |
-| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$ — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, `neutral` where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
@@ -46,6 +46,14 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 | $`\mathit{flow}`$ | `flow` over $`\mathcal{P}`$ — circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{flow}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`flow`**
+
+```math
+\mathit{flow}_{p} \ge 0, \mathit{flow}_{p} \in \mathbb{Z} \qquad \forall\, p \in \mathcal{P}
+```
 
 #### Objective
 
@@ -65,14 +73,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$,
 
 ```math
 \sum_{p \in \mathcal{P}} \mathit{flow}_{p} \cdot \mathrm{uses}_{p,a} \le \mathrm{capacity}_{a} \qquad \forall\, a \in \mathcal{A}
-```
-
-#### Variable domains
-
-**`flow`**
-
-```math
-\mathit{flow}_{p} \ge 0, \mathit{flow}_{p} \in \mathbb{Z} \qquad \forall\, p \in \mathcal{P}
 ```
 
 </details>
@@ -120,6 +120,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           which arcs a path traverses — a path uses an arc or it does not, so the
           value is 1 and absence is 0
         dims: [path, arc]
+        missing: neutral
 
     variables:
       flow:
@@ -136,7 +137,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       within_demand:
         description: a pair cannot be carried more than it asked for, however many paths serve it
         dims: [call]
-        expression: sum(flow, by=call_of, over=path, into=call) <= demand
+        expression: sum(flow, over=path, by=call_of[call]) <= demand
 
       within_capacity:
         description: >-

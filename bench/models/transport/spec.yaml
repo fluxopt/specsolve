@@ -4,6 +4,7 @@
 dimensions:
   snapshot:
     dtype: int
+    ordered: true
   generator:
     dtype: str
   bus:
@@ -43,7 +44,7 @@ variables:
 constraints:
   balance:
     dims: [snapshot, bus]
-    expression: sum(p, by=gen_bus, over=generator, into=bus) + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus) == load
+    expression: sum(p, over=generator, by=gen_bus[bus]) + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus]) == load
 
 objective:
   sense: minimize

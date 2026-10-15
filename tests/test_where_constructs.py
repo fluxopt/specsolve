@@ -31,11 +31,11 @@ LIVE = {
 }  # fmt: skip
 
 BASE: dict[str, Any] = {
-    'dimensions': {'unit': {'dtype': 'str'}, 'step': {'dtype': 'int'}},
+    'dimensions': {'unit': {'dtype': 'str'}, 'step': {'dtype': 'int', 'ordered': True}},
     'parameters': {
-        'p_min': {'dims': ['unit']},
+        'p_min': {'dims': ['unit'], 'missing': 'absent'},
         'p_max': {'dims': ['unit']},
-        'live': {'dims': ['unit', 'step'], 'dtype': 'bool'},
+        'live': {'dims': ['unit', 'step'], 'dtype': 'bool', 'missing': 'neutral'},
     },
 }
 

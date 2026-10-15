@@ -126,7 +126,8 @@ class Compiler:
                 return pl.lit(float(e.value), dtype=pl.Float64)
             if isinstance(e, program.Parameter):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
-                return pl.col(alias).cast(pl.Float64)
+                read = pl.col(alias).cast(pl.Float64)
+                return read.fill_null(open_side) if self.scope.absent(e.name) else read
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 
@@ -223,17 +224,18 @@ class Compiler:
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
 
         def shaped(
-            e: program.Sum | program.GroupSum | program.Pullback | program.Translate | program.WindowSum,
+            e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Piece], Piece],
+            operand: program.Expression | None = None,
         ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand.
+            """One shape operator applied to its compiled operand, *operand* where it is not ``e.operand``.
 
             A node that is not one-to-one mixes input slots, so absence reaches
             the operand before the rewrite consumes it.
             """
-            inner = ev(e.operand)
+            inner = ev(e.operand if operand is None else operand)
             if fan_in(e) != 'one-to-one':
-                assert isinstance(e, program.Sum | program.GroupSum | program.WindowSum), 'only a sum fans in'
+                assert isinstance(e, program.Sum | program.WindowSum), 'only a sum fans in'
                 inner = propagate_absence(inner, self.scope, acted_along(e))
             return map_pieces(inner, rewrite)
 
@@ -319,28 +321,32 @@ class Compiler:
             if isinstance(e, program.Power):
                 return power(e)
             if isinstance(e, program.Sum):
-                return shaped(e, lambda p: self._sum_piece(p, e.over, context))
-            if isinstance(e, program.GroupSum):
-                return shaped(e, lambda p: self._group_piece(p, e, context))
-            if isinstance(e, program.Pullback):
-                return shaped(e, lambda p: self._at_piece(p, e, context))
+                if isinstance(e.operand, program.Join) and e.operand.columns.axes:
+                    join = e.operand
+                    assert e.over == join.columns.axes, 'a sum through a relation sums exactly the axes its join opens'
+                    return shaped(e, lambda p: self._group_piece(p, join.columns, context), join.operand)
+                return shaped(e, lambda p: self._sum_piece(p, _dimensions(e.over), context))
+            if isinstance(e, program.Join):
+                assert not e.columns.axes, f'in {context}: a join that opens axes stands under the sum over them'
+                return shaped(e, lambda p: self._at_piece(p, e.columns, context))
             if isinstance(e, program.Translate):
                 return shaped(e, lambda p: translate_piece(self.scope, p, e, context))
             if isinstance(e, program.WindowSum):
                 return shaped(e, lambda p: window_piece(self.scope, p, e, context))
             if isinstance(e, program.Cases):
                 return cases(e)
-            if isinstance(e, program.Named):
+            if isinstance(e, program.NamedExpression):
                 return ev(e.body)
             assert_never(e)
 
         return ev(expr)
 
     def _parameter_piece(self, name: str) -> Piece:
-        """A parameter as a constant part, keyed by its declared dims."""
+        """A parameter as a constant part, keyed by its declared dims, present only at its rows under ``missing: absent``."""
         dims = self.scope.program.parameters[name].dims
         frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
-        return Piece(dims, frame, 'const', parameters=frozenset({name}))
+        presences = (Presence(frame.select(*dims), dims),) if self.scope.absent(name) else ()
+        return Piece(dims, frame, 'const', presences=presences, parameters=frozenset({name}))
 
     def _variable_piece(self, name: str) -> Piece:
         """A variable as a term with unit coefficients."""
@@ -351,15 +357,15 @@ class Compiler:
         return Piece(dims, frame, 'term', presences=self._variable_presences(name, dims))
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
-        """Presence only for a masked variable under ``absence: undefined``, keyed explicitly as [`Presence`][] requires."""
+        """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
         declaration = self.scope.program.variables[name]
-        propagates = declaration.where is not None and declaration.absence == 'undefined'
+        propagates = declaration.where is not None and declaration.missing == 'absent'
         return (Presence(_presence(self.scope.variables[name], dims, 'var_label'), dims),) if propagates else ()
 
     def _solved_piece(self, name: str) -> Piece:
         """A variable at its primal — the const piece a read compiles it to, carrying the presence its term would.
 
-        Under ``absence: zero`` it is filled with zero over the unmasked product,
+        Under ``missing: neutral`` it is filled with zero over the unmasked product,
         because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
         """
         assert self.solution is not None
@@ -367,7 +373,7 @@ class Compiler:
         dims = declaration.dims
         keys = dims or (UNIT,)
         rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
-        if declaration.where is not None and declaration.absence == 'zero':
+        if declaration.where is not None and declaration.missing == 'neutral':
             everywhere = masked(self.scope, dims, None).select(*keys)
             rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
         return Piece(dims, rows.select(*dims, 'cval'), 'const', presences=self._variable_presences(name, dims))
@@ -479,18 +485,18 @@ class Compiler:
             frame = frame.with_columns(pl.col(p.value_column) * scale)
         return self._empty_sums(Piece(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
-    def _group_piece(self, p: Piece, g: program.GroupSum, context: str) -> Piece:
-        """Relabel the dims the direction consumes to the ones it produces, through its relation.
+    def _group_piece(self, p: Piece, columns: program.JoinColumns, context: str) -> Piece:
+        """Relabel the dims the join drops to the ones it adds, through its relation.
 
         No aggregate, as for [`_sum_piece`][]: a keyed relation neither
         duplicates nor drops a term, and a bare one fans out into the
         many-to-many sum.
         """
-        over = g.direction.consumed_dims
+        over = columns.dropped_dims
         missing = [d for d in over if d not in p.dims]
         if missing:
             refuse_a_piece_without_the_dims(p, missing, context, f'sum(by=) over {list(over)}')
-        return self._empty_sums(self._remap_piece(p, g))
+        return self._empty_sums(self._remap_piece(p, columns))
 
     def _empty_sums(self, p: Piece) -> Piece:
         """Reduced *p* with a zero row at every coordinate of its dims that no member lands in.
@@ -514,28 +520,28 @@ class Compiler:
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
         return replace(p, frame=pl.concat([p.frame, zeros]))
 
-    def _at_piece(self, p: Piece, a: program.Pullback, context: str) -> Piece:
-        """Spread the consumed dims back out over the produced ones — the adjoint of a group.
+    def _at_piece(self, p: Piece, a: program.JoinColumns, context: str) -> Piece:
+        """Spread the dropped dims back out over the added ones — the adjoint of a group.
 
         The join fans out, so a later reduction can bring two copies of one
         ``var_label`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
-        absent = [d for d in a.direction.consumed_dims if d not in p.dims]
-        assert not absent, f'in {context}: a pullback through {absent}, which the expression does not span'
+        absent = [d for d in a.dropped_dims if d not in p.dims]
+        assert not absent, f'in {context}: a lookup through {absent}, which the expression does not span'
         remapped = self._remap_piece(p, a)
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
-    def _pulled_back_presences(self, p: Piece, a: program.Pullback) -> tuple[Presence, ...]:
-        """Where a pullback's variables exist, keyed by the fine dims they now span, as [`Presence`][] requires.
+    def _pulled_back_presences(self, p: Piece, a: program.JoinColumns) -> tuple[Presence, ...]:
+        """Where a lookup's variables exist, keyed by the fine dims they now span, as [`Presence`][] requires.
 
         [`_remap_piece`][]'s inner join swallows both the operand's absence and
         the relation's; unreported, the row survives to assert ``x <= 0`` where
         the model said nothing.
         """
-        joined = a.direction.joined_dims
-        fine = (*joined, *a.direction.produced_dims)
-        table = mapping(self.scope.data.relations, a.direction)
+        joined = tuple(a.dim(role) for role in a.kept)
+        fine = (*joined, *a.added_dims)
+        table = mapping(self.scope.data.relations, a)
         reachable = landed(table, a).unique()
         if not p.presences:
             total = math.prod(self.scope.data.cardinality[d] for d in fine)
@@ -546,7 +552,7 @@ class Compiler:
             keys = presence.keys(p.dims)
             if not keys:
                 return Presence(presence.restrict(reachable, keys), fine)
-            carries_targets = all(i in keys for i in (*a.direction.consumed_dims, *joined))
+            carries_targets = all(i in keys for i in a.joined_dims)
             source, keys = (
                 (presence.frame, keys) if carries_targets else (self.scope.widen(presence.frame, keys, p.dims), p.dims)
             )
@@ -554,10 +560,16 @@ class Compiler:
 
         return tuple(pulled(x) for x in p.presences)
 
-    def _remap_piece(self, p: Piece, node: program.GroupSum | program.Pullback) -> Piece:
-        """Trade the dims *node*'s direction consumes for the ones it produces, through its relation."""
-        frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, node.direction), node, p.dims, p.carried)
+    def _remap_piece(self, p: Piece, columns: program.JoinColumns) -> Piece:
+        """Trade the dims *columns* drops for the ones it adds, through its relation."""
+        frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
         return Piece(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+
+
+def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:
+    """The dimensions a plain sum is over: a join's axis is summed by the group, never here."""
+    assert all(axis.column is None for axis in over), 'an axis a join opens is summed under that join'
+    return tuple(axis.dimension for axis in over)
 
 
 def _zero(e: program.Expression) -> bool:

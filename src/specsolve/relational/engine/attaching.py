@@ -6,16 +6,20 @@ every source; this shapes each and encodes the string dimensions.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
 
+from specsolve.errors import DataError
+from specsolve.messages import coordinate_text, missing_row_message
 from specsolve.relational.collect import collected, in_memory
+from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from mathspec import program
 
@@ -24,9 +28,12 @@ if TYPE_CHECKING:
 class AttachedSources:
     """The data a program is built against, after attaching.
 
-    ``parameters`` are tidy ``(dims…, value)``; ``dimensions`` are
-    ``(val, ord)``; ``relations`` hold no row for a key that maps nowhere.
-    ``cardinality`` and ``parameter_rows`` are cached frame heights.
+    ``parameters`` are tidy ``(dims…, value)``, a parameter that declares a
+    value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
+    coordinates the data gave for each filled parameter, which a bare name in
+    a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
+    cached frame heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
     ``first`` is its ordinal.
@@ -38,6 +45,7 @@ class AttachedSources:
     cardinality: Mapping[str, int]
     parameter_rows: Mapping[str, int]
     consecutive: Mapping[str, int]
+    given: Mapping[str, pl.LazyFrame]
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
@@ -50,6 +58,10 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
     [`in_memory`][], since every read holds one table whole.
+
+    Raises:
+        DataError: A parameter or a relation that refuses a missing row has none
+            at some coordinate.
     """
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
@@ -68,6 +80,24 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
         parameters[name] = frame.with_columns(casts) if casts else frame
 
+    for name, relation in program.relations.items():
+        if relation.missing == 'refused':
+            key = relation.key or relation.roles
+            _refuse_a_missing_row(
+                'relation', name, relations[name].select(*key).unique(), key, relation.dim, dimensions
+            )
+    given: dict[str, pl.LazyFrame] = {}
+    for name, p in program.parameters.items():
+        if not p.dims or p.missing in ('absent', 'neutral', None):
+            continue
+        if p.missing == 'refused':
+            _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
+            continue
+        frame = parameters[name]
+        if frame.height < math.prod(dimensions[d].height for d in p.dims):
+            given[name] = frame.select(*p.dims).lazy()
+            parameters[name] = _filled(frame, p.dims, p.missing, dimensions)
+
     return AttachedSources(
         parameters={name: f.lazy() for name, f in parameters.items()},
         dimensions={d: f.lazy() for d, f in dimensions.items()},
@@ -75,7 +105,51 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         cardinality={d: f.height for d, f in dimensions.items()},
         parameter_rows={name: f.height for name, f in parameters.items()},
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
+        given=given,
     )
+
+
+def _product(
+    columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, pl.DataFrame]
+) -> pl.LazyFrame:
+    """Every combination of the labels of the dimension under each of *columns*, one column per name."""
+    frames = [dimensions[dim(column)].lazy().select(pl.col('val').alias(column)) for column in columns]
+    product = frames[0]
+    for frame in frames[1:]:
+        product = product.join(frame, how='cross')
+    return product
+
+
+def _refuse_a_missing_row(
+    kind: str,
+    name: str,
+    rows: pl.DataFrame,
+    columns: tuple[str, ...],
+    dim: Callable[[str], str],
+    dimensions: Mapping[str, pl.DataFrame],
+) -> None:
+    """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
+
+    The door refuses a duplicate, so a height short of the product is a gap,
+    and only a short table pays for the anti-join that names one.
+    """
+    if not columns:
+        return
+    missing = math.prod(dimensions[dim(column)].height for column in columns) - rows.height
+    if missing <= 0:
+        return
+    gaps = _product(columns, dim, dimensions).join(rows.lazy().select(*columns), on=list(columns), how='anti')
+    first = gaps.head(1).pipe(collected).row(0, named=True)
+    raise DataError(missing_row_message(kind, name, coordinate_text(first), missing))
+
+
+def _filled(
+    frame: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
+) -> pl.DataFrame:
+    """*frame* with a row at every coordinate of *dims*, *value* where the data has none."""
+    product = _product(dims, lambda d: d, dimensions)
+    filled = product.join(frame.lazy(), on=list(dims), how='left').with_columns(pl.col(VALUE).fill_null(value))
+    return filled.select(*dims, pl.col(VALUE).cast(frame.schema[VALUE])).pipe(collected)
 
 
 def _first_of_a_run(dimension: pl.DataFrame) -> int | None:

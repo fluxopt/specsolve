@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
     import xarray as xr
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
     from specsolve.relational.answer_layout import FrameWriter
     from specsolve.relational.status import SolveStatus

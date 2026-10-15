@@ -132,7 +132,7 @@ def test_every_negated_dual_is_checked_rather_than_excused():
 #: A file whose named expressions read one another, so the projection has to walk them and
 #: could reach for a set while doing it. `eta` reads `zeta`, so one pass is not enough.
 _ORDERING_FIXTURE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {n: {'dims': ['g']} for n in ('alpha', 'beta', 'gamma', 'delta', 'epsilon')},
     'variables': {'x': {'dims': ['t', 'g'], 'bounds': {'lower': 0}}},
     'expressions': {

@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
     import pandas as pd
     import polars as pl
-    from mathspec import Spec
     from mathspec.program import Expression
+    from mathspec.spec import Spec
 
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
 #: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
