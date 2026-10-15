@@ -614,7 +614,9 @@ def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
 
     The pairs are sorted, and a row whose first nonzero coefficient is negative
     is flipped whole, its sense with it. Coefficients and constants are
-    rounded to nine places, as the builders may differ in the last ulp.
+    rounded to nine places, as the builders may differ in the last ulp. A
+    label with no nonzero coefficient is not a row: linopy's `flat` holds no
+    entry for it, and its LP writer and its row count skip it.
     """
     terms = defaultdict(list)
     meta = {}
@@ -624,7 +626,7 @@ def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
     rows = {}
     flipped = {'<=': '>=', '>=': '<=', '=': '='}
     for key, label in _keyed(labels).items():
-        if int(label) == -1:
+        if int(label) not in meta:
             continue
         sign, rhs = meta[int(label)]
         pairs = tuple(sorted(terms[int(label)]))
