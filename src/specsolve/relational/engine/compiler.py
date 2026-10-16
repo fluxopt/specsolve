@@ -43,7 +43,9 @@ from specsolve.relational.engine.pieces import (
     join_quad,
     map_pieces,
     negate,
+    ordered_sum,
     propagate_absence,
+    reduces,
     refuse_a_piece_without_the_dims,
     region_over,
     spread_piece,
@@ -65,7 +67,7 @@ def _totalled(p: Piece) -> pl.LazyFrame:
 
     A null summand is a divisor's hole, so the total keeps it for the refusal.
     """
-    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
+    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(ordered_sum('cval')).alias('cval')
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
@@ -478,7 +480,7 @@ class Compiler:
             return compiled
         pieces = compiled.consts
         if len(pieces) == 1:
-            if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
+            if not reduces(operand):
                 return compiled
             return CompiledExpression((), (replace(pieces[0], frame=_totalled(pieces[0])),))
         dims, restrictions = self.scope.spanned(pieces), absence_restrictions(pieces)
@@ -494,7 +496,7 @@ class Compiler:
     def summed_onto(
         self, pieces: Sequence[Piece], carrier: pl.LazyFrame, *, absent: Literal['zero', 'hole', 'spreads']
     ) -> pl.LazyFrame:
-        """Const *pieces* added per coordinate onto *carrier* — its columns, then ``cval``.
+        """Const *pieces* added per coordinate onto *carrier* — its columns, then ``cval``, each piece in value order.
 
         *carrier* holds one row per coordinate of
         [`spanned`][specsolve.relational.engine.scope.Scope.spanned], restricted by
@@ -507,7 +509,7 @@ class Compiler:
         assert all(p.kind == 'const' for p in pieces), 'a read compiles every variable to its value'
         columns = [f'__piece {i}__' for i in range(len(pieces))]
         for p, column in zip(pieces, columns, strict=True):
-            carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            carrier = join_on(carrier, constant_scalar(p, ordered=True).rename({'cval': column}), p.dims, 'left')
             if absent == 'spreads' and p.region is not None:
                 carrier = self._zero_outside(carrier, column, p.region, self.scope.spanned(pieces))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')

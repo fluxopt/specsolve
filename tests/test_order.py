@@ -27,32 +27,14 @@ from tests.conftest import port_sources as sources
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: Ports whose model moves when the rows of a table are shuffled, and why.
-MOVES = {
-    'osemosys_utopia': (
-        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
-    ),
-}
 
-#: polars 1.x runs ``auto`` in memory, so only polars 2 streams a build above the limit.
-AUTO_STREAMS = int(pl.__version__.split('.')[0]) >= 2
-
-
-@pytest.fixture
-def port_that_holds(port: dict[str, Any], request: pytest.FixtureRequest) -> dict[str, Any]:
-    """*port*, expected to fail where ``MOVES`` says its model moves."""
-    if reason := MOVES.get(port['name']):
-        request.applymarker(pytest.mark.xfail(reason=reason))
-    return port
-
-
-def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
+def _built(spec: Any, given: Mapping[str, Any]) -> tuple[bytes, ...]:
     """The built model to the last bit: what a re-solve may not change, then every number it may.
 
     The objective is read through the dense cost vector, since ``obj`` carries
     no order contract.
     """
-    with sps.build(expanded(port['spec']), given) as model:
+    with sps.build(spec, given) as model:
         handoff = model._engine._model.handoff
         numbers = (
             handoff.matrix['coeff'],
@@ -83,27 +65,88 @@ def _shuffled(port: dict[str, Any], seed: int) -> dict[str, Any]:
 
 @pytest.mark.parametrize('above_the_limit', [False, True], ids=['below-the-limit', 'above-the-limit'])
 def test_the_same_sources_build_the_same_model(
-    port: dict[str, Any], above_the_limit: bool, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    port: dict[str, Any], above_the_limit: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every port holds below `IN_MEMORY_REACH`, a ``MOVES`` one included: there the build runs in memory.
-
-    Above it the build is left to polars, whose streaming engine sums the same
-    rows of osemosys_utopia in another order from one build to the next.
-    """
+    """Below `IN_MEMORY_REACH` the build runs in memory; above it polars may stream it."""
     if above_the_limit:
         monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
-        if (reason := MOVES.get(port['name'])) and AUTO_STREAMS:
-            request.applymarker(pytest.mark.xfail(reason=reason, strict=True))
     given = sources(port['name'])
-    assert _built(port, given) == _built(port, given)
+    assert _built(expanded(port['spec']), given) == _built(expanded(port['spec']), given)
 
 
 @pytest.mark.parametrize('seed', [0, 1])
-def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], seed: int) -> None:
-    plain = _built(port_that_holds, sources(port_that_holds['name']))
-    assert _built(port_that_holds, _shuffled(port_that_holds, seed)) == plain, (
+def test_shuffled_tables_build_the_same_model(port: dict[str, Any], seed: int) -> None:
+    plain = _built(expanded(port['spec']), sources(port['name']))
+    assert _built(expanded(port['spec']), _shuffled(port, seed)) == plain, (
         'shuffling the rows of a table built another model'
     )
+
+
+def _summing(constraint: str, objective: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A model over ``i`` whose parameter ``p`` has forty values along ``t`` per ``i``, of mixed magnitude, and its sources."""
+    rng = np.random.default_rng(0)
+    items, periods = 30, 40
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'p': {'dims': ['i', 't']}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'c': {'dims': ['i'], 'expression': constraint}},
+        'objective': {'sense': 'maximize', 'expression': objective},
+    }
+    p = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods),
+            't': np.tile(np.arange(periods), items),
+            'value': rng.uniform(1.0, 10.0, items * periods) * 10.0 ** rng.integers(-6, 6, items * periods),
+        }
+    )
+    return spec, {'i': list(range(items)), 't': list(range(periods)), 'p': p}
+
+
+#: Where a sum of several rows per coordinate lands in the model, as ``(constraint, objective)``.
+SUMMED_INTO = [
+    pytest.param('x <= sum(p, over=t)', 'sum(x)', id='right-hand-side'),
+    pytest.param('x <= sum(p)', 'sum(x)', id='right-hand-side-of-every-row'),
+    pytest.param('sum(p, over=t) - x >= 0', 'sum(x)', id='constant-on-the-left'),
+    pytest.param('sum(p * x, over=t) <= 1', 'sum(x)', id='coefficient'),
+    pytest.param('x <= 1', 'sum(p * x)', id='cost'),
+    pytest.param('x <= 1', 'sum(x) + sum(p)', id='objective-constant'),
+    pytest.param('x / sum(p, over=t) <= 1', 'sum(x)', id='divisor'),
+    pytest.param('x / (sum(p, over=t) + 1) <= 1', 'sum(x)', id='divisor-of-two-parts'),
+]
+
+
+@pytest.mark.parametrize(('constraint', 'objective'), SUMMED_INTO)
+@pytest.mark.parametrize('above_the_limit', [False, True], ids=['below-the-limit', 'above-the-limit'])
+def test_a_sum_of_many_rows_is_the_same_in_any_row_order(
+    constraint: str, objective: str, above_the_limit: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forty values per coordinate add up to the same bits in every row order.
+
+    Floating-point addition is not associative, so a sum taken in the order
+    the rows arrive moved in its last bit when they arrived in another (#1898).
+    """
+    if above_the_limit:
+        monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', 0)
+    spec, given = _summing(constraint, objective)
+    plain = _built(spec, given)
+    for seed in range(3):
+        shuffled = given['p'].sample(fraction=1.0, shuffle=True, seed=seed)
+        assert _built(spec, given | {'p': shuffled}) == plain, f'the rows of p in shuffle {seed} built another model'
+
+
+def test_a_read_of_a_sum_of_many_rows_is_the_same_in_any_row_order() -> None:
+    spec, given = _summing('x <= 1', 'sum(x)')
+
+    def read(p: pl.DataFrame) -> bytes:
+        with sps.solve(spec, given | {'p': p}) as result:
+            return result.evaluate('sum(p, over=t)')['value'].to_numpy().tobytes()
+
+    plain = read(given['p'])
+    for seed in range(3):
+        assert read(given['p'].sample(fraction=1.0, shuffle=True, seed=seed)) == plain, (
+            f'the rows of p in shuffle {seed} read another sum'
+        )
 
 
 def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:

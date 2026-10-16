@@ -20,7 +20,7 @@ from specsolve.relational import sinks
 from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.engine import coverage, labels
 from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.pieces import Piece, absence_restrictions
+from specsolve.relational.engine.pieces import Piece, absence_restrictions, ordered_sum, reduces
 from specsolve.relational.engine.scope import Scope, join_on
 from specsolve.relational.sinks.handoff import SENSE
 
@@ -265,8 +265,8 @@ class Assembly:
         rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", quadratic=quadratic)
         terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
         quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
-        consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        restrictions = absence_restrictions([p for p, _ in (*terms, *quads, *consts)])
+        consts = [(p, 1.0, reduces(c.rhs)) for p in rhs.consts] + [(p, -1.0, reduces(c.lhs)) for p in lhs.consts]
+        restrictions = absence_restrictions([p for p, *_ in (*terms, *quads, *consts)])
         start = self.n_rows
         declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
         labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
@@ -277,7 +277,7 @@ class Assembly:
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
 
         subject = f"constraint '{name}'"
-        pieces = [p for p, _ in consts]
+        pieces = [p for p, *_ in consts]
         coverage.refuse_null_constants(
             coverage.narrowed_to_rows(frame, pieces),
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
@@ -408,7 +408,7 @@ class Assembly:
                 f'objective constant part has dims {list(p.dims)} — the language refuses a '
                 f'variable-free part of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
+            self.obj_const += p.frame.select(ordered_sum('cval')).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quads, o.expression)
         if not comp.terms:
@@ -506,10 +506,10 @@ def _collapsed(
 ) -> tuple[pl.DataFrame, bool]:
     """*stacked* with repeated *keys* summed and zeros dropped, in key order where *ordered* — and whether a zero went.
 
-    The sort and the aggregate run only when a linear probe says they would
+    The sort and the sum run only when a linear probe says they would
     change something. The stack is rechunked first, because ``shift(1)``
     crosses chunk boundaries that ``is_sorted`` does not. A cancelling pair
-    becomes a zero only at the aggregate, so the prune runs again there.
+    becomes a zero only at the sum, so the prune runs again there.
     Unordered, a repeat is probed over *space*, the dense label count.
     """
     pruned = _pruned(stacked.rechunk())
@@ -527,27 +527,38 @@ def _collapsed(
         repeated = _repeats_a_label(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
-    aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
-    if ordered:
-        aggregated = aggregated.sort(*keys)
-    summed = aggregated.pipe(collected)
+    summed = _run_sums(stacked, keys)
     share = _pruned(summed)
     return share, dropped or share.height != summed.height
 
 
-def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
-    """*stacked* sorted by *keys*, on one integer that orders as they do where one can hold them all.
+def _run_sums(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
+    """*stacked* with each run of equal *keys* summed into one row, in key order.
+
+    Each run is summed in value order, so its sum depends on the values alone
+    and not on the order the rows arrived in: floating-point addition is not
+    associative, and no join fixes that order.
+    """
+    ordered = _sorted(stacked, keys, 'coeff')
+    first = pl.any_horizontal([pl.col(k) != pl.col(k).shift(1) for k in keys]).fill_null(True)
+    starts = ordered.select(pl.arg_where(first)).to_series().to_numpy()
+    sums = np.add.reduceat(ordered.get_column('coeff').to_numpy(), starts)
+    return ordered[starts].select(*keys).with_columns(pl.Series('coeff', sums, dtype=_DTYPES['coeff']))
+
+
+def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...], *then: str) -> pl.DataFrame:
+    """*stacked* sorted by *keys* and then by *then*, on one integer that orders as the keys do where one can hold them all.
 
     The keys are labels, never negative, so each is a digit in a base one past
     its largest value.
     """
     largest = stacked.select(pl.col(k).max() for k in keys).row(0)
     if math.prod(value + 1 for value in largest) >= 2**63:
-        return stacked.sort(*keys)
+        return stacked.sort(*keys, *then)
     position: pl.Expr = pl.lit(0, dtype=pl.Int64)
     for key, value in zip(keys, largest, strict=True):
         position = position * (value + 1) + pl.col(key).cast(pl.Int64)
-    return stacked.sort(position)
+    return stacked.sort(position, *then)
 
 
 def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:

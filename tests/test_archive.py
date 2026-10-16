@@ -1769,11 +1769,12 @@ def test_an_archive_reads_an_undeclared_expression_as_the_solve_did(
 
 
 def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums(tmp_path: Path) -> None:
-    """``osemosys_utopia`` sums its costs over rows in no fixed order, so each build differs in the last bit.
+    """An archive is read as it was written, with no digest of its rebuild compared.
 
-    Reading an archive compared a digest of the built model to the last bit,
-    so every archive of it refused an undeclared read as built from other
-    data. An archive is read as it was written now, with no digest compared.
+    ``osemosys_utopia`` sums several rows into each of some costs and
+    right-hand sides, so a rebuild that summed them in another order would
+    differ in the last bit; a digest compared to the last bit refused every
+    archive of it as built from other data.
     """
     from tests.conftest import expanded, port_sources, port_spec
 
