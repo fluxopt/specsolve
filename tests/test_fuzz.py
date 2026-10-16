@@ -294,10 +294,24 @@ REDUCED = [
                 'p': pl.DataFrame({'g': ['g1', 'g2'], 'h': ['h1', 'h2'], 'value': [1.0, 2.0]}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle reads `missing: <value>` on a parameter over two dimensions as `neutral`, and refuses the data'
-        ),
         id='oracle: a missing value over two dimensions',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**G, 'h': {'dtype': 'str'}},
+                'v <= 1',
+                ['g', 'h'],
+                parameters={'p': {'dims': ['g', 'h'], 'missing': 0.0}},
+                variables={'v': _bounded('g', 'h') | {'where': 'p != 1'}},
+            ),
+            {
+                'g': ['g1', 'g2'],
+                'h': ['h1', 'h2'],
+                'p': pl.DataFrame({'g': ['g1', 'g2'], 'h': ['h1', 'h2'], 'value': [2.0, 3.0]}),
+            },
+        ),
+        id='oracle: a missing value over two dimensions in a where',
     ),
     pytest.param(
         _case(
