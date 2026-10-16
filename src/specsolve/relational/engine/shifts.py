@@ -189,11 +189,12 @@ def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) 
         source, keyed_by = presence.frame, presence.keyed_by
         if keyed_by is not None and not set(edge.keys).issubset(keyed_by):
             source, keyed_by = scope.widen(source, keyed_by, p.dims), None
-        moved_presence = remap(source, [], p.dims if keyed_by is None else keyed_by)
+        keys = p.dims if keyed_by is None else keyed_by
+        moved_presence = remap(source, [], keys)
         if s.wrap or s.fill is None:
             return Presence(moved_presence, keyed_by)
-        vacated = edge.vacated_of(scope, presence, p.dims)
-        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique())
+        vacated = edge.vacated_beside(source, keys)
+        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), keyed_by)
 
     frame = remap(p.frame, p.carried, p.dims)
     if not s.wrap and s.fill is not None and p.kind == 'const':
@@ -257,22 +258,22 @@ class _Edge:
         edge = scope.spread(self.coordinates(vacated=True), [d for d in others if d not in self.keys])
         return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, self.shift.along, 'cval')
 
-    def vacated_of(self, scope: Scope, presence: Presence, dims: tuple[str, ...]) -> pl.LazyFrame:
-        """The edge positions ``shift`` leaves with nothing to move in, for one presence.
+    def vacated_beside(self, source: pl.LazyFrame, keys: tuple[str, ...]) -> pl.LazyFrame:
+        """The edge positions ``shift`` leaves with nothing to move in, under *keys*, beside a presence's rows.
 
         Back in the presence set they are present with no term, so the row
-        survives. The edge is crossed with the other-dim combinations the
-        variable has, so a coordinate its own mask removed stays absent.
+        survives. The edge is crossed with the combinations of the other keys
+        that *source*, the presence over *keys*, has, so a coordinate its own
+        mask removed stays absent. The columns come in the order
+        [`_Order.remap`][] writes them, for the concat with the moved presence.
         """
-        others = [d for d in dims if d != self.shift.along]
-        edge = self.coordinates(vacated=True)
+        along = self.shift.along
+        others = [d for d in keys if d != along]
         if not others:
-            return edge
-        have = presence.keys(dims)
-        source = presence.frame if all(d in have for d in others) else scope.widen(presence.frame, have, dims)
-        keys = [d for d in self.keys if d in others]
+            return self.coordinates(vacated=True)
         rows = source.select(*others).unique()
-        return join_on(rows, edge, keys, 'inner')
+        on = [d for d in self.keys if d in others]
+        return join_on(rows, self.coordinates(vacated=True), on, 'inner').select(*others, along)
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:

@@ -109,9 +109,6 @@ REDUCED = [
             ),
             {'t': [1, 2], 'g': ['a']},
         ),
-        marks=_found(
-            '#2049 — a shift of a shift over a variable with a second dimension crashes polars: schema lengths differ'
-        ),
         id='nested shift over two dimensions',
     ),
     pytest.param(
@@ -305,7 +302,6 @@ REDUCED = [
             {'h': [5, 6], 't': [1], 'p': pl.DataFrame({'h': [5, 6], 'value': [1.0, 2.0]})},
             'shift(v / p, along=h, offset=1, edge=0)',
         ),
-        marks=_found('#2049 — a quotient read under a shift with an edge crashes polars: schema lengths differ'),
         id='a quotient under a shift with an edge',
     ),
     pytest.param(
