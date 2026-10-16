@@ -19,6 +19,7 @@ import json
 import logging
 import multiprocessing
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -104,8 +105,76 @@ def _reduce(seeds: range, *, verbose: bool) -> int:
     return int(bool(found))
 
 
+def _campaign(seeds: range, jobs: int, solve: bool) -> dict[int, dict[str, Any]]:
+    """Every seed's record, each checked in a worker of its own."""
+    records = {}
+    with multiprocessing.get_context('spawn').Pool(jobs, maxtasksperchild=50) as pool:
+        pending = {seed: pool.apply_async(_one, (seed, solve)) for seed in seeds}
+        for seed, job in pending.items():
+            try:
+                records[seed] = job.get(timeout=TIMEOUT_S)
+            except multiprocessing.TimeoutError:
+                records[seed] = _failed(seed, 'hang', f'no verdict within {TIMEOUT_S} s', 'hang')
+            except Exception as e:
+                records[seed] = _failed(
+                    seed, 'harness', f'{type(e).__name__}: {e}'[:200], f'harness: {type(e).__name__}'
+                )
+    return records
+
+
+def _failed(seed: int, oracle: str, summary: str, signature: str) -> dict[str, Any]:
+    finding = {'oracle': oracle, 'summary': summary, 'signature': signature, 'detail': ''}
+    return {'seed': seed, 'status': oracle, 'solved': False, 'findings': [finding]}
+
+
+def _found(records: dict[int, dict[str, Any]]) -> dict[str, list[str]]:
+    """Each seed with a finding, and the signatures it has, sorted: the shape a baseline file holds."""
+    found = {str(seed): sorted({f['signature'] for f in r['findings']}) for seed, r in records.items()}
+    return {seed: signatures for seed, signatures in found.items() if signatures}
+
+
+def against_baseline(found: dict[str, list[str]], baseline: dict[str, list[str]], seeds: range) -> list[str]:
+    """What differs from *baseline* over *seeds*: a finding it does not hold, and one it holds that did not recur.
+
+    Both directions fail, as a strict ``xfail`` does: a fix that removes a
+    finding leaves the baseline stale until it is written again.
+    """
+    problems = []
+    for seed in seeds:
+        now, then = set(found.get(str(seed), ())), set(baseline.get(str(seed), ()))
+        problems += [f'seed {seed}: new finding — {s}' for s in sorted(now - then)]
+        problems += [f'seed {seed}: no longer found, so drop it from the baseline — {s}' for s in sorted(then - now)]
+    return problems
+
+
+#: Where a message says a defect showed: the entry and the side. It names the place, not the defect.
+_PLACE = re.compile(r'(?:in |the )?(?:constraint _(?: lhs| rhs)?|named expression _|objective|the expression): ')
+
+
+#: The names the generator gives its dimensions and entries, which a message may print unquoted.
+_GENERATED = re.compile(r'\b(?:[tgbhk]|[pvecmr]\d+)\b')
+
+
+def kind(signature: str) -> str:
+    """*signature* without the place and the names it prints, cut to its first clause, so one defect is one kind.
+
+    One defect reads as one kind wherever it shows: in a constraint or the
+    objective, on either side, over any dimension.
+    """
+    return _GENERATED.sub('_', _PLACE.sub('', signature))[:120].split('; ')[0]
+
+
+def against_kinds(found: dict[str, list[str]], kinds: dict[str, str]) -> list[str]:
+    """Every kind of finding that *kinds* does not name, with the first seed that has it."""
+    seen: dict[str, str] = {}
+    for seed, signatures in sorted(found.items(), key=lambda kv: int(kv[0])):
+        for signature in signatures:
+            seen.setdefault(kind(signature), seed)
+    return [f'a new kind of finding, first at seed {seed} — {k}' for k, seed in sorted(seen.items()) if k not in kinds]
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run the campaign; exit 1 if anything was found."""
+    """Run the campaign; exit 1 on a finding, or on a difference from ``--baseline`` or ``--known``."""
     front = argparse.ArgumentParser(prog='python -m tests.fuzz')
     front.add_argument('--seeds', default='0:200', help='a seed, or a range start:stop')
     front.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
@@ -113,43 +182,49 @@ def main(argv: list[str] | None = None) -> int:
     front.add_argument('--no-solve', action='store_true', help='skip the solve and the shuffle')
     front.add_argument('-v', '--verbose', action='store_true', help='print every finding in full')
     front.add_argument('--reduce', action='store_true', help='shrink each finding of each seed, in this process')
+    gate = front.add_mutually_exclusive_group()
+    gate.add_argument('--baseline', type=Path, help='fail only where the findings differ from this file, seed by seed')
+    gate.add_argument('--known', type=Path, help='fail only on a kind of finding this file does not name')
+    gate.add_argument('--write-baseline', type=Path, help='write the findings to this file, and pass')
     args = front.parse_args(argv)
-    if args.reduce:
-        return _reduce(_seeds(args.seeds), verbose=args.verbose)
-
     seeds = _seeds(args.seeds)
-    statuses: collections.Counter[str] = collections.Counter()
+    if args.reduce:
+        return _reduce(seeds, verbose=args.verbose)
+
+    records = _campaign(seeds, args.jobs, solve=not args.no_solve)
+    statuses = collections.Counter(r['status'] for r in records.values())
+    solved = sum(r['solved'] for r in records.values())
     groups: dict[str, list[int]] = collections.defaultdict(list)
-    examples: dict[str, dict[str, Any]] = {}
-    solved = 0
-    context = multiprocessing.get_context('spawn')
-    with context.Pool(args.jobs, maxtasksperchild=50) as pool:
-        pending = {seed: pool.apply_async(_one, (seed, not args.no_solve)) for seed in seeds}
-        for seed, job in pending.items():
-            try:
-                record = job.get(timeout=TIMEOUT_S)
-            except Exception as e:
-                record = {'seed': seed, 'status': 'harness', 'solved': False, 'findings': [
-                    {'oracle': 'harness', 'summary': f'{type(e).__name__}: {e}'[:200], 'signature': f'harness: {type(e).__name__}', 'detail': repr(e)}
-                ]}  # fmt: skip
-            except multiprocessing.TimeoutError:
-                record = {'seed': seed, 'status': 'hang', 'solved': False, 'findings': [
-                    {'oracle': 'hang', 'summary': f'no verdict within {TIMEOUT_S} s', 'signature': 'hang', 'detail': ''}
-                ]}  # fmt: skip
-            statuses[record['status']] += 1
-            solved += record['solved']
-            for finding in record['findings']:
-                groups[finding['signature']].append(seed)
-                examples.setdefault(finding['signature'], {'seed': seed, 'finding': finding, 'all': record['findings']})
-                if args.verbose:
-                    print(f'--- seed {seed} [{finding["oracle"]}] {finding["summary"]}\n{finding["detail"]}\n')
+    for seed, record in records.items():
+        for finding in record['findings']:
+            groups[finding['signature']].append(seed)
+            if args.verbose:
+                print(f'--- seed {seed} [{finding["oracle"]}] {finding["summary"]}\n{finding["detail"]}\n')
 
     print(f'{len(seeds)} seeds: {dict(statuses)}, {solved} solved on both lanes')
     for signature, hit in sorted(groups.items(), key=lambda kv: -len(kv[1])):
-        example = examples[signature]
-        print(f'{len(hit):5d}  {signature}\n       first seed {example["seed"]}: {example["finding"]["summary"]}')
+        first = records[hit[0]]
+        print(f'{len(hit):5d}  {signature}\n       seeds {hit[:8]}')
         if args.out is not None:
-            reproduction(example['seed'], args.out, example['all'])
+            reproduction(hit[0], args.out, first['findings'])
+
+    found = _found(records)
+    if args.write_baseline is not None:
+        args.write_baseline.write_text(json.dumps(found, indent=1, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'wrote {len(found)} seeds with findings to {args.write_baseline}')
+        return 0
+    if args.baseline is not None or args.known is not None:
+        path = args.baseline or args.known
+        baseline = json.loads(path.read_text(encoding='utf-8'))
+        problems = against_baseline(found, baseline, seeds) if args.baseline else against_kinds(found, baseline)
+        print('\n'.join(problems) or f'every finding is one {path} already holds')
+        if problems and args.baseline:
+            print(f'\nReproduce a seed with `python -m tests.fuzz --seeds <n> --reduce`. After a fix, or a change to the '
+                  f'generator, write the baseline again: `python -m tests.fuzz --seeds {args.seeds} --write-baseline {path}`.')  # fmt: skip
+        elif problems:
+            print(f'\nReproduce a seed with `python -m tests.fuzz --seeds <n> --reduce`, file what it shows, and add '
+                  f'the kind to {path} under the issue.')  # fmt: skip
+        return int(bool(problems))
     return int(bool(groups))
 
 

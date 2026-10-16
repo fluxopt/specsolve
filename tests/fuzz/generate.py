@@ -308,7 +308,7 @@ class Generator:
                         and (set(p.dims) - {rel.value}) | {rel.key} <= frame
                     ):
                         atoms.append(f'at({name}, by={rel_name}[{rel.value}])')
-        for d in frame:
+        for d in sorted(frame):
             dim = self.dims[d]
             if dim.ordered:
                 atoms.append(f'position({d}) {r.choice((">", "==", "<"))} {r.choice((0, 1, -1))}')

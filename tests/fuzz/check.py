@@ -11,7 +11,7 @@ Each check is an oracle that needs no expected answer:
   sentence. An oracle gap (``OracleCannotBuildError``) is not a finding.
 - **read**: every expression the case names reads the same on both lanes at one
   point (:func:`tests.differential.at_a_point`'s claim, without its asserts).
-- **solve**: for a linear case, both lanes reach the same status and objective,
+- **solve**: for a linear case with an objective (linopy solves no feasibility problem), both lanes reach the same status and objective,
   build the same coefficients row for row, and the written LP file re-solves to
   that objective.
 - **shuffle**: the rows of a table carry no order, so shuffling every
@@ -116,7 +116,7 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
     with relational:
         findings += _reads(expanded, case, model, relational)
     solved = False
-    if solve and case.linear:
+    if solve and case.linear and expanded.objective is not None:
         solve_findings, solved = _solve(expanded, case.sources)
         findings += solve_findings
         findings += _shuffled(expanded, case)
@@ -267,7 +267,7 @@ def _close(a: float, b: float) -> bool:
 def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]:
     m = specsolve_linopy.build(spec, dict(sources))
     status, condition = m.solve(solver_name='highs', output_flag=False)
-    oracle = (float(m.objective.value) if spec.objective is not None else 0.0) if status == 'ok' else math.nan
+    oracle = float(m.objective.value) if status == 'ok' else math.nan
     program = lowered(spec)
     findings = []
     with Engine() as engine:
@@ -422,7 +422,7 @@ def _shuffled(spec: Spec, case: Case) -> list[Finding]:
             after.solve(solver_options={'output_flag': False}),
         )
         if one.termination_condition != two.termination_condition or (
-            one.is_ok and not _close(one.objective, two.objective)
+            one.has_primal and not _close(one.objective, two.objective)
         ):
             findings.append(
                 Finding(
