@@ -327,7 +327,8 @@ def readers(
         return declared, None
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
-        return expression_frame('the expression', lower(written), compiler)
+        name = written if isinstance(written, str) and written in named else 'the expression'
+        return expression_frame(name, lower(written), compiler)
 
     return declared, evaluate
 

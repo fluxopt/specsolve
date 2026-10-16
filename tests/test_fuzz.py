@@ -483,6 +483,20 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': {'b': {'dtype': 'str'}},
+                'parameters': {'p': {'dims': ['b'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 1}}},
+                'expressions': {'e': {'dims': ['b'], 'expression': 'v / p'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'b': ['b5'], 'p': pl.DataFrame({'b': [], 'value': []}, schema={'b': pl.String, 'value': pl.Float64})},
+            'e',
+        ),
+        id='a declared expression read from a saved answer is refused by its own name',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},
