@@ -218,7 +218,9 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
     Needed before a node that is not one-to-one ([`fan_in`][]): the row-level
     intersection at assembly cannot say which input slots behind a row survived.
     A piece lacking a dim a restriction is keyed by is first repeated along
-    it, never along a dim in *along*, which the operator refuses itself
+    it. A piece with a variable is repeated along a dim in *along* too, or the
+    operator would count it at every position, absent slots included. A
+    constant part is not, as the operator refuses it there
     ([`refuse_a_piece_without_the_dims`][]). A piece is never restricted
     by its own presence: its rows are inside it by construction.
     """
@@ -233,7 +235,7 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
                 continue
             on = list(presence.keys(source.dims))
             missing = [d for d in on if d not in dims]
-            if any(d in along for d in missing):
+            if p.kind == 'const' and any(d in along for d in missing):
                 continue
             if missing:
                 dims = scope.in_declaration_order((*dims, *missing))

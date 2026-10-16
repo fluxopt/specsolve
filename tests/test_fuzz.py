@@ -343,9 +343,6 @@ REDUCED = [
             {'b': ['b8'], 'g': ['g6', 'g7']},
             'x - y',
         ),
-        marks=_found(
-            '#2048 — a summand is absent where its masked operand is, but the relational lane keeps the term it broadcasts beside it'
-        ),
         id='an absent summand beside a broadcast term',
     ),
     pytest.param(
