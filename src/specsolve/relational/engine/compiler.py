@@ -596,7 +596,7 @@ class Compiler:
         """
         missing = [d for d in a.dropped_dims if d not in p.dims]
         if missing:
-            refuse_a_piece_without_the_dims(p, missing, context, f'at(by=) through {missing}')
+            refuse_a_piece_without_the_dims(p, missing, context, 'at(by=)')
         remapped = self._remap_piece(p, a)
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
