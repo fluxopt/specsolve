@@ -504,9 +504,6 @@ REDUCED = [
             {'k': [7], 'f': pl.DataFrame({'k': [7], 'value': [False]})},
             'e',
         ),
-        marks=_found(
-            '#2049 — a case whose when: counts, beside a quotient in otherwise:, crashes polars when it is read: no column __present__'
-        ),
         id='a counted case beside a quotient',
     ),
     pytest.param(

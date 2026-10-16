@@ -250,11 +250,16 @@ class Compiler:
 
                 Unwidened, it would unmake rows another region covers. The
                 regions are disjoint, so each coordinate is still held to the
-                one region that claims it.
+                one region that claims it. Keyed by no dim, both halves are
+                the scalar marker [`PRESENT`][], since a frame with no columns
+                holds no rows.
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
                 complement = masked(self.scope, on, ~r.when)
+                if not keys:
+                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
+                    return Presence(pl.concat(marks).unique(), keys)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
                 widened = [self.scope.widen(x.frame, have, keys), self.scope.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
