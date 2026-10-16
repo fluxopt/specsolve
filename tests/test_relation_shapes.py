@@ -16,7 +16,7 @@ single-valued map — two columns, one of them the key — is one shape of it:
 - **two columns over one dimension** name a line's two ends in one table.
 
 Every optimum here is hand-derived, and the written LP file re-solves to it;
-the linopy lane refuses these shapes (`test_conditioned_relations.py` holds
+the linopy lane refuses most of these shapes (`test_conditioned_relations.py` holds
 what it builds).
 """
 

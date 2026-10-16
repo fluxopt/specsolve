@@ -8,7 +8,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve.errors import SpecsolveError
-from specsolve.messages import coordinate_expr, unknown_name_message
+from specsolve.messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
@@ -353,7 +353,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         [p.frame for p in compiled.consts],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
-        _reported_divisor_message,
+        reported_divisor_message,
     )
 
     pieces = compiled.consts
@@ -363,17 +363,6 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
-
-
-def _reported_divisor_message(name: str, missing: int) -> str:
-    """The message for a divisor parameter a reported expression reads short of a row."""
-    return (
-        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
-        f'quotient is not dropped there, and there is no number to divide by.\n'
-        f'  Supply the missing rows.\n'
-        f'  Declare the parameter `missing: absent`, if the quotient has no value there.'
-    )
 
 
 def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:

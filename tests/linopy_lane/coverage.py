@@ -21,8 +21,12 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError
-from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
-from specsolve.relational.engine.readback import _reported_divisor_message as reported_divisor_message
+from specsolve.messages import (
+    non_finite_message,
+    reported_divisor_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
