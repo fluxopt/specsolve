@@ -484,7 +484,6 @@ REDUCED = [
             {'b': ['b1'], 'p': pl.DataFrame({'b': [], 'value': []}, schema={'b': pl.String, 'value': pl.Float64})},
             'p ** 0',
         ),
-        marks=_found('#2048 — the oracle reads an absent parameter to the power 0 as 1'),
         id='oracle: an absent base to the power 0',
     ),
     pytest.param(

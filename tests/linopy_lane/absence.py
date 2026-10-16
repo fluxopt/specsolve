@@ -27,6 +27,7 @@ __all__ = [
     'divisor',
     'filled',
     'holes',
+    'power',
     'present',
     'unmapped',
     'vacated',
@@ -108,6 +109,20 @@ def combined(op: Callable[[Any, Any], Any], left: Any, right: Any, *, neutral: f
     if hasattr(result, 'to_linexpr'):
         result = result.to_linexpr()
     return result.where(~absent)
+
+
+def power(base: Any, exponent: Any) -> Any:
+    """``base ** exponent``, absent wherever either side is.
+
+    IEEE answers ``nan ** 0`` and ``1 ** nan`` with 1, and the language
+    answers an absent operand with absence, so the holes are put back after
+    the power is taken.
+    """
+    raised = base**exponent
+    for side in (base, exponent):
+        if (gap := holes(side)) is not None:
+            raised = raised.where(~gap)
+    return raised
 
 
 def divisor(value: Any) -> Any:

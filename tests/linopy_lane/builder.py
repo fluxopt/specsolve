@@ -380,7 +380,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return absence.combined(operator.truediv, _eval(node.numerator, ctx), divisor, neutral=1.0)
 
     if isinstance(node, program.Power):
-        return _eval(node.base, ctx) ** _eval(node.exponent, ctx)
+        return absence.power(_eval(node.base, ctx), _eval(node.exponent, ctx))
 
     if isinstance(node, program.Sum) and isinstance(node.operand, program.Join) and node.operand.columns.axes:
         return _grouped_sum(_eval(node.operand.operand, ctx), node.operand.columns, ctx)
