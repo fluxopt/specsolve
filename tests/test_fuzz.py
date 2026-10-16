@@ -90,8 +90,8 @@ def _bounded(*dims: str) -> dict[str, Any]:
     return {'dims': list(dims), 'bounds': {'lower': 0, 'upper': 1}}
 
 
-def _case(spec: dict[str, Any], sources: dict[str, Any], *reads: str) -> Case:
-    return Case(seed=0, spec=spec, sources=sources, reads=list(reads))
+def _case(spec: dict[str, Any], sources: dict[str, Any], *reads: str, linear: bool = True) -> Case:
+    return Case(seed=0, spec=spec, sources=sources, reads=list(reads), linear=linear)
 
 
 def _found(reason: str) -> Any:
@@ -608,9 +608,9 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'sum(-v * e)'},
             },
             {'k': [-2]},
-        ),
-        marks=_found(
-            '#2049 — the oracle crashes on a product with a case whose when: reads a variable: unsupported operand for *'
+            'e',
+            'sum(-v * e)',
+            linear=False,
         ),
         id='oracle: a product with a case over a variable',
     ),

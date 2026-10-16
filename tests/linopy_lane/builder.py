@@ -420,7 +420,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return absence.combined(operator.add, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Multiply):
-        return absence.combined(operator.mul, _eval(node.left, ctx), _eval(node.right, ctx))
+        return absence.combined(_times, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Divide):
         numerator, divisor = _eval(node.numerator, ctx), _eval(node.divisor, ctx)
@@ -473,6 +473,26 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return _eval(node.body, ctx)
 
     assert_never(node)
+
+
+def _times(left: Any, right: Any) -> Any:
+    """``left * right``, the factor with more terms first.
+
+    linopy multiplies an expression by a factor of one term at most, and
+    refuses a wider one even where the other factor has a single term — a
+    ``cases:`` block, an addition or a sum each makes one — so the order is
+    what lets the product be taken.
+    """
+    if _terms(right) > _terms(left):
+        return right * left
+    return left * right
+
+
+def _terms(side: Any) -> int:
+    """How many terms *side* holds: a variable one, a value none."""
+    if hasattr(side, 'to_linexpr'):
+        return 1
+    return getattr(side, 'nterm', 0)
 
 
 def _dual(name: str, ctx: EvaluationContext) -> xr.DataArray:
