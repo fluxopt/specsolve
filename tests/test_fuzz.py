@@ -254,9 +254,6 @@ REDUCED = [
             ),
             {'g': ['g1'], 'p0': pl.DataFrame({'g': ['g1'], 'value': [0.0]}), 'p1': 2.0},
         ),
-        marks=_found(
-            '#2048 — a row whose only coefficient is a data zero: the relational lane keeps `2 == 0`, the oracle drops it'
-        ),
         id='a row whose coefficient is a data zero',
     ),
     pytest.param(
