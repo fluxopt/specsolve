@@ -565,9 +565,6 @@ REDUCED = [
             },
             {'g': ['g3'], 'lo': -0.5},
         ),
-        marks=_found(
-            '#2048 — an integer column with a lower bound of -0.5 solves optimal with no values here, and to -0.5 on the oracle'
-        ),
         id='an integer column with a fractional lower bound',
     ),
     pytest.param(

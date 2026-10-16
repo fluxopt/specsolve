@@ -40,7 +40,7 @@ from tests.linopy_lane.operators import (
 from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_relation, evaluate_where
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     import linopy
     import pandas as pd
@@ -85,9 +85,12 @@ def _build_variables(ctx: EvaluationContext) -> None:
 
             _check_bounds_are_defined(name, vdef, ctx, mask)
 
+            lower, upper = _bound(vdef.lower, ctx, -math.inf), _bound(vdef.upper, ctx, math.inf)
+            if vdef.domain != 'continuous':
+                lower, upper = _whole(lower, np.ceil), _whole(upper, np.floor)
             ctx.model.add_variables(
-                lower=_bound(vdef.lower, ctx, -math.inf),
-                upper=_bound(vdef.upper, ctx, math.inf),
+                lower=lower,
+                upper=upper,
                 coords=coords,
                 name=name,
                 mask=as_linopy_mask(mask),
@@ -130,6 +133,20 @@ def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: 
         return values.fillna(open_side) if ctx.absent(bound.name) else values
     msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
+
+
+def _whole(bound: Any, inward: Callable[[Any], Any]) -> Any:
+    """An integer variable's bound as the whole number it admits: the nearest within 1e-6, else rounded *inward*.
+
+    linopy hands HiGHS a fractional bound on an integer column as it is, and
+    HiGHS answers it with a value that is not whole.
+    """
+    nearest = np.round(bound)
+    with np.errstate(invalid='ignore'):  # an open side is infinite, and inf - inf is NaN, which is not close
+        close = abs(bound - nearest) <= 1e-6
+    if isinstance(bound, xr.DataArray):
+        return nearest.where(close, inward(bound))
+    return nearest if close else inward(bound)
 
 
 # ---------------------------------------------------------------------------
