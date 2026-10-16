@@ -227,14 +227,14 @@ class Compiler:
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Piece], Piece],
-            operand: program.Expression | None = None,
+            inner: CompiledExpression | None = None,
         ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand, *operand* where it is not ``e.operand``.
+            """One shape operator applied to its compiled operand, *inner* where the caller compiled it.
 
             A node that is not one-to-one mixes input slots, so absence reaches
             the operand before the rewrite consumes it.
             """
-            inner = ev(e.operand if operand is None else operand)
+            inner = ev(e.operand) if inner is None else inner
             if fan_in(e) != 'one-to-one':
                 assert isinstance(e, program.Sum | program.WindowSum), 'only a sum fans in'
                 inner = propagate_absence(inner, self.scope, acted_along(e))
@@ -330,13 +330,17 @@ class Compiler:
                 if isinstance(e.operand, program.Join) and e.operand.columns.axes:
                     join = e.operand
                     assert e.over == join.columns.axes, 'a sum through a relation sums exactly the axes its join opens'
-                    return shaped(e, lambda p: self._group_piece(p, join.columns, context), join.operand)
+                    return shaped(e, lambda p: self._group_piece(p, join.columns, context), ev(join.operand))
                 return shaped(e, lambda p: self._sum_piece(p, _dimensions(e.over), context))
             if isinstance(e, program.Join):
                 assert not e.columns.axes, f'in {context}: a join that opens axes stands under the sum over them'
                 return shaped(e, lambda p: self._at_piece(p, e.columns, context))
             if isinstance(e, program.Translate):
-                return shaped(e, lambda p: translate_piece(self.scope, p, e, context))
+                operand = ev(e.operand)
+                over_a_variable = bool(operand.terms or operand.quads)
+                return shaped(
+                    e, lambda p: translate_piece(self.scope, p, e, context, over_a_variable=over_a_variable), operand
+                )
             if isinstance(e, program.WindowSum):
                 return shaped(e, lambda p: window_piece(self.scope, p, e, context))
             if isinstance(e, program.Cases):

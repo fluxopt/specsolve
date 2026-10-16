@@ -193,10 +193,21 @@ REDUCED = [
             {'t': [1, 2], 'g': ['a', 'b'], 'p': pl.DataFrame({'t': [2], 'g': ['a'], 'value': [0.5]})},
             'shift(p, along=t, offset=1, edge=0)',
         ),
-        marks=_found(
-            '#2048 — a numeric shift edge over a parameter stands only where the parameter has a row in the other dimensions'
-        ),
         id='a shift edge where the parameter has no row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'shift(x + p, along=t, offset=1, edge=0) <= v',
+                ['g', 't'],
+                parameters={'p': {'dims': ['t', 'g'], 'missing': 'absent'}},
+                variables={'v': _bounded('g', 't'), 'x': _bounded('g', 't')},
+            ),
+            {'t': [1, 2], 'g': ['a', 'b'], 'p': pl.DataFrame({'t': [2], 'g': ['a'], 'value': [0.5]})},
+            'shift(x + p, along=t, offset=1, edge=0)',
+        ),
+        id='a shift edge beside a variable where the parameter has no row',
     ),
     pytest.param(
         _case(

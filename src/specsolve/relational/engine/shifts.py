@@ -140,12 +140,14 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
     return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) -> Piece:
+def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str, *, over_a_variable: bool) -> Piece:
     """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
     Every fill over a constant is written, ``0`` included, so the slot has a
     value. Over a term a fill writes nothing: the vacated slot contributes no
     term, and lowering refuses every nonzero fill over a variable.
+    *over_a_variable* says whether the whole operand carries a variable, which
+    decides where a fill stands ([`_Edge.vacated`][]).
     """
     if s.along not in p.dims:
         refuse_a_piece_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
@@ -193,7 +195,7 @@ def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) 
         moved_presence = remap(source, [], keys)
         if s.wrap or s.fill is None:
             return Presence(moved_presence, keyed_by)
-        vacated = edge.vacated_beside(source, keys)
+        vacated = edge.vacated(scope, keys, beside=source if over_a_variable else None)
         return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), keyed_by)
 
     frame = remap(p.frame, p.carried, p.dims)
@@ -255,25 +257,29 @@ class _Edge:
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
-        edge = scope.spread(self.coordinates(vacated=True), [d for d in others if d not in self.keys])
-        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, self.shift.along, 'cval')
+        edge = self.vacated(scope, (*others, self.shift.along), beside=None)
+        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval'))
 
-    def vacated_beside(self, source: pl.LazyFrame, keys: tuple[str, ...]) -> pl.LazyFrame:
-        """The edge positions ``shift`` leaves with nothing to move in, under *keys*, beside a presence's rows.
+    def vacated(self, scope: Scope, keys: tuple[str, ...], *, beside: pl.LazyFrame | None) -> pl.LazyFrame:
+        """The coordinates the shift leaves with nothing to move in, under *keys*.
 
-        Back in the presence set they are present with no term, so the row
-        survives. The edge is crossed with the combinations of the other keys
-        that *source*, the presence over *keys*, has, so a coordinate its own
-        mask removed stays absent. The columns come in the order
-        [`_Order.remap`][] writes them, for the concat with the moved presence.
+        Back in a presence set they are present with no term, so the row
+        survives. *beside*, a presence over *keys*, keeps only the combinations
+        of the other keys it has rows for, so a line along the dimension that
+        the operand's variable lacks whole stays absent; ``None`` keeps every
+        one, as an operand with no variable reads. The columns come in the
+        order [`_Order.remap`][] writes them, for the concat with the moved
+        presence.
         """
         along = self.shift.along
         others = [d for d in keys if d != along]
-        if not others:
-            return self.coordinates(vacated=True)
-        rows = source.select(*others).unique()
-        on = [d for d in self.keys if d in others]
-        return join_on(rows, self.coordinates(vacated=True), on, 'inner').select(*others, along)
+        edge = self.coordinates(vacated=True)
+        if beside is not None and others:
+            rows = beside.select(*others).unique()
+            edge = join_on(rows, edge, [d for d in self.keys if d in others], 'inner')
+        else:
+            edge = scope.spread(edge, [d for d in others if d not in self.keys])
+        return edge.select(*others, along)
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:
