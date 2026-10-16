@@ -347,18 +347,17 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"
-    compiled = compiler.expression(expr, context, reported=True)
+    pieces = compiler.expression(expr, context, reported=True).consts
+    dims = compiler.scope.spanned(pieces)
+    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
 
     coverage.refuse_null_constants(
-        [p.frame for p in compiled.consts],
+        coverage.narrowed_to_rows(carrier.rename({_EXPRESSION_ROW: 'row'}), pieces),
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
     )
 
-    pieces = compiled.consts
-    dims = compiler.scope.spanned(pieces)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
     added = compiler.summed_onto(pieces, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)

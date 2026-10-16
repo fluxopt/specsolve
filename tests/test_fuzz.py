@@ -380,6 +380,29 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': {'g': {'dtype': 'str'}, 'h': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 'neutral'}},
+                'variables': {
+                    'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}, 'where': "g != 'g6'"},
+                    'y': {'dims': ['k', 'h'], 'bounds': {'lower': -5, 'upper': 5}},
+                },
+                'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
+            },
+            {
+                'g': ['g6'],
+                'h': [9],
+                'k': [2],
+                'p': pl.DataFrame(
+                    {'g': [], 'h': [], 'value': []}, schema={'g': pl.String, 'h': pl.Int64, 'value': pl.Float64}
+                ),
+            },
+            '(y + x) / p',
+        ),
+        id='a read divided by a neutral parameter with no row, where the quotient is absent',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},
