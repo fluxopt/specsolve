@@ -485,7 +485,6 @@ REDUCED = [
             | {'constraints': {'c': {'dims': ['b', 'g'], 'expression': 'v <= 1', 'where': 'r'}}},
             {'b': ['b0'], 'g': ['g0'], 'r': pl.DataFrame({'g': ['g0'], 'b': ['b0']})},
         ),
-        marks=_found('#1897 — the oracle crashes on a where that reads a bare relation: reduce() of empty iterable'),
         id='oracle: a where that reads a bare relation',
     ),
     pytest.param(

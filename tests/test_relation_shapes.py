@@ -267,6 +267,20 @@ def test_a_bare_where_tests_that_a_row_exists(tmp_path):
     assert objective == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
 
 
+def test_both_lanes_keep_the_pairs_a_bare_where_relates():
+    """The linopy lane reads `where: connection` as the relational lane does, rather than crashing (#1897)."""
+    from tests.differential import differential
+
+    spec = _bare_spec()
+    spec['parameters'] = {}
+    spec['variables'] = {'x': {'dims': ['generator', 'bus'], 'where': 'connection', 'bounds': {'lower': 0, 'upper': 1}}}
+    spec['constraints'] = {}
+    spec['objective'] = {'sense': 'maximize', 'expression': 'sum(x)'}
+    sources = {'generator': ['g1', 'g2'], 'bus': ['a', 'b'], 'connection': CONNECTION}
+    with differential(spec, sources) as run:
+        assert float(run.result.objective) == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
+
+
 #: A start covers its own snapshot and the next, and the last start covers itself alone.
 COVER = [(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)]
 
