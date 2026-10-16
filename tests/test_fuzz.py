@@ -356,9 +356,6 @@ REDUCED = [
             },
             {'h': [2], 'p': pl.DataFrame({'h': [], 'value': []}, schema={'h': pl.Int64, 'value': pl.Float64})},
         ),
-        marks=_found(
-            '#2048 — a neutral divisor with no row is not refused on the relational lane when the dividend lacks its dimension'
-        ),
         id='a neutral divisor beside a scalar dividend',
     ),
     pytest.param(
