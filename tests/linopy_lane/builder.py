@@ -227,18 +227,8 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 mask, other = mask & ~gap, other.fillna(0.0)
                 if not bool(np.asarray(mask).any()):
                     continue
-            mask = mask & _with_a_variable(term, other)
-            if not bool(np.asarray(mask).any()):
-                continue
             term, other = _refuse_a_coefficient_that_is_not_finite(context, row, term, other, mask)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
-
-
-def _with_a_variable(term: Any, other: Any) -> xr.DataArray:
-    """The rows where a variable is left: a row with none is not built (the absence page), and linopy would count it."""
-    from linopy.constants import TERM_DIM
-
-    return ((term - other).data.vars != -1).any(TERM_DIM)
 
 
 def _refuse_a_coefficient_that_is_not_finite(
