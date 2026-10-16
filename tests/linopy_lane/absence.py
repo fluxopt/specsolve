@@ -29,6 +29,7 @@ __all__ = [
     'holes',
     'power',
     'present',
+    'quotient',
     'unmapped',
     'vacated',
     'variable_term',
@@ -125,11 +126,29 @@ def power(base: Any, exponent: Any) -> Any:
     return raised
 
 
+def quotient(numerator: Any, divisor: Any) -> Any:
+    """``numerator / divisor`` as a build divides, a term's zero constant staying zero over a zero divisor.
+
+    linopy divides a term's constant with its coefficients, and ``0 / 0`` is
+    the NaN that marks an absent slot, so a term with no constant there — a sum
+    with no terms among them — would be absent and take its row. The
+    coefficients keep the infinity or NaN a zero divisor leaves: whether one
+    reaches a row the build keeps is the builder's question.
+    """
+    result = combined(operator.truediv, numerator, divisor, neutral=1.0)
+    if not hasattr(result, 'const') or not isinstance(divisor, xr.DataArray):
+        return result
+    before = numerator.to_linexpr().const if hasattr(numerator, 'to_linexpr') else numerator.const
+    const = result.const.where(~((before == 0) & (divisor == 0)), 0.0)
+    return type(result)(result.data.assign(const=const), result.model)
+
+
 def divisor(value: Any) -> Any:
     """A divisor as a read takes it: absent where it is zero, since a reported quotient by zero has no value (#1776).
 
-    A build keeps the plain divisor: a zero in it is refused before the build
-    divides (`check_divisors_cover`), as the relational engine refuses it.
+    A build divides by the plain divisor (:func:`quotient`), and a zero in it
+    is refused where the quotient reaches what the build keeps, as the
+    relational engine refuses it.
     """
     if hasattr(value, 'where'):
         return value.where(value != 0)

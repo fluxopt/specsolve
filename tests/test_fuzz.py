@@ -353,7 +353,6 @@ REDUCED = [
             },
             {'k': [11], 'p0': pl.DataFrame({'k': [11], 'value': [0.0]})},
         ),
-        marks=_found('#2048 — the oracle drops the whole row, v1 with it, when a sum with no terms is divided by zero'),
         id='oracle: an empty sum over a zero divisor',
     ),
     pytest.param(
@@ -512,10 +511,20 @@ REDUCED = [
                 'd': pl.DataFrame({'h': [10, 6], 'value': [0.0, 2.0]}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle divides by a zero that the where already excludes, and crashes on the infinity'
-        ),
         id='oracle: a zero divisor the where excludes',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': T,
+                'parameters': {'p': {'dims': ['t']}},
+                'variables': {'v': _bounded('t')},
+                'constraints': {'c': {'dims': ['t'], 'expression': 'shift(v / p, along=t, offset=1) >= v'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'t': [1, 2], 'p': pl.DataFrame({'t': [1, 2], 'value': [2.0, 0.0]})},
+        ),
+        id='oracle: a zero divisor a shift vacates',
     ),
     pytest.param(
         _case(

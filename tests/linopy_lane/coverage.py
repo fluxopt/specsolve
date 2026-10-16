@@ -128,6 +128,8 @@ def check_divisors_cover(
     ctx: EvaluationContext,
     mask: Any,
     evaluate: Callable[[program.Expression], Any],
+    *,
+    terms: bool = True,
 ) -> None:
     """A divisor must have a value, and one that is not zero, wherever this declaration divides by it.
 
@@ -143,7 +145,9 @@ def check_divisors_cover(
     0.0 at the parameter leaf, and from there the division yields an infinity
     and the row is masked out silently. A zero the data holds is asked after
     the gaps, of the divisor as *evaluate* reads it, so a divisor that adds up
-    to zero is found too.
+    to zero is found too. With *terms* false a zero under a dividend that
+    carries a variable is left to the row it lands in, which a constraint asks
+    once it is built.
     """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
@@ -160,6 +164,8 @@ def check_divisors_cover(
                 missing = gaps_under(ctx.dataset[param], needed)
                 if missing:
                     raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
+            if not terms and program.carries_variable(quotient.numerator):
+                continue
             zeros = _zeros_under(evaluate(quotient.divisor), needed)
             if zeros:
                 raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')

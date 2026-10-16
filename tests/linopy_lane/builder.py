@@ -24,7 +24,7 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.messages import negative_window_message, null_bounds_message
+from specsolve.messages import negative_window_message, non_finite_message, null_bounds_message
 from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
@@ -211,7 +211,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             mask = evaluate_where(row.where, ctx)
             context = f"constraint '{name}'"
 
-            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx))
+            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx), terms=False)
             check_constant_side_covers(context, row, ctx, mask)
 
             if mask is not None and not bool(np.asarray(mask).any()):
@@ -226,7 +226,55 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 mask, other = mask & ~gap, other.fillna(0.0)
                 if not bool(np.asarray(mask).any()):
                     continue
+            term, other = _refuse_a_coefficient_that_is_not_finite(context, row, term, other, mask)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
+
+
+def _refuse_a_coefficient_that_is_not_finite(
+    context: str, row: program.ConstraintDeclaration, term: Any, other: Any, mask: Any
+) -> tuple[Any, Any]:
+    """Refuse a quotient by zero that reaches a row the build keeps, and clear one that reaches none.
+
+    A zero under a term is asked of the row rather than of the divisor's own
+    coordinates: a ``where``, a mask on the dividend, a shift and a sum with
+    no terms each decide whether the quotient lands in a row, and the built
+    row is where all four have answered. Asked only of a row that divides, so
+    an infinite limit on a side with no divisor stays the limit that never
+    binds. linopy refuses an infinity even in a row it then masks, so what
+    reaches no row is cleared: a coefficient to zero, a constant to absent.
+
+    Raises:
+        DataError: A coefficient, or a term's constant, that is not finite in
+            a row the build keeps.
+    """
+    from linopy.constants import TERM_DIM
+
+    divisors = program.parameters_of(
+        *(node.divisor for node in program.walk(row.lhs, row.rhs) if isinstance(node, program.Divide))
+    )
+    if not divisors:
+        return term, other
+    whole = (term - other).data
+    kept = mask & whole.const.notnull() & (whole.vars != -1).any(TERM_DIM)
+    sides = [side.to_linexpr() if hasattr(side, 'to_linexpr') else side for side in (term, other)]
+    terms = [side for side in sides if hasattr(side, 'nterm')]
+    entries = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
+    constants = sum(int((np.isinf(s.const) & kept).sum()) for s in terms)
+    if entries or constants:
+        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), entries or constants)}')
+    return tuple(_cleared(side, ~kept) for side in sides)
+
+
+def _cleared(side: Any, unbuilt: xr.DataArray) -> Any:
+    """*side* with every value that is not finite at an *unbuilt* row made one linopy takes."""
+    if hasattr(side, 'nterm'):
+        data = side.data
+        coeffs = data.coeffs.where(~(unbuilt & (data.vars != -1) & ~np.isfinite(data.coeffs)), 0.0)
+        const = data.const.where(~(unbuilt & np.isinf(data.const)))
+        return type(side)(data.assign(coeffs=coeffs, const=const), side.model)
+    if isinstance(side, xr.DataArray):
+        return side.where(~(unbuilt & np.isinf(side)), 0.0)
+    return side
 
 
 def _linear_where_squares_vanish(side: Any, context: str) -> Any:
@@ -375,9 +423,10 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return absence.combined(operator.mul, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Divide):
-        divisor = _eval(node.divisor, ctx)
-        divisor = absence.divisor(divisor) if ctx.solved else divisor
-        return absence.combined(operator.truediv, _eval(node.numerator, ctx), divisor, neutral=1.0)
+        numerator, divisor = _eval(node.numerator, ctx), _eval(node.divisor, ctx)
+        if ctx.solved:
+            return absence.combined(operator.truediv, numerator, absence.divisor(divisor), neutral=1.0)
+        return absence.quotient(numerator, divisor)
 
     if isinstance(node, program.Power):
         return absence.power(_eval(node.base, ctx), _eval(node.exponent, ctx))
