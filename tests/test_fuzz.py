@@ -373,9 +373,6 @@ REDUCED = [
                 'p': pl.DataFrame({'g': [], 'value': []}, schema={'g': pl.String, 'value': pl.Float64}),
             },
         ),
-        marks=_found(
-            "#2049 — a neutral factor on a side with a variable is refused as a constant side, and the message names parameter ''"
-        ),
         id='a neutral factor on a side with a variable',
     ),
     pytest.param(
