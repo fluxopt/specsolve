@@ -150,12 +150,7 @@ def test_a_read_of_a_sum_of_many_rows_is_the_same_in_any_row_order() -> None:
 
 
 def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
-    """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
-
-    The solver was kept only while every coefficient matched to the last bit,
-    so the same numbers in another row order loaded it again at every update
-    and lost the warm start.
-    """
+    """The same numbers in another row order sum to the same coefficients, so the solver is kept with its warm start."""
     rng = np.random.default_rng(0)
     items, periods = 2_000, 50
     spec = {
@@ -180,7 +175,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
 
 
 def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
-    """Only a last-bit difference keeps the solver; a change the data made, however small, reaches it."""
+    """A change the data made to a coefficient, however small, reaches the solver."""
     spec = {
         'dimensions': {'i': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['i']}},
