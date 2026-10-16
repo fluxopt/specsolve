@@ -277,9 +277,6 @@ REDUCED = [
                 'r': pl.DataFrame({'k': ['k1'], 'b': ['b1']}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle crashes on a sum grouped by a column that an at() on the other side also adds'
-        ),
         id='oracle: a grouped sum beside a lookup of the same column',
     ),
     pytest.param(
@@ -530,7 +527,6 @@ REDUCED = [
                 'r': pl.DataFrame({'g': ['g5'], 'k': [6]}),
             },
         ),
-        marks=_found('#2049 — the oracle crashes on an at() in a where whose frame also carries the column it reads'),
         id='oracle: an at() in a where over a frame with its column',
     ),
     pytest.param(
@@ -596,9 +592,6 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'sum(sum_back(at(v, by=r[t]), along=h, window=2))'},
             },
             {'h': [-1, 1], 't': [5, 1], 'r': pl.DataFrame({'h': [-1, 1], 't': [1, 5]})},
-        ),
-        marks=_found(
-            '#2049 — the oracle crashes on a sum_back over an at(): an auxiliary coordinate with conflicting values'
         ),
         id='oracle: a sum_back over a lookup',
     ),
