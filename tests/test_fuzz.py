@@ -544,6 +544,21 @@ REDUCED = [
     ),
     pytest.param(
         _case(
+            _model(
+                {'t': {'dtype': 'int'}},
+                '3 / p <= v',
+                ['t'],
+                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                variables={
+                    'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 'neutral'}
+                },
+            ),
+            {'t': [0, 9], 'p': pl.DataFrame({'t': [0], 'value': [2.0]})},
+        ),
+        id='oracle: a divisor with no row beside a neutral variable masked there',
+    ),
+    pytest.param(
+        _case(
             {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},

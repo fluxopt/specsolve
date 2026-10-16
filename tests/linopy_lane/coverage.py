@@ -198,7 +198,8 @@ def _quotients(
     the numerator at the quotient's own coordinate, either of which removes
     the coordinate. A quotient that stands at the row's own coordinate is
     also removed where a variable beside it there is absent, which takes the
-    row.
+    row. A variable declared ``missing: neutral`` is a zero where it is
+    masked, and removes nothing.
     """
     at_the_row = [node for e in expressions for node in _at_the_row(e)]
     row_variables = {node.name for node in at_the_row if isinstance(node, program.Variable)}
@@ -212,6 +213,8 @@ def _quotients(
             needed = region
             beside = row_variables if any(quotient is node for node in at_the_row) else set()
             for variable in sorted(_in_place(quotient.numerator) | beside):
+                if ctx.program.variables[variable].missing == 'neutral':
+                    continue
                 present = absence.present(ctx.model, variable)
                 needed = present if needed is None else (needed & present)
             yield quotient, params, needed
