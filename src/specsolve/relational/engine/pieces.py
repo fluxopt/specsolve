@@ -115,8 +115,9 @@ def refuse_a_piece_without_the_dims(p: Piece, dims: list[str], context: str, ope
     """Refuse a piece an operator cannot act on, in the right class.
 
     A constant part lacking the dims is valid YAML this engine cannot build, so
-    it is a `SpecsolveError`; a term always carries the frame dims from load, so
-    one here is a malformed plan. *operator* is the spelling the user wrote.
+    it is a `SpecsolveError`; a term is repeated along every dim an operator
+    reads before the operator runs ([`spread_piece`][]), so one here is a
+    malformed plan. *operator* is the spelling the user wrote.
     """
     if p.kind == 'const':
         raise SpecsolveError(
@@ -128,6 +129,20 @@ def refuse_a_piece_without_the_dims(p: Piece, dims: list[str], context: str, ope
         )
     msg = f'in {context}: {operator} along {dims}, which the expression does not span'
     raise AssertionError(msg)
+
+
+def spread_piece(scope: Scope, p: Piece, dims: Sequence[str]) -> Piece:
+    """*p* repeated at every label of each of *dims* it lacks, the same value at each.
+
+    Its presences leave with their keys spelled out, since the implied key,
+    the piece's dims, now names columns their frames do not hold.
+    """
+    missing = [d for d in dims if d not in p.dims]
+    if not missing:
+        return p
+    out = scope.in_declaration_order((*p.dims, *missing))
+    frame = scope.spread(p.frame, missing).select(*out, *p.carried)
+    return replace(p, dims=out, frame=frame, presences=_keyed(p))
 
 
 #: The label columns each kind carries, in the order a projection keeps them.

@@ -45,11 +45,12 @@ from specsolve.relational.engine.pieces import (
     propagate_absence,
     refuse_a_piece_without_the_dims,
     region_over,
+    spread_piece,
 )
 from specsolve.relational.engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
 from specsolve.relational.engine.relations import landed, mapping, walk_join
 from specsolve.relational.engine.scope import UNIT, Scope
-from specsolve.relational.engine.shifts import translate_piece, window_piece
+from specsolve.relational.engine.shifts import translate_piece, walked_dims, window_piece
 from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
@@ -227,14 +228,27 @@ class Compiler:
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Piece], Piece],
+            reads: tuple[str, ...],
+            acts: tuple[str, ...],
             inner: CompiledExpression | None = None,
         ) -> CompiledExpression:
             """One shape operator applied to its compiled operand, *inner* where the caller compiled it.
 
+            *reads* are the dims the rewrite keys each piece by, and *acts*
+            those among them it moves or sums along. A piece lacking one is
+            constant along it, so it is repeated there first, as the
+            operator's input: a term along all of them, and a constant along
+            the ones it does not act along, since the rewrite refuses a
+            constant short of those ([`refuse_a_piece_without_the_dims`][]).
             A node that is not one-to-one mixes input slots, so absence reaches
-            the operand before the rewrite consumes it.
+            the operand next, a repeated term with it, before the rewrite
+            consumes it.
             """
             inner = ev(e.operand) if inner is None else inner
+            constant_along = tuple(d for d in reads if d not in acts)
+            inner = map_pieces(
+                inner, lambda p: spread_piece(self.scope, p, constant_along if p.kind == 'const' else reads)
+            )
             if fan_in(e) != 'one-to-one':
                 assert isinstance(e, program.Sum | program.WindowSum), 'only a sum fans in'
                 inner = propagate_absence(inner, self.scope, acted_along(e))
@@ -330,19 +344,33 @@ class Compiler:
                 if isinstance(e.operand, program.Join) and e.operand.columns.axes:
                     join = e.operand
                     assert e.over == join.columns.axes, 'a sum through a relation sums exactly the axes its join opens'
-                    return shaped(e, lambda p: self._group_piece(p, join.columns, context), ev(join.operand))
-                return shaped(e, lambda p: self._sum_piece(p, _dimensions(e.over), context))
+                    columns = join.columns
+                    return shaped(
+                        e,
+                        lambda p: self._group_piece(p, columns, context),
+                        columns.joined_dims,
+                        columns.dropped_dims,
+                        ev(join.operand),
+                    )
+                over = _dimensions(e.over)
+                return shaped(e, lambda p: self._sum_piece(p, over, context), over, over)
             if isinstance(e, program.Join):
                 assert not e.columns.axes, f'in {context}: a join that opens axes stands under the sum over them'
-                return shaped(e, lambda p: self._at_piece(p, e.columns, context))
+                at = e.columns
+                return shaped(e, lambda p: self._at_piece(p, at, context), at.joined_dims, at.dropped_dims)
             if isinstance(e, program.Translate):
                 operand = ev(e.operand)
                 over_a_variable = bool(operand.terms or operand.quads)
                 return shaped(
-                    e, lambda p: translate_piece(self.scope, p, e, context, over_a_variable=over_a_variable), operand
+                    e,
+                    lambda p: translate_piece(self.scope, p, e, context, over_a_variable=over_a_variable),
+                    walked_dims(self.scope, e),
+                    (e.along,),
+                    operand,
                 )
             if isinstance(e, program.WindowSum):
-                return shaped(e, lambda p: window_piece(self.scope, p, e, context))
+                walk = walked_dims(self.scope, e)
+                return shaped(e, lambda p: window_piece(self.scope, p, e, context), walk, (e.along,))
             if isinstance(e, program.Cases):
                 return cases(e)
             if isinstance(e, program.NamedExpression):
@@ -518,13 +546,10 @@ class Compiler:
         skips absent slots.
         """
         missing = [d for d in over if d not in p.dims]
-        if missing and p.kind == 'const':
+        if missing:
             refuse_a_piece_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
-        scale = math.prod(self.scope.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
-        if scale != 1:
-            frame = frame.with_columns(pl.col(p.value_column) * scale)
         return self._empty_sums(Piece(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
     def _group_piece(self, p: Piece, columns: program.JoinColumns, context: str) -> Piece:
@@ -569,8 +594,9 @@ class Compiler:
         ``var_label`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
-        absent = [d for d in a.dropped_dims if d not in p.dims]
-        assert not absent, f'in {context}: a lookup through {absent}, which the expression does not span'
+        missing = [d for d in a.dropped_dims if d not in p.dims]
+        if missing:
+            refuse_a_piece_without_the_dims(p, missing, context, f'at(by=) through {missing}')
         remapped = self._remap_piece(p, a)
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 

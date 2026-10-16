@@ -121,9 +121,6 @@ REDUCED = [
             ),
             {'t': [1, 2, 3], 'g': ['a']},
         ),
-        marks=_found(
-            '#2049 — a shift over a sum with a term that does not carry the dimension raises an internal AssertionError'
-        ),
         id='shift over a term without the dimension',
     ),
     pytest.param(
@@ -136,10 +133,53 @@ REDUCED = [
             ),
             {'t': [1, 2, 3], 'g': ['a']},
         ),
-        marks=_found(
-            '#2049 — a sum_back over a sum with a term that does not carry the dimension raises an internal AssertionError'
-        ),
         id='sum_back over a term without the dimension',
+    ),
+    *(
+        pytest.param(
+            _case(
+                _model(
+                    {**T, **G},
+                    f'{operator}(x + y, along=t, {amount}) <= 1',
+                    ['g', 't'],
+                    variables={'x': _bounded('t', 'g'), 'y': {**_bounded('g'), 'where': "g != 'b'", **missing}},
+                ),
+                {'t': [1, 2, 3], 'g': ['a', 'b']},
+            ),
+            id=f'{operator} over a {label} term without the dimension',
+        )
+        for operator, amount in [('shift', 'offset=1, edge=0'), ('sum_back', 'window=2')]
+        for label, missing in [('masked', {}), ('neutral', {'missing': 'neutral'})]
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'sum(x + y, over=t) <= 2',
+                ['g'],
+                variables={'x': {**_bounded('t', 'g'), 'where': 't != 2'}, 'y': _bounded('g')},
+            ),
+            {'t': [1, 2, 3], 'g': ['a', 'b']},
+        ),
+        id='sum over a term without the dimension beside a masked term',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'sum_back(x + y + q, along=t, window=w) <= 4',
+                ['g', 't'],
+                parameters={'w': {'dims': ['g'], 'dtype': 'int'}, 'q': {'dims': ['t']}},
+                variables={'x': _bounded('t', 'g'), 'y': {**_bounded('t'), 'where': 't != 2'}},
+            ),
+            {
+                't': [1, 2, 3],
+                'g': ['a', 'b'],
+                'w': pl.DataFrame({'g': ['a', 'b'], 'value': [1, 2]}),
+                'q': pl.DataFrame({'t': [1, 2, 3], 'value': [1.0, 0.5, 0.25]}),
+            },
+        ),
+        id='a parameter window over a masked term without its dimension',
     ),
     pytest.param(
         _case(
@@ -158,9 +198,6 @@ REDUCED = [
                 'p': pl.DataFrame({'h': ['h1'], 'g': ['g1'], 'value': [-0.5]}),
                 'r': pl.DataFrame({'k': ['k1', 'k2'], 'h': ['h1', 'h1']}),
             },
-        ),
-        marks=_found(
-            '#2049 — an at() over a sum with a term that does not carry the looked-up column raises an internal AssertionError'
         ),
         id='at over a term without the column',
     ),
@@ -331,9 +368,6 @@ REDUCED = [
                 'p': pl.DataFrame({'t': [2], 'value': [1.0]}),
                 'r': pl.DataFrame({'t': [2], 'b': ['b3']}),
             },
-        ),
-        marks=_found(
-            '#2049 — a sum through a relation over a sum with a term that does not carry the dimension raises an internal AssertionError'
         ),
         id='sum by over a term without the dimension',
     ),
@@ -582,9 +616,6 @@ REDUCED = [
                 'o': pl.DataFrame({'b': ['b0'], 'value': [1]}),
                 'q': pl.DataFrame({'k': [11, 11], 'h': [9, 10], 'value': [1.0, 2.0]}),
             },
-        ),
-        marks=_found(
-            '#2049 — a shift by a parameter offset over a term that lacks the offset dimension crashes polars: column not found'
         ),
         id='a parameter offset over a term without its dimension',
     ),

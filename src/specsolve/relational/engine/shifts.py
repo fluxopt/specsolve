@@ -12,6 +12,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import polars as pl
+from mathspec import program
 
 from specsolve.relational.collect import collected
 from specsolve.relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
@@ -21,8 +22,6 @@ from specsolve.relational.names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from mathspec import program
 
     from specsolve.relational.engine.scope import Scope
 
@@ -84,6 +83,21 @@ class _Order:
         )
 
 
+def walked_dims(scope: Scope, s: program.Translate | program.WindowSum) -> tuple[str, ...]:
+    """The dims a walk keys each row of its operand by.
+
+    The dimension walked, a partition's joined dims, and a named offset's or
+    width's own dims, less the ones a partition groups into, which it reads
+    under the group column ([`_named_amount`][]).
+    """
+    amount = s.offset if isinstance(s, program.Translate) else s.width
+    named = scope.program.parameters[amount].dims if isinstance(amount, str) else ()
+    partition = s.partition
+    joined = partition.joined_dims if partition is not None else ()
+    grouped = {partition.dim(role) for role in partition.grouped} if partition is not None else set()
+    return tuple(dict.fromkeys((s.along, *joined, *(d for d in named if d not in grouped))))
+
+
 def translate_rows(
     scope: Scope, frame: pl.LazyFrame, dims: tuple[str, ...], carried: Sequence[str], along: str, offset: int
 ) -> pl.LazyFrame:
@@ -130,7 +144,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
 
     def travelled(presence: Presence) -> Presence:
         keyed_by, source = presence.keyed_by, presence.frame
-        if keyed_by is not None and not set(order.grouping.keys).issubset(keyed_by):
+        if keyed_by is not None and not set(walked_dims(scope, s)).issubset(keyed_by):
             source, keyed_by = scope.widen(source, keyed_by, p.dims), None
         return Presence(remap(source, [], p.dims if keyed_by is None else keyed_by).unique(), keyed_by)
 
