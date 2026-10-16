@@ -281,6 +281,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 "differential/**/*.py" = ["T20", "D"]
 "tests/**/*.py" = ["D"]
 "tests/typeset/golden/__main__.py" = ["T20", "D"]
+"tests/fuzz/run.py" = ["T20", "D"]
 
 [tool.ruff.format]
 quote-style = "single"
