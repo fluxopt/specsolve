@@ -314,9 +314,22 @@ REDUCED = [
             'sum_back(v, along=t, window=w)',
         ),
         marks=_found(
-            '#2048 — a window parameter of 0 is accepted, which a literal window is not, and the lanes read it apart'
+            '#2048 — a window parameter of 0 reads 0.0 at every position on the relational lane, and no row on the oracle'
         ),
         id='a window parameter of zero',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {**T, **G},
+                'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
+                'variables': {'v': _bounded('g', 't')},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'t': [1, 2], 'g': ['a', 'b'], 'w': pl.DataFrame({'g': ['a', 'b'], 'value': [2, -1]})},
+            'sum_back(v, along=t, window=w)',
+        ),
+        id='a negative window parameter',
     ),
     pytest.param(
         _case(

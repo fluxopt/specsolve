@@ -14,7 +14,7 @@ import pytest
 import specsolve as sps
 from specsolve.errors import DimensionError, LanguageError
 from tests.conftest import masked_operand_spec, relation
-from tests.differential import differential
+from tests.differential import both_lanes_refuse, differential
 from tests.oracle import pd
 
 MIN_UP = {'slow': 3, 'fast': 1}
@@ -392,6 +392,17 @@ def test_a_literal_width_is_a_whole_number_of_positions(width: str):
     spec['constraints']['stays_up_its_own_time']['expression'] = f'sum_back(started, along=t, window={width}) <= on'
     with pytest.raises(LanguageError, match='must be a whole number of at least 1'):
         sps.check(spec)
+
+
+def test_a_negative_width_in_the_data_is_refused_on_both_lanes():
+    """A width counts positions, so the data may not hold one below zero.
+
+    Both lanes read a negative width as a window of nothing, as they read a
+    zero, which a literal ``window=-2`` is refused for at load (#2048).
+    """
+    sources = {**UP_TIME_DATA, 'min_up': pd.Series([3, -1], index=pd.Index(UNITS, name='g'))}
+    message = both_lanes_refuse(up_time_spec(None), sources, match="parameter 'min_up' is the window of a sum_back")
+    assert 'holds -1.' in message, 'the refusal names the negative width it found'
 
 
 def test_a_window_refuses_a_numeric_edge():

@@ -24,7 +24,7 @@ import xarray as xr
 from mathspec import program
 
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.messages import null_bounds_message
+from specsolve.messages import negative_window_message, null_bounds_message
 from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
@@ -390,6 +390,8 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         )
 
     if isinstance(node, program.WindowSum):
+        if isinstance(node.width, str):
+            _refuse_a_negative_window(node.width, ctx)
         return operator_sum_back(
             _eval(node.operand, ctx),
             over=node.along,
@@ -465,6 +467,14 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     nobody supplied is a step of nothing, which is what a zero offset means.
     """
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
+
+
+def _refuse_a_negative_window(name: str, ctx: EvaluationContext) -> None:
+    """A width below zero counts no positions, so the data is refused, as the other lane refuses it."""
+    widths = np.asarray(ctx.dataset[name], dtype=float).ravel()
+    negative = sorted({int(w) for w in widths[widths < 0]})
+    if negative:
+        raise DataError(negative_window_message(name, negative))
 
 
 def _grouped_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:

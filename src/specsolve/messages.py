@@ -141,6 +141,16 @@ def short_groups_message(name: str, by: str, op: str, position: int, short: Sequ
     )
 
 
+def negative_window_message(name: str, widths: Sequence[int]) -> str:
+    """A ``sum_back`` window read from a parameter that holds the negative *widths*, sorted and each once."""
+    shown = ', '.join(map(str, widths[:5])) + (' …' if len(widths) > 5 else '')
+    return (
+        f"parameter '{name}' is the window of a sum_back, and holds {shown}. A window counts positions, "
+        f"so it is a whole number of at least 0, and a window of 0 sums nothing. Give every row of '{name}' "
+        f'a value of 0 or more.'
+    )
+
+
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     """``unknown <kind> '<name>'``, plus the near miss, or every declaration the name prefixes.
 

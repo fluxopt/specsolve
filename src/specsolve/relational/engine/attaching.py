@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 
 from specsolve.errors import DataError
-from specsolve.messages import coordinate_text, missing_row_message
+from specsolve.messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve.relational.collect import collected, in_memory
 from specsolve.relational.names import VALUE
 
@@ -110,6 +110,17 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
+
+
+def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
+    """Refuse parameter *name*, the window of a ``sum_back``, where a row holds a negative width.
+
+    Raises:
+        DataError: Naming *name* and each negative width it holds.
+    """
+    negative = data.parameters[name].filter(pl.col(VALUE) < 0).select(pl.col(VALUE).unique().sort()).pipe(collected)
+    if negative.height:
+        raise DataError(negative_window_message(name, negative[VALUE].to_list()))
 
 
 def _product(

@@ -26,6 +26,7 @@ from mathspec import program
 
 from specsolve.errors import SpecsolveError
 from specsolve.relational.collect import collected
+from specsolve.relational.engine.attaching import refuse_a_negative_window
 from specsolve.relational.engine.pieces import (
     PRESENT,
     CompiledExpression,
@@ -374,6 +375,8 @@ class Compiler:
                     operand,
                 )
             if isinstance(e, program.WindowSum):
+                if isinstance(e.width, str):
+                    refuse_a_negative_window(self.scope.data, e.width)
                 walk = walked_dims(self.scope, e)
                 return shaped(e, lambda p: window_piece(self.scope, p, e, context), walk, (e.along,))
             if isinstance(e, program.Cases):
