@@ -17,6 +17,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
@@ -226,8 +227,18 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 mask, other = mask & ~gap, other.fillna(0.0)
                 if not bool(np.asarray(mask).any()):
                     continue
+            mask = mask & _with_a_variable(term, other)
+            if not bool(np.asarray(mask).any()):
+                continue
             term, other = _refuse_a_coefficient_that_is_not_finite(context, row, term, other, mask)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
+
+
+def _with_a_variable(term: Any, other: Any) -> xr.DataArray:
+    """The rows where a variable is left: a row with none is not built (the absence page), and linopy would count it."""
+    from linopy.constants import TERM_DIM
+
+    return ((term - other).data.vars != -1).any(TERM_DIM)
 
 
 def _refuse_a_coefficient_that_is_not_finite(
@@ -420,7 +431,8 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return absence.combined(operator.add, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Multiply):
-        return absence.combined(_times, _eval(node.left, ctx), _eval(node.right, ctx))
+        left, right = _eval(node.left, ctx), _eval(node.right, ctx)
+        return _unsupplied_left_out(absence.combined(_times, left, right), node, (left, right), ctx)
 
     if isinstance(node, program.Divide):
         numerator, divisor = _eval(node.numerator, ctx), _eval(node.divisor, ctx)
@@ -486,6 +498,33 @@ def _times(left: Any, right: Any) -> Any:
     if _terms(right) > _terms(left):
         return right * left
     return left * right
+
+
+def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any, Any], ctx: EvaluationContext) -> Any:
+    """*product* contributing nothing where its value factor is zero only because a ``neutral`` parameter has no row.
+
+    A missing ``neutral`` row leaves no term to multiply, so a row it leaves
+    with none is not built (the absence page), while a zero the data gave is a
+    term whose row stands. Filled with zero, the two read alike, so the factor
+    is evaluated again with the missing rows kept NaN to tell them apart.
+    """
+    if not _terms(product):
+        return product
+    for operand, value in zip((node.left, node.right), sides, strict=True):
+        if _terms(value) or not isinstance(value, xr.DataArray) or not _reads_a_neutral_parameter(operand, ctx):
+            continue
+        raw = _eval(operand, replace(ctx, absent_parameter=lambda arr: arr))
+        unsupplied = raw.isnull() & (value == 0)
+        if bool(unsupplied.any()):
+            product = product.where(~unsupplied, 0)
+    return product
+
+
+def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
+    return any(
+        isinstance(n, program.Parameter) and ctx.program.parameters[n.name].missing == 'neutral'
+        for n in program.walk(node)
+    )
 
 
 def _terms(side: Any) -> int:
