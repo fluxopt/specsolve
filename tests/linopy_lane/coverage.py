@@ -180,7 +180,8 @@ def _quotients(
     """Every quotient by a parameter under *expressions*, with its divisor's parameters and where it divides.
 
     Where it divides is the region's mask and the mask of every variable in
-    the numerator, either of which removes the coordinate.
+    the numerator at the quotient's own coordinate, either of which removes
+    the coordinate.
     """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
@@ -190,10 +191,24 @@ def _quotients(
             if not params:
                 continue
             needed = region
-            for variable in sorted(program.variables_of(quotient.numerator)):
+            for variable in sorted(_in_place(quotient.numerator)):
                 present = absence.present(ctx.model, variable)
                 needed = present if needed is None else (needed & present)
             yield quotient, params, needed
+
+
+def _in_place(expression: program.Expression) -> set[str]:
+    """The variables under *expression* that stand at its own coordinate.
+
+    A sum, a window, a shift or a lookup moves a variable's slots elsewhere, so
+    its mask says nothing about where *expression* exists: `sum(v) / p` divides
+    at every coordinate of `p`.
+    """
+    if isinstance(expression, program.Variable):
+        return {expression.name}
+    if isinstance(expression, program.Sum | program.WindowSum | program.Translate | program.Join):
+        return set()
+    return set().union(*(_in_place(child) for child in program.children(expression)))
 
 
 def _refuse_gaps(

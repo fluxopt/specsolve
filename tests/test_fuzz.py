@@ -423,6 +423,20 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': {'b': {'dtype': 'str'}},
+                'parameters': {'p': {'dims': ['b']}},
+                'variables': {
+                    'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 10}, 'where': "b != 'b4'"},
+                },
+                'objective': {'sense': 'maximize', 'expression': 'sum(sum(v) / p)'},
+            },
+            {'b': ['b4', 'b7'], 'p': pl.DataFrame({'b': ['b4', 'b7'], 'value': [0.0, 2.0]})},
+        ),
+        id='oracle: a zero divisor under a sum in the objective',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},
