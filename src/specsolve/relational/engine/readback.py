@@ -352,9 +352,8 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
 
-    narrowed = coverage.narrowed_to_rows(carrier.rename({_EXPRESSION_ROW: 'row'}), pieces)
     coverage.refuse_null_constants(
-        [_holed(carrier, pieces), *(f.with_columns(pl.col('cval').fill_null(0.0)) for f in narrowed)],
+        [_holed(carrier, pieces), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in pieces)],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
