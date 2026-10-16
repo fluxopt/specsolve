@@ -213,9 +213,6 @@ REDUCED = [
             {'k': [1, 2], 'p': pl.DataFrame({'k': [1], 'value': [7]})},
             'p',
         ),
-        marks=_found(
-            '#2048 — a float parameter supplied as an integer column reads `missing: 2.5` as 2 on the relational lane'
-        ),
         id='a fractional missing value under an integer column',
     ),
     pytest.param(

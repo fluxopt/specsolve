@@ -28,8 +28,9 @@ if TYPE_CHECKING:
 class AttachedSources:
     """The data a program is built against, after attaching.
 
-    ``parameters`` are tidy ``(dims…, value)``, a parameter that declares a
-    value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    ``parameters`` are tidy ``(dims…, value)``, a ``float`` parameter's value
+    a ``Float64`` whatever column it arrived in, and a parameter that declares
+    a value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
@@ -78,6 +79,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     for name, p in program.parameters.items():
         frame = _plain_strings(parameters[name], p.dims)
         casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
+        if p.dtype == 'float':
+            casts.append(pl.col(VALUE).cast(pl.Float64))
         parameters[name] = frame.with_columns(casts) if casts else frame
 
     for name, relation in program.relations.items():
