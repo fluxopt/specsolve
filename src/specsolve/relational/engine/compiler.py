@@ -204,12 +204,17 @@ class Compiler:
             return CompiledExpression(terms, consts, quads)
 
         def quotient(e: program.Divide) -> CompiledExpression:
-            """``a / b``, where *b* carries no variable, added up first to one value per coordinate."""
+            """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
+
+            *a* is repeated along the dims of *b* it lacks first: joined across
+            the divisor's rows, a coordinate the divisor has no row for would
+            drop the quotient rather than leave the null its refusal looks for.
+            """
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a variable-free divisor is added up to one piece'
             inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
-            a = map_pieces(a, lambda p: self._spread_over(p, inv.dims))
+            a = map_pieces(a, lambda p: spread_piece(self.scope, p, inv.dims))
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
             quads = tuple(join_mul(q, inv, 'quad', divide=True) for q in a.quads)
             consts = tuple(join_mul(x, inv, 'const', divide=True) for x in a.consts)
@@ -449,19 +454,6 @@ class Compiler:
             present = pl.LazyFrame({PRESENT: [True]}).join(count, how='cross').filter(pl.col('__zeros__') == 0)
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
-
-    def _spread_over(self, p: Piece, dims: tuple[str, ...]) -> Piece:
-        """*p* repeated along the *dims* it lacks, its presences keyed explicitly as [`Presence`][] requires.
-
-        A dividend lacking a dim of its divisor would join the divisor's rows
-        across, so a coordinate the divisor has no row for would drop the
-        quotient rather than leave the null its refusal looks for.
-        """
-        missing = [d for d in dims if d not in p.dims]
-        if not missing:
-            return p
-        presences = tuple(Presence(x.frame, x.keys(p.dims)) for x in p.presences)
-        return replace(p, dims=(*p.dims, *missing), frame=self.scope.spread(p.frame, missing), presences=presences)
 
     def _added_up(
         self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
