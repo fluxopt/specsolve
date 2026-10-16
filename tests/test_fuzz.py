@@ -397,9 +397,6 @@ REDUCED = [
                 'b': pl.DataFrame({'h': [7, 7, 5, 5], 't': [1, 2, 1, 2], 'value': [1, 2, 3, 4]}),
             },
         ),
-        marks=_found(
-            '#2049 — a cased divisor with a value at every coordinate is refused as short of rows on the relational lane'
-        ),
         id='a cased divisor',
     ),
     pytest.param(

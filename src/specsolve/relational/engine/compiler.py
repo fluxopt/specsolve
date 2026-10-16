@@ -468,17 +468,35 @@ class Compiler:
         [`spanned`][specsolve.relational.engine.scope.Scope.spanned], restricted by
         the caller to where every variable under the pieces exists. *absent*
         is what a piece with no value adds: ``zero``; ``hole``, null where no
-        piece has a value; ``spreads``, null where any piece has none.
+        piece has a value; ``spreads``, null where any piece has none inside
+        the ``cases:`` region it was built under ([`_zero_outside`][]).
         """
         assert pieces, 'an expression compiles to at least one piece'
         assert all(p.kind == 'const' for p in pieces), 'a read compiles every variable to its value'
         columns = [f'__piece {i}__' for i in range(len(pieces))]
         for p, column in zip(pieces, columns, strict=True):
             carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            if absent == 'spreads' and p.region is not None:
+                carrier = self._zero_outside(carrier, column, p.region, self.scope.spanned(pieces))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')
         if absent == 'hole':
             total = pl.when(pl.any_horizontal([pl.col(c).is_not_null() for c in columns])).then(total).otherwise(None)
         return carrier.select(pl.exclude(columns), total.alias('cval'))
+
+    def _zero_outside(
+        self, carrier: pl.LazyFrame, column: str, region: program.Mask, dims: tuple[str, ...]
+    ) -> pl.LazyFrame:
+        """*carrier* with *column* read as zero at the coordinates of *dims* that *region* does not claim.
+
+        A piece built under a ``cases:`` region has rows only inside it, and the
+        regions are disjoint, so a divisor that is null wherever any piece has
+        no row would find a hole at every coordinate another region claims.
+        """
+        keys = list(dims or (UNIT,))
+        claimed = masked(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
+        inside = carrier.join(claimed, on=keys, how='left')
+        value = pl.when(pl.col('__claimed__')).then(pl.col(column)).otherwise(0.0)
+        return inside.with_columns(value.alias(column)).drop('__claimed__')
 
     # ------------------------------------------------------------------
     # shape operators — one dim rewritten per piece
