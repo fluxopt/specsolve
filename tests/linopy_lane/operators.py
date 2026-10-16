@@ -236,11 +236,12 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
 
     A position the window cannot reach contributes a **zero**, never an
     absence: absence propagates, so an unreachable lag would annihilate the
-    whole row, and a window at the first position is short, not empty. The
-    window that reaches **nothing** is the exception — a zero there would
-    build a row about constants alone — so the fill is paired with the
-    positions any lag actually reached, and a window that reached none keeps
-    no row. A width of zero everywhere is that window at every position.
+    whole row, and a window at the first position is short, not empty. A
+    window that reaches nothing, a width of zero among them, is an empty sum
+    and reads zero; a row it leaves with no variable is not built. Over an
+    operand that is absent somewhere, a window that reaches no present slot is
+    absent instead, as the relational lane carries the operand's presence
+    through the window.
 
     ``by=`` stops the window at each group's edge. A width declared over the
     group's own dim is read through the relation first (:func:`_per_group`).
@@ -259,11 +260,14 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
             else _gather_by_offset(array, over, lag, edge=probe)
         )
         live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
+        if lag == 0:
+            holed = not bool(live.all())
         if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term * (within > lag).astype(float)
+            live, term = live & (within > lag), term.where(within > lag, 0)
         terms.append(term)
         reached.append(live)
-    return _merged(terms).where(reduce(operator.or_, reached))
+    merged = _merged(terms)
+    return merged.where(reduce(operator.or_, reached)) if holed else merged
 
 
 def _widest(within: Any) -> int:

@@ -378,7 +378,7 @@ class Compiler:
                 if isinstance(e.width, str):
                     refuse_a_negative_window(self.scope.data, e.width)
                 walk = walked_dims(self.scope, e)
-                return shaped(e, lambda p: window_piece(self.scope, p, e, context), walk, (e.along,))
+                return shaped(e, lambda p: self._empty_sums(window_piece(self.scope, p, e, context)), walk, (e.along,))
             if isinstance(e, program.Cases):
                 return cases(e)
             if isinstance(e, program.NamedExpression):
@@ -565,8 +565,9 @@ class Compiler:
 
         An empty sum is zero, not a hole, and [`coverage.constant_side`][]
         cannot tell the two apart, so the zero is written here: a dimension
-        with no labels, a group its relation maps no member to, and a member a
-        ``cases:`` region leaves out all land nowhere. Asked of the piece
+        with no labels, a group its relation maps no member to, a window of
+        width zero or over no row, and a member a ``cases:`` region leaves out
+        all land nowhere. Asked of the piece
         rather than the relation for that last reason. A neutral parameter short
         of a member is one summand fewer. Only for a constant part: a row with
         no terms is not built.
@@ -580,7 +581,7 @@ class Compiler:
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
-        return replace(p, frame=pl.concat([p.frame, zeros]))
+        return replace(p, frame=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
 
     def _at_piece(self, p: Piece, a: program.JoinColumns, context: str) -> Piece:
         """Spread the dropped dims back out over the added ones — the adjoint of a group.

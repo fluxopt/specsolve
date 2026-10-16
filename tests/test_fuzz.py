@@ -321,10 +321,48 @@ REDUCED = [
             {'t': [1, 2], 'w': 0},
             'sum_back(v, along=t, window=w)',
         ),
-        marks=_found(
-            '#2048 — a window parameter of 0 reads 0.0 at every position on the relational lane, and no row on the oracle'
-        ),
         id='a window parameter of zero',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'sum_back(v, along=t, window=w) + x <= 0.5',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}},
+                variables={'v': _bounded('t'), 'x': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0},
+        ),
+        id='a window of width zero beside another term',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'v <= sum_back(p, along=t, window=w)',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}, 'p': {'dims': ['t']}},
+                variables={'v': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0, 'p': pl.DataFrame({'t': [1, 2], 'value': [1.0, 2.0]})},
+            'sum_back(p, along=t, window=w)',
+        ),
+        id='a window of width zero over data',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'sum_back(p, along=t, window=1) <= x',
+                ['t'],
+                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                variables={'x': _bounded('t')},
+            ),
+            {'t': [1, 2], 'p': pl.DataFrame({'t': [2], 'value': [0.25]})},
+            'sum_back(p, along=t, window=1)',
+        ),
+        id='a window over a neutral parameter with no row in it',
     ),
     pytest.param(
         _case(
