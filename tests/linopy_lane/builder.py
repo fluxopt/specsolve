@@ -616,8 +616,9 @@ def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationConte
     """A sum through the rows of a relation: every row carries its dropped columns' term to its added ones.
 
     The operand's dims become the relation's roles, so two roles over one
-    dimension stay apart; the membership array multiplies in, the dropped
-    roles sum out, and the added roles take their dimensions back.
+    dimension stay apart; the membership array multiplies in, a pair it does
+    not relate leaves no term rather than a zero one, the dropped roles sum
+    out, and the added roles take their dimensions back.
 
     Raises:
         OracleCannotBuildError: The call joins on or groups by a value
@@ -632,7 +633,8 @@ def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationConte
         )
     entering = {columns.dim(r): r for r in columns.joined if columns.dim(r) != r}
     leaving = {r: columns.dim(r) for r in columns.grouped if columns.dim(r) != r}
-    summed = operand.rename(entering) * _membership(columns, ctx)
+    membership = _membership(columns, ctx)
+    summed = (operand.rename(entering) * membership).where(membership != 0, 0)
     for role in columns.dropped:
         summed = operator_sum(summed, role)
     return summed.rename(leaving)

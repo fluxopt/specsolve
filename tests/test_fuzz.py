@@ -403,6 +403,26 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': {'h': {'dtype': 'int'}, 'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+                'relations': {'r': {'key': ['g', 'h'], 'missing': 'absent'}},
+                'parameters': {'p': {'dims': ['t', 'g']}},
+                'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 10}}},
+                'constraints': {'c': {'dims': ['g', 't'], 'expression': 'p <= sum(v, over=h, by=r[g])'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {
+                'h': [9],
+                'g': ['g7'],
+                't': [9],
+                'p': pl.DataFrame({'t': [9], 'g': ['g7'], 'value': [1.0]}),
+                'r': pl.DataFrame({'g': [], 'h': []}, schema={'g': pl.String, 'h': pl.Int64}),
+            },
+        ),
+        id='oracle: a sum through a bare relation that relates nothing',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},
