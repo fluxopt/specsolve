@@ -484,6 +484,19 @@ REDUCED = [
     ),
     pytest.param(
         _case(
+            {
+                'dimensions': {'h': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'variables': {'v': _bounded('h')},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'h': [1, 2], 'p': pl.DataFrame({'h': [1], 'value': [2.0]})},
+            'v / p',
+        ),
+        id='oracle: a read that divides by a neutral parameter with no row',
+    ),
+    pytest.param(
+        _case(
             _model(
                 {'b': {'dtype': 'str'}, **G},
                 'v <= 1',

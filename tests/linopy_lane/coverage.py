@@ -22,6 +22,7 @@ from mathspec import program
 
 from specsolve.errors import DataError
 from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve.relational.engine.readback import _reported_divisor_message as reported_divisor_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
@@ -149,6 +150,34 @@ def check_divisors_cover(
     carries a variable is left to the row it lands in, which a constraint asks
     once it is built.
     """
+    for quotient, params, needed in _quotients(expressions, ctx, mask):
+        _refuse_gaps(name, params, needed, ctx, sparse_divisor_message)
+        if not terms and program.carries_variable(quotient.numerator):
+            continue
+        zeros = _zeros_under(evaluate(quotient.divisor), needed)
+        if zeros:
+            raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+
+
+def check_read_divisors_cover(name: str, expression: program.Expression, ctx: EvaluationContext) -> None:
+    """A divisor must have a value wherever a read divides by it.
+
+    The gaps :func:`check_divisors_cover` asks of a build, worded for a read.
+    A zero is not asked: a read takes a quotient by zero as absent
+    (:func:`absence.divisor`).
+    """
+    for _, params, needed in _quotients((expression,), ctx, None):
+        _refuse_gaps(name, params, needed, ctx, reported_divisor_message)
+
+
+def _quotients(
+    expressions: tuple[program.Expression, ...], ctx: EvaluationContext, mask: Any
+) -> Iterator[tuple[program.Divide, frozenset[str], Any]]:
+    """Every quotient by a parameter under *expressions*, with its divisor's parameters and where it divides.
+
+    Where it divides is the region's mask and the mask of every variable in
+    the numerator, either of which removes the coordinate.
+    """
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
             if not isinstance(quotient, program.Divide):
@@ -160,15 +189,17 @@ def check_divisors_cover(
             for variable in sorted(program.variables_of(quotient.numerator)):
                 present = absence.present(ctx.model, variable)
                 needed = present if needed is None else (needed & present)
-            for param in sorted(p for p in params if not ctx.absent(p)):
-                missing = gaps_under(ctx.dataset[param], needed)
-                if missing:
-                    raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-            if not terms and program.carries_variable(quotient.numerator):
-                continue
-            zeros = _zeros_under(evaluate(quotient.divisor), needed)
-            if zeros:
-                raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+            yield quotient, params, needed
+
+
+def _refuse_gaps(
+    name: str, params: frozenset[str], needed: Any, ctx: EvaluationContext, message: Callable[[str, int], str]
+) -> None:
+    """Refuse the first of *params*, by name, that has no row where *needed* still admits the quotient."""
+    for param in sorted(p for p in params if not ctx.absent(p)):
+        missing = gaps_under(ctx.dataset[param], needed)
+        if missing:
+            raise DataError(f'{name}: {message(param, missing)}')
 
 
 def _zeros_under(divisor: Any, mask: Any) -> int:
