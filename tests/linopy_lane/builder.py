@@ -496,7 +496,8 @@ def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any,
     A missing ``neutral`` row leaves no term to multiply, so a row it leaves
     with none is not built (the absence page), while a zero the data gave is a
     term whose row stands. Filled with zero, the two read alike, so the factor
-    is evaluated again with the missing rows kept NaN to tell them apart.
+    is evaluated again with the missing rows kept NaN to tell them apart. A
+    slot already absent stays absent.
     """
     if not _terms(product):
         return product
@@ -504,7 +505,7 @@ def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any,
         if _terms(value) or not isinstance(value, xr.DataArray) or not _reads_a_neutral_parameter(operand, ctx):
             continue
         raw = _eval(operand, replace(ctx, absent_parameter=lambda arr: arr))
-        unsupplied = raw.isnull() & (value == 0)
+        unsupplied = raw.isnull() & (value == 0) & ~product.isnull()
         if bool(unsupplied.any()):
             product = product.where(~unsupplied, 0)
     return product

@@ -469,6 +469,19 @@ REDUCED = [
     ),
     pytest.param(
         _case(
+            _model(
+                {'b': {'dtype': 'str'}},
+                'sum(v) + v * p <= 1',
+                ['b'],
+                parameters={'p': {'dims': ['b'], 'missing': 'neutral'}},
+                variables={'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 10}, 'where': "b != 'b8'"}},
+            ),
+            {'b': ['b5', 'b8'], 'p': pl.DataFrame({'b': ['b5'], 'value': [2.0]})},
+        ),
+        id='oracle: a neutral factor with no row beside a variable absent there',
+    ),
+    pytest.param(
+        _case(
             {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
