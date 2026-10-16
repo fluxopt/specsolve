@@ -165,10 +165,12 @@ def vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) ->
     ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
     just made and a coordinate *operand* never had are both absent, and filling
     the second builds a row asserting ``x <= 0`` where the model said nothing.
-    So the fill lands where the shift vacated **and** the operand carries the
-    coordinate, and every other slot keeps the absence it arrived with.
+    So over a term the fill lands where the shift vacated **and** the operand
+    carries the coordinate, and every other slot keeps the absence it arrived
+    with. Over data it lands at every vacated position, as an unpartitioned
+    ``DataArray.shift`` fills it.
     """
-    carried = (~operand.isnull()).any(over)
+    carried = True if isinstance(operand, xr.DataArray) else (~operand.isnull()).any(over)
     keep = carried & (~shifted.isnull() | vacated)
     return filled(shifted, fill).where(keep)
 

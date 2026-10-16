@@ -156,7 +156,9 @@ def check_divisors_cover(
     once it is built.
     """
     for quotient, params, needed in _quotients(expressions, ctx, mask):
-        _refuse_gaps(name, params, needed, ctx, sparse_divisor_message)
+        _refuse_gaps(
+            name, frozenset(_in_place(quotient.divisor, program.Parameter)), needed, ctx, sparse_divisor_message
+        )
         if not terms and program.carries_variable(quotient.numerator):
             continue
         zeros = _zeros_under(evaluate(quotient.divisor), needed)
@@ -194,8 +196,12 @@ def _quotients(
 
     Where it divides is the region's mask and the mask of every variable in
     the numerator at the quotient's own coordinate, either of which removes
-    the coordinate.
+    the coordinate. A quotient that stands at the row's own coordinate is
+    also removed where a variable beside it there is absent, which takes the
+    row.
     """
+    at_the_row = [node for e in expressions for node in _at_the_row(e)]
+    row_variables = {node.name for node in at_the_row if isinstance(node, program.Variable)}
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
             if not isinstance(quotient, program.Divide):
@@ -204,24 +210,41 @@ def _quotients(
             if not params:
                 continue
             needed = region
-            for variable in sorted(_in_place(quotient.numerator)):
+            beside = row_variables if any(quotient is node for node in at_the_row) else set()
+            for variable in sorted(_in_place(quotient.numerator) | beside):
                 present = absence.present(ctx.model, variable)
                 needed = present if needed is None else (needed & present)
             yield quotient, params, needed
 
 
-def _in_place(expression: program.Expression) -> set[str]:
-    """The variables under *expression* that stand at its own coordinate.
+def _in_place(
+    expression: program.Expression, kind: type[program.Variable | program.Parameter] = program.Variable
+) -> set[str]:
+    """The variables, or the parameters, under *expression* that stand at its own coordinate.
 
     A sum, a window, a shift or a lookup moves a variable's slots elsewhere, so
     its mask says nothing about where *expression* exists: `sum(v) / p` divides
-    at every coordinate of `p`.
+    at every coordinate of `p`. A parameter summed there is one summand fewer
+    where it has no row, never a gap in what it sums to.
     """
-    if isinstance(expression, program.Variable):
+    if isinstance(expression, kind):
         return {expression.name}
     if isinstance(expression, program.Sum | program.WindowSum | program.Translate | program.Join):
         return set()
-    return set().union(*(_in_place(child) for child in program.children(expression)))
+    return set().union(*(_in_place(child, kind) for child in program.children(expression)))
+
+
+def _at_the_row(expression: program.Expression) -> Iterator[program.Expression]:
+    """The nodes under *expression* that stand at its own coordinate, everywhere it has one.
+
+    Not under a sum, a window, a shift or a lookup, which move coordinates,
+    nor inside a ``cases:`` region, which holds only where it applies.
+    """
+    yield expression
+    if isinstance(expression, program.Sum | program.WindowSum | program.Translate | program.Join | program.Cases):
+        return
+    for child in program.children(expression):
+        yield from _at_the_row(child)
 
 
 def _refuse_gaps(

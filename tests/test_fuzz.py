@@ -497,6 +497,54 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': G,
+                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
+                'expressions': {'e': {'dims': ['g'], 'expression': 'sum(v, over=g) / p'}},
+                'constraints': {'c': {'dims': ['g'], 'expression': 'v == e'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'g': ['g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2]})},
+        ),
+        id='oracle: a divisor with no row where a variable beside the quotient takes the row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                G,
+                'v / sum(p, over=g) <= 1',
+                ['g'],
+                parameters={'p': {'dims': ['g'], 'missing': 'neutral'}},
+                variables={'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
+            ),
+            {'g': ['g0', 'g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2.0]})},
+        ),
+        id='oracle: a neutral parameter with no row summed inside a divisor',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'t': {'dtype': 'int'}, 'h': {'dtype': 'int', 'ordered': True}},
+                'relations': {'r': {'key': 'h', 'values': 't'}},
+                'parameters': {'p': {'dims': ['h', 't'], 'missing': 'absent'}},
+                'variables': {'v': {'dims': [], 'bounds': {'lower': 0, 'upper': 1}}},
+                'objective': {'sense': 'maximize', 'expression': 'v'},
+            },
+            {
+                't': [-2],
+                'h': [2],
+                'p': pl.DataFrame(
+                    {'h': [], 't': [], 'value': []}, schema={'h': pl.Int64, 't': pl.Int64, 'value': pl.Float64}
+                ),
+                'r': pl.DataFrame({'h': [2], 't': [-2]}),
+            },
+            'shift(p, along=h, offset=-1, edge=1.5, within=r[t])',
+        ),
+        id='oracle: a partitioned shift edge over data with no row',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},
