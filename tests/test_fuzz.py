@@ -340,6 +340,19 @@ REDUCED = [
         _case(
             _model(
                 T,
+                'sum_back(v, along=t, window=w) <= 0.5',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}},
+                variables={'v': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0},
+        ),
+        id='a window of width zero alone in a row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
                 'v <= sum_back(p, along=t, window=w)',
                 ['t'],
                 parameters={'w': {'dims': [], 'dtype': 'int'}, 'p': {'dims': ['t']}},
