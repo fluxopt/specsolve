@@ -437,6 +437,39 @@ REDUCED = [
     pytest.param(
         _case(
             {
+                'dimensions': {'h': {'dtype': 'int'}, 'b': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 5}}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {
+                'h': [0],
+                'b': ['b5'],
+                't': [-1],
+                'p': pl.DataFrame(
+                    {'t': [], 'h': [], 'value': []}, schema={'t': pl.Int64, 'h': pl.Int64, 'value': pl.Float64}
+                ),
+            },
+            'v / p - v / p',
+        ),
+        id='a read refused once per coordinate where two quotients by a missing row reach it',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'h': {'dtype': 'int', 'ordered': True}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'h': [10, 4], 'p': pl.DataFrame({'h': [10], 'value': [-0.5]})},
+            '-v / p + shift(shift(v, along=h, offset=1), along=h, offset=1, edge=0)',
+        ),
+        id='oracle: a read answered where a quotient by a missing row is absent beside a shift',
+    ),
+    pytest.param(
+        _case(
+            {
                 'dimensions': {**T, **G},
                 'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
                 'variables': {'v': _bounded('g', 't')},

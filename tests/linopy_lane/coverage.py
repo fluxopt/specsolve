@@ -14,6 +14,7 @@ divisor" is answered once for both lanes.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
@@ -163,15 +164,27 @@ def check_divisors_cover(
             raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
 
 
-def check_read_divisors_cover(name: str, expression: program.Expression, ctx: EvaluationContext) -> None:
-    """A divisor must have a value wherever a read divides by it.
+def check_read_divisors_cover(
+    name: str, expression: program.Expression, ctx: EvaluationContext, evaluate: Callable[[EvaluationContext], Any]
+) -> None:
+    """A divisor must have a value at every coordinate where a quotient by it reaches the read.
 
-    The gaps :func:`check_divisors_cover` asks of a build, worded for a read.
-    A zero is not asked: a read takes a quotient by zero as absent
-    (:func:`absence.divisor`).
+    The read is taken twice by *evaluate*: once with the divisors' missing
+    rows absent, and once with them read as one. A coordinate the second
+    answers and the first does not is one a quotient by a missing row reaches,
+    so another summand being absent there already keeps it out. A zero is not
+    asked: a read takes a quotient by zero as absent (:func:`absence.divisor`).
     """
-    for _, params, needed in _quotients((expression,), ctx, None):
-        _refuse_gaps(name, params, needed, ctx, reported_divisor_message)
+    divisors = program.parameters_of(*(n.divisor for n in program.walk(expression) if isinstance(n, program.Divide)))
+    holed = sorted(p for p in divisors if not ctx.absent(p) and bool(ctx.dataset[p].isnull().any()))
+    if not holed:
+        return
+    filled = ctx.dataset.assign({p: ctx.dataset[p].fillna(1.0) for p in holed})
+    with_ones = evaluate(replace(ctx, dataset=filled))
+    without = evaluate(replace(ctx, absent_parameter=lambda a: a if a.name in holed else absence.coefficient(a)))
+    reached = int((xr.DataArray(with_ones).notnull() & xr.DataArray(without).isnull()).sum())
+    if reached:
+        raise DataError(f'{name}: {reported_divisor_message(", ".join(sorted(divisors)), reached)}')
 
 
 def _quotients(

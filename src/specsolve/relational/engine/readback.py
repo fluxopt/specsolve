@@ -12,7 +12,7 @@ from specsolve.messages import coordinate_expr, reported_divisor_message, unknow
 from specsolve.relational.answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve.relational.collect import collected
 from specsolve.relational.engine import coverage, labels
-from specsolve.relational.engine.pieces import absence_restrictions
+from specsolve.relational.engine.pieces import Piece, absence_restrictions
 from specsolve.relational.names import VALUE
 from specsolve.relational.result import ConstraintRow, InfeasibleSubsystem
 from specsolve.relational.sinks.handoff import SENSE_CODES
@@ -351,8 +351,9 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
 
+    narrowed = coverage.narrowed_to_rows(carrier.rename({_EXPRESSION_ROW: 'row'}), pieces)
     coverage.refuse_null_constants(
-        coverage.narrowed_to_rows(carrier.rename({_EXPRESSION_ROW: 'row'}), pieces),
+        [_holed(carrier, pieces), *(f.with_columns(pl.col('cval').fill_null(0.0)) for f in narrowed)],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
@@ -362,6 +363,29 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
+
+
+def _holed(carrier: pl.LazyFrame, pieces: Sequence[Piece]) -> pl.LazyFrame:
+    """One ``cval`` per row of *carrier*, null where any of *pieces* holds a null there, else zero.
+
+    The refusal counts the coordinates the expression divides at, and two
+    pieces can hold a hole at one coordinate, as ``v / p - v / p`` does.
+    """
+    holed: pl.Expr = pl.lit(False)
+    for i, p in enumerate(pieces):
+        column = f'__hole {i}__'
+        if p.dims:
+            hole = (
+                p.frame.filter(pl.col('cval').is_null())
+                .select(*p.dims)
+                .unique()
+                .with_columns(pl.lit(True).alias(column))
+            )
+            carrier = carrier.join(hole, on=list(p.dims), how='left')
+        else:
+            carrier = carrier.join(p.frame.select(pl.col('cval').is_null().any().alias(column)), how='cross')
+        holed = holed | pl.col(column).fill_null(False)
+    return carrier.select(pl.when(holed).then(None).otherwise(0.0).alias('cval'))
 
 
 def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:

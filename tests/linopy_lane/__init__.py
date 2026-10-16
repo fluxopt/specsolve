@@ -36,6 +36,7 @@ rather than its prior value.
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -151,7 +152,7 @@ def evaluate(
         given = given_rows(program, tidy, master_coords)
         context = EvaluationContext(dataset, master_coords, built, relations, program, solved=True, given=given)
         named = expression if isinstance(expression, str) and expression in program.expressions else 'the expression'
-        check_read_divisors_cover(f"named expression '{named}'", node, context)
+        check_read_divisors_cover(f"named expression '{named}'", node, context, functools.partial(_eval, node))
         value = _eval(node, context)
         if isinstance(value, xarray.DataArray):
             return value
