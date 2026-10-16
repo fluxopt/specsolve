@@ -293,7 +293,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
     if odef is None:
         return
     with note('while building the objective'):
-        check_divisors_cover('the objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
+        check_divisors_cover('objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
 
         expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)

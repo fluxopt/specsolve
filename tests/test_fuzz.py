@@ -409,9 +409,6 @@ REDUCED = [
             },
             {'h': [1], 'p': pl.DataFrame({'h': [1], 'value': [0.0]})},
         ),
-        marks=_found(
-            '#2049 — a zero divisor in the objective is refused as `objective:` on one lane and `the objective:` on the other'
-        ),
         id='the words for a zero divisor in the objective',
     ),
     pytest.param(
