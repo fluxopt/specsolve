@@ -1,48 +1,9 @@
 {
- "1": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "10": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
- ],
- "113": [
-  "crash-linopy: ValueError: k already exists as coordinate or variable name."
- ],
- "13": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "147": [
-  "wording: the lanes refuse the data in different words"
- ],
  "154": [
   "wording: the lanes refuse the data in different words"
  ],
- "178": [
-  "wording: the lanes refuse the data in different words"
- ],
- "187": [
-  "read: the lanes read an expression differently at one point"
- ],
- "198": [
-  "solve: the lanes reach different objectives",
-  "solve: the written LP file re-solves to a different objective"
- ],
- "201": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
  "211": [
   "wording: the lanes refuse the data in different words"
- ],
- "217": [
-  "build: only the relational lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row"
- ],
- "226": [
-  "read: the lanes read an expression differently at one point",
-  "solve: the lanes reach different objectives",
-  "solve: the written LP file re-solves to a different objective"
- ],
- "229": [
-  "crash-read-relational: AssertionError reading _: in named expression _: a lookup through [_], which the expression does not span"
  ],
  "231": [
   "wording: the lanes refuse the data in different words"
@@ -50,126 +11,26 @@
  "238": [
   "wording: the lanes refuse the data in different words"
  ],
- "248": [
-  "crash-relational: AssertionError: in objective: shift(along=_) along [_], which the expression does not span"
- ],
- "261": [
-  "wording: the lanes refuse the data in different words"
- ],
- "271": [
-  "read: the lanes read an expression differently at one point"
- ],
- "283": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "292": [
-  "wording: the lanes refuse the data in different words"
- ],
  "308": [
   "wording: the lanes refuse the data in different words"
  ],
- "310": [
-  "wording: the lanes refuse the data in different words"
- ],
- "311": [
-  "read: the lanes read an expression differently at one point",
-  "solve: the lanes write different coefficients"
- ],
- "313": [
-  "crash-relational: AssertionError: in constraint _ lhs: shift(along=_) along [_], which the expression does not span"
- ],
- "318": [
-  "wording: the lanes refuse the data in different words"
- ],
- "326": [
-  "solve: the lanes reach different objectives"
- ],
- "328": [
-  "solve: the lanes write different coefficients"
- ],
- "346": [
-  "read: the lanes read an expression differently at one point",
-  "solve: the lanes build a different number of columns or rows",
-  "solve: the lanes end the solve differently"
- ],
- "35": [
-  "solve: the lanes build a different number of columns or rows"
- ],
- "350": [
-  "wording: the lanes refuse the data in different words"
- ],
- "351": [
-  "read: the lanes read an expression differently at one point"
- ],
- "354": [
-  "crash-relational: ComputeError: schema lengths differ"
- ],
- "370": [
-  "crash-relational: ComputeError: schema lengths differ"
- ],
  "380": [
-  "crash-relational: AssertionError: in constraint _ lhs: shift(along=_) along [_], which the expression does not span"
+  "wording: the lanes refuse the data in different words"
  ],
  "382": [
   "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
  ],
- "386": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
- ],
- "39": [
-  "wording: the lanes refuse the data in different words"
- ],
  "391": [
-  "wording: the lanes refuse the data in different words"
- ],
- "396": [
   "wording: the lanes refuse the data in different words"
  ],
  "400": [
   "wording: the lanes refuse the data in different words"
  ],
- "403": [
-  "read: the lanes read an expression differently at one point"
- ],
- "432": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "436": [
-  "wording: the lanes refuse the data in different words"
- ],
  "46": [
   "wording: the lanes refuse the data in different words"
  ],
- "460": [
-  "crash-relational: ComputeError: schema lengths differ"
- ],
- "464": [
-  "solve: the lanes build a different number of columns or rows",
-  "solve: the lanes end the solve differently"
- ],
- "469": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
- ],
- "485": [
-  "wording: the lanes refuse the data in different words"
- ],
- "487": [
-  "build: only the linopy lane refuses: the objective: parameter _ is used as a divisor but covers _ fewer coordinates than it is indexed over. A missing row means a zero coefficient everywhere else, and zero is not a divisor: the term w"
- ],
- "49": [
-  "crash-relational: AssertionError: in constraint _ lhs: sum_back(along=_) along [_], which the expression does not span"
- ],
  "490": [
   "wording: the lanes refuse the data in different words"
- ],
- "504": [
-  "wording: the lanes refuse the data in different words"
- ],
- "508": [
-  "read: the lanes read an expression differently at one point"
- ],
- "534": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
  ],
  "540": [
   "wording: the lanes refuse the data in different words"
@@ -180,57 +41,16 @@
  "555": [
   "wording: the lanes refuse the data in different words"
  ],
- "559": [
-  "wording: the lanes refuse the data in different words"
- ],
- "571": [
-  "build: only the linopy lane refuses: constraint _: parameter _ is used as a divisor but covers _ fewer coordinates than it is indexed over. A missing row means a zero coefficient everywhere else, and zero is not a divisor: the term"
- ],
- "572": [
-  "crash-relational: AssertionError: in constraint _ lhs: sum_back(along=_) along [_], which the expression does not span"
- ],
- "576": [
-  "solve: the lanes build a different number of columns or rows"
- ],
- "578": [
-  "read: the lanes read an expression differently at one point"
- ],
  "585": [
   "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
  ],
- "594": [
-  "crash-relational: AssertionError: in constraint _ lhs: shift(along=_) along [_], which the expression does not span"
- ],
  "601": [
-  "wording: the lanes refuse the data in different words"
- ],
- "602": [
-  "crash-relational: AssertionError: in constraint _ lhs: a lookup through [_], which the expression does not span"
- ],
- "614": [
-  "solve: the lanes build a different number of columns or rows",
-  "solve: the lanes end the solve differently"
- ],
- "624": [
   "wording: the lanes refuse the data in different words"
  ],
  "628": [
   "wording: the lanes refuse the data in different words"
  ],
- "635": [
-  "crash-linopy: ValueError: t already exists as coordinate or variable name.",
-  "crash-relational: AssertionError: in constraint _ lhs: a lookup through [_], which the expression does not span"
- ],
  "654": [
-  "wording: the lanes refuse the data in different words"
- ],
- "663": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
- ],
- "67": [
-  "crash-linopy: TypeError: reduce() of empty iterable with no initial value"
- ],
- "718": [
   "wording: the lanes refuse the data in different words"
  ],
  "73": [
@@ -239,36 +59,11 @@
  "764": [
   "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
  ],
- "783": [
-  "crash-linopy: ValueError: Constraint c_ contains incorrect infinite values."
- ],
- "785": [
-  "wording: the lanes refuse the data in different words"
- ],
  "786": [
   "wording: the lanes refuse the data in different words"
  ],
- "787": [
-  "crash-relational: AssertionError: in objective: shift(along=_) along [_], which the expression does not span"
- ],
  "789": [
   "wording: the lanes refuse the data in different words"
- ],
- "794": [
-  "build: the lanes build a variable over different coordinates: the saved answer_v_' frame does not cover every coordinate this model builds, so it is not an answer to this model. Re-solve rather than read.",
-  "solve: the lanes build a different number of columns or rows"
- ],
- "801": [
-  "wording: the lanes refuse the data in different words"
- ],
- "802": [
-  "wording: the lanes refuse the data in different words"
- ],
- "81": [
-  "wording: the lanes refuse the data in different words"
- ],
- "815": [
-  "crash-linopy: ValueError: g already exists as coordinate or variable name."
  ],
  "841": [
   "wording: the lanes refuse the data in different words"
@@ -276,59 +71,15 @@
  "856": [
   "wording: the lanes refuse the data in different words"
  ],
- "87": [
-  "build: only the relational lane refuses: objective: parameter _ is used as a divisor but covers _ fewer coordinates than it is indexed over. A missing row means a zero coefficient everywhere else, and zero is not a divisor: the term "
- ],
- "871": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
  "882": [
   "wording: the lanes refuse the data in different words"
- ],
- "883": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
  ],
  "889": [
   "solve: the lanes build a different number of columns or rows",
   "solve: the lanes reach different objectives",
   "solve: the written LP file re-solves to a different objective"
  ],
- "890": [
-  "wording: the lanes refuse the data in different words"
- ],
- "90": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "904": [
-  "build: only the linopy lane refuses: constraint _: _ value(s) are not finite where the model divides by _: a divisor is zero there, or a value is infinite, and the model needs a finite number."
- ],
- "935": [
-  "solve: the lanes build a different number of columns or rows",
-  "solve: the lanes end the solve differently"
- ],
- "936": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "942": [
-  "wording: the lanes refuse the data in different words"
- ],
- "947": [
-  "solve: the lanes build a different number of columns or rows",
-  "solve: the lanes end the solve differently"
- ],
- "960": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
- "963": [
-  "crash-relational: AssertionError: in constraint _ rhs: sum_back(along=_) along [_], which the expression does not span"
- ],
- "976": [
-  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
- ],
  "982": [
   "wording: the lanes refuse the data in different words"
- ],
- "995": [
-  "read: the lanes read an expression differently at one point"
  ]
 }

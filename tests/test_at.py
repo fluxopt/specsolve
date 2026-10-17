@@ -14,6 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve.errors import SpecsolveError
 from tests.conftest import EXAMPLES_DIR, by_coord, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
@@ -418,3 +419,22 @@ def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
     }
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(10.0), 'no row reads a cap, so each y runs to its bound of 5'
+
+
+def test_a_constant_without_the_looked_up_dimension_is_refused_by_name():
+    """A constant beside the variable carries no row of the dimension `at` reads.
+
+    The term is repeated along it before the lookup; a constant is not, so the
+    relational engine refuses it naming the operator, rather than failing an
+    internal check.
+    """
+    spec = {
+        'dimensions': {'h': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
+        'relations': {'r': {'key': 'k', 'values': 'h'}},
+        'variables': {'x': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'c': {'dims': ['k'], 'expression': 'at(x + 3, by=r[h]) <= 5'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    sources = {'h': ['h1'], 'k': ['k1', 'k2'], 'r': pl.DataFrame({'k': ['k1', 'k2'], 'h': ['h1', 'h1']})}
+    with pytest.raises(SpecsolveError, match=r"at\(by=\) acts along \['h'\].*specsolve cannot build that"):
+        sps.solve(spec, sources)
