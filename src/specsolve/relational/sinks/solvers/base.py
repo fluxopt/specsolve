@@ -139,14 +139,15 @@ class Solver(ABC):
         """Whether this held solver may keep its load and take *handoff* by value.
 
         The same options and [`structure`][], and every matrix coefficient
-        equal to the one loaded, to the last bit.
+        within 1e-12 relative of the one loaded, which stays: a coefficient
+        summed over rows in another order moves in its last bits.
         """
         import numpy as np
 
         return (
             self._options == dict(solver_options or {})
             and self.structure() == handoff.structure
-            and np.array_equal(handoff.matrix['coeff'].to_numpy(), self._coefficients)
+            and np.allclose(handoff.matrix['coeff'].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
         )
 
     @classmethod

@@ -168,27 +168,11 @@ class CompiledExpression:
     quads: tuple[Piece, ...] = ()
 
 
-def ordered_sum(column: str) -> pl.Expr:
-    """The sum of *column*, added in value order: the same values in any row order give the same bits.
-
-    Floating-point addition is not associative, and no join or group-by fixes
-    the order its rows arrive in. polars drops a ``sort`` before ``sum`` as
-    order-free, so the sorted values are summed as a list.
-    """
-    return pl.col(column).sort().implode().list.sum()
-
-
-def constant_scalar(p: Piece, *, ordered: bool) -> pl.LazyFrame:
-    """The const piece summed per coordinate: ``(dims…, cval)``.
-
-    *ordered* sums in value order ([`ordered_sum`][]), which a piece with
-    several rows per coordinate needs ([`reduces`][]). It builds a list per
-    coordinate, so a piece with one row per coordinate is summed plainly.
-    """
-    total = ordered_sum('cval') if ordered else pl.col('cval').sum()
+def constant_scalar(p: Piece) -> pl.LazyFrame:
+    """The const piece summed per coordinate: ``(dims…, cval)``."""
     if not p.dims:
-        return p.frame.select(total)
-    return p.frame.group_by(p.dims).agg(total)
+        return p.frame.select(pl.col('cval').sum())
+    return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
 
 
 def absence_restrictions(pieces: Sequence[Piece]) -> list[Presence]:
@@ -241,11 +225,6 @@ def fan_in(expression: program.Expression) -> FanIn:
     ):
         return 'one-to-one'
     assert_never(expression)
-
-
-def reduces(*expressions: program.Expression) -> bool:
-    """Whether a node under *expressions* is not one-to-one ([`fan_in`][]), so a piece may hold several rows per coordinate."""
-    return any(fan_in(node) != 'one-to-one' for node in program.walk(*expressions))
 
 
 def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequence[str]) -> CompiledExpression:

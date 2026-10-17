@@ -124,7 +124,7 @@ def narrowed_to_rows(rows: pl.LazyFrame, consts: Sequence[Piece]) -> list[pl.Laz
 def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
-    consts: Sequence[tuple[Piece, float, bool]],
+    consts: Sequence[tuple[Piece, float]],
     c: program.ConstraintDeclaration,
     subject: str,
 ) -> pl.DataFrame:
@@ -135,9 +135,7 @@ def constant_side(
     owed: one whose parameters all stand beside a variable is a coefficient,
     and its zero is not a bound. A piece built under a ``cases:`` region is
     owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum. Each of
-    *consts* is a piece, its sign, and whether it is summed in value order
-    ([`constant_scalar`][pieces.constant_scalar]).
+    as it is for a ``missing: neutral`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant piece with no value at a row it is owed.
@@ -145,9 +143,9 @@ def constant_side(
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: dict[str, frozenset[str]] = {}
     carrier = rows
-    for i, (p, sign, ordered) in enumerate(consts):
+    for i, (p, sign) in enumerate(consts):
         column = f'__const {i}__'
-        aggregated = constant_scalar(p, ordered=ordered).rename({'cval': column})
+        aggregated = constant_scalar(p).rename({'cval': column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         if not p.parameters:
