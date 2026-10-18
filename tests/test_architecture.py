@@ -183,7 +183,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
 
 #: Package modules the engine may import: dependency-free leaves that carry no
 #: YAML, schema or AST knowledge.
-ENGINE_MAY_IMPORT = {'specsolve.errors', 'specsolve.messages', 'mathspec.program'}
+ENGINE_MAY_IMPORT = {'specsolve.errors', 'specsolve._messages', 'mathspec.program'}
 
 
 def test_engine_is_isolated():
@@ -193,8 +193,8 @@ def test_engine_is_isolated():
     which keeps the subpackage extractable.
     """
     offenders = _reaches_past(
-        'relational',
-        ('specsolve.relational',),
+        '_relational',
+        ('specsolve._relational',),
         ENGINE_MAY_IMPORT,
         third_party=FORBIDDEN_RUNTIME | {'yaml'},
         nodes=_runtime_nodes,
@@ -203,14 +203,14 @@ def test_engine_is_isolated():
 
 
 def test_no_contract_module_names_an_engine():
-    """``relational/__init__.py``'s own split: contract above, ``engine/`` below.
+    """``_relational/__init__.py``'s own split: contract above, ``engine/`` below.
 
     A contract module naming a class out of ``engine/`` inverts the two.
     Type-only imports count here.
     """
     offenders = {}
-    for path in (PKG / 'relational').rglob('*.py'):
-        rel = path.relative_to(PKG / 'relational').as_posix()
+    for path in (PKG / '_relational').rglob('*.py'):
+        rel = path.relative_to(PKG / '_relational').as_posix()
         if '__pycache__' in path.parts or rel.startswith('engine/'):
             continue
         named = _imported(ast.parse(path.read_text()), relative=True)
@@ -449,6 +449,19 @@ def test_each_public_module_holds_one_kind_of_name(module, belongs):
     assert not wrong, f'specsolve.{module} exports {wrong}, which do not belong to it'
 
 
+def test_only_the_public_modules_have_names_without_a_leading_underscore():
+    """A module named without an underscore reads as public, so a new one is the same decision as a name in `__all__`."""
+    import pkgutil
+
+    import specsolve
+
+    named = {info.name for info in pkgutil.iter_modules(specsolve.__path__) if not info.name.startswith('_')}
+    assert named == set(PUBLIC_MODULES), (
+        f'only in the package: {sorted(named - set(PUBLIC_MODULES))}; '
+        f'only in PUBLIC_MODULES: {sorted(set(PUBLIC_MODULES) - named)}'
+    )
+
+
 def test_only_the_axes_are_classes_at_the_top_level():
     """A caller builds an axis and passes it in. Every other class is a type, and lives in ``specsolve.types``."""
     import specsolve
@@ -458,7 +471,7 @@ def test_only_the_axes_are_classes_at_the_top_level():
 
 
 #: The two sink families; the directory is the family.
-SINKS = PKG / 'relational' / 'sinks'
+SINKS = PKG / '_relational' / 'sinks'
 
 
 def _family(name: str) -> set[str]:
@@ -473,7 +486,7 @@ def test_each_sink_family_is_its_directory_and_its_registry():
     class. Writers are keyed by suffix.
     """
 
-    from specsolve.relational.sinks import SOLVERS, WRITERS, Solver
+    from specsolve._relational.sinks import SOLVERS, WRITERS, Solver
 
     solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
     assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
@@ -500,8 +513,8 @@ def test_each_sink_family_is_its_directory_and_its_registry():
 def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
-    from specsolve.relational.sinks import SOLVERS, WRITERS
-    from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
+    from specsolve._relational.sinks import SOLVERS, WRITERS
+    from specsolve._relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
@@ -522,7 +535,7 @@ def test_the_door_gives_every_declared_dimension_dtype_a_column():
     """``sources._DECLARED`` spells the dtype set the language validates."""
     from mathspec.program import DimensionDtype
 
-    from specsolve.sources import _DECLARED
+    from specsolve._sources import _DECLARED
 
     assert set(_DECLARED) == set(get_args(DimensionDtype)), 'the two homes of the dimension dtype vocabulary disagree'
 
@@ -531,7 +544,7 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
     """Every declared dtype has a column table entry, and ``int`` for ``float`` is the only widening."""
     from mathspec.program import ParameterDtype
 
-    from specsolve.sources import _COLUMNS, ACCEPTED_VALUE_TYPES
+    from specsolve._sources import _COLUMNS, ACCEPTED_VALUE_TYPES
 
     declared = set(get_args(ParameterDtype))
     assert set(_COLUMNS) == declared, 'the column table and the language disagree'
@@ -561,7 +574,7 @@ def test_no_sink_reaches_a_sibling():
             reached = {
                 name
                 for name in _imported(ast.parse(path.read_text()))
-                if name.startswith('specsolve.relational.sinks.') and not name.endswith(shareable)
+                if name.startswith('specsolve._relational.sinks.') and not name.endswith(shareable)
             }
             if reached and path.stem != '__init__':
                 offenders[f'{family}/{path.name}'] = sorted(reached)
@@ -577,7 +590,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     from mathspec import program
 
-    engine_dir = PKG / 'relational' / 'engine'
+    engine_dir = PKG / '_relational' / 'engine'
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
@@ -604,9 +617,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / 'inputs.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / '_inputs.py', 'Buildable'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve.inputs.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve._inputs.Buildable takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 
@@ -626,8 +639,8 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve.axes import EachCoordinate, EachWindow
-    from specsolve.strategy import solve_over
+    from specsolve._axes import EachCoordinate, EachWindow
+    from specsolve._strategy import solve_over
 
     doors = {
         'build': specsolve.build,
@@ -656,41 +669,41 @@ def test_both_lanes_lower_a_spec_through_one_function():
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute) and node.attr == 'program' and isinstance(node.value, ast.Call)
     }
-    assert reading == {'inputs.py'}, (
+    assert reading == {'_inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
         f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
     )
 
 
 def test_every_parquet_file_goes_through_one_module():
-    """``relational/parquet.py`` reads and writes through pyarrow where polars has no parquet, as in the browser."""
+    """``_relational/parquet.py`` reads and writes through pyarrow where polars has no parquet, as in the browser."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
         for path in _all_modules()
-        if path != PKG / 'relational' / 'parquet.py'
+        if path != PKG / '_relational' / 'parquet.py'
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute)
         and node.attr in {'read_parquet', 'scan_parquet', 'read_parquet_schema', 'write_parquet', 'sink_parquet'}
     }
     assert not calls, (
-        f'{sorted(calls)} read or write parquet directly; go through relational.parquet, or the browser, '
+        f'{sorted(calls)} read or write parquet directly; go through _relational.parquet, or the browser, '
         f'whose polars has no parquet, fails there'
     )
 
 
 def test_every_frame_is_collected_through_one_function():
-    """``relational/collect.py`` picks the engine and keeps every join in the order it was written."""
+    """``_relational/collect.py`` picks the engine and keeps every join in the order it was written."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
         for path in _all_modules()
-        if path != PKG / 'relational' / 'collect.py'
+        if path != PKG / '_relational' / 'collect.py'
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr in {'collect', 'collect_all'}
     }
     assert not calls, (
-        f'{sorted(calls)} collect a frame directly; pipe it through relational.collect.collected, '
+        f'{sorted(calls)} collect a frame directly; pipe it through _relational.collect.collected, '
         f'or polars picks the engine and reorders the joins'
     )
 
@@ -718,7 +731,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve.relational.engine.pieces import fan_in
+    from specsolve._relational.engine.pieces import fan_in
 
     x = program.Variable('x')
     grouping, lookup = _gen_bus_joins(program)
@@ -825,7 +838,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
         return found
 
     lanes = {
-        'relational': dispatched_on(*(PKG / 'relational' / 'engine').glob('*.py')),
+        'relational': dispatched_on(*(PKG / '_relational' / 'engine').glob('*.py')),
         'linopy': dispatched_on(*ORACLE.glob('*.py')),
     }
     for lane, handled in lanes.items():
@@ -857,7 +870,7 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('relational/engine/predicates.py', 'specsolve.relational.engine.compiler'): (
+    ('_relational/engine/predicates.py', 'specsolve._relational.engine.compiler'): (
         'the same comparison on the streaming lane, and the compiler reads this module for the mask '
         'walk and the carrier both of its walks join on'
     ),

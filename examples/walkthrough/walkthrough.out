@@ -23,7 +23,7 @@ spec: examples/walkthrough/walkthrough.yaml
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
-[4] plan + data -> the model frames  (relational/engine/engine.py)
+[4] plan + data -> the model frames  (_relational/engine/engine.py)
     cols                   18 rows
     obj                     6 rows
     rows                    6 rows
@@ -47,7 +47,7 @@ spec: examples/walkthrough/walkthrough.yaml
     │ 1        ┆ wind      ┆ 3         │
     └──────────┴───────────┴───────────┘
 
-[5] sink: stream the frames to an LP file  (relational/sinks/writers/lp_file.py)
+[5] sink: stream the frames to an LP file  (_relational/sinks/writers/lp_file.py)
     min
     
     obj:
@@ -61,7 +61,7 @@ spec: examples/walkthrough/walkthrough.yaml
     s.t.
     ... (64 lines total)
 
-[6] sink: batches -> highspy -> solution frames  (relational/sinks/solvers/highs.py)
+[6] sink: batches -> highspy -> solution frames  (_relational/sinks/solvers/highs.py)
     status     ok (optimal)
     objective  1,000.0
     shape: (6, 3)

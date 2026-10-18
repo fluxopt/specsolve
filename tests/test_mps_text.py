@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.sinks.writers import mps_file
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks.writers import mps_file
 from tests.conftest import (
     DISPATCH_SPEC,
     PORT_REFERENCES,

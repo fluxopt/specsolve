@@ -17,8 +17,8 @@ import pytest
 from mathspec.program import Constant, Power, Variable
 
 import specsolve as sps
+from specsolve._sources import tidy_sources
 from specsolve.errors import LanguageError
-from specsolve.sources import tidy_sources
 from tests.differential import differential
 
 #: Three coordinates one period apart, so a discount factor orders them and a

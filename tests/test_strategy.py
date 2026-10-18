@@ -24,10 +24,10 @@ import pytest
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve import strategy
-from specsolve import sweep as sweep_module
-from specsolve.axes import axis_from
-from specsolve.relational.answer_layout import Metrics, Provenance, Record
+from specsolve import _strategy as strategy
+from specsolve import _sweep as sweep_module
+from specsolve._axes import axis_from
+from specsolve._relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
@@ -2032,7 +2032,7 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     from mathspec import validation
     from mathspec.spec import Spec
 
-    from specsolve import inputs
+    from specsolve import _inputs as inputs
 
     parsed: list[object] = []
     original = validation.to_spec

@@ -39,15 +39,15 @@ from mathspec.program import (
 from mathspec.spec import Spec
 
 import specsolve as sps
+from specsolve._relational.engine.assembly import _sorted
+from specsolve._relational.engine.compiler import Compiler
+from specsolve._relational.engine.engine import Engine
+from specsolve._relational.engine.scope import Scope
+from specsolve._relational.sinks import SOLVERS
+from specsolve._relational.sinks.handoff import ranges
+from specsolve._relational.sinks.solvers.highs import Highs
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engine.assembly import _sorted
-from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.engine import Engine
-from specsolve.relational.engine.scope import Scope
-from specsolve.relational.sinks import SOLVERS
-from specsolve.relational.sinks.handoff import ranges
-from specsolve.relational.sinks.solvers.highs import Highs
-from specsolve.sources import tidy_sources
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, specsolve_linopy, transport_linopy_objective, xr
@@ -1234,7 +1234,7 @@ FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve.relational.engine import compiler as compiler_module
+    from specsolve._relational.engine import compiler as compiler_module
 
     real = compiler_module.Compiler._aligned_bound
     seen = {}

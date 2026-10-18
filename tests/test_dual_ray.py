@@ -13,8 +13,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.sinks import SOLVERS
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks import SOLVERS
 
 #: Two rows that cannot both hold, and no bound in the argument: ``p`` is held
 #: only by a lower bound of zero, which delivers nothing into the combination,

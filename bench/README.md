@@ -552,7 +552,7 @@ across a session, and this machine has drifted 2x on wall time between the
 start of a session and the end of one. Check out A, measure, check out B,
 measure, and go back — not A once and B once an hour later. A second arm used
 to be the tell — if it moved too, the machine moved, because nothing in
-`src/specsolve/relational/` can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
+`src/specsolve/_relational/` can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
 wall time and is usually the honest half of a before/after claim.
 
 ## The cases
@@ -832,7 +832,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve.relational.engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._relational.engine.compiler:Compiler._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```

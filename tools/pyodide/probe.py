@@ -13,7 +13,7 @@ import json
 import polars as pl
 
 import specsolve as sps
-from specsolve.relational.collect import collect_engine
+from specsolve._relational.collect import collect_engine
 
 GENERATORS = ['wind', 'gas']
 LOAD = [80.0, 90.0, 100.0, 70.0, 60.0, 120.0]

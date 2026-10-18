@@ -25,18 +25,18 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._inputs import lowered
+from specsolve._relational.engine.engine import Engine
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
-from specsolve.inputs import lowered
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file
 from tests.oracle import linopy, specsolve_linopy, xr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve.relational.answer_layout import Output
-    from specsolve.relational.engine.engine import Result
+    from specsolve._relational.answer_layout import Output
+    from specsolve._relational.engine.engine import Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9

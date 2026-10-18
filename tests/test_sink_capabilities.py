@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from specsolve.relational.sinks import SOLVERS, WRITERS
-from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
+from specsolve._relational.sinks import SOLVERS, WRITERS
+from specsolve._relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
 EMPTY = Capabilities(supports=frozenset({}))
 

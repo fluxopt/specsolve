@@ -18,7 +18,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.answer_layout import OUTPUT_KINDS, OUTPUTS
+from specsolve._relational.answer_layout import OUTPUT_KINDS, OUTPUTS
 from tests.test_strategy import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
 
 if TYPE_CHECKING:
@@ -76,10 +76,10 @@ def test_a_request_that_names_no_output_is_refused(verb: Callable[[object], obje
     ('module', 'verb'),
     [
         pytest.param(
-            'specsolve.api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
+            'specsolve._api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
         ),
         pytest.param(
-            'specsolve.strategy',
+            'specsolve._strategy',
             lambda: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs={'activty'}),
             id='sweep-before-a-slice',
         ),
@@ -116,7 +116,7 @@ def _scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 def _archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.load_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.archive.ResultArchive)
+    assert isinstance(archive, sps.types.ResultArchive)
     return archive.result
 
 
@@ -149,7 +149,7 @@ def _sweep_scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 def _sweep_archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.load_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.archive.SweepArchive)
+    assert isinstance(archive, sps.types.SweepArchive)
     return archive.sweep
 
 
@@ -292,6 +292,6 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
         'an equality balance, so each snapshot carries its own load'
     )
     archive = sps.load_archive(tmp_path / 'run')
-    assert isinstance(archive, sps.archive.SweepArchive)
+    assert isinstance(archive, sps.types.SweepArchive)
     assert archive.sweep.activity('balance').sort('snapshot').equals(stitched)
     assert archive.sweep.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))

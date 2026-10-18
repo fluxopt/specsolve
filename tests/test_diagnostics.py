@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.sinks import SOLVERS, solver
+from specsolve._relational.sinks import SOLVERS, solver
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC
 from tests.differential import RTOL, differential
 

@@ -16,8 +16,8 @@ import polars as pl
 import pytest
 from mathspec import program
 
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, pd, specsolve_linopy, where, xr
@@ -68,7 +68,7 @@ def test_nothing_is_patched_onto_linopy_model():
 
 
 def test_the_lane_takes_sources_as_the_one_type():
-    """The lane's two verbs annotate ``sources`` the way every door in ``api.py`` does."""
+    """The lane's two verbs annotate ``sources`` the way every door in ``_api.py`` does."""
     from tests.test_architecture import sources_annotations
 
     doors = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}

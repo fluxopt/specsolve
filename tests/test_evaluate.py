@@ -11,8 +11,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.engine.compiler import Compiler
 from specsolve.errors import LanguageError, SpecsolveError
-from specsolve.relational.engine.compiler import Compiler
 
 SPEC = {
     'dimensions': {
