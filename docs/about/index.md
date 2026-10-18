@@ -28,4 +28,3 @@ a reason to add anything.
 | [Coming from linopy](linopy.md) | the same model in linopy and in specsolve, and what maps to what |
 | [Benchmarks](benchmarks.md) | what a build costs against four other ways of writing the same model |
 | [Prior art and credit](prior-art.md) | the work this is derived from, and how to cite it |
-| [Changelog](changelog.md) | every release |
