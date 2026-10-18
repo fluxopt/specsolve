@@ -325,7 +325,7 @@ def law_spec(
     """
     return {
         'dimensions': dict(LAW_DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'}, 'w': {'dims': ['f']}},
+        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False}, 'w': {'dims': ['f']}},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'dims': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},

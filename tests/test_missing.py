@@ -139,7 +139,7 @@ def test_a_bool_that_declares_true_masks_in_where_the_data_has_no_row():
 
 SCALAR: dict[str, Any] = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'omega': {'dims': [], 'missing': 'neutral'}},
+    'parameters': {'omega': {'dims': [], 'missing': 0}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 10}},
         'z': {'dims': [], 'where': 'omega', 'bounds': {'lower': 0, 'upper': 5}},
@@ -150,7 +150,7 @@ SCALAR: dict[str, Any] = {
 
 
 def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_masks():
-    """A parameter over no dims has one coordinate, so under `missing: neutral` an empty table is its missing row.
+    """A parameter over no dims has one coordinate, so under `missing: 0` an empty table is its missing row.
 
     `z` exists only where `omega` has a row, so it is not built.
     """

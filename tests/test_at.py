@@ -179,7 +179,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         },
         'relations': {'same_moment': {'key': 'tf', 'values': 't'}},
         'parameters': {
-            'window': {'dims': ['unit', 't', 'tf'], 'missing': 'neutral'},
+            'window': {'dims': ['unit', 't', 'tf'], 'missing': 0},
             'load': {'dims': ['t']},
             'cap': {'dims': ['unit']},
             'run_cost': {'dims': ['unit']},

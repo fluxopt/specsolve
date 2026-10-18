@@ -38,7 +38,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
 | $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
 | $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
-| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
+| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -49,7 +49,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
-| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
+| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
 #### Notation
 
@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           energy arriving at a storage unit whether or not it was wanted — zero for
           a unit that receives none
         dims: [snapshot, storage]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -213,7 +213,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           balance keeps its row there.
         dims: [snapshot, storage]
         where: "inflow != 0"
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: inflow
@@ -322,7 +322,7 @@ only for units whose inflow is positive somewhere. The port matches that with
 The mask is safe only because of the line beside it. A constraint mentioning a
 masked variable loses its **row**, not only the term. On its own the mask would
 delete the battery's whole energy balance. Its stored energy would come from
-nowhere, and the model would report **0.0** instead of 3200. `missing: neutral`
+nowhere, and the model would report **0.0** instead of 3200. `missing: 0`
 says the missing coordinates hold a spill of zero rather than a quantity with no
 value, so the row stands without the term.
 
@@ -336,7 +336,7 @@ rather than an absence. The sparsity that matters is in the *value*, and
 
 ## What it exercises
 
-`missing: neutral` on a masked variable, the declaration that keeps a row whose
+`missing: 0` on a masked variable, the declaration that keeps a row whose
 term has gone, against an energy balance carrying two independent sinks. Also
 the asymmetry underneath it: a masked **variable** takes its row, while a sparse
 **parameter** on a constant side is refused. The two halves of this model's

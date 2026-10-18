@@ -29,7 +29,8 @@ class AttachedSources:
     """The data a program is built against, after attaching.
 
     ``parameters`` are tidy ``(dims…, value)``, a parameter that declares a
-    value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    value for a missing row filled with it, unless the value is ``0`` or
+    ``false`` ([`Scope.reads_zero`][specsolve._engine.scope.Scope.reads_zero]); ``dimensions`` are ``(val, ord)``;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
@@ -88,7 +89,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             )
     given: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        if p.missing in ('absent', 'neutral', None):
+        if p.missing in ('absent', None) or p.missing == 0:
             continue
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)

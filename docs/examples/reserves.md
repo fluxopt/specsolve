@@ -55,7 +55,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | $`\mathrm{offer\_cost}`$ | `offer_cost` over $`\mathcal{O}`$ — cost of holding one unit of reserve on an offer |
 | $`\mathrm{req}`$ | `req` over $`\mathcal{M}`$ — reserve a market has to be filled with |
 | $`\mathrm{tranche\_frac}`$ | `tranche_frac` over $`\mathcal{T}`$ — share of capacity a generator may offer at a tranche |
-| $`\mathrm{zone\_share}`$ | `zone_share` over $`\mathcal{G} \times \mathcal{Z}`$, `neutral` where the data has no row — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a relation over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
+| $`\mathrm{zone\_share}`$ | `zone_share` over $`\mathcal{G} \times \mathcal{Z}`$, $`0`$ where the data has no row — how much of a generator's reserve counts towards a zone — a generator may back several zones at a per-zone weight, so this cannot be a relation over the generator, which is single-valued per label; rows are absent where a generator backs no part of a zone |
 | $`\mathrm{zone\_req}`$ | `zone_req` over $`\mathcal{Z}`$ — reserve a zone has to be covered by |
 
 #### Variables
@@ -224,7 +224,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the generator, which is single-valued per label; rows are absent where a
           generator backs no part of a zone
         dims: [generator, zone]
-        missing: neutral
+        missing: 0
       zone_req:
         description: reserve a zone has to be covered by
         dims: [zone]

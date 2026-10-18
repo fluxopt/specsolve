@@ -101,7 +101,7 @@ parameters:
   Generator_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [generator]
-    missing: neutral
+    missing: absent
   Generator_maintainable:
     description: whether a generator must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -164,7 +164,7 @@ parameters:
   Link_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [link]
-    missing: neutral
+    missing: absent
   Link_maintainable:
     description: whether a link must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -241,7 +241,7 @@ parameters:
   Process_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [process]
-    missing: neutral
+    missing: absent
   Process_maintainable:
     description: whether a process must be taken off for maintenance within the horizon — in any scenario,
       as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -367,60 +367,60 @@ variables:
       and one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_maintainable AND Generator_active
-    missing: neutral
+    missing: 0
     bounds: {lower: 0, upper: 1}
   Generator_maintenance_start:
     description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_maintainable AND Generator_active
-    missing: neutral
+    missing: 0
     domain: binary
   Generator_maintenance_capacity:
     description: '`Generator-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, generator]
     where: Generator_maint_ext
-    missing: neutral
+    missing: 0
     bounds: {lower: 0}
   Link_maintenance:
     description: '`Link-maintenance` — whether a maintainable link is in maintenance: continuous, and
       one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, link]
     where: Link_maintainable AND Link_active
-    missing: neutral
+    missing: 0
     bounds: {lower: 0, upper: 1}
   Link_maintenance_start:
     description: '`Link-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, link]
     where: Link_maintainable AND Link_active
-    missing: neutral
+    missing: 0
     domain: binary
   Link_maintenance_capacity:
     description: '`Link-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, link]
     where: Link_maint_ext
-    missing: neutral
+    missing: 0
     bounds: {lower: 0}
   Process_maintenance:
     description: '`Process-maintenance` — whether a maintainable process is in maintenance: continuous,
       and one exactly where an event covers the snapshot'
     dims: [scenario, snapshot, process]
     where: Process_maintainable AND Process_active
-    missing: neutral
+    missing: 0
     bounds: {lower: 0, upper: 1}
   Process_maintenance_start:
     description: '`Process-maintenance_start` — whether a maintenance event starts in this snapshot'
     dims: [scenario, snapshot, process]
     where: Process_maintainable AND Process_active
-    missing: neutral
+    missing: 0
     domain: binary
   Process_maintenance_capacity:
     description: '`Process-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
       the product the `maintcap` rows linearize'
     dims: [scenario, snapshot, process]
     where: Process_maint_ext
-    missing: neutral
+    missing: 0
     bounds: {lower: 0}
   Generator_p_nom_ext:
     description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;

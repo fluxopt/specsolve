@@ -187,9 +187,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{\mathrm{up}}`$ | `Generator_start_up_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one start in this snapshot |
 | $`\mathrm{c}^{\mathrm{dn}}`$ | `Generator_shut_down_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one stop in this snapshot |
 | $`\mathrm{c}^{\mathrm{on}}`$ | `Generator_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one snapshot spent on |
-| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{\mathrm{fix}}`$ | `Generator_modules_installed` over $`\Xi \times \mathcal{G}`$ — how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}`$ | `Generator_big_m` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — the bound a committed extendable generator's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it caps that output; data prep |
+| $`\mathrm{M}`$ | `Generator_big_m` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — the bound a committed extendable generator's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it caps that output; data prep |
 | $`\mathrm{nonneg}`$ | `Generator_p_min_pu_nonneg` over $`\mathcal{G}`$ — true where none of the generator's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}`$ | `Generator_maintainable` over $`\mathcal{G}`$ — whether a generator must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma`$ | `Generator_maintenance_pu` over $`\Xi \times \mathcal{G}`$ — the share of the build a maintenance event takes off |
@@ -209,9 +209,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{f,\mathrm{up}}`$ | `Link_start_up_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one start in this snapshot |
 | $`\mathrm{c}^{f,\mathrm{dn}}`$ | `Link_shut_down_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one stop in this snapshot |
 | $`\mathrm{c}^{f,\mathrm{on}}`$ | `Link_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one snapshot spent on |
-| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{f,\mathrm{fix}}`$ | `Link_modules_installed` over $`\Xi \times \mathcal{L}`$ — how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, `neutral` where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
+| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
 | $`\mathrm{nonneg}^{f}`$ | `Link_p_min_pu_nonneg` over $`\mathcal{L}`$ — true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}^{f}`$ | `Link_maintainable` over $`\mathcal{L}`$ — whether a link must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{f}`$ | `Link_maintenance_pu` over $`\Xi \times \mathcal{L}`$ — the share of the build a maintenance event takes off |
@@ -234,9 +234,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{z,\mathrm{up}}`$ | `Process_start_up_cost` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of one start in this snapshot |
 | $`\mathrm{c}^{z,\mathrm{dn}}`$ | `Process_shut_down_cost` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of one stop in this snapshot |
 | $`\mathrm{c}^{z,\mathrm{on}}`$ | `Process_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of one snapshot spent on |
-| $`\mathrm{z}^{\mathrm{mod}}`$ | `Process_p_nom_mod` over $`\mathcal{J}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{z}^{\mathrm{mod}}`$ | `Process_p_nom_mod` over $`\mathcal{J}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{z,\mathrm{fix}}`$ | `Process_modules_installed` over $`\Xi \times \mathcal{J}`$ — how many whole modules a committable build has in place: `Process_p_nom / Process_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{z}`$ | `Process_big_m` over $`\Xi \times \mathcal{J}`$, `neutral` where the data has no row — the bound a committed extendable process's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal power; data prep |
+| $`\mathrm{M}^{z}`$ | `Process_big_m` over $`\Xi \times \mathcal{J}`$, $`0`$ where the data has no row — the bound a committed extendable process's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal power; data prep |
 | $`\mathrm{nonneg}^{z}`$ | `Process_p_min_pu_nonneg` over $`\mathcal{J}`$ — true where none of the process's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}^{z}`$ | `Process_maintainable` over $`\mathcal{J}`$ — whether a process must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{z}`$ | `Process_maintenance_pu` over $`\Xi \times \mathcal{J}`$ — the share of the build a maintenance event takes off |
@@ -1486,7 +1486,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Generator_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [generator]
-        missing: neutral
+        missing: absent
       Generator_modules_installed:
         description: 'how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -1500,7 +1500,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it
           caps that output; data prep
         dims: [scenario, generator]
-        missing: neutral
+        missing: 0
       Generator_p_min_pu_nonneg:
         description: true where none of the generator's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep
@@ -1582,7 +1582,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Link_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [link]
-        missing: neutral
+        missing: absent
       Link_modules_installed:
         description: 'how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -1596,7 +1596,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data
           prep
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_p_min_pu_nonneg:
         description: true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu
           >= 0).all()` over every snapshot and scenario, data prep
@@ -1692,7 +1692,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Process_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [process]
-        missing: neutral
+        missing: absent
       Process_modules_installed:
         description: 'how many whole modules a committable build has in place: `Process_p_nom / Process_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -1706,7 +1706,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal
           power; data prep
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_p_min_pu_nonneg:
         description: true where none of the process's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep
@@ -1865,20 +1865,20 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           and one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Generator_maintenance_start:
         description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
-        missing: neutral
+        missing: 0
         domain: binary
       Generator_maintenance_capacity:
         description: '`Generator-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, generator]
         where: Generator_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Generator_maintenance_status:
         description: '`Generator-maintenance_status` — the status while in maintenance, zero otherwise: the
@@ -1886,7 +1886,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_committed AND NOT (Generator_p_nom_extendable AND NOT
           (Generator_p_nom_mod > 0))
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Link_n_mod:
         description: '`Link-n_mod` — how many modules of an extendable modular build; none for a unit that
@@ -1921,20 +1921,20 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, link]
         where: Link_maintainable AND Link_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Link_maintenance_start:
         description: '`Link-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, link]
         where: Link_maintainable AND Link_active
-        missing: neutral
+        missing: 0
         domain: binary
       Link_maintenance_capacity:
         description: '`Link-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, link]
         where: Link_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Link_maintenance_status:
         description: '`Link-maintenance_status` — the status while in maintenance, zero otherwise: the product
@@ -1942,7 +1942,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, link]
         where: Link_maintainable AND Link_committed AND NOT (Link_p_nom_extendable AND NOT (Link_p_nom_mod
           > 0))
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Process_n_mod:
         description: '`Process-n_mod` — how many modules of an extendable modular build; none for a unit that
@@ -1977,20 +1977,20 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           and one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, process]
         where: Process_maintainable AND Process_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Process_maintenance_start:
         description: '`Process-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, process]
         where: Process_maintainable AND Process_active
-        missing: neutral
+        missing: 0
         domain: binary
       Process_maintenance_capacity:
         description: '`Process-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, process]
         where: Process_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Process_maintenance_status:
         description: '`Process-maintenance_status` — the status while in maintenance, zero otherwise: the
@@ -1998,7 +1998,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, process]
         where: Process_maintainable AND Process_committed AND NOT (Process_p_nom_extendable AND NOT (Process_p_nom_mod
           > 0))
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Generator_p_nom_ext:
         description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;

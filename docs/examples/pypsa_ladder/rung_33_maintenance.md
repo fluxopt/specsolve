@@ -107,7 +107,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{mnt}`$ | `Generator_maintainable` over $`\mathcal{G}`$ — whether a generator must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma`$ | `Generator_maintenance_pu` over $`\Xi \times \mathcal{G}`$ — the share of the build a maintenance event takes off |
 | $`\mathrm{n}^{\mathrm{mnt}}`$ | `Generator_maintenance_events` over $`\Xi \times \mathcal{G}`$ — how many maintenance events the horizon holds |
@@ -122,7 +122,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{c}^{f,(2)}`$ | `Link_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of the square of one unit of flow |
 | $`\mathrm{com}^{f}`$ | `Link_committable` over $`\mathcal{L}`$ — whether flow is gated by an on/off status decision |
-| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{mnt}^{f}`$ | `Link_maintainable` over $`\mathcal{L}`$ — whether a link must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{f}`$ | `Link_maintenance_pu` over $`\Xi \times \mathcal{L}`$ — the share of the build a maintenance event takes off |
 | $`\mathrm{n}^{f,\mathrm{mnt}}`$ | `Link_maintenance_events` over $`\Xi \times \mathcal{L}`$ — how many maintenance events the horizon holds |
@@ -140,7 +140,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\overline{\mathrm{z}}^{\mathrm{nom}}`$ | `Process_p_nom_max` over $`\Xi \times \mathcal{J}`$ — most nominal power an extendable process may be built at |
 | $`\mathrm{c}^{\mathrm{cap},z}`$ | `Process_capital_cost` over $`\Xi \times \mathcal{J}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 | $`\mathrm{com}^{z}`$ | `Process_committable` over $`\mathcal{J}`$ — whether internal power is gated by an on/off status decision |
-| $`\mathrm{z}^{\mathrm{mod}}`$ | `Process_p_nom_mod` over $`\mathcal{J}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{z}^{\mathrm{mod}}`$ | `Process_p_nom_mod` over $`\mathcal{J}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{mnt}^{z}`$ | `Process_maintainable` over $`\mathcal{J}`$ — whether a process must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{z}`$ | `Process_maintenance_pu` over $`\Xi \times \mathcal{J}`$ — the share of the build a maintenance event takes off |
 | $`\mathrm{n}^{z,\mathrm{mnt}}`$ | `Process_maintenance_events` over $`\Xi \times \mathcal{J}`$ — how many maintenance events the horizon holds |
@@ -798,7 +798,7 @@ Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in 
       Generator_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [generator]
-        missing: neutral
+        missing: absent
       Generator_maintainable:
         description: whether a generator must be taken off for maintenance within the horizon — in any scenario,
           as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -861,7 +861,7 @@ Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in 
       Link_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [link]
-        missing: neutral
+        missing: absent
       Link_maintainable:
         description: whether a link must be taken off for maintenance within the horizon — in any scenario,
           as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -938,7 +938,7 @@ Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in 
       Process_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [process]
-        missing: neutral
+        missing: absent
       Process_maintainable:
         description: whether a process must be taken off for maintenance within the horizon — in any scenario,
           as PyPSA takes the union over them (`components.py:1016-1019`)
@@ -1064,60 +1064,60 @@ Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in 
           and one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Generator_maintenance_start:
         description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
-        missing: neutral
+        missing: 0
         domain: binary
       Generator_maintenance_capacity:
         description: '`Generator-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, generator]
         where: Generator_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Link_maintenance:
         description: '`Link-maintenance` — whether a maintainable link is in maintenance: continuous, and
           one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, link]
         where: Link_maintainable AND Link_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Link_maintenance_start:
         description: '`Link-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, link]
         where: Link_maintainable AND Link_active
-        missing: neutral
+        missing: 0
         domain: binary
       Link_maintenance_capacity:
         description: '`Link-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, link]
         where: Link_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Process_maintenance:
         description: '`Process-maintenance` — whether a maintainable process is in maintenance: continuous,
           and one exactly where an event covers the snapshot'
         dims: [scenario, snapshot, process]
         where: Process_maintainable AND Process_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: 1}
       Process_maintenance_start:
         description: '`Process-maintenance_start` — whether a maintenance event starts in this snapshot'
         dims: [scenario, snapshot, process]
         where: Process_maintainable AND Process_active
-        missing: neutral
+        missing: 0
         domain: binary
       Process_maintenance_capacity:
         description: '`Process-maintenance_capacity` — the chosen build while in maintenance, zero otherwise:
           the product the `maintcap` rows linearize'
         dims: [scenario, snapshot, process]
         where: Process_maint_ext
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Generator_p_nom_ext:
         description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;

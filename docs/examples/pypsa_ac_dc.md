@@ -50,7 +50,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{I}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_p\_max\_pu}`$ | `link_p_max_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry forwards |
 | $`\mathrm{link\_p\_min\_pu}`$ | `link_p_min_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry backwards, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
+| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, $`0`$ where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
 | $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
 
 #### Variables
@@ -265,7 +265,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the cycle basis, as a sparse table of impedance times direction. A line
           may belong to several cycles, so this cannot be a coordinate.
         dims: [cycle, line]
-        missing: neutral
+        missing: 0
       co2_limit:
         description: emissions the whole horizon is allowed
         dims: []

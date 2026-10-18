@@ -294,7 +294,7 @@ def test_a_sos2_set_of_one_member_restricts_nothing():
     after it own.
     """
     raw = spec(2)
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     raw['variables'] = {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}}
     live = DATA | {
         'live': _table({(site, size): (site == 'north' or size == 0) for site in SITES for size in SIZES}).with_columns(
@@ -323,7 +323,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int', 'ordered': True}},
         'parameters': {
             'worth': {'dims': ['site', 'size']},
-            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'},
+            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False},
         },
         'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'live'}},
         'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': 1}},
@@ -385,7 +385,7 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dim
     take = {'dims': dims, 'bounds': {'lower': 0, 'upper': 'cap'}}
     raw = spec(2) | {'variables': {'take': take}}
     masked = raw | {
-        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}},
+        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}},
         'variables': {'take': take | {'where': 'live'}},
     }
     live = _table(dict.fromkeys(((site, size) for site in SITES for size in SIZES), 1.0)).with_columns(
@@ -411,7 +411,7 @@ def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
     """
     take = {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}
     raw = spec(1) | {'variables': {'take': take}}
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     live = _table({(site, size): float(site == 'south') for site in SITES for size in SIZES}).with_columns(
         pl.col('value').cast(pl.Boolean)
     )

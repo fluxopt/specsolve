@@ -127,7 +127,9 @@ class Compiler:
             if isinstance(e, program.ParameterReference):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 read = pl.col(alias).cast(pl.Float64)
-                return read.fill_null(open_side) if self.scope.absent(e.name) else read
+                if self.scope.absent(e.name):
+                    return read.fill_null(open_side)
+                return read.fill_null(0.0) if self.scope.reads_zero(e.name) else read
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 
@@ -300,7 +302,7 @@ class Compiler:
                 return CompiledExpression((), (self._parameter_piece(e.name),))
             if isinstance(e, program.VariableReference):
                 if self.solution is None:
-                    return CompiledExpression((self._variable_piece(e.name),), ())
+                    return CompiledExpression((self._variable_piece(e.name),), self._standing_in(e.name))
                 return CompiledExpression((), (self._solved_piece(e.name),))
             if isinstance(e, program.Dual):
                 assert self.solution is not None, (
@@ -355,6 +357,27 @@ class Compiler:
         )
         return Piece(dims, frame, 'term', presences=self._variable_presences(name, dims))
 
+    def _standing_in(self, name: str) -> tuple[Piece, ...]:
+        """The number a masked variable's ``missing:`` names where the mask leaves the variable out, as a const piece.
+
+        The piece holds ``0`` where the variable exists, so it covers every
+        coordinate and the constant side owes it nothing. ``missing: 0`` and an
+        unmasked variable need none: a missing term is already zero in a row
+        that stands.
+        """
+        declaration = self.scope.program.variables[name]
+        value = declaration.missing
+        if declaration.where is None or isinstance(value, str) or value == 0:
+            return ()
+        dims, held = declaration.dims, self.scope.variables[name].frame
+        if dims:
+            inside = held.select(*dims).with_columns(pl.lit(value=True).alias('__held__'))
+            everywhere = join_on(self.scope.product(dims).select(*dims), inside, dims, 'left')
+        else:
+            everywhere = held.select((pl.len() > 0).alias('__held__'))
+        number = pl.when(pl.col('__held__').fill_null(value=False)).then(0.0).otherwise(float(value))
+        return (Piece(dims, everywhere.select(*dims, number.cast(pl.Float64).alias('cval')), 'const'),)
+
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
         declaration = self.scope.program.variables[name]
@@ -364,17 +387,18 @@ class Compiler:
     def _solved_piece(self, name: str) -> Piece:
         """A variable at its primal — the const piece a read compiles it to, carrying the presence its term would.
 
-        Under ``missing: neutral`` it is filled with zero over the unmasked product,
-        because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
+        Under a ``missing:`` number it is filled with that number over the unmasked
+        product, because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
         """
         assert self.solution is not None
         held, declaration = self.scope.variables[name], self.scope.program.variables[name]
         dims = declaration.dims
         keys = dims or (UNIT,)
         rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
-        if declaration.where is not None and declaration.missing == 'neutral':
+        if declaration.where is not None and declaration.missing != 'absent':
             everywhere = masked(self.scope, dims, None).select(*keys)
-            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
+            filled = pl.col('cval').fill_null(float(declaration.missing))
+            rows = join_on(everywhere, rows, keys, 'left').with_columns(filled)
         return Piece(dims, rows.select(*dims, 'cval'), 'const', presences=self._variable_presences(name, dims))
 
     def _dual_piece(self, name: str) -> Piece:
@@ -463,13 +487,17 @@ class Compiler:
         [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
         the caller to where every variable under the pieces exists. *absent*
         is what a piece with no value adds: ``zero``; ``hole``, null where no
-        piece has a value; ``spreads``, null where any piece has none.
+        piece has a value; ``spreads``, null where any piece has none. A piece
+        with a factor that reads a missing row as zero, and no absence under
+        it, has that zero where it has no row.
         """
         assert pieces, 'an expression compiles to at least one piece'
         assert all(p.kind == 'const' for p in pieces), 'a read compiles every variable to its value'
         columns = [f'__piece {i}__' for i in range(len(pieces))]
         for p, column in zip(pieces, columns, strict=True):
             carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            if not p.presences and any(self.scope.reads_zero(name) for name in p.parameters):
+                carrier = carrier.with_columns(pl.col(column).fill_null(0.0))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')
         if absent == 'hole':
             total = pl.when(pl.any_horizontal([pl.col(c).is_not_null() for c in columns])).then(total).otherwise(None)
@@ -515,7 +543,7 @@ class Compiler:
         cannot tell the two apart, so the zero is written here: a dimension
         with no labels, a group its relation maps no member to, and a member a
         ``cases:`` region leaves out all land nowhere. Asked of the piece
-        rather than the relation for that last reason. A neutral parameter short
+        rather than the relation for that last reason. A ``missing: 0`` parameter short
         of a member is one summand fewer. Only for a constant part: a row with
         no terms is not built.
         """

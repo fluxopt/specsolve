@@ -35,11 +35,11 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{bp\_rate}`$ | `bp_rate` over $`\mathcal{F} \times \mathcal{B}`$, `absent` where the data has no row — what each flow runs at, at each breakpoint of its converter's curve |
-| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{C} \times \mathcal{B}`$, `neutral` where the data has no row — how far each converter's curve runs |
+| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{C} \times \mathcal{B}`$, `false` where the data has no row — how far each converter's curve runs |
 | $`\mathrm{rate}^{\mathrm{max}}`$ | `rate_max` over $`\mathcal{F}`$ — what each flow runs at when its converter is at its last breakpoint |
-| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver heat |
-| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver power |
-| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$, `neutral` where the data has no row — what a unit of each input flow costs |
+| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$, $`0`$ where the data has no row — which flows deliver heat |
+| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$, $`0`$ where the data has no row — which flows deliver power |
+| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$, $`0`$ where the data has no row — what a unit of each input flow costs |
 | $`\mathrm{heat\_demand}`$ | `heat_demand` over $`\mathcal{T}`$ — heat to be delivered |
 | $`\mathrm{power\_demand}`$ | `power_demand` over $`\mathcal{T}`$ — power to be delivered |
 
@@ -146,22 +146,22 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: how far each converter's curve runs
         dims: [converter, bp]
         dtype: bool
-        missing: neutral
+        missing: false
       rate_max:
         description: what each flow runs at when its converter is at its last breakpoint
         dims: [flow]
       is_heat:
         description: which flows deliver heat
         dims: [flow]
-        missing: neutral
+        missing: 0
       is_power:
         description: which flows deliver power
         dims: [flow]
-        missing: neutral
+        missing: 0
       fuel_price:
         description: what a unit of each input flow costs
         dims: [flow]
-        missing: neutral
+        missing: 0
       heat_demand:
         description: heat to be delivered
         dims: [time]

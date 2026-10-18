@@ -1,7 +1,7 @@
 """Absence: what a missing value does to a coefficient, a row and a bound.
 
 Absence is a state, not a zero (docs/reference/language/absence.md): a sparse
-coefficient is still a coefficient, a constant side with a hole is refused, an
+coefficient is still a coefficient, a constant side with a hole reads its value, an
 empty group is a zero, and a term whose variable is absent takes its row with
 it. Each pair that differs is checked side by side.
 """
@@ -12,9 +12,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.errors import DataError
 from tests.conftest import by_coord, override
-from tests.differential import RTOL, both_lanes_refuse, differential
+from tests.differential import RTOL, differential
 from tests.oracle import pd
 
 #: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
@@ -25,7 +24,7 @@ BROADCAST_MASK_SPEC = {
         'carrier': {'dtype': 'str'},
     },
     'parameters': {
-        'produces': {'dims': ['tech', 'carrier'], 'missing': 'neutral'},
+        'produces': {'dims': ['tech', 'carrier'], 'missing': 0},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
         'installed': {'dims': ['node', 'tech']},
@@ -48,7 +47,7 @@ def _grid(dims, labels, values):
 
 SPARSE_COEFFICIENT_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'c': {'dims': ['t'], 'missing': 'neutral'}, 'w': {'dims': ['t'], 'missing': 'neutral'}},
+    'parameters': {'c': {'dims': ['t'], 'missing': 0}, 'w': {'dims': ['t'], 'missing': 0}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -68,29 +67,22 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
         )
 
 
-def test_a_sparse_constant_side_is_refused_on_both_lanes():
-    """The same omission on the constant side is a `DataError`, not a zero.
-
-    There the fill is the bound: `w * x <= c` with no `c` row would read `<= 0`.
-    """
-    with (
-        pytest.raises(DataError, match="parameter 'c' covers 1 fewer"),
-        differential(SPARSE_COEFFICIENT_SPEC, SPARSE_CONSTANT_DATA),
-    ):
-        pass
-
-
 @pytest.mark.parametrize(
-    'constraint',
+    ('expression', 'objective'),
     [
-        pytest.param({'dims': ['t'], 'expression': 'w * x <= c'}, id='at the row key'),
-        pytest.param({'dims': ['t'], 'expression': 'w * x <= c + sum(c, over=t)'}, id='beside a sum of itself'),
+        pytest.param('w * x <= c', 0.0 + 4.0 + 5.0, id='at-the-row-key'),
+        pytest.param('w * x <= c + sum(c, over=t)', 9.0 + 10.0 + 10.0, id='beside-a-sum-of-itself'),
+        pytest.param('w * x + c <= 100', 10.0 + 10.0 + 10.0, id='beside-a-term'),
     ],
 )
-def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint):
-    """A reduction between the parameter and the row does not hide the hole (#1465)."""
-    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
+def test_a_missing_constant_reads_as_its_value_on_both_lanes(expression, objective):
+    """On the constant side a missing `missing: 0` row is the bound 0, and the row stands.
+
+    `c` has no row at t=0, and `w` is 1 everywhere, so t=0 reads `x <= 0`, `x <= 9` and `x <= 100`.
+    """
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': expression})
+    with differential(spec, SPARSE_CONSTANT_DATA, lp=True) as run:
+        assert run.result.objective == pytest.approx(objective, rel=RTOL), f'the sum of x is {objective}'
 
 
 @pytest.mark.parametrize(
@@ -100,8 +92,8 @@ def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint)
         pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
     ],
 )
-def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
-    """Inside a sum a missing `neutral` row contributes nothing, so the row is built from the rows the data has.
+def test_a_zero_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
+    """Inside a sum a missing `missing: 0` row contributes nothing, so the row is built from the rows the data has.
 
     `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
     """
@@ -121,16 +113,6 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
             't=0 has no row at all, so x runs to its bound there'
         )
-
-
-def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
-    """A parameter added beside a variable term is a constant piece, and is checked (#1521).
-
-    Filled, `w * x + c <= 100` would read `w * x <= 100` where the file says
-    `w * x <= 100 - c`.
-    """
-    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
 def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
@@ -257,12 +239,12 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
-    """A group short of a member's value sums the members it has, when the parameter is `neutral`.
+def test_a_zero_member_with_no_value_is_one_summand_fewer_through_a_group():
+    """A group short of a member's value sums the members it has, when the parameter is `missing: 0`.
 
     Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
-    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'})
+    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 0})
     with differential(spec, _grouped_constant_sources(capacity=('g1',))) as run:
         assert run.oracle == pytest.approx(3.0, rel=RTOL), 'north imports up to 3 and south up to 0'
 
@@ -270,7 +252,7 @@ def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {
-        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
         'relmax': {'dims': ['f']},
         'cost': {'dims': ['f']},
     },
@@ -306,7 +288,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {
-        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
         'relmax': {'dims': ['f']},
         'cost': {'dims': ['f']},
     },
@@ -341,7 +323,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f'], 'missing': 'neutral'}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'dims': ['f'], 'missing': 0}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 50}},
@@ -405,3 +387,55 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
 
     with differential(BROADCAST_MASK_SPEC, data) as run:
         assert run.result.objective == pytest.approx(100.0, rel=RTOL)
+
+
+def test_a_missing_bound_reads_its_value_on_both_lanes():
+    """A `missing: 0` bound with no row is the bound 0, neither an open side nor a refusal."""
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}},
+        'parameters': {'cap': {'dims': ['i'], 'missing': 0}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+        'constraints': {'c': {'dims': ['i'], 'expression': 'x >= 0'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=i)'},
+    }
+    data = {'i': [0, 1, 2], 'cap': pd.Series({0: 5.0, 1: 6.0})}
+    with differential(spec, data, lp=True) as run:
+        assert run.result.objective == pytest.approx(5.0 + 6.0 + 0.0, rel=RTOL), 'x at i=2 is held to 0'
+
+
+@pytest.mark.parametrize(
+    ('where', 'objective'),
+    [
+        pytest.param('cost < 1', 10.0 + 10.0, id='true-at-the-zero'),
+        pytest.param('cost > 0', 10.0, id='false-at-the-zero'),
+    ],
+)
+def test_a_comparison_reads_the_value_of_a_missing_row_on_both_lanes(where, objective):
+    """`cost` has no row at t=1, so the comparison reads its `missing: 0` there."""
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['t'], 'missing': 0}},
+        'variables': {'x': {'dims': ['t'], 'where': where, 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'c': {'dims': ['t'], 'expression': 'x >= 0'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+    }
+    data = {'t': [0, 1], 'cost': pd.Series({0: 0.5})}
+    with differential(spec, data) as run:
+        assert run.result.objective == pytest.approx(objective, rel=RTOL), f'{where} admits x worth {objective}'
+
+
+def test_a_masked_variable_stands_as_its_missing_number_on_both_lanes():
+    """`y` is masked out at t=1 and declares `missing: 2`, so `x + y == 10` reads `x == 8` there."""
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'open': {'dims': ['t'], 'dtype': 'bool', 'missing': False}},
+        'variables': {
+            'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': ['t'], 'where': 'open', 'missing': 2, 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {'c': {'dims': ['t'], 'expression': 'x + y == 10'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+    }
+    data = {'t': [0, 1], 'open': pd.Series({0: True})}
+    with differential(spec, data, lp=True) as run:
+        assert run.result.objective == pytest.approx(10.0 + 8.0, rel=RTOL), 't=0: y can be 0; t=1: y stands as 2'

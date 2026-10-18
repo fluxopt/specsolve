@@ -81,18 +81,18 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the data has no row — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the data has no row — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — most output in the snapshot a unit starts, per unit of nominal power; no value means no limit |
-| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — most output in the snapshot before a unit stops, per unit of nominal power; no value means no limit |
+| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, $`0`$ where the data has no row — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, $`0`$ where the data has no row — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — most output in the snapshot a unit starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — most output in the snapshot before a unit stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{DT}`$ | `Generator_min_down_time` over $`\Xi \times \mathcal{G}`$ — least snapshots a unit stays off once stopped |
 | $`\mathrm{u}^{0}`$ | `Generator_status_initial` over $`\Xi \times \mathcal{G}`$ — one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
-| $`\mathrm{p}^{0}`$ | `Generator_p_init` over $`\Xi \times \mathcal{G}`$, `neutral` where the data has no row — the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot |
+| $`\mathrm{p}^{0}`$ | `Generator_p_init` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot |
 | $`\mathrm{rest}`$ | `Generator_must_stay_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — true while the down time a unit brought into the horizon still binds — PyPSA's `min_down_time - down_time_before` snapshots, where `down_time_before > 0`, data prep for the same reason |
 | $`\mathrm{c}^{\mathrm{up}}`$ | `Generator_start_up_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one start in this snapshot |
 | $`\mathrm{c}^{\mathrm{dn}}`$ | `Generator_shut_down_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one stop in this snapshot |
 | $`\mathrm{c}^{\mathrm{on}}`$ | `Generator_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one snapshot spent on |
-| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{\mathrm{fix}}`$ | `Generator_modules_installed` over $`\Xi \times \mathcal{G}`$ — how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
 | $`\mathrm{mnt}`$ | `Generator_maintainable` over $`\mathcal{G}`$ — whether a generator must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma`$ | `Generator_maintenance_pu` over $`\Xi \times \mathcal{G}`$ — the share of the build a maintenance event takes off |
@@ -640,25 +640,25 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_ramp_limit_up:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_down:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_start_up:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot a unit starts, per unit of nominal power; no value means
           no limit
       Generator_ramp_limit_shut_down:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot before a unit stops, per unit of nominal power; no value
           means no limit
       Generator_min_down_time:
@@ -673,7 +673,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_p_init:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
           came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
       Generator_must_stay_down:
@@ -696,7 +696,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_p_nom_mod:
         dims: [generator]
         dtype: float
-        missing: neutral
+        missing: absent
         description: the module size a build comes in whole numbers of; no value means the build is continuous
       Generator_modules_installed:
         dims: [scenario, generator]
@@ -870,14 +870,14 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
         where: Generator_maintainable AND Generator_active
         bounds: {lower: 0.0, upper: 1.0}
         domain: continuous
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance` — whether a maintainable generator is in maintenance: continuous,
           and one exactly where an event covers the snapshot'
       Generator_maintenance_start:
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
         domain: binary
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
       Generator_maintenance_status:
         dims: [scenario, snapshot, generator]
@@ -885,7 +885,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
           (Generator_p_nom_mod > 0))
         bounds: {lower: 0.0}
         domain: continuous
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance_status` — the status while in maintenance, zero otherwise: the
           product the `maint-status` rows linearize, so a unit in maintenance may also be off'
       Generator_p_nom_ext:

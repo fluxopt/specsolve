@@ -48,7 +48,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 | $`\mathrm{start\_fuel}`$ | `start_fuel` over $`\mathcal{P}`$ — fuel burned per unit of capacity started |
 | $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{P} \times \mathcal{H}`$ — what a unit of the plant's fuel costs in that hour |
 | $`\mathrm{run\_cost}`$ | `run_cost` over $`\mathcal{P}`$ — variable cost of one unit of output, fuel aside |
-| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$, `neutral` where the data has no row — what starting one unit of capacity costs |
+| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$, $`0`$ where the data has no row — what starting one unit of capacity costs |
 | $`\mathrm{weight}`$ | `weight` over $`\mathcal{H}`$ — how many real hours an hour of the representative day stands for |
 | $`\mathrm{emitted}`$ | `emitted` over $`\mathcal{P}`$ — net CO2 per unit of fuel burned after capture, negative where the fuel took it up |
 | $`\mathrm{emitted}^{\mathrm{start}}`$ | `emitted_start` over $`\mathcal{P}`$ — net CO2 per unit of start-up fuel burned |
@@ -340,7 +340,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_cost:
         description: what starting one unit of capacity costs
         dims: [plant]
-        missing: neutral
+        missing: 0
       weight:
         description: how many real hours an hour of the representative day stands for
         dims: [hour]

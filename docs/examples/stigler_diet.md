@@ -33,7 +33,7 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, `neutral` where the data has no row — how much of each nutrient a dollar of each food buys |
+| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, $`0`$ where the data has no row — how much of each nutrient a dollar of each food buys |
 | $`\mathrm{daily\_minimum}`$ | `daily_minimum` over $`\mathcal{N}`$ — how much of a nutrient a day has to supply |
 
 #### Variables
@@ -92,7 +92,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nutrient_per_dollar:
         description: how much of each nutrient a dollar of each food buys
         dims: [food, nutrient]
-        missing: neutral
+        missing: 0
       daily_minimum:
         description: how much of a nutrient a day has to supply
         dims: [nutrient]

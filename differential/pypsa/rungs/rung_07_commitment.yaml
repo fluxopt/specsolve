@@ -72,22 +72,22 @@ parameters:
     description: most a generator may raise its output between snapshots, per unit of nominal power; no
       value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_down:
     description: most a generator may lower its output between snapshots, per unit of nominal power; no
       value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_start_up:
     description: most output in the snapshot a unit starts, per unit of nominal power; no value means
       no limit
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_shut_down:
     description: most output in the snapshot before a unit stops, per unit of nominal power; no value
       means no limit
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_min_up_time:
     description: least snapshots a unit stays on once started
     dims: [scenario, generator]
@@ -105,7 +105,7 @@ parameters:
     description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
       came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_must_stay_up:
     description: true while the up time a unit brought into the horizon still binds — data prep, since
       `position()` compares against a literal rather than a parameter
@@ -123,7 +123,7 @@ parameters:
   Generator_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [generator]
-    missing: neutral
+    missing: absent
   Generator_modules_installed:
     description: 'how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod`
       where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build

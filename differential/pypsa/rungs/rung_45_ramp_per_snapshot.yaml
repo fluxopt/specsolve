@@ -72,22 +72,22 @@ parameters:
     description: most a generator may raise its output between snapshots, per unit of nominal power; no
       value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_down:
     description: most a generator may lower its output between snapshots, per unit of nominal power; no
       value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_start_up:
     description: most output in the snapshot a unit starts, per unit of nominal power; no value means
       no limit
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_ramp_limit_shut_down:
     description: most output in the snapshot before a unit stops, per unit of nominal power; no value
       means no limit
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_status_initial:
     description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
       > 0`, data prep
@@ -97,21 +97,21 @@ parameters:
     description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
       came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
     dims: [scenario, generator]
-    missing: neutral
+    missing: 0
   Generator_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [generator]
-    missing: neutral
+    missing: absent
   Link_ramp_limit_up:
     description: most a link may raise its flow between snapshots, per unit of nominal power; no value
       means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, link]
-    missing: neutral
+    missing: 0
   Link_ramp_limit_down:
     description: most a link may lower its flow between snapshots, per unit of nominal power; no value
       means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, link]
-    missing: neutral
+    missing: 0
   Link_p_nom:
     description: nominal power
     dims: [scenario, link]
@@ -157,12 +157,12 @@ parameters:
     description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
       limit
     dims: [scenario, link]
-    missing: neutral
+    missing: 0
   Link_ramp_limit_shut_down:
     description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
       no limit
     dims: [scenario, link]
-    missing: neutral
+    missing: 0
   Link_status_initial:
     description: one where the link was on before the first snapshot, zero where off — PyPSA's `up_time_before
       > 0`, data prep
@@ -172,11 +172,11 @@ parameters:
     description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
       came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
     dims: [scenario, link]
-    missing: neutral
+    missing: 0
   Link_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [link]
-    missing: neutral
+    missing: absent
   Process_p_nom:
     description: nominal internal power
     dims: [scenario, process]
@@ -220,12 +220,12 @@ parameters:
     description: most a process may raise its internal power between snapshots, per unit of nominal power;
       no value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, process]
-    missing: neutral
+    missing: 0
   Process_ramp_limit_down:
     description: most a process may lower its internal power between snapshots, per unit of nominal power;
       no value means no limit — read at the later of the two snapshots, so the limit may change over time
     dims: [scenario, snapshot, process]
-    missing: neutral
+    missing: 0
   Process_committable:
     description: whether internal power is gated by an on/off status decision
     dims: [process]
@@ -234,12 +234,12 @@ parameters:
     description: most internal power in the snapshot a process starts, per unit of nominal power; no value
       means no limit
     dims: [scenario, process]
-    missing: neutral
+    missing: 0
   Process_ramp_limit_shut_down:
     description: most internal power in the snapshot before a process stops, per unit of nominal power;
       no value means no limit
     dims: [scenario, process]
-    missing: neutral
+    missing: 0
   Process_status_initial:
     description: one where the process was on before the first snapshot, zero where off — PyPSA's `up_time_before
       > 0`, data prep
@@ -250,11 +250,11 @@ parameters:
       the process came in running; no value means it is unknown, so the process carries no ramp row at
       the first snapshot
     dims: [scenario, process]
-    missing: neutral
+    missing: 0
   Process_p_nom_mod:
     description: the module size a build comes in whole numbers of; no value means the build is continuous
     dims: [process]
-    missing: neutral
+    missing: absent
   Load_p_set:
     description: demand
     dims: [scenario, snapshot, load]
