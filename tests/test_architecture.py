@@ -854,8 +854,6 @@ def test_every_module_is_documented_somewhere():
     missing = []
     for path in _all_modules():
         name = path.name
-        if name.startswith('_'):
-            continue
         if name == '__init__.py':
             continue
         readmes = [d / 'README.md' for d in path.parents if PKG in d.parents or d == PKG]
