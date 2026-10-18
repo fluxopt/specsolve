@@ -116,7 +116,7 @@ def _product(
     frames = [dimensions[dim(column)].lazy().select(pl.col('val').alias(column)) for column in columns]
     product = frames[0]
     for frame in frames[1:]:
-        product = product.join(frame, how='cross')
+        product = product.join(frame, how='cross', maintain_order='left_right')
     return product
 
 
@@ -146,11 +146,17 @@ def _refuse_a_missing_row(
 def _filled(
     frame: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.DataFrame:
-    """*frame* with a row at every coordinate of *dims*, *value* where the data has none."""
+    """*frame* with a row at every coordinate of *dims*, *value* where the data has none.
+
+    The rows come back in label order, so a sum over them adds its terms in
+    the same order at every build.
+    """
     if not dims:
         return frame if frame.height else pl.DataFrame({VALUE: [value]}, schema={VALUE: frame.schema[VALUE]})
     product = _product(dims, lambda d: d, dimensions)
-    filled = product.join(frame.lazy(), on=list(dims), how='left').with_columns(pl.col(VALUE).fill_null(value))
+    filled = product.join(frame.lazy(), on=list(dims), how='left', maintain_order='left').with_columns(
+        pl.col(VALUE).fill_null(value)
+    )
     return filled.select(*dims, pl.col(VALUE).cast(frame.schema[VALUE])).pipe(collected)
 
 
