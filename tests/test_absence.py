@@ -13,7 +13,7 @@ import pytest
 
 import specsolve as sps
 from tests.conftest import by_coord, override
-from tests.differential import RTOL, differential
+from tests.differential import RTOL, at_a_point, differential
 from tests.oracle import pd
 
 #: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
@@ -408,6 +408,7 @@ def test_a_missing_bound_reads_its_value_on_both_lanes():
     [
         pytest.param('cost < 1', 10.0 + 10.0, id='true-at-the-zero'),
         pytest.param('cost > 0', 10.0, id='false-at-the-zero'),
+        pytest.param('2 * cost < 1', 10.0, id='an-expression-true-at-the-zero'),
     ],
 )
 def test_a_comparison_reads_the_value_of_a_missing_row_on_both_lanes(where, objective):
@@ -439,3 +440,20 @@ def test_a_masked_variable_stands_as_its_missing_number_on_both_lanes():
     data = {'t': [0, 1], 'open': pd.Series({0: True})}
     with differential(spec, data, lp=True) as run:
         assert run.result.objective == pytest.approx(10.0 + 8.0, rel=RTOL), 't=0: y can be 0; t=1: y stands as 2'
+
+
+def test_a_read_values_a_masked_variable_at_its_missing_number_on_both_lanes():
+    """`y` is masked out at t=1 and declares `missing: 2`, so `2 * y` reads 4 there on both lanes."""
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'open': {'dims': ['t'], 'dtype': 'bool', 'missing': False}},
+        'variables': {
+            'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': ['t'], 'where': 'open', 'missing': 2, 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {'c': {'dims': ['t'], 'expression': 'x + y >= 0'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
+    }
+    with at_a_point(spec, {'t': [0, 1], 'open': pd.Series({0: True})}) as read:
+        frame = read({'dims': ['t'], 'expression': '2 * y'})
+    assert frame.filter(pl.col('t') == 1)['value'].to_list() == [4.0], 'one row at t=1, holding 2 * 2'
