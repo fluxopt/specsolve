@@ -40,6 +40,7 @@ nav:
       - The data contract: reference/data.md
       - Sweeps and rolling horizons: reference/sweeps.md
       - Glossary: reference/glossary.md
+      - Changelog: reference/changelog.md
       - Examples:
           - examples/index.md
           - Published optima:
@@ -68,7 +69,6 @@ nav:
       - Coming from linopy: about/linopy.md
       - Benchmarks: about/benchmarks.md
       - Prior art and credit: about/prior-art.md
-      - Changelog: about/changelog.md
   # What a user does not need: how the package is built, and the PyPSA models
   # that prove it works. The PyPSA pages stay in docs/examples/, where
   # tools/ladder.py writes them and tools/constructs.py reads them.
