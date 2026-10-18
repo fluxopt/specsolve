@@ -238,7 +238,7 @@ def given_rows(
     """
     given: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        if pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+        if pdef.dtype == 'bool' or isinstance(pdef.missing, str):
             continue
         if not pdef.dims:
             given[pname] = xr.DataArray(tidy[pname].select(pl.len()).collect().item() > 0)
@@ -252,7 +252,7 @@ def given_rows(
 
 def _fill(pdef: program.Parameter, flag: bool) -> Any:
     """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
-    if not isinstance(pdef.missing, str) and pdef.missing is not None:
+    if not isinstance(pdef.missing, str):
         return pdef.missing
     return False if flag else np.nan
 

@@ -89,7 +89,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             )
     given: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        if p.missing in ('absent', None) or p.missing == 0:
+        if p.missing == 'absent' or p.missing == 0:
             continue
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
