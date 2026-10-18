@@ -65,7 +65,7 @@ class Scope:
         a bound, a constant side, a comparison — reads the zero there.
         """
         missing = self.program.parameters[param].missing
-        return not isinstance(missing, str) and missing is not None and missing == 0
+        return not isinstance(missing, str) and missing == 0
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
