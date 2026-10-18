@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat!: specsolve requires mathspec 0.4.0, where `missing: neutral` is gone and a file names the value that a missing row or a masked variable reads as ([#PRNUM](https://github.com/fluxopt/specsolve/pull/PRNUM))
+- feat!: specsolve requires mathspec 0.4.0, where `missing: neutral` is gone and a file names the value that a missing row or a masked variable reads as ([#2054](https://github.com/fluxopt/specsolve/pull/2054))
 - feat!: specsolve requires mathspec 0.3.0, where a file says what a missing row means, a sum or a lookup names the columns of its relation, and a dimension declares whether its order counts ([#2047](https://github.com/fluxopt/specsolve/pull/2047))
 - docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))
 - docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
