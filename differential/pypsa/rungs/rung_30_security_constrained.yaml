@@ -226,7 +226,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   Line_BODF:
     description: the share of an outaged branch's flow a line takes on when that branch goes out — PyPSA's
       `BODF`, from the PTDF of the sub-network the period's active branches form, data prep; a row only
@@ -234,7 +234,7 @@ parameters:
       line itself. The factors are the same in every scenario, because PyPSA takes those of the first
       scenario (`abstract.py:534`)
     dims: [period, line, outage]
-    missing: neutral
+    missing: 0
   Transformer_s_nom:
     description: nominal apparent power
     dims: [scenario, transformer]
@@ -262,13 +262,13 @@ parameters:
       orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
       has no row. From the first scenario only, as a line's
     dims: [period, transformer, cycle]
-    missing: neutral
+    missing: 0
   Transformer_BODF:
     description: the share of an outaged branch's flow a transformer takes on when that branch goes out,
       as a line's; a row only where the transformer and the outage are active in the period and share
       a sub-network
     dims: [period, transformer, outage]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

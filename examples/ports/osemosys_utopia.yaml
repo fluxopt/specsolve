@@ -34,20 +34,20 @@ parameters:
   still_live:
     description: 1 where a vintage is still inside its technology's operational life in that year
     dims: [technology, year, vintage]
-    missing: neutral
+    missing: 0
   residual_capacity:
     description: capacity that already stood in 1990 and has not yet retired
     dims: [technology, year]
-    missing: neutral
+    missing: 0
 
   build_cost:
     description: discounted cost of building a unit of capacity in a vintage
     dims: [technology, vintage]
-    missing: neutral
+    missing: 0
   holding_cost:
     description: discounted fixed cost of holding a unit of capacity through a year
     dims: [technology, year]
-    missing: neutral
+    missing: 0
   running_cost:
     description: discounted variable cost of a unit of activity
     dims: [timeslice, technology, mode, year]
@@ -61,20 +61,20 @@ parameters:
   input_ratio:
     description: fuel a technology consumes per unit of activity
     dims: [technology, fuel, mode, year]
-    missing: neutral
+    missing: 0
   output_ratio:
     description: fuel a technology produces per unit of activity
     dims: [technology, fuel, mode, year]
-    missing: neutral
+    missing: 0
 
   sliced_demand:
     description: demand for a fuel placed on one timeslice
     dims: [fuel, timeslice, year]
-    missing: neutral
+    missing: 0
   annual_demand:
     description: demand for a fuel placed on the year as a whole
     dims: [fuel, year]
-    missing: neutral
+    missing: 0
 
   max_capacity:
     description: most capacity a technology may stand at
@@ -91,11 +91,11 @@ parameters:
   reserve_tagged:
     description: 1 where a technology's capacity counts towards the reserve
     dims: [technology, year]
-    missing: neutral
+    missing: 0
   reserve_demand:
     description: the activity the reserve margin is measured against
     dims: [technology, fuel, mode, year]
-    missing: neutral
+    missing: 0
 
   residual_holding:
     description: fixed operating cost owed on the capacity that already stood in 1990

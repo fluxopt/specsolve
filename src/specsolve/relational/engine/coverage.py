@@ -1,8 +1,9 @@
 """Is the data there where a declaration needs it? The positions that ask.
 
-Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
-constant piece have no such reading, so each is asked at the last moment the
-gap is still visible:
+A missing row of a ``missing: 0`` parameter is no term in a coefficient and a
+zero on a constant side, and the language refuses one that can make a divisor
+zero. Any other gap has no reading in a divisor or a constant piece, so each is
+asked at the last moment the gap is still visible:
 
 =============================  ===================================  ==========================================
 position                       the gap looks like                   asked
@@ -125,27 +126,31 @@ def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
     consts: Sequence[tuple[Piece, float]],
-    c: program.ConstraintDeclaration,
+    c: program.Constraint,
     subject: str,
 ) -> pl.DataFrame:
     """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.
 
     A coordinate a piece has no row for contributes zero, and the coverage
     check rides on the same pass. A piece built under a ``cases:`` region is
-    owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
+    owed only inside it. A gap a reduction summed away is one summand fewer.
+    A piece with a factor that reads a missing row as zero
+    ([`Scope.reads_zero`][specsolve.relational.engine.scope.Scope.reads_zero])
+    is owed nothing: its gap is that zero.
 
     Raises:
         DataError: A constant piece with no value at a row it is owed.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
-    gaps: list[str] = []
+    gaps: dict[str, frozenset[str]] = {}
     carrier = rows
     for i, (p, sign) in enumerate(consts):
         column = f'__const {i}__'
         aggregated = constant_scalar(p).rename({'cval': column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
+        if any(scope.reads_zero(name) for name in p.parameters):
+            continue
         gap = pl.col(column).is_null()
         if p.region is not None:
             inside = f'__inside {i}__'
@@ -153,7 +158,7 @@ def constant_side(
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
         carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
-        gaps.append(f'__gap {i}__')
+        gaps[f'__gap {i}__'] = p.parameters
 
     built = carrier.select(
         'row',
@@ -163,9 +168,9 @@ def constant_side(
     ).pipe(collected)
     if not gaps:
         return built
-    owed = [p.parameters for (p, _), column in zip(consts, gaps, strict=True) if built.get_column(column).any()]
+    owed = [parameters for column, parameters in gaps.items() if built.get_column(column).any()]
     if owed:
-        uncovered = int(built.select(pl.any_horizontal(gaps).sum()).item())
+        uncovered = int(built.select(pl.any_horizontal(list(gaps)).sum()).item())
         names = ', '.join(sorted(frozenset[str]().union(*owed)))
         raise DataError(uncovered_constant_message(names, uncovered, subject))
-    return built.drop(gaps)
+    return built.drop(list(gaps))

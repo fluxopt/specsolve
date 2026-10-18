@@ -58,9 +58,7 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow and its loss and so is a row rather than a bound |
-| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
-
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, $`0`$ where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
 
 #### Variable domains
 
@@ -228,7 +226,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           their rows.
         dims: [snapshot, line]
         where: loss_max
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: loss_max
@@ -344,15 +342,15 @@ climb `10.00 → 85.78 → 90.00`: power is worth more the further it travels,
 which no objective figure shows. Across the lossless line the price does not
 move. `b3` differs from `b2` only because the local generator sets it.
 
-**The mask needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
+**The mask needs `missing: 0`.** `loss` is declared `where: loss_max`, so
 the resistanceless line has no loss variable. `loss` also appears as a bare
 term in the rating rows, `f + loss <= s_nom`, and a constraint naming a masked
-variable loses its row. Without `missing: neutral` those two rows vanish for that
+variable loses its row. Without `missing: 0` those two rows vanish for that
 line, it becomes uncapacitated, and the model reports a cheaper answer:
 
 | spelling | rows | `omissions` | objective |
 |---|---|---|---|
-| `where:` + `missing: neutral` | 132 | 0 | **24114.24** ✔ |
+| `where:` + `missing: 0` | 132 | 0 | **24114.24** ✔ |
 | `where:` alone | 120 | **2** | 17514.24 ✘ |
 
 Twenty-seven per cent low, with an optimal status. `diagnostics().omissions`

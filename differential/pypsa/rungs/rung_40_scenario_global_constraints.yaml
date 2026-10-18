@@ -221,19 +221,19 @@ parameters:
       without it (`global_constraints.py:364-369`)'
     dims: [scenario, global_constraint, snapshot]
     dtype: bool
-    missing: neutral
+    missing: false
   Generator_primary_energy_weight:
     description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
       over the generator's efficiency at the snapshot, data prep; a generator of an unweighted carrier
       has no row
     dims: [scenario, global_constraint, snapshot, generator]
-    missing: neutral
+    missing: 0
   Line_volume_weight:
     description: the line's length in each scenario where its carrier is in the row's set (`global_constraints.py:847-848`)
       — data prep; a line outside it, or one that does not stand in the row's `investment_period`, has
       no row
     dims: [scenario, global_constraint, line]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

@@ -42,7 +42,7 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a piece exists, and what keys it.
 
-    Not which rows the piece's frame has: a neutral parameter's missing rows
+    Not which rows the piece's frame has: a ``missing: 0`` parameter's missing rows
     are a zero coefficient, a masked variable's are absence, and the frame
     cannot tell them apart.
 
@@ -185,7 +185,7 @@ def fan_in(expression: program.Expression) -> FanIn:
     Both classes other than ``'one-to-one'`` sum several input slots into an
     output row, so [`propagate_absence`][] runs before them.
     """
-    if isinstance(expression, program.NamedExpression):
+    if isinstance(expression, program.ExpressionReference):
         return fan_in(expression.body)
     if isinstance(expression, program.Sum):
         return 'many-to-one'
@@ -195,8 +195,8 @@ def fan_in(expression: program.Expression) -> FanIn:
         expression,
         (
             program.Constant,
-            program.Parameter,
-            program.Variable,
+            program.ParameterReference,
+            program.VariableReference,
             program.Dual,
             program.Negate,
             program.Add,

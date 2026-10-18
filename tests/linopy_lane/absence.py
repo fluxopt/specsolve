@@ -1,10 +1,8 @@
 """The positions an absent value is spelled differently in.
 
-Absence is **positional** in this lane: one missing row of a ``missing:
-neutral`` parameter is a zero in a coefficient, an error in ``bounds:``, and
-false in a ``where`` operand — so there is no single fill to apply once at
-load, and each position states its own answer. A ``missing: absent`` row stays
-NaN everywhere, and :func:`combined` carries it onto a linopy term as the
+A value fills a missing row when the data loads, and ``refused`` refuses one,
+so the one row that arrives NaN at a build is a ``missing: absent`` row. It
+stays NaN everywhere, and :func:`combined` carries it onto a linopy term as the
 absence linopy v1 propagates. The convention underneath is linopy v1's, which
 the lane selects on import.
 """
@@ -44,27 +42,27 @@ def unmapped(key: object) -> bool:
     return key is None or key != key
 
 
-def variable_term(variable: Any, missing: str) -> Any:
+def variable_term(variable: Any, missing: str | float) -> Any:
     """The variable as it enters an expression, carrying its declared ``missing:``.
 
     The mask stays on the variable either way — it is what keeps the absent
     coordinates out of the model. Under v1 an absent slot propagates and takes
-    its row, which is ``missing: absent``; ``fillna(0)`` is linopy's own
-    per-expression escape back to the other reading: the slot contributes
-    nothing and the row stands.
+    its row, which is ``missing: absent``; ``fillna`` is linopy's own
+    per-expression escape back to a number: the slot stands as that number and
+    the row stands.
     """
-    return variable.fillna(0) if missing == 'neutral' else variable
+    return variable if missing == 'absent' else variable.fillna(missing)
 
 
-def variable_value(variable: Any, missing: str) -> Any:
+def variable_value(variable: Any, missing: str | float) -> Any:
     """The variable's primal as it enters a read, carrying its declared ``missing:``.
 
     :func:`variable_term`'s two readings over values: a masked slot is NaN,
     which propagates through the arithmetic the way the absent term takes its
-    row, and ``missing: neutral`` fills it.
+    row, and a ``missing:`` number fills it.
     """
     solution = variable.solution
-    return solution.fillna(0.0) if missing == 'neutral' else solution
+    return solution if missing == 'absent' else solution.fillna(float(missing))
 
 
 def coefficient(parameter: Any) -> Any:

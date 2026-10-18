@@ -225,7 +225,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   GlobalConstraint_type:
     description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
       `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -250,13 +250,13 @@ parameters:
       without it (`global_constraints.py:364-369`)'
     dims: [scenario, global_constraint, snapshot]
     dtype: bool
-    missing: neutral
+    missing: false
   Generator_primary_energy_weight:
     description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
       over the generator's efficiency at the snapshot, data prep; a generator of an unweighted carrier
       has no row
     dims: [scenario, global_constraint, snapshot, generator]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

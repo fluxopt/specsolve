@@ -201,7 +201,7 @@ def load_parameters(
     *tidy* is :func:`~specsolve.sources.tidy_sources`' output — one checked
     ``(dims…, value)`` frame per parameter — so what is left is the crossing
     into xarray, and what a missing row reads as. A value fills it; ``absent``
-    and ``neutral`` leave it NaN, which each position reads in its own way
+    leaves it NaN, which each position reads in its own way
     (:mod:`~tests.linopy_lane.absence`); a ``bool`` short of a row reads false
     there unless its value says otherwise.
 
@@ -238,7 +238,10 @@ def given_rows(
     """
     given: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        if not pdef.dims or pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+        if pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+            continue
+        if not pdef.dims:
+            given[pname] = xr.DataArray(tidy[pname].select(pl.len()).collect().item() > 0)
             continue
         product = math.prod(len(master_coords[d]) for d in pdef.dims)
         if tidy[pname].select(pl.len()).collect().item() < product:
@@ -247,7 +250,7 @@ def given_rows(
     return given
 
 
-def _fill(pdef: program.ParameterDeclaration, flag: bool) -> Any:
+def _fill(pdef: program.Parameter, flag: bool) -> Any:
     """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
     if not isinstance(pdef.missing, str) and pdef.missing is not None:
         return pdef.missing

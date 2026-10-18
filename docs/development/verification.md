@@ -36,7 +36,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 
 | In an expression | linopy or xarray |
 |---|---|
-| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: neutral` |
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: 0` |
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
@@ -52,9 +52,10 @@ Each row lives in `tests/linopy_lane/builder.py`.
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
-A missing row of a `missing: neutral` parameter is zero in a coefficient, an
-error in `bounds:`, and false in a `where` operand
-(`tests/linopy_lane/absence.py`).
+The linopy lane fills a missing row with the value its `missing:` names
+when it loads the data, so a `missing: 0` row is zero in a coefficient, a
+bound and a `where` comparison. A bare name in a `where` still asks whether
+the data has the row (`given_rows` in `tests/linopy_lane/loader.py`).
 
 ### The same language, but not every build
 

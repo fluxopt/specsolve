@@ -149,12 +149,12 @@ parameters:
       preference, the file has no CVaR variables or rows. With `omega = 0`, PyPSA builds them, and the
       optimum is the risk-neutral one
     dims: []
-    missing: neutral
+    missing: 0
   CVaR_alpha:
     description: PyPSA's `risk_preference['alpha']` — the confidence level; the tail holds the other `1
       - alpha` of the probability. Data prep writes a row where it writes `CVaR_omega`
     dims: []
-    missing: neutral
+    missing: 0
   period_weight_objective:
     description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
       reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
@@ -209,18 +209,18 @@ variables:
       it does not'
     dims: [scenario]
     where: CVaR_omega
-    missing: neutral
+    missing: 0
     bounds: {lower: 0}
   CVaR_theta:
     description: '`CVaR-theta` — where the tail starts, the value at risk'
     dims: []
     where: CVaR_omega
-    missing: neutral
+    missing: 0
   CVaR:
     description: '`CVaR` — the tail''s average cost, what the objective prices at `omega`'
     dims: []
     where: CVaR_omega
-    missing: neutral
+    missing: 0
   Process_p:
     description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its
       own rate, withdrawing where the rate is negative and injecting where it is positive'

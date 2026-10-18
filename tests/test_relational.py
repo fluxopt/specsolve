@@ -18,23 +18,23 @@ from mathspec.program import (
     Add,
     Axis,
     Constant,
-    ConstraintDeclaration,
-    DimensionDeclaration,
+    Constraint,
+    Dimension,
     Expression,
     Join,
     JoinColumns,
     Mask,
     Multiply,
     Negate,
-    ObjectiveDeclaration,
+    Objective,
     Parameter,
     ParameterComparison,
-    ParameterDeclaration,
+    ParameterReference,
     Program,
-    RelationDeclaration,
+    Relation,
     Sum,
     Variable,
-    VariableDeclaration,
+    VariableReference,
 )
 from mathspec.spec import Spec
 
@@ -85,30 +85,33 @@ def dispatch_data():
 def dispatch_program() -> Program:
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'load': ParameterDeclaration(('snapshot',)),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'load': Parameter(('snapshot',)),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
                 where=Mask(ParameterComparison('p_max', '>', 0, ('generator',))),
                 lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                upper=ParameterReference('p_max'),
             )
         },
         constraints={
-            'power_balance': ConstraintDeclaration(
+            'power_balance': Constraint(
                 ('snapshot',),
-                lhs=Sum(Variable('p'), over=(Axis('generator'),)),
+                lhs=Sum(VariableReference('p'), over=(Axis('generator'),)),
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load'),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
+        objective=Objective(
+            'minimize',
+            Sum(
+                Multiply(VariableReference('p'), ParameterReference('cost')), over=(Axis('generator'), Axis('snapshot'))
+            ),
         ),
-        dimensions={'snapshot': DimensionDeclaration(dtype='int', ordered=True), 'generator': DimensionDeclaration()},
+        dimensions={'snapshot': Dimension(dtype='int', ordered=True), 'generator': Dimension()},
     )
 
 
@@ -147,7 +150,7 @@ NODE_CAP_SPEC = {
 
 LABEL_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f'], 'missing': 'neutral'}, 'cap': {'dims': ['f']}},
+    'parameters': {'cost': {'dims': ['f'], 'missing': 0}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['f'], 'expression': 'x <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
@@ -201,9 +204,9 @@ def dispatch_linopy_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 #: The transport network's wiring, as the three maps a nodal balance reads.
 WIRING = {
-    'gen_bus': RelationDeclaration((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
-    'from': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
-    'to': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'gen_bus': Relation((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
+    'from': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'to': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
 }
 
 
@@ -217,47 +220,50 @@ def _onto_bus(operand: Expression, name: str) -> Sum:
 def transport_program() -> Program:
     injection = Add(
         Add(
-            _onto_bus(Variable('p'), 'gen_bus'),
-            _onto_bus(Variable('f'), 'to'),
+            _onto_bus(VariableReference('p'), 'gen_bus'),
+            _onto_bus(VariableReference('f'), 'to'),
         ),
-        Negate(_onto_bus(Variable('f'), 'from')),
+        Negate(_onto_bus(VariableReference('f'), 'from')),
     )
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'cap': ParameterDeclaration(('line',)),
-            'cap_low': ParameterDeclaration(('line',)),
-            'load': ParameterDeclaration(('snapshot', 'bus')),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'cap': Parameter(('line',)),
+            'cap_low': Parameter(('line',)),
+            'load': Parameter(('snapshot', 'bus')),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
                 lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                upper=ParameterReference('p_max'),
             ),
-            'f': VariableDeclaration(
+            'f': Variable(
                 ('snapshot', 'line'),
-                lower=Parameter('cap_low'),
-                upper=Parameter('cap'),
+                lower=ParameterReference('cap_low'),
+                upper=ParameterReference('cap'),
             ),
         },
         constraints={
-            'balance': ConstraintDeclaration(
+            'balance': Constraint(
                 ('snapshot', 'bus'),
                 lhs=injection,
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load'),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
+        objective=Objective(
+            'minimize',
+            Sum(
+                Multiply(VariableReference('p'), ParameterReference('cost')), over=(Axis('generator'), Axis('snapshot'))
+            ),
         ),
         dimensions={
-            'snapshot': DimensionDeclaration(dtype='int', ordered=True),
-            'bus': DimensionDeclaration(),
-            'generator': DimensionDeclaration(),
-            'line': DimensionDeclaration(),
+            'snapshot': Dimension(dtype='int', ordered=True),
+            'bus': Dimension(),
+            'generator': Dimension(),
+            'line': Dimension(),
         },
         relations=WIRING,
     )
@@ -364,28 +370,6 @@ class TestWhatBindRefusesAndWhatItTakes:
         del sources['cost']
         with pytest.raises(DataError, match="no data provided for parameter 'cost'"):
             tidy_sources(dispatch_program(), sources)
-
-    def test_a_bound_parameter_short_of_a_coordinate_is_refused_with_the_count(self):
-        """The refusal nothing else in the suite reaches.
-
-        A bound whose *value* is null is refused at attach, and so is a
-        missing row of a parameter that does not declare `missing:`, so the
-        only way to a null bound is a `missing: neutral` parameter with no row
-        for a coordinate the variable has a column at. The count is asserted because it is what the message
-        exists to carry: it is read off the two bound columns before the frame
-        that carries them is filtered, and a probe that looked at one of them
-        would report every model as sound.
-        """
-        spec = {
-            'dimensions': {'i': {'dtype': 'int'}},
-            'parameters': {'cap': {'dims': ['i'], 'missing': 'neutral'}},
-            'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-            'constraints': {'c': {'dims': ['i'], 'expression': 'x >= 0'}},
-            'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
-        }
-        sources = {'i': [0, 1, 2], 'cap': pl.DataFrame({'i': [0, 1], 'value': [5.0, 6.0]})}
-        with pytest.raises(DataError, match="variable 'x': 1 rows have NULL bounds"):
-            sps.build(spec, sources)
 
     @pytest.mark.parametrize('rows', [2, 0])
     def test_a_dimensionless_parameter_must_be_one_row(self, rows):
@@ -951,7 +935,7 @@ SPELLED_ZEROS_INDEX = {'i': [0, 1], 'j': [0, 1, 2, 3]}
 
 SPELLED_ZEROS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
-    'parameters': {'a': {'dims': ['i', 'j'], 'missing': 'neutral'}},
+    'parameters': {'a': {'dims': ['i', 'j'], 'missing': 0}},
     'variables': {'x': {'dims': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'c': {'dims': ['i'], 'expression': 'sum(a * x, over=j) >= 10'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=j)'},
@@ -1154,7 +1138,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """A cost of zero and no cost at all are the same instruction."""
         a = _spelled_zeros([[1.0, 1.0]])
         spec = override(SPELLED_ZEROS_SPEC, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
-        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 'neutral'}}
+        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 0}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
             tables = model._engine._model.handoff
@@ -1520,8 +1504,8 @@ class TestThePositionalHandoff:
         assert _aligned_for(masked, shuffled, monkeypatch) == {'avail': False}
 
         holey = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
-        neutral = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'neutral'})
-        assert _aligned_for(neutral, holey, monkeypatch) == {'avail': False}
+        zero = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 0})
+        assert _aligned_for(zero, holey, monkeypatch) == {'avail': False}
 
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:

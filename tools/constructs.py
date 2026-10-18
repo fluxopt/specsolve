@@ -95,7 +95,7 @@ def constructs(spec: Path) -> set[str]:
     return used
 
 
-def _bounded(v: program.VariableDeclaration) -> bool:
+def _bounded(v: program.Variable) -> bool:
     open_at = {float('-inf'): 'lower', float('inf'): 'upper'}
     for side in ('lower', 'upper'):
         bound = getattr(v, side)

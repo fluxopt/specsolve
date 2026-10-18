@@ -50,7 +50,7 @@ parameters:
       energy arriving at a storage unit whether or not it was wanted — zero for
       a unit that receives none
     dims: [snapshot, storage]
-    missing: neutral
+    missing: 0
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -88,7 +88,7 @@ variables:
       balance keeps its row there.
     dims: [snapshot, storage]
     where: "inflow != 0"
-    missing: neutral
+    missing: 0
     bounds:
       lower: 0
       upper: inflow

@@ -37,15 +37,13 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 |---|---|
 | $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{A}`$ — circuits an arc can carry |
 | $`\mathrm{demand}`$ | `demand` over $`\mathcal{C}`$ — circuits a city pair asked for |
-| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, `neutral` where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, $`0`$ where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
 | $`\mathit{flow}`$ | `flow` over $`\mathcal{P}`$ — circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
-
-Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{flow}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Variable domains
 
@@ -120,7 +118,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           which arcs a path traverses — a path uses an arc or it does not, so the
           value is 1 and absence is 0
         dims: [path, arc]
-        missing: neutral
+        missing: 0
 
     variables:
       flow:

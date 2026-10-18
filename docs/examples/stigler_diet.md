@@ -33,7 +33,7 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, `neutral` where the data has no row — how much of each nutrient a dollar of each food buys |
+| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, $`0`$ where the data has no row — how much of each nutrient a dollar of each food buys |
 | $`\mathrm{daily\_minimum}`$ | `daily_minimum` over $`\mathcal{N}`$ — how much of a nutrient a day has to supply |
 
 #### Variables
@@ -41,8 +41,6 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 | Symbol | Meaning |
 |---|---|
 | $`\mathit{spend}`$ | `spend` over $`\mathcal{F}`$ — dollars per day spent on this food |
-
-Upright is what the data supplies — a parameter such as $`\mathrm{nutrient\_per\_dollar}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{spend}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 #### Variable domains
 
@@ -94,7 +92,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nutrient_per_dollar:
         description: how much of each nutrient a dollar of each food buys
         dims: [food, nutrient]
-        missing: neutral
+        missing: 0
       daily_minimum:
         description: how much of a nutrient a day has to supply
         dims: [nutrient]

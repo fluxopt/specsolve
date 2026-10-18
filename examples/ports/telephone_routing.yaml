@@ -35,7 +35,7 @@ parameters:
       which arcs a path traverses — a path uses an arc or it does not, so the
       value is 1 and absence is 0
     dims: [path, arc]
-    missing: neutral
+    missing: 0
 
 variables:
   flow:

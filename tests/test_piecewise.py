@@ -541,7 +541,7 @@ parameters:
   load: {dims: []}
   bp_x: {dims: [generator, bp], missing: absent}
   bp_y: {dims: [generator, bp], missing: absent}
-  bp_present: {dims: [generator, bp], dtype: bool, missing: neutral}
+  bp_present: {dims: [generator, bp], dtype: bool, missing: false}
 
 variables:
   p:
@@ -803,7 +803,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     """
     raw = raw_of(GATED_YAML)
     raw['piecewise']['cost_curve']['method'] = method
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {'dims': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'}
 
     gated = [True, False] * 6
@@ -826,16 +826,16 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
-    """`missing: neutral` is the spelling the refusal above asks for, and it holds
+    """`missing: 0` is the spelling the refusal above asks for, and it holds
     the formulation together: the row is built everywhere, reading
     ``sum(lam) == 0`` where the gate does not exist."""
     raw = raw_of(GATED_YAML)
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {
         'dims': ['snapshot'],
         'domain': 'binary',
         'where': 'gate_rows',
-        'missing': 'neutral',
+        'missing': 0,
     }
 
     rows = dict(expanded(raw, 'piecewise').program.constraints)

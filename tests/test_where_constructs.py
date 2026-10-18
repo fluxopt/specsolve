@@ -35,7 +35,7 @@ BASE: dict[str, Any] = {
     'parameters': {
         'p_min': {'dims': ['unit'], 'missing': 'absent'},
         'p_max': {'dims': ['unit']},
-        'live': {'dims': ['unit', 'step'], 'dtype': 'bool', 'missing': 'neutral'},
+        'live': {'dims': ['unit', 'step'], 'dtype': 'bool', 'missing': False},
     },
 }
 

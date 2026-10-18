@@ -86,7 +86,7 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
 def _members(
     model: BuiltModel,
     registry: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable | program.Constraint],
     found: pl.DataFrame,
     label: str,
     carried: Sequence[str],
@@ -261,7 +261,7 @@ def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSou
 def reordered(
     attached: AttachedSources,
     registry: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable | program.Constraint],
     frames: Mapping[str, pl.DataFrame],
 ) -> pl.Series:
     """A saved solution's value frames back as the positional vector — the inverse of [`laid_out`][].
@@ -309,7 +309,7 @@ def _aligned(
 
 def readers(
     compiler: Compiler,
-    named: Mapping[str, program.ExpressionDeclaration],
+    named: Mapping[str, program.NamedExpression],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """The reads [`evaluate`][specsolve.relational.result.Result.evaluate] is built from, over one compiler.
@@ -337,7 +337,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
 
     It answers as a constraint over the same expression would: a coordinate a
     parameter does not cover contributes zero, and one where a variable is
-    absent has no row, or a zero under ``missing: neutral``. A quotient has no row
+    absent has no row, or a zero under ``missing: 0``. A quotient has no row
     where its divisor is absent or zero. A variable-free expression is one row.
     Dims come in declaration order, rows in label order.
 
@@ -369,8 +369,7 @@ def _reported_divisor_message(name: str, missing: int) -> str:
     """The message for a divisor parameter a reported expression reads short of a row."""
     return (
         f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
-        f'quotient is not dropped there, and there is no number to divide by.\n'
+        f'the expression divides at, so there is no number to divide by.\n'
         f'  Supply the missing rows.\n'
         f'  Declare the parameter `missing: absent`, if the quotient has no value there.'
     )
@@ -433,7 +432,7 @@ def _place(
     into: np.ndarray,
     model: BuiltModel,
     held: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable] | Mapping[str, program.Constraint],
     previous: Mapping[str, pl.LazyFrame],
     value: pl.Expr,
 ) -> int:

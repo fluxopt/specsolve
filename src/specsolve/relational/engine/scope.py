@@ -57,6 +57,16 @@ class Scope:
     data: AttachedSources
     variables: Mapping[str, Labelled]
 
+    def reads_zero(self, param: str) -> bool:
+        """Whether *param* reads a missing row as ``0`` or ``false``, so its table stays as the data gave it.
+
+        A missing row is then no row: a term it multiplies is no term, and a row
+        left with no term is not built. A position that reads the value itself —
+        a bound, a constant side, a comparison — reads the zero there.
+        """
+        missing = self.program.parameters[param].missing
+        return not isinstance(missing, str) and missing is not None and missing == 0
+
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
         declaration = self.program.parameters[param]

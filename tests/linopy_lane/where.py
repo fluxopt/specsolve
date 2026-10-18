@@ -60,10 +60,10 @@ class EvaluationContext:
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
-    #: How a ``missing: neutral`` parameter reads where the data has no row. A
-    #: coefficient is zero there, which is what the row multiplies by; the side
-    #: of a where comparison is absent there, which is the false the language
-    #: states for a comparison over a value that is not supplied.
+    #: How a parameter reads where its value is NaN. A coefficient is zero
+    #: there, which is what the row multiplies by; the side of a where
+    #: comparison is absent there, which is the false the language states for
+    #: a comparison over a value that is not supplied.
     absent_parameter: Callable[[Any], Any] = absence.coefficient
     #: Where the data gave a row, for each numeric parameter a declared value
     #: fills elsewhere (:func:`~tests.linopy_lane.loader.given_rows`).
@@ -168,7 +168,7 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)
 
-    if isinstance(node, program.NamedMask):
+    if isinstance(node, program.MaskReference):
         return evaluate(node.body)
 
     if isinstance(node, program.Not):
