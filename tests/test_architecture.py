@@ -532,7 +532,7 @@ def test_every_sink_declares_what_it_can_ingest():
 
 
 def test_the_door_gives_every_declared_dimension_dtype_a_column():
-    """``sources._DECLARED`` spells the dtype set the language validates."""
+    """``_sources._DECLARED`` spells the dtype set the language validates."""
     from mathspec.program import DimensionDtype
 
     from specsolve._sources import _DECLARED

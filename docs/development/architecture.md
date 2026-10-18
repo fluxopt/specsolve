@@ -27,7 +27,7 @@ flowchart TB
     end
 
     SPEC -->|"the declarations to attach against"| SRC
-    SRC["<b>sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
+    SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
 
     PLAN -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the plan"| COMP
@@ -78,10 +78,10 @@ flowchart TB
 - **The language is another package.** `mathspec` reads a file and lowers it
   to a `Program`. It cannot import anything here.
 - **Data enters through one door, and both lanes use it.**
-  `sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
+  `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
   accepts into tidy polars tables, and `_assumptions.py` checks a spec's
   assumptions there.
-- **One gate decides what either lane builds.** `inputs.lowered` returns a
+- **One gate decides what either lane builds.** `_inputs.lowered` returns a
   `Program` or raises `LanguageError`. `DataError` is what a source failed to
   supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
@@ -114,7 +114,7 @@ the dependency claims.*
    nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
 3. **One language, two builds, and linopy is only the oracle.** Both pass
-   `inputs.lowered`, and nothing under `src/` imports linopy. The three files
+   `_inputs.lowered`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
    [Verification](verification.md#the-same-language-but-not-every-build).
 4. **A YAML file is self-contained.** No Python-side state may change what a
@@ -244,10 +244,10 @@ The names the code uses for its own parts. The names a caller meets are in
 : One way to build a spec: the relational lane or the oracle.
 
 **The door**
-: `sources.tidy_sources`, the one function both lanes read data through.
+: `_sources.tidy_sources`, the one function both lanes read data through.
 
 **Lowering**
-: Turning a spec into its `Program`, through `inputs.lowered`.
+: Turning a spec into its `Program`, through `_inputs.lowered`.
 
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(val, ord)`, a
