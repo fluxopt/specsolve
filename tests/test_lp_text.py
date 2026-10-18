@@ -18,9 +18,9 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.sinks.writers import lp_file
-from specsolve._relational.sinks.writers.lp_file import _signed
-from specsolve._relational.sinks.writers.text import number
+from specsolve._sinks import lp_file
+from specsolve._sinks.lp_file import _signed
+from specsolve._sinks.text import number
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:

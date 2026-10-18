@@ -36,7 +36,7 @@ from mathspec.spec import Spec
 
 import specsolve as sps
 from specsolve._api import Model
-from specsolve._relational.result import Result
+from specsolve._result import Result
 
 try:
     from tests import linopy_lane

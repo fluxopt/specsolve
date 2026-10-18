@@ -18,7 +18,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.answer_layout import OUTPUT_KINDS, OUTPUTS
+from specsolve._answer_layout import OUTPUT_KINDS, OUTPUTS
 from tests.test_strategy import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
 
 if TYPE_CHECKING:

@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING, assert_never
 import polars as pl
 from mathspec import program
 
+from specsolve._collect import collected
+from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
+from specsolve._engine.scope import join_on
+from specsolve._engine.shifts import translate_rows
 from specsolve._messages import position_out_of_range_message, short_groups_message
-from specsolve._relational.collect import collected
-from specsolve._relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
-from specsolve._relational.engine.scope import join_on
-from specsolve._relational.engine.shifts import translate_rows
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from polars._typing import JoinStrategy
 
-    from specsolve._relational.engine.scope import Scope
+    from specsolve._engine.scope import Scope
 
 
 class Carrier:
@@ -250,7 +250,7 @@ def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
     """
     # in-function: the compiler imports this module
-    from specsolve._relational.engine.compiler import Compiler
+    from specsolve._engine.compiler import Compiler
 
     compiler = Compiler(scope)
     compiled = compiler.expression(side, 'a where comparing expressions')

@@ -23,7 +23,7 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
-from specsolve._relational.sinks import SOLVERS
+from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
@@ -108,7 +108,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet."""
     if config.getoption('--parquet-via-pyarrow'):
-        from specsolve._relational import parquet
+        from specsolve import _parquet as parquet
 
         parquet._polars_has_parquet = cache(lambda: False)
 

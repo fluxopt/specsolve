@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
-from specsolve._relational.names import VALUE
-from specsolve._relational.sinks.handoff import SENSE_CODES
+from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
+from specsolve._names import VALUE
+from specsolve._sinks.handoff import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from specsolve._relational.sinks.capabilities import Capabilities
-    from specsolve._relational.sinks.handoff import Handoff, Ints
-    from specsolve._relational.status import SolveStatus
+    from specsolve._sinks.capabilities import Capabilities
+    from specsolve._sinks.handoff import Handoff, Ints
+    from specsolve._status import SolveStatus
 
 
 #: The status of a nonbasic row, by its sense.
@@ -80,10 +80,10 @@ class InfeasibleSubsystemIndices:
 class Solver(ABC):
     """One solver, holding one model. Subclassed once per member of ``SOLVERS``.
 
-    A driver gets one from [`loaded`][specsolve._relational.sinks.solvers.loaded],
+    A driver gets one from [`loaded`][specsolve._sinks.loaded],
     then runs and closes it::
 
-        solver = solvers.loaded(held, name, handoff, options)
+        solver = loaded(held, name, handoff, options)
         solver.run(handoff)  # …repeatedly
         solver.close()
     """
@@ -110,7 +110,7 @@ class Solver(ABC):
     requires: ClassVar[tuple[str, ...]]
 
     #: What this member can ingest
-    #: ([`refusal`][specsolve._relational.sinks.refusal] acts on it).
+    #: ([`refusal`][specsolve._sinks.refusal] acts on it).
     capabilities: ClassVar[Capabilities]
 
     #: What to tell a caller when [`is_available`][] says no.

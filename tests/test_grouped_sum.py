@@ -30,7 +30,7 @@ from mathspec.program import (
 )
 
 import specsolve as sps
-from specsolve._relational.engine.engine import Engine
+from specsolve._engine.engine import Engine
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
 from tests.conftest import EXAMPLES_DIR, override, schema_of

@@ -3,7 +3,7 @@
 An expression the file never named passes the same door: [`lower`][] splices
 it into the spec as a named one and lowers the whole spec again. This sits
 above both lanes because nothing
-under ``_relational/`` may see the spec as written
+in the engine or a sink may see the spec as written
 (docs/development/architecture.md, hard rule 2).
 """
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from mathspec import to_spec
 from mathspec.program import Program
 
-from specsolve._relational.names import refuse_reserved, refuse_value
+from specsolve._names import refuse_reserved, refuse_value
 from specsolve.errors import LanguageError, SpecsolveError
 
 if TYPE_CHECKING:

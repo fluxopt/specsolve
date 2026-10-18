@@ -27,13 +27,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import polars as pl
 
-from specsolve._api import build, check
-from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
-from specsolve._frames import as_frame
-from specsolve._inputs import declared
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
     KINDS,
     METRICS_FILE,
     RECORD_FILE,
@@ -45,9 +40,14 @@ from specsolve._relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve._relational.collect import collected
-from specsolve._relational.names import VALUE, refuse_reserved
-from specsolve._relational.result import Result
+from specsolve._api import build, check
+from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
+from specsolve._collect import collected
+from specsolve._frames import as_frame
+from specsolve._inputs import declared
+from specsolve._names import VALUE, refuse_reserved
+from specsolve._result import Result
 from specsolve._sources import numbered, refuse_unknown_start, refuse_unknown_start_word, tidy_sources
 from specsolve._sweep import (
     KEYS_FILE,
@@ -68,10 +68,10 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
+    from specsolve._answer_layout import FrameWriter, Output
     from specsolve._api import Model
     from specsolve._inputs import Buildable, Label, Source
-    from specsolve._relational.answer_layout import FrameWriter, Output
-    from specsolve._relational.result import Diagnostics, Start
+    from specsolve._result import Diagnostics, Start
 
 
 def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:

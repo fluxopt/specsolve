@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.answer_layout import NO_BASIS
+from specsolve._answer_layout import NO_BASIS
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -201,8 +201,8 @@ def test_a_basis_that_does_not_span_the_model_is_refused(monkeypatch: pytest.Mon
     The double overrides `_basis`, the half a sink writes; the guard is the
     base's `run` around it, so every sink is checked.
     """
-    from specsolve._relational.sinks import SOLVERS
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks import SOLVERS
+    from specsolve._sinks.highs import Highs
 
     class Crooked(Highs):
         def _basis(self):

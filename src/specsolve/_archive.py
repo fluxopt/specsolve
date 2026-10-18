@@ -19,6 +19,16 @@ import polars as pl
 from mathspec import to_spec
 from mathspec.program import parameters_of
 
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
+    ANSWER_LAYOUT,
+    KINDS,
+    METRICS_FILE,
+    Metrics,
+    other_layout,
+    row_of,
+    saved_frames,
+)
 from specsolve._api import build, load_result, scan_result
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -29,19 +39,9 @@ from specsolve._archive_layout import (
     opened,
 )
 from specsolve._axes import axis_from
+from specsolve._collect import collected
 from specsolve._inputs import lower
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
-    ANSWER_LAYOUT,
-    KINDS,
-    METRICS_FILE,
-    Metrics,
-    other_layout,
-    row_of,
-    saved_frames,
-)
-from specsolve._relational.collect import collected
-from specsolve._relational.names import RUN
+from specsolve._names import RUN
 from specsolve._sweep import (
     MANIFEST_FILE,
     OWNED_FILE,
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 
     from specsolve._axes import Axis
     from specsolve._inputs import Buildable, Label, Source
-    from specsolve._relational.result import Result
+    from specsolve._result import Result
 
 __all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'load_archive', 'load_inputs', 'scan_archive']
 
@@ -81,7 +81,7 @@ class ResultArchive:
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
         metrics: What reaching the answer took, as one
-            [`Metrics`][specsolve._relational.answer_layout.Metrics].
+            [`Metrics`][specsolve._answer_layout.Metrics].
     """
 
     spec: Spec
@@ -265,7 +265,7 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
 
 
 def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._relational.result.Result.evaluate].
+    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._result.Result.evaluate].
 
     *spec* is rebuilt over *sources* at the first undeclared read, never
     solved, and cached. *answer* comes back unchanged where the solve left no

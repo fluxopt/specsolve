@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args, get_
 import polars as pl
 from mathspec import to_spec
 
-from specsolve._relational import parquet
-from specsolve._relational.names import RUN
-from specsolve._relational.status import SolveStatus, status_of
+from specsolve import _parquet as parquet
+from specsolve._names import RUN
+from specsolve._status import SolveStatus, status_of
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -354,7 +354,7 @@ RECORD_SCHEMA = _column_types(Record)
 class Metrics(NamedTuple):
     """What a build and its solves took, as the row an archive records beside the answer.
 
-    The scalars of [`Diagnostics`][specsolve._relational.result.Diagnostics],
+    The scalars of [`Diagnostics`][specsolve._result.Diagnostics],
     with the same columns whoever writes them, so rows from unrelated runs
     concatenate into one table.
 

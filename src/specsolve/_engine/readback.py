@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
+from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
+from specsolve._collect import collected
+from specsolve._engine import coverage, labels
+from specsolve._engine.pieces import absence_restrictions
 from specsolve._messages import coordinate_expr, unknown_name_message
-from specsolve._relational.answer_layout import AT_LOWER, BASIC, BASIS
-from specsolve._relational.collect import collected
-from specsolve._relational.engine import coverage, labels
-from specsolve._relational.engine.pieces import absence_restrictions
-from specsolve._relational.names import VALUE
-from specsolve._relational.result import ConstraintRow, InfeasibleSubsystem
-from specsolve._relational.sinks.handoff import SENSE_CODES
-from specsolve._relational.sinks.solvers.base import settled
+from specsolve._names import VALUE
+from specsolve._result import ConstraintRow, InfeasibleSubsystem
+from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._sinks.solver import settled
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from specsolve._relational.engine.assembly import BuiltModel
-    from specsolve._relational.engine.attaching import AttachedSources
-    from specsolve._relational.engine.compiler import Compiler
-    from specsolve._relational.sinks.handoff import Handoff
-    from specsolve._relational.sinks.solvers.base import Basis, InfeasibleSubsystemIndices
+    from specsolve._engine.assembly import BuiltModel
+    from specsolve._engine.attaching import AttachedSources
+    from specsolve._engine.compiler import Compiler
+    from specsolve._sinks.handoff import Handoff
+    from specsolve._sinks.solver import Basis, InfeasibleSubsystemIndices
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -202,7 +202,7 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     """Each column's reduced cost: the objective's gradient less the rows' gradients weighted by *dual*.
 
     Computed here rather than asked of each solver, so it carries
-    [`dual`][specsolve._relational.result.Result.dual]'s one sign convention on
+    [`dual`][specsolve._result.Result.dual]'s one sign convention on
     every sink. The gradients are taken at *primal*, which only a quadratic
     term reads.
     """
@@ -312,7 +312,7 @@ def readers(
     named: Mapping[str, program.ExpressionDeclaration],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
-    """The reads [`evaluate`][specsolve._relational.result.Result.evaluate] is built from, over one compiler.
+    """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one compiler.
 
     One deferred reader per declared name, and an ad-hoc evaluator. Nothing
     compiles until a reader is called. Without *lower* there is no spec as
@@ -384,7 +384,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     basic, which is how a row gained between two builds enters without moving
     the vertex. A declaration whose dims changed is new. The result is then
     [`_counted`][] to one basic entry per row, which is what a solver needs to
-    take it, and [`settled`][specsolve._relational.sinks.solvers.base.settled]
+    take it, and [`settled`][specsolve._sinks.solver.settled]
     on this build's bounds.
 
     Raises:

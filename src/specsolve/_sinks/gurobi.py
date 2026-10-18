@@ -10,9 +10,9 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
-from specsolve._relational.sinks.capabilities import Capabilities
-from specsolve._relational.sinks.solvers.base import (
+from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.solver import (
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -22,7 +22,7 @@ from specsolve._relational.sinks.solvers.base import (
     solver_vector,
     spelled_senses,
 )
-from specsolve._relational.status import SolveStatus
+from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from specsolve._relational.sinks.handoff import Handoff, RowVectors
+    from specsolve._sinks.handoff import Handoff, RowVectors
 
 
 #: Gurobi status -> termination condition: linopy's ``Gurobi.CONDITION_MAP``
@@ -260,7 +260,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
 
     ``loadModel`` reads the matrix by column, so the linear rows' CSR is
     transposed here. Its ``qobj_coo`` takes each pair's coefficient whole, as
-    [`quad`][specsolve._relational.sinks.handoff.Handoff.quad] holds it. The
+    [`quad`][specsolve._sinks.handoff.Handoff.quad] holds it. The
     senses go in as bytes, which ``loadModel`` would otherwise convert one
     character at a time.
     """
@@ -340,7 +340,7 @@ def _set_quadratic(m: Any, handoff: Handoff, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
     ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` unhalved, so
-    [`quad`][specsolve._relational.sinks.handoff.Handoff.quad] goes in as it
+    [`quad`][specsolve._sinks.handoff.Handoff.quad] goes in as it
     stands. It sets the whole objective, so *cost* is passed again.
     """
     import scipy.sparse

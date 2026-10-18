@@ -23,9 +23,7 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import _strategy as strategy
-from specsolve._api import _provenance
-from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
-from specsolve._relational.answer_layout import (
+from specsolve._answer_layout import (
     ANSWER_LAYOUT,
     METRICS_FILE,
     Metrics,
@@ -36,8 +34,10 @@ from specsolve._relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve._relational.names import RUN
-from specsolve._relational.sinks.solvers import SOLVERS
+from specsolve._api import _provenance
+from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
+from specsolve._names import RUN
+from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,

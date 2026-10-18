@@ -28,11 +28,11 @@ import polars as pl
 import pytest
 from mathspec import program
 
-from specsolve._relational.engine.attaching import AttachedSources
-from specsolve._relational.engine.compiler import Compiler
-from specsolve._relational.engine.labels import Labelled
-from specsolve._relational.engine.predicates import masked
-from specsolve._relational.engine.scope import Scope
+from specsolve._engine.attaching import AttachedSources
+from specsolve._engine.compiler import Compiler
+from specsolve._engine.labels import Labelled
+from specsolve._engine.predicates import masked
+from specsolve._engine.scope import Scope
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

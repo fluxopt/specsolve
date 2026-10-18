@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
+from specsolve._collect import collected, in_memory
 from specsolve._messages import coordinate_text, missing_row_message
-from specsolve._relational.collect import collected, in_memory
-from specsolve._relational.names import VALUE
+from specsolve._names import VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:

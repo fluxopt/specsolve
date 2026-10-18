@@ -57,7 +57,8 @@ def _imported(
 ) -> list[str]:
     """Every imported name in *tree*, as written.
 
-    ``import a.b`` yields ``a.b``; ``from a.b import c`` yields ``a.b``. With
+    ``import a.b`` yields ``a.b``; ``from a.b import c`` yields ``a.b``, and
+    ``from specsolve import _x`` yields ``specsolve._x``, the module it binds. With
     ``relative=True`` a relative import keeps its dots (``from ..x import y``
     yields ``..x``); otherwise a module-less relative import is dropped.
     *nodes* picks the walk — ``ast.walk`` sees everything,
@@ -70,37 +71,19 @@ def _imported(
         elif isinstance(node, ast.ImportFrom):
             if relative:
                 names.append('.' * node.level + (node.module or ''))
+            elif node.module == 'specsolve':
+                names += [f'specsolve.{a.name}' for a in node.names]
             elif node.module:
                 names.append(node.module)
     return names
 
 
-def _reaches_past(
-    package: str,
-    allowed: tuple[str, ...],
-    allowlist: set[str],
-    *,
-    third_party: frozenset[str],
-    nodes: Callable[[ast.AST], Iterator[ast.AST]],
-) -> dict[str, list[str]]:
-    """Modules under *package* importing a name its fence forbids.
+#: The streaming lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
+LANE = frozenset({'_answer_layout', '_collect', '_engine', '_names', '_parquet', '_result', '_sinks', '_status'})
 
-    Forbidden is a ``specsolve`` name outside *allowed* and *allowlist*, or a
-    name whose root package is in *third_party*. Lazy imports count.
-    """
-    offenders = {}
-    for path in (PKG / package).rglob('*.py'):
-        if '__pycache__' in path.parts:
-            continue
-        bad = [
-            n
-            for n in _imported(ast.parse(path.read_text()), nodes=nodes)
-            if n.split('.')[0] in third_party
-            or (n.startswith('specsolve') and not n.startswith(allowed) and n not in allowlist)
-        ]
-        if bad:
-            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
-    return offenders
+
+def _lane_modules() -> list[Path]:
+    return [p for p in _all_modules() if p.relative_to(PKG).parts[0].removesuffix('.py') in LANE]
 
 
 def _runtime_nodes(tree: ast.AST) -> Iterator[ast.AST]:
@@ -189,37 +172,44 @@ ENGINE_MAY_IMPORT = {'specsolve.errors', 'specsolve._messages', 'mathspec.progra
 def test_engine_is_isolated():
     """Hard rule 2: the engine knows nothing about linopy, xarray or YAML.
 
-    Enforced as "imports nothing from the package bar ENGINE_MAY_IMPORT",
-    which keeps the subpackage extractable.
+    Enforced as "the lane imports nothing from the package bar itself and
+    ENGINE_MAY_IMPORT", which keeps it extractable. Lazy imports count.
     """
-    offenders = _reaches_past(
-        '_relational',
-        ('specsolve._relational',),
-        ENGINE_MAY_IMPORT,
-        third_party=FORBIDDEN_RUNTIME | {'yaml'},
-        nodes=_runtime_nodes,
-    )
-    assert not offenders, f'engine reaches outside its subpackage: {offenders}'
+    offenders = {}
+    for path in _lane_modules():
+        bad = [
+            n
+            for n in _imported(ast.parse(path.read_text()), nodes=_runtime_nodes)
+            if n.split('.')[0] in FORBIDDEN_RUNTIME | {'yaml'}
+            or (
+                n.split('.')[0] == 'specsolve'
+                and n not in ENGINE_MAY_IMPORT
+                and n.partition('.')[2].split('.')[0] not in LANE
+            )
+        ]
+        if bad:
+            offenders[str(path.relative_to(PKG))] = sorted(set(bad))
+    assert not offenders, f'the lane reaches outside LANE: {offenders}'
 
 
 def test_no_contract_module_names_an_engine():
-    """``_relational/__init__.py``'s own split: contract above, ``engine/`` below.
+    """The lane's own split: the sinks and the modules both read are the contract, ``_engine/`` implements it.
 
-    A contract module naming a class out of ``engine/`` inverts the two.
+    A contract module naming a module inside ``_engine/`` inverts the two.
     Type-only imports count here.
     """
     offenders = {}
-    for path in (PKG / '_relational').rglob('*.py'):
-        rel = path.relative_to(PKG / '_relational').as_posix()
-        if '__pycache__' in path.parts or rel.startswith('engine/'):
+    for path in _lane_modules():
+        rel = path.relative_to(PKG).as_posix()
+        if rel.startswith('_engine/'):
             continue
         named = _imported(ast.parse(path.read_text()), relative=True)
-        engine = sorted({m for m in named if 'engine' in m.split('.')})
+        engine = sorted({m for m in named if '_engine' in m.split('.')})
         if engine:
             offenders[rel] = engine
     assert not offenders, (
         f'a contract module names an implementation: {offenders}. Either the fact belongs '
-        f'under engine/, or what crosses the seam should be a type the contract already owns'
+        f'under _engine/, or what crosses the seam should be a type the contract already owns'
     )
 
 
@@ -470,51 +460,59 @@ def test_only_the_axes_are_classes_at_the_top_level():
     assert classes == ['EachCoordinate', 'EachWindow'], f'classes at the top level: {classes}, not only the two axes'
 
 
-#: The two sink families; the directory is the family.
-SINKS = PKG / '_relational' / 'sinks'
+SINKS = PKG / '_sinks'
+
+#: The one module each sink family shares: the solver lifecycle, the text renderings.
+FAMILY_SHARED = {'solvers': 'solver', 'writers': 'text'}
 
 
-def _family(name: str) -> set[str]:
-    return {p.stem for p in (SINKS / name).glob('*.py') if p.stem != '__init__'}
+def _families() -> dict[str, set[str]]:
+    """Each family's members by module name, read off its registry."""
+    from specsolve._sinks import SOLVERS, WRITERS
+
+    return {
+        'solvers': {held.__module__.rsplit('.', 1)[-1] for held in SOLVERS.values()},
+        'writers': {found.write.__module__.rsplit('.', 1)[-1] for found in WRITERS.values()},
+    }
 
 
-def test_each_sink_family_is_its_directory_and_its_registry():
-    """One shape per family, checked off the path.
+def test_each_sink_is_its_module_and_its_registry_entry():
+    """One shape per family, checked off the registry.
 
-    A solver is a module under ``solvers/`` named for it, a ``Solver``
-    subclass defined in that module, and the ``SOLVERS`` key holding the
-    class. Writers are keyed by suffix.
+    A solver is a module named for it, a ``Solver`` subclass defined in that
+    module, and the ``SOLVERS`` key holding the class. Writers are keyed by
+    suffix. Every other module in ``_sinks/`` is shared.
     """
 
-    from specsolve._relational.sinks import SOLVERS, WRITERS, Solver
+    from specsolve._sinks import SOLVERS, WRITERS, Solver
 
-    solvers = _family('solvers') - {FAMILY_SHARED['solvers']}
-    assert set(SOLVERS) == solvers, f'solver modules and SOLVERS keys disagree: {solvers ^ set(SOLVERS)}'
-    for name in sorted(solvers):
-        held = SOLVERS[name]
-        assert issubclass(held, Solver), f'SOLVERS[{name!r}] is not a Solver'
-        assert held.__module__.rsplit('.', 1)[-1] == name, (
-            f"{name}'s solver is defined in {held.__module__} — it belongs to its own module"
-        )
-        assert held.requires and all(isinstance(package, str) for package in held.requires), (
+    families = _families()
+    shared = {'__init__', 'handoff', 'capabilities', *FAMILY_SHARED.values()}
+    held = families['solvers'] | families['writers']
+    on_disk = {path.stem for path in SINKS.glob('*.py')} - shared
+    assert held == on_disk, f'sink modules and registry entries disagree: {sorted(held ^ on_disk)}'
+    assert not families['solvers'] & families['writers'], 'a module serves both families'
+
+    assert set(SOLVERS) == families['solvers'], 'a solver is keyed by the name of its module'
+    for name in sorted(SOLVERS):
+        found = SOLVERS[name]
+        assert issubclass(found, Solver), f'SOLVERS[{name!r}] is not a Solver'
+        assert found.requires and all(isinstance(package, str) for package in found.requires), (
             f'{name} does not name the packages it needs, so is_available() cannot answer for it'
         )
-        assert isinstance(held.is_available(), bool), (
+        assert isinstance(found.is_available(), bool), (
             f'{name}.is_available() must answer without importing the solver or raising'
         )
-        assert held.unavailable_message, f'{name} does not say what to do when is_available() is False'
+        assert found.unavailable_message, f'{name} does not say what to do when is_available() is False'
 
-    assert {w.write.__module__.rsplit('.', 1)[-1] for w in WRITERS.values()} == _family('writers') - {
-        FAMILY_SHARED['writers']
-    }
     assert all(s.startswith('.') for s in WRITERS), 'writers are keyed by file suffix'
 
 
 def test_every_sink_declares_what_it_can_ingest():
     """Both families answer the capability axis, in one vocabulary."""
 
-    from specsolve._relational.sinks import SOLVERS, WRITERS
-    from specsolve._relational.sinks.capabilities import ALL_CAPABILITIES, Capabilities
+    from specsolve._sinks import SOLVERS, WRITERS
+    from specsolve._sinks.capabilities import ALL_CAPABILITIES, Capabilities
 
     described = {f'solver {name}': held.capabilities for name, held in SOLVERS.items()}
     described |= {f'writer {suffix}': found.capabilities for suffix, found in WRITERS.items()}
@@ -556,28 +554,23 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
     )
 
 
-#: The one module each sink family shares: the solver lifecycle, the text renderings.
-FAMILY_SHARED = {'solvers': 'base', 'writers': 'text'}
-
-
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    A leaf reads ``handoff.py``, its family's shared module
-    (``FAMILY_SHARED``), ``capabilities``, and its own dependency — nothing
-    else in the family.
+    A sink reads ``handoff.py``, ``capabilities.py``, its family's shared
+    module (``FAMILY_SHARED``), and its own dependency — no other sink.
     """
     offenders = {}
-    for family, shared in FAMILY_SHARED.items():
-        shareable = ('.handoff', '.capabilities', f'.{family}.{shared}')
-        for path in sorted((SINKS / family).glob('*.py')):
+    for family, members in _families().items():
+        shareable = {f'specsolve._sinks.{name}' for name in ('handoff', 'capabilities', FAMILY_SHARED[family])}
+        for member in sorted(members | {FAMILY_SHARED[family]}):
             reached = {
                 name
-                for name in _imported(ast.parse(path.read_text()))
-                if name.startswith('specsolve._relational.sinks.') and not name.endswith(shareable)
+                for name in _imported(ast.parse((SINKS / f'{member}.py').read_text()))
+                if name.startswith('specsolve._sinks') and name not in shareable
             }
-            if reached and path.stem != '__init__':
-                offenders[f'{family}/{path.name}'] = sorted(reached)
+            if reached:
+                offenders[member] = sorted(reached)
     assert not offenders, (
         f"sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family's shared "
         f'module and its own dependency; anything else shared belongs on one of those two'
@@ -590,7 +583,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     from mathspec import program
 
-    engine_dir = PKG / '_relational' / 'engine'
+    engine_dir = PKG / '_engine'
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
@@ -676,34 +669,34 @@ def test_both_lanes_lower_a_spec_through_one_function():
 
 
 def test_every_parquet_file_goes_through_one_module():
-    """``_relational/parquet.py`` reads and writes through pyarrow where polars has no parquet, as in the browser."""
+    """``_parquet.py`` reads and writes through pyarrow where polars has no parquet, as in the browser."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
         for path in _all_modules()
-        if path != PKG / '_relational' / 'parquet.py'
+        if path != PKG / '_parquet.py'
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Attribute)
         and node.attr in {'read_parquet', 'scan_parquet', 'read_parquet_schema', 'write_parquet', 'sink_parquet'}
     }
     assert not calls, (
-        f'{sorted(calls)} read or write parquet directly; go through _relational.parquet, or the browser, '
+        f'{sorted(calls)} read or write parquet directly; go through _parquet, or the browser, '
         f'whose polars has no parquet, fails there'
     )
 
 
 def test_every_frame_is_collected_through_one_function():
-    """``_relational/collect.py`` picks the engine and keeps every join in the order it was written."""
+    """``_collect.py`` picks the engine and keeps every join in the order it was written."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
         for path in _all_modules()
-        if path != PKG / '_relational' / 'collect.py'
+        if path != PKG / '_collect.py'
         for node in ast.walk(ast.parse(path.read_text()))
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr in {'collect', 'collect_all'}
     }
     assert not calls, (
-        f'{sorted(calls)} collect a frame directly; pipe it through _relational.collect.collected, '
+        f'{sorted(calls)} collect a frame directly; pipe it through _collect.collected, '
         f'or polars picks the engine and reorders the joins'
     )
 
@@ -731,7 +724,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve._relational.engine.pieces import fan_in
+    from specsolve._engine.pieces import fan_in
 
     x = program.Variable('x')
     grouping, lookup = _gen_bus_joins(program)
@@ -838,7 +831,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
         return found
 
     lanes = {
-        'relational': dispatched_on(*(PKG / '_relational' / 'engine').glob('*.py')),
+        'relational': dispatched_on(*(PKG / '_engine').glob('*.py')),
         'linopy': dispatched_on(*ORACLE.glob('*.py')),
     }
     for lane, handled in lanes.items():
@@ -868,7 +861,7 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('_relational/engine/predicates.py', 'specsolve._relational.engine.compiler'): (
+    ('_engine/predicates.py', 'specsolve._engine.compiler'): (
         'the same comparison on the streaming lane, and the compiler reads this module for the mask '
         'walk and the carrier both of its walks join on'
     ),

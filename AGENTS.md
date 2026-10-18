@@ -76,7 +76,7 @@ raises the minor version, and its notes name the break. A change to what a
 result, a sweep or an archive writes to disk also raises a layout number, so a
 file in the old layout is refused by name: `INPUTS_LAYOUT` in
 `_archive_layout.py` for an archive's `spec.yaml`, `sources/` and `axis.json`,
-and `ANSWER_LAYOUT` in `_relational/answer_layout.py` for everything else,
+and `ANSWER_LAYOUT` in `_answer_layout.py` for everything else,
 `catalog.parquet` included. `load_inputs` then still reads an
 archive whose answer alone is out of date. A new output in `OUTPUT_KINDS` is the
 exception: an answer's `format.json` names the outputs it holds, so an older
@@ -214,7 +214,7 @@ name is the *caller*, not the implementer.
   inside belongs in the code, where anyone who needs it is already looking.
 - **A private helper is the exception** — there the reader *is* a maintainer:
   write the constraint that made it exist, and the invariant a change could
-  break unknowingly. `_relational/chunking.py` is the model.
+  break unknowingly. `_collect.py` is the model.
 - **Cut** restatement, argument for a settled decision, narration of how the
   answer was found, and any tour of internals a caller cannot see.
 - **The form is

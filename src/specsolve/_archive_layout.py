@@ -2,7 +2,7 @@
 
 ``spec.yaml``, one ``sources/<key>.parquet`` per key the file declares,
 ``catalog.parquet`` saying what each file holds, ``answer/`` in the answer's own layout
-([`specsolve._relational.answer_layout`][]), ``axis.json`` where the
+([`specsolve._answer_layout`][]), ``axis.json`` where the
 sources are cut, and ``format.json`` stamping [`INPUTS_LAYOUT`][]. A
 directory archive is read where it lies; a zip is unpacked first. Reading
 one back is [`specsolve._archive`][].
@@ -21,15 +21,15 @@ from typing import TYPE_CHECKING
 import polars as pl
 import polars.selectors as cs
 
-from specsolve._inputs import lowered
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
     FORMAT_FILE,
     OUTPUT_KINDS,
     write_format,
     write_whole,
 )
-from specsolve._relational.names import RESERVED_PREFIX, RUN, VALUE
+from specsolve._inputs import lowered
+from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
 from specsolve.errors import LayoutError
 
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
-    from specsolve._relational.answer_layout import FrameWriter
+    from specsolve._answer_layout import FrameWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -51,7 +51,7 @@ ANSWER_DIR = 'answer'
 #: The layout of the spec and the data an archive holds: ``spec.yaml``,
 #: ``sources/`` and ``axis.json``. A change to any of them raises it; any other
 #: change to what an archive writes, ``catalog.parquet`` included, raises
-#: [`ANSWER_LAYOUT`][specsolve._relational.answer_layout.ANSWER_LAYOUT] instead.
+#: [`ANSWER_LAYOUT`][specsolve._answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
 INPUTS_LAYOUT = 2
 

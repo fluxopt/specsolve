@@ -333,7 +333,7 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
     """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
 
     with sps.build(SPEC, SOURCES) as model, pytest.raises(SpecsolveError, match='no quadratic-constraint concept'):
         Highs(model._engine._model.handoff)

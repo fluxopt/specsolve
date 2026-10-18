@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
-    from specsolve._relational.sinks.handoff import Handoff
+    from specsolve._sinks.handoff import Handoff
 
 #: What a model may need a sink to have.
 Capability = Literal[

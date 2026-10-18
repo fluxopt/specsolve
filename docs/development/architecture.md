@@ -12,7 +12,8 @@ is asserted line for line by `tests/test_walkthrough.py`.
 
 A spec is a **closed AST known before any data is touched**, so it can be
 built two ways that mean the same thing. The package's build is the
-*relational lane* (`_relational/`), a plan streamed to a sink. The test suite's
+*relational lane* (`_engine/`, `_sinks/` and the modules both read), a plan
+streamed to a sink. The test suite's
 is *the oracle* (`tests/linopy_lane/`), a `linopy.Model`.
 
 ```mermaid
@@ -35,17 +36,17 @@ flowchart TB
     PLAN -->|"the plan, the same one"| BUILD
     SRC --> LOAD
 
-    subgraph REL["_relational/ — the streaming lane"]
+    subgraph REL["the streaming lane"]
         direction TB
-        subgraph ENG["engine/ — what the contract around it is written against"]
+        subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
         end
-        ENG --> TABLES["sinks/handoff.py<br/>cols · obj · rows · A · sos"]
-        TABLES --> LPS["sinks/writers/<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
-        TABLES --> DIRECT["sinks/solvers/<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
-        DIRECT --> SOL["result.py<br/>label join, never dense"]
+        ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
+        TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
+        TABLES --> DIRECT["_sinks/, a solver<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
+        DIRECT --> SOL["_result.py<br/>label join, never dense"]
     end
 
     SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · evaluate<br/>polars tables you can join"]
@@ -165,7 +166,7 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 ## The relational lane
 
 **The spine is one module per box**: `attaching.py`, `compiler.py`,
-`assembly.py`, `sinks/`, and `engine.py`, which runs the lifecycle. `scope.py`
+`assembly.py`, `_sinks/`, and `engine.py`, which runs the lifecycle. `scope.py`
 sits under them all.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
@@ -188,7 +189,7 @@ a formulation out.
 table through the Arrow PyCapsule protocol, and a `Result` hands back polars.
 
 **Sinks take four streams**: `cols`, `rows`, `A` in CSR, and `sos`. A sink
-declares what it can ingest (`sinks/capabilities.py`). A solver is chosen by
+declares what it can ingest (`_sinks/capabilities.py`). A solver is chosen by
 name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 
 ## Module map
@@ -200,8 +201,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
 | `_inputs.py` | `Buildable` and `Source`, what every function takes |
-| `_relational/collect.py` | how polars materialises a frame |
-| `_relational/parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
+| `_collect.py` | how polars materialises a frame |
+| `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | the door: caller data into tidy tables |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `_frames.py` | caller tables in, via the Arrow PyCapsule protocol |
@@ -211,28 +212,30 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_strategy.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, and the stitch back |
 | `_sweep.py` | `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
-| `_relational/engine/scope.py` | the program, its attached data and the variable frames built so far |
-| `_relational/engine/compiler.py` | plan → lazy queries |
-| `_relational/engine/relations.py` | a relation's table as a walk reads it |
-| `_relational/engine/shifts.py` | `shift` and `sum_back` |
-| `_relational/engine/predicates.py` | a `where:` mask as a boolean query |
-| `_relational/engine/pieces.py` | the additive pieces an expression compiles to |
-| `_relational/status.py` | solve outcome on two axes |
-| `_relational/engine/labels.py` | which coordinate gets which solver index |
-| `_relational/engine/attaching.py` | the door's tables → `AttachedSources` |
-| `_relational/engine/assembly.py` | one build: every declaration into the model tables |
-| `_relational/engine/coverage.py` | is the data there where a declaration reads it |
-| `_relational/engine/readback.py` | a row, a solve and a named expression, read back by label |
-| `_relational/engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_relational/result.py` | what a solve returned |
-| `_relational/answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
-| `_relational/names.py` | the columns specsolve writes beside a spec's own |
-| `_relational/sinks/handoff.py` | what every sink reads |
-| `_relational/sinks/capabilities.py` | what a sink can ingest |
-| `_relational/sinks/` | how a built model leaves: `solvers/` by name, `writers/` by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_relational/sinks/README.md)) |
+| `_engine/scope.py` | the program, its attached data and the variable frames built so far |
+| `_engine/compiler.py` | plan → lazy queries |
+| `_engine/relations.py` | a relation's table as a walk reads it |
+| `_engine/shifts.py` | `shift` and `sum_back` |
+| `_engine/predicates.py` | a `where:` mask as a boolean query |
+| `_engine/pieces.py` | the additive pieces an expression compiles to |
+| `_status.py` | solve outcome on two axes |
+| `_engine/labels.py` | which coordinate gets which solver index |
+| `_engine/attaching.py` | the door's tables → `AttachedSources` |
+| `_engine/assembly.py` | one build: every declaration into the model tables |
+| `_engine/coverage.py` | is the data there where a declaration reads it |
+| `_engine/readback.py` | a row, a solve and a named expression, read back by label |
+| `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
+| `_result.py` | what a solve returned |
+| `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
+| `_names.py` | the columns specsolve writes beside a spec's own |
+| `_sinks/handoff.py` | what every sink reads |
+| `_sinks/capabilities.py` | what a sink can ingest |
+| `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
 
-**`_relational/` imports nothing else from the package but `errors.py` and
-`_messages.py`.** No module imports linopy, and none imports xarray at module
+**The lane imports nothing else from the package but `errors.py` and
+`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer_layout.py`,
+`_collect.py`, `_names.py`, `_parquet.py`, `_result.py` and `_status.py`
+(`LANE`). No module imports linopy, and none imports xarray at module
 level.
 
 ## Internal names
@@ -294,10 +297,10 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Add a macro or named expression:** edit YAML.
 
-**Add a sink:** a module in `_relational/sinks/solvers/` with one line in
-`SOLVERS`, or one in `writers/` keyed by suffix in `WRITERS`. Its dependency
+**Add a sink:** a module in `_sinks/` named for it, with one line in
+`SOLVERS`, or one keyed by suffix in `WRITERS`. Its dependency
 sits behind an extra, imported inside the function. The
-[README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_relational/sinks/README.md)
+[README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)
 is the full list.
 
 **Add a consumer of the AST:** a package of its own that depends on

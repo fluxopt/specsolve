@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve._relational.collect import collected
-from specsolve._relational.names import VALUE
+from specsolve._collect import collected
+from specsolve._names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -21,9 +21,9 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from specsolve._relational.engine.attaching import AttachedSources
-    from specsolve._relational.engine.labels import Labelled
-    from specsolve._relational.engine.pieces import Piece
+    from specsolve._engine.attaching import AttachedSources
+    from specsolve._engine.labels import Labelled
+    from specsolve._engine.pieces import Piece
 
 
 def join_on(

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn, assert_never
 import polars as pl
 from mathspec import program
 
-from specsolve._relational.engine.scope import join_on
+from specsolve._engine.scope import join_on
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from polars._typing import JoinStrategy
 
-    from specsolve._relational.engine.scope import Scope
+    from specsolve._engine.scope import Scope
 
 
 #: The right-hand operand's value while a join holds both. The spaces make it
@@ -355,7 +355,7 @@ def join_quad(a: Piece, b: Piece) -> Piece:
     The second label is renamed on the way in: a suffix collision would pair a
     variable with itself, which ``p * p`` makes a legal piece. Pairs are
     canonicalised later, once column labels exist
-    ([`Assembly._build_objective`][specsolve._relational.engine.assembly.Assembly._build_objective]).
+    ([`Assembly._build_objective`][specsolve._engine.assembly.Assembly._build_objective]).
     """
     joined, out_dims = _paired(a, b, b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS}), 'inner')
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(

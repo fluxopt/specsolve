@@ -13,18 +13,18 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve._relational.collect import collected
-from specsolve._relational.engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
-from specsolve._relational.engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
-from specsolve._relational.engine.scope import join_on
-from specsolve._relational.names import VALUE
+from specsolve._collect import collected
+from specsolve._engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
+from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
+from specsolve._engine.scope import join_on
+from specsolve._names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from mathspec import program
 
-    from specsolve._relational.engine.scope import Scope
+    from specsolve._engine.scope import Scope
 
 
 #: Scratch columns.

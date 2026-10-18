@@ -44,7 +44,7 @@ from bench.conftest import (
     take_lock,
 )
 from bench.test_ladder import RELOADS, _fresh
-from specsolve._relational.engine.engine import Engine
+from specsolve._engine.engine import Engine
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -1019,7 +1019,7 @@ def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
     can retire them without touching `bench/` (#1245)."""
     import importlib
 
-    from specsolve._relational.engine.assembly import Assembly
+    from specsolve._engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
@@ -2164,7 +2164,7 @@ def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
         AB_ROOT,
         AB_ROOT,
         rounds=1,
-        focus='specsolve._relational.engine.compiler:Compiler._aligned_bound',
+        focus='specsolve._engine.compiler:Compiler._aligned_bound',
     )
     assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
     assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'

@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 from mathspec.program import assumption_message
 
+from specsolve._collect import collected
+from specsolve._engine.attaching import attach
+from specsolve._engine.predicates import masked
+from specsolve._engine.scope import Scope
 from specsolve._messages import coordinate_text
-from specsolve._relational.collect import collected
-from specsolve._relational.engine.attaching import attach
-from specsolve._relational.engine.predicates import masked
-from specsolve._relational.engine.scope import Scope
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
