@@ -106,9 +106,13 @@ def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], s
     )
 
 
-@pytest.mark.xfail(reason='the rows a declared value fills come back in no fixed order', strict=True)
 def test_a_parameter_filled_with_its_declared_value_builds_the_same_model() -> None:
-    """A parameter that declares a value for a missing row builds the same model at every build."""
+    """A parameter that declares a value for a missing row builds the same model at every build.
+
+    The rows that fill it came back from two joins in no fixed order, so a sum
+    over them added the same numbers in another order with several polars
+    threads, and the cost of an ``x`` differed in its last bit between builds.
+    """
     rng = np.random.default_rng(0)
     items, periods = 200, 50
     spec = {
