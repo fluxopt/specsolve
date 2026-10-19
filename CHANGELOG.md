@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
+
 ## 0.10.0 (2026-10-19)
 
 **specsolve moves to mathspec 0.3.0.** A model file now says what a missing
