@@ -161,16 +161,16 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def expression(
-        self, expr: program.Expression, context: str, *, quadratic: bool = False, reported: bool = False
+        self, expr: program.Expression, context: str, *, admits_quadratic: bool = False, reported: bool = False
     ) -> CompiledExpression:
         """Compile an expression into linear, quadratic and constant terms.
 
-        *quadratic* is the position's ceiling: the objective can hold a product
-        of two variables and a constraint row cannot. *reported* is set by a
-        read, where a quotient is absent wherever its divisor is zero
-        ([`_read_divisor`][]). The asserts are the plan-boundary backstop to
-        ``mathspec.degree``. No join in the walk maintains order; every
-        consumer verifies order where it reads.
+        *admits_quadratic* is the position's ceiling: whether it may hold a
+        product of two variables, as the objective and a quadratic constraint
+        may. *reported* is set by a read, where a quotient is absent wherever
+        its divisor is zero ([`_read_divisor`][]). The asserts are the
+        plan-boundary backstop to ``mathspec.degree``. No join in the walk
+        maintains order; every consumer verifies order where it reads.
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
@@ -182,16 +182,16 @@ class Compiler:
             assert not ((a.quadratic and b.linear) or (b.quadratic and a.linear) or (a.quadratic and b.quadratic)), (
                 f'in {context}: a product of degree 3 reached the compiler'
             )
-            assert quadratic or not (a.linear and b.linear), (
+            assert admits_quadratic or not (a.linear and b.linear), (
                 f'in {context}: a quadratic product in a position compiled as affine'
             )
-            quadratic_terms = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
-            quadratic_terms += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b.constant)
-            quadratic_terms += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a.constant)
-            linear_terms = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b.constant)
-            linear_terms += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a.constant)
+            quadratic = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b.constant)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a.constant)
+            linear = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b.constant)
+            linear += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a.constant)
             a_carries, b_carries = bool(a.linear or a.quadratic), bool(b.linear or b.quadratic)
-            constant_terms = tuple(
+            constant = tuple(
                 replace(
                     times_constant(x, c, 'constant'),
                     parameters=(frozenset() if b_carries else x.parameters)
@@ -200,7 +200,7 @@ class Compiler:
                 for x in a.constant
                 for c in b.constant
             )
-            return CompiledExpression(linear_terms, constant_terms, quadratic_terms)
+            return CompiledExpression(linear, constant, quadratic)
 
         def quotient(e: program.Divide) -> CompiledExpression:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate."""
@@ -208,10 +208,10 @@ class Compiler:
             assert not (b.linear or b.quadratic), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.constant) == 1, 'a variable-free divisor is added up to one term'
             inv = self._read_divisor(b.constant[0]) if reported else b.constant[0]
-            linear_terms = tuple(times_constant(t, inv, t.kind, divide=True) for t in a.linear)
-            quadratic_terms = tuple(times_constant(q, inv, 'quadratic', divide=True) for q in a.quadratic)
-            constant_terms = tuple(times_constant(x, inv, 'constant', divide=True) for x in a.constant)
-            return CompiledExpression(linear_terms, constant_terms, quadratic_terms)
+            linear = tuple(times_constant(t, inv, t.kind, divide=True) for t in a.linear)
+            quadratic = tuple(times_constant(q, inv, 'quadratic', divide=True) for q in a.quadratic)
+            constant = tuple(times_constant(x, inv, 'constant', divide=True) for x in a.constant)
+            return CompiledExpression(linear, constant, quadratic)
 
         def power(e: program.Power) -> CompiledExpression:
             """``a ** b``, where neither side carries a variable; each side is added up first."""
