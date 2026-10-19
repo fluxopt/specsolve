@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, BinaryIO, Literal
 
 import polars as pl
 
-from specsolve._relational.collect import collected
+from specsolve._collect import collected
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

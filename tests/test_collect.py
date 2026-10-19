@@ -6,10 +6,10 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational import collect
-from specsolve._relational.collect import collected
-from specsolve._relational.engine import assembly
-from specsolve._relational.engine.scope import Scope, ordinal
+from specsolve import _collect as collect
+from specsolve._collect import collected
+from specsolve._engine import assembly
+from specsolve._engine.scope import Scope, ordinal
 
 
 def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:

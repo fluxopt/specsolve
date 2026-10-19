@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational import parquet
+from specsolve import _parquet as parquet
 
 if TYPE_CHECKING:
     from collections.abc import Callable

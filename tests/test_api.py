@@ -332,7 +332,7 @@ def test_error_hierarchy_is_one_catchable_tree():
 
 def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
     """The set of solvers is closed, and a name outside it never falls back to the default."""
-    from specsolve._relational.sinks import SOLVERS
+    from specsolve._sinks import SOLVERS
 
     sources = dispatch_frame_inputs
     with pytest.raises(sps.errors.SpecsolveError, match='unknown solver'):
@@ -349,7 +349,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     suite does.
     """
     from specsolve import _api as api
-    from specsolve._relational.sinks import SOLVERS
+    from specsolve._sinks import SOLVERS
 
     sources = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))

@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.engine import readback
+from specsolve._engine import readback
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

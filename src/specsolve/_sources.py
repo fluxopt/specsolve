@@ -16,13 +16,13 @@ import polars.selectors as cs
 from mathspec.errors import did_you_mean
 from mathspec.program import ParameterDeclaration
 
+from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._assumptions import validate_assumptions
+from specsolve._collect import collected, collected_all, in_memory
 from specsolve._frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text, unknown_name_message
-from specsolve._relational.answer_layout import BASIS_STATUSES
-from specsolve._relational.collect import collected, collected_all, in_memory
-from specsolve._relational.names import POSITION, VALUE
-from specsolve._relational.result import Start
+from specsolve._names import POSITION, VALUE
+from specsolve._result import Start
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -581,7 +581,7 @@ def _read_by(
 
 
 def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
-    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve._relational.answer_layout.BASIS_STATUSES]."""
+    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve._answer_layout.BASIS_STATUSES]."""
     held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
     if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
         raise SpecsolveError(

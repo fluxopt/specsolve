@@ -17,9 +17,9 @@ import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
 
+from specsolve._collect import collected
 from specsolve._frames import as_frame
-from specsolve._relational.collect import collected
-from specsolve._relational.names import VALUE
+from specsolve._names import VALUE
 from specsolve._sources import in_microseconds, least_value
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 

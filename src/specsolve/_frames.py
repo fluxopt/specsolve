@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve import _parquet as parquet
 from specsolve._inputs import ArrowTable
-from specsolve._relational import parquet
-from specsolve._relational.names import VALUE
+from specsolve._names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

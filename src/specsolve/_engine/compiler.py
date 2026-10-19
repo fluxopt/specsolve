@@ -24,8 +24,8 @@ import numpy as np
 import polars as pl
 from mathspec import program
 
-from specsolve._relational.collect import collected
-from specsolve._relational.engine.pieces import (
+from specsolve._collect import collected
+from specsolve._engine.pieces import (
     PRESENT,
     CompiledExpression,
     Piece,
@@ -45,17 +45,17 @@ from specsolve._relational.engine.pieces import (
     refuse_a_piece_without_the_dims,
     region_over,
 )
-from specsolve._relational.engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
-from specsolve._relational.engine.relations import landed, mapping, walk_join
-from specsolve._relational.engine.scope import UNIT, Scope
-from specsolve._relational.engine.shifts import translate_piece, window_piece
-from specsolve._relational.names import VALUE
+from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
+from specsolve._engine.relations import landed, mapping, walk_join
+from specsolve._engine.scope import UNIT, Scope
+from specsolve._engine.shifts import translate_piece, window_piece
+from specsolve._names import VALUE
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve._relational.engine.labels import Labelled
+    from specsolve._engine.labels import Labelled
 
 
 def _totalled(p: Piece) -> pl.LazyFrame:
@@ -451,7 +451,7 @@ class Compiler:
         """Const *pieces* added per coordinate onto *carrier* — its columns, then ``cval``.
 
         *carrier* holds one row per coordinate of
-        [`spanned`][specsolve._relational.engine.scope.Scope.spanned], restricted by
+        [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
         the caller to where every variable under the pieces exists. *absent*
         is what a piece with no value adds: ``zero``; ``hole``, null where no
         piece has a value; ``spreads``, null where any piece has none.

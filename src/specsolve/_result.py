@@ -12,9 +12,8 @@ from datetime import datetime  # noqa: TC003  — a Record annotation this modul
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
     BASES,
     NO_BASIS,
     NO_PROVENANCE,
@@ -34,8 +33,9 @@ from specsolve._relational.answer_layout import (
     write_spec,
     write_whole,
 )
-from specsolve._relational.collect import collected
-from specsolve._relational.names import VALUE
+from specsolve._collect import collected
+from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
+from specsolve._names import VALUE
 from specsolve.errors import NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
-    from specsolve._relational.answer_layout import FrameWriter
-    from specsolve._relational.status import SolveStatus
+    from specsolve._answer_layout import FrameWriter
+    from specsolve._status import SolveStatus
 
 
 class Start(TypedDict, total=False):
@@ -315,7 +315,7 @@ class Diagnostics:
     def metrics(self) -> Metrics:
         """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
 
-        [`Metrics`][specsolve._relational.answer_layout.Metrics] says what each
+        [`Metrics`][specsolve._answer_layout.Metrics] says what each
         field means. A phase this build never entered reads zero, and
         ``specsolve_run`` is null.
         """
@@ -381,7 +381,7 @@ class Result:
     _primals: Mapping[str, pl.LazyFrame] | None
     _duals: Mapping[str, pl.LazyFrame] | None
     #: ``{kind: {name: frame}}`` for each of the
-    #: [`OUTPUT_KINDS`][specsolve._relational.answer_layout.OUTPUT_KINDS] the
+    #: [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the
     #: solve asked for, laid out as [`_primals`][] or [`_duals`][]. Its keys
     #: are what this answer carries; a kind asked for by a solve that left no
     #: values maps to nothing.
@@ -682,15 +682,15 @@ class Result:
         return given
 
     def _output(self, kind: str, name: str) -> pl.DataFrame:
-        """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve._relational.answer_layout.OUTPUT_KINDS]: what each output's reader returns."""
+        """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS]: what each output's reader returns."""
         return _named(self._carried(kind, name), name, OUTPUT_KINDS[kind].per).pipe(collected)
 
     def _carried(self, kind: str, name: str) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._relational.answer_layout.OUTPUT_KINDS], or why they cannot be read.
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
         that exists only where the duals do, the duals' reason, and for a basis,
-        [`NO_BASIS`][specsolve._relational.answer_layout.NO_BASIS] where the
+        [`NO_BASIS`][specsolve._answer_layout.NO_BASIS] where the
         solve ended on none.
         """
         what = f"the {kind.replace('_', ' ')} of '{name}'"
@@ -788,7 +788,7 @@ class Result:
         """Every kind this solve answered with, one file per name, into *directory*.
 
         ``record.parquet`` holds the
-        [`Record`][specsolve._relational.answer_layout.Record], with a null
+        [`Record`][specsolve._answer_layout.Record], with a null
         rather than ``nan`` objective where none was reached, and
         ``spec.yaml`` the [`spec`][] it answered. Beside them are
         ``primal/<name>.parquet`` per variable, ``dual/<name>.parquet`` per

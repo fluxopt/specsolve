@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.sinks import SOLVERS
+from specsolve._sinks import SOLVERS
 from specsolve.errors import SpecsolveError
 
 SHORT = {
@@ -159,7 +159,7 @@ def _solved_then_closed(model: Any) -> None:
 
 def _solved_then_broken(model: Any) -> None:
     """A second solve from nothing whose run raises: the solver no longer holds what the first solved."""
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
 
     def broken(self: Highs, handoff: object) -> None:
         raise RuntimeError('the run broke')

@@ -10,10 +10,10 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
-from specsolve._relational.sinks.capabilities import Capabilities
-from specsolve._relational.sinks.handoff import SENSE_CODES
-from specsolve._relational.sinks.solvers.base import (
+from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._sinks.solver import (
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -21,7 +21,7 @@ from specsolve._relational.sinks.solvers.base import (
     basis_codes,
     solver_vector,
 )
-from specsolve._relational.status import SolveStatus
+from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import numpy as np
     import polars as pl
 
-    from specsolve._relational.sinks.handoff import ColumnVectors, Handoff, RowVectors
+    from specsolve._sinks.handoff import ColumnVectors, Handoff, RowVectors
 
 
 #: HiGHS model status -> termination condition, copied from linopy's

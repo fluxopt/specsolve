@@ -23,19 +23,19 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
+from specsolve._collect import collected, collected_all
+from specsolve._engine.pieces import constant_scalar
+from specsolve._engine.predicates import masked
+from specsolve._engine.scope import join_on
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
-from specsolve._relational.collect import collected, collected_all
-from specsolve._relational.engine.pieces import constant_scalar
-from specsolve._relational.engine.predicates import masked
-from specsolve._relational.engine.scope import join_on
-from specsolve._relational.sinks.handoff import SENSE
+from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
-    from specsolve._relational.engine.pieces import Piece
-    from specsolve._relational.engine.scope import Scope
+    from specsolve._engine.pieces import Piece
+    from specsolve._engine.scope import Scope
 
 
 def divisors_of(*expressions: program.Expression) -> tuple[program.Expression, ...]:

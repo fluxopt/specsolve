@@ -16,10 +16,8 @@ from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
-from specsolve._axes import Stitch, bulleted
-from specsolve._messages import no_model_behind_this_answer_message
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
     BASES,
     KINDS,
     METRICS_FILE,
@@ -44,9 +42,11 @@ from specsolve._relational.answer_layout import (
     write_spec,
     write_whole,
 )
-from specsolve._relational.collect import collected
-from specsolve._relational.names import RUN
-from specsolve._relational.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
+from specsolve._axes import Stitch, bulleted
+from specsolve._collect import collected
+from specsolve._messages import no_model_behind_this_answer_message
+from specsolve._names import RUN
+from specsolve._result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -56,12 +56,12 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
+    from specsolve._answer_layout import FrameWriter, Output
     from specsolve._inputs import Label
-    from specsolve._relational.answer_layout import FrameWriter, Output
-    from specsolve._relational.result import Start
+    from specsolve._result import Start
 
 
-#: What each of the [`KINDS`][specsolve._relational.answer_layout.KINDS] is a frame of, as a message names it.
+#: What each of the [`KINDS`][specsolve._answer_layout.KINDS] is a frame of, as a message names it.
 _LABELS: Mapping[str, str] = MappingProxyType(
     {
         'primal': 'variable',
@@ -86,7 +86,7 @@ class SliceAnswer:
     meta: Record
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
-    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._relational.answer_layout.KINDS]:
+    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._answer_layout.KINDS]:
     #: every variable, every constraint's dual, every declared named
     #: expression evaluated at this slice's solution, and each output the
     #: sweep was asked for. A kind the slice produced nothing of is absent.
@@ -274,7 +274,7 @@ class Spill:
 class Sweep:
     """What a fold returned: the answer over the model's own coordinates, and a record per slice.
 
-    [`Result`][specsolve._relational.result.Result]'s readers, same names and
+    [`Result`][specsolve._result.Result]'s readers, same names and
     shapes, and each returns **the answer** by default. An [`EachWindow`][]
     sweep is read over the dimension it sliced: each coordinate comes from
     the window that owns it, and the lookahead rows are dropped. An
@@ -288,7 +288,7 @@ class Sweep:
     """
 
     key_name: str
-    #: One [`Record`][specsolve._relational.answer_layout.Record] per slice, in slice
+    #: One [`Record`][specsolve._answer_layout.Record] per slice, in slice
     #: order — how every slice terminated, whether or not it produced an
     #: answer. The key column comes first, as its own type, so the table joins
     #: to the frames; ``slice_axis`` and ``slice`` name the slice again as
@@ -296,7 +296,7 @@ class Sweep:
     #: slice that reached no objective holds null there rather than ``nan``,
     #: so the column aggregates over the slices that solved.
     record: pl.DataFrame
-    #: One [`Metrics`][specsolve._relational.answer_layout.Metrics] per slice, keyed as
+    #: One [`Metrics`][specsolve._answer_layout.Metrics] per slice, keyed as
     #: [`record`][] is and in slice order — [`diagnostics`][specsolve._api.Model.diagnostics]
     #: one dimension wider, its counts and clocks only. Each row is the slice's
     #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
@@ -325,7 +325,7 @@ class Sweep:
     #: Whether the per-window frames are there to read: not on an archive
     #: written without ``keep_windows=True``.
     _windows: bool = field(repr=False, default=True)
-    #: Each [`Output`][specsolve._relational.answer_layout.Output] the sweep was
+    #: Each [`Output`][specsolve._answer_layout.Output] the sweep was
     #: asked for, and so carries.
     _outputs: frozenset[Output] = field(repr=False, default=frozenset())
     #: What [`evaluate`][] lowers an undeclared expression through; ``None``
@@ -417,7 +417,7 @@ class Sweep:
             raise SpecsolveError(NO_WINDOWS)
 
     def _check_requested(self, kind: str, name: str) -> None:
-        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve._relational.answer_layout.OUTPUT_KINDS] the sweep was not asked for."""
+        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the sweep was not asked for."""
         if kind in OUTPUT_KINDS and OUTPUT_KINDS[kind].output not in self._outputs:
             raise SpecsolveError(not_requested_message(kind, name))
 
@@ -536,7 +536,7 @@ class Sweep:
         """One constraint's distance to binding at every slice's solution.
 
         [`primal`][]'s shape and arguments, and
-        [`Result.slack`][specsolve._relational.result.Result.slack]'s sign.
+        [`Result.slack`][specsolve._result.Result.slack]'s sign.
         Carried only where the sweep was asked for it with
         ``outputs={'slack'}``.
 
@@ -550,7 +550,7 @@ class Sweep:
         """One variable's reduced costs at every slice's solution.
 
         [`primal`][]'s shape and arguments, and
-        [`Result.reduced_cost`][specsolve._relational.result.Result.reduced_cost]'s
+        [`Result.reduced_cost`][specsolve._result.Result.reduced_cost]'s
         sign. Carried only where the sweep was asked for it with
         ``outputs={'reduced_cost'}``. A slice whose model had an integer
         variable contributes none, as it contributes no duals.
@@ -566,7 +566,7 @@ class Sweep:
         """One variable's basis status where every slice's solve ended.
 
         [`primal`][]'s shape and arguments, and
-        [`Result.variable_basis`][specsolve._relational.result.Result.variable_basis]'s
+        [`Result.variable_basis`][specsolve._result.Result.variable_basis]'s
         words. Carried only where the sweep was asked for it with
         ``outputs={'basis'}``. A slice that ended on no basis contributes
         none.
@@ -581,7 +581,7 @@ class Sweep:
         """One constraint's basis status where every slice's solve ended.
 
         [`primal`][]'s shape and arguments, and
-        [`Result.constraint_basis`][specsolve._relational.result.Result.constraint_basis]'s
+        [`Result.constraint_basis`][specsolve._result.Result.constraint_basis]'s
         words. Carried only where the sweep was asked for it with
         ``outputs={'basis'}``. A slice that ended on no basis contributes
         none.
@@ -595,7 +595,7 @@ class Sweep:
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
 
-        [`evaluate`][specsolve._relational.result.Result.evaluate] over the
+        [`evaluate`][specsolve._result.Result.evaluate] over the
         sweep, with [`primal`][]'s shape. A declared name is read from what
         the sweep holds, live or off disk. Anything else is valued at each
         slice's own solution with no re-solve, which needs the spec, sources

@@ -11,7 +11,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import _api as api
-from specsolve._relational.engine.compiler import Compiler
+from specsolve._engine.compiler import Compiler
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.fixtures import override
 

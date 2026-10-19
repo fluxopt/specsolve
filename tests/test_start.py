@@ -18,10 +18,10 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
-from specsolve._relational.engine.readback import _counted
-from specsolve._relational.sinks.handoff import SENSE_CODES
-from specsolve._relational.sinks.solvers.base import settled
+from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
+from specsolve._engine.readback import _counted
+from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._sinks.solver import settled
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
@@ -169,7 +169,7 @@ LP_VALUES = {
 def test_a_start_of_values_for_an_lp_is_used_warned_of_or_refused_as_its_sink_says(
     solver_name: str, given: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from specsolve._relational import sinks
+    from specsolve import _sinks as sinks
 
     before = sps.solve(DISPATCH, snapshots(40), solver_name=solver_name)
     primal = before.primal('p')
@@ -199,7 +199,7 @@ def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_loads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Neither an answer read back nor a model never solved bears a mark, and two absent marks are not one solve."""
-    from specsolve._relational import sinks
+    from specsolve import _sinks as sinks
 
     sps.solve(DISPATCH, snapshots(40)).save(tmp_path / 'answer')
     loaded = sps.load_result(tmp_path / 'answer')
@@ -453,7 +453,7 @@ def test_one_answer_starts_every_slice() -> None:
 
 
 def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
     from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
@@ -479,7 +479,7 @@ def test_a_table_over_the_windows_local_index_alone_is_refused() -> None:
 def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_covers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
     from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
@@ -539,7 +539,7 @@ def test_a_slice_its_start_leaves_no_row_starts_from_nothing_with_a_warning(star
 
 def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     """Every basis HiGHS is warmed from, in order."""
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
 
     warmed: list[object] = []
     original = Highs.warm
@@ -549,7 +549,7 @@ def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
 
 def _forgotten(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     """Every time HiGHS forgets the work it did: a solve that begins from nothing on the solver it kept."""
-    from specsolve._relational.sinks.solvers.highs import Highs
+    from specsolve._sinks.highs import Highs
 
     forgotten: list[object] = []
     original = Highs.forget

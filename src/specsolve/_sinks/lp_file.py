@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING, get_args
 import polars as pl
 from mathspec import program
 
-from specsolve._relational.collect import collected
-from specsolve._relational.sinks.capabilities import Capabilities
-from specsolve._relational.sinks.handoff import SENSE_CODES
-from specsolve._relational.sinks.writers.text import append_lines, chunk_key, digits, number
+from specsolve._collect import collected
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._sinks.text import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
-    from specsolve._relational.sinks.handoff import Handoff
+    from specsolve._sinks.handoff import Handoff
 
 
 #: Every construct the language can reach, quadratic rows included. A reader

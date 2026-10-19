@@ -31,10 +31,8 @@ import numpy as np
 import polars as pl
 from mathspec import advice
 
-from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
-from specsolve._relational import parquet
-from specsolve._relational.answer_layout import (
+from specsolve import _parquet as parquet
+from specsolve._answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
     RECORD_FILE,
@@ -49,10 +47,12 @@ from specsolve._relational.answer_layout import (
     read_spec,
     saved_frames,
 )
-from specsolve._relational.collect import collected
-from specsolve._relational.engine.engine import Engine, expression_readers
-from specsolve._relational.result import Result, evaluated
-from specsolve._relational.sinks import solver, writer
+from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._collect import collected
+from specsolve._engine.engine import Engine, expression_readers
+from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve._result import Result, evaluated
+from specsolve._sinks import solver, writer
 from specsolve._sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
 from specsolve.errors import (
     LayoutError,
@@ -65,8 +65,8 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve._relational.answer_layout import FrameWriter, Output
-    from specsolve._relational.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
+    from specsolve._answer_layout import FrameWriter, Output
+    from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
 
 __all__ = ['build', 'check', 'evaluate', 'load_result', 'scan_result', 'solve', 'tidy', 'write']
 
@@ -160,7 +160,7 @@ def evaluate(spec: Buildable, sources: Mapping[str, Source], expression: str | M
     A spec with only dimensions, parameters, relations and ``expressions:``
     is a calculation: each expression reads only the attached data. This
     attaches *sources* and values one expression, the way
-    [`evaluate`][specsolve._relational.result.Result.evaluate] does at a
+    [`evaluate`][specsolve._result.Result.evaluate] does at a
     solution. The spec is read as [`solve`][] reads it; one that declares
     variables belongs there.
 
@@ -244,11 +244,11 @@ class Model:
         ``model.update(x)`` answers what ``build(spec, sources | x)`` answers,
         whatever changed. Data that moves a mask renumbers labels, so the model
         is rebuilt and solved cold rather than pushed onto a loaded solver;
-        [`loads`][specsolve._relational.result.Diagnostics.loads] says which ran.
+        [`loads`][specsolve._result.Diagnostics.loads] says which ran.
 
         Results taken before the update keep reading their own frames, and
         keep their build's label frames alive until dropped or until
-        [`close`][specsolve._relational.result.Result.close] is called. A sweep, a
+        [`close`][specsolve._result.Result.close] is called. A sweep, a
         rolling horizon or a myopic pathway is
         [`solve_over`][specsolve._strategy.solve_over], which runs this loop.
 
@@ -295,7 +295,7 @@ class Model:
                 ``timelimit``. Gurobi's are applied when its environment is
                 created, so ``ComputeServer``, ``TokenServer`` and
                 ``WLSAccessID`` reach it too. The result's
-                [`provenance`][specsolve._relational.result.Result.provenance]
+                [`provenance`][specsolve._result.Result.provenance]
                 records the value of an option that changes the answer, such
                 as a time limit or a gap, and the name alone of any other.
             record_options: More option names whose value the result
@@ -308,7 +308,7 @@ class Model:
                 ``.zip`` suffix packs it into one file; anything else is a
                 directory. What the build and its solves spent goes in beside
                 the answer, as
-                [`Metrics`][specsolve._relational.answer_layout.Metrics]. Each
+                [`Metrics`][specsolve._answer_layout.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
             outputs: Each [`Output`][specsolve.types.Output] the answer
@@ -525,7 +525,7 @@ class Model:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
         """An ad-hoc expression reader over a *saved* solution, put back against this build.
 
-        What an archive and a sweep hand [`evaluate`][specsolve._relational.result.Result.evaluate]
+        What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]
         for a quantity the file never named: the saved frames are laid back in
         this build's label order, and the reader is the one a live solve gives.
         A build, never a solve.
@@ -685,7 +685,7 @@ def load_result(directory: str | Path) -> Result:
     ``nan``.
 
     Args:
-        directory: Where [`save`][specsolve._relational.result.Result.save] wrote
+        directory: Where [`save`][specsolve._result.Result.save] wrote
             it. One inside an archive is
             [`load_archive`][specsolve._archive.load_archive]'s to find.
 

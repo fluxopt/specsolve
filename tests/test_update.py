@@ -399,7 +399,7 @@ def _hashes(monkeypatch) -> list[int]:
     A plain property in place of the `cached_property`, so one object asked
     twice counts twice. Each count below is one object asked once.
     """
-    from specsolve._relational.sinks.handoff import Handoff
+    from specsolve._sinks.handoff import Handoff
 
     taken: list[int] = []
     real = Handoff.structure.func

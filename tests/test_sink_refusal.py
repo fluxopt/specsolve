@@ -15,10 +15,9 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational import sinks
-from specsolve._relational.sinks.capabilities import Capabilities
-from specsolve._relational.sinks.solvers import SOLVERS
-from specsolve._relational.sinks.writers import WRITERS
+from specsolve import _sinks as sinks
+from specsolve._sinks import SOLVERS, WRITERS
+from specsolve._sinks.capabilities import Capabilities
 from specsolve.errors import SpecsolveError
 
 #: A pure LP: every sink takes it whole.

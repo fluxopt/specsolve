@@ -14,21 +14,21 @@ import numpy as np
 import polars as pl
 from mathspec import program
 
+from specsolve import _sinks as sinks
+from specsolve._collect import collected, in_memory
+from specsolve._engine import coverage, labels
+from specsolve._engine.compiler import Compiler
+from specsolve._engine.pieces import Piece, absence_restrictions
+from specsolve._engine.scope import Scope, join_on
 from specsolve._messages import null_bounds_message
-from specsolve._relational import sinks
-from specsolve._relational.collect import collected, in_memory
-from specsolve._relational.engine import coverage, labels
-from specsolve._relational.engine.compiler import Compiler
-from specsolve._relational.engine.pieces import Piece, absence_restrictions
-from specsolve._relational.engine.scope import Scope, join_on
-from specsolve._relational.sinks.handoff import SENSE
+from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
-    from specsolve._relational.engine.attaching import AttachedSources
+    from specsolve._engine.attaching import AttachedSources
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -88,7 +88,7 @@ class BuiltModel:
 
     program: program.Program
     attached: AttachedSources
-    #: One [`Labelled`][specsolve._relational.engine.labels.Labelled] per
+    #: One [`Labelled`][specsolve._engine.labels.Labelled] per
     #: declaration, one map per label space: a variable and a constraint may share a name.
     variables: dict[str, labels.Labelled]
     constraints: dict[str, labels.Labelled]
@@ -324,7 +324,7 @@ class Assembly:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
 
         Such a block numbers its rows row-major over the declared ordinals
-        ([`labels.frame`][specsolve._relational.engine.labels.frame]), so a term
+        ([`labels.frame`][specsolve._engine.labels.frame]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
@@ -426,7 +426,7 @@ class Assembly:
 
         One row per unordered pair, at the coefficient the file wrote, not
         halved; each sink converts. It leaves sorted, because
-        [`structure`][specsolve._relational.sinks.handoff.Handoff.structure] hashes it.
+        [`structure`][specsolve._sinks.handoff.Handoff.structure] hashes it.
         """
         if not quads:
             return None

@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._relational.engine.compiler import Compiler
+from specsolve._engine.compiler import Compiler
 from specsolve.errors import LanguageError, SpecsolveError
 
 SPEC = {

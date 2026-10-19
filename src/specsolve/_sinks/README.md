@@ -1,28 +1,28 @@
 # Sinks
 
 How a built model leaves the engine — the boxes downstream of the engine in
-[docs/development/architecture.md](../../../../docs/development/architecture.md)'s pipeline, which
+[docs/development/architecture.md](../../../docs/development/architecture.md)'s pipeline, which
 carries the argument for the split. This page is the membership list.
 
 **Two families.** A **solver** takes the handoff and runs it; a **writer**
 takes the handoff and renders it to a file. Everything else follows.
 
-| | solvers/ | writers/ |
+| | solver | writer |
 |---|---|---|
 | answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `base.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `solver.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
 ## Staying loaded
 
-`base.py` is what a solver **is**: a loaded model with a lifecycle, which is
+`solver.py` is what a solver **is**: a loaded model with a lifecycle, which is
 linopy's shape and its word — their `Solver` is the persistent object too. It
 holds no solver of its own, which is the whole reason it is allowed to exist
 beside the leaves: it cannot carry an optional dependency across the fence
 below, and sharing through it is what stops one leaf importing the other.
 
-The split is by who can answer. `solvers.loaded(held, name, …)` is the whole of
+The split is by who can answer. `loaded(held, name, …)` is the whole of
 **reuse or load again**: it keeps a held solver exactly when it is the named
 class whose recorded digest and options match the new handoff — and then pushes
 the new numbers onto it — closing and replacing it otherwise. The base records
@@ -30,7 +30,7 @@ that evidence at the load; a subclass owns **the hand-off**:
 
 | | |
 |---|---|
-| `solvers.loaded(held, name, …)` | reuse or load again — the whole of that decision |
+| `loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
 | `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
 | `_load(handoff)` | hand the model over and hold what reads it back |
@@ -92,8 +92,8 @@ how it is drained. That is the point: `mps_file.py` is a module beside
 
 The one thing sinks may share is a *projection* of those frames, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a
-family's one shared module, which holds no member's own answer: `solvers/base.py` is the
-lifecycle without a solver in it, `writers/text.py` the renderings without a
+family's one shared module, which holds no member's own answer: `solver.py` is the
+lifecycle without a solver in it, `text.py` the renderings without a
 format in them.
 
 ## Row-major, and the one format that is not
@@ -149,7 +149,7 @@ places it bites are worth naming because neither is a choice:
 
 ## Adding one
 
-**A solver:** `solvers/<name>.py` named for the solver, defining a `Solver`
+**A solver:** `<name>.py` named for the solver, defining a `Solver`
 subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
 `SOLVERS` holding the class. Constructing it loads the model and stops there,
 which is what `bench/` measures.
@@ -159,7 +159,7 @@ to import for callers who will never use it. Copy linopy's status map for it
 and pin the copy in `tests/test_solve_status.py`, including anywhere you
 deliberately diverge.
 
-**A writer:** `writers/<format>.py`, one line in `WRITERS` keyed by suffix,
+**A writer:** `<format>.py`, one line in `WRITERS` keyed by suffix,
 holding a `Writer(write, capabilities)` — a function has nowhere to carry a
 fact about itself, so the pair travels together. Render through `text.py`
 rather than casting in the module — that is what makes two files describe one

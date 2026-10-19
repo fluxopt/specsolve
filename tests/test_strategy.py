@@ -26,8 +26,8 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import _strategy as strategy
 from specsolve import _sweep as sweep_module
+from specsolve._answer_layout import Metrics, Provenance, Record
 from specsolve._axes import axis_from
-from specsolve._relational.answer_layout import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------

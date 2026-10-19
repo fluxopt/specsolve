@@ -2,9 +2,9 @@
 
 The engine owns the lifecycle — a build, its solver, the counters and clocks
 [`Engine.diagnostics`][] reports — and none of the three questions it
-asks on the way: what the data is ([`attaching`][specsolve._relational.engine.attaching]),
-what each declaration contributes ([`assembly`][specsolve._relational.engine.assembly]),
-how a row or a solve reads back ([`readback`][specsolve._relational.engine.readback]).
+asks on the way: what the data is ([`attaching`][specsolve._engine.attaching]),
+what each declaration contributes ([`assembly`][specsolve._engine.assembly]),
+how a row or a solve reads back ([`readback`][specsolve._engine.readback]).
 The lane is described in docs/development/architecture.md.
 """
 
@@ -18,22 +18,22 @@ from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
-from specsolve._relational import sinks
-from specsolve._relational.answer_layout import BASIS, BASIS_STATUSES, kinds_of
-from specsolve._relational.engine import readback
-from specsolve._relational.engine.assembly import (
+from specsolve import _sinks as sinks
+from specsolve._answer_layout import BASIS, BASIS_STATUSES, kinds_of
+from specsolve._engine import readback
+from specsolve._engine.assembly import (
     Assembly,
     BuiltModel,
     Measured,
     declares_quadratic,
     short_parameters,
 )
-from specsolve._relational.engine.attaching import attach
-from specsolve._relational.engine.compiler import Compiler, Solution
-from specsolve._relational.engine.scope import Scope
-from specsolve._relational.names import VALUE
-from specsolve._relational.result import ConstraintRow, Diagnostics, Result
-from specsolve._relational.sinks.solvers.base import Basis
+from specsolve._engine.attaching import attach
+from specsolve._engine.compiler import Compiler, Solution
+from specsolve._engine.scope import Scope
+from specsolve._names import VALUE
+from specsolve._result import ConstraintRow, Diagnostics, Result
+from specsolve._sinks.solver import Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -43,10 +43,10 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
-    from specsolve._relational.answer_layout import Output
-    from specsolve._relational.result import InfeasibleSubsystem
-    from specsolve._relational.sinks.solvers.base import SolveAnswer
-    from specsolve._relational.status import SolveStatus
+    from specsolve._answer_layout import Output
+    from specsolve._result import InfeasibleSubsystem
+    from specsolve._sinks.solver import SolveAnswer
+    from specsolve._status import SolveStatus
 
 
 def _statuses(codes: np.ndarray) -> pl.Series:
@@ -135,7 +135,7 @@ class Engine:
         """Attach *sources*, then build every declaration into the model frames.
 
         A second call rebuilds over the same object. The held solver reads its
-        [`structure`][specsolve._relational.sinks.solvers.base.Solver.structure]
+        [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         frames. A build that raises leaves no model rather than half of one.
         """
@@ -152,7 +152,7 @@ class Engine:
             self._built = assembly.run()
 
     # ------------------------------------------------------------------
-    # sinks — see _relational/sinks/; the engine only supplies the frames
+    # sinks — see _sinks/; the engine only supplies the frames
     # ------------------------------------------------------------------
 
     def row(self, name: str, coordinate: Mapping[str, object]) -> ConstraintRow:
@@ -196,7 +196,7 @@ class Engine:
         """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
 
         Returns the solver and whether it was loaded again, which
-        [`loaded`][specsolve._relational.sinks.solvers.loaded] decides. A solver
+        [`loaded`][specsolve._sinks.loaded] decides. A solver
         kept forgets its last run unless *carry_on*. Counts toward neither
         ``solves`` nor ``loads``, so timing this alone leaves them true.
         """
@@ -222,19 +222,19 @@ class Engine:
         """Hand the built model to a solver and solve it.
 
         The solver stays loaded where
-        [`loaded`][specsolve._relational.sinks.solvers.loaded] allows. A construct
+        [`loaded`][specsolve._sinks.loaded] allows. A construct
         the solver cannot ingest is refused before the load, read off the built
         model rather than the file.
 
         Args:
-            solver_name: One of [`SOLVERS`][specsolve._relational.sinks.SOLVERS].
+            solver_name: One of [`SOLVERS`][specsolve._sinks.SOLVERS].
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
             lower: How an expression the caller writes becomes a plan node,
-                for [`evaluate`][specsolve._relational.result.Result.evaluate], or
+                for [`evaluate`][specsolve._result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
             outputs: Which of
-                [`OUTPUTS`][specsolve._relational.answer_layout.OUTPUTS] the
+                [`OUTPUTS`][specsolve._answer_layout.OUTPUTS] the
                 result carries, already checked.
             start: ``'previous'``, to carry on from the last solve while its
                 solver stays loaded and begin from nothing otherwise; ``None``,
@@ -242,9 +242,9 @@ class Engine:
                 [`Start`][specsolve.types.Start] already read
                 ([`read_start`][specsolve._sources.read_start]), matched by
                 coordinate: an LP from a basis where one is given
-                ([`matched_basis`][specsolve._relational.engine.readback.matched_basis]),
+                ([`matched_basis`][specsolve._engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
-                ([`matched_values`][specsolve._relational.engine.readback.matched_values]).
+                ([`matched_values`][specsolve._engine.readback.matched_values]).
 
         Returns:
             The solution, holding this engine and the build it answered.
@@ -404,7 +404,7 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._relational.answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
@@ -451,7 +451,7 @@ class Engine:
         dict[str, Callable[[], pl.DataFrame]],
         Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
     ]:
-        """What [`evaluate`][specsolve._relational.result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
+        """What [`evaluate`][specsolve._result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
 
         Both close over a snapshot the result owns, including a copy of the
         variable registry, so they keep answering after an update or ``close()``.
@@ -520,7 +520,7 @@ class Engine:
 
 
 def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
-    """One [`Diagnostics`][specsolve._relational.result.Diagnostics] frame: a row per name in *measured*, in build order.
+    """One [`Diagnostics`][specsolve._result.Diagnostics] frame: a row per name in *measured*, in build order.
 
     *kind* names the first column, and the remaining *columns* carry each
     value in order — a scalar for one column, a tuple for several.

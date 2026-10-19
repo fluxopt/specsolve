@@ -34,9 +34,9 @@ def main(argv: list[str] | None = None) -> int:
 
     from mathspec import to_spec
 
-    from specsolve._relational.engine import engine as executor_module
-    from specsolve._relational.engine.assembly import Assembly
-    from specsolve._relational.engine.engine import Engine
+    from specsolve._engine import engine as executor_module
+    from specsolve._engine.assembly import Assembly
+    from specsolve._engine.engine import Engine
     from specsolve._sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)

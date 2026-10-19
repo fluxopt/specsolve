@@ -13,12 +13,12 @@ from typing import IO, TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from specsolve._relational.sinks.capabilities import Capabilities
-from specsolve._relational.sinks.handoff import SENSE_CODES, ranges
-from specsolve._relational.sinks.writers.text import append_lines, chunk_key, digits, number
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.handoff import SENSE_CODES, ranges
+from specsolve._sinks.text import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
-    from specsolve._relational.sinks.handoff import Handoff
+    from specsolve._sinks.handoff import Handoff
 
 
 #: What this writer emits. It writes no quadratic extension section, so a
