@@ -179,6 +179,34 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     assert 'AGGREGATE' not in query(piece.frame)
 
 
+def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
+    """`p * sum(load, over=snapshot)` holds one row per slot of `p`.
+
+    A sum leaves one row per summand for assembly to add up. Joined to `p` as
+    it was, each of those rows repeated every term, so the product held one row
+    per slot and snapshot, and a year of hourly snapshots ran out of memory.
+    """
+    snapshots, generators = range(24), ['a', 'b', 'c']
+    data = replace(
+        attached(),
+        parameters=dict(PARAMETERS, load=pl.LazyFrame({'snapshot': list(snapshots), 'value': [1.0] * 24})),
+    )
+    slots = pl.LazyFrame(
+        {
+            'snapshot': [s for s in snapshots for _ in generators],
+            'generator': generators * len(snapshots),
+            'var_label': range(len(snapshots) * len(generators)),
+        }
+    )
+    total = program.Sum(program.Parameter('load'), (program.Axis('snapshot'),))
+    compiled = Compiler(Scope(declared(), data, {'p': Labelled(slots, 0, 72)})).expression(
+        program.Multiply(program.Variable('p'), total), 'test'
+    )
+    terms = compiled.terms[0].frame.collect()
+    assert terms.height == 72, 'one row per slot of p, not one per slot and snapshot'
+    assert terms['coeff'].unique().to_list() == [24.0], 'every term carries the whole total'
+
+
 def masked_compiler() -> Compiler:
     """A compiler over two masked variables, since a restriction only crosses between pieces."""
     over = ('snapshot', 'generator')

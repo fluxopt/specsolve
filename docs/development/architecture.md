@@ -145,7 +145,7 @@ absence is pushed into the operand first
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
-| `Multiply` | `x * y` | one-to-one | a join on the shared dims; two variable factors pair into a quadratic piece |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dims, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic piece |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dims traded for the added ones, and a bare relation fans a member out to every group |
