@@ -315,7 +315,7 @@ class Compiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.terms + b.terms, a.consts + b.consts, a.quads + b.quads)
             if isinstance(e, program.Multiply):
-                return product(ev(e.left), ev(e.right))
+                return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
                 return quotient(e)
             if isinstance(e, program.Power):
@@ -411,6 +411,17 @@ class Compiler:
             present = pl.LazyFrame({PRESENT: [True]}).join(count, how='cross').filter(pl.col('__zeros__') == 0)
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
+
+    def _factor(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
+        """A product's factor with each constant part added up to one value per coordinate ([`_totalled`][]).
+
+        A sum leaves one row per summand for the aggregate at assembly. Joined
+        to the other factor as it is, each of its rows would repeat every term
+        there, so a factor with a reduction under it is added up first.
+        """
+        if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
+            return compiled
+        return replace(compiled, consts=tuple(replace(p, frame=_totalled(p)) for p in compiled.consts))
 
     def _added_up(
         self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
