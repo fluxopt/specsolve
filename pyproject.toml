@@ -342,6 +342,6 @@ matches = "tests/linopy_lane/**"
 errors = { explicit-any = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "src/specsolve/relational/sinks/solvers/**"
+matches = "src/specsolve/_relational/sinks/solvers/**"
 errors = { explicit-any = false }
 

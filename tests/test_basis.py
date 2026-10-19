@@ -16,8 +16,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.answer_layout import NO_BASIS
 from specsolve.errors import SpecsolveError
-from specsolve.relational.answer_layout import NO_BASIS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -84,7 +84,7 @@ def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) ->
     sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case').save(tmp_path / 'saved')
     loaded = sps.load_result(tmp_path / 'saved')
     archived = sps.load_archive(tmp_path / 'case')
-    assert isinstance(archived, sps.archive.ResultArchive)
+    assert isinstance(archived, sps.types.ResultArchive)
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet').filter(pl.col('name') == 'x')
 
     for answer in (loaded, archived.result):
@@ -161,7 +161,7 @@ def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Swee
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.archive.SweepArchive)
+        assert isinstance(archive, sps.types.SweepArchive)
         return archive.sweep
     if how == 'process-pool':
         with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
@@ -201,8 +201,8 @@ def test_a_basis_that_does_not_span_the_model_is_refused(monkeypatch: pytest.Mon
     The double overrides `_basis`, the half a sink writes; the guard is the
     base's `run` around it, so every sink is checked.
     """
-    from specsolve.relational.sinks import SOLVERS
-    from specsolve.relational.sinks.solvers.highs import Highs
+    from specsolve._relational.sinks import SOLVERS
+    from specsolve._relational.sinks.solvers.highs import Highs
 
     class Crooked(Highs):
         def _basis(self):

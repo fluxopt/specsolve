@@ -21,8 +21,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.sinks.solvers.xpress import Xpress
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks.solvers.xpress import Xpress
 from tests.conftest import (
     CASES,
     assert_agrees_with_highs,
@@ -190,7 +190,7 @@ def test_a_solve_that_errored_is_not_reported_as_unknown() -> None:
     """
     from types import SimpleNamespace
 
-    from specsolve.relational.sinks.solvers.xpress import _status_of
+    from specsolve._relational.sinks.solvers.xpress import _status_of
 
     failed = _status_of(SimpleNamespace(attributes=SimpleNamespace(solvestatus=2, solstatus=0)))
     assert failed.termination_condition == 'internal_solver_error'

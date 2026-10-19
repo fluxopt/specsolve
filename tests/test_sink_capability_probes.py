@@ -14,7 +14,7 @@ import highspy
 import numpy as np
 import pytest
 
-from specsolve.relational.sinks import SOLVERS
+from specsolve._relational.sinks import SOLVERS
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -35,8 +35,8 @@ from mathspec import to_spec
 from mathspec.spec import Spec
 
 import specsolve as sps
-from specsolve.api import Model
-from specsolve.relational.result import Result
+from specsolve._api import Model
+from specsolve._relational.result import Result
 
 try:
     from tests import linopy_lane
@@ -315,7 +315,7 @@ def test_every_block_is_covered() -> None:
 # module docstrings
 # --------------------------------------------------------------------------
 
-DOCSTRING_MODULES = ['src/specsolve/__init__.py', 'src/specsolve/api.py', 'tests/linopy_lane/__init__.py']
+DOCSTRING_MODULES = ['src/specsolve/__init__.py', 'src/specsolve/_api.py', 'tests/linopy_lane/__init__.py']
 
 
 def _docstring_examples(path: Path) -> list[str]:

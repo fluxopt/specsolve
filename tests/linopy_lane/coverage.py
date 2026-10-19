@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Any
 import xarray as xr
 from mathspec import program
 
+from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from specsolve.errors import DataError
-from specsolve.messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 

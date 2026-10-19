@@ -22,10 +22,10 @@ import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve import strategy
-from specsolve.api import _provenance
-from specsolve.archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
-from specsolve.relational.answer_layout import (
+from specsolve import _strategy as strategy
+from specsolve._api import _provenance
+from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
+from specsolve._relational.answer_layout import (
     ANSWER_LAYOUT,
     METRICS_FILE,
     Metrics,
@@ -36,9 +36,9 @@ from specsolve.relational.answer_layout import (
     write_reasons,
     write_whole,
 )
-from specsolve.relational.names import RUN
-from specsolve.relational.sinks.solvers import SOLVERS
-from specsolve.sources import attachable, tidy_sources
+from specsolve._relational.names import RUN
+from specsolve._relational.sinks.solvers import SOLVERS
+from specsolve._sources import attachable, tidy_sources
 from tests.conftest import (
     DISPATCH_COST,
     DISPATCH_GENERATORS,
@@ -373,7 +373,7 @@ def test_a_directory_of_archives_never_globs_one_still_being_written(
     the catalogs are written, when the answer and the staged archive are both
     complete on disk and nothing has landed yet.
     """
-    from specsolve import archive_layout
+    from specsolve import _archive_layout as archive_layout
 
     staged: list[Path] = []
     catalogs = archive_layout._write_catalogs

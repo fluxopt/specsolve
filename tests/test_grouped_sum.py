@@ -30,9 +30,9 @@ from mathspec.program import (
 )
 
 import specsolve as sps
+from specsolve._relational.engine.engine import Engine
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd, specsolve_linopy, transport_linopy_objective

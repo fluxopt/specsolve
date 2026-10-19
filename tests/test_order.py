@@ -20,7 +20,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.engine import assembly
+from specsolve._relational.engine import assembly
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 

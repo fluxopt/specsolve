@@ -37,7 +37,7 @@ class LayoutError(SpecsolveError):
 
     The fix is which path was named, or re-solving a model whose layout has
     moved since it was written. The layout is the one
-    [`save`][specsolve.relational.result.Result.save] stamps.
+    [`save`][specsolve._relational.result.Result.save] stamps.
     """
 
 

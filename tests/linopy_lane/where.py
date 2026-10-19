@@ -4,7 +4,7 @@ The other half of what a declaration says: ``builder.py`` builds the thing,
 this decides where it exists. A :class:`~mathspec.program.Predicate` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes. Both lanes read the same node kinds, and
-``relational/engine/predicates.py`` answers each with a polars
+``_relational/engine/predicates.py`` answers each with a polars
 expression where this one answers with an array.
 """
 
@@ -19,8 +19,8 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
+from specsolve._messages import position_out_of_range_message, short_groups_message
 from specsolve.errors import DataError
-from specsolve.messages import position_out_of_range_message, short_groups_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.operators import _grouped, operator_at
 

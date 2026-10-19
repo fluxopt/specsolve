@@ -1,6 +1,6 @@
 """The solve outcome, and linopy as its oracle.
 
-`relational/status.py` copies linopy's status vocabulary spelling for
+`_relational/status.py` copies linopy's status vocabulary spelling for
 spelling, and each solver sink copies linopy's own mapping for its solver.
 These tests import linopy and compare, so a divergence on either side fails
 here.
@@ -16,12 +16,12 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._relational.answer_layout import Metrics, Record, _column_types
+from specsolve._relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
+from specsolve._relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
+from specsolve._relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
+from specsolve._relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 from specsolve.errors import NoSolutionError
-from specsolve.relational.answer_layout import Metrics, Record, _column_types
-from specsolve.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
-from specsolve.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
-from specsolve.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
-from specsolve.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 from tests.conftest import CASES
 
 # ---------------------------------------------------------------------------
