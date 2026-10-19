@@ -10,7 +10,7 @@ from mathspec import program
 from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve._collect import collected
 from specsolve._engine import coverage, labels
-from specsolve._engine.pieces import absence_restrictions
+from specsolve._engine.terms import absence_restrictions
 from specsolve._messages import coordinate_expr, unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, InfeasibleSubsystem
@@ -274,10 +274,10 @@ def reordered(
             rebuilt model holds — the frame is not this model's answer.
     """
     in_start_order = sorted((held.start, name) for name, held in registry.items())
-    pieces = [
+    aligned = [
         _aligned(attached, name, registry[name], declared[name].dims, frames.get(name)) for _, name in in_start_order
     ]
-    return pl.concat(pieces) if pieces else pl.Series(_SOLUTION, [], dtype=pl.Float64)
+    return pl.concat(aligned) if aligned else pl.Series(_SOLUTION, [], dtype=pl.Float64)
 
 
 def _aligned(
@@ -350,16 +350,16 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     compiled = compiler.expression(expr, context, reported=True)
 
     coverage.refuse_null_constants(
-        [p.frame for p in compiled.consts],
+        [p.frame for p in compiled.constant],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         _reported_divisor_message,
     )
 
-    pieces = compiled.consts
-    dims = compiler.scope.spanned(pieces)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
-    added = compiler.summed_onto(pieces, carrier, absent='zero')
+    terms = compiled.constant
+    dims = compiler.scope.spanned(terms)
+    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    added = compiler.summed_onto(terms, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)

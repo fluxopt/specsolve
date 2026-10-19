@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
-    from specsolve._engine.pieces import Presence
     from specsolve._engine.scope import Scope
+    from specsolve._engine.terms import Presence
 
 
 @dataclass(frozen=True)

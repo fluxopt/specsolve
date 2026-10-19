@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
 from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
 from specsolve._engine.scope import join_on
+from specsolve._engine.terms import Presence, Term, refuse_a_term_without_the_dims
 from specsolve._names import VALUE
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ class _Order:
         """*source* with the walked dimension moved by *moved*.
 
         *dims* is the caller's, since a presence frame need not carry the
-        piece's. *prepared* adds the operator's extra join between the two keyed sides.
+        term's. *prepared* adds the operator's extra join between the two keyed sides.
         """
         dimension = self.grouping.dimension
         kept = [d for d in dims if d != dimension]
@@ -89,13 +89,13 @@ def translate_rows(
 ) -> pl.LazyFrame:
     """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
-    The predicate form of [`translate_piece`][]: a missing row already reads as false.
+    The predicate form of [`translate_term`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
     return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
 
 
-def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> Piece:
+def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Term:
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for. A window
@@ -103,7 +103,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
     partition, for the coordinates in no group.
     """
     if s.along not in p.dims:
-        refuse_a_piece_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
+        refuse_a_term_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
     order = _Order.of(scope, s.along, s.partition)
 
     width_name = s.width if isinstance(s.width, str) else None
@@ -140,15 +140,15 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
     return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) -> Piece:
+def translate_term(scope: Scope, p: Term, s: program.Translate, context: str) -> Term:
     """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
     Every fill over a constant is written, ``0`` included, so the slot has a
-    value. Over a term a fill writes nothing: the vacated slot contributes no
+    value. Over a linear term a fill writes nothing: the vacated slot contributes no
     term, and lowering refuses every nonzero fill over a variable.
     """
     if s.along not in p.dims:
-        refuse_a_piece_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
+        refuse_a_term_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
     others = [d for d in p.dims if d != s.along]
     order = _Order.of(scope, s.along, s.partition)
     edge = _Edge.of(scope, order, s)
@@ -196,7 +196,7 @@ def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) 
         return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique())
 
     frame = remap(p.frame, p.carried, p.dims)
-    if not s.wrap and s.fill is not None and p.kind == 'const':
+    if not s.wrap and s.fill is not None and p.kind == 'constant':
         frame = pl.concat([frame, edge.filled(scope, others, s.fill)], how='vertical_relaxed')
     return replace(p, frame=frame, presences=travelled_presences())
 

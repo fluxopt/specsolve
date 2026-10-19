@@ -206,7 +206,7 @@ def test_a_dual_on_a_solve_that_left_none_is_refused_by_name():
 
 
 def test_a_divisor_that_adds_keeps_its_hole():
-    """Adding up a divisor must not invent a zero: a coordinate no piece covers stays null, so the division reports it rather than dividing by it."""
+    """Adding up a divisor must not invent a zero: a coordinate no term covers stays null, so the division reports it rather than dividing by it."""
     spec = override(
         SPEC,
         **{

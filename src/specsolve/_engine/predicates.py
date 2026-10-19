@@ -246,7 +246,7 @@ def compile_predicate(
 def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:
     """One side of a comparison of expressions as ``(dims…, cval)``, and the dims it is keyed by.
 
-    Read by the expression compiler, so it cannot drift from the rows. Pieces
+    Read by the expression compiler, so it cannot drift from the rows. Its terms
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
     """
     # in-function: the compiler imports this module
@@ -254,11 +254,11 @@ def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple
 
     compiler = Compiler(scope)
     compiled = compiler.expression(side, 'a where comparing expressions')
-    assert not (compiled.terms or compiled.quads), (
+    assert not (compiled.linear or compiled.quadratic), (
         'a where compares expressions the language keeps every variable out of'
     )
-    dims = scope.spanned(compiled.consts)
-    added = compiler.summed_onto(compiled.consts, masked(scope, dims, None), absent='spreads')
+    dims = scope.spanned(compiled.constant)
+    added = compiler.summed_onto(compiled.constant, masked(scope, dims, None), absent='spreads')
     return added.select(*dims, 'cval'), dims
 
 
