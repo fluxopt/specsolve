@@ -37,3 +37,6 @@ docs/*.pdf
 
 bench/results/.inflight
 node_modules/
+
+# The reproductions `pixi run fuzz-fresh` writes.
+fuzz-findings/
