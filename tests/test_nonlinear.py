@@ -99,7 +99,9 @@ def test_a_function_of_a_sum_takes_the_sum_at_each_coordinate(sink):
     }
     sources = {'i': ['a', 'b'], 'j': ['p', 'q', 'r'], 'd': pl.DataFrame({'i': ['a', 'b'], 'value': DATA})}
     with sps.solve(spec, sources, solver_name=sink) as result:
-        assert result.objective == pytest.approx(sum(map(math.log, DATA)), rel=RTOL)
+        assert result.objective == pytest.approx(sum(map(math.log, DATA)), rel=RTOL), (
+            'at each coordinate the xs sum to log(d)'
+        )
 
 
 @pytest.mark.parametrize('sense', ['minimize', 'maximize'])
@@ -122,10 +124,10 @@ def test_an_lp_on_ipopt_answers_as_highs_does(sense):
         sps.solve(spec, sources, solver_name='highs', outputs=outputs) as highs,
         sps.solve(spec, sources, solver_name='ipopt', outputs=outputs) as ipopt,
     ):
-        assert ipopt.objective == pytest.approx(highs.objective, rel=RTOL)
+        assert ipopt.objective == pytest.approx(highs.objective, rel=RTOL), 'one LP, one optimum'
         assert ipopt.primal('x')['value'].to_list() == pytest.approx(
             highs.primal('x')['value'].to_list(), rel=RTOL, abs=1e-6
-        )
+        ), 'the LP has one optimal vertex, which an interior point reaches to its tolerance'
         for name in ('floor', 'cap', 'pair'):
             assert ipopt.dual(name)['value'].to_list() == pytest.approx(
                 highs.dual(name)['value'].to_list(), rel=RTOL, abs=1e-6
@@ -150,7 +152,7 @@ def test_a_quadratic_row_on_ipopt_reaches_gurobis_optimum():
         'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
     }
     with sps.solve(spec, {'g': ['a', 'b']}, solver_name='ipopt') as result:
-        assert result.objective == pytest.approx(8.0, rel=RTOL)
+        assert result.objective == pytest.approx(8.0, rel=RTOL), 'p = q = 2 on both generators'
 
 
 def test_a_sink_without_the_capability_names_the_ones_with_it():
@@ -165,7 +167,7 @@ def test_a_function_of_data_folds_to_a_number_and_builds_no_column():
     with sps.build(spec, _sources(DATA)) as model:
         assert model._engine._model.handoff.nl.height == 0, 'a function of a parameter defines no column'
         with model.solve() as result:
-            assert result.primal('x')['value'].to_list() == pytest.approx([4.0, 10.0], rel=RTOL)
+            assert result.primal('x')['value'].to_list() == pytest.approx([4.0, 10.0], rel=RTOL), 'x = d + w'
 
 
 @pytest.mark.parametrize('sink', SINKS)
@@ -174,7 +176,7 @@ def test_evaluate_reads_a_function_at_the_solution(sink):
     with sps.solve(_model('exp(x)'), _sources(DATA), solver_name=sink) as result:
         assert result.evaluate('exp(x) + x / y')['value'].to_list() == pytest.approx(
             [d + math.log(d) / w for d, w in zip(DATA, [2.0, 3.0], strict=True)], rel=RTOL
-        )
+        ), 'exp(x) is d where the row binds, and x / y is log(d) / w'
 
 
 def test_a_defined_column_is_not_a_variable_the_result_reports():
