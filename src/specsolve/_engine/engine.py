@@ -404,12 +404,16 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent.
+
+        A model with a defined column has no reduced costs: the multipliers of
+        its equations are not in the dual, so the computed ones would be wrong.
+        """
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
             case 'reduced_cost':
-                if answer.primal is None or answer.dual is None:
+                if answer.primal is None or answer.dual is None or self._model.handoff.nl.height:
                     return {}
                 return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
             case 'slack':

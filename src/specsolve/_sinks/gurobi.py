@@ -101,7 +101,14 @@ class Gurobi(Solver):
     lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'no_gain'})
     capabilities = Capabilities(
         supports=frozenset(
-            {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+            {
+                'integrality',
+                'sos',
+                'quadratic_objective',
+                'nonconvex_quadratic_objective',
+                'quadratic_constraint',
+                'nonlinear',
+            }
         )
     )
 
@@ -296,13 +303,73 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
 
 
 def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> None:
-    """What ``loadModel`` cannot take: the SOS and the quadratic rows, over the model's own ``Var`` list."""
-    if not handoff.sos.height and not handoff.qmatrix.height:
+    """What ``loadModel`` cannot take: the SOS, the quadratic rows and the defined columns, over the model's own ``Var`` list."""
+    if not handoff.sos.height and not handoff.qmatrix.height and not handoff.nl.height:
         return
     columns = m.getVars()
     _add_sets(m, columns, handoff, gurobipy)
     _add_quadratic_rows(m, columns, handoff, handoff.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
+    _add_nonlinear(m, columns, handoff, gurobipy)
     m.update()
+
+
+def _add_nonlinear(m: Any, columns: list[Any], handoff: Handoff, gurobipy: Any) -> None:
+    """Every defined column a row or the objective reads, one ``addGenConstrNL`` call each, its chain inlined.
+
+    A defined column read only by another one's argument is written into that
+    one's expression rather than given an equation of its own: Gurobi's
+    presolve turns a chain of ``mul`` equations into quadratic rows that end in
+    a numeric error, where the same product as one tree solves. Such a column
+    is left free and unread. Gurobi's ``pow`` needs a constant on one side, so
+    a variable raised to a variable is written ``exp(b · log(a))``, which holds
+    only where ``a > 0``. A model with any of these is solved to global
+    optimality, and leaves no duals.
+    """
+    import numpy as np
+    from gurobipy import nlfunc
+
+    read = set(
+        np.unique(
+            np.concatenate(
+                [
+                    handoff.matrix['col'].to_numpy(),
+                    handoff.obj['col'].to_numpy(),
+                    *(handoff.quad[c].to_numpy() for c in ('col_l', 'col_r')),
+                    *(handoff.qmatrix[c].to_numpy() for c in ('col_l', 'col_r')),
+                ]
+            )
+        ).tolist()
+    )
+    inlined: dict[int, Any] = {}
+
+    def affine(entries: pl.DataFrame) -> tuple[Any, float | None]:
+        """An argument as an expression, and its value where it holds no variable."""
+        constant = float(entries.filter(entries['var'].is_null())['coeff'].sum())
+        expression: Any = constant
+        held = False
+        for var, coeff in entries.filter(entries['var'].is_not_null()).iter_rows():
+            expression = expression + coeff * inlined.get(var, columns[var])
+            held = True
+        return expression, None if held else constant
+
+    unary = {'exp': nlfunc.exp, 'log': nlfunc.log, 'sqrt': nlfunc.sqrt, 'sin': nlfunc.sin, 'cos': nlfunc.cos}
+    for col, op, arguments in handoff.nonlinear_blocks():
+        (a, a_value), *rest = (affine(entries) for entries in arguments)
+        if op in unary:
+            expression = unary[op](a)
+        else:
+            ((b, b_value),) = rest
+            if op == 'mul':
+                expression = a * b
+            elif op == 'div':
+                expression = a / b
+            elif a_value is None and b_value is None:
+                expression = nlfunc.exp(b * nlfunc.log(a))
+            else:
+                expression = a**b
+        inlined[col] = expression
+        if col in read:
+            m.addGenConstrNL(columns[col], expression)
 
 
 def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowVectors, spelling: Any) -> None:

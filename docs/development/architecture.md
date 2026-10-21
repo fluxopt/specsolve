@@ -218,6 +218,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/predicates.py` | a `where:` mask as a boolean query |
 | `_engine/pieces.py` | the additive pieces an expression compiles to |
+| `_engine/nonlinear.py` | a nonlinear term as a defined column and its equation (prototype) |
+| `_mathspec_mock.py` | the mathspec half of nonlinear support, patched in (prototype, not for merge) |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |

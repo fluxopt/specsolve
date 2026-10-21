@@ -156,7 +156,8 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
     Each declaration owns a contiguous run of column indices, so a term's
     variable is a range test and its place in that frame is a positional take.
     ``coordinate`` is one string because one row's terms may span variables
-    with different dims.
+    with different dims. A defined column has no declaration, so it is named
+    by its op and its column index.
     """
     wanted = entries['col'].to_numpy()
     named = []
@@ -175,6 +176,15 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
                 pl.lit(variable).alias('variable'),
                 rendered.alias('coordinate'),
             ).pipe(collected)
+        )
+    defined = model.handoff.nl.filter(pl.col('col').is_in(wanted))
+    if defined.height:
+        named.append(
+            defined.select(
+                pl.col('col').cast(pl.Int64),
+                pl.format('{}(…)', pl.col('op').cast(pl.String)).alias('variable'),
+                pl.format('#{}', pl.col('col')).alias('coordinate'),
+            )
         )
     labelled = (
         pl.concat(named)

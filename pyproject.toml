@@ -110,6 +110,10 @@ python = "3.12.*"
 [tool.pixi.pypi-dependencies]
 specsolve = { path = ".", editable = true }
 
+[tool.pixi.feature.dev.dependencies]
+# The ipopt sink's solver: conda-forge ships the shared library cyipopt links against.
+cyipopt = ">=1.5"
+
 [tool.pixi.feature.dev.pypi-dependencies]
 specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress"] }
 

@@ -22,6 +22,7 @@ installed reads ``0.0.0``.
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _installed_version
 
+from specsolve import _mathspec_mock as _mathspec_mock  # PROTOTYPE: patches mathspec before anything parses a spec
 from specsolve import errors as errors
 from specsolve import types as types
 from specsolve._api import build, check, evaluate, load_result, scan_result, solve, tidy, write

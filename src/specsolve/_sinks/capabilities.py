@@ -30,6 +30,7 @@ Capability = Literal[
     'quadratic_objective',
     'nonconvex_quadratic_objective',
     'quadratic_constraint',
+    'nonlinear',
 ]
 
 ALL_CAPABILITIES: tuple[Capability, ...] = get_args(Capability)
@@ -75,6 +76,8 @@ def required(handoff: Handoff, /) -> frozenset[Capability]:
         needed.add('quadratic_constraint')
     if handoff.sos.height:
         needed.add('sos')
+    if handoff.nl.height:
+        needed.add('nonlinear')
     return frozenset(needed)
 
 
@@ -85,6 +88,7 @@ _SPELLED: Mapping[str, str] = {
     'quadratic_objective': 'a quadratic objective',
     'nonconvex_quadratic_objective': 'a nonconvex quadratic objective',
     'quadratic_constraint': 'a quadratic constraint',
+    'nonlinear': 'a nonlinear term (a variable in a divisor, under a power or in a function)',
 }
 
 
