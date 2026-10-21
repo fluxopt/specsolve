@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from specsolve._engine.labels import Labelled
+    from specsolve._engine.nonlinear import Atoms, Op
 
 
 def _totalled(p: Piece) -> pl.LazyFrame:
@@ -97,11 +98,14 @@ class Compiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
     ``solution`` is set on the compiler a read builds and on no other: with it
-    every variable and every ``dual(c)`` compiles to a value.
+    every variable and every ``dual(c)`` compiles to a value. ``atoms`` is
+    set on the compiler a build uses, and numbers the defined column a
+    nonlinear term over a variable becomes.
     """
 
     scope: Scope
     solution: Solution | None = None
+    atoms: Atoms | None = None
 
     # ------------------------------------------------------------------
     # bounds
@@ -177,8 +181,12 @@ class Compiler:
             """``a * b``, every pairing of both operands' pieces formed once, both mixed products included.
 
             A constant piece owes a factor's parameters only where the other
-            factor carries no variable ([`Piece.parameters`][]).
+            factor carries no variable ([`Piece.parameters`][]). A factor of
+            degree 2 beside a variable makes a product above degree 2, which
+            is one ``mul`` column, so the row reading it stays linear.
             """
+            if (a.quads and (b.terms or b.quads)) or (b.quads and a.terms):
+                return self._nonlinear('mul', (a, b), context)
             assert not ((a.quads and b.terms) or (b.quads and a.terms) or (a.quads and b.quads)), (
                 f'in {context}: a product of degree 3 reached the compiler'
             )
@@ -205,7 +213,8 @@ class Compiler:
         def quotient(e: program.Divide) -> CompiledExpression:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate."""
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
-            assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
+            if b.terms or b.quads:
+                return self._nonlinear('div', (a, b), context)
             assert len(b.consts) == 1, 'a variable-free divisor is added up to one piece'
             inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
@@ -217,11 +226,17 @@ class Compiler:
             """``a ** b``, where neither side carries a variable; each side is added up first."""
             a = self._added_up(ev(e.base), e.base, absent='zero')
             b = self._added_up(ev(e.exponent), e.exponent, absent='zero')
-            assert not (a.terms or a.quads or b.terms or b.quads), (
-                f'in {context}: a power over variables reached the compiler'
-            )
+            if a.terms or a.quads or b.terms or b.quads:
+                return self._nonlinear('pow', (a, b), context)
             assert len(a.consts) == 1 and len(b.consts) == 1, 'a variable-free operand is added up to one piece'
             return CompiledExpression((), (join_pow(a.consts[0], b.consts[0]),))
+
+        def function(e: program.Apply) -> CompiledExpression:  # pyrefly: ignore[missing-attribute] — the mock's node
+            """``f(a)``: a column of its own where *a* carries a variable, else *a* added up and ``f`` taken of each value."""
+            a = self._added_up(ev(e.operand), e.operand, absent='zero')
+            if a.terms or a.quads:
+                return self._nonlinear(e.function, (a,), context)
+            return map_pieces(a, lambda p: replace(p, frame=p.frame.with_columns(_FUNCTIONS[e.function])))
 
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
@@ -318,6 +333,8 @@ class Compiler:
                 return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
                 return quotient(e)
+            if isinstance(e, program.Apply):  # pyrefly: ignore[missing-attribute] — the mock's node
+                return function(e)
             if isinstance(e, program.Power):
                 return power(e)
             if isinstance(e, program.Sum):
@@ -340,6 +357,11 @@ class Compiler:
             assert_never(e)
 
         return ev(expr)
+
+    def _nonlinear(self, op: Op, operands: Sequence[CompiledExpression], context: str) -> CompiledExpression:
+        """A nonlinear term over a variable, as the defined column it becomes. Only a build has variables to define one over."""
+        assert self.atoms is not None, f'in {context}: a nonlinear term over a variable reached a read'
+        return CompiledExpression((self.atoms.atom(op, operands),), ())
 
     def _parameter_piece(self, name: str) -> Piece:
         """A parameter as a constant part, keyed by its declared dims, present only at its rows under ``missing: absent``."""
@@ -576,6 +598,16 @@ class Compiler:
         """Trade the dims *columns* drops for the ones it adds, through its relation."""
         frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
         return Piece(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+
+
+#: Each function of a variable-free value, as polars computes it.
+_FUNCTIONS: Mapping[str, pl.Expr] = {
+    'exp': pl.col('cval').exp(),
+    'log': pl.col('cval').log(),
+    'sqrt': pl.col('cval').sqrt(),
+    'sin': pl.col('cval').sin(),
+    'cos': pl.col('cval').cos(),
+}
 
 
 def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:

@@ -106,6 +106,13 @@ class Handoff:
     *sink capability* — so a solver without the concept refuses a model
     carrying one.
 
+    ``nl`` is ``(col, op)``, one row per defined column, and ``nl_args`` its
+    arguments as ``(col, arg, var, coeff)``: column ``col`` equals ``op`` of
+    its arguments, argument ``arg`` being the sum of ``coeff · x[var]`` over its
+    entries, a null ``var`` contributing ``coeff`` alone. A function takes
+    argument 0; ``mul``, ``div`` and ``pow`` take 0 and 1. Empty for every
+    model with no nonlinear term.
+
     ``cols``, ``rows`` and ``matrix`` arrive in the solver's own order —
     ``cols`` by column, the other two by row — and ``col`` and ``row`` are
     dense ``0..n-1``, so they *are* the solver's indices: every dense vector is
@@ -125,6 +132,8 @@ class Handoff:
     rows: pl.DataFrame
     matrix: pl.DataFrame
     sos: pl.DataFrame
+    nl: pl.DataFrame
+    nl_args: pl.DataFrame
     row_starts: Ints
     column_count: int
     row_count: int
@@ -236,7 +245,25 @@ class Handoff:
             self.matrix['col'].to_numpy(),
             self.row_starts,
             *(self.sos[column].to_numpy() for column in self.sos.columns),
+            *(self.nl[column].to_physical().to_numpy() for column in self.nl.columns),
+            *(self.nl_args[column].fill_null(-1).to_numpy() for column in self.nl_args.columns),
         ).digest()
+
+    def nonlinear_blocks(self) -> Iterator[tuple[int, str, tuple[pl.DataFrame, ...]]]:
+        """Each defined column, its op, and its arguments' ``(var, coeff)`` entries, in column order.
+
+        An argument with no entry is zero.
+        """
+        arity = {'mul': 2, 'div': 2, 'pow': 2}
+        grouped = {int(col): entries for (col,), entries in self.nl_args.group_by('col', maintain_order=True)}
+        empty = self.nl_args.clear()
+        for col, op in self.nl.iter_rows():
+            entries = grouped.get(col, empty)
+            yield (
+                col,
+                op,
+                tuple(entries.filter(pl.col('arg') == k).select('var', 'coeff') for k in range(arity.get(op, 1))),
+            )
 
     def sets(self) -> Iterator[tuple[int, pl.Series, pl.Series]]:
         """Each special-ordered set: its type, member columns, and weights, in ``(set, weight)`` order.

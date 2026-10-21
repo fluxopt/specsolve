@@ -18,6 +18,7 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
+from specsolve._engine.nonlinear import Atoms
 from specsolve._engine.pieces import Piece, absence_restrictions
 from specsolve._engine.scope import Scope, join_on
 from specsolve._messages import null_bounds_message
@@ -105,7 +106,8 @@ class Assembly:
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.compiler = Compiler(self.scope)
+        self.atoms = Atoms(self.scope)
+        self.compiler = Compiler(self.scope, atoms=self.atoms)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
@@ -121,14 +123,20 @@ class Assembly:
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
         ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
-        [`IN_MEMORY_REACH`][] collects [`in_memory`][].
+        [`IN_MEMORY_REACH`][] collects [`in_memory`][]. The defined columns
+        nonlinear terms become are numbered after every declared variable.
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
             cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
             sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
+            self.atoms.next = self.n_cols
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
             built = [self._build_constraint(name, c) for name, c in ordered]
             objective = self._build_objective(self.program.objective)
+        if defined := self.atoms.next - self.n_cols:
+            cols.append(_free_columns(defined))
+            self.n_cols = self.atoms.next
+        nl, nl_args = self.atoms.frames()
 
         stacked = labels.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
         matrix_starts = _row_starts(stacked, self.n_rows)
@@ -145,6 +153,8 @@ class Assembly:
             rows=labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
             matrix=matrix,
             sos=_stack(sets, _SOS),
+            nl=nl,
+            nl_args=nl_args,
             row_starts=matrix_starts,
             column_count=self.n_cols,
             row_count=self.n_rows,
@@ -417,7 +427,7 @@ class Assembly:
         ]
         stacked = pl.concat(pieces).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
-        objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
+        objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.atoms.next)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
         return objective
 
@@ -435,6 +445,14 @@ class Assembly:
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
+
+
+def _free_columns(count: int) -> pl.DataFrame:
+    """*count* continuous columns with no bound, as ``cols`` holds them."""
+    return pl.DataFrame(
+        {'lb': [-math.inf] * count, 'ub': [math.inf] * count, 'vtype': ['continuous'] * count},
+        schema={'lb': pl.Float64, 'ub': pl.Float64, 'vtype': _DTYPES['vtype']},
+    )
 
 
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:

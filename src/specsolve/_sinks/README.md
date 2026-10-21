@@ -12,7 +12,7 @@ takes the handoff and renders it to a file. Everything else follows.
 | answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
-| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `solver.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
+| members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), `ipopt.py` (`cyipopt` from conda-forge, prototype), over `solver.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
 
 ## Staying loaded
 

@@ -18,6 +18,7 @@ from specsolve._sinks.capabilities import spelled
 from specsolve._sinks.gurobi import Gurobi
 from specsolve._sinks.handoff import Handoff
 from specsolve._sinks.highs import Highs
+from specsolve._sinks.ipopt import Ipopt
 from specsolve._sinks.lp_file import LP_FILE_CAPABILITIES, write_lp_file
 from specsolve._sinks.mps_file import MPS_FILE_CAPABILITIES, write_mps_file
 from specsolve._sinks.solver import Solver
@@ -49,6 +50,7 @@ SOLVERS: Mapping[str, type[Solver]] = {
     'highs': Highs,
     'gurobi': Gurobi,
     'xpress': Xpress,
+    'ipopt': Ipopt,
 }
 
 
