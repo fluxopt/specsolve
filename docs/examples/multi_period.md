@@ -73,8 +73,6 @@ Least-cost investment and dispatch together: capacity is decided once per period
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E} \times \mathcal{G}`$ — capacity a generator holds for the whole of a period |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

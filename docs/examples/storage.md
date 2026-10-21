@@ -46,7 +46,11 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 | $`\mathrm{discharge}`$ | `discharge` over $`\mathcal{S}`$ — energy out of the store |
 | $`\mathrm{soc}`$ | `soc` over $`\mathcal{S}`$ — state of charge carried into the next snapshot |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
+
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 
 #### Variable domains
 

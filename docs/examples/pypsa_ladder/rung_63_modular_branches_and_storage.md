@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-63--modular-branches-and-storage): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **13927.0** on both sides; structure ≠ `Generator-ext-p_nom-lower` 0 vs 1 — UNEXPLAINED; `Generator-p_nom` 0 vs 1 — UNEXPLAINED; `Link-ext-p_nom-lower` 0 vs 1 — UNEXPLAINED; `Link-p_nom` 0 vs 1 — UNEXPLAINED; `Process-ext-p_nom-lower` 0 vs 1 — UNEXPLAINED; `Process-p_nom` 0 vs 1 — UNEXPLAINED; size ≠ 108 vs 111 rows · ≠ 52 vs 55 columns · ≠ 200 vs 203 nonzeros; duals — integer model, no duals; **model for model**: 44 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **13927.0** on both sides; structure ✔ 27 constraints · 17 variables, name for name; size ✔ 108 rows · ✔ 52 columns · ✔ 200 nonzeros; duals — integer model, no duals; **model for model**: 44 blocks equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -12,17 +12,14 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | row | PyPSA | specsolve |
 | --- | ---: | ---: |
 | `Bus-nodal_balance` | 12 | 12 |
-| `Generator-ext-p_nom-lower` | 0 | ≠ 1 |
 | `Generator-fix-p-lower` | 12 | 12 |
 | `Generator-fix-p-upper` | 12 | 12 |
 | `Line-ext-s-lower` | 4 | 4 |
 | `Line-ext-s-upper` | 4 | 4 |
 | `Line-ext-s_nom-lower` | 1 | 1 |
 | `Line-s_nom_modularity` | 1 | 1 |
-| `Link-ext-p_nom-lower` | 0 | ≠ 1 |
 | `Link-fix-p-lower` | 4 | 4 |
 | `Link-fix-p-upper` | 4 | 4 |
-| `Process-ext-p_nom-lower` | 0 | ≠ 1 |
 | `StorageUnit-energy_balance` | 4 | 4 |
 | `StorageUnit-ext-p_dispatch-lower` | 4 | 4 |
 | `StorageUnit-ext-p_dispatch-upper` | 4 | 4 |
@@ -45,13 +42,10 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | column | PyPSA | specsolve |
 | --- | ---: | ---: |
 | `Generator-p` | 12 | 12 |
-| `Generator-p_nom` | 0 | ≠ 1 |
 | `Line-n_mod` | 1 | 1 |
 | `Line-s` | 4 | 4 |
 | `Line-s_nom` | 1 | 1 |
 | `Link-p` | 4 | 4 |
-| `Link-p_nom` | 0 | ≠ 1 |
-| `Process-p_nom` | 0 | ≠ 1 |
 | `StorageUnit-n_mod` | 1 | 1 |
 | `StorageUnit-p_dispatch` | 4 | 4 |
 | `StorageUnit-p_nom` | 1 | 1 |
@@ -116,12 +110,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{c}^{f,(2)}`$ | `Link_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of the square of one unit of flow |
 | $`\mathrm{com}^{f}`$ | `Link_committable` over $`\mathcal{L}`$ — whether flow is gated by an on/off status decision |
-| $`\mathrm{ext}^{z}`$ | `Process_p_nom_extendable` over $`\mathcal{J}`$ — whether the nominal internal power is a decision |
 | $`\alpha`$ | `Process_rate` over $`\Xi \times \mathcal{T} \times \mathcal{R}`$ — the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`, … read long — negative where the port withdraws, positive where it injects; a link is a process whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`) |
 | $`\mathrm{d}^{z}`$ | `Process_output_delay` over $`\mathcal{R}`$ — snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`, … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for a port that transfers at once. A port has the same delay in every scenario, as a link's port has |
 | $`\mathrm{cyc}^{z}`$ | `Process_output_cyclic_delay` over $`\mathcal{R}`$ — whether a delayed port's transfer wraps from the end of its investment period — PyPSA's `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's first snapshots is lost. The flag is the same in every scenario, as the delay is |
-| $`\underline{\mathrm{z}}^{\mathrm{nom}}`$ | `Process_p_nom_min` over $`\Xi \times \mathcal{J}`$ — least nominal power an extendable process may be built at |
-| $`\mathrm{c}^{\mathrm{cap},z}`$ | `Process_capital_cost` over $`\Xi \times \mathcal{J}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 | $`\mathrm{load}`$ | `Load_p_set` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — demand |
 | $`\mathrm{sgn}^{\mathrm{load}}`$ | `Load_sign` over $`\mathcal{D}`$ — the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{on}^{\mathrm{load}}`$ | `Load_active` over $`\mathcal{D}`$ — whether a load stands in the model — PyPSA's `active`. A load has no build year and no lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`) |
@@ -134,18 +125,15 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{on}^{s}`$ | `Line_active` over $`\mathcal{T} \times \mathcal{K}`$ — whether a line stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{z}`$ | `Process_active` over $`\mathcal{T} \times \mathcal{J}`$ — whether a process stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{\sigma}`$ | `Transformer_active` over $`\mathcal{T} \times \mathcal{M}`$ — whether a transformer stands in a snapshot's period — PyPSA's `active`, data prep |
-| $`\mathrm{W}`$ | `Generator_capital_weight` over $`\mathcal{G}`$ — the sum of period weights a generator stands in — PyPSA's `active * period_weighting`, summed, data prep |
-| $`\mathrm{W}^{f}`$ | `Link_capital_weight` over $`\mathcal{L}`$ — the sum of period weights a link stands in — PyPSA's `active * period_weighting`, summed, data prep |
+| $`\mathrm{act}^{h}`$ | `StorageUnit_active_asset` over $`\mathcal{S}`$ — whether a storage unit is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
+| $`\mathrm{act}^{e}`$ | `Store_active_asset` over $`\mathcal{V}`$ — whether a store is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
+| $`\mathrm{act}^{s}`$ | `Line_active_asset` over $`\mathcal{K}`$ — whether a line is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
+| $`\mathrm{act}^{\sigma}`$ | `Transformer_active_asset` over $`\mathcal{M}`$ — whether a transformer is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\mathrm{W}^{h}`$ | `StorageUnit_capital_weight` over $`\mathcal{S}`$ — the sum of period weights a storage unit stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{W}^{e}`$ | `Store_capital_weight` over $`\mathcal{V}`$ — the sum of period weights a store stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{W}^{s}`$ | `Line_capital_weight` over $`\mathcal{K}`$ — the sum of period weights a line stands in — PyPSA's `active * period_weighting`, summed, data prep |
-| $`\mathrm{W}^{z}`$ | `Process_capital_weight` over $`\mathcal{J}`$ — the sum of period weights a process stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{W}^{\sigma}`$ | `Transformer_capital_weight` over $`\mathcal{M}`$ — the sum of period weights a transformer stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{w}^{\mathrm{sto}}`$ | `snapshot_weightings_stores` over $`\mathcal{T}`$ — PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance |
-| $`\underline{\mathrm{p}}^{\mathrm{nom}}`$ | `Generator_p_nom_min` over $`\Xi \times \mathcal{G}`$ — least nominal power an extendable generator may be built at |
-| $`\mathrm{c}^{\mathrm{cap}}`$ | `Generator_capital_cost` over $`\Xi \times \mathcal{G}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
-| $`\underline{\mathrm{f}}^{\mathrm{nom}}`$ | `Link_p_nom_min` over $`\Xi \times \mathcal{L}`$ — least nominal power an extendable link may be built at |
-| $`\mathrm{c}^{\mathrm{cap},f}`$ | `Link_capital_cost` over $`\Xi \times \mathcal{L}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 | $`\underline{\mathrm{h}}^{\mathrm{nom}}`$ | `StorageUnit_p_nom_min` over $`\Xi \times \mathcal{S}`$ — least nominal power an extendable storage unit may be built at |
 | $`\mathrm{c}^{\mathrm{cap},h}`$ | `StorageUnit_capital_cost` over $`\Xi \times \mathcal{S}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 | $`\underline{\mathrm{e}}^{\mathrm{nom}}`$ | `Store_e_nom_min` over $`\Xi \times \mathcal{V}`$ — least nominal capacity an extendable store may be built at |
@@ -195,7 +183,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\underline{\sigma}^{\mathrm{nom}}`$ | `Transformer_s_nom_min` over $`\Xi \times \mathcal{M}`$ — least nominal apparent power an extendable transformer may be built at |
 | $`\mathrm{c}^{\mathrm{cap},\sigma}`$ | `Transformer_capital_cost` over $`\Xi \times \mathcal{M}`$ — cost of one unit of nominal apparent power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 
-#### Masks
+#### Conditions
 
 | Symbol | Meaning |
 |---|---|
@@ -214,17 +202,14 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`q`$ | `Store_p` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-p` — power delivered to the bus; charging is negative |
 | $`s`$ | `Line_s` over $`\Xi \times \mathcal{T} \times \mathcal{K}`$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `Line_bus1`, lossless |
 | $`\sigma`$ | `Transformer_s` over $`\Xi \times \mathcal{T} \times \mathcal{M}`$ — `Transformer-s` — PyPSA's `p0`, the flow measured at the `Transformer_bus0` end: a positive value withdraws there and injects at `Transformer_bus1`, lossless |
-| $`S`$ | `Line_s_nom_ext` over $`\mathcal{K}`$ — `Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`N^{s}`$ | `Line_n_mod` over $`\mathcal{K}`$ — `Line-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
-| $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`\Sigma`$ | `Transformer_s_nom_ext` over $`\mathcal{M}`$ — `Transformer-s_nom` — nominal apparent power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`N^{\sigma}`$ | `Transformer_n_mod` over $`\mathcal{M}`$ — `Transformer-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
-| $`H`$ | `StorageUnit_p_nom_ext` over $`\mathcal{S}`$ — `StorageUnit-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`N^{h}`$ | `StorageUnit_n_mod` over $`\mathcal{S}`$ — `StorageUnit-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
-| $`E`$ | `Store_e_nom_ext` over $`\mathcal{V}`$ — `Store-e_nom` — nominal capacity where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`N^{e}`$ | `Store_n_mod` over $`\mathcal{V}`$ — `Store-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
+| $`S`$ | `Line_s_nom_ext` over $`\mathcal{K}`$ — `Line-s_nom` — nominal apparent power where it is a decision, for a line that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`N^{s}`$ | `Line_n_mod` over $`\mathcal{K}`$ — `Line-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
+| $`\Sigma`$ | `Transformer_s_nom_ext` over $`\mathcal{M}`$ — `Transformer-s_nom` — nominal apparent power where it is a decision, for a transformer that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`N^{\sigma}`$ | `Transformer_n_mod` over $`\mathcal{M}`$ — `Transformer-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
+| $`H`$ | `StorageUnit_p_nom_ext` over $`\mathcal{S}`$ — `StorageUnit-p_nom` — nominal power where it is a decision, for a storage unit that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`N^{h}`$ | `StorageUnit_n_mod` over $`\mathcal{S}`$ — `StorageUnit-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
+| $`E`$ | `Store_e_nom_ext` over $`\mathcal{V}`$ — `Store-e_nom` — nominal capacity where it is a decision, for a store that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`N^{e}`$ | `Store_n_mod` over $`\mathcal{V}`$ — `Store-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
 #### Definitions
@@ -240,37 +225,34 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{StorageUnit\_opex}`$ | `StorageUnit_opex` over $`\Xi`$ |
 | $`\mathit{Store\_opex}`$ | `Store_opex` over $`\Xi`$ |
 | $`\mathit{scenario\_opex}`$ | `scenario_opex` over $`\Xi`$ — what a future costs to run — every operating term, weighted by the snapshot's hours and its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted, as PyPSA adds them (`optimize.py:415-432`) |
-| $`\mathit{Generator\_capex}`$ | `Generator_capex` (scalar) |
-| $`\mathit{Link\_capex}`$ | `Link_capex` (scalar) |
 | $`\mathit{StorageUnit\_capex}`$ | `StorageUnit_capex` (scalar) |
 | $`\mathit{Store\_capex}`$ | `Store_capex` (scalar) |
 | $`\mathit{Line\_capex}`$ | `Line_capex` (scalar) |
-| $`\mathit{Process\_capex}`$ | `Process_capex` (scalar) |
 | $`\mathit{Transformer\_capex}`$ | `Transformer_capex` (scalar) |
 | $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
 | $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Line\_injection}`$ | `Line_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Transformer\_injection}`$ | `Transformer_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Line\_injection}`$ | `Line_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Transformer\_injection}`$ | `Transformer_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
+| $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ | `position(within=relation[...])` — the position of $`t`$ inside its group |
 
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-$`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ counts within the group a relation puts $`t`$ in: the subscript names the map, $`\mathcal{T}_{\mathrm{relation}(t)}`$ is the group it lands in, and that group has a first position of its own.
-
-#### Masks
+#### Conditions
 
 **`StorageUnit_ext`**
 
@@ -337,67 +319,49 @@ s_{\xi,t,k} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ k 
 **`Line_s_nom_ext`**
 
 ```math
-S_{k} \in \mathbb{R} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k}
+S_{k} \in \mathbb{R} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Line_n_mod`**
 
 ```math
-N^{s}_{k} \ge 0, N^{s}_{k} \in \mathbb{Z} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{s}^{\mathrm{mod}}_{k} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{s}_{t,k} \} \rvert > 0
-```
-
-**`Generator_p_nom_ext`**
-
-```math
-P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
-```
-
-**`Link_p_nom_ext`**
-
-```math
-F_{l} \in \mathbb{R} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l}
-```
-
-**`Process_p_nom_ext`**
-
-```math
-Z_{j} \in \mathbb{R} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j}
+N^{s}_{k} \ge 0, N^{s}_{k} \in \mathbb{Z} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{s}^{\mathrm{mod}}_{k} > 0 \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Transformer_s_nom_ext`**
 
 ```math
-\Sigma_{m} \in \mathbb{R} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m}
+\Sigma_{m} \in \mathbb{R} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \mathrm{act}^{\sigma}_{m}
 ```
 
 **`Transformer_n_mod`**
 
 ```math
-N^{\sigma}_{m} \ge 0, N^{\sigma}_{m} \in \mathbb{Z} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \sigma^{\mathrm{mod}}_{m} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{\sigma}_{t,m} \} \rvert > 0
+N^{\sigma}_{m} \ge 0, N^{\sigma}_{m} \in \mathbb{Z} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \sigma^{\mathrm{mod}}_{m} > 0 \wedge \mathrm{act}^{\sigma}_{m}
 ```
 
 **`StorageUnit_p_nom_ext`**
 
 ```math
-H_{s} \in \mathbb{R} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s}
+H_{s} \in \mathbb{R} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{act}^{h}_{s}
 ```
 
 **`StorageUnit_n_mod`**
 
 ```math
-N^{h}_{s} \ge 0, N^{h}_{s} \in \mathbb{Z} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{h}^{\mathrm{mod}}_{s} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{h}_{t,s} \} \rvert > 0
+N^{h}_{s} \ge 0, N^{h}_{s} \in \mathbb{Z} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{h}^{\mathrm{mod}}_{s} > 0 \wedge \mathrm{act}^{h}_{s}
 ```
 
 **`Store_e_nom_ext`**
 
 ```math
-E_{v} \in \mathbb{R} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v}
+E_{v} \in \mathbb{R} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Store_n_mod`**
 
 ```math
-N^{e}_{v} \ge 0, N^{e}_{v} \in \mathbb{Z} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{e}^{\mathrm{mod}}_{v} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{e}_{t,v} \} \rvert > 0
+N^{e}_{v} \ge 0, N^{e}_{v} \in \mathbb{Z} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{e}^{\mathrm{mod}}_{v} > 0 \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Process_p`**
@@ -462,18 +426,6 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 \mathit{scenario\_opex}_{\xi} = \mathit{Generator\_opex}_{\xi} + \mathit{Link\_opex}_{\xi} + \mathit{StorageUnit\_opex}_{\xi} + \mathit{Store\_opex}_{\xi} \qquad \forall\, \xi \in \Xi
 ```
 
-**`Generator_capex`**
-
-```math
-\mathit{Generator\_capex} = \sum_{\xi \in \Xi,\ g \in \mathcal{G}} \pi_{\xi} \cdot P_{g} \cdot \mathrm{c}^{\mathrm{cap}}_{\xi,g} \cdot \mathrm{W}_{g}
-```
-
-**`Link_capex`**
-
-```math
-\mathit{Link\_capex} = \sum_{\xi \in \Xi,\ l \in \mathcal{L}} \pi_{\xi} \cdot F_{l} \cdot \mathrm{c}^{\mathrm{cap},f}_{\xi,l} \cdot \mathrm{W}^{f}_{l}
-```
-
 **`StorageUnit_capex`**
 
 ```math
@@ -492,12 +444,6 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 \mathit{Line\_capex} = \sum_{\xi \in \Xi,\ k \in \mathcal{K}} \pi_{\xi} \cdot S_{k} \cdot \mathrm{c}^{\mathrm{cap},s}_{\xi,k} \cdot \mathrm{W}^{s}_{k}
 ```
 
-**`Process_capex`**
-
-```math
-\mathit{Process\_capex} = \sum_{\xi \in \Xi,\ j \in \mathcal{J}} \pi_{\xi} \cdot Z_{j} \cdot \mathrm{c}^{\mathrm{cap},z}_{\xi,j} \cdot \mathrm{W}^{z}_{j}
-```
-
 **`Transformer_capex`**
 
 ```math
@@ -513,7 +459,7 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`total_cost`**
 
 ```math
-\mathit{total\_cost} = \mathit{Generator\_capex} + \mathit{Link\_capex} + \mathit{StorageUnit\_capex} + \mathit{Store\_capex} + \mathit{Line\_capex} + \mathit{Process\_capex} + \mathit{Transformer\_capex} + \mathit{risk\_weighted\_opex}
+\mathit{total\_cost} = \mathit{StorageUnit\_capex} + \mathit{Store\_capex} + \mathit{Line\_capex} + \mathit{Transformer\_capex} + \mathit{risk\_weighted\_opex}
 ```
 
 **`Load_demand`**
@@ -525,55 +471,55 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Line_injection`**
 
 ```math
-\mathit{Line\_injection}_{\xi,t,n} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Line\_injection}_{n,\xi,t} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{\xi,t,n} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`StorageUnit_injection`**
 
 ```math
-\mathit{StorageUnit\_injection}_{\xi,t,n} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{StorageUnit\_injection}_{n,\xi,t} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Store_injection`**
 
 ```math
-\mathit{Store\_injection}_{\xi,t,n} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Store\_injection}_{n,\xi,t} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Transformer_injection`**
 
 ```math
-\mathit{Transformer\_injection}_{\xi,t,n} = -\left( \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus0}(m) = n} \sigma_{\xi,t,m} \right) + \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus1}(m) = n} \sigma_{\xi,t,m} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Transformer\_injection}_{n,\xi,t} = -\left( \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus0}(m) = n} \sigma_{\xi,t,m} \right) + \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus1}(m) = n} \sigma_{\xi,t,m} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
 
 ```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Line\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} + \mathit{StorageUnit\_injection}_{\xi,t,n} + \mathit{Store\_injection}_{\xi,t,n} + \mathit{Transformer\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{n,\xi,t} + \mathit{Line\_injection}_{n,\xi,t} + \mathit{Link\_injection}_{n,\xi,t} + \mathrm{Load\_injection}_{n,\xi,t} + \mathit{Process\_injection}_{n,\xi,t} + \mathit{StorageUnit\_injection}_{n,\xi,t} + \mathit{Store\_injection}_{n,\xi,t} + \mathit{Transformer\_injection}_{n,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 #### Objective
@@ -608,24 +554,6 @@ f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}
 f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \neg \mathrm{ext}^{f}_{l} \wedge \neg \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l}
 ```
 
-**`Generator_ext_p_nom_lower`**
-
-```math
-P_{g} \ge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
-```
-
-**`Link_ext_p_nom_lower`**
-
-```math
-F_{l} \ge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l}
-```
-
-**`Process_ext_p_nom_lower`**
-
-```math
-Z_{j} \ge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j}
-```
-
 **`Line_ext_s_lower`**
 
 ```math
@@ -641,13 +569,13 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot S_{k} \qquad \forall\, \xi
 **`Line_ext_s_nom_lower`**
 
 ```math
-S_{k} \ge \underline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k}
+S_{k} \ge \underline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Line_s_nom_modularity`**
 
 ```math
-S_{k} = \mathrm{s}^{\mathrm{mod}}_{k} \cdot N^{s}_{k} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{s}^{\mathrm{mod}}_{k} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{s}_{t,k} \} \rvert > 0
+S_{k} = \mathrm{s}^{\mathrm{mod}}_{k} \cdot N^{s}_{k} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{s}^{\mathrm{mod}}_{k} > 0 \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Transformer_ext_s_lower`**
@@ -665,13 +593,13 @@ S_{k} = \mathrm{s}^{\mathrm{mod}}_{k} \cdot N^{s}_{k} \qquad \forall\, k \in \ma
 **`Transformer_ext_s_nom_lower`**
 
 ```math
-\Sigma_{m} \ge \underline{\sigma}^{\mathrm{nom}}_{\xi,m} \qquad \forall\, \xi \in \Xi,\ m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m}
+\Sigma_{m} \ge \underline{\sigma}^{\mathrm{nom}}_{\xi,m} \qquad \forall\, \xi \in \Xi,\ m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \mathrm{act}^{\sigma}_{m}
 ```
 
 **`Transformer_s_nom_modularity`**
 
 ```math
-\Sigma_{m} = \sigma^{\mathrm{mod}}_{m} \cdot N^{\sigma}_{m} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \sigma^{\mathrm{mod}}_{m} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{\sigma}_{t,m} \} \rvert > 0
+\Sigma_{m} = \sigma^{\mathrm{mod}}_{m} \cdot N^{\sigma}_{m} \qquad \forall\, m \in \mathcal{M} \,:\, \mathrm{ext}^{\sigma}_{m} \wedge \sigma^{\mathrm{mod}}_{m} > 0 \wedge \mathrm{act}^{\sigma}_{m}
 ```
 
 **`StorageUnit_ext_p_dispatch_lower`**
@@ -713,13 +641,13 @@ h^{-}_{\xi,t,s} \le -\underline{\mathrm{h}}_{\xi,t,s} \cdot H_{s} \qquad \forall
 **`StorageUnit_ext_p_nom_lower`**
 
 ```math
-H_{s} \ge \underline{\mathrm{h}}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s}
+H_{s} \ge \underline{\mathrm{h}}^{\mathrm{nom}}_{\xi,s} \qquad \forall\, \xi \in \Xi,\ s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{act}^{h}_{s}
 ```
 
 **`StorageUnit_p_nom_modularity`**
 
 ```math
-H_{s} = \mathrm{h}^{\mathrm{mod}}_{s} \cdot N^{h}_{s} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{h}^{\mathrm{mod}}_{s} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{h}_{t,s} \} \rvert > 0
+H_{s} = \mathrm{h}^{\mathrm{mod}}_{s} \cdot N^{h}_{s} \qquad \forall\, s \in \mathcal{S} \,:\, \mathrm{ext}^{h}_{s} \wedge \mathrm{h}^{\mathrm{mod}}_{s} > 0 \wedge \mathrm{act}^{h}_{s}
 ```
 
 **`StorageUnit_energy_balance`**
@@ -743,13 +671,13 @@ e_{\xi,t,v} \le \overline{\mathrm{e}}_{\xi,t,v} \cdot E_{v} \qquad \forall\, \xi
 **`Store_ext_e_nom_lower`**
 
 ```math
-E_{v} \ge \underline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v}
+E_{v} \ge \underline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Store_e_nom_modularity`**
 
 ```math
-E_{v} = \mathrm{e}^{\mathrm{mod}}_{v} \cdot N^{e}_{v} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{e}^{\mathrm{mod}}_{v} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{e}_{t,v} \} \rvert > 0
+E_{v} = \mathrm{e}^{\mathrm{mod}}_{v} \cdot N^{e}_{v} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{e}^{\mathrm{mod}}_{v} > 0 \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Store_energy_balance`**
@@ -893,10 +821,6 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: whether flow is gated by an on/off status decision
         dims: [link]
         dtype: bool
-      Process_p_nom_extendable:
-        description: whether the nominal internal power is a decision
-        dims: [process]
-        dtype: bool
       Process_rate:
         description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
           … read long — negative where the port withdraws, positive where it injects; a link is a process
@@ -916,15 +840,6 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           first snapshots is lost. The flag is the same in every scenario, as the delay is
         dims: [process_output]
         dtype: bool
-      Process_p_nom_min:
-        description: least nominal power an extendable process may be built at
-        dims: [scenario, process]
-      Process_capital_cost:
-        description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
-          `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
-          and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
-          data prep'
-        dims: [scenario, process]
       Load_p_set:
         description: demand
         dims: [scenario, snapshot, load]
@@ -974,14 +889,30 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: whether a transformer stands in a snapshot's period — PyPSA's `active`, data prep
         dims: [snapshot, transformer]
         dtype: bool
-      Generator_capital_weight:
-        description: the sum of period weights a generator stands in — PyPSA's `active * period_weighting`,
-          summed, data prep
-        dims: [generator]
-      Link_capital_weight:
-        description: the sum of period weights a link stands in — PyPSA's `active * period_weighting`, summed,
-          data prep
-        dims: [link]
+      StorageUnit_active_asset:
+        description: whether a storage unit is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [storage_unit]
+        dtype: bool
+      Store_active_asset:
+        description: whether a store is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [store]
+        dtype: bool
+      Line_active_asset:
+        description: whether a line is one of PyPSA's `active_assets` — its `active` flag alone, without build
+          year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses
+          one that differs by scenario (`constants.py:51`)
+        dims: [line]
+        dtype: bool
+      Transformer_active_asset:
+        description: whether a transformer is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [transformer]
+        dtype: bool
       StorageUnit_capital_weight:
         description: the sum of period weights a storage unit stands in — PyPSA's `active * period_weighting`,
           summed, data prep
@@ -994,10 +925,6 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: the sum of period weights a line stands in — PyPSA's `active * period_weighting`, summed,
           data prep
         dims: [line]
-      Process_capital_weight:
-        description: the sum of period weights a process stands in — PyPSA's `active * period_weighting`,
-          summed, data prep
-        dims: [process]
       Transformer_capital_weight:
         description: the sum of period weights a transformer stands in — PyPSA's `active * period_weighting`,
           summed, data prep
@@ -1005,24 +932,6 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       snapshot_weightings_stores:
         description: PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance
         dims: [snapshot]
-      Generator_p_nom_min:
-        description: least nominal power an extendable generator may be built at
-        dims: [scenario, generator]
-      Generator_capital_cost:
-        description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
-          `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
-          and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
-          data prep'
-        dims: [scenario, generator]
-      Link_p_nom_min:
-        description: least nominal power an extendable link may be built at
-        dims: [scenario, link]
-      Link_capital_cost:
-        description: 'cost of one unit of nominal power for the modelled horizon — PyPSA''s `periodized_cost`:
-          `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given,
-          and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`),
-          data prep'
-        dims: [scenario, link]
       StorageUnit_p_nom_min:
         description: least nominal power an extendable storage unit may be built at
         dims: [scenario, storage_unit]
@@ -1256,68 +1165,51 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         dims: [scenario, snapshot, transformer]
         where: Transformer_active
       Line_s_nom_ext:
-        description: '`Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same
-          PyPSA name carries the fixed regime'
+        description: '`Line-s_nom` — nominal apparent power where it is a decision, for a line that is active;
+          the parameter of the same PyPSA name carries the fixed regime'
         dims: [line]
-        where: Line_s_nom_extendable
+        where: Line_s_nom_extendable AND Line_active_asset
       Line_n_mod:
-        description: '`Line-n_mod` — how many modules of an extendable modular build; none for a build that
-          stands in no snapshot'
+        description: '`Line-n_mod` — how many modules of an extendable modular build; none for a unit that
+          is not active'
         dims: [line]
-        where: Line_s_nom_extendable AND Line_s_nom_mod > 0 AND count(Line_active, over=snapshot) > 0
+        where: Line_s_nom_extendable AND Line_s_nom_mod > 0 AND Line_active_asset
         domain: integer
         bounds: {lower: 0}
-      Generator_p_nom_ext:
-        description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
-          PyPSA name carries the fixed regime'
-        dims: [generator]
-        where: Generator_p_nom_extendable
-      Link_p_nom_ext:
-        description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
-          name carries the fixed regime'
-        dims: [link]
-        where: Link_p_nom_extendable
-      Process_p_nom_ext:
-        description: '`Process-p_nom` — nominal internal power where it is a decision; the parameter of the
-          same PyPSA name carries the fixed regime'
-        dims: [process]
-        where: Process_p_nom_extendable
       Transformer_s_nom_ext:
-        description: '`Transformer-s_nom` — nominal apparent power where it is a decision; the parameter of
-          the same PyPSA name carries the fixed regime'
+        description: '`Transformer-s_nom` — nominal apparent power where it is a decision, for a transformer
+          that is active; the parameter of the same PyPSA name carries the fixed regime'
         dims: [transformer]
-        where: Transformer_s_nom_extendable
+        where: Transformer_s_nom_extendable AND Transformer_active_asset
       Transformer_n_mod:
-        description: '`Transformer-n_mod` — how many modules of an extendable modular build; none for a build
-          that stands in no snapshot'
+        description: '`Transformer-n_mod` — how many modules of an extendable modular build; none for a unit
+          that is not active'
         dims: [transformer]
-        where: Transformer_s_nom_extendable AND Transformer_s_nom_mod > 0 AND count(Transformer_active, over=snapshot)
-          > 0
+        where: Transformer_s_nom_extendable AND Transformer_s_nom_mod > 0 AND Transformer_active_asset
         domain: integer
         bounds: {lower: 0}
       StorageUnit_p_nom_ext:
-        description: '`StorageUnit-p_nom` — nominal power where it is a decision; the parameter of the same
-          PyPSA name carries the fixed regime'
+        description: '`StorageUnit-p_nom` — nominal power where it is a decision, for a storage unit that
+          is active; the parameter of the same PyPSA name carries the fixed regime'
         dims: [storage_unit]
-        where: StorageUnit_p_nom_extendable
+        where: StorageUnit_p_nom_extendable AND StorageUnit_active_asset
       StorageUnit_n_mod:
-        description: '`StorageUnit-n_mod` — how many modules of an extendable modular build; none for a build
-          that stands in no snapshot'
+        description: '`StorageUnit-n_mod` — how many modules of an extendable modular build; none for a unit
+          that is not active'
         dims: [storage_unit]
-        where: StorageUnit_p_nom_extendable AND StorageUnit_p_nom_mod > 0 AND count(StorageUnit_active, over=snapshot)
-          > 0
+        where: StorageUnit_p_nom_extendable AND StorageUnit_p_nom_mod > 0 AND StorageUnit_active_asset
         domain: integer
         bounds: {lower: 0}
       Store_e_nom_ext:
-        description: '`Store-e_nom` — nominal capacity where it is a decision; the parameter of the same PyPSA
-          name carries the fixed regime'
+        description: '`Store-e_nom` — nominal capacity where it is a decision, for a store that is active;
+          the parameter of the same PyPSA name carries the fixed regime'
         dims: [store]
-        where: Store_e_nom_extendable
+        where: Store_e_nom_extendable AND Store_active_asset
       Store_n_mod:
-        description: '`Store-n_mod` — how many modules of an extendable modular build; none for a build that
-          stands in no snapshot'
+        description: '`Store-n_mod` — how many modules of an extendable modular build; none for a unit that
+          is not active'
         dims: [store]
-        where: Store_e_nom_extendable AND Store_e_nom_mod > 0 AND count(Store_active, over=snapshot) > 0
+        where: Store_e_nom_extendable AND Store_e_nom_mod > 0 AND Store_active_asset
         domain: integer
         bounds: {lower: 0}
       Process_p:
@@ -1347,21 +1239,6 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         dims: [scenario, snapshot, link]
         where: not Link_p_nom_extendable AND not Link_committable AND Link_active
         expression: Link_p <= Link_p_max_pu * Link_p_nom
-      Generator_ext_p_nom_lower:
-        description: '`Generator-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
-        dims: [scenario, generator]
-        where: Generator_p_nom_extendable
-        expression: Generator_p_nom_ext >= Generator_p_nom_min
-      Link_ext_p_nom_lower:
-        description: '`Link-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
-        dims: [scenario, link]
-        where: Link_p_nom_extendable
-        expression: Link_p_nom_ext >= Link_p_nom_min
-      Process_ext_p_nom_lower:
-        description: '`Process-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
-        dims: [scenario, process]
-        where: Process_p_nom_extendable
-        expression: Process_p_nom_ext >= Process_p_nom_min
       Line_ext_s_lower:
         description: '`Line-ext-s-lower` — an extendable line carries at least the negative of its rating
           of the chosen build, the loss counted against it'
@@ -1377,12 +1254,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Line_ext_s_nom_lower:
         description: '`Line-ext-s_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, line]
-        where: Line_s_nom_extendable
+        where: Line_s_nom_extendable AND Line_active_asset
         expression: Line_s_nom_ext >= Line_s_nom_min
       Line_s_nom_modularity:
         description: '`Line-s_nom_modularity` — the chosen build is a whole number of modules'
         dims: [line]
-        where: Line_s_nom_extendable AND Line_s_nom_mod > 0 AND count(Line_active, over=snapshot) > 0
+        where: Line_s_nom_extendable AND Line_s_nom_mod > 0 AND Line_active_asset
         expression: Line_s_nom_ext == Line_s_nom_mod * Line_n_mod
       Transformer_ext_s_lower:
         description: '`Transformer-ext-s-lower` — an extendable transformer carries at least the negative
@@ -1399,13 +1276,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Transformer_ext_s_nom_lower:
         description: '`Transformer-ext-s_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, transformer]
-        where: Transformer_s_nom_extendable
+        where: Transformer_s_nom_extendable AND Transformer_active_asset
         expression: Transformer_s_nom_ext >= Transformer_s_nom_min
       Transformer_s_nom_modularity:
         description: '`Transformer-s_nom_modularity` — the chosen build is a whole number of modules'
         dims: [transformer]
-        where: Transformer_s_nom_extendable AND Transformer_s_nom_mod > 0 AND count(Transformer_active, over=snapshot)
-          > 0
+        where: Transformer_s_nom_extendable AND Transformer_s_nom_mod > 0 AND Transformer_active_asset
         expression: Transformer_s_nom_ext == Transformer_s_nom_mod * Transformer_n_mod
       StorageUnit_ext_p_dispatch_lower:
         description: '`StorageUnit-ext-p_dispatch-lower` — dispatch is non-negative'
@@ -1443,13 +1319,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       StorageUnit_ext_p_nom_lower:
         description: '`StorageUnit-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, storage_unit]
-        where: StorageUnit_p_nom_extendable
+        where: StorageUnit_p_nom_extendable AND StorageUnit_active_asset
         expression: StorageUnit_p_nom_ext >= StorageUnit_p_nom_min
       StorageUnit_p_nom_modularity:
         description: '`StorageUnit-p_nom_modularity` — the chosen build is a whole number of modules'
         dims: [storage_unit]
-        where: StorageUnit_p_nom_extendable AND StorageUnit_p_nom_mod > 0 AND count(StorageUnit_active, over=snapshot)
-          > 0
+        where: StorageUnit_p_nom_extendable AND StorageUnit_p_nom_mod > 0 AND StorageUnit_active_asset
         expression: StorageUnit_p_nom_ext == StorageUnit_p_nom_mod * StorageUnit_n_mod
       StorageUnit_energy_balance:
         description: '`StorageUnit-energy_balance` — the charge carried in, plus what is stored after its
@@ -1472,12 +1347,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Store_ext_e_nom_lower:
         description: '`Store-ext-e_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, store]
-        where: Store_e_nom_extendable
+        where: Store_e_nom_extendable AND Store_active_asset
         expression: Store_e_nom_ext >= Store_e_nom_min
       Store_e_nom_modularity:
         description: '`Store-e_nom_modularity` — the chosen build is a whole number of modules'
         dims: [store]
-        where: Store_e_nom_extendable AND Store_e_nom_mod > 0 AND count(Store_active, over=snapshot) > 0
+        where: Store_e_nom_extendable AND Store_e_nom_mod > 0 AND Store_active_asset
         expression: Store_e_nom_ext == Store_e_nom_mod * Store_n_mod
       Store_energy_balance:
         description: '`Store-energy_balance` — the energy carried in, less what is delivered to the bus'
@@ -1585,20 +1460,16 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: what a future costs to run — every operating term, weighted by the snapshot's hours and
           its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
           as PyPSA adds them (`optimize.py:415-432`)
-      Generator_capex: {expression: sum(scenario_weight * Generator_p_nom_ext * Generator_capital_cost * Generator_capital_weight)}
-      Link_capex: {expression: sum(scenario_weight * Link_p_nom_ext * Link_capital_cost * Link_capital_weight)}
       StorageUnit_capex: {expression: sum(scenario_weight * StorageUnit_p_nom_ext * StorageUnit_capital_cost
           * StorageUnit_capital_weight)}
       Store_capex: {expression: sum(scenario_weight * Store_e_nom_ext * Store_capital_cost * Store_capital_weight)}
       Line_capex: {expression: sum(scenario_weight * Line_s_nom_ext * Line_capital_cost * Line_capital_weight)}
-      Process_capex: {expression: sum(scenario_weight * Process_p_nom_ext * Process_capital_cost * Process_capital_weight)}
       Transformer_capex: {expression: sum(scenario_weight * Transformer_s_nom_ext * Transformer_capital_cost
           * Transformer_capital_weight)}
       risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
       total_cost:
         dims: []
-        expression: Generator_capex + Link_capex + StorageUnit_capex + Store_capex + Line_capex + Process_capex
-          + Transformer_capex + risk_weighted_opex
+        expression: (((StorageUnit_capex + Store_capex) + Line_capex) + Transformer_capex) + risk_weighted_opex
         description: what the system costs — capacity once per active period at its expected cost over the
           scenarios, operation in expectation over the scenarios, and a share of it at the tail
       Load_demand:
@@ -1626,9 +1497,9 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           + StorageUnit_injection + Store_injection + Transformer_injection
         description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
           term into the balance, and a load on its right-hand side
-    masks:
+    conditions:
       StorageUnit_ext: {description: a storage unit with an extendable build that stands in the snapshot's
-          period — PyPSA's `ext` rows, where: StorageUnit_p_nom_extendable AND StorageUnit_active}
+          period — PyPSA's `ext` rows, condition: StorageUnit_p_nom_extendable AND StorageUnit_active}
     objective: {sense: minimize, expression: total_cost}
     ```
 
