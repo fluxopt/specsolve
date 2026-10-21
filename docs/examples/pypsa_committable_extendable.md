@@ -58,8 +58,6 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 | $`\mathit{status}`$ | `status` over $`\mathcal{T} \times \mathcal{G}`$ — is this unit committed in this snapshot? Declared only for the units that carry a big-M, which is what marks a unit as committed rather than merely dispatched |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{min,pu}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**
