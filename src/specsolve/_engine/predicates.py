@@ -338,7 +338,7 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
     """The column a where-comparison on *dimension* reads.
 
     A string label is compared as ``String``, not ``Enum``: the where-string
-    rules order labels bytewise and read an unknown label as matching nothing.
+    rules read an unknown label as matching nothing.
     """
     column = pl.col(dimension)
     return column.cast(pl.String) if isinstance(value, str) else column

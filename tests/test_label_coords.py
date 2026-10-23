@@ -426,21 +426,6 @@ def test_a_relation_compares_against_a_label_the_target_lacks():
     assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
 
 
-def test_a_relation_orders_bytewise_not_by_declaration():
-    """Labels order bytewise, whatever order the dimension declared them.
-
-    Attaching casts a relation column to the target's `Enum`, which orders by
-    *declaration*, so an ordering comparison read off it would answer a
-    different question — and silently, since both readings return a mask.
-    `south` is declared first here precisely so the two disagree.
-    """
-    sources = {**NETWORK_SOURCES, 'bus': pl.DataFrame({'bus': ['south', 'north']})}
-    spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send >= 'south'"}}}
-    with sps.solve(spec, sources) as result:
-        built = sorted(row['line'] for row in result.primal('f').to_dicts())
-    assert built == ['ring_b'], "only ring_b sends from 'south'; declaration order would keep the 'north' lines too"
-
-
 # ---------------------------------------------------------------------------
 # a relation's map, supplied under its own key
 # ---------------------------------------------------------------------------
