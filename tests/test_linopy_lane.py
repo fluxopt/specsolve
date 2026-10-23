@@ -48,10 +48,10 @@ def test_a_side_the_program_leaves_open_builds_as_linopy_s_open_bound():
     """A program says an open side is `None`, and linopy takes an infinity there."""
     declared = program.Program(
         parameters={},
-        variables={'p': program.VariableDeclaration(('snapshot',), lower=None, upper=None)},
+        variables={'p': program.Variable(('snapshot',), lower=None, upper=None)},
         constraints={},
         objective=None,
-        dimensions={'snapshot': program.DimensionDeclaration(ordered=True)},
+        dimensions={'snapshot': program.Dimension(ordered=True)},
     )
     model = linopy.Model()
     builder.build_model(model, declared, xr.Dataset(), {'snapshot': pd.Index([0, 1], name='snapshot')}, {})
@@ -356,7 +356,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "    where: '<<<'\n",
             {},
             ValueError,
-            'Cannot parse the where string',
+            'Cannot parse the condition',
             "Variable 'p'",
             id='malformed-where',
         ),

@@ -51,9 +51,11 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 | $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
+| Symbol | Meaning |
+|---|---|
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
 #### Variable domains
 

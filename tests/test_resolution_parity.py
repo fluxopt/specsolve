@@ -87,8 +87,8 @@ COVERED_ELSEWHERE = {
     'RelationComparison': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
     'RelationPairComparison': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
     'RelationDefined': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
-    'JoinedPredicate': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
-    'NamedMask': 'tests/test_resolution_parity.py::test_a_named_mask_builds_the_model_its_where_builds',
+    'JoinedCondition': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
+    'ConditionReference': 'tests/test_resolution_parity.py::test_a_named_condition_builds_the_model_its_condition_builds',
 }
 
 
@@ -103,10 +103,10 @@ def test_both_lanes_build_the_same_model(tmp_path, dispatch_spec_inputs, where):
     _both_lanes_agree(dispatch_spec_path(tmp_path, **{'variables.p.where': where}), dispatch_spec_inputs, where)
 
 
-def test_a_named_mask_builds_the_model_its_where_builds(tmp_path, dispatch_spec_inputs):
-    """A `masks:` entry read by name masks what its `where` masks, on both lanes."""
+def test_a_named_condition_builds_the_model_its_condition_builds(tmp_path, dispatch_spec_inputs):
+    """A `conditions:` entry read by name masks what its condition masks, on both lanes."""
     named = dispatch_spec_path(
-        tmp_path, **{'masks.generates': {'where': 'p_max > 150'}, 'variables.p.where': 'NOT generates'}
+        tmp_path, **{'conditions.generates': {'condition': 'p_max > 150'}, 'variables.p.where': 'NOT generates'}
     )
     _both_lanes_agree(named, dispatch_spec_inputs, 'NOT generates')
 
@@ -132,7 +132,7 @@ def test_every_resolved_predicate_is_parity_tested():
 
     from mathspec import program, to_spec
 
-    expected = set(get_args(program.Predicate))
+    expected = set(get_args(program.Condition))
     covered: set[type] = set()
 
     def walk(node):

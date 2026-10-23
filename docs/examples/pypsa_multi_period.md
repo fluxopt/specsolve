@@ -51,8 +51,6 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot, held at zero in the snapshots whose period the generator does not exist in |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

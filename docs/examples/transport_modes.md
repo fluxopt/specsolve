@@ -48,8 +48,6 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 |---|---|
 | $`\mathit{moved}`$ | `moved` over $`\mathcal{C}`$ — tonnes sent over a connection |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{stock}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{moved}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`moved`**

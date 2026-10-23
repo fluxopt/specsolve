@@ -72,8 +72,6 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 |---|---|
 | $`\mathit{reserve\_of}`$ | `reserve_of` over $`\mathcal{G}`$ — all the reserve a generator holds, across every offer it made |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**
