@@ -50,11 +50,20 @@ dimension, a date is the microsecond its day starts on.
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters, so a misspelled label, such as `gsa` for `gas`, is refused by name.
 
-**A relation goes under
-[its own name](https://mathspec.readthedocs.io/en/latest/reference/language/relations/#the-data-contract)**,
-as a table of its rows with one column per column it declares. A value matching
-no label is refused. A keyed relation holds one row per key; a bare relation
-holds each row at most once.
+**A [set](https://mathspec.readthedocs.io/en/latest/reference/language/sets/)
+goes under its own name**, as a table with one column per member and one row
+per combination it holds. **A property goes under `subject.property`**, as a
+table of the subject's members and one column named after the property, with
+one row per row of the subject that has it: `sources['line.bus0']` holds the
+columns `line` and `bus0`. A value matching no label is refused. A set holds
+each row at most once, and a property one row per row of its subject. A
+property of a set holds rows of that set only.
+
+**A property may also arrive as a column of its subject's table.** The table
+under `sources['line']`, which is also the index of `line`, may carry `bus0`
+and `bus1` columns; a null there is a line without that property. A set's
+table may carry its properties the same way. A property given both ways is
+refused.
 
 ## What attaching refuses and accepts
 
@@ -82,24 +91,26 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a dict or a sequence for a parameter over more than one dimension | |
 | a sequence whose length is not the dimension's | |
 | a sequence for a dimension nothing else supplies labels for | names the three ways to supply them |
-| a key naming neither a parameter, a dimension nor a relation | names the near miss |
-| a relation table short of a column it declares | names them, and what each is |
-| a relation table with a null in any column | |
+| a key naming neither a parameter, a dimension, a set nor a property table | names the near miss |
+| a set or a property table short of a column it declares | names them, and what each is |
+| a set or a property table with a null in any column | |
+| a property given under its own key and as a column of its subject's table | names both |
 | a map with both authors, or neither | names them, and says which way out |
-| an index carrying a column named after a relation with a column over it | names the key it belongs under |
+| an index carrying a column named after a set with a member over it | names the key it belongs under |
 | a datetime label finer than a microsecond | names a label, and the rounding |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a label outside the dimension's index | names the parameter and the strays |
 | two rows for one coordinate | |
-| a relation with two values for one key | |
-| a dimension carrying relations with no index | |
+| a set with a row twice, or a property with two values for one row of its subject | |
+| a property of a set at a row the set does not hold | names the strays |
+| a dimension with sets or properties over it and no index | |
 | a dimension nothing can supply labels for | names both ways to fix it |
 | a dimension the spec declares and the caller also supplies | names the declaration and the colliding key |
-| a relation whose map the spec declares and the caller also supplies | names the map and the colliding column |
+| a set whose table the spec declares and the caller also supplies | names the set and the colliding column |
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
-| a declared map keyed by something the labels do not carry | names the relation and the strays |
+| a declared map keyed by something the labels do not carry | names the table and the strays |
 | a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
-| a parameter or a relation with no row at a coordinate, under the default `missing: refused` | names the first such coordinate and how many more have no row ([a missing row](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#a-missing-row)) |
+| a parameter, a set or a property with no row at a coordinate, or a property missing at a row of its subject, under the default `missing: refused` | names the first such coordinate and how many more have no row ([a missing row](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#a-missing-row)) |
 
 ### Accepted
 
@@ -120,7 +131,8 @@ attaches**, after every check above:
 |---|---|
 | a dimension | `<dim>, specsolve_position`: each label once, and its position as an `Int64` from 0 |
 | a parameter | its dims, then `value` |
-| a relation | the columns it declares |
+| a set | one column per member |
+| a property, under `subject.property` | the subject's members, then the property |
 
 An [archive](../howto/archiving.md) holds these tables under `sources/`, each
 with `specsolve_run` added, and each goes back into `sources` as it is.

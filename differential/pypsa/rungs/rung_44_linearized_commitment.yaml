@@ -21,31 +21,54 @@ dimensions:
       one term in the balance, data prep'}
   load: {dtype: str, description: 'demands, each on one bus'}
   period: {dtype: int, ordered: true, description: investment periods — PyPSA's `investment_periods`}
-relations:
-  snapshot_period: {key: snapshot, values: period, description: the investment period a snapshot falls
-      in}
-  Generator_bus: {key: generator, values: bus, description: the bus a generator sits on}
-  Link_bus0: {key: link, values: bus, description: the bus a link leaves}
-  Link_output_link: {key: link_output, values: link, description: the link an output port belongs to}
-  Link_output_bus: {key: link_output, values: bus, description: 'the bus an output port delivers to —
-      PyPSA''s `bus1`, `bus2`, … columns. A link of three output ports is three labels here rather than
-      a third relation, so the file states any number of them'}
-  Process_output_process: {key: process_output, values: process, description: the process a port belongs
-      to}
-  Process_output_bus: {key: process_output, values: bus, description: 'the bus a port draws from or delivers
-      to — PyPSA''s `bus0`, `bus1`, … columns. A process of three ports is three labels here rather than
-      a third relation, so the file states any number of them'}
-  Load_bus: {key: load, values: bus, description: the bus a load sits on}
+sets:
   Generator_maintenance_cover:
-    key:
-      scenario: scenario
-      generator: generator
-      start: snapshot
-      covered: snapshot
+    description: >-
+      the snapshots a maintenance event covers, by the snapshot it starts in —
+      in a scenario, the start and the snapshots after it, until their generator
+      weightings reach that scenario's `maintenance_duration`, data prep; no
+      rows for a generator that is not maintainable
+    dims: { scenario: scenario, generator: generator, start: snapshot, covered: snapshot }
     missing: absent
-    description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
-      the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
-      data prep; no rows for a generator that is not maintainable
+
+properties:
+  snapshot:
+    period:
+      description: the investment period a snapshot falls in
+      into: period
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link:
+    bus0:
+      description: the bus a link leaves
+      into: bus
+  link_output:
+    link:
+      description: the link an output port belongs to
+      into: link
+    bus:
+      description: >-
+        the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
+        A link of three output ports is three labels here rather than a third
+        relation, so the file states any number of them
+      into: bus
+  process_output:
+    process:
+      description: the process a port belongs to
+      into: process
+    bus:
+      description: >-
+        the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
+        columns. A process of three ports is three labels here rather than a
+        third relation, so the file states any number of them
+      into: bus
+  load:
+    bus:
+      description: the bus a load sits on
+      into: bus
+
 parameters:
   snapshot_weightings_objective:
     dims: [snapshot]
@@ -286,7 +309,7 @@ variables:
     where: Link_active
     domain: continuous
     missing: absent
-    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
       withdraws there and injects at every bus the link''s output ports deliver to'
   Generator_status:
     dims: [scenario, snapshot, generator]
@@ -589,10 +612,10 @@ expressions:
       the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay`
       zero) delivers its flow unshifted, cyclic or not
     cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-      edge=0, within=snapshot_period[period]) * Link_efficiency
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot[period]) * Link_efficiency
   Process_output_arrival:
     dims: [scenario, snapshot, process_output]
     description: what a process transfers at a port at a snapshot — its internal power delayed by the
@@ -601,22 +624,22 @@ expressions:
       where it is not the energy still in transit at the period's first snapshots is lost. A port that
       does not delay (`delay` zero) transfers at once, cyclic or not
     cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
           * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-      edge=0, within=snapshot_period[period]) * Process_rate
+    otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot[period]) * Process_rate
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
       * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=generator), over=snapshot)'}
+      by=snapshot[period]), over=generator), over=snapshot)'}
   Generator_commitment_opex: {expression: 'sum(sum(((Generator_status * Generator_stand_by_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum(Generator_start_up
+      * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum(Generator_start_up
       * Generator_start_up_cost, over=generator), over=snapshot) + sum(sum(Generator_shut_down * Generator_shut_down_cost,
       over=generator), over=snapshot)'}
   Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      by=snapshot[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
       over=snapshot)'}
   scenario_opex:
     dims: [scenario]
@@ -637,11 +660,11 @@ expressions:
     cases:
       active: {when: Load_active, expression: Load_sign * Load_p_set}
     otherwise: '0'
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
-      over=link_output, by=Link_output_bus[bus])'}
-  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
+      over=link_output, by=link_output[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
   Bus_injection:
     dims: [scenario, snapshot, bus]
     expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
@@ -650,7 +673,7 @@ expressions:
 conditions:
   Generator_committed: {condition: Generator_committable AND Generator_active, description: a committable
       generator that stands in the snapshot's period — every unit-commitment row's set}
-  Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR
+  Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot[period]) > 0 OR
       (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a
       snapshot whose ramp reads a previous output — any snapshot but its period''s first, and the horizon''s
       first where the generator comes in off or carries an initial output'}

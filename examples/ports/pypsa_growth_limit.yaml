@@ -21,19 +21,19 @@ dimensions:
     description: generating units, each built in one period and standing from then on
     dtype: str
 
-relations:
-  gen_carrier:
-    description: the carrier a generator burns
-    key: generator
-    values: carrier
-  build_period:
-    description: the period a generator is first built in, and so counted as new in
-    key: generator
-    values: period
-  period_of:
-    description: the investment period a snapshot falls in
-    key: snapshot
-    values: period
+properties:
+  generator:
+    carrier:
+      description: the carrier a generator burns
+      into: carrier
+    period:
+      description: the period a generator is first built in, and so counted as new in
+      into: period
+  snapshot:
+    period:
+      description: the investment period a snapshot falls in
+      into: period
+
 
 parameters:
   load:
@@ -73,7 +73,7 @@ expressions:
     description: >-
       capacity of the capped carrier first standing in a period: each generator's
       capacity counted once, in the period it is built, and never again
-    expression: sum(p_nom * at(capped_carrier, by=gen_carrier[carrier]), over=generator, by=build_period[period])
+    expression: sum(p_nom * at(capped_carrier, by=generator[carrier]), over=generator, by=generator[period])
 
 variables:
   p:
@@ -94,7 +94,7 @@ constraints:
       a generator produces no more than the capacity built for it, and nothing in
       a period it does not stand in
     dims: [snapshot, generator]
-    expression: p <= p_nom * at(activity, by=period_of[period])
+    expression: p <= p_nom * at(activity, by=snapshot[period])
 
   power_balance:
     dims: [snapshot]
@@ -117,5 +117,5 @@ objective:
     operating and capacity cost, each discounted by the weight of the period it
     falls in — capacity once per period the generator stands in
   expression: >-
-    sum(p * opex * at(period_weight, by=period_of[period]))
+    sum(p * opex * at(period_weight, by=snapshot[period]))
     + sum(p_nom * capex * activity * period_weight)

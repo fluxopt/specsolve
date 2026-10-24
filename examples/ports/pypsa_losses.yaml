@@ -24,19 +24,19 @@ dimensions:
     dtype: int
     ordered: true
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  from:
-    description: the bus a line leaves
-    key: line
-    values: bus
-  to:
-    description: the bus a line arrives at
-    key: line
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  line:
+    from_bus:
+      description: the bus a line leaves
+      into: bus
+    to_bus:
+      description: the bus a line arrives at
+      into: bus
+
 
 parameters:
   p_nom:
@@ -111,9 +111,9 @@ constraints:
       a branch dissipates half at either end
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus])
-      - 0.5 * sum(loss, over=line, by=from[bus]) - 0.5 * sum(loss, over=line, by=to[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
+      - 0.5 * sum(loss, over=line, by=line[from_bus]) - 0.5 * sum(loss, over=line, by=line[to_bus])
       == load
 
   within_rating_forward:

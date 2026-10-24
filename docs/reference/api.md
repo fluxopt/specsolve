@@ -206,8 +206,8 @@ variable `p` is accepted.
 
 **A declared name that starts with `specsolve_`, in any letter case, is
 refused** by every function. The prefix is reserved for the columns specsolve adds,
-such as `specsolve_run`. The rule covers dimensions, relations and their
-columns, parameters, variables, constraints, named expressions, `sos:` sets and
+such as `specsolve_run`. The rule covers dimensions, sets and their
+members, properties, parameters, variables, constraints, named expressions, `sos:` sets and
 assumptions. A `key_name=` with the prefix is refused too, and so is a
 dimension called `value`.
 

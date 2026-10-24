@@ -22,12 +22,12 @@ Each case stresses a different SQL shape:
 ``network``    buses joined by lines, a store at every bus and a portfolio
                installed at some buses only: ``transport``, ``storage`` and
                ``nodal`` in one model, the shape of a small PyPSA dispatch.
-               Pools cap groups of plants through a relation keyed by the
-               sparse (bus, tech) pair.
+               Pools cap groups of plants through a property of the set of
+               sparse (bus, tech) pairs.
 ``milp``       the A/B grid's ``milp`` shape (``bench/ab/grid.py``) over
                ``(snapshot, node, tech)``: a binary ``u`` that switches
-               dispatch ``p``, a row mask on a relation's label, and a sum
-               through a relation into regions.
+               dispatch ``p``, a row mask on a property's label, and a sum
+               through a property into regions.
 
 A rung label counts variables per snapshot across all of a case's
 declarations. ``nominal_variables`` is the full coordinate product; what
@@ -396,10 +396,10 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
             'neg_cap': pd.DataFrame({'line': lines, 'value': -rng.uniform(20.0, 80.0, n_line)}),
             'load': pd.DataFrame({'snapshot': snaps, 'bus': buses * n_snap, 'value': load.ravel()}),
             'generator': pd.DataFrame({'generator': gens}),
-            'gen_bus': pd.DataFrame({'generator': gens, 'bus': gen_bus}),
+            'generator.bus': pd.DataFrame({'generator': gens, 'bus': gen_bus}),
             'line': pd.DataFrame({'line': lines}),
-            'line_from': pd.DataFrame({'line': lines, 'bus': frm}),
-            'line_to': pd.DataFrame({'line': lines, 'bus': to}),
+            'line.from_bus': pd.DataFrame({'line': lines, 'from_bus': frm}),
+            'line.to_bus': pd.DataFrame({'line': lines, 'to_bus': to}),
             'bus': pd.DataFrame({'bus': buses}),
             'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
         },
@@ -643,12 +643,13 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
             'load': pd.DataFrame(
                 {'snapshot': np.repeat(np.arange(n_snap), n_bus), 'bus': buses * n_snap, 'value': load.reshape(-1)}
             ),
-            'line_from': pd.DataFrame({'line': lines, 'bus': [buses[i % n_bus] for i in range(n_line)]}),
-            'line_to': pd.DataFrame(
-                {'line': lines, 'bus': [buses[(i % n_bus + 1 + i // n_bus) % n_bus] for i in range(n_line)]}
+            'line.from_bus': pd.DataFrame({'line': lines, 'from_bus': [buses[i % n_bus] for i in range(n_line)]}),
+            'line.to_bus': pd.DataFrame(
+                {'line': lines, 'to_bus': [buses[(i % n_bus + 1 + i // n_bus) % n_bus] for i in range(n_line)]}
             ),
-            'store_bus': pd.DataFrame({'store': stores, 'bus': buses}),
-            'pool_of': pd.DataFrame(
+            'store.bus': pd.DataFrame({'store': stores, 'bus': buses}),
+            'bus_tech': pd.DataFrame({'bus': np.asarray(buses)[bus_of], 'tech': np.asarray(techs)[tech_of]}),
+            'bus_tech.pool': pd.DataFrame(
                 {
                     'bus': np.asarray(buses)[bus_of],
                     'tech': np.asarray(techs)[tech_of],

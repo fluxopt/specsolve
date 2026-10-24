@@ -20,15 +20,16 @@ dimensions:
     description: energy stores, each sitting on one bus
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  store_bus:
-    description: the bus a store sits on
-    key: store
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  store:
+    bus:
+      description: the bus a store sits on
+      into: bus
+
 
 parameters:
   p_nom:
@@ -81,7 +82,7 @@ constraints:
   nodal_balance:
     description: what is generated at a bus, plus what the stores supply, meets the load there
     dims: [snapshot, bus]
-    expression: sum(p, over=generator, by=gen_bus[bus]) + sum(store_p, over=store, by=store_bus[bus]) == load
+    expression: sum(p, over=generator, by=generator[bus]) + sum(store_p, over=store, by=store[bus]) == load
 
   within_capacity:
     description: a store holds no more energy than the capacity built for it

@@ -19,11 +19,12 @@ dimensions:
     dtype: int
     ordered: true
 
-relations:
-  converter_of:
-    description: which converter a flow belongs to
-    key: flow
-    values: converter
+properties:
+  flow:
+    converter:
+      description: which converter a flow belongs to
+      into: converter
+
 
 parameters:
   bp_rate:
@@ -92,7 +93,7 @@ constraints:
   on_the_curve:
     description: every flow reads its own value off its converter's weights
     dims: [flow, time]
-    expression: rate == sum(at(weight, by=converter_of[converter]) * bp_rate, over=bp)
+    expression: rate == sum(at(weight, by=flow[converter]) * bp_rate, over=bp)
   heat_balance:
     description: heat delivered meets the demand
     dims: [time]

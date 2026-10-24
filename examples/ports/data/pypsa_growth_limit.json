@@ -43,7 +43,7 @@
       1.0
     ]
   },
-  "build_period": {
+  "generator.period": {
     "generator": [
       "wind_2030",
       "wind_2040",
@@ -87,7 +87,7 @@
       "gas"
     ]
   },
-  "gen_carrier": {
+  "generator.carrier": {
     "generator": [
       "wind_2030",
       "wind_2040",
@@ -164,7 +164,7 @@
       2050
     ]
   },
-  "period_of": {
+  "snapshot.period": {
     "snapshot": [
       0,
       1,

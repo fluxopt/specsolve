@@ -115,14 +115,15 @@ load = (
 sources = {
     'snapshot': load['snapshot'].unique(),
     'bus': load['bus'].unique(),
-    'generator': n.generators.index.rename('generator'),
+    'generator': n.generators[['bus']].rename_axis('generator').reset_index(),
     'p_max': n.generators['p_nom'].rename_axis('generator'),
     'cost': n.generators['marginal_cost'].rename_axis('generator'),
-    'gen_bus': n.generators['bus'].rename_axis('generator').reset_index(),
     'load': load,
 }
 ```
 
-`gen_bus` is a
-[relation](https://mathspec.readthedocs.io/en/latest/reference/language/relations/),
-so it arrives as a table with one column per column it declares.
+`bus` is a
+[property](https://mathspec.readthedocs.io/en/latest/reference/language/sets/)
+of `generator`, so the table under `generator` carries it: the `generator`
+column is the index, and the `bus` column is the property. The same table may
+go under `generator.bus` instead, without the other columns.

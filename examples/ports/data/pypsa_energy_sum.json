@@ -20,7 +20,7 @@
       150.0
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "hydro",
       "contract",

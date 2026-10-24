@@ -56,8 +56,8 @@ axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_
 sps.solve_over('window.yaml', sources, axis.to_dict())
 ```
 
-**Sources cross a slice in every shape `build` takes.** A parameter or relation
-whose table carries the axis is filtered. Every other source passes through. An
+**Sources cross a slice in every shape `build` takes.** A parameter, set or
+property whose table carries the axis is filtered. Every other source passes through. An
 index of another dimension that carries the axis is refused. A table carrying
 the axis that is short of a coordinate another table has warns, naming both.
 

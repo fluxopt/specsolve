@@ -17,8 +17,12 @@ dimensions:
     description: conversions, each drawing at one bus and delivering at several
     dtype: str
 
-relations:
-  gen_bus: {key: generator, values: bus, description: "the bus a generator sits on"}
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+
 
 parameters:
   gen_p_nom:
@@ -66,7 +70,7 @@ constraints:
       rows name — three ends or two, the expression never says.
     dims: [bus]
     expression: >-
-      sum(gen, over=generator, by=gen_bus[bus])
+      sum(gen, over=generator, by=generator[bus])
       + sum(incidence * p, over=link)
       == load
 

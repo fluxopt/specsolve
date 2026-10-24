@@ -17,11 +17,12 @@ dimensions:
     description: a route end to end, serving one city pair
     dtype: str
 
-relations:
-  call_of:
-    description: the city pair a path serves, end to end
-    key: path
-    values: call
+properties:
+  path:
+    call:
+      description: the city pair a path serves, end to end
+      into: call
+
 
 parameters:
   capacity:
@@ -52,7 +53,7 @@ constraints:
   within_demand:
     description: a pair cannot be carried more than it asked for, however many paths serve it
     dims: [call]
-    expression: sum(flow, over=path, by=call_of[call]) <= demand
+    expression: sum(flow, over=path, by=path[call]) <= demand
 
   within_capacity:
     description: >-

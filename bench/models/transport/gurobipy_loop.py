@@ -37,9 +37,9 @@ def build(env: Any, tables: Mapping[str, Any]) -> Any:
     generators = list(tables['generator']['generator'])
     lines = list(tables['line']['line'])
     buses = list(tables['bus']['bus'])
-    at_bus = _grouped(tables['gen_bus']['generator'], tables['gen_bus']['bus'])
-    into_bus = _grouped(tables['line_to']['line'], tables['line_to']['bus'])
-    out_of_bus = _grouped(tables['line_from']['line'], tables['line_from']['bus'])
+    at_bus = _grouped(tables['generator.bus']['generator'], tables['generator.bus']['bus'])
+    into_bus = _grouped(tables['line.to_bus']['line'], tables['line.to_bus']['to_bus'])
+    out_of_bus = _grouped(tables['line.from_bus']['line'], tables['line.from_bus']['from_bus'])
 
     m = gp.Model(env=env)
     p = {(s, g): m.addVar(ub=p_max[g], obj=cost[g]) for s in snapshots for g in generators}

@@ -1,5 +1,5 @@
 {
-  "as_from": {
+  "city.from_city": {
     "city": [
       "c01",
       "c02",
@@ -39,7 +39,7 @@
       "c17"
     ]
   },
-  "as_to": {
+  "city.to_city": {
     "city": [
       "c01",
       "c02",

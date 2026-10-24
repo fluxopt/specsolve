@@ -6,7 +6,7 @@
       "heat"
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "gas_well"
     ],

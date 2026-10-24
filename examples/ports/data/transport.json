@@ -23,7 +23,7 @@
       40.0
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "wind_n",
       "gas_s"
@@ -44,19 +44,19 @@
       "n_to_s"
     ]
   },
-  "line_from": {
+  "line.from_bus": {
     "line": [
       "n_to_s"
     ],
-    "bus": [
+    "from_bus": [
       "north"
     ]
   },
-  "line_to": {
+  "line.to_bus": {
     "line": [
       "n_to_s"
     ],
-    "bus": [
+    "to_bus": [
       "south"
     ]
   },

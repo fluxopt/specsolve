@@ -17,7 +17,7 @@
 #
 # Every installed plant draws from one pool, a fuel contract or an emission
 # budget, and a pool caps what its plants generate in each snapshot. Pools are
-# drawn per plant, so `pool_of` is keyed by the (bus, tech) pair, and the cap
+# drawn per plant, so `bus_tech[pool]` is keyed by the (bus, tech) pair, and the cap
 # sums `p` over both of its sparse dimensions at once.
 dimensions:
   snapshot:
@@ -34,11 +34,18 @@ dimensions:
   pool:
     dtype: str
 
-relations:
-  line_from: {key: line, values: bus}
-  line_to: {key: line, values: bus}
-  store_bus: {key: store, values: bus}
-  pool_of: {key: [bus, tech], values: pool, missing: absent}
+sets:
+  bus_tech: { dims: [bus, tech], missing: absent }
+
+properties:
+  line:
+    from_bus: bus
+    to_bus: bus
+  store:
+    bus: bus
+  bus_tech:
+    pool: pool
+
 
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
@@ -97,15 +104,15 @@ constraints:
     dims: [snapshot, bus]
     expression: >-
       sum(p, over=tech)
-      + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
-      + sum(discharge, over=store, by=store_bus[bus]) - sum(charge, over=store, by=store_bus[bus])
+      + sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
+      + sum(discharge, over=store, by=store[bus]) - sum(charge, over=store, by=store[bus])
       == load
   soc_balance:
     dims: [snapshot, store]
     expression: soc == shift(soc, along=snapshot, offset=1, edge=0) + charge * eta - discharge
   pool_cap:
     dims: [snapshot, pool]
-    expression: sum(p, over=[bus, tech], by=pool_of[pool]) <= limit
+    expression: sum(p, over=[bus, tech], by=bus_tech[pool]) <= limit
 
 objective:
   sense: minimize

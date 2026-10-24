@@ -73,19 +73,19 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`\Xi`$ | index $`\xi`$ — `scenario` — the futures dispatch is chosen in, each with a weight |
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{snapshot\_period}: \mathcal{T} \to \mathcal{Y}`$ — dispatch periods |
-| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N},\ \mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N},\ \mathrm{StorageUnit\_bus}: \mathcal{S} \to \mathcal{N},\ \mathrm{Line\_bus0}: \mathcal{K} \to \mathcal{N},\ \mathrm{Line\_bus1}: \mathcal{K} \to \mathcal{N},\ \mathrm{Store\_bus}: \mathcal{V} \to \mathcal{N},\ \mathrm{Transformer\_bus0}: \mathcal{M} \to \mathcal{N},\ \mathrm{Transformer\_bus1}: \mathcal{M} \to \mathcal{N}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N}`$ — generating units, each on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L}`$ — controllable connections, each from one bus to the buses it delivers to |
-| $`\mathcal{O}`$ | index $`o`$ — `link_output` with $`\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N}`$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
-| $`\mathcal{J}`$ | index $`j`$ — `process` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J}`$ — generalized multi-port converters, each with an internal power that every port draws or delivers at its own rate |
-| $`\mathcal{R}`$ | index $`r`$ — `process_output` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N}`$ — a process's ports, one label per port a process declares — PyPSA's `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in the balance, data prep |
-| $`\mathcal{D}`$ | index $`d`$ — `load` with $`\mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}`$ — demands, each on one bus |
-| $`\mathcal{S}`$ | index $`s`$ — `storage_unit` with $`\mathrm{StorageUnit\_bus}: \mathcal{S} \to \mathcal{N}`$ — storage units, dispatch and store behind one bus connection |
-| $`\mathcal{V}`$ | index $`v`$ — `store` with $`\mathrm{Store\_bus}: \mathcal{V} \to \mathcal{N}`$ — pure energy stores, each on one bus |
-| $`\mathcal{K}`$ | index $`k`$ — `line` with $`\mathrm{Line\_bus0}: \mathcal{K} \to \mathcal{N},\ \mathrm{Line\_bus1}: \mathcal{K} \to \mathcal{N}`$ — passive branches, each between two buses, their flow set by impedance |
-| $`\mathcal{M}`$ | index $`m`$ — `transformer` with $`\mathrm{Transformer\_bus0}: \mathcal{M} \to \mathcal{N},\ \mathrm{Transformer\_bus1}: \mathcal{M} \to \mathcal{N}`$ — passive branches between two buses, their flow set by impedance and tap ratio, with a phase shift fixed or optimised |
-| $`\mathcal{Y}`$ | index $`y`$ — `period` with $`\mathrm{snapshot\_period}: \mathcal{T} \to \mathcal{Y}`$ — investment periods — PyPSA's `investment_periods` |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period}: \mathcal{T} \to \mathcal{Y}`$ — dispatch periods |
+| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{bus}: \mathcal{O} \to \mathcal{N},\ \mathrm{bus}: \mathcal{R} \to \mathcal{N},\ \mathrm{bus}: \mathcal{D} \to \mathcal{N},\ \mathrm{bus}: \mathcal{S} \to \mathcal{N},\ \mathrm{bus0}: \mathcal{K} \to \mathcal{N},\ \mathrm{bus1}: \mathcal{K} \to \mathcal{N},\ \mathrm{bus}: \mathcal{V} \to \mathcal{N},\ \mathrm{bus0}: \mathcal{M} \to \mathcal{N},\ \mathrm{bus1}: \mathcal{M} \to \mathcal{N}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{N}`$ — generating units, each on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{link}: \mathcal{O} \to \mathcal{L}`$ — controllable connections, each from one bus to the buses it delivers to |
+| $`\mathcal{O}`$ | index $`o`$ — `link_output` with $`\mathrm{link}: \mathcal{O} \to \mathcal{L},\ \mathrm{bus}: \mathcal{O} \to \mathcal{N}`$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
+| $`\mathcal{J}`$ | index $`j`$ — `process` with $`\mathrm{process}: \mathcal{R} \to \mathcal{J}`$ — generalized multi-port converters, each with an internal power that every port draws or delivers at its own rate |
+| $`\mathcal{R}`$ | index $`r`$ — `process_output` with $`\mathrm{process}: \mathcal{R} \to \mathcal{J},\ \mathrm{bus}: \mathcal{R} \to \mathcal{N}`$ — a process's ports, one label per port a process declares — PyPSA's `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in the balance, data prep |
+| $`\mathcal{D}`$ | index $`d`$ — `load` with $`\mathrm{bus}: \mathcal{D} \to \mathcal{N}`$ — demands, each on one bus |
+| $`\mathcal{S}`$ | index $`s`$ — `storage_unit` with $`\mathrm{bus}: \mathcal{S} \to \mathcal{N}`$ — storage units, dispatch and store behind one bus connection |
+| $`\mathcal{V}`$ | index $`v`$ — `store` with $`\mathrm{bus}: \mathcal{V} \to \mathcal{N}`$ — pure energy stores, each on one bus |
+| $`\mathcal{K}`$ | index $`k`$ — `line` with $`\mathrm{bus0}: \mathcal{K} \to \mathcal{N},\ \mathrm{bus1}: \mathcal{K} \to \mathcal{N}`$ — passive branches, each between two buses, their flow set by impedance |
+| $`\mathcal{M}`$ | index $`m`$ — `transformer` with $`\mathrm{bus0}: \mathcal{M} \to \mathcal{N},\ \mathrm{bus1}: \mathcal{M} \to \mathcal{N}`$ — passive branches between two buses, their flow set by impedance and tap ratio, with a phase shift fixed or optimised |
+| $`\mathcal{Y}`$ | index $`y`$ — `period` with $`\mathrm{period}: \mathcal{T} \to \mathcal{Y}`$ — investment periods — PyPSA's `investment_periods` |
 
 #### Parameters
 
@@ -200,8 +200,8 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{soc}`$ | `StorageUnit_state_of_charge` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — `StorageUnit-state_of_charge` — energy held at the end of a snapshot |
 | $`e`$ | `Store_e` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-e` — energy held at the end of a snapshot |
 | $`q`$ | `Store_p` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-p` — power delivered to the bus; charging is negative |
-| $`s`$ | `Line_s` over $`\Xi \times \mathcal{T} \times \mathcal{K}`$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `Line_bus1`, lossless |
-| $`\sigma`$ | `Transformer_s` over $`\Xi \times \mathcal{T} \times \mathcal{M}`$ — `Transformer-s` — PyPSA's `p0`, the flow measured at the `Transformer_bus0` end: a positive value withdraws there and injects at `Transformer_bus1`, lossless |
+| $`s`$ | `Line_s` over $`\Xi \times \mathcal{T} \times \mathcal{K}`$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `line[bus1]`, lossless |
+| $`\sigma`$ | `Transformer_s` over $`\Xi \times \mathcal{T} \times \mathcal{M}`$ — `Transformer-s` — PyPSA's `p0`, the flow measured at the `Transformer_bus0` end: a positive value withdraws there and injects at `transformer[bus1]`, lossless |
 | $`S`$ | `Line_s_nom_ext` over $`\mathcal{K}`$ — `Line-s_nom` — nominal apparent power where it is a decision, for a line that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`N^{s}`$ | `Line_n_mod` over $`\mathcal{K}`$ — `Line-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`\Sigma`$ | `Transformer_s_nom_ext` over $`\mathcal{M}`$ — `Transformer-s_nom` — nominal apparent power where it is a decision, for a transformer that is active; the parameter of the same PyPSA name carries the fixed regime |
@@ -248,9 +248,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 |---|---|
 | $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 | $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
-| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
-| $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ | `position(within=relation[...])` — the position of $`t`$ inside its group |
+| $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
 #### Conditions
 
@@ -375,49 +375,49 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`StorageUnit_charge_carried_in`**
 
 ```math
-\mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} = \begin{cases} \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,\left( t \ominus \mathrm{idle} \right) \ominus 1,s} & \text{if } \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \neg \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,s} & \text{if } \mathrm{cyc}^{y}_{\xi,s} \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \mathrm{reset}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S}
+\mathit{StorageUnit\_charge\_carried\_in}_{\xi,t,s} = \begin{cases} \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,\left( t \ominus \mathrm{idle} \right) \ominus 1,s} & \text{if } \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \neg \mathrm{cyc}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \neg \mathrm{reset}_{\xi,s} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}_{t,s} \right) \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t \ominus^{\mathrm{period}(t)} 1,s} & \text{if } \mathrm{cyc}^{y}_{\xi,s} \\ \mathrm{soc}^{0}_{\xi,s} & \text{if } \mathrm{reset}_{\xi,s} \wedge \neg \mathrm{cyc}^{y}_{\xi,s} \wedge \mathrm{pos}_{\mathrm{period}(t)}(t) = 0 \\ \rho_{\xi,t,s} \cdot \mathit{soc}_{\xi,t - 1,s} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 **`Store_energy_carried_in`**
 
 ```math
-\mathit{Store\_energy\_carried\_in}_{\xi,t,v} = \begin{cases} \rho^{e}_{\xi,t,v} \cdot e_{\xi,\left( t \ominus \mathrm{idle}^{e} \right) \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \neg \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} 1,v} & \text{if } \mathrm{cyc}^{e,y}_{\xi,v} \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \mathrm{reset}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) = 0 \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V}
+\mathit{Store\_energy\_carried\_in}_{\xi,t,v} = \begin{cases} \rho^{e}_{\xi,t,v} \cdot e_{\xi,\left( t \ominus \mathrm{idle}^{e} \right) \ominus 1,v} & \text{if } \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \neg \mathrm{cyc}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \neg \mathrm{reset}^{e}_{\xi,v} \wedge \left( \mathrm{pos}(t) = 0 \vee \mathrm{open}^{e}_{t,v} \right) \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t \ominus^{\mathrm{period}(t)} 1,v} & \text{if } \mathrm{cyc}^{e,y}_{\xi,v} \\ \mathrm{e}^{0}_{\xi,v} & \text{if } \mathrm{reset}^{e}_{\xi,v} \wedge \neg \mathrm{cyc}^{e,y}_{\xi,v} \wedge \mathrm{pos}_{\mathrm{period}(t)}(t) = 0 \\ \rho^{e}_{\xi,t,v} \cdot e_{\xi,t - 1,v} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v \in \mathcal{V}
 ```
 
 **`Link_output_arrival`**
 
 ```math
-\mathit{Link\_output\_arrival}_{\xi,t,o} = \begin{cases} f_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{if } \mathrm{cyc}^{f}_{o} \\ f_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ o \in \mathcal{O}
+\mathit{Link\_output\_arrival}_{\xi,t,o} = \begin{cases} f_{\xi,t \ominus^{\mathrm{period}(t)} \mathrm{d}^{f},\mathrm{link}(o)} \cdot \eta_{\xi,t,o} & \text{if } \mathrm{cyc}^{f}_{o} \\ f_{\xi,t \boxminus_{0}^{\mathrm{period}(t)} \mathrm{d}^{f},\mathrm{link}(o)} \cdot \eta_{\xi,t,o} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ o \in \mathcal{O}
 ```
 
 **`Process_output_arrival`**
 
 ```math
-\mathit{Process\_output\_arrival}_{\xi,t,r} = \begin{cases} z_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{if } \mathrm{cyc}^{z}_{r} \\ z_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ r \in \mathcal{R}
+\mathit{Process\_output\_arrival}_{\xi,t,r} = \begin{cases} z_{\xi,t \ominus^{\mathrm{period}(t)} \mathrm{d}^{z},\mathrm{process}(r)} \cdot \alpha_{\xi,t,r} & \text{if } \mathrm{cyc}^{z}_{r} \\ z_{\xi,t \boxminus_{0}^{\mathrm{period}(t)} \mathrm{d}^{z},\mathrm{process}(r)} \cdot \alpha_{\xi,t,r} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ r \in \mathcal{R}
 ```
 
 **`Generator_opex`**
 
 ```math
-\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`Link_opex`**
 
 ```math
-\mathit{Link\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot \mathrm{c}^{f}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot f_{\xi,t,l} \cdot \mathrm{c}^{f,(2)}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Link\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot \mathrm{c}^{f}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot f_{\xi,t,l} \cdot \mathrm{c}^{f,(2)}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`StorageUnit_opex`**
 
 ```math
-\mathit{StorageUnit\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h,(2)}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{c}^{\mathrm{soc}}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{StorageUnit\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} h^{+}_{\xi,t,s} \cdot h^{+}_{\xi,t,s} \cdot \mathrm{c}^{h,(2)}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{s \in \mathcal{S}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{c}^{\mathrm{soc}}_{\xi,t,s} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`Store_opex`**
 
 ```math
-\mathit{Store\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot \mathrm{c}^{q}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot q_{\xi,t,v} \cdot \mathrm{c}^{q,(2)}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} e_{\xi,t,v} \cdot \mathrm{c}^{e}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Store\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot \mathrm{c}^{q}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} q_{\xi,t,v} \cdot q_{\xi,t,v} \cdot \mathrm{c}^{q,(2)}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{v \in \mathcal{V}} e_{\xi,t,v} \cdot \mathrm{c}^{e}_{\xi,t,v} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`scenario_opex`**
@@ -471,49 +471,49 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Line_injection`**
 
 ```math
-\mathit{Line\_injection}_{n,\xi,t} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Line\_injection}_{n,\xi,t} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`StorageUnit_injection`**
 
 ```math
-\mathit{StorageUnit\_injection}_{n,\xi,t} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{StorageUnit\_injection}_{n,\xi,t} = \sum_{s \in \mathcal{S} \,:\, \mathrm{bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Store_injection`**
 
 ```math
-\mathit{Store\_injection}_{n,\xi,t} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Store\_injection}_{n,\xi,t} = \sum_{v \in \mathcal{V} \,:\, \mathrm{bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Transformer_injection`**
 
 ```math
-\mathit{Transformer\_injection}_{n,\xi,t} = -\left( \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus0}(m) = n} \sigma_{\xi,t,m} \right) + \sum_{m \in \mathcal{M} \,:\, \mathrm{Transformer\_bus1}(m) = n} \sigma_{\xi,t,m} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Transformer\_injection}_{n,\xi,t} = -\left( \sum_{m \in \mathcal{M} \,:\, \mathrm{bus0}(m) = n} \sigma_{\xi,t,m} \right) + \sum_{m \in \mathcal{M} \,:\, \mathrm{bus1}(m) = n} \sigma_{\xi,t,m} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
@@ -730,25 +730,66 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       transformer: {description: 'passive branches between two buses, their flow set by impedance and tap
           ratio, with a phase shift fixed or optimised'}
       period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
-    relations:
-      snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-      Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-      Link_bus0: {description: the bus a link leaves, key: link, values: bus}
-      Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-      Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-          A link of three output ports is three labels here rather than a third relation, so the file states
-          any number of them', key: link_output, values: bus}
-      Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-      Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-          … columns. A process of three ports is three labels here rather than a third relation, so the file
-          states any number of them', key: process_output, values: bus}
-      Load_bus: {description: the bus a load sits on, key: load, values: bus}
-      StorageUnit_bus: {description: the bus a storage unit sits on, key: storage_unit, values: bus}
-      Line_bus0: {description: the bus a line's flow is measured at, key: line, values: bus}
-      Line_bus1: {description: the bus at a line's other end, key: line, values: bus}
-      Store_bus: {description: the bus a store sits on, key: store, values: bus}
-      Transformer_bus0: {description: the bus a transformer's flow is measured at, key: transformer, values: bus}
-      Transformer_bus1: {description: the bus at a transformer's other end, key: transformer, values: bus}
+    properties:
+      snapshot:
+        period:
+          description: the investment period a snapshot falls in
+          into: period
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      link:
+        bus0:
+          description: the bus a link leaves
+          into: bus
+      link_output:
+        link:
+          description: the link an output port belongs to
+          into: link
+        bus:
+          description: >-
+            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
+            A link of three output ports is three labels here rather than a third
+            relation, so the file states any number of them
+          into: bus
+      process_output:
+        process:
+          description: the process a port belongs to
+          into: process
+        bus:
+          description: >-
+            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
+            columns. A process of three ports is three labels here rather than a
+            third relation, so the file states any number of them
+          into: bus
+      load:
+        bus:
+          description: the bus a load sits on
+          into: bus
+      storage_unit:
+        bus:
+          description: the bus a storage unit sits on
+          into: bus
+      line:
+        bus0:
+          description: the bus a line's flow is measured at
+          into: bus
+        bus1:
+          description: the bus at a line's other end
+          into: bus
+      store:
+        bus:
+          description: the bus a store sits on
+          into: bus
+      transformer:
+        bus0:
+          description: the bus a transformer's flow is measured at
+          into: bus
+        bus1:
+          description: the bus at a transformer's other end
+          into: bus
+
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -1156,12 +1197,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         where: Store_active
       Line_s:
         description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `Line_bus0` end: a positive value
-          withdraws there and injects at `Line_bus1`, lossless'
+          withdraws there and injects at `line[bus1]`, lossless'
         dims: [scenario, snapshot, line]
         where: Line_active
       Transformer_s:
         description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `Transformer_bus0` end: a
-          positive value withdraws there and injects at `Transformer_bus1`, lossless'
+          positive value withdraws there and injects at `transformer[bus1]`, lossless'
         dims: [scenario, snapshot, transformer]
         where: Transformer_active
       Line_s_nom_ext:
@@ -1387,9 +1428,9 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
               AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
             expression: StorageUnit_state_of_charge_initial}
           period_cyclic: {when: StorageUnit_cyclic_state_of_charge_per_period, expression: 'StorageUnit_retention
-              * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot_period[period])'}
+              * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot[period])'}
           period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
-              AND position(snapshot, within=snapshot_period[period]) == 0', expression: StorageUnit_state_of_charge_initial}
+              AND position(snapshot, within=snapshot[period]) == 0', expression: StorageUnit_state_of_charge_initial}
         otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
       Store_energy_carried_in:
         description: the energy a store opens a snapshot with — at the first snapshot it stands in, its last
@@ -1405,9 +1446,9 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           opening: {when: NOT Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
               AND (position(snapshot) == 0 OR Store_opens_late), expression: Store_e_initial}
           period_cyclic: {when: Store_e_cyclic_per_period, expression: 'Store_retention * shift(Store_e, along=snapshot,
-              offset=1, edge=''wrap'', within=snapshot_period[period])'}
+              offset=1, edge=''wrap'', within=snapshot[period])'}
           period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
-              within=snapshot_period[period]) == 0', expression: Store_e_initial}
+              within=snapshot[period]) == 0', expression: Store_e_initial}
         otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
       Link_output_arrival:
         description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
@@ -1417,10 +1458,10 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           zero) delivers its flow unshifted, cyclic or not
         dims: [scenario, snapshot, link_output]
         cases:
-          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-              along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot_period[period]) * Link_efficiency
+          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+              along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
+          edge=0, within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -1429,30 +1470,30 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           does not delay (`delay` zero) transfers at once, cyclic or not
         dims: [scenario, snapshot, process_output]
         cases:
-          wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
               * Process_rate'}
-        otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-          edge=0, within=snapshot_period[period]) * Process_rate
+        otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+          edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+          * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
           * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period[period]), over=generator), over=snapshot)'}
+          by=snapshot[period]), over=generator), over=snapshot)'}
       Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+          by=snapshot[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
           over=snapshot)'}
       StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) +
           sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=storage_unit),
           over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)'}
       Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot) + sum(sum((((Store_p
+          * at(period_weight_objective, by=snapshot[period]), over=store), over=snapshot) + sum(sum((((Store_p
           * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=store),
+          by=snapshot[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=store),
           over=snapshot)'}
       scenario_opex:
         dims: [scenario]
@@ -1479,18 +1520,18 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         cases:
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
-      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-      Line_injection: {expression: '(-sum(Line_s, over=line, by=Line_bus0[bus])) + sum(Line_s, over=line,
-          by=Line_bus1[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
-          over=link_output, by=Link_output_bus[bus])'}
-      Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-      Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+      Line_injection: {expression: '(-sum(Line_s, over=line, by=line[bus0])) + sum(Line_s, over=line,
+          by=line[bus1])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
+          over=link_output, by=link_output[bus])'}
+      Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+      Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
-          over=storage_unit, by=StorageUnit_bus[bus])'}
-      Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
-      Transformer_injection: {expression: '(-sum(Transformer_s, over=transformer, by=Transformer_bus0[bus]))
-          + sum(Transformer_s, over=transformer, by=Transformer_bus1[bus])'}
+          over=storage_unit, by=storage_unit[bus])'}
+      Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=store[bus])'}
+      Transformer_injection: {expression: '(-sum(Transformer_s, over=transformer, by=transformer[bus0]))
+          + sum(Transformer_s, over=transformer, by=transformer[bus1])'}
       Bus_injection:
         dims: [scenario, snapshot, bus]
         expression: Generator_injection + Line_injection + Link_injection + Load_injection + Process_injection
@@ -1506,7 +1547,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
     The prep — every table the spec declares, from the network — and the solve:
 
     ```python
-    from differential.pypsa.prep import relation, static, varying, weighting
+    from differential.pypsa.prep import prop, static, varying, weighting
 
 
     n = build()  # the network from the PyPSA tab
@@ -1521,11 +1562,11 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
             **scenarios(n),
             **periods(n, multi),
             **carriers(n, multi),
-        'Generator_bus': relation(n, 'Generator', 'bus'),
-        'Link_bus0': relation(n, 'Link', 'bus0'),
-        'Load_bus': relation(n, 'Load', 'bus'),
-        'StorageUnit_bus': relation(n, 'StorageUnit', 'bus'),
-        'Store_bus': relation(n, 'Store', 'bus'),
+        'generator.bus': prop(n, 'Generator', 'bus'),
+        'link.bus0': prop(n, 'Link', 'bus0'),
+        'load.bus': prop(n, 'Load', 'bus'),
+        'storage_unit.bus': prop(n, 'StorageUnit', 'bus'),
+        'store.bus': prop(n, 'Store', 'bus'),
         'snapshot_weightings_objective': weighting(n, 'objective'),
         'Generator_sign': per_component('Generator', first_scenario(n.generators['sign'])),
         'Load_p_set': varying(n, 'Load', 'p_set'),

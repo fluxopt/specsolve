@@ -47,7 +47,7 @@
       300.0
     ]
   },
-  "gen_placement": {
+  "generator.bus": {
     "generator": [
       "wind_north",
       "wind_east",
@@ -59,6 +59,14 @@
       "east",
       "south",
       "east"
+    ]
+  },
+  "generator.carrier": {
+    "generator": [
+      "wind_north",
+      "wind_east",
+      "gas_south",
+      "oil_east"
     ],
     "carrier": [
       "wind",
@@ -91,12 +99,12 @@
       400.0
     ]
   },
-  "link_from": {
+  "link.from_bus": {
     "link": [
       "north_south",
       "east_south"
     ],
-    "bus": [
+    "from_bus": [
       "north",
       "east"
     ]
@@ -111,12 +119,12 @@
       50.0
     ]
   },
-  "link_to": {
+  "link.to_bus": {
     "link": [
       "north_south",
       "east_south"
     ],
-    "bus": [
+    "to_bus": [
       "south",
       "south"
     ]

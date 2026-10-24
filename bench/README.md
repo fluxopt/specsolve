@@ -568,7 +568,7 @@ verdict off the SQL"), not to cover the language:
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no linopy cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 | `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP of the comparison, so integrality reaches every sink at scale |
-| `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a relation's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
+| `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a property's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
 technologies, and a technology only generates at a node where it is installed:
@@ -852,10 +852,10 @@ may assume: the dimension count, terms per row, a term over fewer dimensions,
 parameter rows sorted, shuffled or reversed, a dimension's own labels shuffled,
 `int` or `str` labels, four kinds of upper bound, a wrapped `shift`, a
 quadratic row, a binary or integer variable, a binary that switches a variable
-on and off (`p <= ub * u`), a sum through a relation into a coarser dimension, a row that sums one dimension away, and seven masks: on the
-row (one that keeps every row, half, 1%, or a relation's label), on a variable
+on and off (`p <= ub * u`), a sum through a property into a coarser dimension, a row that sums one dimension away, and seven masks: on the
+row (one that keeps every row, half, 1%, or a property's label), on a variable
 (half, or where a sparse parameter has a row), and on both. `milp` combines a
-binary that switches `p`, a relation's mask and a grouped sum. The names follow
+binary that switches `p`, a property's mask and a grouped sum. The names follow
 the ladder's: dimensions `snapshot`, `node` and `tech`, dispatch `p`, status `u`. Each cell moves one axis
 from the baseline, and `worst` moves all of them. The sizes `below` and `above`
 put the model either side of 250,000 columns. The ladder's own cases come after

@@ -40,8 +40,8 @@ Each row lives in `tests/linopy_lane/builder.py`.
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
-| `sum(x, over=c, by=r[d])` | the column walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two columns groups onto both at once, and a key of several columns groups by the value and the rest of the key |
-| `at(p, by=r[c])` | `.sel({into: relation})`, xarray's vectorised selection; a read of two columns reads a tuple of labels at once |
+| `sum(x, over=c, by=s[d])` | the property walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two properties groups onto both at once, and a set subject groups by the value and the rest of its members |
+| `at(p, by=s[c])` | `.sel({into: property})`, xarray's vectorised selection; a read of two properties reads a tuple of labels at once |
 | `shift(x, along=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
 | `sum_back(x, along=t, window=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero; under `by=` each gather reads inside the group, so the window stops at its edge |
 | `dual(c)` | `Model.constraints['c'].dual`, at a read only; the language keeps a dual out of the math, and a solve that stored none refuses the read |
@@ -64,8 +64,9 @@ Three files pass `check` and build on one side only.
 - **An objective with a constant** builds only in specsolve, because
   `linopy.Objective` has no slot for one (`osemosys_utopia`,
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
-- **A relation that is not a single-valued map** builds only in specsolve,
-  because the oracle holds each relation as one dense array.
+- **A sum that reads a property backwards**, from the dimension it maps into
+  to its subject, builds only in specsolve, because the oracle holds each
+  property as one dense array over its subject.
 - **An operator along a dimension a constant part does not carry**, such as
   `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
   refusal says to declare the parameter over the dimension

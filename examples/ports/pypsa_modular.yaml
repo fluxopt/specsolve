@@ -16,11 +16,12 @@ dimensions:
     description: generating units, each sitting on one bus
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+
 
 parameters:
   p_nom_mod:
@@ -74,7 +75,7 @@ constraints:
   nodal_balance:
     description: what is generated at a bus meets the load there
     dims: [snapshot, bus]
-    expression: sum(p, over=generator, by=gen_bus[bus]) == load
+    expression: sum(p, over=generator, by=generator[bus]) == load
 
 objective:
   sense: minimize

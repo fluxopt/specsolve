@@ -106,7 +106,7 @@
       0.0
     ]
   },
-  "origin": {
+  "connection.depot": {
     "connection": [
       "d1_c1_road",
       "d1_c2_road",

@@ -544,14 +544,23 @@ def _span(values: list[float]) -> str:
     return short(lo) if lo == hi else f'{short(lo)}\N{EN DASH}{short(hi)}'
 
 
-#: A sum that groups its terms through a relation, as a spec writes it: what is summed over, and into what.
-_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*over=(\[[^\]]*\]|\w+),\s*by=\w+\[(\w+)\]\s*\)')
+#: A sum that groups its terms through a property, as a spec writes it: what is summed over, the subject, and the property.
+_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*over=(\[[^\]]*\]|\w+),\s*by=(\w+)\[(\w+)\]\s*\)')
 
 
 def grouped_sums(spec: Path | None) -> str:
-    """Each distinct grouped sum in *spec*, as ``over → into``, or a dash where it has none."""
+    """Each distinct grouped sum in *spec*, as ``over → into``, or a dash where it has none.
+
+    ``into`` is the dimension the property maps into, read off the spec's ``properties:``.
+    """
+    import yaml
+
+    text = spec.read_text() if spec else ''
+    properties = (yaml.safe_load(text) if text else {}).get('properties') or {}
     found = []
-    for over, into in _GROUPED.findall(spec.read_text() if spec else ''):
+    for over, subject, prop in _GROUPED.findall(text):
+        declared = properties[subject][prop]
+        into = declared['into'] if isinstance(declared, dict) else declared
         dims = ' \N{MULTIPLICATION SIGN} '.join(d.strip() for d in over.strip('[]').split(','))
         if (pair := f'{dims} \N{RIGHTWARDS ARROW} {into}') not in found:
             found.append(pair)

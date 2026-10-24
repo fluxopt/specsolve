@@ -19,15 +19,16 @@ dimensions:
     description: storage units, each sitting on one bus
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  storage_bus:
-    description: the bus a storage unit sits on
-    key: storage
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  storage:
+    bus:
+      description: the bus a storage unit sits on
+      into: bus
+
 
 parameters:
   p_nom:
@@ -100,9 +101,9 @@ constraints:
       goes into them, meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(p_dispatch, over=storage, by=storage_bus[bus])
-      - sum(p_store, over=storage, by=storage_bus[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(p_dispatch, over=storage, by=storage[bus])
+      - sum(p_store, over=storage, by=storage[bus])
       == load
 
   energy_balance_initial:
