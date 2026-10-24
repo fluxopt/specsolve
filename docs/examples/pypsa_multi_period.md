@@ -29,8 +29,8 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
-| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the grouping capacity is decided and paid over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
+| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{period}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the grouping capacity is decided and paid over |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each existing in some periods and not others |
 
 #### Parameters
@@ -68,7 +68,7 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}
+\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period}(t)} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}
 ```
 
 #### Subject to
@@ -76,7 +76,7 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 **`within_capacity`**
 
 ```math
-p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
 **`power_balance`**
@@ -114,11 +114,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: generating units, each existing in some periods and not others
         dtype: str
 
-    relations:
-      period_of:
-        description: the investment period a snapshot falls in
-        key: snapshot
-        values: period
+    properties:
+      snapshot:
+        period:
+          description: the investment period a snapshot falls in
+          into: period
 
     parameters:
       load:
@@ -165,9 +165,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: >-
           a generator produces no more than the capacity built for it, and nothing at
           all in a period it does not exist in — the activity is read down onto the
-          snapshot through the period relation
+          snapshot through its period property
         dims: [snapshot, generator]
-        expression: p <= p_nom * at(activity, by=period_of[period])
+        expression: p <= p_nom * at(activity, by=snapshot[period])
 
       power_balance:
         description: what exists in this snapshot meets the load
@@ -181,7 +181,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         period it falls in — capacity once per period the asset stands in, which is
         why an asset alive in both is paid for twice
       expression: >-
-        sum(p * opex * at(period_weight, by=period_of[period]))
+        sum(p * opex * at(period_weight, by=snapshot[period]))
         + sum(p_nom * capex * activity * period_weight)
     ```
 
@@ -202,7 +202,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
         ``tables`` is the same mapping the specsolve call attaches as ``sources``.
 
-        The port's flat ``snapshot`` axis carries a relation into ``period``; PyPSA
+        The port's flat ``snapshot`` axis carries a property into ``period``; PyPSA
         wants the same fact as a ``(period, timestep)`` MultiIndex, so the snapshots
         are paired with the period each falls in. ``investment_period_weightings``
         takes the port's ``period_weight`` as its ``objective`` column, and ``years``
@@ -214,7 +214,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         periods = list(tables['period']['period'])
         n.set_snapshots(
             pd.MultiIndex.from_arrays(
-                [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+                [tables['snapshot.period'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
             )
         )
         n.investment_periods = periods
@@ -257,19 +257,19 @@ nothing, because `capital_cost` is given directly rather than annuitised from an
 differ in shape. PyPSA gives `coal` no dispatch variable in 2040 at all
 (`Generator-p` is masked to the active pairs). The port keeps the variable and
 multiplies its capacity bound by the activity read down through the period
-relation, so `p <= p_nom * 0` holds it at zero. Same optimum and same duals, since
+property, so `p <= p_nom * 0` holds it at zero. Same optimum and same duals, since
 a variable pinned to `[0, 0]` contributes nothing, but not the same model on
 paper.
 
-Writing the absence exactly would need `where: at(activity, by=period_of[period])` on
+Writing the absence exactly would need `where: at(activity, by=snapshot[period])` on
 the variable, and a `where:` cannot call `at()`: its grammar compares a name
 against a literal. A second table keyed by `(snapshot, generator)` would state
 one fact twice. [#982](https://github.com/fluxopt/specsolve/issues/982) asks
-whether a mask may read a parameter one declared relation away.
+whether a mask may read a parameter one declared property away.
 
 ## What it exercises
 
-A second axis over time (`period`) with a relation down onto the snapshots, a
-parameter read through that relation in both a constraint and the objective, and a
+A second axis over time (`period`) with a property of the snapshots that maps into it, a
+parameter read through that property in both a constraint and the objective, and a
 capacity variable whose cost is summed over the periods it exists in rather than
 paid once. No construct here is new.

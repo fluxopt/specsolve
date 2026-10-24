@@ -34,7 +34,6 @@ properties:
       description: the investment period a snapshot falls in
       into: period
 
-
 parameters:
   load:
     description: demand to be met

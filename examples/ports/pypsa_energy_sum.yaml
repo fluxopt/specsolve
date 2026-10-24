@@ -21,7 +21,6 @@ properties:
       description: the bus a generator sits on
       into: bus
 
-
 parameters:
   weighting:
     description: hours a snapshot stands for — what turns a power into an energy

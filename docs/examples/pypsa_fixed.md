@@ -25,8 +25,8 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 
 #### Parameters
 
@@ -89,7 +89,7 @@ p_{t,g} = \mathrm{p}^{\mathrm{set}}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 </details>
@@ -118,11 +118,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: generating units, each sitting on one bus
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
 
     parameters:
       p_nom_max:
@@ -188,7 +188,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nodal_balance:
         description: what is generated at a bus meets the load there
         dims: [snapshot, bus]
-        expression: sum(p, over=generator, by=gen_bus[bus]) == load
+        expression: sum(p, over=generator, by=generator[bus]) == load
 
     objective:
       sense: minimize
@@ -235,7 +235,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom_extendable=True,
             p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
             p_nom_set=tables['p_nom_set'].set_index('generator')['value'].reindex(generators.index, fill_value=np.nan),

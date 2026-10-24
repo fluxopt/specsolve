@@ -52,7 +52,6 @@ properties:
       description: the tranche an offer is made at
       into: tranche
 
-
 parameters:
   p_max:
     description: installed capacity
@@ -84,7 +83,7 @@ parameters:
   zone_share:
     description: >-
       how much of a generator's reserve counts towards a zone — a generator may
-      back several zones at a per-zone weight, so this cannot be a relation over
+      back several zones at a per-zone weight, so this cannot be a property of
       the generator, which is single-valued per label; rows are absent where a
       generator backs no part of a zone
     dims: [generator, zone]

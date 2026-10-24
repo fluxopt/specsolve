@@ -25,7 +25,6 @@ properties:
       description: which converter a flow belongs to
       into: converter
 
-
 parameters:
   bp_rate:
     description: what each flow runs at, at each breakpoint of its converter's curve

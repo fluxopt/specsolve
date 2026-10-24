@@ -40,7 +40,6 @@ properties:
         heat rate
       into: fuel_use_mode
 
-
 parameters:
   unit_size:
     description: capacity of one unit of a plant

@@ -19,7 +19,6 @@ properties:
       description: the season a snapshot falls in
       into: season
 
-
 parameters:
   inflow:
     description: energy arriving in a snapshot, whether or not it is wanted then

@@ -25,7 +25,6 @@ properties:
       description: the investment period a snapshot falls in
       into: period
 
-
 parameters:
   load:
     description: demand to be met
@@ -71,7 +70,7 @@ constraints:
     description: >-
       a generator produces no more than the capacity built for it, and nothing at
       all in a period it does not exist in — the activity is read down onto the
-      snapshot through the period relation
+      snapshot through its period property
     dims: [snapshot, generator]
     expression: p <= p_nom * at(activity, by=snapshot[period])
 

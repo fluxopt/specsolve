@@ -29,7 +29,6 @@ properties:
       description: the bus a storage unit sits on
       into: bus
 
-
 parameters:
   p_nom:
     description: installed capacity of a generator

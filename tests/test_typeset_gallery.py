@@ -121,10 +121,9 @@ DIVERGENT = {
         'inner sum where the model reaches it through a named expression.'
     ),
     'multi_period': (
-        'writes the pullback in reader notation: a hatted p for the capacity variable '
-        'and period() for the relation, where the generator spells the declarations — '
-        'p^nom and period_of(). Matching would take a symbol table, not a renderer '
-        'change.'
+        'writes the pullback in reader notation: a hatted p for the capacity variable, '
+        'where the generator spells the declaration p^nom. Matching would take a '
+        'symbol table, not a renderer change.'
     ),
     'storage': (
         'writes soc_{s-1}, ordinary index arithmetic. The model rolls, and a roll '

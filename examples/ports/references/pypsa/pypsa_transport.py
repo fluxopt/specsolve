@@ -54,15 +54,15 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=tables['gen_bus'].set_index('generator')['bus'],
+        bus=tables['generator.bus'].set_index('generator')['bus'],
         p_nom=tables['p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )
     n.add(
         'Link',
         links.index,
-        bus0=tables['link_from'].set_index('link')['bus'],
-        bus1=tables['link_to'].set_index('link')['bus'],
+        bus0=tables['link.from_bus'].set_index('link')['from_bus'],
+        bus1=tables['link.to_bus'].set_index('link')['to_bus'],
         p_nom=tables['rating'].set_index('link')['value'],
         p_min_pu=-1.0,
         efficiency=1.0,

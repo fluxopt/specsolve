@@ -30,7 +30,6 @@ properties:
       description: the bus a storage unit sits on
       into: bus
 
-
 parameters:
   cyclic:
     description: >-

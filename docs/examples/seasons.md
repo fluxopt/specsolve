@@ -19,12 +19,12 @@ is *higher*.
 The cycle a multi-period model means is per period, and `by=` says which:
 
 ```yaml
-soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=season_of[season]) + inflow - release
+soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=snapshot[season]) + inflow - release
 ```
 
-$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus_{\mathrm{season\_of}(t)} 1} + \mathit{inflow}_{t} - \mathit{release}_{t}$$
+$$\mathit{soc}_{t} = \mathit{soc}_{t \ominus^{\mathrm{season}(t)} 1} + \mathrm{inflow}_{t} - \mathit{release}_{t}$$
 
-The translation walks inside the group the relation makes, so a season's first
+The translation walks inside the group the property makes, so a season's first
 snapshot reads that season's last, whatever the season's length. Winter has
 four snapshots and summer three here, and nothing in the file says so.
 
@@ -40,8 +40,8 @@ A store that cycles inside each season rather than across the horizon, with seas
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
-| $`\mathcal{S}`$ | index $`s`$ — `season` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — the blocks the store cycles over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
+| $`\mathcal{S}`$ | index $`s`$ — `season` with $`\mathrm{season}: \mathcal{T} \to \mathcal{S}`$ — the blocks the store cycles over |
 
 #### Parameters
 
@@ -62,7 +62,7 @@ A store that cycles inside each season rather than across the horizon, with seas
 | Symbol | Meaning |
 |---|---|
 | $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
-| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 
 #### Variable domains
 
@@ -89,7 +89,7 @@ A store that cycles inside each season rather than across the horizon, with seas
 **`season_balance`**
 
 ```math
-\mathit{soc}_{t} = \mathit{soc}_{t \ominus^{\mathrm{season\_of}(t)} 1} + \mathrm{inflow}_{t} - \mathit{release}_{t} \qquad \forall\, t \in \mathcal{T}
+\mathit{soc}_{t} = \mathit{soc}_{t \ominus^{\mathrm{season}(t)} 1} + \mathrm{inflow}_{t} - \mathit{release}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
 </details>
@@ -115,11 +115,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dtype: str
         ordered: true
 
-    relations:
-      season_of:
-        description: the season a snapshot falls in
-        key: snapshot
-        values: season
+    properties:
+      snapshot:
+        season:
+          description: the season a snapshot falls in
+          into: season
 
     parameters:
       inflow:
@@ -149,7 +149,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           season's first snapshot carries from that season's own last — so each
           season ends where it began and hands the next one nothing
         dims: [snapshot]
-        expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=season_of[season]) + inflow - release
+        expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=snapshot[season]) + inflow - release
 
     objective:
       sense: maximize
@@ -188,7 +188,7 @@ the boundary.
 
 ## The grouping is data
 
-`season_of` is a table passed beside the snapshot index, so the same file
+`snapshot.season` is a table passed beside the snapshot index, so the same file
 expresses maintenance campaigns, representative days, market quarters or
 contract windows. Move two snapshots between seasons by editing that table and
 no clause changes:
@@ -216,4 +216,4 @@ and its row is not built. Absence reads the same way in
 
 Compare [monthly budget](monthly_budget.md), where such a column groups a *sum*,
 and [multi-period](multi_period.md), where it carries a capacity decision down
-onto the snapshots it covers. One relation, three jobs.
+onto the snapshots it covers. One property, three jobs.

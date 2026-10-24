@@ -41,7 +41,7 @@ properties:
       description: >-
         the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
         A link of three output ports is three labels here rather than a third
-        relation, so the file states any number of them
+        property, so the file states any number of them
       into: bus
   process_output:
     process:
@@ -51,7 +51,7 @@ properties:
       description: >-
         the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
         columns. A process of three ports is three labels here rather than a
-        third relation, so the file states any number of them
+        third property, so the file states any number of them
       into: bus
   load:
     bus:

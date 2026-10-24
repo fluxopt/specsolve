@@ -19,7 +19,6 @@ properties:
     from_bus: bus # both endpoints are buses
     to_bus: bus
 
-
 parameters:
   p_max:
     dims: [generator]

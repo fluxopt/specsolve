@@ -30,7 +30,6 @@ properties:
       description: the bus a store sits on
       into: bus
 
-
 parameters:
   p_nom:
     description: installed capacity of a generator

@@ -46,7 +46,6 @@ properties:
   bus_tech:
     pool: pool
 
-
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
     dims: [bus, tech]

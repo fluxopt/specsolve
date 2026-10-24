@@ -127,7 +127,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`u`$ | `Generator_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-status` — how much of a committable unit is on, a share in \[0, 1\] rather than an integer: the relaxation the keyword solves (`variables.py:86-87`) |
 | $`\mathit{up}`$ | `Generator_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-start_up` — how much of a committable unit turns on this snapshot, a share in \[0, 1\] (`variables.py:137-138`) |
 | $`\mathit{dn}`$ | `Generator_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-shut_down` — how much of a committable unit turns off this snapshot, a share in \[0, 1\] (`variables.py:188-189`) |
@@ -569,7 +569,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
           description: >-
             the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
             A link of three output ports is three labels here rather than a third
-            relation, so the file states any number of them
+            property, so the file states any number of them
           into: bus
       process_output:
         process:
@@ -579,7 +579,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
           description: >-
             the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
             columns. A process of three ports is three labels here rather than a
-            third relation, so the file states any number of them
+            third property, so the file states any number of them
           into: bus
       load:
         bus:
@@ -817,7 +817,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
         where: Link_active
         domain: continuous
         missing: absent
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
       Generator_status:
         dims: [scenario, snapshot, generator]

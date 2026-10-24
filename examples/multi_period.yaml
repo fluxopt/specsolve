@@ -20,7 +20,6 @@ properties:
   snapshot:
     period: period
 
-
 parameters:
   load:
     description: demand to be met

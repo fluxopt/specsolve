@@ -21,7 +21,6 @@ properties:
       description: the month a snapshot falls in
       into: month
 
-
 parameters:
   p_max:
     description: installed capacity

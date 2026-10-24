@@ -30,9 +30,9 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — passive AC lines, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — passive AC lines, each joining two buses |
 | $`\mathcal{C}`$ | index $`c`$ — `cycle` — one independent loop of the network |
 
 #### Parameters
@@ -41,7 +41,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 |---|---|
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `line_to` bus |
+| $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `line[to_bus]` bus |
 | $`\mathrm{neg\_s\_nom}`$ | `neg_s_nom` over $`\mathcal{L}`$ — most a line may carry the other way, negative by convention |
 | $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{C} \times \mathcal{L}`$, $`0`$ where the data has no row — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
@@ -51,7 +51,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line[to_bus]` bus — not chosen, but whatever the voltage law leaves |
 
 #### Variable domains
 
@@ -78,7 +78,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_from}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`kirchhoff_voltage_law`**
@@ -118,19 +118,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: one independent loop of the network
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      line_from:
-        description: the bus a line leaves
-        key: line
-        values: bus
-      line_to:
-        description: the bus a line arrives at
-        key: line
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      line:
+        from_bus:
+          description: the bus a line leaves
+          into: bus
+        to_bus:
+          description: the bus a line arrives at
+          into: bus
 
     parameters:
       p_nom:
@@ -140,7 +139,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: cost of one unit of output
         dims: [generator]
       s_nom:
-        description: most a line may carry towards its `line_to` bus
+        description: most a line may carry towards its `line[to_bus]` bus
         dims: [line]
       neg_s_nom:
         description: most a line may carry the other way, negative by convention
@@ -165,7 +164,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           upper: p_nom
       f:
         description: >-
-          flow on a line, signed towards its `line_to` bus — not chosen, but whatever
+          flow on a line, signed towards its `line[to_bus]` bus — not chosen, but whatever
           the voltage law leaves
         dims: [snapshot, line]
         bounds:
@@ -177,9 +176,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the lines meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(f, over=line, by=line_to[bus])
-          - sum(f, over=line, by=line_from[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(f, over=line, by=line[to_bus])
+          - sum(f, over=line, by=line[from_bus])
           == load
 
       kirchhoff_voltage_law:
@@ -229,15 +228,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Line',
             lines.index,
-            bus0=tables['line_from'].set_index('line')['bus'],
-            bus1=tables['line_to'].set_index('line')['bus'],
+            bus0=tables['line.from_bus'].set_index('line')['from_bus'],
+            bus1=tables['line.to_bus'].set_index('line')['to_bus'],
             x=tables['reactance'].set_index('line')['value'],
             r=0.0,
             s_nom=tables['s_nom'].set_index('line')['value'],

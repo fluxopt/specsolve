@@ -55,7 +55,7 @@ def build(tables: dict[str, pd.DataFrame], growth_limit: bool = True) -> pypsa.N
     ``tables`` is the same mapping the specsolve call attaches as ``sources``.
 
     ``growth_limit=False`` drops the two carrier attributes, which is how
-    ``main`` measures what the limit is worth. The port's ``build_period`` relation
+    ``main`` measures what the limit is worth. The port's ``generator[period]`` property
     is PyPSA's ``build_year``; its ``activity`` table is what ``build_year`` and
     ``lifetime`` derive.
     """
@@ -63,7 +63,7 @@ def build(tables: dict[str, pd.DataFrame], growth_limit: bool = True) -> pypsa.N
     snapshots: pd.DataFrame = tables['snapshot']
     n.set_snapshots(
         pd.MultiIndex.from_arrays(
-            [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+            [tables['snapshot.period'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
         )
     )
     n.investment_periods = list(tables['period']['period'])
@@ -85,9 +85,9 @@ def build(tables: dict[str, pd.DataFrame], growth_limit: bool = True) -> pypsa.N
         'Generator',
         generators.index,
         bus='hub',
-        carrier=tables['gen_carrier'].set_index('generator')['carrier'],
+        carrier=tables['generator.carrier'].set_index('generator')['carrier'],
         p_nom_extendable=True,
-        build_year=tables['build_period'].set_index('generator')['period'],
+        build_year=tables['generator.period'].set_index('generator')['period'],
         lifetime=LIFETIME,
         p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
         marginal_cost=tables['opex'].set_index('generator')['value'],
@@ -103,7 +103,7 @@ def balance_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per snapshot, keyed the way the port keys it.
 
     PyPSA's row index is ``(period, timestep)``; the port's is the flat snapshot a
-    relation maps into a period, so the pairs are collapsed back to the port's
+    property maps into a period, so the pairs are collapsed back to the port's
     labels in the order the instance lists them.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()

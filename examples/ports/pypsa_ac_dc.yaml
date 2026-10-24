@@ -55,7 +55,6 @@ properties:
       description: the bus a link arrives at
       into: bus
 
-
 parameters:
   load:
     description: demand at each bus in each snapshot

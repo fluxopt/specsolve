@@ -22,7 +22,6 @@ properties:
       description: the bus a generator sits on
       into: bus
 
-
 parameters:
   p_nom_max:
     description: most capacity that may stand at a generator once built

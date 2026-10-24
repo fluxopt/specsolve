@@ -22,7 +22,6 @@ properties:
       description: the bus a generator sits on
       into: bus
 
-
 parameters:
   p_nom_mod:
     description: capacity of one module — what a single unit of this technology adds

@@ -19,7 +19,6 @@ properties:
     from_city: from_city
     to_city: to_city
 
-
 parameters:
   distance:
     description: >-

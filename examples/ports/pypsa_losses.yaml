@@ -37,7 +37,6 @@ properties:
       description: the bus a line arrives at
       into: bus
 
-
 parameters:
   p_nom:
     description: installed capacity of a generator

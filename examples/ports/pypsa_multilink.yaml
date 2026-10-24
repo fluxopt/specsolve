@@ -1,8 +1,8 @@
 description: >-
   PyPSA multi-link: one Link, one input bus, several output buses, each output
-  derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
+  derated by its own efficiency. PyPSA spells the buses wide — bus0, bus1,
   bus2, efficiency, efficiency2, an empty bus2 where a link has no third
-  terminal — and grows a column pair per arity. Here the relation is one
+  terminal — and grows a column pair per arity. Here the buses are one
   incidence parameter over link and bus, so arity is the number of rows that
   name the link. Optimum 1100.0, from PyPSA itself.
 
@@ -22,7 +22,6 @@ properties:
     bus:
       description: the bus a generator sits on
       into: bus
-
 
 parameters:
   gen_p_nom:

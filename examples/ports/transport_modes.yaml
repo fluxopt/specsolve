@@ -22,7 +22,6 @@ properties:
       description: the depot a connection leaves
       into: depot
 
-
 parameters:
   stock:
     description: tonnes standing at a depot

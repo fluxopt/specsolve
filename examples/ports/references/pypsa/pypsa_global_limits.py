@@ -91,7 +91,9 @@ def build(
     n.add('Carrier', 'DC')
 
     generators: pd.DataFrame = (
-        tables['generator'].set_index('generator').join(tables['gen_placement'].set_index('generator'))
+        tables['generator']
+        .set_index('generator')
+        .join([tables['generator.bus'].set_index('generator'), tables['generator.carrier'].set_index('generator')])
     )
     p_max_pu: pd.DataFrame = tables['p_max_pu'].pivot(index='snapshot', columns='generator', values='value')
     n.add(
@@ -109,8 +111,8 @@ def build(
     n.add(
         'Link',
         links.index,
-        bus0=tables['link_from'].set_index('link')['bus'],
-        bus1=tables['link_to'].set_index('link')['bus'],
+        bus0=tables['link.from_bus'].set_index('link')['from_bus'],
+        bus1=tables['link.to_bus'].set_index('link')['to_bus'],
         carrier='DC',
         p_nom_extendable=True,
         length=tables['link_length'].set_index('link')['value'],

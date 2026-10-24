@@ -26,8 +26,8 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `time` — dispatch periods |
-| $`\mathcal{C}`$ | index $`c`$ — `converter` with $`\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}`$ — units converting one carrier into others |
-| $`\mathcal{F}`$ | index $`f`$ — `flow` with $`\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}`$ — a converter's inputs and outputs, one row each |
+| $`\mathcal{C}`$ | index $`c`$ — `converter` with $`\mathrm{converter}: \mathcal{F} \to \mathcal{C}`$ — units converting one carrier into others |
+| $`\mathcal{F}`$ | index $`f`$ — `flow` with $`\mathrm{converter}: \mathcal{F} \to \mathcal{C}`$ — a converter's inputs and outputs, one row each |
 | $`\mathcal{B}`$ | index $`b`$ — `bp` — breakpoints, as many as the longest curve needs |
 
 #### Parameters
@@ -81,7 +81,7 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 **`on_the_curve`**
 
 ```math
-\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathrm{bp\_rate}_{f,b} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
+\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter}(f),t,b} \cdot \mathrm{bp\_rate}_{f,b} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
 ```
 
 **`heat_balance`**
@@ -131,11 +131,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dtype: int
         ordered: true
 
-    relations:
-      converter_of:
-        description: which converter a flow belongs to
-        key: flow
-        values: converter
+    properties:
+      flow:
+        converter:
+          description: which converter a flow belongs to
+          into: converter
 
     parameters:
       bp_rate:
@@ -204,7 +204,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       on_the_curve:
         description: every flow reads its own value off its converter's weights
         dims: [flow, time]
-        expression: rate == sum(at(weight, by=converter_of[converter]) * bp_rate, over=bp)
+        expression: rate == sum(at(weight, by=flow[converter]) * bp_rate, over=bp)
       heat_balance:
         description: heat delivered meets the demand
         dims: [time]
@@ -236,7 +236,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
         ``tables`` is the same mapping the specsolve call attaches as ``sources``.
         """
-        flows: pd.DataFrame = tables['flow'].set_index('flow').join(tables['converter_of'].set_index('flow'))
+        flows: pd.DataFrame = tables['flow'].set_index('flow').join(tables['flow.converter'].set_index('flow'))
         times = pd.Index(tables['time']['time'], name='time')
         present = tables['bp_present'].set_index(['converter', 'bp'])['value']
         runs_to = {c: int(present[c].sum()) for c in present.index.get_level_values('converter').unique()}
