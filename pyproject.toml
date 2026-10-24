@@ -233,7 +233,7 @@ depends-on = ["ladder", "density", "declarations", "report", "plot"]
 
 # 314.0.7 is the Pyodide the browser app loads. Its polars, 1.33.1, is the newest that builds for WebAssembly.
 [tool.pixi.feature.pyodide.tasks]
-test-pyodide = { cmd = "rm -rf dist/pyodide && python -m pip wheel --no-deps --wheel-dir dist/pyodide . && npm install --no-save --prefix tools/pyodide pyodide@314.0.7 && node tools/pyodide/run.mjs dist/pyodide/specsolve-*.whl", description = "A wheel of this tree installs, solves and sweeps in the browser's Python" }
+test-pyodide = { cmd = "rm -rf dist/pyodide && python -m pip wheel --no-deps --wheel-dir dist/pyodide . && python tools/pyodide/direct.py dist/pyodide/direct && npm install --no-save --prefix tools/pyodide pyodide@314.0.7 && node tools/pyodide/run.mjs dist/pyodide/specsolve-*.whl", description = "A wheel of this tree installs, solves and sweeps in the browser's Python" }
 
 [tool.pixi.feature.floors.tasks]
 test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.find_spec('linopy') is not None)\" && pytest -q -n auto", description = "The suite on the shipped shape, at the declared floors" }
