@@ -7,7 +7,8 @@ other one.
 
 The dependency floors: ``[project.dependencies]`` declares each as a lower
 bound, and the ``floors`` pixi environment pins the same package to that exact
-version.
+version. A direct reference to one git commit is the exception and is excluded
+from both sides: it is already exact, so there is no bound to prove.
 
 The mathspec ceiling: mathspec raises its minor version on a break, so the
 ceiling is the next minor above the floor, and a floor that moves takes it along.
@@ -52,12 +53,18 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
 #: environment has to pin to prove; a ceiling, where there is one, is not.
 _FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,<([0-9][0-9a-zA-Z.]*))?$')
 
+#: `mathspec @ git+https://…@<40 hex>`. Exact, so it has no lower bound to prove
+#: and stays out of the `floors` environment; a branch or a tag would move, so
+#: only a full commit hash counts.
+_DIRECT = re.compile(r'^([A-Za-z0-9._-]+) @ git\+https://\S+@[0-9a-f]{40}$')
+
 
 def _declared_floors() -> dict[str, str]:
     declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
-    unparsed = [spec for spec in declared if not _FLOOR.match(spec)]
+    unparsed = [spec for spec in declared if not (_FLOOR.match(spec) or _DIRECT.match(spec))]
     assert not unparsed, (
-        f'{unparsed} is not a `name>=version` lower bound, with or without a `,<version` ceiling. A '
+        f'{unparsed} is neither a `name>=version` lower bound, with or without a `,<version` ceiling, '
+        f'nor a direct reference to one git commit. A '
         f'runtime dependency written any other way has no floor for the `floors` environment to '
         f'pin, so teach this pattern the new shape rather than leaving the dependency unchecked.'
     )
@@ -90,13 +97,21 @@ def _declared_ceilings() -> dict[str, str]:
     return {match[1]: match[3] for spec in declared if (match := _FLOOR.match(spec)) and match[3]}
 
 
-def test_mathspec_is_capped_below_the_next_minor_of_its_floor():
+def _declared_directly() -> set[str]:
+    declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
+    return {match[1] for spec in declared if (match := _DIRECT.match(spec))}
+
+
+def test_mathspec_is_capped_below_the_next_minor_of_its_floor_or_pinned_to_one_commit():
     """A specsolve release keeps installing with the mathspec it was released against.
 
     `format.json` names the specsolve that wrote an archive, and reading one in an old
     layout means installing that release. With a bare floor, that install takes the
-    newest mathspec, whose next minor may load no spec the release can build.
+    newest mathspec, whose next minor may load no spec the release can build. A
+    direct reference to one commit installs exactly that commit, so it needs no cap.
     """
+    if 'mathspec' in _declared_directly():
+        return
     floor = _declared_floors()['mathspec']
     major, minor = floor.split('.')[:2]
     assert _declared_ceilings().get('mathspec') == f'{major}.{int(minor) + 1}', (
