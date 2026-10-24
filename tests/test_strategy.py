@@ -1856,7 +1856,7 @@ def test_a_reach_a_property_decides_is_refused_with_the_property_named():
     )
     spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int', 'ordered': True}}
     spec['properties'] = {'t': {'day': 'day'}}
-    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 't\.day'"):
+    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through 't\.day'"):
         sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
 
 
@@ -2441,7 +2441,7 @@ CUT_INDEXES = [
 
 @pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_INDEXES)
 def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a_slice(spec, sources, axis, match):
-    """An index lists the labels every slice has; which of them a slice has is a parameter or a relation.
+    """An index lists the labels every slice has; which of them a slice has is a parameter or a set.
 
     Cut by the axis, the index would make each slice a model over other labels.
     """
@@ -2450,4 +2450,4 @@ def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a
         pytest.raises(sps.errors.DataError, match=re.escape(match)) as refused,
     ):
         sps.solve_over(spec, sources(), axis)
-    assert 'in a parameter or a relation over' in str(refused.value), 'the message names the rewrite'
+    assert 'in a parameter or a set over' in str(refused.value), 'the message names the rewrite'
