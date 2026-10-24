@@ -20,7 +20,14 @@ from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve._messages import coordinate_text, coordinates_text, unknown_name_message
+from specsolve._messages import (
+    coordinate_text,
+    coordinates_text,
+    missing_row_message,
+    table_noun,
+    table_ways,
+    unknown_name_message,
+)
 from specsolve._names import POSITION, VALUE
 from specsolve._result import Start
 from specsolve.errors import DataError, SpecsolveError
@@ -38,12 +45,12 @@ if TYPE_CHECKING:
 
 
 def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
-    """Every name data may be attached to — declared parameters, dimensions and relations, one flat namespace."""
+    """Every name data may be attached to — parameters, dimensions, sets and property tables, one flat namespace."""
     return {**program.parameters, **program.dimensions, **program.relations}
 
 
 def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None:
-    """Refuse a key of *data* that names no parameter, dimension or relation *program* declares.
+    """Refuse a key of *data* that names no parameter, dimension, set or property table *program* declares.
 
     Raises:
         DataError: A key naming nothing the spec declares.
@@ -58,18 +65,28 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's index as one column of labels
-    under its own name in the order they arrived, a relation as one column
-    per declared column. A datetime label is held in microseconds, and a date
-    under a ``datetime`` dimension as the microsecond its day starts on.
+    under its own name in the order they arrived, a set as one column per
+    member, and a property as its subject's members and one column named
+    after it, under ``subject.property``. A datetime label is held in
+    microseconds, and a date under a ``datetime`` dimension as the
+    microsecond its day starts on.
+
+    A property may also arrive as a column of a wide table under its
+    subject's key: the subject's members, then one column per property, a
+    null where a row lacks that property.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
-            dimension, relation or parameter with no data; a source no reader
-            accepts or short of the columns its declaration needs; an index
-            holding a label twice; a parameter with two rows for one
-            coordinate, a label its dimension lacks, a null or NaN value, or a
-            column of another type than it declares; a relation with a null, a
-            row twice, or a label its column's dimension lacks; a datetime
+            dimension, set, property or parameter with no data, or a property
+            given both under its own key and as a column of its subject's
+            table; a source no reader accepts or short of the columns its
+            declaration needs; an index holding a label twice; a parameter
+            with two rows for one coordinate, a label its dimension lacks, a
+            null or NaN value, or a column of another type than it declares;
+            a set or a property with a null, a row twice, or a label its
+            column's dimension lacks; a property of a set at a row the set
+            lacks, or missing at a row it has where the property refuses a
+            missing row; a datetime
             label finer than a microsecond, or in another time zone than its
             index; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
@@ -89,6 +106,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     after it. It attaches in memory too, and checks each assumption over the
     dimensions on the default engine.
     """
+    data = _split_wide_tables(program, data)
     _check_relation_sources(program, data)
     data = _read_paths_at_once(program, data)
     sources: dict[str, pl.LazyFrame] = {}
@@ -102,6 +120,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
     _check_relations_hold_labels(program, relations, sources)
+    _check_properties_of_set_rows(program, relations)
     sources |= relations
 
     for pname, pdef in program.parameters.items():
@@ -146,7 +165,7 @@ def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, 
     """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
-    ``Int64`` from 0 in index order; a parameter and a relation unchanged.
+    ``Int64`` from 0 in index order; a parameter, a set and a property unchanged.
     Nothing is read again, so a model archives what its build read.
     """
     tables = dict(tidied)
@@ -160,7 +179,7 @@ def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> s
     unknown = sorted(keys)
     lead = f'source key {unknown[0]!r} names' if len(unknown) == 1 else f'source keys {unknown} name'
     return (
-        f'{lead} neither a parameter, a dimension nor a relation this spec declares. '
+        f'{lead} neither a parameter, a dimension, a set nor a property table this spec declares. '
         f'{did_you_mean(unknown[0], known, label="Declared")} Pass only what the '
         f'spec takes — a table carrying more than that is filtered here, not attached.'
     )
@@ -182,19 +201,19 @@ def _no_index_source_message(dim: str) -> str:
 
 
 def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
-    """A dimension whose relations have an author and whose labels have none."""
+    """A dimension whose sets or properties have an author and whose labels have none."""
     declared = ', '.join(sorted(authors))
     return (
-        f"dimension '{dim}' has its maps ({declared}) but no index of its own, so nothing says "
-        f'which of its labels exist. A relation is a table over the dimension, not the dimension '
-        f"itself — it may omit members, and its row order is arbitrary. Pass an index for '{dim}' "
-        f'under that key: every relation column over it is checked against the index, and a label no '
-        f'row mentions is unmapped.'
+        f"dimension '{dim}' has tables over it ({declared}) but no index of its own, so nothing says "
+        f'which of its labels exist. A set or a property is a table over the dimension, not the dimension '
+        f'itself — it may omit labels, and its row order is arbitrary. Pass an index for '
+        f"'{dim}' under that key: every column over it is checked against the index, and a label no "
+        f'row mentions is in no row.'
     )
 
 
 # ---------------------------------------------------------------------------
-# dimensions and relations
+# dimensions, sets and properties
 # ---------------------------------------------------------------------------
 
 
@@ -285,7 +304,7 @@ def _not_labels(dim: str, values: object) -> str:
 
 
 def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> None:
-    """Refuse a relation nothing supplies, and a relation column carried on an index."""
+    """Refuse a set or a property nothing supplies, and a set carried as a column of an index."""
     for name, relation in program.relations.items():
         if name not in data:
             raise DataError(_unsupplied_relation_message(name, relation))
@@ -298,7 +317,7 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
             if name in carried:
                 raise DataError(
                     f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
-                    f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
+                    f"is a set with a member over '{dim}'. A set is supplied under its own key, not "
                     f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
                     f'the rows it holds.'
                 )
@@ -351,16 +370,22 @@ def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, ind
 
 
 def _relations_over(program: Program, dim: str) -> tuple[str, ...]:
-    """The relations with a column over *dim*, in declaration order."""
+    """The sets and property tables with a column over *dim*, in declaration order."""
     return tuple(name for name, lk in program.relations.items() if any(over == dim for _, over in lk.columns))
 
 
 def _unsupplied_relation_message(name: str, relation: Relation) -> str:
-    """A relation nothing gives a table for."""
-    rows = f'one row per {list(relation.key)} it maps' if relation.values else 'one row per tuple it relates'
+    """A set or a property nothing gives a table for."""
+    if relation.subject is None:
+        return (
+            f"no data provided for set '{name}'. Pass it under key '{name}' as a table with "
+            f'columns {list(relation.roles)} — one row per combination it holds, and no row for one it does not.'
+        )
+    (value,) = relation.values
     return (
-        f"no data provided for relation '{name}'. Pass it under key '{name}' as a table with "
-        f'columns {list(relation.roles)} — {rows}, and no row for one it does not.'
+        f"no data provided for {table_noun(name, relation)}. Pass it under key '{name}' as a table "
+        f'with columns {list(relation.roles)}, one row per row of {relation.subject!r} that has it, or as a '
+        f"{value!r} column of the table under '{relation.subject}', null where a row lacks it."
     )
 
 
@@ -373,23 +398,24 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
 def _check_relations_hold_labels(
     program: Program, relations: Mapping[str, pl.LazyFrame], indices: Mapping[str, pl.LazyFrame]
 ) -> None:
-    """Every column of every relation holds labels of its dimension.
+    """Every column of every set and property table holds labels of its dimension.
 
     Raises:
         DataError: A column holding a label its dimension lacks.
     """
     for name, relation in program.relations.items():
+        owner = table_noun(name, relation)
         for role, dim in relation.columns:
-            _check_column_holds_labels(relations[name], name, role, dim, _labels_of(dim, indices[dim]))
+            _check_column_holds_labels(relations[name], owner, role, dim, _labels_of(dim, indices[dim]))
 
 
-def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
-    """Refuse a relation column holding a value that is not a label of its dimension.
+def _check_column_holds_labels(rows: pl.LazyFrame, owner: str, role: str, dim: str, labels: pl.Series) -> None:
+    """Refuse a column of a set or a property holding a value that is not a label of its dimension.
 
     Offenders keep their own type — a python native off polars, never a numpy
     scalar — because the message reprs them.
     """
-    _check_same_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
+    _check_same_clock(owner, role, dim, rows.collect_schema()[role], labels.dtype)
     known = set(labels.to_list())
     strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
     if not strays:
@@ -397,9 +423,9 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
     shown = ', '.join(repr(v) for v in list(strays)[:5]) + (' …' if len(strays) > 5 else '')
     spelled = [str(x) for x in labels.to_list()]
     raise DataError(
-        f"relation '{name}' has value(s) in '{role}' that are not '{dim}' labels: {shown}. '{dim}' takes "
+        f"{owner} has value(s) in '{role}' that are not '{dim}' labels: {shown}. '{dim}' takes "
         f'its labels from the data here, and they are {spelled[:8]}{" …" if len(spelled) > 8 else ""}. A '
-        f'relation relates the labels that exist — a value matching none of them would place its terms '
+        f'set or a property holds the labels that exist — a value matching none of them would place its terms '
         f'nowhere, so it is a typo on one side or a label missing from the other.'
     )
 
@@ -410,7 +436,7 @@ def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
 
 
 def _read_relation(source: Source, name: str, relation: Relation, indexes: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
-    """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
+    """One supplied set or property as the frame both lanes read: one column per declared column, under its own name.
 
     A column is read in its dimension's label type, from *indexes*.
 
@@ -418,28 +444,24 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
         DataError: A source no reader accepts, a table short of a column,
             carrying a null, or holding a row twice.
     """
+    owner = table_noun(name, relation)
     roles = list(relation.roles)
     table = as_frame(source, tuple(roles))
     if table is None:
         raise DataError(
-            f"relation '{name}': cannot adapt {type(source).__name__} to a table — pass any "
+            f'{owner}: cannot adapt {type(source).__name__} to a table — pass any '
             f'table polars can read with columns {roles} (polars, pyarrow, pandas), or a parquet '
             f'path.'
         )
     available = table.collect_schema().names()
     if any(c not in available for c in roles):
         keyed = (
-            f'{list(relation.key)} is the key it is single-valued per'
-            if relation.values
-            else 'it is a bare relation, every column in its key'
+            f'{list(relation.key)} are the members of {relation.subject!r}, and the last column is the property'
+            if relation.subject is not None
+            else 'one column per member'
         )
-        raise DataError(
-            f"relation '{name}' must carry a column per column it declares, {roles} (has "
-            f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
-        )
-    rows = in_microseconds(
-        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, indexes)
-    )
+        raise DataError(f'{owner} must carry the columns {roles} (has {list(available)}): {keyed}.')
+    rows = in_microseconds(table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, indexes))
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -447,27 +469,96 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
         where = repr(holed[0]) if len(holed) == 1 else str(holed)
         shown = coordinates_text(roles, holes.head(5).rows())
         raise DataError(
-            f"relation '{name}' carries {holes.height} row(s) with a null in {where}: {shown}. A relation "
-            f'is partial by leaving a row out, not by relating a label to nothing — drop the row and '
-            f'the label is unmapped, which is what every operator reading the relation already '
-            f'means by it.'
+            f'{owner} carries {holes.height} row(s) with a null in {where}: {shown}. A table here '
+            f'leaves a row out rather than relate a label to nothing — drop the row, and the row is '
+            f'not there, which is what every operator reading it already means by it.'
         )
 
     key = list(relation.key)
     twice = rows.group_by(key).len().filter(pl.col('len') > 1).sort(key)
     if twice.height:
         shown = coordinates_text(key, twice.select(key).head(5).rows())
-        if relation.values:
+        if relation.subject is not None:
             raise DataError(
-                f"relation '{name}' maps {twice.height} key(s) more than once: {shown}. "
-                f'{key} is the declared key, so each key it maps takes exactly one row.'
+                f'{owner} has {twice.height} row(s) of {relation.subject!r} more than once: {shown}. '
+                f'A property holds one value per row of its subject.'
             )
         raise DataError(
-            f"relation '{name}' relates {twice.height} tuple(s) more than once: {shown}. "
-            f'A relation holds each row at most once, so drop the repeats.'
+            f'{owner} holds {twice.height} row(s) more than once: {shown}. '
+            f'A set holds each row at most once, so drop the repeats.'
         )
 
     return rows.lazy()
+
+
+def _properties_by_subject(program: Program) -> dict[str, dict[str, str]]:
+    """Each subject's properties, as the property's name and its table's, in declaration order."""
+    subjects: dict[str, dict[str, str]] = {}
+    for name, relation in program.relations.items():
+        if relation.subject is not None:
+            subjects.setdefault(relation.subject, {})[name.removeprefix(relation.subject + '.')] = name
+    return subjects
+
+
+def _split_wide_tables(program: Program, data: Mapping[str, Source]) -> dict[str, Source]:
+    """*data* with each table under a subject's key split into the subject and one table per property it carries.
+
+    A subject's wide table is its members' columns and a column per
+    property; a null there is a row without the property, so each property
+    table keeps the rows where its column holds a value. What stays under the
+    subject's key is the table without those columns, which is the set's own
+    table or the dimension's index. The wide table is read once, since its
+    columns become several tables.
+    """
+    split = dict(data)
+    for subject, properties in _properties_by_subject(program).items():
+        members = (subject,) if subject in program.dimensions else program.relations[subject].roles
+        if subject not in data or (table := as_frame(data[subject], members)) is None:
+            continue
+        carried = [prop for prop in properties if prop in table.collect_schema().names()]
+        if not carried:
+            continue
+        if twice := [properties[prop] for prop in carried if properties[prop] in data]:
+            raise DataError(
+                f"property '{twice[0].removeprefix(subject + '.')}' of '{subject}' is given twice: under key "
+                f"'{twice[0]}', and as a column of the table under '{subject}'. Pass it once."
+            )
+        wide = table.pipe(collected)
+        for prop in carried:
+            key = program.relations[properties[prop]].key
+            split[properties[prop]] = wide.select(*key, prop).filter(pl.col(prop).is_not_null()).lazy()
+        split[subject] = wide.drop(carried).lazy()
+    return split
+
+
+def _check_properties_of_set_rows(program: Program, relations: Mapping[str, pl.LazyFrame]) -> None:
+    """Every row of a set's property is a row of the set, and a property that refuses a missing row has every row.
+
+    A property of a dimension is checked by its labels and by the attach,
+    over the dimension's labels. A set is a table, so its property is checked
+    against that table here.
+
+    Raises:
+        DataError: A property row the set lacks, or a set row without a
+            property that refuses a missing row.
+    """
+    for name, relation in program.relations.items():
+        if relation.subject not in program.relations:
+            continue
+        owner, key = table_noun(name, relation), list(relation.key)
+        held, rows = relations[name].select(key), relations[relation.subject].select(key)
+        strays = held.join(rows, on=key, how='anti', nulls_equal=True).pipe(collected)
+        if strays.height:
+            raise DataError(
+                f'{owner} has {strays.height} row(s) that are not rows of {relation.subject!r}: '
+                f'{coordinates_text(key, strays.head(5).rows())}. A property is a fact about a row of its '
+                f"subject: add the row to '{relation.subject}', or drop it here."
+            )
+        if relation.missing == 'refused':
+            gaps = rows.join(held, on=key, how='anti', nulls_equal=True).pipe(collected)
+            if gaps.height:
+                first = coordinate_text(gaps.row(0, named=True))
+                raise DataError(missing_row_message(owner, first, gaps.height, table_ways(relation)))
 
 
 # ---------------------------------------------------------------------------

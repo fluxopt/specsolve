@@ -37,7 +37,7 @@ from tests.linopy_lane.operators import (
     operator_sum,
     operator_sum_back,
 )
-from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_relation, evaluate_where
+from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_read, bound_relation, evaluate_where
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -522,15 +522,13 @@ def _membership(columns: program.JoinColumns, ctx: EvaluationContext) -> xr.Data
     relation = columns.relation
     if not relation.values:
         return bound_relation(columns.name, '', ctx.relations)
-    held = functools.reduce(
-        operator.or_, (bound_relation(columns.name, v, ctx.relations).notnull() for v in relation.values)
-    )
+    held = functools.reduce(operator.or_, (bound_read(columns, v, ctx.relations).notnull() for v in relation.values))
     return held.rename({relation.dim(r): r for r in relation.key if relation.dim(r) != r}).astype(float)
 
 
 def _walked_arrays(columns: program.JoinColumns, roles: tuple[str, ...], ctx: EvaluationContext) -> tuple[Any, ...]:
     """The relation's value columns *roles* as arrays over the dimensions its key names, in the order given."""
-    return tuple(bound_relation(columns.name, role, ctx.relations) for role in roles)
+    return tuple(bound_read(columns, role, ctx.relations) for role in roles)
 
 
 def _partition(node: program.Translate | program.WindowSum, ctx: EvaluationContext) -> Any:
@@ -544,5 +542,5 @@ def _partition(node: program.Translate | program.WindowSum, ctx: EvaluationConte
     if node.partition is None:
         return None
     (column,) = node.partition.grouped
-    array = bound_relation(node.partition.name, column, ctx.relations)
+    array = bound_read(node.partition, column, ctx.relations)
     return array.rename(node.partition.dim(column))

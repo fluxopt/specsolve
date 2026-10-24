@@ -44,10 +44,10 @@ PORTS_DIR = EXAMPLES_DIR / 'ports'
 PORT_REFERENCES: dict[str, dict[str, Any]] = constructs.REFERENCES
 
 
-def relation(over: str, into: str, labels: Sequence[Any], values: Sequence[Any]) -> pl.DataFrame:
-    """A relation's map from one value per label, `None` where the label maps nowhere."""
+def prop(subject: str, name: str, labels: Sequence[Any], values: Sequence[Any]) -> pl.DataFrame:
+    """The table of property *name* of a dimension *subject*, from one value per label, `None` where a label lacks it."""
     rows = [(a, b) for a, b in zip(labels, values, strict=True) if b is not None]
-    return pl.DataFrame({over: [a for a, _ in rows], into: [b for _, b in rows]})
+    return pl.DataFrame({subject: [a for a, _ in rows], name: [b for _, b in rows]})
 
 
 def port_sources(name: str) -> dict[str, Any]:
@@ -341,7 +341,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     ``level`` is masked where ``usable`` says so (unmasked under
     ``masked=False``), and ``take`` is capped only by *expression*'s row. The
     1000x penalty on ``level`` makes "row dropped" and "row built and binding"
-    separable from the objective alone. ``grouped`` adds ``season_of``.
+    separable from the objective alone. ``grouped`` adds the property ``t[season]``.
     """
     spec: dict[str, Any] = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -355,7 +355,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     }
     if grouped:
         spec['dimensions']['season'] = {'dtype': 'str'}
-        spec['relations'] = {'season_of': {'key': 't', 'values': 'season'}}
+        spec['properties'] = {'t': {'season': 'season'}}
     if not masked:
         del spec['parameters']
         del spec['variables']['level']['where']

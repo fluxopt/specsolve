@@ -23,7 +23,7 @@ import xarray as xr
 from mathspec import program as _program
 
 from specsolve._frames import to_pandas
-from specsolve._messages import coordinate_text, missing_row_message
+from specsolve._messages import PARAMETER_WAYS, coordinate_text, missing_row_message, table_noun, table_ways
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -114,15 +114,16 @@ def dimension_coords(
     """
     master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
     for name, relation in program.relations.items():
-        if relation.missing == 'refused':
+        if relation.missing == 'refused' and relation.subject not in program.relations:
             key = relation.key or relation.roles
-            _refuse_a_missing_row('relation', name, tidy[name].select(*key).unique(), key, relation.dim, tidy)
+            owner, ways = table_noun(name, relation), table_ways(relation)
+            _refuse_a_missing_row(owner, ways, tidy[name].select(*key).unique(), key, relation.dim, tidy)
     return master, _relation_arrays(program, tidy, master)
 
 
 def _refuse_a_missing_row(
-    kind: str,
-    name: str,
+    owner: str,
+    ways: str,
     rows: pl.LazyFrame,
     columns: tuple[str, ...],
     dim: Callable[[str], str],
@@ -143,7 +144,7 @@ def _refuse_a_missing_row(
     held = rows.select(pl.col(column).cast(schema[column]) for column in columns)
     gaps = product.join(held, on=list(columns), how='anti').collect()
     if gaps.height:
-        raise DataError(missing_row_message(kind, name, coordinate_text(gaps.row(0, named=True)), gaps.height))
+        raise DataError(missing_row_message(owner, coordinate_text(gaps.row(0, named=True)), gaps.height, ways))
 
 
 def _relation_arrays(
@@ -221,7 +222,7 @@ def load_parameters(
         arr = _from_tidy(frame, pdef.dims)
         if pdef.dims:
             if pdef.missing == 'refused':
-                _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)
+                _refuse_a_missing_row(f"parameter '{pname}'", PARAMETER_WAYS, tidy[pname], pdef.dims, lambda d: d, tidy)
             onto = {d: master_coords[d] for d in pdef.dims}
             arr = arr.reindex(onto, fill_value=_fill(pdef, arr.dtype == bool))
         arrays[pname] = arr

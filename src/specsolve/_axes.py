@@ -103,7 +103,7 @@ def bulleted(entries: Mapping[str, str]) -> str:
 class EachCoordinate:
     """One slice per coordinate of *dim*, a column the sources carry: scenarios, draws, investment periods.
 
-    Parameters and relations carrying *dim* are filtered to one coordinate and
+    Parameters, sets and properties carrying *dim* are filtered to one coordinate and
     the column dropped, so the model never mentions it; a *dim* the spec
     declares is refused, and so is an index that carries it. Every other
     source passes through untouched. Slices run in sorted coordinate order.
@@ -271,10 +271,10 @@ class EachWindow:
         if verdict.undecided:
             raise SpecsolveError(
                 f"EachWindow('{self.dim}', …, into='{self.into}') slices '{self.into}', which the model reaches "
-                f'along through a relation whose groups a window may split, and this driver does not resolve a '
-                f'reach the relation decides:\n'
-                f'{bulleted({r.label: f"through the relation {r.name!r}" for r in verdict.undecided})}\n'
-                f'Cut a dimension the relation does not group.'
+                f'along through a property whose groups a window may split, and this driver does not resolve a '
+                f'reach the property decides:\n'
+                f'{bulleted({r.label: f"through {r.name!r}" for r in verdict.undecided})}\n'
+                f'Cut a dimension the property does not group.'
             )
         if self.lookahead < verdict.ahead:
             raise SpecsolveError(
@@ -362,7 +362,7 @@ def check_no_index_is_cut(program: Program, sources: Mapping[str, Source], axis:
             f"index for dimension '{dim}' carries a '{axis.dim}' column, and {type(axis).__name__}"
             f"('{axis.dim}') cuts every table that carries '{axis.dim}'. An index is not cut: it lists "
             f"the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
-            f"slice has in a parameter or a relation over ('{dim}', '{axis.dim}'), where a missing row "
+            f"slice has in a parameter or a set over ('{dim}', '{axis.dim}'), where a missing row "
             f'already reads as absent.'
         )
 

@@ -195,7 +195,7 @@ def solve_over(
         spec: As [`check`][specsolve._api.check] takes it. Parsed once, whichever
             executor runs the slices.
         sources: As [`build`][specsolve._api.build] takes them, every shape
-            included; the axis filters the parameters and relations that carry
+            included; the axis filters the parameters, sets and properties that carry
             it and passes the rest through.
         axis: [`EachCoordinate`][], [`EachWindow`][], either as the plain
             data its ``to_dict`` writes, or a list of ``(key, sources)``

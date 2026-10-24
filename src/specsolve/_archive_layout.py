@@ -161,7 +161,8 @@ def _answered_under(under: str) -> dict[str, list[str]]:
 _HELD_UNDER = MappingProxyType(
     {
         'dimension': [SOURCES_DIR],
-        'relation': [SOURCES_DIR],
+        'set': [SOURCES_DIR],
+        'property': [SOURCES_DIR],
         'parameter': [SOURCES_DIR],
         **_answered_under(ANSWER_DIR),
     }
@@ -253,7 +254,8 @@ def _declared_files(
     for name, dimension in program.dimensions.items():
         yield name, 'dimension', dimension.description, dimension.dtype, [(name, name)]
     for name, relation in program.relations.items():
-        yield name, 'relation', relation.description, None, relation.columns
+        kind = 'set' if relation.subject is None else 'property'
+        yield name, kind, relation.description, None, relation.columns
     for name, parameter in program.parameters.items():
         yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
     answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
