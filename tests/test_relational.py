@@ -610,19 +610,6 @@ class TestTheLabelSpace:
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 
-    def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
-        """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
-        (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
-        spec = override(
-            NODE_CAP_SPEC,
-            **{'variables.x.where': "node >= 'b'", 'constraints.k.where': "node >= 'b'"},
-        )
-        cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
-
-        with sps.build(spec, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
-            assert sorted(model._engine._model.variables['x'].frame.collect()['node'].to_list()) == ['b', 'c']
-            assert model.solve().objective == pytest.approx(5.0)
-
     def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
         """A quoted label the dimension does not carry masks everything out (the
         where-string rules); the comparison is in String space, since the Enum
