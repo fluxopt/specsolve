@@ -122,8 +122,8 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{h}`$ | `StorageUnit_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of one unit of dispatch |
 | $`\mathrm{c}^{h,(2)}`$ | `StorageUnit_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of the square of one unit of dispatch; storing is not charged |
 | $`\mathrm{c}^{\mathrm{soc}}`$ | `StorageUnit_marginal_cost_storage` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — cost of one unit of charge held over one snapshot |
-| $`\mathrm{h}^{+,\mathrm{set}}`$ | `StorageUnit_p_dispatch_set` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$, $`0`$ where the data has no row — a given dispatch schedule; a unit without one has no row here |
-| $`\mathrm{h}^{-,\mathrm{set}}`$ | `StorageUnit_p_store_set` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$, $`0`$ where the data has no row — a given charging schedule; a unit without one has no row here |
+| $`\mathrm{h}^{+,\mathrm{set}}`$ | `StorageUnit_p_dispatch_set` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$, `absent` where the data has no row — a given dispatch schedule; a unit without one has no row here |
+| $`\mathrm{h}^{-,\mathrm{set}}`$ | `StorageUnit_p_store_set` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$, `absent` where the data has no row — a given charging schedule; a unit without one has no row here |
 | $`\mathrm{e}^{\mathrm{nom}}`$ | `Store_e_nom` over $`\Xi \times \mathcal{V}`$ — nominal energy capacity |
 | $`\mathrm{ext}^{e}`$ | `Store_e_nom_extendable` over $`\mathcal{V}`$ — whether the nominal energy capacity is a decision |
 | $`\underline{\mathrm{e}}`$ | `Store_e_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — least energy held, per unit of nominal capacity — negative for a store that may go short |
@@ -139,7 +139,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{q}`$ | `Store_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of one unit of power delivered |
 | $`\mathrm{c}^{q,(2)}`$ | `Store_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of the square of the net power delivered, so charging costs as much as delivering |
 | $`\mathrm{c}^{e}`$ | `Store_marginal_cost_storage` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — cost of one unit of energy held over one snapshot |
-| $`\mathrm{q}^{\mathrm{set}}`$ | `Store_p_set` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$, $`0`$ where the data has no row — a given schedule of power delivered; a store without one has no row here |
+| $`\mathrm{q}^{\mathrm{set}}`$ | `Store_p_set` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$, `absent` where the data has no row — a given schedule of power delivered; a store without one has no row here |
 
 #### Conditions
 
@@ -152,7 +152,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`h^{+}`$ | `StorageUnit_p_dispatch` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — `StorageUnit-p_dispatch` — power delivered to the bus |
 | $`h^{-}`$ | `StorageUnit_p_store` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — `StorageUnit-p_store` — power drawn from the bus into charge |
 | $`\mathit{soc}`$ | `StorageUnit_state_of_charge` over $`\Xi \times \mathcal{T} \times \mathcal{S}`$ — `StorageUnit-state_of_charge` — energy held at the end of a snapshot |
@@ -521,50 +521,27 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {description: the investment period a snapshot falls in, into: period}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {description: the bus a generator sits on, into: bus}
       link:
-        bus0:
-          description: the bus a link leaves
-          into: bus
+        bus0: {description: the bus a link leaves, into: bus}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {description: the link an output port belongs to, into: link}
+        bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns. A link
+            of three output ports is three labels here rather than a third relation, so the file states any
+            number of them', into: bus}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {description: the process a port belongs to, into: process}
+        bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`, … columns.
+            A process of three ports is three labels here rather than a third relation, so the file states
+            any number of them', into: bus}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
+        bus: {description: the bus a load sits on, into: bus}
       storage_unit:
-        bus:
-          description: the bus a storage unit sits on
-          into: bus
+        bus: {description: the bus a storage unit sits on, into: bus}
       store:
-        bus:
-          description: the bus a store sits on
-          into: bus
-
+        bus: {description: the bus a store sits on, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -775,11 +752,11 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       StorageUnit_p_dispatch_set:
         description: a given dispatch schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: 0
+        missing: absent
       StorageUnit_p_store_set:
         description: a given charging schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: 0
+        missing: absent
       Store_e_nom:
         description: nominal energy capacity
         dims: [scenario, store]
@@ -843,14 +820,14 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       Store_p_set:
         description: a given schedule of power delivered; a store without one has no row here
         dims: [scenario, snapshot, store]
-        missing: 0
+        missing: absent
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'
         dims: [scenario, snapshot, generator]
         where: Generator_active
       Link_p:
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         dims: [scenario, snapshot, link]
         where: Link_active
@@ -1032,8 +1009,8 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -1043,8 +1020,7 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
         dims: [scenario, snapshot, process_output]
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -1056,11 +1032,11 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
           * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
           over=snapshot)'}
       StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) +
-          sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=storage_unit),
-          over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)'}
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) + sum(sum((((StorageUnit_p_dispatch
+          * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge
+          * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot[period]), over=storage_unit), over=snapshot)'}
       Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
           * at(period_weight_objective, by=snapshot[period]), over=store), over=snapshot) + sum(sum((((Store_p
           * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
@@ -1087,8 +1063,8 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
-          over=link_output, by=link_output[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+          by=link_output[bus])'}
       Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
       Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),

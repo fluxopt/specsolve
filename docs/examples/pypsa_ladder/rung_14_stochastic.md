@@ -88,7 +88,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{on}^{\mathrm{load}}`$ | `Load_active` over $`\mathcal{D}`$ — whether a load stands in the model — PyPSA's `active`. A load has no build year and no lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\pi`$ | `scenario_weight` over $`\Xi`$ — PyPSA's `scenario_weightings.weight` — the probability of a future |
 | $`\omega`$ | `CVaR_omega` (scalar), $`0`$ where the data has no row — PyPSA's `risk_preference['omega']` — the share of operating cost priced at the tail rather than in expectation. Data prep writes a row only where a risk preference is set. Without a risk preference, the file has no CVaR variables or rows. With `omega = 0`, PyPSA builds them, and the optimum is the risk-neutral one |
-| $`\alpha`$ | `CVaR_alpha` (scalar), $`0`$ where the data has no row — PyPSA's `risk_preference['alpha']` — the confidence level; the tail holds the other `1 - alpha` of the probability. Data prep writes a row where it writes `CVaR_omega` |
+| $`\alpha`$ | `CVaR_alpha` (scalar), `absent` where the data has no row — PyPSA's `risk_preference['alpha']` — the confidence level; the tail holds the other `1 - alpha` of the probability. Data prep writes a row where it writes `CVaR_omega` |
 | $`\mathrm{w}^{y}`$ | `period_weight_objective` over $`\mathcal{Y}`$ — PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column holds (`optimize.py:205-207`, `:264-266`) |
 | $`\mathrm{on}`$ | `Generator_active` over $`\mathcal{T} \times \mathcal{G}`$ — whether a generator stands in a snapshot's period — PyPSA's `active`, from build year and lifetime, data prep |
 | $`\mathrm{on}^{f}`$ | `Link_active` over $`\mathcal{T} \times \mathcal{L}`$ — whether a link stands in a snapshot's period — PyPSA's `active`, data prep |
@@ -104,7 +104,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision, for a generator that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`a`$ | `CVaR_a` over $`\Xi`$, $`0`$ where the mask leaves it out — `CVaR-a` — how far a scenario's operating cost exceeds the tail's start; nothing where it does not |
 | $`\theta`$ | `CVaR_theta` (scalar), $`0`$ where the mask leaves it out — `CVaR-theta` — where the tail starts, the value at risk |
@@ -377,42 +377,23 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
       period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {description: the investment period a snapshot falls in, into: period}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {description: the bus a generator sits on, into: bus}
       link:
-        bus0:
-          description: the bus a link leaves
-          into: bus
+        bus0: {description: the bus a link leaves, into: bus}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {description: the link an output port belongs to, into: link}
+        bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns. A link
+            of three output ports is three labels here rather than a third relation, so the file states any
+            number of them', into: bus}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {description: the process a port belongs to, into: process}
+        bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`, … columns.
+            A process of three ports is three labels here rather than a third relation, so the file states
+            any number of them', into: bus}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
-
+        bus: {description: the bus a load sits on, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -530,7 +511,7 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
         description: PyPSA's `risk_preference['alpha']` — the confidence level; the tail holds the other `1
           - alpha` of the probability. Data prep writes a row where it writes `CVaR_omega`
         dims: []
-        missing: 0
+        missing: absent
       period_weight_objective:
         description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
           reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
@@ -577,7 +558,7 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
         dims: [scenario, snapshot, generator]
         where: Generator_active
       Link_p:
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         dims: [scenario, snapshot, link]
         where: Link_active
@@ -687,8 +668,8 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -698,8 +679,7 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
         dims: [scenario, snapshot, process_output]
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -732,8 +712,8 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
-          over=link_output, by=link_output[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+          by=link_output[bus])'}
       Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
       Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       Bus_injection:

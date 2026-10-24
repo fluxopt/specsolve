@@ -103,7 +103,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{W}^{e}`$ | `Store_capital_weight` over $`\mathcal{V}`$ — the sum of period weights a store stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{new}^{h}`$ | `StorageUnit_first_active` over $`\mathcal{Y} \times \mathcal{S}`$ — one in the first period a storage unit stands in, zero elsewhere, data prep. PyPSA takes `active & (active.cumsum() == 1)` (`global_constraints.py:265`) |
 | $`\mathrm{new}^{e}`$ | `Store_first_active` over $`\mathcal{Y} \times \mathcal{V}`$ — one in the first period a store stands in, zero elsewhere, data prep. PyPSA takes `active & (active.cumsum() == 1)` (`global_constraints.py:265`) |
-| $`\overline{\Delta}`$ | `Carrier_max_growth` over $`\mathcal{I}`$, $`0`$ where the data has no row — most capacity of a carrier that may be added in a period; no value means no limit. The least over the scenarios, as PyPSA takes it (`global_constraints.py:227-231`), data prep. PyPSA reads it only under `multi_investment_periods` (`global_constraints.py:220-221`), so data prep feeds no value otherwise |
+| $`\overline{\Delta}`$ | `Carrier_max_growth` over $`\mathcal{I}`$, `absent` where the data has no row — most capacity of a carrier that may be added in a period; no value means no limit. The least over the scenarios, as PyPSA takes it (`global_constraints.py:227-231`), data prep. PyPSA reads it only under `multi_investment_periods` (`global_constraints.py:220-221`), so data prep feeds no value otherwise |
 | $`\mathrm{r}`$ | `Carrier_max_relative_growth` over $`\mathcal{I}`$ — share of the previous period's additions that may be added on top — the least over the scenarios, as PyPSA takes it, data prep |
 | $`\mathrm{w}^{\mathrm{sto}}`$ | `snapshot_weightings_stores` over $`\mathcal{T}`$ — PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance |
 | $`\underline{\mathrm{h}}^{\mathrm{nom}}`$ | `StorageUnit_p_nom_min` over $`\Xi \times \mathcal{S}`$ — least nominal power an extendable storage unit may be built at |
@@ -163,7 +163,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`q`$ | `Store_p` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-p` — power delivered to the bus; charging is negative |
 | $`H`$ | `StorageUnit_p_nom_ext` over $`\mathcal{S}`$ — `StorageUnit-p_nom` — nominal power where it is a decision, for a storage unit that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`E`$ | `Store_e_nom_ext` over $`\mathcal{V}`$ — `Store-e_nom` — nominal capacity where it is a decision, for a store that is active; the parameter of the same PyPSA name carries the fixed regime |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
 #### Definitions
@@ -575,52 +575,27 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       carrier: {description: 'energy carriers, what a growth limit is set per'}
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {description: the investment period a snapshot falls in, into: period}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {description: the bus a generator sits on, into: bus}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {description: the link an output port belongs to, into: link}
+        bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns. A link
+            of three output ports is three labels here rather than a third relation, so the file states any
+            number of them', into: bus}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {description: the process a port belongs to, into: process}
+        bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`, … columns.
+            A process of three ports is three labels here rather than a third relation, so the file states
+            any number of them', into: bus}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
+        bus: {description: the bus a load sits on, into: bus}
       storage_unit:
-        carrier:
-          description: the carrier a storage unit converts from
-          into: carrier
-        bus:
-          description: the bus a storage unit sits on
-          into: bus
+        carrier: {description: the carrier a storage unit converts from, into: carrier}
+        bus: {description: the bus a storage unit sits on, into: bus}
       store:
-        carrier:
-          description: the carrier a store holds
-          into: carrier
-        bus:
-          description: the bus a store sits on
-          into: bus
-
+        carrier: {description: the carrier a store holds, into: carrier}
+        bus: {description: the bus a store sits on, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -764,7 +739,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           reads it only under `multi_investment_periods` (`global_constraints.py:220-221`), so data prep feeds
           no value otherwise
         dims: [carrier]
-        missing: 0
+        missing: absent
       Carrier_max_relative_growth:
         description: share of the previous period's additions that may be added on top — the least over the
           scenarios, as PyPSA takes it, data prep
@@ -958,7 +933,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         dims: [store]
         where: Store_e_nom_extendable AND Store_active_asset
       Link_p:
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         dims: [scenario, snapshot, link]
         where: Link_active
@@ -1125,8 +1100,8 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -1136,8 +1111,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         dims: [scenario, snapshot, process_output]
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -1145,11 +1119,11 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
           by=snapshot[period]), over=generator), over=snapshot)'}
       StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) +
-          sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=storage_unit),
-          over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)'}
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) + sum(sum((((StorageUnit_p_dispatch
+          * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic) * snapshot_weightings_objective)
+          * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge
+          * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
+          by=snapshot[period]), over=storage_unit), over=snapshot)'}
       Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
           * at(period_weight_objective, by=snapshot[period]), over=store), over=snapshot) + sum(sum((((Store_p
           * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,

@@ -189,7 +189,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{\mathrm{on}}`$ | `Generator_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of one snapshot spent on |
 | $`\mathrm{p}^{\mathrm{mod}}`$ | `Generator_p_nom_mod` over $`\mathcal{G}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{\mathrm{fix}}`$ | `Generator_modules_installed` over $`\Xi \times \mathcal{G}`$ — how many whole modules a committable build has in place: `Generator_p_nom / Generator_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}`$ | `Generator_big_m` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — the bound a committed extendable generator's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it caps that output; data prep |
+| $`\mathrm{M}`$ | `Generator_big_m` over $`\Xi \times \mathcal{G}`$, `absent` where the data has no row — the bound a committed extendable generator's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it caps that output; data prep |
 | $`\mathrm{nonneg}`$ | `Generator_p_min_pu_nonneg` over $`\mathcal{G}`$ — true where none of the generator's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}`$ | `Generator_maintainable` over $`\mathcal{G}`$ — whether a generator must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma`$ | `Generator_maintenance_pu` over $`\Xi \times \mathcal{G}`$ — the share of the build a maintenance event takes off |
@@ -211,7 +211,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{f,\mathrm{on}}`$ | `Link_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one snapshot spent on |
 | $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{f,\mathrm{fix}}`$ | `Link_modules_installed` over $`\Xi \times \mathcal{L}`$ — how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
+| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, `absent` where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
 | $`\mathrm{nonneg}^{f}`$ | `Link_p_min_pu_nonneg` over $`\mathcal{L}`$ — true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}^{f}`$ | `Link_maintainable` over $`\mathcal{L}`$ — whether a link must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{f}`$ | `Link_maintenance_pu` over $`\Xi \times \mathcal{L}`$ — the share of the build a maintenance event takes off |
@@ -236,7 +236,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{z,\mathrm{on}}`$ | `Process_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of one snapshot spent on |
 | $`\mathrm{z}^{\mathrm{mod}}`$ | `Process_p_nom_mod` over $`\mathcal{J}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{z,\mathrm{fix}}`$ | `Process_modules_installed` over $`\Xi \times \mathcal{J}`$ — how many whole modules a committable build has in place: `Process_p_nom / Process_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{z}`$ | `Process_big_m` over $`\Xi \times \mathcal{J}`$, $`0`$ where the data has no row — the bound a committed extendable process's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal power; data prep |
+| $`\mathrm{M}^{z}`$ | `Process_big_m` over $`\Xi \times \mathcal{J}`$, `absent` where the data has no row — the bound a committed extendable process's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal power; data prep |
 | $`\mathrm{nonneg}^{z}`$ | `Process_p_min_pu_nonneg` over $`\mathcal{J}`$ — true where none of the process's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{mnt}^{z}`$ | `Process_maintainable` over $`\mathcal{J}`$ — whether a process must be taken off for maintenance within the horizon — in any scenario, as PyPSA takes the union over them (`components.py:1016-1019`) |
 | $`\gamma^{z}`$ | `Process_maintenance_pu` over $`\Xi \times \mathcal{J}`$ — the share of the build a maintenance event takes off |
@@ -282,7 +282,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 | $`N`$ | `Generator_n_mod` over $`\mathcal{G}`$ — `Generator-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`u`$ | `Generator_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-status` — how much of a committable unit is on: an integer the rows below cap at one, or at the module count where the build is modular |
@@ -1397,68 +1397,54 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
     sets:
       Generator_maintenance_cover:
-        description: >-
-          the snapshots a maintenance event covers, by the snapshot it starts in —
-          in a scenario, the start and the snapshots after it, until their generator
-          weightings reach that scenario's `maintenance_duration`, data prep; no
-          rows for a generator that is not maintainable
-        dims: { scenario: scenario, generator: generator, start: snapshot, covered: snapshot }
+        description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
+          the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
+          data prep; no rows for a generator that is not maintainable
+        dims:
+          scenario: scenario
+          generator: generator
+          start: snapshot
+          covered: snapshot
         missing: absent
       Link_maintenance_cover:
-        description: >-
-          the snapshots a maintenance event covers, by the snapshot it starts in —
-          in a scenario, the start and the snapshots after it, until their generator
-          weightings reach that scenario's `maintenance_duration`, data prep; no
-          rows for a link that is not maintainable
-        dims: { scenario: scenario, link: link, start: snapshot, covered: snapshot }
+        description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
+          the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
+          data prep; no rows for a link that is not maintainable
+        dims:
+          scenario: scenario
+          link: link
+          start: snapshot
+          covered: snapshot
         missing: absent
       Process_maintenance_cover:
-        description: >-
-          the snapshots a maintenance event covers, by the snapshot it starts in —
-          in a scenario, the start and the snapshots after it, until their generator
-          weightings reach that scenario's `maintenance_duration`, data prep; no
-          rows for a process that is not maintainable
-        dims: { scenario: scenario, process: process, start: snapshot, covered: snapshot }
+        description: the snapshots a maintenance event covers, by the snapshot it starts in — in a scenario,
+          the start and the snapshots after it, until their generator weightings reach that scenario's `maintenance_duration`,
+          data prep; no rows for a process that is not maintainable
+        dims:
+          scenario: scenario
+          process: process
+          start: snapshot
+          covered: snapshot
         missing: absent
-
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {description: the investment period a snapshot falls in, into: period}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {description: the bus a generator sits on, into: bus}
       link:
-        bus0:
-          description: the bus a link leaves
-          into: bus
+        bus0: {description: the bus a link leaves, into: bus}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {description: the link an output port belongs to, into: link}
+        bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns. A link
+            of three output ports is three labels here rather than a third relation, so the file states any
+            number of them', into: bus}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {description: the process a port belongs to, into: process}
+        bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`, … columns.
+            A process of three ports is three labels here rather than a third relation, so the file states
+            any number of them', into: bus}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
-
+        bus: {description: the bus a load sits on, into: bus}
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -1521,7 +1507,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           1e6 where there is none of them (`components.py:1050-1121`). Below the output a solve wants, it
           caps that output; data prep
         dims: [scenario, generator]
-        missing: 0
+        missing: absent
       Generator_p_min_pu_nonneg:
         description: true where none of the generator's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep
@@ -1617,7 +1603,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data
           prep
         dims: [scenario, link]
-        missing: 0
+        missing: absent
       Link_p_min_pu_nonneg:
         description: true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu
           >= 0).all()` over every snapshot and scenario, data prep
@@ -1727,7 +1713,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal
           power; data prep
         dims: [scenario, process]
-        missing: 0
+        missing: absent
       Process_p_min_pu_nonneg:
         description: true where none of the process's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep
@@ -1844,7 +1830,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, generator]
         where: Generator_active
       Link_p:
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         dims: [scenario, snapshot, link]
         where: Link_active
@@ -2709,8 +2695,8 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -2720,8 +2706,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, process_output]
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -2772,8 +2757,8 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
-          over=link_output, by=link_output[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+          by=link_output[bus])'}
       Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
       Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       Bus_injection:

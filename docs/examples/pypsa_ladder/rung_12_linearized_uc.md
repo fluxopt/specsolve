@@ -78,10 +78,10 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, $`0`$ where the data has no row — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, $`0`$ where the data has no row — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — most output in the snapshot a unit starts, per unit of nominal power; no value means no limit |
-| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$, $`0`$ where the data has no row — most output in the snapshot before a unit stops, per unit of nominal power; no value means no limit |
+| $`\mathrm{ru}`$ | `Generator_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — most a generator may raise its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}`$ | `Generator_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — most a generator may lower its output between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{\mathrm{up}}`$ | `Generator_ramp_limit_start_up` over $`\Xi \times \mathcal{G}`$, `absent` where the data has no row — most output in the snapshot a unit starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{\mathrm{dn}}`$ | `Generator_ramp_limit_shut_down` over $`\Xi \times \mathcal{G}`$, `absent` where the data has no row — most output in the snapshot before a unit stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{UT}`$ | `Generator_min_up_time` over $`\Xi \times \mathcal{G}`$ — least snapshots a unit stays on once started |
 | $`\mathrm{DT}`$ | `Generator_min_down_time` over $`\Xi \times \mathcal{G}`$ — least snapshots a unit stays off once stopped |
 | $`\mathrm{u}^{0}`$ | `Generator_status_initial` over $`\Xi \times \mathcal{G}`$ — one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
@@ -127,7 +127,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`u`$ | `Generator_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-status` — how much of a committable unit is on, a share in \[0, 1\] rather than an integer: the relaxation the keyword solves (`variables.py:86-87`) |
 | $`\mathit{up}`$ | `Generator_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-start_up` — how much of a committable unit turns on this snapshot, a share in \[0, 1\] (`variables.py:137-138`) |
 | $`\mathit{dn}`$ | `Generator_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-shut_down` — how much of a committable unit turns off this snapshot, a share in \[0, 1\] (`variables.py:188-189`) |
@@ -550,42 +550,23 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
       period: {dtype: int, ordered: true, description: investment periods — PyPSA's `investment_periods`}
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {into: period, description: the investment period a snapshot falls in}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {into: bus, description: the bus a generator sits on}
       link:
-        bus0:
-          description: the bus a link leaves
-          into: bus
+        bus0: {into: bus, description: the bus a link leaves}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {into: link, description: the link an output port belongs to}
+        bus: {into: bus, description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
+            A link of three output ports is three labels here rather than a third relation, so the file states
+            any number of them'}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {into: process, description: the process a port belongs to}
+        bus: {into: bus, description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
+            … columns. A process of three ports is three labels here rather than a third relation, so the
+            file states any number of them'}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
-
+        bus: {into: bus, description: the bus a load sits on}
     parameters:
       snapshot_weightings_objective:
         dims: [snapshot]
@@ -627,25 +608,25 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
       Generator_ramp_limit_up:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_down:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_start_up:
         dims: [scenario, generator]
         dtype: float
-        missing: 0
+        missing: absent
         description: most output in the snapshot a unit starts, per unit of nominal power; no value means
           no limit
       Generator_ramp_limit_shut_down:
         dims: [scenario, generator]
         dtype: float
-        missing: 0
+        missing: absent
         description: most output in the snapshot before a unit stops, per unit of nominal power; no value
           means no limit
       Generator_min_up_time:
@@ -817,7 +798,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
         where: Link_active
         domain: continuous
         missing: absent
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
       Generator_status:
         dims: [scenario, snapshot, generator]
@@ -1111,8 +1092,8 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         dims: [scenario, snapshot, process_output]
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
@@ -1122,8 +1103,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
           does not delay (`delay` zero) transfers at once, cyclic or not
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -1158,8 +1138,8 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: '0'
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
-          over=link_output, by=link_output[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+          by=link_output[bus])'}
       Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
       Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       Bus_injection:
@@ -1170,10 +1150,10 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
     conditions:
       Generator_committed: {condition: Generator_committable AND Generator_active, description: a committable
           generator that stands in the snapshot's period — every unit-commitment row's set}
-      Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot[period]) > 0 OR
-          (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a
-          snapshot whose ramp reads a previous output — any snapshot but its period''s first, and the horizon''s
-          first where the generator comes in off or carries an initial output'}
+      Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot[period]) > 0 OR (position(snapshot)
+          == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a snapshot whose ramp
+          reads a previous output — any snapshot but its period''s first, and the horizon''s first where the
+          generator comes in off or carries an initial output'}
     objective: {sense: minimize, expression: total_cost}
     ```
 

@@ -101,8 +101,8 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{ru}^{f}`$ | `Link_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, $`0`$ where the data has no row — most a link may raise its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}^{f}`$ | `Link_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, $`0`$ where the data has no row — most a link may lower its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{f}`$ | `Link_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `absent` where the data has no row — most a link may raise its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}^{f}`$ | `Link_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `absent` where the data has no row — most a link may lower its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
 | $`\mathrm{f}^{\mathrm{nom}}`$ | `Link_p_nom` over $`\Xi \times \mathcal{L}`$ — nominal power |
 | $`\mathrm{ext}^{f}`$ | `Link_p_nom_extendable` over $`\mathcal{L}`$ — whether the nominal power is a decision |
 | $`\underline{\mathrm{f}}`$ | `Link_p_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — least flow, per unit of nominal power — negative for a link that carries both ways |
@@ -113,8 +113,8 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{c}^{f,(2)}`$ | `Link_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of the square of one unit of flow |
 | $`\mathrm{com}^{f}`$ | `Link_committable` over $`\mathcal{L}`$ — whether flow is gated by an on/off status decision |
-| $`\mathrm{ru}^{f,\mathrm{up}}`$ | `Link_ramp_limit_start_up` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — most flow in the snapshot a link starts, per unit of nominal power; no value means no limit |
-| $`\mathrm{rd}^{f,\mathrm{dn}}`$ | `Link_ramp_limit_shut_down` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — most flow in the snapshot before a link stops, per unit of nominal power; no value means no limit |
+| $`\mathrm{ru}^{f,\mathrm{up}}`$ | `Link_ramp_limit_start_up` over $`\Xi \times \mathcal{L}`$, `absent` where the data has no row — most flow in the snapshot a link starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{f,\mathrm{dn}}`$ | `Link_ramp_limit_shut_down` over $`\Xi \times \mathcal{L}`$, `absent` where the data has no row — most flow in the snapshot before a link stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{UT}^{f}`$ | `Link_min_up_time` over $`\Xi \times \mathcal{L}`$ — least snapshots a link stays on once started |
 | $`\mathrm{u}^{f,0}`$ | `Link_status_initial` over $`\Xi \times \mathcal{L}`$ — one where the link was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
 | $`\mathrm{f}^{0}`$ | `Link_p_init` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot |
@@ -123,7 +123,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{c}^{f,\mathrm{on}}`$ | `Link_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one snapshot spent on |
 | $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{f,\mathrm{fix}}`$ | `Link_modules_installed` over $`\Xi \times \mathcal{L}`$ — how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
+| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, `absent` where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
 | $`\mathrm{nonneg}^{f}`$ | `Link_p_min_pu_nonneg` over $`\mathcal{L}`$ — true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\mathrm{z}^{\mathrm{nom}}`$ | `Process_p_nom` over $`\Xi \times \mathcal{J}`$ — nominal internal power |
 | $`\mathrm{ext}^{z}`$ | `Process_p_nom_extendable` over $`\mathcal{J}`$ — whether the nominal internal power is a decision |
@@ -134,11 +134,11 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{cyc}^{z}`$ | `Process_output_cyclic_delay` over $`\mathcal{R}`$ — whether a delayed port's transfer wraps from the end of its investment period — PyPSA's `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's first snapshots is lost. The flag is the same in every scenario, as the delay is |
 | $`\mathrm{c}^{z}`$ | `Process_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of one unit of internal power |
 | $`\mathrm{c}^{z,(2)}`$ | `Process_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — cost of the square of one unit of internal power |
-| $`\mathrm{ru}^{z}`$ | `Process_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, $`0`$ where the data has no row — most a process may raise its internal power between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}^{z}`$ | `Process_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, $`0`$ where the data has no row — most a process may lower its internal power between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{z}`$ | `Process_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, `absent` where the data has no row — most a process may raise its internal power between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}^{z}`$ | `Process_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, `absent` where the data has no row — most a process may lower its internal power between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
 | $`\mathrm{com}^{z}`$ | `Process_committable` over $`\mathcal{J}`$ — whether internal power is gated by an on/off status decision |
-| $`\mathrm{ru}^{z,\mathrm{up}}`$ | `Process_ramp_limit_start_up` over $`\Xi \times \mathcal{J}`$, $`0`$ where the data has no row — most internal power in the snapshot a process starts, per unit of nominal power; no value means no limit |
-| $`\mathrm{rd}^{z,\mathrm{dn}}`$ | `Process_ramp_limit_shut_down` over $`\Xi \times \mathcal{J}`$, $`0`$ where the data has no row — most internal power in the snapshot before a process stops, per unit of nominal power; no value means no limit |
+| $`\mathrm{ru}^{z,\mathrm{up}}`$ | `Process_ramp_limit_start_up` over $`\Xi \times \mathcal{J}`$, `absent` where the data has no row — most internal power in the snapshot a process starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{z,\mathrm{dn}}`$ | `Process_ramp_limit_shut_down` over $`\Xi \times \mathcal{J}`$, `absent` where the data has no row — most internal power in the snapshot before a process stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{UT}^{z}`$ | `Process_min_up_time` over $`\Xi \times \mathcal{J}`$ — least snapshots a process stays on once started |
 | $`\mathrm{u}^{z,0}`$ | `Process_status_initial` over $`\Xi \times \mathcal{J}`$ — one where the process was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
 | $`\mathrm{z}^{0}`$ | `Process_p_init` over $`\Xi \times \mathcal{J}`$, $`0`$ where the data has no row — the internal power a process brought into the horizon — PyPSA's `p_init`, read only where the process came in running; no value means it is unknown, so the process carries no ramp row at the first snapshot |
@@ -177,7 +177,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 | $`u^{f}`$ | `Link_status` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-status` — how much of a committable link is on, a share in \[0, 1\] rather than an integer: the relaxation the keyword solves (`variables.py:86-87`) |
 | $`\mathit{up}^{f}`$ | `Link_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-start_up` — how much of a committable link turns on this snapshot, a share in \[0, 1\] (`variables.py:137-138`) |
@@ -852,42 +852,23 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       period: {dtype: int, ordered: true, description: investment periods — PyPSA's `investment_periods`}
     properties:
       snapshot:
-        period:
-          description: the investment period a snapshot falls in
-          into: period
+        period: {into: period, description: the investment period a snapshot falls in}
       generator:
-        bus:
-          description: the bus a generator sits on
-          into: bus
+        bus: {into: bus, description: the bus a generator sits on}
       link:
-        bus0:
-          description: the bus a link leaves
-          into: bus
+        bus0: {into: bus, description: the bus a link leaves}
       link_output:
-        link:
-          description: the link an output port belongs to
-          into: link
-        bus:
-          description: >-
-            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
-            A link of three output ports is three labels here rather than a third
-            property, so the file states any number of them
-          into: bus
+        link: {into: link, description: the link an output port belongs to}
+        bus: {into: bus, description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
+            A link of three output ports is three labels here rather than a third relation, so the file states
+            any number of them'}
       process_output:
-        process:
-          description: the process a port belongs to
-          into: process
-        bus:
-          description: >-
-            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
-            columns. A process of three ports is three labels here rather than a
-            third property, so the file states any number of them
-          into: bus
+        process: {into: process, description: the process a port belongs to}
+        bus: {into: bus, description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
+            … columns. A process of three ports is three labels here rather than a third relation, so the
+            file states any number of them'}
       load:
-        bus:
-          description: the bus a load sits on
-          into: bus
-
+        bus: {into: bus, description: the bus a load sits on}
     parameters:
       snapshot_weightings_objective:
         dims: [snapshot]
@@ -929,13 +910,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_ramp_limit_up:
         dims: [scenario, snapshot, link]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
       Link_ramp_limit_down:
         dims: [scenario, snapshot, link]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
       Link_p_nom:
@@ -988,13 +969,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_ramp_limit_start_up:
         dims: [scenario, link]
         dtype: float
-        missing: 0
+        missing: absent
         description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
           limit
       Link_ramp_limit_shut_down:
         dims: [scenario, link]
         dtype: float
-        missing: 0
+        missing: absent
         description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
           no limit
       Link_min_up_time:
@@ -1038,7 +1019,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_big_m:
         dims: [scenario, link]
         dtype: float
-        missing: 0
+        missing: absent
         description: the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max`
           times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m`
           times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the
@@ -1098,13 +1079,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_ramp_limit_up:
         dims: [scenario, snapshot, process]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a process may raise its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
       Process_ramp_limit_down:
         dims: [scenario, snapshot, process]
         dtype: float
-        missing: 0
+        missing: absent
         description: most a process may lower its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
       Process_committable:
@@ -1114,13 +1095,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_ramp_limit_start_up:
         dims: [scenario, process]
         dtype: float
-        missing: 0
+        missing: absent
         description: most internal power in the snapshot a process starts, per unit of nominal power; no value
           means no limit
       Process_ramp_limit_shut_down:
         dims: [scenario, process]
         dtype: float
-        missing: 0
+        missing: absent
         description: most internal power in the snapshot before a process stops, per unit of nominal power;
           no value means no limit
       Process_min_up_time:
@@ -1243,7 +1224,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
         where: Link_active
         domain: continuous
         missing: absent
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
       Process_p:
         dims: [scenario, snapshot, process]
@@ -1777,8 +1758,8 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
         cases:
           wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
               along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot[period]) * Link_efficiency
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+          within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         dims: [scenario, snapshot, process_output]
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
@@ -1788,8 +1769,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
           does not delay (`delay` zero) transfers at once, cyclic or not
         cases:
           wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
-              * Process_rate'}
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
         otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
           edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
@@ -1833,8 +1813,8 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: '0'
       Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
-          over=link_output, by=link_output[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+          by=link_output[bus])'}
       Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
       Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       Bus_injection:
@@ -1855,10 +1835,10 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
           comes in off or carries an initial output'}
       Process_committed: {condition: Process_committable AND Process_active, description: a committable process
           that stands in the snapshot's period — every unit-commitment row's set}
-      Process_ramps_from_previous: {condition: 'position(snapshot, within=snapshot[period]) > 0 OR
-          (position(snapshot) == 0 AND (Process_status_initial == 0 OR Process_p_init))', description: 'a
-          snapshot whose ramp reads a previous output — any snapshot but its period''s first, and the horizon''s
-          first where the process comes in off or carries an initial output'}
+      Process_ramps_from_previous: {condition: 'position(snapshot, within=snapshot[period]) > 0 OR (position(snapshot)
+          == 0 AND (Process_status_initial == 0 OR Process_p_init))', description: 'a snapshot whose ramp
+          reads a previous output — any snapshot but its period''s first, and the horizon''s first where the
+          process comes in off or carries an initial output'}
     objective: {sense: minimize, expression: total_cost}
     ```
 
