@@ -204,7 +204,7 @@ def _shaped(declared: dict, expression: str, dims: list[str]) -> dict:
             },
             'shift(p, along=period, offset=1, edge=0, within=generator_period[bus]) >= load',
             ['generator', 'period'],
-            r"a partition by 'generator_period\.bus' groups by a map keyed by \['generator', 'period'\]",
+            r"a partition by 'generator_period\[bus\]' reads a subject whose members are \['generator', 'period'\]",
             id='a-partition-by-a-property-of-a-set',
         ),
     ],

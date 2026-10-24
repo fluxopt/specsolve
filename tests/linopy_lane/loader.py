@@ -48,16 +48,16 @@ def refuse_relations_the_lane_does_not_build(program: program.Program) -> None:
         if node.partition.joined:
             raise OracleCannotBuildError(
                 _relation_shape_message(
-                    f"a partition by '{node.partition.name}' groups by a map keyed by {list(node.partition.relation.key)}, "
-                    f'and this lane groups a shift, sum_back or position by a map keyed by the dimension it '
-                    f'walks alone'
+                    f"a partition by '{node.partition.written}[{', '.join(node.partition.grouped)}]' reads a "
+                    f'subject whose members are {list(node.partition.relation.key)}, and this lane groups a shift, '
+                    f'sum_back or position by a property of the dimension it walks alone'
                 )
             )
         if len(node.partition.grouped) != 1:
             raise OracleCannotBuildError(
                 _relation_shape_message(
-                    f"a partition by '{node.partition.name}' groups by {list(node.partition.grouped)}, and this "
-                    f'lane groups a shift, sum_back or position by one column'
+                    f"a partition by '{node.partition.written}' groups by {list(node.partition.grouped)}, and this "
+                    f'lane groups a shift, sum_back or position by one property'
                 )
             )
 

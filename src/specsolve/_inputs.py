@@ -117,11 +117,15 @@ def _refuse_reserved_names(program: Program) -> None:
     """Refuse a declaration whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
-        *((table_noun(name, relation), name) for name, relation in program.relations.items()),
         *(
-            (f"column '{role}' of {table_noun(name, relation)}", role)
+            (table_noun(name, relation), name.removeprefix(f'{relation.subject}.'))
             for name, relation in program.relations.items()
-            for role, _ in relation.columns
+        ),
+        *(
+            (f"member '{role}' of {table_noun(name, relation)}", role)
+            for name, relation in program.relations.items()
+            if relation.subject is None
+            for role in relation.roles
         ),
         *((f"parameter '{name}'", name) for name in program.parameters),
         *((f"variable '{name}'", name) for name in program.variables),

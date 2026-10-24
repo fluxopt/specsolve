@@ -444,12 +444,12 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
         ),
         pytest.param(
             {**_named(), 'sets': {'pair': {'dims': {'specsolve_here': 't', 'there': 't'}, 'missing': 'absent'}}},
-            "column 'specsolve_here' of set 'pair'",
-            id='a column of a set',
+            "member 'specsolve_here' of set 'pair'",
+            id='a member of a set',
         ),
         pytest.param(
             {**_named(), 'properties': {'t': {'specsolve_next': {'into': 't', 'missing': 'absent'}}}},
-            "column 'specsolve_next' of property 'specsolve_next' of 't'",
+            "property 'specsolve_next' of 't'",
             id='a property',
         ),
         pytest.param(
