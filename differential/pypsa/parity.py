@@ -269,9 +269,10 @@ def spread(table: object, dims: list[str], scenarios: object) -> object:
 def prepared(spec: Path, tables: dict[str, object]) -> dict[str, object]:
     """`prep.sources`'s *tables* cut to what *spec* declares — specsolve refuses a key the spec does not take."""
     declared = mathspec.to_spec(spec)
-    names = {*declared.dimensions, *declared.parameters, *declared.relations}
+    tables_of_rows = declared.program.relations
+    names = {*declared.dimensions, *declared.parameters, *tables_of_rows}
     dims = {name: p.dims for name, p in declared.parameters.items()} | {
-        name: list(relation.key_roles) for name, relation in declared.relations.items()
+        name: list(relation.key) for name, relation in tables_of_rows.items()
     }
     return {
         name: spread(flattened(name, table, dims.get(name, [])), dims.get(name, []), tables['scenario'])
@@ -1056,7 +1057,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
         fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
             f'{name}: no rung feeds {unfed}'
-            for unfed in sorted({*declared.parameters, *declared.relations} - fed)
+            for unfed in sorted({*declared.parameters, *declared.program.relations} - fed)
             if answers(unfed)
         )
         program = declared.program
