@@ -19,18 +19,27 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: the language is mathspec at the commit pyproject.toml references, else at its floor
+      # The corpus is the release the committed rungs were certified from, or the commit
+      # pyproject.toml references in its place. A later corpus adds rungs and data prep,
+      # so moving the tag is its own change, with the rungs it adds.
+      - name: the language and the corpus are mathspec at the commit pyproject.toml references, else at its floor
         id: pin
         run: |
           direct=$(grep -o 'mathspec @ git+[^"]*' pyproject.toml || true)
           floor=$(grep -o 'mathspec>=[^,"]*' pyproject.toml | cut -d= -f2 || true)
-          echo "requirement=${direct:-mathspec==$floor}" >> "$GITHUB_OUTPUT"
-      # The corpus is the release the committed rungs were certified from. A later corpus
-      # adds rungs and data prep, so moving this tag is its own change, with the rungs it adds.
+          if [ -n "$direct" ]; then
+            echo "requirement=$direct" >> "$GITHUB_OUTPUT"
+            echo "repository=$(echo "$direct" | sed -E 's#.*github\.com/([^@]+)@.*#\1#')" >> "$GITHUB_OUTPUT"
+            echo "ref=${direct##*@}" >> "$GITHUB_OUTPUT"
+          else
+            echo "requirement=mathspec==$floor" >> "$GITHUB_OUTPUT"
+            echo "repository=energy-models/mathspec" >> "$GITHUB_OUTPUT"
+            echo "ref=v0.4.0" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v7
         with:
-          repository: energy-models/mathspec
-          ref: v0.4.0
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.ref }}
           path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:
