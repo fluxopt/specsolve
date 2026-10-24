@@ -81,13 +81,13 @@ ACCEPTED = [
 
 #: Predicates this sweep cannot host, with the test that checks each instead. A
 #: bare variable name is a self-reference in ``p``'s own where and spans a dim
-#: ``balance`` does not (#469); dispatch declares no relation.
+#: ``balance`` does not (#469); dispatch declares no set or property.
 COVERED_ELSEWHERE = {
     'VariableDefined': ('tests/test_relational.py::test_a_bare_variable_name_in_a_where_asks_whether_it_exists'),
-    'RelationComparison': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
-    'RelationPairComparison': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
-    'RelationDefined': 'tests/test_label_coords.py::test_a_where_reads_a_relation',
-    'JoinedCondition': 'tests/test_label_coords.py::test_a_relation_where_agrees_with_the_oracle',
+    'RelationComparison': 'tests/test_label_coords.py::test_a_where_reads_a_property',
+    'RelationPairComparison': 'tests/test_label_coords.py::test_a_property_where_agrees_with_the_oracle',
+    'RelationDefined': 'tests/test_label_coords.py::test_a_where_reads_a_property',
+    'JoinedCondition': 'tests/test_label_coords.py::test_a_property_where_agrees_with_the_oracle',
     'ConditionReference': 'tests/test_resolution_parity.py::test_a_named_condition_builds_the_model_its_condition_builds',
 }
 

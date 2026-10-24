@@ -230,7 +230,7 @@ WIDE_DATA = {
 
 WIDE_COORDS = {
     'f': pd.DataFrame({'f': ['a', 'b', 'c', 'd']}),
-    'grp': pd.DataFrame({'f': ['a', 'b', 'c', 'd'], 'g': ['g0', 'g0', 'g1', 'g1']}),
+    'f.grp': pd.DataFrame({'f': ['a', 'b', 'c', 'd'], 'grp': ['g0', 'g0', 'g1', 'g1']}),
     'g': pd.Index(['g0', 'g1'], name='g'),
     't': pd.Index([0, 1], name='t'),
 }
@@ -248,7 +248,7 @@ def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
     )
     spec = {
         'dimensions': dimensions,
-        **({'relations': {'grp': {'key': 'f', 'values': 'g'}}} if grouped else {}),
+        **({'properties': {'f': {'grp': 'g'}}} if grouped else {}),
         'parameters': {
             'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
             'gate2': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
@@ -268,8 +268,8 @@ def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
 
 def test_sum_does_not_distribute_over_addition_either():
     """A grouped `sum` is a reduction, so the non-law applies to it unchanged (#314)."""
-    together = _wide_objective_of('sum(x + y, over=f, by=grp[g]) <= 120', dims=['g', 't'])
-    apart = _wide_objective_of('sum(x, over=f, by=grp[g]) + sum(y, over=f, by=grp[g]) <= 120', dims=['g', 't'])
+    together = _wide_objective_of('sum(x + y, over=f, by=f[grp]) <= 120', dims=['g', 't'])
+    apart = _wide_objective_of('sum(x, over=f, by=f[grp]) + sum(y, over=f, by=f[grp]) <= 120', dims=['g', 't'])
 
     assert together == pytest.approx(640.0, rel=RTOL)
     assert apart == pytest.approx(480.0, rel=RTOL)

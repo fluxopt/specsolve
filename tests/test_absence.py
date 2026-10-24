@@ -133,13 +133,13 @@ def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
 #: behind `south`'s constant side has no members at all.
 GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
-    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+    'properties': {'generator': {'bus': 'bus'}},
     'parameters': {'capacity': {'dims': ['generator']}},
     'variables': {'imports': {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
         'import_limit': {
             'dims': ['bus'],
-            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
+            'expression': 'imports <= sum(capacity, over=generator, by=generator[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
@@ -150,7 +150,7 @@ def _grouped_constant_sources(capacity=('g1', 'g2')):
     return {
         'bus': ['north', 'south'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
-        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
+        'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame({'generator': list(capacity), 'value': [3.0, 4.0][: len(capacity)]}),
     }
 
@@ -177,7 +177,7 @@ SPANNED_GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
+            'expression': 'imports <= sum(capacity, over=generator, by=generator[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=snapshot)'},
@@ -190,7 +190,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
         'snapshot': [0, 1],
         'bus': ['north', 'south'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
-        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
+        'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
         'capacity': pl.DataFrame(
             {'snapshot': [0, 0, 1, 1], 'generator': ['g1', 'g2', 'g1', 'g2'], 'value': [3.0, 4.0, 1.0, 1.0]}
         ),
@@ -203,16 +203,16 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
 
 
-#: A relation to two columns: `south` reaches neither technology, `north` both.
+#: Two properties of one generator: `south` reaches neither technology, `north` both.
 PLURAL_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'technology': {'dtype': 'str'}},
-    'relations': {'gen_placement': {'key': 'generator', 'values': ['bus', 'technology']}},
+    'properties': {'generator': {'bus': 'bus', 'technology': 'technology'}},
     'variables': {'imports': {'dims': ['bus', 'technology'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
         'import_limit': {
             'dims': ['bus', 'technology'],
-            'expression': 'imports <= sum(capacity, over=generator, by=gen_placement[bus, technology])',
+            'expression': 'imports <= sum(capacity, over=generator, by=generator[bus, technology])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=technology)'},
@@ -225,9 +225,8 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
         'bus': ['north', 'south'],
         'technology': ['wind', 'solar'],
         'generator': pl.DataFrame({'generator': ['g1', 'g2']}),
-        'gen_placement': pl.DataFrame(
-            {'generator': ['g1', 'g2'], 'bus': ['north', 'north'], 'technology': ['wind', 'solar']}
-        ),
+        'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'north']}),
+        'generator.technology': pl.DataFrame({'generator': ['g1', 'g2'], 'technology': ['wind', 'solar']}),
         'capacity': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [3.0, 4.0]}),
     }
     with differential(PLURAL_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:

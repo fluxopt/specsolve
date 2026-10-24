@@ -175,7 +175,7 @@ CONSTANT_BESIDE_A_TERM = {
 #: reaches from the file *as written* — which is the number the rewrite owes.
 CONSTANT_BESIDE_A_TERM_CASES = [
     ('sum(x * k + d, over=t) >= load', 8.0, 'sum-over'),
-    ('sum(sum(x * k + d, over=t, by=r_of[r]), over=r) >= load', 8.0, 'sum-by'),
+    ('sum(sum(x * k + d, over=t, by=t[r]), over=r) >= load', 8.0, 'sum-by'),
     ('sum(shift(x * k + d, along=t, offset=1, edge=0), over=t) >= load', 8.0, 'shift'),
     ('sum(sum_back(x * k + d, along=t, window=2), over=t) >= load', 3.0, 'sum-back'),
 ]
@@ -480,10 +480,7 @@ class TestWhatBindRefusesAndWhatItTakes:
 #: A `line` whose two endpoints are *both* multi-valued for one label.
 TWO_BAD_COORDS_SPEC = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {}},
-    'relations': {
-        'from': {'key': 'line', 'values': 'bus'},
-        'to': {'key': 'line', 'values': 'bus'},
-    },
+    'properties': {'line': {'from_bus': 'bus', 'to_bus': 'bus'}},
     'parameters': {'cap': {'dims': ['line']}},
     'variables': {'f': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['line'], 'expression': 'f <= cap'}},
@@ -816,14 +813,14 @@ class TestTheLabelSpace:
     def test_every_multi_valued_coordinate_is_named_at_once(self):
         """Every multi-valued coordinate is named in one refusal (#273).
 
-        The pass is over the relation's rows, so both labels it maps twice arrive
+        The pass is over the property's rows, so both labels it maps twice arrive
         in one count and are named together.
         """
         data = {
             'cap': pl.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 1.0]}),
             'line': pl.DataFrame({'line': ['l1', 'l2']}),
-            'from': pl.DataFrame({'line': ['l1', 'l1', 'l2', 'l2'], 'bus': ['b1', 'b2', 'b1', 'b2']}),
-            'to': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['b2', 'b1']}),
+            'line.from_bus': pl.DataFrame({'line': ['l1', 'l1', 'l2', 'l2'], 'from_bus': ['b1', 'b2', 'b1', 'b2']}),
+            'line.to_bus': pl.DataFrame({'line': ['l1', 'l2'], 'to_bus': ['b2', 'b1']}),
         }
 
         with pytest.raises(DataError) as exc:
@@ -892,16 +889,13 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
             'bus': {'dtype': 'str'},
             'line': {},
         },
-        'relations': {
-            'from': {'key': 'line', 'values': 'bus'},
-            'to': {'key': 'line', 'values': 'bus'},
-        },
+        'properties': {'line': {'from_bus': 'bus', 'to_bus': 'bus'}},
         'parameters': {'cap': {'dims': ['line']}, 'load': {'dims': ['snapshot', 'bus']}},
         'variables': {'f': {'dims': ['snapshot', 'line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'constraints': {
             'balance': {
                 'dims': ['snapshot', 'bus'],
-                'expression': 'sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus]) == load',
+                'expression': 'sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus]) == load',
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'},
@@ -910,8 +904,8 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
         'snapshot': [0, 1],
         'bus': ['b0', 'b1'],
         'line': pl.DataFrame({'line': ['l0', 'l1']}),
-        'from': pl.DataFrame({'line': ['l0', 'l1'], 'bus': ['b0', ends[0]]}),
-        'to': pl.DataFrame({'line': ['l0', 'l1'], 'bus': ['b1', ends[1]]}),
+        'line.from_bus': pl.DataFrame({'line': ['l0', 'l1'], 'from_bus': ['b0', ends[0]]}),
+        'line.to_bus': pl.DataFrame({'line': ['l0', 'l1'], 'to_bus': ['b1', ends[1]]}),
         'cap': pl.DataFrame({'line': ['l0', 'l1'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame(
             {'snapshot': [0, 0, 1, 1], 'bus': ['b0', 'b1', 'b0', 'b1'], 'value': [0.0, 0.0, 0.0, 0.0]}
@@ -1521,9 +1515,9 @@ def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = Fal
     """
     sources: dict = {'k': [1.0, 1.0, 1.0], 'load': 10.0, 't': pl.DataFrame({'t': [0, 1, 2]})}
     sources['d'] = [1.0, 1.0, 1.0] if over_the_dim else 1.0
-    if 'r_of' in expression:
+    if 't[r]' in expression:
         sources['r'] = ['n', 's']
-        sources['r_of'] = pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']})
+        sources['t.r'] = pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']})
     return sources
 
 
@@ -1541,7 +1535,7 @@ REWRITE_CASES = [
 def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> dict:
     """The model, optionally with the rewrite the refusal names applied.
 
-    `r` and its relation are added only for the case that groups into them:
+    `r` and its property are added only for the case that groups into them:
     `check` advises on a dimension nothing uses as an axis, and the suite turns
     warnings into errors.
     """
@@ -1549,9 +1543,9 @@ def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> d
     parameters = dict(spec['parameters'])
     if over_the_dim:
         parameters['d'] = {'dims': ['t']}
-    if 'r_of' in expression:
+    if 't[r]' in expression:
         spec['dimensions'] = {**spec['dimensions'], 'r': {'dtype': 'str'}}
-        spec['relations'] = {'r_of': {'key': 't', 'values': 'r'}}
+        spec['properties'] = {'t': {'r': 'r'}}
     return {
         **spec,
         'parameters': parameters,
@@ -1565,18 +1559,18 @@ def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> d
 #: that slot; the powers of ten make a disagreement name the slot it kept.
 ABSENT_SLOT_CASES = [
     pytest.param('sum(x * k + d, over=t) >= load', id='sum-over'),
-    pytest.param('sum(sum(x * k + d, over=t, by=r_of[r]), over=r) >= load', id='sum-by'),
+    pytest.param('sum(sum(x * k + d, over=t, by=t[r]), over=r) >= load', id='sum-by'),
     pytest.param('sum(shift(x * k + d, along=t, offset=1, edge=0), over=t) >= load', id='shift-forward'),
     pytest.param('sum(shift(x * k + d, along=t, offset=-1, edge=0), over=t) >= load', id='shift-back'),
     pytest.param("sum(shift(x * k + d, along=t, offset=1, edge='wrap'), over=t) >= load", id='shift-wrap'),
-    pytest.param('sum(at(sum(x * k + d, over=t, by=r_of[r]), by=r_of[r]), over=t) >= load', id='at'),
+    pytest.param('sum(at(sum(x * k + d, over=t, by=t[r]), by=t[r]), over=t) >= load', id='at'),
     pytest.param('sum(sum_back(x * k + d, along=t, window=2), over=t) >= load', id='sum-back'),
 ]
 
 
 ABSENT_SLOT_SOURCES = {
     't': pl.DataFrame({'t': [0, 1, 2]}),
-    'r_of': pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']}),
+    't.r': pl.DataFrame({'t': [0, 1, 2], 'r': ['n', 'n', 's']}),
     'r': ['n', 's'],
     'k': [1.0, 1.0, 1.0],
     'd': [1.0, 10.0, 100.0],
@@ -1587,7 +1581,7 @@ ABSENT_SLOT_SOURCES = {
 def _absent_slot_spec(expression: str) -> dict:
     return {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'r': {'dtype': 'str'}},
-        'relations': {'r_of': {'key': 't', 'values': 'r'}},
+        'properties': {'t': {'r': 'r'}},
         'parameters': {'k': {'dims': ['t']}, 'd': {'dims': ['t']}, 'load': {'dims': []}},
         'variables': {'x': {'dims': ['t'], 'where': 't != 2', 'bounds': {'lower': 0}}},
         'constraints': {'bal': {'dims': [], 'expression': expression}},
@@ -1711,13 +1705,13 @@ def test_a_column_name_outside_the_declared_dims_is_an_error():
         sps.build(Spec(**NETWORK), {'cap': wide})
 
 
-#: A dimension, a relation and a parameter, so each kind of source can come short of a column.
+#: A dimension, a property and a parameter, so each kind of source can come short of a column.
 MAPPED = {
     'dimensions': {'g': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
-    'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
+    'properties': {'g': {'bus': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 10'}},
+    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=g[bus]) <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
@@ -1727,10 +1721,10 @@ MAPPED = {
     [
         pytest.param('g', {'gg': ['w', 's']}, "without a 'g' column", id='an-index'),
         pytest.param(
-            'gen_bus',
-            {'g': ['w', 's'], 'bus': ['n', 'e']},
-            r"must carry a column per column it declares, \['g', 'b'\]",
-            id='a-relation',
+            'g.bus',
+            {'g': ['w', 's'], 'b': ['n', 'e']},
+            r"property 'bus' of 'g' must carry the columns \['g', 'bus'\] \(has \['g', 'b'\]\)",
+            id='a-property',
         ),
         pytest.param('p_max', {'gg': ['w', 's'], 'value': [5.0, 5.0]}, 'is missing columns', id='a-parameter'),
     ],
@@ -1740,7 +1734,7 @@ def test_a_parquet_path_short_of_a_column_is_refused_by_name(tmp_path, name, sho
     sources = {
         'g': pl.DataFrame({'g': ['w', 's']}),
         'b': pl.DataFrame({'b': ['n', 'e']}),
-        'gen_bus': pl.DataFrame({'g': ['w', 's'], 'b': ['n', 'e']}),
+        'g.bus': pl.DataFrame({'g': ['w', 's'], 'bus': ['n', 'e']}),
         'p_max': pl.DataFrame({'g': ['w', 's'], 'value': [5.0, 5.0]}),
     }
     paths = {}

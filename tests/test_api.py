@@ -438,20 +438,19 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
             id='a named expression',
         ),
         pytest.param(
-            {
-                **_named(),
-                'relations': {'specsolve_next': {'key': {'here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
-            },
-            "relation 'specsolve_next'",
-            id='a relation',
+            {**_named(), 'sets': {'specsolve_pair': {'dims': {'here': 't', 'there': 't'}, 'missing': 'absent'}}},
+            "set 'specsolve_pair'",
+            id='a set',
         ),
         pytest.param(
-            {
-                **_named(),
-                'relations': {'next': {'key': {'specsolve_here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
-            },
-            "column 'specsolve_here' of relation 'next'",
-            id='a column of a relation',
+            {**_named(), 'sets': {'pair': {'dims': {'specsolve_here': 't', 'there': 't'}, 'missing': 'absent'}}},
+            "column 'specsolve_here' of set 'pair'",
+            id='a column of a set',
+        ),
+        pytest.param(
+            {**_named(), 'properties': {'t': {'specsolve_next': {'into': 't', 'missing': 'absent'}}}},
+            "column 'specsolve_next' of property 'specsolve_next' of 't'",
+            id='a property',
         ),
         pytest.param(
             {**_named(), 'sos': {'specsolve_pick': {'variable': 'p', 'along': 't', 'type': 1}}},

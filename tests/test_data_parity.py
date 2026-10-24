@@ -307,30 +307,30 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
         assert run.objective == pytest.approx(1.0), 'defined is having a row, and only `a` has one'
 
 
-#: A relation-carrying dimension.
-RELATION_SPEC = {
+#: A dimension with a property.
+PROPERTY_SPEC = {
     'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
-    'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
+    'properties': {'g': {'bus': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 10'}},
+    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=g[bus]) <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
 _INDEX = {'g': _tidy(g=['w', 's']), 'b': _tidy(b=['n', 'e'])}
-_MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
+_MAP = {'g.bus': _tidy(g=['w', 's'], bus=['n', 'e'])}
 
 
 @pytest.mark.parametrize(
     ('sources', 'match'),
     [
-        pytest.param({**_P_MAX, **_MAP}, 'has its maps', id='a-map-and-no-labels'),
-        pytest.param({**_P_MAX, **_INDEX}, 'no data provided for relation', id='an-index-and-no-map'),
+        pytest.param({**_P_MAX, **_MAP}, 'has tables over it', id='a-map-and-no-labels'),
+        pytest.param({**_P_MAX, **_INDEX}, "no data provided for property 'bus' of 'g'", id='an-index-and-no-map'),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
-            r"must carry a column per column it declares, \['g', 'b'\]",
-            id='a-map-named-after-itself-and-not-its-target',
+            {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 's'], b=['n', 'e'])},
+            r"must carry the columns \['g', 'bus'\] \(has \['g', 'b'\]\)",
+            id='a-property-column-named-after-its-dimension-and-not-itself',
         ),
         pytest.param(
             {**_P_MAX, **_MAP, 'g': _tidy(gg=['w', 's'])},
@@ -338,56 +338,56 @@ _MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
             id='an-index-without-the-label-column',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'zz'])},
+            {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 's'], bus=['n', 'zz'])},
             'not .b. labels',
-            id='a-relation-value-that-is-no-label-of-its-target',
+            id='a-property-value-that-is-no-label-of-its-target',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=['n', 'e', 'e'])},
+            {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 'w', 's'], bus=['n', 'e', 'e'])},
             'more than once',
-            id='a-relation-with-two-values-for-one-label',
+            id='a-property-with-two-values-for-one-label',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[None, 'e'])},
-            "null in 'b'",
-            id='a-relation-mapping-a-label-to-nothing',
+            {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 's'], bus=[None, 'e'])},
+            "null in 'bus'",
+            id='a-property-mapping-a-label-to-nothing',
         ),
         pytest.param(
-            {**_P_MAX, **_MAP, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
-            "is a relation with a column over 'g'",
-            id='a-map-carried-on-the-index-it-runs-over',
+            {**_P_MAX, **_MAP, 'g': _tidy(g=['w', 's'], bus=['n', 'e'])},
+            "property 'bus' of 'g' is given twice",
+            id='a-property-given-both-on-its-subject-and-under-its-own-key',
         ),
     ],
 )
-def test_a_relation_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
+def test_a_property_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
     """One wording, not two, from the one door both lanes enter."""
-    path = _written(tmp_path, RELATION_SPEC)
+    path = _written(tmp_path, PROPERTY_SPEC)
 
     both_lanes_refuse(path, sources, match=match)
 
 
 def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_path):
     """The front door, not the engine, refuses an index without its label column."""
-    spec = {**RELATION_SPEC, 'relations': {'gen_bus': {'key': 'g', 'values': 'b'}}}
+    spec = {**PROPERTY_SPEC, 'properties': {'g': {'bus': 'b'}}}
     path = _written(tmp_path, spec)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': _tidy(gg=['w', 's'])}
 
     both_lanes_refuse(path, sources, match="without a 'g' column")
 
 
-def test_a_relation_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_path):
+def test_a_property_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_path):
     """A label holding a null and a value is two values, on both lanes.
 
     pandas `nunique()` skips nulls where polars `n_unique()` counts them.
     """
     spec = {
-        **RELATION_SPEC,
+        **PROPERTY_SPEC,
         'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
-        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 3'}},
+        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=g[bus]) <= 3'}},
     }
     path = _written(tmp_path, spec)
-    clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
-    holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
+    clean = {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 's'], bus=['n', 'n'])}
+    holed = {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 'w', 's'], bus=[None, 'n', 'n'])}
 
     with sps.solve(path, clean) as run:
         assert run.objective == pytest.approx(3.0), 'both members are on the bus, and the bus caps them'
@@ -395,12 +395,12 @@ def test_a_relation_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_
     built.solve(solver_name='highs', output_flag=False)
     assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane agrees where the index is clean'
 
-    both_lanes_refuse(path, holed, match="null in 'b'")
+    both_lanes_refuse(path, holed, match="null in 'bus'")
 
 
 def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
     """A polars index under the dimension's own key reaches both lanes."""
-    path = _written(tmp_path, RELATION_SPEC)
+    path = _written(tmp_path, PROPERTY_SPEC)
     sources = {**_P_MAX, **_INDEX, **_MAP}
 
     with sps.solve(path, sources) as relational:
@@ -413,7 +413,9 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     """The oracle brings pandas and xarray, and nothing says it brings pyarrow."""
     import sys
 
-    path = _written(tmp_path, RELATION_SPEC)
+    import pyarrow.compute  # noqa: F401  pandas' own string columns import it lazily, and the patch below hides it
+
+    path = _written(tmp_path, PROPERTY_SPEC)
     index = tmp_path / 'g.parquet'
     _tidy(g=['w', 's']).write_parquet(index)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': str(index)}
@@ -425,13 +427,13 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the linopy lane read the same path'
 
 
-#: A relation whose target is a temporal dimension.
-TEMPORAL_RELATION_SPEC = {
+#: A property into a temporal dimension.
+TEMPORAL_PROPERTY_SPEC = {
     'dimensions': {'g': {}, 'd': {'dtype': 'datetime', 'ordered': True}},
-    'relations': {'day_of': {'key': 'g', 'values': 'd'}},
+    'properties': {'g': {'d': 'd'}},
     'parameters': {'p_max': {'dims': ['g']}, 'cap': {'dims': ['d']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['d'], 'expression': 'sum(x, over=g, by=day_of[d]) <= cap'}},
+    'constraints': {'k': {'dims': ['d'], 'expression': 'sum(x, over=g, by=g[d]) <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
 }
 
@@ -445,13 +447,13 @@ def _days() -> list[Any]:
 def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lanes(tmp_path):
     """Only a ``datetime`` dimension reads a date as the instant its day starts on; another keeps what it was given."""
     days = _days()
-    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {'ordered': True}}}
+    spec = {**TEMPORAL_PROPERTY_SPEC, 'dimensions': {'g': {}, 'd': {'ordered': True}}}
     sources = {
         **_P_MAX,
         'd': days,
         'g': ['w', 's'],
         'cap': _tidy(d=days, value=[3.0, 7.0]),
-        'day_of': _tidy(g=['w', 's'], d=[days[0], days[0]]),
+        'g.d': _tidy(g=['w', 's'], d=[days[0], days[0]]),
     }
     with differential(_written(tmp_path, spec), sources) as run:
         assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
@@ -486,8 +488,8 @@ _SPELLINGS = {
 
 @pytest.mark.parametrize('column', list(_SPELLINGS), ids=[f'column-{i}' for i in _SPELLINGS.values()])
 @pytest.mark.parametrize('index', list(_SPELLINGS), ids=[f'index-{i}' for i in _SPELLINGS.values()])
-def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
-    """A relation's values and a parameter's labels are labels of the dimension, canonicalised as those are.
+def test_a_property_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
+    """A property's values and a parameter's labels are labels of the dimension, canonicalised as those are.
 
     Both members map to the same day, so that day's cap binds them together.
     A date and a midnight datetime are one instant, whichever spells the index
@@ -502,20 +504,20 @@ def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_p
         'd': _spelled(index, {'d': days}, tmp_path / 'd.parquet'),
         'g': ['w', 's'],
         'cap': _spelled(column, {'d': days, 'value': [3.0, 7.0]}, tmp_path / 'cap.parquet'),
-        'day_of': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'day_of.parquet'),
+        'g.d': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'g.d.parquet'),
     }
-    with differential(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources) as run:
+    with differential(_written(tmp_path, TEMPORAL_PROPERTY_SPEC), sources) as run:
         assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
 
 
-def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_path):
+def test_a_stray_property_value_reads_the_same_over_an_int_labelled_target(tmp_path):
     """One sentence, and the labels in it spelled as the caller wrote them."""
     spec = {
-        **RELATION_SPEC,
+        **PROPERTY_SPEC,
         'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
     path = _written(tmp_path, spec)
-    sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
+    sources = {**_P_MAX, **_INDEX, 'g.bus': _tidy(g=['w', 's'], bus=[1, 99])}
 
     sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
     assert '99.' in sentence, 'the label as the caller wrote it, not as numpy holds it'
@@ -523,7 +525,7 @@ def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_p
 
 def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     """A MultiIndex restates the declared dims and can contradict them, so it is refused."""
-    path = _written(tmp_path, RELATION_SPEC)
+    path = _written(tmp_path, PROPERTY_SPEC)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
     sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_INDEX, **_MAP}
 
@@ -563,14 +565,15 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     """An undeclared column is ignored where an undeclared key is not.
 
     A misspelled required column is a missing one. A column named after a
-    relation over the dimension is refused, naming the key it belongs under.
+    property of the dimension is that property, so giving it under its own key
+    too is refused.
     """
     spec = {
         'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
-        'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
+        'properties': {'g': {'bus': 'b'}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 100'}},
+        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=g[bus]) <= 100'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = _written(tmp_path, spec)
@@ -578,7 +581,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     sources = {
         'g': generators,
         'b': _tidy(b=['n', 'e']),
-        'gen_bus': _tidy(g=['w', 's'], b=['n', 'e']),
+        'g.bus': _tidy(g=['w', 's'], bus=['n', 'e']),
         'cap': _tidy(g=['w', 's'], value=[10.0, 20.0]),
     }
 
@@ -588,8 +591,8 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
     with pytest.raises(DataError, match=r"missing columns \['g'\]"):
         sps.build(path, {**sources, 'cap': _tidy(gg=['w', 's'], value=[10.0, 20.0])}).close()
 
-    carried = _tidy(g=['w', 's'], cap=[10.0, 20.0], gen_bus=['n', 'e'])
-    with pytest.raises(DataError, match=r"index for dimension 'g' carries a 'gen_bus' column"):
+    carried = _tidy(g=['w', 's'], cap=[10.0, 20.0], bus=['n', 'e'])
+    with pytest.raises(DataError, match=r"property 'bus' of 'g' is given twice: under key 'g\.bus', and as a column"):
         sps.build(path, {**sources, 'g': carried}).close()
 
 
@@ -685,14 +688,14 @@ def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, 
         assert run.oracle == pytest.approx(7.0), 'each instant takes its own cap, on both lanes'
 
 
-def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
-    """The temporal relation model's sources, its three datetime columns given."""
+def _temporal_sources(*, index: pl.Series, cap: pl.Series, day: pl.Series) -> dict[str, Any]:
+    """The temporal property model's sources, its three datetime columns given."""
     return {
         **_P_MAX,
         'cap': pl.DataFrame({'d': cap, 'value': [3.0, 7.0]}),
         'd': pl.DataFrame({'d': index}),
         'g': ['w', 's'],
-        'day_of': pl.DataFrame({'g': ['w', 's'], 'd': day_of}),
+        'g.d': pl.DataFrame({'g': ['w', 's'], 'd': day}),
     }
 
 
@@ -706,40 +709,40 @@ _DATES = _EVEN.cast(pl.Date)
     ('sources', 'owner', 'match'),
     [
         pytest.param(
-            _temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE),
+            _temporal_sources(index=_FINE, cap=_FINE, day=_FINE),
             "index for dimension 'd'",
             'finer',
             id='index-finer',
         ),
         pytest.param(
-            _temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
+            _temporal_sources(index=_EVEN, cap=_FINE, day=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
         ),
         pytest.param(
-            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
+            _temporal_sources(index=_EVEN, cap=_EVEN, day=_FINE), "property 'd' of 'g'", 'finer', id='property-finer'
         ),
         pytest.param(
-            _temporal_sources(index=_DATES, cap=_DATES, day_of=_instants('ns', nanoseconds=3_600_000_000_000)),
-            "relation 'day_of'",
+            _temporal_sources(index=_DATES, cap=_DATES, day=_instants('ns', nanoseconds=3_600_000_000_000)),
+            "property 'd' of 'g'",
             "not 'd' labels",
-            id='relation-past-midnight-of-a-date',
+            id='property-past-midnight-of-a-date',
         ),
         pytest.param(
-            _temporal_sources(index=_UTC, cap=_EVEN, day_of=_UTC),
+            _temporal_sources(index=_UTC, cap=_EVEN, day=_UTC),
             "parameter 'cap'",
             'convert_time_zone',
             id='parameter-zone',
         ),
         pytest.param(
             _temporal_sources(
-                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day_of=_UTC
+                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day=_UTC
             ),
-            "relation 'day_of'",
+            "property 'd' of 'g'",
             'convert_time_zone',
-            id='relation-other-zone',
+            id='property-other-zone',
         ),
     ],
 )
 def test_a_datetime_label_the_index_cannot_hold_is_refused_on_both_lanes(tmp_path, sources, owner, match):
     """A cast that drops a nanosecond, or a compare across two clocks, is refused rather than made."""
-    sentence = both_lanes_refuse(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources, match=match)
+    sentence = both_lanes_refuse(_written(tmp_path, TEMPORAL_PROPERTY_SPEC), sources, match=match)
     assert sentence.startswith(owner), 'the refusal names what carried the label'

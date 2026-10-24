@@ -1,8 +1,8 @@
-"""A relation whose two columns sit over one dimension — a representative snapshot.
+"""A property that maps a dimension into itself — a representative snapshot.
 
-`rep_of: {key: snapshot, values: {rep: snapshot}}` maps each snapshot to the
-one that stands for it. The walk lands on the dimension it started from, so the
-column it produces and the column it was joined on are over one dimension.
+`snapshot: {rep: snapshot}` maps each snapshot to the one that stands for it.
+The walk lands on the dimension it started from, so the column it produces and
+the column it was joined on are over one dimension.
 """
 
 from __future__ import annotations
@@ -21,11 +21,9 @@ description: each snapshot priced at the snapshot that represents it
 dimensions:
   snapshot: {dtype: int, description: a step of the horizon, ordered: true}
 
-relations:
-  rep_of:
-    key: snapshot
-    values: {rep: snapshot}
-    description: the snapshot that stands for this one
+properties:
+  snapshot:
+    rep: {into: snapshot, description: the snapshot that stands for this one}
 
 parameters:
   price: {dims: [snapshot], description: what output earns in a snapshot}
@@ -39,7 +37,7 @@ variables:
 constraints:
   capped:
     dims: [snapshot]
-    expression: p <= at(price, by=rep_of[rep])
+    expression: p <= at(price, by=snapshot[rep])
     description: output stays under the price of the snapshot that represents this one
 
 objective:
@@ -57,13 +55,13 @@ REP_OF = pl.DataFrame({'snapshot': [0, 1, 2], 'rep': [0, 0, 2]})
 def _inputs() -> dict[str, object]:
     return {
         'snapshot': pd.Index(SNAPSHOTS, name='snapshot'),
-        'rep_of': REP_OF,
+        'snapshot.rep': REP_OF,
         'price': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0]}),
     }
 
 
 def test_a_pullback_through_a_self_map_reads_the_representative():
-    """`at(price, by=rep_of[rep])` is the price at the snapshot that stands for this one (#1652)."""
+    """`at(price, by=snapshot[rep])` is the price at the snapshot that stands for this one (#1652)."""
     with differential(SPEC, _inputs()) as run:
         assert run.oracle == pytest.approx(1 * 1.0 + 1 * 2.0 + 3 * 3.0, rel=RTOL), (
             'each snapshot capped at its representative price, both lanes agreeing'
@@ -76,7 +74,7 @@ def test_a_pullback_through_a_self_map_reads_the_representative():
 
 
 def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
-    """`sum(p, over=snapshot, by=rep_of[rep])` adds each snapshot's output into its representative's row.
+    """`sum(p, over=snapshot, by=snapshot[rep])` adds each snapshot's output into its representative's row.
 
     The adjoint of the pullback above (#1652).
     """
@@ -86,7 +84,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
             'parameters.cap': {'dims': ['snapshot']},
             'constraints.capped': {
                 'dims': ['snapshot'],
-                'expression': 'sum(p, over=snapshot, by=rep_of[rep]) <= cap',
+                'expression': 'sum(p, over=snapshot, by=snapshot[rep]) <= cap',
             },
         },
     )
@@ -107,7 +105,7 @@ def test_a_where_reads_a_self_map_at_its_key():
     spec = override(
         raw_of(SPEC),
         **{
-            'variables.p.where': 'rep_of == 0',
+            'variables.p.where': 'snapshot[rep] == 0',
             'constraints.capped': {'dims': ['snapshot'], 'expression': 'p <= price'},
         },
     )
@@ -118,8 +116,11 @@ def test_a_where_reads_a_self_map_at_its_key():
 
 
 def test_a_self_map_supplied_twice_for_one_key_is_refused():
-    """Both columns are over one dimension; the key is still the one the file named."""
+    """Both columns are over one dimension; the subject is still the one the file named."""
     sources = _inputs()
-    sources['rep_of'] = pl.concat([REP_OF, REP_OF.head(1)])
-    with pytest.raises(sps.errors.DataError, match=r'maps 1 key\(s\) more than once: snapshot=0'):
+    sources['snapshot.rep'] = pl.concat([REP_OF, REP_OF.head(1)])
+    with pytest.raises(
+        sps.errors.DataError,
+        match=r"property 'rep' of 'snapshot' has 1 row\(s\) of 'snapshot' more than once: snapshot=0",
+    ):
         sps.solve(SPEC, sources)

@@ -1,4 +1,4 @@
-"""What a missing row means, as each parameter or relation declares it with ``missing:``.
+"""What a missing row means, as each parameter, set or property declares it with ``missing:``.
 
 One small model, two units `a` and `b`, each `x` in ``[0, 10]`` and the
 objective their sum, so every reading moves the optimum by a number worked out
@@ -36,24 +36,24 @@ def test_a_parameter_short_of_a_row_is_refused_by_default_and_the_coordinate_is_
     assert 'missing: absent' in message, 'the refusal names the declarations that would accept the gap'
 
 
-def test_a_relation_short_of_a_key_is_refused_by_default_and_the_key_is_named():
-    """A map with no `missing:` has a row for every key, so a unit on no bus is refused on both lanes."""
+def test_a_property_short_of_a_row_is_refused_by_default_and_the_row_is_named():
+    """A property with no `missing:` has a value for every row of its subject, so a unit on no bus is refused on both lanes."""
     spec = override(
         BASE,
         **{
             'dimensions.bus': {'dtype': 'str'},
-            'relations.on_bus': {'key': 'f', 'values': 'bus'},
+            'properties.f': {'bus': 'bus'},
             'parameters': {'load': {'dims': ['bus']}},
-            'constraints.c': {'dims': ['bus'], 'expression': 'sum(x, over=f, by=on_bus[bus]) <= load'},
+            'constraints.c': {'dims': ['bus'], 'expression': 'sum(x, over=f, by=f[bus]) <= load'},
         },
     )
     sources = {
         'f': ['a', 'b'],
         'bus': ['n'],
-        'on_bus': pd.DataFrame({'f': ['a'], 'bus': ['n']}),
+        'f.bus': pd.DataFrame({'f': ['a'], 'bus': ['n']}),
         'load': pd.Series([4.0], index=pd.Index(['n'], name='bus')),
     }
-    both_lanes_refuse(spec, sources, match="relation 'on_bus' has no row at f=b")
+    both_lanes_refuse(spec, sources, match="property 'bus' of 'f' has no row at f=b")
 
 
 @pytest.mark.parametrize(

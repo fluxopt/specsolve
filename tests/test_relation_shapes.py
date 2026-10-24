@@ -1,19 +1,20 @@
-"""Every shape of relation the language admits, built by the relational lane.
+"""Every shape of set and property the language admits, built by the relational lane.
 
-mathspec's relation is a table over any number of dimensions, keyed by any
-number of its columns, walked in whichever direction a call names. The
-single-valued map — two columns, one of them the key — is one shape of it:
+A set is a table of label combinations over two or more dimensions, and a
+property maps each row of a dimension or of a set to one label; a call walks
+either in whichever direction it names. A property of a dimension — the
+single-valued map — is one shape of them:
 
-- **a key of several columns** reads the map *under a condition* the row
-  carries, so the join carries the rest of the key through;
-- **several value columns** land one walk on a product of dimensions;
-- **a bare relation** fans a member out to every target it is related to;
-- **a partition by a conditioned map** groups a shift, a window or a position
-  by the value at the rest of the key, so a neighbour is a neighbour inside
-  *this generator's* season;
+- **a property of a set** reads the map *under a condition* the row carries,
+  so the join carries the set's other members through;
+- **several properties of one subject** land one walk on a product of dimensions;
+- **a set** fans a member out to every label it is combined with;
+- **a partition by a property of a set** groups a shift, a window or a
+  position by the value at the rest of the row, so a neighbour is a neighbour
+  inside *this generator's* season;
 - **a self-map** produces the dimension it consumes, so the walk's landing
   column needs a name of its own until the consumed one is dropped;
-- **two columns over one dimension** name a line's two ends in one table.
+- **two properties into one dimension** name a line's two ends in one table.
 
 Every optimum here is hand-derived, and the written LP file re-solves to it;
 the linopy lane refuses these shapes (`test_conditioned_relations.py` holds
@@ -53,13 +54,14 @@ def _solved(spec: dict[str, Any], sources: dict[str, Any], tmp_path: Path) -> tu
 
 
 # ---------------------------------------------------------------------------
-# several value columns — one walk onto a product of dimensions
+# several properties of one subject — one walk onto a product of dimensions
 # ---------------------------------------------------------------------------
 
 GENERATORS = ['g1', 'g2', 'g3', 'g4']
 
-#: `g3` and `g4` share (b, wind), so a limit binds across two generators, and
-#: nothing sits at (b, sun), which is the empty combination.
+#: The generator index, carrying both properties as columns. `g3` and `g4`
+#: share (b, wind), so a limit binds across two generators, and nothing sits
+#: at (b, sun), which is the empty combination.
 GEN_BT = pl.DataFrame(
     {'generator': GENERATORS, 'bus': ['a', 'a', 'b', 'b'], 'technology': ['wind', 'sun', 'wind', 'wind']}
 )
@@ -68,7 +70,7 @@ GEN_BT = pl.DataFrame(
 def _two_value_spec(constraint: str, demand: float, headroom: bool = False) -> dict[str, Any]:
     spec: dict[str, Any] = {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'technology': {'dtype': 'str'}},
-        'relations': {'gen_bt': {'key': 'generator', 'values': ['bus', 'technology']}},
+        'properties': {'generator': {'bus': 'bus', 'technology': 'technology'}},
         'parameters': {
             'cost': {'dims': ['generator']},
             'limit': {'dims': ['bus', 'technology']},
@@ -90,10 +92,9 @@ def _two_value_spec(constraint: str, demand: float, headroom: bool = False) -> d
 
 def _two_value_sources(demand: float) -> dict[str, Any]:
     return {
-        'generator': GENERATORS,
+        'generator': GEN_BT,
         'bus': ['a', 'b'],
         'technology': ['wind', 'sun'],
-        'gen_bt': GEN_BT,
         'cost': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 3.0, 4.0]}),
         'limit': pl.DataFrame(
             {'bus': ['a', 'a', 'b', 'b'], 'technology': ['wind', 'sun', 'wind', 'sun'], 'value': [10.0, 5.0, 7.0, 1.0]}
@@ -103,14 +104,14 @@ def _two_value_sources(demand: float) -> dict[str, Any]:
     }
 
 
-def test_a_sum_through_one_relation_lands_on_a_product_of_dimensions(tmp_path):
-    """`sum(p, over=generator, by=gen_bt[bus, technology])` is one walk onto both value columns.
+def test_a_sum_through_two_properties_lands_on_a_product_of_dimensions(tmp_path):
+    """`sum(p, over=generator, by=generator[bus, technology])` is one walk onto both properties.
 
     (a, wind) caps `g1` at 10 and (a, sun) caps `g2` at 5, which is 15 of the
     20 demanded. The rest comes from (b, wind), shared by `g3` and `g4`, so
     the cheaper `g3` takes it: 10 + 10 + 15.
     """
-    spec = _two_value_spec('sum(p, over=generator, by=gen_bt[bus, technology]) <= limit', demand=20)
+    spec = _two_value_spec('sum(p, over=generator, by=generator[bus, technology]) <= limit', demand=20)
     objective, primals = _solved(spec, _two_value_sources(20), tmp_path)
     assert objective == pytest.approx(35.0, rel=RTOL), '10 at cost 1, 5 at cost 2, and 5 of the shared pair at cost 3'
     assert primals['p'] == pytest.approx({'g1': 10.0, 'g2': 5.0, 'g3': 5.0, 'g4': 0.0}), (
@@ -119,12 +120,12 @@ def test_a_sum_through_one_relation_lands_on_a_product_of_dimensions(tmp_path):
 
 
 def test_a_pullback_reads_a_two_column_slot_at_each_generator(tmp_path):
-    """`at(limit, by=gen_bt[bus, technology])` is the adjoint: each generator's own limit.
+    """`at(limit, by=generator[bus, technology])` is the adjoint: each generator's own limit.
 
     Bounded one by one rather than as a group, `g3` and `g4` each take (b,
     wind)'s 7, so 24 is reachable: 10 + 5 + 7 + 2.
     """
-    spec = _two_value_spec('p <= at(limit, by=gen_bt[bus, technology])', demand=24)
+    spec = _two_value_spec('p <= at(limit, by=generator[bus, technology])', demand=24)
     spec['constraints']['capped']['dims'] = ['generator']
     objective, primals = _solved(spec, _two_value_sources(24), tmp_path)
     assert objective == pytest.approx(10 * 1.0 + 5 * 2.0 + 7 * 3.0 + 2 * 4.0, rel=RTOL), (
@@ -141,7 +142,7 @@ def test_a_combination_no_member_lands_on_is_an_empty_sum_on_a_constant_side(tmp
     model for a constant side with no value where the row is built.
     """
     spec = _two_value_spec(
-        'headroom <= limit - sum(bonus, over=generator, by=gen_bt[bus, technology])', demand=0, headroom=True
+        'headroom <= limit - sum(bonus, over=generator, by=generator[bus, technology])', demand=0, headroom=True
     )
     objective, primals = _solved(spec, _two_value_sources(0), tmp_path)
     assert primals['headroom'][('b', 'sun')] == pytest.approx(1.0), 'the empty combination is worth its whole limit'
@@ -153,7 +154,7 @@ def test_a_combination_no_member_lands_on_is_an_empty_sum_on_a_constant_side(tmp
 def _masked_sum_spec(expression: str) -> dict:
     return {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-        'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+        'properties': {'generator': {'bus': 'bus'}},
         'parameters': {'load': {'dims': ['bus']}, 'cap': {'dims': ['bus']}},
         'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'capped': {'dims': ['bus'], 'expression': expression}},
@@ -164,7 +165,7 @@ def _masked_sum_spec(expression: str) -> dict:
 MASKED_SUM_SOURCES = {
     'generator': ['g1', 'g2'],
     'bus': ['a', 'b'],
-    'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['a', 'b']}),
+    'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['a', 'b']}),
     'load': pl.DataFrame({'bus': ['a', 'b'], 'value': [1.0, 2.0]}),
     'cap': pl.DataFrame({'bus': ['a', 'b'], 'value': [4.0, 4.0]}),
 }
@@ -174,13 +175,13 @@ def test_a_walk_onto_a_dimension_the_operand_carries_is_refused_and_names_the_re
     """A walk brings the dimension it lands on, so the operand may not already carry it.
 
     Inside the operator, `load[bus]` and a walk onto `bus` read as a product
-    over every (generator, bus) pair masked back down to the pairs the map
+    over every (generator, bus) pair masked back down to the pairs the property
     agrees with — which is the same answer as multiplying outside, reached by a
     spelling that hides what the call adds.
     """
-    spec = _masked_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
+    spec = _masked_sum_spec('sum(load * p, over=generator, by=generator[bus]) <= cap')
     with pytest.raises(
-        DimensionError, match=r"sum\(by=gen_bus\[bus\]\) groups by \['bus'\], which the expression already carries"
+        DimensionError, match=r"sum\(by=generator\[bus\]\) groups by \['bus'\], which the expression already carries"
     ):
         sps.check(spec)
 
@@ -191,14 +192,14 @@ def test_the_factor_over_the_landed_dimension_multiplies_outside(tmp_path):
     Bus a holds `load_a * p1` and bus b holds `load_b * p2`, under caps of 4 —
     so 4 and 2.
     """
-    spec = _masked_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
+    spec = _masked_sum_spec('load * sum(p, over=generator, by=generator[bus]) <= cap')
     objective, primals = _solved(spec, MASKED_SUM_SOURCES, tmp_path)
     assert primals['p'] == pytest.approx({'g1': 4.0, 'g2': 2.0}), "each generator weighed by its own bus's load"
     assert objective == pytest.approx(6.0, rel=RTOL), '4 under a load of 1, and 2 under a load of 2'
 
 
 # ---------------------------------------------------------------------------
-# a bare relation — many-to-many
+# a set — many-to-many
 # ---------------------------------------------------------------------------
 
 #: `g1` reaches both buses, `g2` one, and nothing reaches `c`.
@@ -208,7 +209,7 @@ CONNECTION = pl.DataFrame({'generator': ['g1', 'g1', 'g2'], 'bus': ['a', 'b', 'b
 def _bare_spec() -> dict[str, Any]:
     return {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-        'relations': {'connection': {'key': ['generator', 'bus'], 'missing': 'absent'}},
+        'sets': {'connection': {'dims': ['generator', 'bus'], 'missing': 'absent'}},
         'parameters': {'limit': {'dims': ['bus']}, 'w': {'dims': ['generator']}},
         'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {
@@ -228,7 +229,7 @@ def _bare_sources() -> dict[str, Any]:
     }
 
 
-def test_a_sum_through_a_bare_relation_counts_a_member_in_every_group_it_is_related_to(tmp_path):
+def test_a_sum_through_a_set_counts_a_member_in_every_group_it_is_in(tmp_path):
     """`g1` is connected to both buses, so its term belongs in two sums.
 
     Bus `a` holds `p1` under 5 and bus `b` holds `p1 + p2` under 5, so the
@@ -240,7 +241,7 @@ def test_a_sum_through_a_bare_relation_counts_a_member_in_every_group_it_is_rela
     assert primals['p']['g1'] + primals['p']['g2'] == pytest.approx(5.0), 'bus b holds both'
 
 
-def test_a_constant_summed_through_a_bare_relation_reads_zero_where_nothing_reaches(tmp_path):
+def test_a_constant_summed_through_a_set_reads_zero_where_nothing_reaches(tmp_path):
     """The weights land on every bus a member reaches, and an unreached bus gets the empty sum."""
     spec = _bare_spec()
     spec['variables']['x'] = {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}}
@@ -257,22 +258,22 @@ def test_a_constant_summed_through_a_bare_relation_reads_zero_where_nothing_reac
 
 
 def test_a_bare_where_tests_that_a_row_exists(tmp_path):
-    """`where: connection` over `[generator, bus]` keeps the pairs the table relates and no other."""
+    """`where: connection` over `[generator, bus]` keeps the pairs the set holds and no other."""
     spec = _bare_spec()
     spec['variables'] = {'x': {'dims': ['generator', 'bus'], 'where': 'connection', 'bounds': {'lower': 0, 'upper': 1}}}
     spec['constraints'] = {}
     spec['objective'] = {'sense': 'maximize', 'expression': 'sum(x)'}
     objective, primals = _solved(spec, _bare_sources(), tmp_path)
-    assert sorted(primals['x']) == [('g1', 'a'), ('g1', 'b'), ('g2', 'b')], 'one column per related pair'
-    assert objective == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
+    assert sorted(primals['x']) == [('g1', 'a'), ('g1', 'b'), ('g2', 'b')], 'one column per pair the set holds'
+    assert objective == pytest.approx(3.0, rel=RTOL), 'one unit per pair the set holds'
 
 
 #: A start covers its own snapshot and the next, and the last start covers itself alone.
 COVER = [(0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3), (3, 3)]
 
 
-def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range_over_one_dimension():
-    """`start` and `covered` are both snapshots, so the relation is keyed by one dimension twice.
+def test_both_lanes_carry_a_member_through_a_set_whose_two_members_range_over_one_dimension():
+    """`start` and `covered` are both snapshots, so the set is over one dimension twice.
 
     One start is made, and the window it opens is priced at the snapshots it
     covers: from 1 it covers 1 and 2 at a cost of 1 each, the cheapest window.
@@ -282,7 +283,7 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
 
     spec = {
         'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
-        'relations': {'cover': {'key': {'start': 'snapshot', 'covered': 'snapshot'}, 'missing': 'absent'}},
+        'sets': {'cover': {'dims': {'start': 'snapshot', 'covered': 'snapshot'}, 'missing': 'absent'}},
         'parameters': {'cost': {'dims': ['snapshot']}},
         'variables': {
             's': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 1}},
@@ -303,21 +304,21 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
         assert float(run.result.objective) == pytest.approx(2.0, rel=RTOL), 'the window from 1 costs 1 + 1'
 
 
-def test_a_bare_relation_holding_a_pair_twice_is_refused():
-    """A table has each coordinate at most once, and a bare relation's coordinate is the whole row."""
+def test_a_set_holding_a_pair_twice_is_refused():
+    """A table has each coordinate at most once, and a set's coordinate is the whole row."""
     sources = _bare_sources() | {'connection': pl.concat([CONNECTION, CONNECTION.head(1)])}
-    with pytest.raises(DataError, match=r'relates 1 tuple\(s\) more than once: generator=g1, bus=a'):
+    with pytest.raises(DataError, match=r"set 'connection' holds 1 row\(s\) more than once: generator=g1, bus=a"):
         sps.solve(_bare_spec(), sources)
 
 
 # ---------------------------------------------------------------------------
-# a partition by a map keyed on more than the dimension it walks
+# a partition by a property of a set over more than the dimension it walks
 # ---------------------------------------------------------------------------
 
 PERIODS = [1, 2, 3, 4]
 
 #: Each generator's own seasons: `g1` splits the year in half, `g2` after one period.
-SEASON_OF = pl.DataFrame(
+SEASON = pl.DataFrame(
     {
         'generator': ['g1'] * 4 + ['g2'] * 4,
         'period': PERIODS * 2,
@@ -333,7 +334,8 @@ def _conditioned_partition_spec(constraint: dict[str, Any]) -> dict[str, Any]:
             'period': {'dtype': 'int', 'ordered': True},
             'season': {'dtype': 'str'},
         },
-        'relations': {'season_of': {'key': ['generator', 'period'], 'values': 'season', 'missing': 'absent'}},
+        'sets': {'generator_period': {'dims': ['generator', 'period']}},
+        'properties': {'generator_period': {'season': {'into': 'season', 'missing': 'absent'}}},
         'parameters': {},
         'variables': {'p': {'dims': ['generator', 'period'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': {'rule': constraint},
@@ -342,10 +344,16 @@ def _conditioned_partition_spec(constraint: dict[str, Any]) -> dict[str, Any]:
 
 
 def _conditioned_partition_sources() -> dict[str, Any]:
-    return {'generator': ['g1', 'g2'], 'period': PERIODS, 'season': ['summer', 'winter'], 'season_of': SEASON_OF}
+    return {
+        'generator': ['g1', 'g2'],
+        'period': PERIODS,
+        'season': ['summer', 'winter'],
+        'generator_period': SEASON.select('generator', 'period'),
+        'generator_period.season': SEASON,
+    }
 
 
-def test_a_shift_grouped_by_a_conditioned_map_stays_inside_each_generators_own_season(tmp_path):
+def test_a_shift_grouped_by_a_property_of_a_set_stays_inside_each_generators_own_season(tmp_path):
     """The neighbour is the period before *in this generator's* season, and each season starts from the edge.
 
     `p <= shift(p) + 1` with `edge=0` lets a season ramp 1, 2, 3… from its
@@ -356,7 +364,7 @@ def test_a_shift_grouped_by_a_conditioned_map_stays_inside_each_generators_own_s
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=season_of[season]) + 1',
+            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=generator_period[season]) + 1',
         }
     )
     objective, primals = _solved(spec, _conditioned_partition_sources(), tmp_path)
@@ -365,7 +373,7 @@ def test_a_shift_grouped_by_a_conditioned_map_stays_inside_each_generators_own_s
     assert primals['p'][('g1', 3)] == pytest.approx(1.0), "g1's winter restarts from its edge"
 
 
-def test_a_window_grouped_by_a_conditioned_map_stops_at_each_generators_own_season_edge(tmp_path):
+def test_a_window_grouped_by_a_property_of_a_set_stops_at_each_generators_own_season_edge(tmp_path):
     """A window of two inside each (generator, season) group.
 
     `g1` fits 3 per season, 6 in all; `g2` fits 3 in its one-period summer and
@@ -375,15 +383,15 @@ def test_a_window_grouped_by_a_conditioned_map_stops_at_each_generators_own_seas
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'sum_back(p, along=period, window=2, within=season_of[season]) <= 3',
+            'expression': 'sum_back(p, along=period, window=2, within=generator_period[season]) <= 3',
         }
     )
     objective, _primals = _solved(spec, _conditioned_partition_sources(), tmp_path)
     assert objective == pytest.approx(15.0, rel=RTOL), "g1's 3 per season, and g2's 3 beside 3 + 0 + 3"
 
 
-def test_a_position_grouped_by_a_conditioned_map_marks_each_generators_own_first_period(tmp_path):
-    """`position(period, within=season_of[season]) == 0` is the first period of each (generator, season) group.
+def test_a_position_grouped_by_a_property_of_a_set_marks_each_generators_own_first_period(tmp_path):
+    """`position(period, within=generator_period[season]) == 0` is the first period of each (generator, season) group.
 
     Four of the eight coordinates are a group's first — `g1` at 1 and 3, `g2`
     at 1 and 2 — and the rule pins those to zero.
@@ -391,7 +399,7 @@ def test_a_position_grouped_by_a_conditioned_map_marks_each_generators_own_first
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'where': 'position(period, within=season_of[season]) == 0',
+            'where': 'position(period, within=generator_period[season]) == 0',
             'expression': 'p <= 0',
         }
     )
@@ -409,11 +417,11 @@ def test_a_pair_the_conditioned_partition_leaves_out_reaches_nothing(tmp_path):
     and the free 5, 15.
     """
     sources = _conditioned_partition_sources()
-    sources['season_of'] = SEASON_OF.filter(~((pl.col('generator') == 'g2') & (pl.col('period') == 4)))
+    sources['generator_period.season'] = SEASON.filter(~((pl.col('generator') == 'g2') & (pl.col('period') == 4)))
     spec = _conditioned_partition_spec(
         {
             'dims': ['generator', 'period'],
-            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=season_of[season]) + 1',
+            'expression': 'p <= shift(p, along=period, offset=1, edge=0, within=generator_period[season]) + 1',
         }
     )
     objective, primals = _solved(spec, sources, tmp_path)
@@ -424,7 +432,7 @@ def test_a_pair_the_conditioned_partition_leaves_out_reaches_nothing(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# a self-map — a dimension related to itself; the walks are test_self_map.py's, this is the partition
+# a self-map — a property into its own subject; the walks are test_self_map.py's, this is the partition
 # ---------------------------------------------------------------------------
 
 SNAPSHOTS = [0, 1, 2]
@@ -436,7 +444,7 @@ REP_OF = pl.DataFrame({'snapshot': SNAPSHOTS, 'rep': [0, 0, 2]})
 def _self_map_spec(constraints: dict[str, Any]) -> dict[str, Any]:
     return {
         'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
-        'relations': {'rep_of': {'key': 'snapshot', 'values': {'rep': 'snapshot'}}},
+        'properties': {'snapshot': {'rep': 'snapshot'}},
         'parameters': {'price': {'dims': ['snapshot']}},
         'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 5}}},
         'constraints': constraints,
@@ -447,7 +455,7 @@ def _self_map_spec(constraints: dict[str, Any]) -> dict[str, Any]:
 def _self_map_sources() -> dict[str, Any]:
     return {
         'snapshot': SNAPSHOTS,
-        'rep_of': REP_OF,
+        'snapshot.rep': REP_OF,
         'price': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0]}),
     }
 
@@ -462,7 +470,7 @@ def test_a_shift_partitioned_by_a_self_map_walks_inside_each_representatives_gro
         {
             'ramp': {
                 'dims': ['snapshot'],
-                'expression': 'p <= shift(p, along=snapshot, offset=1, edge=0, within=rep_of[rep]) + 1',
+                'expression': 'p <= shift(p, along=snapshot, offset=1, edge=0, within=snapshot[rep]) + 1',
             }
         }
     )
@@ -472,26 +480,27 @@ def test_a_shift_partitioned_by_a_self_map_walks_inside_each_representatives_gro
 
 
 # ---------------------------------------------------------------------------
-# two columns over one dimension — a line's two ends in one table
+# two properties into one dimension — a line's two ends in one table
 # ---------------------------------------------------------------------------
 
-#: A chain a → b → c, and a self-loop at c that the where excludes.
+#: The line index, carrying both ends as columns: a chain a → b → c, and a
+#: self-loop at c that the where excludes.
 ENDS = pl.DataFrame({'line': ['l1', 'l2', 'l3'], 'bus0': ['a', 'b', 'c'], 'bus1': ['b', 'c', 'c']})
 
 
 def _ends_spec() -> dict[str, Any]:
     return {
         'dimensions': {'line': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-        'relations': {'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}}},
+        'properties': {'line': {'bus0': 'bus', 'bus1': 'bus'}},
         'parameters': {'load': {'dims': ['bus']}, 'cost': {'dims': ['bus']}},
         'variables': {
-            'f': {'dims': ['line'], 'where': 'ends[bus0] != ends[bus1]', 'bounds': {'lower': 0, 'upper': 10}},
+            'f': {'dims': ['line'], 'where': 'line[bus0] != line[bus1]', 'bounds': {'lower': 0, 'upper': 10}},
             'gen': {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}},
         },
         'constraints': {
             'balance': {
                 'dims': ['bus'],
-                'expression': ('gen + sum(f, over=line, by=ends[bus1]) - sum(f, over=line, by=ends[bus0]) == load'),
+                'expression': ('gen + sum(f, over=line, by=line[bus1]) - sum(f, over=line, by=line[bus0]) == load'),
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(gen * cost)'},
@@ -500,9 +509,8 @@ def _ends_spec() -> dict[str, Any]:
 
 def _ends_sources() -> dict[str, Any]:
     return {
-        'line': ['l1', 'l2', 'l3'],
+        'line': ENDS,
         'bus': ['a', 'b', 'c'],
-        'ends': ENDS,
         'load': pl.DataFrame({'bus': ['a', 'b', 'c'], 'value': [0.0, 0.0, 5.0]}),
         'cost': pl.DataFrame({'bus': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]}),
     }
@@ -520,7 +528,7 @@ def test_one_table_walked_to_each_of_its_two_ends_is_the_nodal_balance(tmp_path)
     assert primals['f'] == pytest.approx({'l1': 5.0, 'l2': 5.0}), 'along the chain, and the self-loop has no column'
 
 
-def test_a_where_compares_two_columns_of_one_relation_row_by_row():
-    """`ends[bus0] != ends[bus1]` excludes the self-loop and nothing else."""
+def test_a_where_compares_two_properties_of_one_subject_row_by_row():
+    """`line[bus0] != line[bus1]` excludes the self-loop and nothing else."""
     with sps.solve(_ends_spec(), _ends_sources()) as result:
         assert sorted(result.primal('f')['line'].to_list()) == ['l1', 'l2'], 'the self-loop `l3` has no column'

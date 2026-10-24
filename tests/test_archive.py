@@ -80,7 +80,7 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     spec, unpacked = _question(sps.load_archive(archive, tmp_path / 'out'))
 
     assert set(unpacked) == set(attachable(program)), (
-        'the archive holds one member per attachable key — every declared parameter, dimension and relation, '
+        'the archive holds one member per attachable key — every declared parameter, dimension, set and property, '
         'and nothing a piecewise block derives'
     )
     before = tidy_sources(program, sources)
@@ -479,19 +479,19 @@ def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
     assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in index order'
 
 
-#: A relation with a role, a named expression over no dimension, and a
+#: A property named apart from the dimension it maps into, a named expression over no dimension, and a
 #: constraint sharing its name with a parameter, which names outside the flat
 #: namespace may do.
 _CATALOGED = {
     'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str', 'description': 'nodes'}},
-    'relations': {'sited': {'key': 'generator', 'values': {'at': 'bus'}}},
+    'properties': {'generator': {'at': 'bus'}},
     'parameters': {
         'p_max': {'dims': ['generator'], 'description': 'rating'},
         'cost': {'dims': ['generator']},
         'load': {'dims': ['bus']},
     },
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'load': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=sited[at]) == load'}},
+    'constraints': {'load': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=generator[at]) == load'}},
     'expressions': {'spend': {'expression': 'sum(p * cost)', 'description': 'what the dispatch costs'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
@@ -503,7 +503,7 @@ def _cataloged_sources(north: float) -> dict[str, object]:
     return {
         'generator': generators,
         'bus': ['north', 'south'],
-        'sited': pl.DataFrame({'generator': generators, 'at': ['north', 'south']}),
+        'generator.at': pl.DataFrame({'generator': generators, 'at': ['north', 'south']}),
         'p_max': pl.DataFrame({'generator': generators, 'value': [100.0, 200.0]}),
         'cost': pl.DataFrame({'generator': generators, 'value': [1.0, 50.0]}),
         'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [north, 80.0]}),
@@ -535,14 +535,14 @@ def test_the_catalog_says_what_each_file_holds_and_which_column_holds_each_dimen
         ('base', 'answer/primal/p.parquet', 'p', 'variable', None, None, 'generator', 'generator'),
         ('base', 'sources/bus.parquet', 'bus', 'dimension', 'nodes', 'str', 'bus', 'bus'),
         ('base', 'sources/cost.parquet', 'cost', 'parameter', None, 'float', 'generator', 'generator'),
+        ('base', 'sources/generator.at.parquet', 'generator.at', 'property', None, None, 'at', 'bus'),
+        ('base', 'sources/generator.at.parquet', 'generator.at', 'property', None, None, 'generator', 'generator'),
         ('base', 'sources/generator.parquet', 'generator', 'dimension', None, 'str', 'generator', 'generator'),
         ('base', 'sources/load.parquet', 'load', 'parameter', None, 'float', 'bus', 'bus'),
         ('base', 'sources/p_max.parquet', 'p_max', 'parameter', 'rating', 'float', 'generator', 'generator'),
-        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'at', 'bus'),
-        ('base', 'sources/sited.parquet', 'sited', 'relation', None, None, 'generator', 'generator'),
     ], (
         'one row per column that holds labels of each file, in path and column order: the constraint load and the parameter '
-        'load are told apart by path, a relation names each role and its dimension, a name over no dimension has '
+        'load are told apart by path, a property names each column and its dimension, a name over no dimension has '
         'one row with no column, and dtype is only what the spec declares'
     )
 

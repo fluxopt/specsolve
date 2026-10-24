@@ -1844,19 +1844,19 @@ def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
         assert len(sps.solve_over(spec, sources, axis)) == 2, 'every window solved'
 
 
-def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
-    """`shift(..., within=day_of[day])` reaches within the groups the relation makes, and
+def test_a_reach_a_property_decides_is_refused_with_the_property_named():
+    """`shift(..., within=t[day])` reaches within the groups the property makes, and
     whether a window cuts a group is nothing the driver computes."""
     spec = _horizon(
         {
             'dims': ['t', 'generator'],
-            'expression': 'p >= shift(p, along=t, offset=1, within=day_of[day], edge=0) - at(day_cap, by=day_of[day])',
+            'expression': 'p >= shift(p, along=t, offset=1, within=t[day], edge=0) - at(day_cap, by=t[day])',
         },
         day_cap={'dims': ['day']},
     )
     spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int', 'ordered': True}}
-    spec['relations'] = {'day_of': {'key': 't', 'values': 'day'}}
-    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 'day_of'"):
+    spec['properties'] = {'t': {'day': 'day'}}
+    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 't\.day'"):
         sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
 
 

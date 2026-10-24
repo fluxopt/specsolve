@@ -7,7 +7,7 @@ Three-way differential on examples/transport.yaml:
      involves no sum at all)
 
 Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
-a relation over ``snapshot`` groups it into months exactly as a relation over
+a property of ``snapshot`` groups it into months exactly as a property of
 ``generator`` groups onto buses. The gallery page quotes its dual and prints
 its snapshot index, so a test has to hold both.
 """
@@ -52,9 +52,9 @@ def _inputs(gens, lines, load):
         'generator': gens[['generator']],
         'bus': pd.Index(sorted(load['bus'].unique()), name='bus'),
         'line': lines[['line']],
-        'gen_bus': gens[['generator', 'bus']],
-        'line_from': lines[['line', 'from_bus']].rename(columns={'from_bus': 'bus'}),
-        'line_to': lines[['line', 'to_bus']].rename(columns={'to_bus': 'bus'}),
+        'generator.bus': gens[['generator', 'bus']],
+        'line.from_bus': lines[['line', 'from_bus']],
+        'line.to_bus': lines[['line', 'to_bus']],
     }
 
 
@@ -95,11 +95,11 @@ def test_sum_lowers_to_one_node_per_injection_term():
         for t in terms
         if isinstance(t, Sum) and isinstance(t.operand, Join)
     }
-    assert ('p', ('generator',), 'gen_bus', ('bus',)) in grouped, (
-        'generation is grouped out of generator onto bus, through gen_bus and nothing else'
+    assert ('p', ('generator',), 'generator.bus', ('bus',)) in grouped, (
+        'generation is grouped out of generator onto bus, through generator.bus and nothing else'
     )
-    assert ('f', ('line',), 'line_to', ('bus',)) in grouped, (
-        'inflow is grouped out of line onto bus, through line_to and nothing else'
+    assert ('f', ('line',), 'line.to_bus', ('bus',)) in grouped, (
+        'inflow is grouped out of line onto bus, through line.to_bus and nothing else'
     )
 
 
@@ -140,7 +140,7 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     gens, lines, load = transport_data
     other = 's' if gens['bus'].iloc[0] != 's' else 'n'
     data = _inputs(gens, lines, load)
-    data['gen_bus'] = pd.concat([data['gen_bus'], data['gen_bus'].head(1).assign(bus=other)])
+    data['generator.bus'] = pd.concat([data['generator.bus'], data['generator.bus'].head(1).assign(bus=other)])
 
     with pytest.raises(DataError, match='more than once'):
         _relationally(data)
@@ -162,14 +162,14 @@ def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
     """A coordinate cannot be inferred from the parameters that use the dim —
     inferring it is what would let a typo extend the label space.
 
-    Nor from the map over it: `gen_bus` still says which generators sit where,
-    and a relation over a dimension never says which of its members exist.
+    Nor from the map over it: `generator.bus` still says which generators sit where,
+    and a property of a dimension never says which of its members exist.
     """
     gens, lines, load = transport_data
     data = _inputs(gens, lines, load)
     del data['generator']
 
-    with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
+    with pytest.raises(DataError, match=re.escape("has tables over it (sources['generator.bus'])")):
         _relationally(data)
 
 
@@ -177,8 +177,9 @@ PARTIAL_YAML = """
 dimensions:
   g: {dtype: str}
   item: {dtype: str}
-relations:
-  grp: {key: item, values: g, missing: absent}
+properties:
+  item:
+    grp: {into: g, missing: absent}
 parameters:
   cap: {dims: [item]}
   target: {dims: [g]}
@@ -189,7 +190,7 @@ variables:
 constraints:
   meet:
     dims: [g]
-    expression: sum(x, over=item, by=grp[g]) >= target
+    expression: sum(x, over=item, by=item[grp]) >= target
 objective:
   sense: minimize
   expression: sum(x, over=item)
@@ -197,14 +198,14 @@ objective:
 
 
 def _partial_inputs():
-    """`item` carries relation `grp`: i0 and i1 in group g0, i2 in none."""
+    """`item` carries property `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
     index = pd.DataFrame({'item': items})
-    grp = pd.DataFrame({'item': ['i0', 'i1'], 'g': ['g0', 'g0']})
+    grp = pd.DataFrame({'item': ['i0', 'i1'], 'grp': ['g0', 'g0']})
     return (
         {  # relational sources
             'item': index,
-            'grp': grp,
+            'item.grp': grp,
             'g': pd.DataFrame({'g': ['g0']}),
             'cap': pd.DataFrame({'item': items, 'value': [5.0, 5.0, 5.0]}),
             'target': pd.DataFrame({'g': ['g0'], 'value': [3.0]}),
@@ -213,7 +214,7 @@ def _partial_inputs():
             'cap': pd.Series([5.0, 5.0, 5.0], index=pd.Index(items, name='item')),
             'target': pd.Series([3.0], index=pd.Index(['g0'], name='g')),
             'item': index,
-            'grp': grp,
+            'item.grp': grp,
             'g': pd.Index(['g0'], name='g'),
         },
     )
@@ -243,10 +244,10 @@ def test_a_partial_coordinate_places_its_orphans_nowhere(tmp_path):
 
 GROUPED_ONTO_BUS = {
     'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
-    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+    'properties': {'generator': {'bus': 'bus'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=gen_bus[bus]) >= load'}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=generator[bus]) >= load'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
 }
 
@@ -257,14 +258,14 @@ GROUPED_ONTO_BUS_SOURCES = {
     'a label no member reaches': {
         'bus': pl.DataFrame({'bus': ['north', 'south', 'east']}),
         'generator': ['g1', 'g2'],
-        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
+        'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame({'bus': ['north', 'south', 'east'], 'value': [4.0, 6.0, 0.0]}),
     },
     'a declared order that is not sorted': {
         'bus': pl.DataFrame({'bus': ['south', 'north']}),
         'generator': ['g1', 'g2'],
-        'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
+        'generator.bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
         'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [4.0, 6.0]}),
     },
@@ -273,7 +274,7 @@ GROUPED_ONTO_BUS_SOURCES = {
 
 @pytest.mark.parametrize('sources', GROUPED_ONTO_BUS_SOURCES.values(), ids=GROUPED_ONTO_BUS_SOURCES.keys())
 def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
-    """The result spans ``bus``'s declared index, not the labels the relation reaches.
+    """The result spans ``bus``'s declared index, not the labels the property reaches.
 
     A groupby yields only the labels some member points at, and in sorted
     order. Either departure — a bus no generator sits on, or a declared order
@@ -293,13 +294,13 @@ BROADCAST_GROUP_SUM = {
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
     },
-    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+    'properties': {'generator': {'bus': 'bus'}},
     'parameters': {'w': {'dims': ['generator']}, 'limit': {'dims': ['snapshot', 'bus']}},
     'variables': {'x': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {
         'cap': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'sum(x * w, over=generator, by=gen_bus[bus]) <= limit',
+            'expression': 'sum(x * w, over=generator, by=generator[bus]) <= limit',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -313,7 +314,7 @@ BROADCAST_SOURCES = {
     'w': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'value': [1.0, 2.0, 5.0]}),
     'limit': pl.DataFrame({'snapshot': [0, 0, 1, 1], 'bus': ['b1', 'b2'] * 2, 'value': [9.0, 100.0, 9.0, 100.0]}),
     'generator': ['g1', 'g2', 'g3'],
-    'gen_bus': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
+    'generator.bus': pl.DataFrame({'generator': ['g1', 'g2', 'g3'], 'bus': ['b1', 'b1', 'b2']}),
     'bus': pl.DataFrame({'bus': ['b1', 'b2']}),
 }
 
@@ -321,7 +322,7 @@ BROADCAST_SOURCES = {
 def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
-    `sum(x * w, over=generator, by=gen_bus[bus])` with `x` indexed by snapshot
+    `sum(x * w, over=generator, by=generator[bus])` with `x` indexed by snapshot
     alone: `generator` reaches the piece by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
@@ -345,7 +346,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.dims': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'sum(x * w, over=generator, by=gen_bus[bus]) <= limit',
+            'constraints.cap.expression': 'sum(x * w, over=generator, by=generator[bus]) <= limit',
         },
     )
     with sps.build(spec, BROADCAST_SOURCES) as model:
@@ -432,7 +433,7 @@ def monthly():
     """The snapshot index and sources: six snapshots over three calendar months,
     wind capped in the first.
 
-    The `month_of` relation is data prep: one polars expression.
+    The `month` property of `snapshot` is data prep: one polars expression.
     """
     import datetime as dt
 
@@ -445,7 +446,7 @@ def monthly():
         month_of,
         {
             'snapshot': snapshots,
-            'month_of': month_of,
+            'snapshot.month': month_of,
             'month': pl.DataFrame({'month': months}),
             'generator': pl.DataFrame({'generator': gens}),
             'p_max': pl.DataFrame({'generator': gens, 'value': [10.0, 100.0]}),
@@ -500,7 +501,7 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     quarters = month_of.with_columns(pl.lit('2030-Q1').alias('month'))
     regrouped = {
         **sources,
-        'month_of': quarters,
+        'snapshot.month': quarters,
         'month': pl.DataFrame({'month': ['2030-Q1']}),
         'monthly_cap': pl.DataFrame({'month': ['2030-Q1'] * 2, 'generator': ['wind', 'gas'], 'value': [5.0, 1e4]}),
     }
@@ -523,8 +524,8 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     typo = month_of.with_columns(
         pl.when(pl.col('month') == '2030-03').then(pl.lit('2030-3')).otherwise(pl.col('month')).alias('month')
     )
-    with pytest.raises(DataError, match=r"relation 'month_of' has value\(s\) in 'month' that are not 'month' labels"):
-        sps.solve(MONTHLY_YAML, {**sources, 'month_of': typo})
+    with pytest.raises(DataError, match=r"property 'month' of 'snapshot' has value\(s\) in 'month' that are not 'month' labels"):
+        sps.solve(MONTHLY_YAML, {**sources, 'snapshot.month': typo})
 
 
 def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
@@ -548,13 +549,13 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
 #: at all and its grouped sum lands on no bus.
 DEMAND_BY_REGION = {
     'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
-    'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
+    'properties': {'load': {'bus': 'bus'}},
     'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': False}},
     'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
     'expressions': {
         'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},
     },
-    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, over=load, by=load_bus[bus])'}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, over=load, by=load[bus])'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
 }
 
@@ -562,15 +563,15 @@ DEMAND_BY_REGION = {
 def test_a_region_that_holds_no_member_of_a_group_adds_the_empty_sum():
     """The `otherwise` region of `demand` is empty at both buses, which is a sum of nothing, not a missing value.
 
-    The zero an empty group adds was written only for a bus the relation maps
-    no load to. Here the relation maps a load to every bus and the region
+    The zero an empty group adds was written only for a bus the property maps
+    no load to. Here the property maps a load to every bus and the region
     leaves each out, so the group was empty with no zero written, and the
     balance was refused as short of `p_set`.
     """
     sources = {
         'bus': ['north', 'south'],
         'load': ['a', 'b'],
-        'load_bus': pd.DataFrame({'load': ['a', 'b'], 'bus': ['north', 'south']}),
+        'load.bus': pd.DataFrame({'load': ['a', 'b'], 'bus': ['north', 'south']}),
         'p_set': pd.Series({'a': 3.0, 'b': 4.0}).rename_axis('load'),
         'active': pd.Series({'a': True, 'b': True}).rename_axis('load'),
     }

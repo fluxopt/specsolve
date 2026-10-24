@@ -376,10 +376,10 @@ def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
 
 #: The flow an outage takes off its line: the line's flow where it stands,
 #: nothing where it does not. Every line stands, so the `otherwise` region is
-#: empty, and the pullback through `outage_line` cannot carry its claim.
+#: empty, and the pullback through `outage[line]` cannot carry its claim.
 OUTAGE_FLOW = {
     'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
-    'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
+    'properties': {'outage': {'line': 'line'}},
     'parameters': {
         'active': {'dims': ['line'], 'dtype': 'bool', 'missing': False},
         'share': {'dims': ['line', 'outage'], 'missing': 0},
@@ -388,7 +388,7 @@ OUTAGE_FLOW = {
     'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {
         'monitored': {'dims': ['line'], 'cases': {'standing': {'when': 'active', 'expression': 's'}}, 'otherwise': 0},
-        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line[line])'},
+        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage[line])'},
     },
     'constraints': {
         'after': {'dims': ['line', 'outage'], 'expression': 'monitored + share * outage_s <= cap'},
@@ -409,7 +409,7 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
     sources = {
         'line': ['a', 'b'],
         'outage': ['out_a'],
-        'outage_line': {'outage': ['out_a'], 'line': ['a']},
+        'outage.line': {'outage': ['out_a'], 'line': ['a']},
         'active': {'line': ['a', 'b'], 'value': [True, True]},
         'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
         'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
