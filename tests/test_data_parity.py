@@ -413,8 +413,6 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     """The oracle brings pandas and xarray, and nothing says it brings pyarrow."""
     import sys
 
-    import pyarrow.compute  # noqa: F401  pandas' own string columns import it lazily, and the patch below hides it
-
     path = _written(tmp_path, PROPERTY_SPEC)
     index = tmp_path / 'g.parquet'
     _tidy(g=['w', 's']).write_parquet(index)
@@ -423,7 +421,8 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
     monkeypatch.setitem(sys.modules, 'pyarrow', None)
     with sps.solve(path, sources) as relational:
         assert relational.is_ok
-    built = specsolve_linopy.build(path, sources)
+    with pd.option_context('mode.string_storage', 'python'):
+        built = specsolve_linopy.build(path, sources)
     assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the linopy lane read the same path'
 
 
@@ -733,9 +732,7 @@ _DATES = _EVEN.cast(pl.Date)
             id='parameter-zone',
         ),
         pytest.param(
-            _temporal_sources(
-                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day=_UTC
-            ),
+            _temporal_sources(index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day=_UTC),
             "property 'd' of 'g'",
             'convert_time_zone',
             id='property-other-zone',
