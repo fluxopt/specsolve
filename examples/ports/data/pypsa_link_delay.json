@@ -25,7 +25,7 @@
       1.0
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "cheap_a",
       "peak_b"
@@ -47,12 +47,12 @@
       "wire"
     ]
   },
-  "link_from": {
+  "link.from_bus": {
     "link": [
       "ship",
       "wire"
     ],
-    "bus": [
+    "from_bus": [
       "port_a",
       "port_a"
     ]
@@ -67,12 +67,12 @@
       20.0
     ]
   },
-  "link_to": {
+  "link.to_bus": {
     "link": [
       "ship",
       "wire"
     ],
-    "bus": [
+    "to_bus": [
       "port_b",
       "port_b"
     ]

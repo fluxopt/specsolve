@@ -438,20 +438,19 @@ def test_a_case_pair_across_two_namespaces_is_allowed():
             id='a named expression',
         ),
         pytest.param(
-            {
-                **_named(),
-                'relations': {'specsolve_next': {'key': {'here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
-            },
-            "relation 'specsolve_next'",
-            id='a relation',
+            {**_named(), 'sets': {'specsolve_pair': {'dims': {'here': 't', 'there': 't'}, 'missing': 'absent'}}},
+            "set 'specsolve_pair'",
+            id='a set',
         ),
         pytest.param(
-            {
-                **_named(),
-                'relations': {'next': {'key': {'specsolve_here': 't'}, 'values': {'there': 't'}, 'missing': 'absent'}},
-            },
-            "column 'specsolve_here' of relation 'next'",
-            id='a column of a relation',
+            {**_named(), 'sets': {'pair': {'dims': {'specsolve_here': 't', 'there': 't'}, 'missing': 'absent'}}},
+            "member 'specsolve_here' of set 'pair'",
+            id='a member of a set',
+        ),
+        pytest.param(
+            {**_named(), 'properties': {'t': {'specsolve_next': {'into': 't', 'missing': 'absent'}}}},
+            "property 'specsolve_next' of 't'",
+            id='a property',
         ),
         pytest.param(
             {**_named(), 'sos': {'specsolve_pick': {'variable': 'p', 'along': 't', 'type': 1}}},
@@ -579,17 +578,17 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     the same way, and `expression()` still says why."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
         with pytest.raises(sps.errors.SpecsolveError):
-            result.evaluate('ratio')
+            result.evaluate('price')
         with pytest.raises(sps.errors.SpecsolveError, match='integer'):
             result.to_dataset(kind='dual')
     assert sorted(p.name for p in out.iterdir()) == [
@@ -622,25 +621,25 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
-            result.evaluate('ratio')
+        with pytest.raises(sps.errors.SpecsolveError) as no_price:
+            result.evaluate('price')
 
     absent = pl.read_parquet(out / 'reasons.parquet')
     assert absent.columns == ['kind', 'name', 'reason'], 'the kind, what is missing under it, and why'
     assert absent.sort('kind', 'name').rows() == [
         ('dual', '', str(no_dual.value)),
-        ('expression', 'ratio', str(no_ratio.value)),
+        ('expression', 'price', str(no_price.value)),
     ], 'the whole kind for the duals, one name for the expression, each with the sentence the reader gives'
 
 
@@ -665,26 +664,26 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     """An absence loads back as the sentence, not as an unknown name."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         loaded = sps.load_result(result.save(tmp_path))
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
-            result.evaluate('ratio')
+        with pytest.raises(sps.errors.SpecsolveError) as no_price:
+            result.evaluate('price')
 
     assert loaded.evaluate('twice').equals(pl.DataFrame({'t': [0, 1], 'value': [4.0, 6.0]}))
     with pytest.raises(sps.errors.SpecsolveError, match='integer'):
         loaded.dual('meet')
-    with pytest.raises(sps.errors.SpecsolveError) as loaded_no_ratio:
-        loaded.evaluate('ratio')
-    assert (str(loaded_no_ratio.value), str(no_ratio.value)) == (str(no_ratio.value), str(no_ratio.value)), (
+    with pytest.raises(sps.errors.SpecsolveError) as loaded_no_price:
+        loaded.evaluate('price')
+    assert (str(loaded_no_price.value), str(no_price.value)) == (str(no_price.value), str(no_price.value)), (
         'the expression names the same reason it named in the process that solved'
     )
     assert 'integer' in str(no_dual.value), 'and the dual refuses for the reason it refused there'
@@ -792,7 +791,7 @@ def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expecte
 SCALAR_SOURCES = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
 
 
-def _masked_out(missing: str) -> dict:
+def _masked_out(missing: str | float) -> dict:
     """[`SCALAR_SPEC`][] with ``slack`` masked out under *missing*."""
     slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'missing': missing}
     return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
@@ -832,9 +831,7 @@ def _evaluated(expression):
         pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
         pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
-        pytest.param(
-            _masked_out('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-neutral'
-        ),
+        pytest.param(_masked_out(0), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-zero'),
         pytest.param(_masked_out('absent'), _evaluated('2 * slack'), [], id='masked-out-missing-absent'),
     ],
 )
@@ -847,7 +844,7 @@ def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate
     """
     spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
     assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (
-        'the solved value, zero where the variable is neutral, and no row where it is absent'
+        'the solved value, zero where the variable reads missing: 0, and no row where it is absent'
     )
 
 

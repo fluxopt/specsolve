@@ -19,11 +19,11 @@ dimensions:
     dtype: int
     ordered: true
 
-relations:
-  converter_of:
-    description: which converter a flow belongs to
-    key: flow
-    values: converter
+properties:
+  flow:
+    converter:
+      description: which converter a flow belongs to
+      into: converter
 
 parameters:
   bp_rate:
@@ -34,22 +34,22 @@ parameters:
     description: how far each converter's curve runs
     dims: [converter, bp]
     dtype: bool
-    missing: neutral
+    missing: false
   rate_max:
     description: what each flow runs at when its converter is at its last breakpoint
     dims: [flow]
   is_heat:
     description: which flows deliver heat
     dims: [flow]
-    missing: neutral
+    missing: 0
   is_power:
     description: which flows deliver power
     dims: [flow]
-    missing: neutral
+    missing: 0
   fuel_price:
     description: what a unit of each input flow costs
     dims: [flow]
-    missing: neutral
+    missing: 0
   heat_demand:
     description: heat to be delivered
     dims: [time]
@@ -92,7 +92,7 @@ constraints:
   on_the_curve:
     description: every flow reads its own value off its converter's weights
     dims: [flow, time]
-    expression: rate == sum(at(weight, by=converter_of[converter]) * bp_rate, over=bp)
+    expression: rate == sum(at(weight, by=flow[converter]) * bp_rate, over=bp)
   heat_balance:
     description: heat delivered meets the demand
     dims: [time]

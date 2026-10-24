@@ -76,8 +76,13 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : A polars `DataFrame` with one column per dimension and a `value` column, one
   row per coordinate.
 
-**Relation**
-: A named map between dimensions, such as the bus each generator sits on.
+**Set**
+: A named table of the combinations of labels that exist, such as which
+  generator connects to which bus.
+
+**Property**
+: A fact about each row of a dimension or a set that maps it into a
+  dimension, such as the bus each generator sits on.
 
 **Mask**
 : The `where:` on a declaration. A coordinate it excludes has no row

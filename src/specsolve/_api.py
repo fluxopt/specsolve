@@ -124,8 +124,9 @@ def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFra
     Returns:
         Each dimension as ``(dim, specsolve_position)``: its labels once each,
         and the ``Int64`` position from 0 that ``shift`` counts. Each
-        parameter as ``(dims…, value)``. Each relation as the columns it
-        declares.
+        parameter as ``(dims…, value)``. Each set as one column per member,
+        and each property, under ``subject.property``, as the subject's
+        members and the property.
 
     Raises:
         LanguageError: A construct outside the streaming language.

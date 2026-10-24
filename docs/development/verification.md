@@ -36,12 +36,12 @@ Each row lives in `tests/linopy_lane/builder.py`.
 
 | In an expression | linopy or xarray |
 |---|---|
-| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: neutral` |
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: 0` |
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
-| `sum(x, over=c, by=r[d])` | the column walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two columns groups onto both at once, and a key of several columns groups by the value and the rest of the key |
-| `at(p, by=r[c])` | `.sel({into: relation})`, xarray's vectorised selection; a read of two columns reads a tuple of labels at once |
+| `sum(x, over=c, by=s[d])` | the property walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two properties groups onto both at once, and a set subject groups by the value and the rest of its members |
+| `at(p, by=s[c])` | `.sel({into: property})`, xarray's vectorised selection; a read of two properties reads a tuple of labels at once |
 | `shift(x, along=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
 | `sum_back(x, along=t, window=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero; under `by=` each gather reads inside the group, so the window stops at its edge |
 | `dual(c)` | `Model.constraints['c'].dual`, at a read only; the language keeps a dual out of the math, and a solve that stored none refuses the read |
@@ -52,9 +52,10 @@ Each row lives in `tests/linopy_lane/builder.py`.
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
-A missing row of a `missing: neutral` parameter is zero in a coefficient, an
-error in `bounds:`, and false in a `where` operand
-(`tests/linopy_lane/absence.py`).
+The linopy lane fills a missing row with the value its `missing:` names
+when it loads the data, so a `missing: 0` row is zero in a coefficient, a
+bound and a `where` comparison. A bare name in a `where` still asks whether
+the data has the row (`given_rows` in `tests/linopy_lane/loader.py`).
 
 ### The same language, but not every build
 
@@ -63,8 +64,9 @@ Three files pass `check` and build on one side only.
 - **An objective with a constant** builds only in specsolve, because
   `linopy.Objective` has no slot for one (`osemosys_utopia`,
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
-- **A relation that is not a single-valued map** builds only in specsolve,
-  because the oracle holds each relation as one dense array.
+- **A sum that reads a property backwards**, from the dimension it maps into
+  to its subject, builds only in specsolve, because the oracle holds each
+  property as one dense array over its subject.
 - **An operator along a dimension a constant part does not carry**, such as
   `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
   refusal says to declare the parameter over the dimension

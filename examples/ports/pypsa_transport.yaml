@@ -17,19 +17,18 @@ dimensions:
     description: controllable connections, each joining two buses
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  link_from:
-    description: the bus a link leaves
-    key: link
-    values: bus
-  link_to:
-    description: the bus a link arrives at
-    key: link
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link:
+    from_bus:
+      description: the bus a link leaves
+      into: bus
+    to_bus:
+      description: the bus a link arrives at
+      into: bus
 
 parameters:
   p_nom:
@@ -39,7 +38,7 @@ parameters:
     description: cost of one unit of output
     dims: [generator]
   rating:
-    description: most a link may carry towards its `link_to` bus
+    description: most a link may carry towards its `link[to_bus]` bus
     dims: [link]
   neg_rating:
     description: most a link may carry the other way, negative by convention
@@ -57,8 +56,8 @@ variables:
       upper: p_nom
   f:
     description: >-
-      PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value
-      withdraws there and injects at `link_to`
+      PyPSA's p0 — flow measured at the link's `link[from_bus]` end, so a positive value
+      withdraws there and injects at `link[to_bus]`
     dims: [snapshot, link]
     bounds:
       lower: neg_rating
@@ -69,9 +68,9 @@ constraints:
     description: what is generated at a bus plus what arrives over the links meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(f, over=link, by=link_to[bus])
-      - sum(f, over=link, by=link_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(f, over=link, by=link[to_bus])
+      - sum(f, over=link, by=link[from_bus])
       == load
 
 objective:

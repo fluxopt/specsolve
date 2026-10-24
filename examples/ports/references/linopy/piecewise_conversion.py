@@ -49,7 +49,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
 
     ``tables`` is the same mapping the specsolve call attaches as ``sources``.
     """
-    flows: pd.DataFrame = tables['flow'].set_index('flow').join(tables['converter_of'].set_index('flow'))
+    flows: pd.DataFrame = tables['flow'].set_index('flow').join(tables['flow.converter'].set_index('flow'))
     times = pd.Index(tables['time']['time'], name='time')
     present = tables['bp_present'].set_index(['converter', 'bp'])['value']
     runs_to = {c: int(present[c].sum()) for c in present.index.get_level_values('converter').unique()}

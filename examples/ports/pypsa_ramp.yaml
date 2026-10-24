@@ -18,19 +18,18 @@ dimensions:
     description: controllable connections, each joining two buses
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  link_from:
-    description: the bus a link leaves
-    key: link
-    values: bus
-  link_to:
-    description: the bus a link arrives at
-    key: link
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link:
+    from_bus:
+      description: the bus a link leaves
+      into: bus
+    to_bus:
+      description: the bus a link arrives at
+      into: bus
 
 parameters:
   p_nom:
@@ -46,7 +45,7 @@ parameters:
     description: share of capacity output may fall by from one snapshot to the next
     dims: [generator]
   rating:
-    description: most a link may carry towards its `link_to` bus
+    description: most a link may carry towards its `link[to_bus]` bus
     dims: [link]
   neg_rating:
     description: most a link may carry the other way, negative by convention
@@ -63,7 +62,7 @@ variables:
       lower: 0
       upper: p_nom
   f:
-    description: flow on a link, signed towards its `link_to` bus
+    description: flow on a link, signed towards its `link[to_bus]` bus
     dims: [snapshot, link]
     bounds:
       lower: neg_rating
@@ -74,9 +73,9 @@ constraints:
     description: what is generated at a bus plus what arrives over the links meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(f, over=link, by=link_to[bus])
-      - sum(f, over=link, by=link_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(f, over=link, by=link[to_bus])
+      - sum(f, over=link, by=link[from_bus])
       == load
 
   ramp_up:

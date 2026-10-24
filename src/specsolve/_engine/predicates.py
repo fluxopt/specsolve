@@ -89,7 +89,7 @@ def compile_predicate(
     semi-joined rather than left-joined. No join maintains order: consumers
     verify it ([`labels.in_position_order`][]).
     """
-    certain = _certain_names(mask)
+    certain = _certain_names(scope, mask)
     carrier = Carrier(frame)
     serial = itertools.count()
 
@@ -164,7 +164,10 @@ def compile_predicate(
 
     def walk(p: program.Condition) -> pl.Expr:
         if isinstance(p, program.ParameterComparison):
-            return _compare(pl.col(join_param(p.name)), p.op, p.value)
+            value = pl.col(join_param(p.name))
+            if scope.reads_zero(p.name):
+                value = value.fill_null(scope.program.parameters[p.name].missing)
+            return _compare(value, p.op, p.value)
         if isinstance(p, program.ExpressionComparison):
             left, right = (_values(scope, side) for side in (p.left, p.right))
             columns = tuple(
@@ -296,13 +299,18 @@ def _joined(scope: Scope, p: program.JoinedCondition, alias: str) -> pl.LazyFram
     return read
 
 
-def _certain_names(mask: program.Mask) -> frozenset[str]:
+def _certain_names(scope: Scope, mask: program.Mask) -> frozenset[str]:
     """Parameter and variable names whose absence alone makes the whole mask false.
 
     Only the ``AND`` spine counts: under ``OR`` or ``NOT`` an absent value can still leave the mask true.
+    A comparison of a parameter that reads a missing row as zero compares the zero there, so it does not count.
     """
     atoms = (program.ParameterComparison, program.ParameterDefined, program.VariableDefined)
-    return frozenset(a.name for a in mask.conjuncts if isinstance(a, atoms))
+    return frozenset(
+        a.name
+        for a in mask.conjuncts
+        if isinstance(a, atoms) and not (isinstance(a, program.ParameterComparison) and scope.reads_zero(a.name))
+    )
 
 
 def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> None:

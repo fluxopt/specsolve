@@ -6,10 +6,10 @@ heat, any conversion with more than one product.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **1100**, matched to `rtol=1e-09`.
 
-**The schema varies, not the network.** PyPSA holds the relation wide: `bus0`,
+**The schema varies, not the network.** PyPSA holds which buses a link joins wide: `bus0`,
 `bus1`, `bus2`, `efficiency`, `efficiency2`, and an empty `bus2` where a link
 has only two ends. Every arity the data reaches adds a column pair to the
-component. Here the relation is one incidence parameter over `(link, bus)`:
+component. Here that is one incidence parameter over `(link, bus)`:
 `-1` at the input, `+efficiency` at each output, rows absent elsewhere. Arity
 is the number of rows that name the link. The three-ended CHP and the
 two-ended boiler sit in the same three columns, and a four-ended link would
@@ -33,14 +33,14 @@ others top up. Flows `(50, 20, 40)`, gas 110, objective **1100**.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA multi-link: one Link, one input bus, several output buses, each output derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1, bus2, efficiency, efficiency2, an empty bus2 where a link has no third terminal — and grows a column pair per arity. Here the relation is one incidence parameter over link and bus, so arity is the number of rows that name the link. Optimum 1100.0, from PyPSA itself.
+PyPSA multi-link: one Link, one input bus, several output buses, each output derated by its own efficiency. PyPSA spells the buses wide — bus0, bus1, bus2, efficiency, efficiency2, an empty bus2 where a link has no third terminal — and grows a column pair per arity. Here the buses are one incidence parameter over link and bus, so arity is the number of rows that name the link. Optimum 1100.0, from PyPSA itself.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` — conversions, each drawing at one bus and delivering at several |
 
 #### Parameters
@@ -50,7 +50,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | $`\mathrm{gen}^{\mathrm{p,nom}}`$ | `gen_p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{L}`$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
-| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$, `neutral` where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$, $`0`$ where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 
 #### Variables
@@ -85,7 +85,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
 ```
 
 </details>
@@ -98,9 +98,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```yaml
     description: >-
       PyPSA multi-link: one Link, one input bus, several output buses, each output
-      derated by its own efficiency. PyPSA spells the relation wide — bus0, bus1,
+      derated by its own efficiency. PyPSA spells the buses wide — bus0, bus1,
       bus2, efficiency, efficiency2, an empty bus2 where a link has no third
-      terminal — and grows a column pair per arity. Here the relation is one
+      terminal — and grows a column pair per arity. Here the buses are one
       incidence parameter over link and bus, so arity is the number of rows that
       name the link. Optimum 1100.0, from PyPSA itself.
 
@@ -115,8 +115,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: conversions, each drawing at one bus and delivering at several
         dtype: str
 
-    relations:
-      gen_bus: {key: generator, values: bus, description: "the bus a generator sits on"}
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
 
     parameters:
       gen_p_nom:
@@ -134,7 +137,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
           columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus
         dims: [bus]
@@ -164,7 +167,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           rows name — three ends or two, the expression never says.
         dims: [bus]
         expression: >-
-          sum(gen, over=generator, by=gen_bus[bus])
+          sum(gen, over=generator, by=generator[bus])
           + sum(incidence * p, over=link)
           == load
 
@@ -221,7 +224,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['gen_p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -244,7 +247,7 @@ of its draw in station load, with no new column and no new construct.
 **When a link end needs a name of its own, the incidence entry stops being
 enough.** A per-end variable or bound (a heat-offtake cap on the CHP's heat
 port alone), a value pulled through an end's bus with `at(..., by=…)`, or a
-link touching the same bus twice all need the ends as a dimension with leg
-relations. A parameter holds one value per `(link, bus)` pair and gives the pair
+link touching the same bus twice all need the ends as a dimension with a
+property for each leg. A parameter holds one value per `(link, bus)` pair and gives the pair
 no identity. [Reserves](reserves.md) proves that other idiom with its
 three-legged offers.

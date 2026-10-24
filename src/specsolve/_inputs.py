@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from mathspec import to_spec
 from mathspec.program import Program
 
+from specsolve._messages import table_noun
 from specsolve._names import refuse_reserved, refuse_value
 from specsolve.errors import LanguageError, SpecsolveError
 
@@ -91,7 +92,7 @@ def _case_collision(program: Program) -> str | None:
     """Two declarations of one namespace whose names differ only by case, as the sentence refusing them."""
     flat = (
         *(('dimension', name) for name in program.dimensions),
-        *(('relation', name) for name in program.relations),
+        *(('set', name) for name, relation in program.relations.items() if relation.subject is None),
         *(('parameter', name) for name in program.parameters),
         *(('variable', name) for name in program.variables),
         *(('named expression', name) for name in program.expressions),
@@ -116,11 +117,15 @@ def _refuse_reserved_names(program: Program) -> None:
     """Refuse a declaration whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
-        *((f"relation '{name}'", name) for name in program.relations),
         *(
-            (f"column '{role}' of relation '{relation}'", role)
-            for relation, held in program.relations.items()
-            for role, _ in held.columns
+            (table_noun(name, relation), name.removeprefix(f'{relation.subject}.'))
+            for name, relation in program.relations.items()
+        ),
+        *(
+            (f"member '{role}' of {table_noun(name, relation)}", role)
+            for name, relation in program.relations.items()
+            if relation.subject is None
+            for role in relation.roles
         ),
         *((f"parameter '{name}'", name) for name in program.parameters),
         *((f"variable '{name}'", name) for name in program.variables),

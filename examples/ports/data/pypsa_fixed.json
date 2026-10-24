@@ -16,7 +16,7 @@
       150.0
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "chp",
       "gas",

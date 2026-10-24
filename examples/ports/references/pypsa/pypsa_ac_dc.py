@@ -76,7 +76,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     generators = (
         tables['generator']
         .set_index('generator')
-        .join([tables['gen_bus'].set_index('generator'), tables['gen_carrier'].set_index('generator')])
+        .join([tables['generator.bus'].set_index('generator'), tables['generator.carrier'].set_index('generator')])
     )
     p_max_pu = _wide(tables['p_max_pu'], 'generator')
     for g, row in generators.iterrows():
@@ -94,8 +94,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
             p_max_pu=p_max_pu[g],
         )
 
-    bus0_of = tables['line_from'].set_index('line')['bus']
-    bus1_of = tables['line_to'].set_index('line')['bus']
+    bus0_of = tables['line.from_bus'].set_index('line')['from_bus']
+    bus1_of = tables['line.to_bus'].set_index('line')['to_bus']
     for line in tables['line']['line']:
         bus0, bus1 = bus0_of[line], bus1_of[line]
         n.add(
@@ -110,8 +110,8 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
             capital_cost=_series(tables['line_capital_cost'], 'line')[line],
         )
 
-    bus0_of = tables['link_from'].set_index('link')['bus']
-    bus1_of = tables['link_to'].set_index('link')['bus']
+    bus0_of = tables['link.from_bus'].set_index('link')['from_bus']
+    bus1_of = tables['link.to_bus'].set_index('link')['to_bus']
     for link in tables['link']['link']:
         bus0, bus1 = bus0_of[link], bus1_of[link]
         n.add(

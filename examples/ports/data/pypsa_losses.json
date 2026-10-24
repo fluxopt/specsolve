@@ -7,19 +7,19 @@
       "b3"
     ]
   },
-  "from": {
+  "line.from_bus": {
     "line": [
       "l0",
       "l1",
       "l2"
     ],
-    "bus": [
+    "from_bus": [
       "b0",
       "b1",
       "b2"
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "cheap",
       "dear",
@@ -264,13 +264,13 @@
       5
     ]
   },
-  "to": {
+  "line.to_bus": {
     "line": [
       "l0",
       "l1",
       "l2"
     ],
-    "bus": [
+    "to_bus": [
       "b1",
       "b2",
       "b3"

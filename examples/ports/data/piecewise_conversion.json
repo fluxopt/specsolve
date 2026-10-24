@@ -107,7 +107,7 @@
       "chp"
     ]
   },
-  "converter_of": {
+  "flow.converter": {
     "flow": [
       "boiler_fuel",
       "boiler_heat",

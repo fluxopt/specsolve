@@ -10,8 +10,8 @@
 Pinned above to the versions that produced the number in ``references.json``,
 and run out of band — PyPSA is not a dependency of this project.
 
-It reads the same instance the port attaches. The port holds the link-to-bus
-relation as one incidence table — a ``(link, bus, value)`` row per link end,
+It reads the same instance the port attaches. The port holds which buses a
+link joins as one incidence table — a ``(link, bus, value)`` row per link end,
 ``-1`` at the input, ``+efficiency`` at each output — and PyPSA holds it wide:
 ``bus0`` is the input, ``bus1``/``bus2`` the outputs,
 ``efficiency``/``efficiency2`` their deratings, an empty ``bus2`` where a link
@@ -19,7 +19,7 @@ has only two ends. ``build`` opens with that pivot. Nothing here imports
 specsolve.
 
 A multi-link is the one PyPSA construct whose schema grows with the data —
-every arity adds a column pair — and the port says the same relation as rows.
+every arity adds a column pair — and the port says the same fact as rows.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=tables['gen_bus'].set_index('generator')['bus'],
+        bus=tables['generator.bus'].set_index('generator')['bus'],
         p_nom=tables['gen_p_nom'].set_index('generator')['value'],
         marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
     )

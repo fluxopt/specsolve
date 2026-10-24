@@ -21,15 +21,14 @@ import pytest
 import yaml
 
 import specsolve as sps
-from specsolve.errors import DataError
-from tests.differential import RTOL, both_lanes_refuse, differential
+from tests.differential import RTOL, differential
 from tests.oracle import specsolve_linopy
 
 CAPPED_BY_REGION = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {
-        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'},
-        'hi': {'dims': ['t'], 'missing': 'neutral'},
+        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': False},
+        'hi': {'dims': ['t'], 'missing': 0},
         'cost': {'dims': ['t']},
     },
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1000}}},
@@ -91,24 +90,13 @@ def test_a_constant_side_is_asked_for_data_only_where_its_region_applies(hi, obj
         assert run.oracle == pytest.approx(objective, rel=RTOL), 'rows outside the region change nothing'
 
 
-@pytest.mark.parametrize('lane', ['relational', 'linopy'])
-def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
-    """Narrowing the question to the region must not stop it being asked there.
-
-    Asserted lane by lane: one lane refusing satisfies a ``pytest.raises``
-    around both.
-    """
+def test_a_hole_inside_the_region_reads_its_value_on_both_lanes():
+    """`hi` declares `missing: 0`, so a flagged step with no `hi` row is capped at 0 rather than refused."""
     sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
-    with tempfile.TemporaryDirectory() as work:
-        path = Path(work) / 'capped.yaml'
-        path.write_text(yaml.safe_dump(CAPPED_BY_REGION))
-        build = (
-            (lambda: sps.build(path, sources))
-            if lane == 'relational'
-            else (lambda: specsolve_linopy.build(path, dict(sources)))
+    with differential(CAPPED_BY_REGION, sources) as run:
+        assert run.oracle == pytest.approx(40.0 + 5.0 + 0.0 + 5.0, rel=RTOL), (
+            'the flagged steps cap at 40 and 0, the rest at 5'
         )
-        with pytest.raises(DataError, match=r"parameter 'hi' covers 1 fewer coordinate"):
-            build()
 
 
 @pytest.mark.parametrize(
@@ -141,7 +129,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
 CARRIED_IN = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {
-        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'},
+        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': False},
         'before': {'dims': ['g']},
         'cap': {'dims': ['g']},
         'step': {'dims': ['g']},
@@ -300,8 +288,8 @@ def test_one_parameter_answering_for_two_regions():
         assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
 
 
-def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
-    """A rate stated for the steps its region claims is not asked about the rest."""
+def test_an_absent_divisor_outside_its_region_changes_nothing():
+    """A rate stated for the steps its region claims leaves the rest to the `otherwise`."""
     spec = CAPPED_BY_REGION | {
         'expressions': {
             'cap': {
@@ -310,34 +298,18 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'absent'}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
 
 
-def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
-    """Narrowing the divisor's question to the region must not stop it being asked there (#1465)."""
-    spec = CAPPED_BY_REGION | {
-        'expressions': {
-            'cap': {
-                'dims': ['t'],
-                'cases': {'flagged': {'when': 'flag', 'expression': 'hi / rate'}},
-                'otherwise': 5,
-            },
-        },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
-    }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
-    both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
-
-
 #: `cap` is a sum over `g` inside the flagged region: `hi` owes two coordinates
 #: per flagged step, and none for the steps the `otherwise` carries.
 SUMMED_BY_REGION = CAPPED_BY_REGION | {
     'dimensions': CAPPED_BY_REGION['dimensions'] | {'g': {'dtype': 'str'}},
-    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 'neutral'}},
+    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 0}},
     'expressions': {
         'cap': {
             'dims': ['t'],
@@ -393,7 +365,7 @@ def test_a_cased_quantity_summed_onto_a_constant_side_builds():
 
 
 def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
-    """A neutral hole under the sum inside the region contributes nothing (#1465).
+    """A `missing: 0` hole under the sum inside the region contributes nothing (#1465).
 
     Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
     """
@@ -404,19 +376,19 @@ def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
 
 #: The flow an outage takes off its line: the line's flow where it stands,
 #: nothing where it does not. Every line stands, so the `otherwise` region is
-#: empty, and the pullback through `outage_line` cannot carry its claim.
+#: empty, and the pullback through `outage[line]` cannot carry its claim.
 OUTAGE_FLOW = {
     'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
-    'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
+    'properties': {'outage': {'line': 'line'}},
     'parameters': {
-        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': 'neutral'},
-        'share': {'dims': ['line', 'outage'], 'missing': 'neutral'},
+        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': False},
+        'share': {'dims': ['line', 'outage'], 'missing': 0},
         'cap': {'dims': ['line']},
     },
     'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {
         'monitored': {'dims': ['line'], 'cases': {'standing': {'when': 'active', 'expression': 's'}}, 'otherwise': 0},
-        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage_line[line])'},
+        'outage_s': {'dims': ['outage'], 'expression': 'at(monitored, by=outage[line])'},
     },
     'constraints': {
         'after': {'dims': ['line', 'outage'], 'expression': 'monitored + share * outage_s <= cap'},
@@ -437,7 +409,7 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
     sources = {
         'line': ['a', 'b'],
         'outage': ['out_a'],
-        'outage_line': {'outage': ['out_a'], 'line': ['a']},
+        'outage.line': {'outage': ['out_a'], 'line': ['a']},
         'active': {'line': ['a', 'b'], 'value': [True, True]},
         'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
         'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},

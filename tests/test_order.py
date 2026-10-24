@@ -3,7 +3,7 @@
 A source table's rows arrive in whatever order its writer chose, and polars
 promises no row order from a join or a group-by that was not asked for one. So
 each referenced model is built twice from the same sources, and again with the
-rows of every parameter and relation table shuffled, and each build must
+rows of every parameter, set and property table shuffled, and each build must
 be the same: matrix, bounds, costs and right-hand sides, bit for bit. One
 that moves solves the same data to an answer that differs in its last bits.
 

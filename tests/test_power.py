@@ -103,7 +103,7 @@ def test_a_missing_row_under_a_power_that_adds_reads_as_zero_on_both_lanes():
     sources = {**SOURCES, 'period': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 1.0]})}
     model = spec(
         'sum(p * cost * (1 + period) ** 2)',
-        parameters={**SPEC['parameters'], 'period': {'dims': ['g'], 'missing': 'neutral'}},
+        parameters={**SPEC['parameters'], 'period': {'dims': ['g'], 'missing': 0}},
     )
     with differential(model, sources) as run:
         assert float(run.result.objective) == pytest.approx(60.0), 'c is priced at 5 * 1 ** 2, not left free'

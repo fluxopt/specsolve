@@ -69,7 +69,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     n.add(
         'Generator',
         generators.index,
-        bus=tables['gen_bus'].set_index('generator')['bus'],
+        bus=tables['generator.bus'].set_index('generator')['bus'],
         p_nom_extendable=True,
         p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
         p_nom_set=tables['p_nom_set'].set_index('generator')['value'].reindex(generators.index, fill_value=np.nan),

@@ -1,6 +1,6 @@
 """`transport` as a pyomo user writes it: a `ConcreteModel` with rules.
 
-The adjacency the YAML declares as relations is built as plain dicts inside
+The adjacency the YAML declares as properties is built as plain dicts inside
 the timed build, and the balance rule sums over them.
 """
 
@@ -32,9 +32,9 @@ def build(tables: Mapping[str, Any]) -> Any:
         (s, b): v
         for s, b, v in zip(tables['load']['snapshot'], tables['load']['bus'], tables['load']['value'], strict=True)
     }
-    at_bus = _grouped(tables['gen_bus']['generator'], tables['gen_bus']['bus'])
-    into_bus = _grouped(tables['line_to']['line'], tables['line_to']['bus'])
-    out_of_bus = _grouped(tables['line_from']['line'], tables['line_from']['bus'])
+    at_bus = _grouped(tables['generator.bus']['generator'], tables['generator.bus']['bus'])
+    into_bus = _grouped(tables['line.to_bus']['line'], tables['line.to_bus']['to_bus'])
+    out_of_bus = _grouped(tables['line.from_bus']['line'], tables['line.from_bus']['from_bus'])
 
     m = pyo.ConcreteModel()
     m.snapshots = pyo.Set(initialize=list(tables['snapshot']['snapshot']), ordered=True)

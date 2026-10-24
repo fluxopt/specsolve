@@ -10,7 +10,7 @@
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
-The script builds every mapping the YAML states as a relation or a weighted
+The script builds every mapping the YAML states as a property or a weighted
 table — generator/line incidence onto buses, the three-legged offer set onto
 generators, markets and tranches, and the overlapping zone weights — as dense
 matrices multiplied through by hand.
@@ -67,11 +67,13 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     offers = tables['offer'].set_index('offer')
     zones = pd.Index(series['zone_req'].index, name='zone')
 
-    gen_at = indicator(buses, tables['gen_bus'], 'generator', 'bus')
-    line_in = indicator(buses, tables['line_to'], 'line', 'bus')
-    line_out = indicator(buses, tables['line_from'], 'line', 'bus')
-    offer_gen = indicator(pd.Index(series['p_max'].index, name='generator'), tables['gen_of'], 'offer', 'generator')
-    offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['market_of'], 'offer', 'market')
+    gen_at = indicator(buses, tables['generator.bus'], 'generator', 'bus')
+    line_in = indicator(buses, tables['line.to_bus'], 'line', 'to_bus')
+    line_out = indicator(buses, tables['line.from_bus'], 'line', 'from_bus')
+    offer_gen = indicator(
+        pd.Index(series['p_max'].index, name='generator'), tables['offer.generator'], 'offer', 'generator'
+    )
+    offer_market = indicator(pd.Index(series['req'].index, name='market'), tables['offer.market'], 'offer', 'market')
 
     zone_at = pd.DataFrame(0.0, index=zones, columns=series['p_max'].index)
     for gen, zone, share in zip(
@@ -80,10 +82,10 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
         zone_at.loc[zone, gen] = share
     zone_at.columns.name = 'generator'
 
-    tranche_of = tables['tranche_of'].set_index('offer')['tranche']
-    gen_of = tables['gen_of'].set_index('offer')['generator']
+    tranche_of = tables['offer.tranche'].set_index('offer')['tranche']
+    gen_of = tables['offer.generator'].set_index('offer')['generator']
     r_cap = tranche_of.map(series['tranche_frac']) * gen_of.map(series['p_max'])
-    f_cap = tables['line_from'].set_index('line')['bus'].map(series['bus_cap'])
+    f_cap = tables['line.from_bus'].set_index('line')['from_bus'].map(series['bus_cap'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, coords=[series['p_max'].index], name='p')

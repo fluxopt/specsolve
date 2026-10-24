@@ -6,7 +6,7 @@ A day of dispatch for two carbon-capture plants and a wind farm under a net-zero
 
 **A plant burns one fuel, and that fuel's price moves hour by hour.** The price
 a plant pays is a `(fuel, hour)` table read through the plant's own fuel, a
-relation whose target keeps a dimension after the read. Every other reach-through
+property whose target keeps a dimension after the read. Every other reach-through
 in this corpus lands on a single value. This one lands on a row.
 
 The instance folds that read into `fuel_price[plant, hour]`, because the mapping
@@ -25,12 +25,12 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{P}`$ | index $`p`$ — `plant` with $`\mathrm{commitment}: \mathcal{P} \to \mathcal{C},\ \mathrm{fuel\_use}: \mathcal{P} \to \mathcal{F}`$ — the units dispatched over the day |
+| $`\mathcal{P}`$ | index $`p`$ — `plant` with $`\mathrm{commitment\_mode}: \mathcal{P} \to \mathcal{C},\ \mathrm{fuel\_use\_mode}: \mathcal{P} \to \mathcal{F}`$ — the units dispatched over the day |
 | $`\mathcal{H}`$ | index $`h`$ — `hour` — hours of a representative day that repeats |
 | $`\mathcal{S}`$ | index $`s`$ — `segment` — a piece of the fuel curve |
 | $`\mathcal{T}`$ | index $`t`$ — `step` — a block of demand that may be shed, each dearer than the last |
-| $`\mathcal{C}`$ | index $`c`$ — `commitment_mode` with $`\mathrm{commitment}: \mathcal{P} \to \mathcal{C}`$ — the ways a plant may be committed |
-| $`\mathcal{F}`$ | index $`f`$ — `fuel_use_mode` with $`\mathrm{fuel\_use}: \mathcal{P} \to \mathcal{F}`$ — the ways a plant's fuel use may be read |
+| $`\mathcal{C}`$ | index $`c`$ — `commitment_mode` with $`\mathrm{commitment\_mode}: \mathcal{P} \to \mathcal{C}`$ — the ways a plant may be committed |
+| $`\mathcal{F}`$ | index $`f`$ — `fuel_use_mode` with $`\mathrm{fuel\_use\_mode}: \mathcal{P} \to \mathcal{F}`$ — the ways a plant's fuel use may be read |
 
 #### Parameters
 
@@ -48,7 +48,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 | $`\mathrm{start\_fuel}`$ | `start_fuel` over $`\mathcal{P}`$ — fuel burned per unit of capacity started |
 | $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{P} \times \mathcal{H}`$ — what a unit of the plant's fuel costs in that hour |
 | $`\mathrm{run\_cost}`$ | `run_cost` over $`\mathcal{P}`$ — variable cost of one unit of output, fuel aside |
-| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$, `neutral` where the data has no row — what starting one unit of capacity costs |
+| $`\mathrm{start\_cost}`$ | `start_cost` over $`\mathcal{P}`$, $`0`$ where the data has no row — what starting one unit of capacity costs |
 | $`\mathrm{weight}`$ | `weight` over $`\mathcal{H}`$ — how many real hours an hour of the representative day stands for |
 | $`\mathrm{emitted}`$ | `emitted` over $`\mathcal{P}`$ — net CO2 per unit of fuel burned after capture, negative where the fuel took it up |
 | $`\mathrm{emitted}^{\mathrm{start}}`$ | `emitted_start` over $`\mathcal{P}`$ — net CO2 per unit of start-up fuel burned |
@@ -172,67 +172,67 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 **`committed_units_exist`**
 
 ```math
-\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{committed}_{p,h} \le \mathit{units}_{p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`thermal_ceiling`**
 
 ```math
-\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{output}_{p,h} \le \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`thermal_floor`**
 
 ```math
-\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{min\_output}_{p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{output}_{p,h} \ge \mathit{committed}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{min\_output}_{p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`variable_ceiling`**
 
 ```math
-\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{free}\text{'}
+\mathit{output}_{p,h} \le \mathit{units}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathrm{availability}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{free}\text{'}
 ```
 
 **`commitment_tracks_starts`**
 
 ```math
-\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{committed}_{p,h} - \mathit{committed}_{p,h \ominus 1} = \mathit{starting}_{p,h} - \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`stay_up_once_started`**
 
 ```math
-\mathit{committed}_{p,h} \ge \mathit{started\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{committed}_{p,h} \ge \mathit{started\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`stay_down_once_shut`**
 
 ```math
-\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shut\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shut\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`ramp_up`**
 
 ```math
-\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{output}_{p,h} - \mathit{output}_{p,h \ominus 1} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`ramp_down`**
 
 ```math
-\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{output}_{p,h \ominus 1} - \mathit{output}_{p,h} \le \mathrm{ramp}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \left( \mathit{committed}_{p,h} - \mathit{starting}_{p,h} \right) - \mathrm{min\_output}_{p} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{starting}_{p,h} + \mathrm{start\_headroom}_{p,h} \cdot \mathrm{unit\_size}_{p} \cdot \mathit{shutting}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment\_mode}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`fuel_above_each_piece`**
 
 ```math
-\mathit{burned}_{p,h} \ge \mathrm{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathrm{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\, p \in \mathcal{P},\ s \in \mathcal{S},\ h \in \mathcal{H} \,:\, \mathrm{fuel\_use}(p) = \text{'}\mathrm{curve}\text{'}
+\mathit{burned}_{p,h} \ge \mathrm{fuel\_slope}_{p,s} \cdot \mathit{output}_{p,h} + \mathrm{fuel\_intercept}_{p,s} \cdot \mathit{committed}_{p,h} \qquad \forall\, p \in \mathcal{P},\ s \in \mathcal{S},\ h \in \mathcal{H} \,:\, \mathrm{fuel\_use\_mode}(p) = \text{'}\mathrm{curve}\text{'}
 ```
 
 **`fuel_at_the_heat_rate`**
 
 ```math
-\mathit{burned}_{p,h} = \mathrm{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{fuel\_use}(p) = \text{'}\mathrm{flat}\text{'}
+\mathit{burned}_{p,h} = \mathrm{heat\_rate}_{p} \cdot \mathit{output}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{fuel\_use\_mode}(p) = \text{'}\mathrm{flat}\text{'}
 ```
 
 **`fuel_to_start`**
@@ -286,15 +286,16 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: the ways a plant's fuel use may be read
         dtype: str
 
-    relations:
-      commitment:
-        description: whether a plant is committed unit by unit or dispatched freely
-        key: plant
-        values: commitment_mode
-      fuel_use:
-        description: whether a plant's fuel use is read off the piecewise curve or a flat heat rate
-        key: plant
-        values: fuel_use_mode
+    properties:
+      plant:
+        commitment_mode:
+          description: whether a plant is committed unit by unit or dispatched freely
+          into: commitment_mode
+        fuel_use_mode:
+          description: >-
+            whether a plant's fuel use is read off the piecewise curve or a flat
+            heat rate
+          into: fuel_use_mode
 
     parameters:
       unit_size:
@@ -340,7 +341,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_cost:
         description: what starting one unit of capacity costs
         dims: [plant]
-        missing: neutral
+        missing: 0
       weight:
         description: how many real hours an hour of the representative day stands for
         dims: [hour]
@@ -445,49 +446,49 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
       committed_units_exist:
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: committed <= units
 
       thermal_ceiling:
         description: a committed unit produces no more than its available capacity
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: output <= committed * unit_size * availability
 
       thermal_floor:
         description: a committed unit produces no less than its minimum
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: output >= committed * unit_size * min_output
 
       variable_ceiling:
         description: a plant with no commitment produces no more than its available capacity
         dims: [plant, hour]
-        where: "commitment == free"
+        where: "plant[commitment_mode] == free"
         expression: output <= units * unit_size * availability
 
       commitment_tracks_starts:
         description: what is committed changes only by what starts and what shuts
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: committed - shift(committed, along=hour, offset=1, edge='wrap') == starting - shutting
 
       stay_up_once_started:
         description: a unit that started within the last six hours is still committed
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: committed >= started_recently
 
       stay_down_once_shut:
         description: a unit that shut within the last six hours is still down
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: units - committed >= shut_recently
 
       ramp_up:
         description: output rises no faster than the ramp allows, with extra room in the hour a unit starts
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: >-
           output - shift(output, along=hour, offset=1, edge='wrap')
           <= ramp * unit_size * (committed - starting)
@@ -496,7 +497,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
       ramp_down:
         dims: [plant, hour]
-        where: "commitment == unit"
+        where: "plant[commitment_mode] == unit"
         expression: >-
           shift(output, along=hour, offset=1, edge='wrap') - output
           <= ramp * unit_size * (committed - starting)
@@ -508,13 +509,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           fuel use is above every piece of the curve, so at the optimum it sits on
           the binding one, and the no-load intercept is charged per committed unit
         dims: [plant, segment, hour]
-        where: "fuel_use == curve"
+        where: "plant[fuel_use_mode] == curve"
         expression: burned >= fuel_slope * output + fuel_intercept * committed
 
       fuel_at_the_heat_rate:
         description: a plant with no curve burns fuel at a flat heat rate
         dims: [plant, hour]
-        where: "fuel_use == flat"
+        where: "plant[fuel_use_mode] == flat"
         expression: burned == heat_rate * output
 
       fuel_to_start:

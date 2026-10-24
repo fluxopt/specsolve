@@ -36,8 +36,8 @@ PyPSA minimum up and down times: a unit that has started must stay on, and one t
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{p}^{\mathrm{min,pu}}`$ | `p_min_pu` over $`\mathcal{G}`$ — share of capacity a committed unit must produce at least |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$, `neutral` where the data has no row — what bringing a unit up costs, once per start |
-| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$, `neutral` where the data has no row — what taking a unit down costs, once per stop |
+| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$, $`0`$ where the data has no row — what bringing a unit up costs, once per start |
+| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$, $`0`$ where the data has no row — what taking a unit down costs, once per stop |
 | $`\mathrm{min\_up\_time}`$ | `min_up_time` over $`\mathcal{G}`$ — how many snapshots a unit must stay on once it has started |
 | $`\mathrm{min\_down\_time}`$ | `min_down_time` over $`\mathcal{G}`$ — how many snapshots a unit must stay off once it has stopped |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
@@ -169,11 +169,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_up_cost:
         description: what bringing a unit up costs, once per start
         dims: [generator]
-        missing: neutral
+        missing: 0
       shut_down_cost:
         description: what taking a unit down costs, once per stop
         dims: [generator]
-        missing: neutral
+        missing: 0
       min_up_time:
         description: how many snapshots a unit must stay on once it has started
         dims: [generator]

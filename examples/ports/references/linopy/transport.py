@@ -10,11 +10,11 @@
 A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
-The line worth comparing is the nodal balance. The YAML groups by relations it
-declared over the dimensions — ``sum(p, over=generator, by=gen_bus[bus])``
+The line worth comparing is the nodal balance. The YAML groups by properties
+it declared on the dimensions — ``sum(p, over=generator, by=generator[bus])``
 — where this script builds the bus x generator and bus x line incidence
 matrices and multiplies through them. Both say Kirchhoff's current law; one
-says it as a relation, the other as linear algebra.
+says it as a property, the other as linear algebra.
 
 linopy's ``groupby`` (which ``monthly_budget.py`` uses) could carry the
 generator half, but not the flows: a bus no line enters vanishes from the
@@ -51,11 +51,14 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
     gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
-    for gen, bus in zip(tables['gen_bus']['generator'], tables['gen_bus']['bus'], strict=True):
+    for gen, bus in zip(tables['generator.bus']['generator'], tables['generator.bus']['bus'], strict=True):
         gen_at.loc[bus, gen] = 1.0
     flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
     for line, src, dst in zip(
-        tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
+        tables['line.from_bus']['line'],
+        tables['line.from_bus']['from_bus'],
+        tables['line.to_bus']['to_bus'],
+        strict=True,
     ):
         flow_in.loc[dst, line] += 1.0
         flow_in.loc[src, line] -= 1.0

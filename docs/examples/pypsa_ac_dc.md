@@ -28,11 +28,11 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}`$ — what a generator burns, and what its emissions are a property of |
-| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{gen\_carrier}: \mathcal{E} \to \mathcal{C}`$ — generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
-| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — passive AC lines, each joining two buses |
-| $`\mathcal{I}`$ | index $`i`$ — `link` with $`\mathrm{link\_from}: \mathcal{I} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{I} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{I} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{I} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{carrier}: \mathcal{E} \to \mathcal{C}`$ — what a generator burns, and what its emissions are a property of |
+| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{carrier}: \mathcal{E} \to \mathcal{C}`$ — generating units, each sitting on a bus and burning a carrier — two coordinates on one dimension, landing on two different axes |
+| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — passive AC lines, each joining two buses |
+| $`\mathcal{I}`$ | index $`i`$ — `link` with $`\mathrm{from\_bus}: \mathcal{I} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{I} \to \mathcal{B}`$ — controllable connections, each joining two buses |
 | $`\mathcal{Y}`$ | index $`y`$ — `cycle` — one independent loop per meshed sub-network |
 
 #### Parameters
@@ -50,7 +50,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{I}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_p\_max\_pu}`$ | `link_p_max_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry forwards |
 | $`\mathrm{link\_p\_min\_pu}`$ | `link_p_min_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry backwards, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
+| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, $`0`$ where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
 | $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
 
 #### Variables
@@ -59,7 +59,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{E}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E}`$ — generator capacity to hold, built on top of what already stands |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line[to_bus]` bus — not chosen, but whatever the voltage law leaves |
 | $`s^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — line capacity to build |
 | $`g`$ | `g` over $`\mathcal{T} \times \mathcal{I}`$ — flow on a link, signed towards the bus it delivers at — chosen, which is what makes it a link and not a line |
 | $`\mathit{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{I}`$ — link capacity to build |
@@ -143,7 +143,7 @@ g_{t,i} \ge \mathit{link\_p\_nom}_{i} \cdot \mathrm{link\_p\_min\_pu}_{i} \qquad
 **`nodal_balance`**
 
 ```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_from}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \,:\, \mathrm{link\_to}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \,:\, \mathrm{link\_from}(i) = b} g_{t,i} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{e \in \mathcal{E} \,:\, \mathrm{bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} f_{t,l} \right) + \sum_{i \in \mathcal{I} \,:\, \mathrm{to\_bus}(i) = b} g_{t,i} - \left( \sum_{i \in \mathcal{I} \,:\, \mathrm{from\_bus}(i) = b} g_{t,i} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`kirchhoff_voltage_law`**
@@ -155,7 +155,7 @@ g_{t,i} \ge \mathit{link\_p\_nom}_{i} \cdot \mathrm{link\_p\_min\_pu}_{i} \qquad
 **`co2_budget`**
 
 ```math
-\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E}} \frac{p_{t,e} \cdot \mathrm{co2\_per\_mwh}_{\mathrm{gen\_carrier}(e)}}{\mathrm{efficiency}_{e}} \le \mathrm{co2\_limit}
+\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E}} \frac{p_{t,e} \cdot \mathrm{co2\_per\_mwh}_{\mathrm{carrier}(e)}}{\mathrm{efficiency}_{e}} \le \mathrm{co2\_limit}
 ```
 
 </details>
@@ -200,31 +200,28 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: one independent loop per meshed sub-network
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      gen_carrier:
-        description: the carrier a generator burns
-        key: generator
-        values: carrier
-      line_from:
-        description: the bus a line leaves
-        key: line
-        values: bus
-      line_to:
-        description: the bus a line arrives at
-        key: line
-        values: bus
-      link_from:
-        description: the bus a link leaves
-        key: link
-        values: bus
-      link_to:
-        description: the bus a link arrives at
-        key: link
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+        carrier:
+          description: the carrier a generator burns
+          into: carrier
+      line:
+        from_bus:
+          description: the bus a line leaves
+          into: bus
+        to_bus:
+          description: the bus a line arrives at
+          into: bus
+      link:
+        from_bus:
+          description: the bus a link leaves
+          into: bus
+        to_bus:
+          description: the bus a link arrives at
+          into: bus
 
     parameters:
       load:
@@ -265,7 +262,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the cycle basis, as a sparse table of impedance times direction. A line
           may belong to several cycles, so this cannot be a coordinate.
         dims: [cycle, line]
-        missing: neutral
+        missing: 0
       co2_limit:
         description: emissions the whole horizon is allowed
         dims: []
@@ -283,7 +280,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           lower: p_nom_min
       f:
         description: >-
-          flow on a line, signed towards its `line_to` bus — not chosen, but whatever
+          flow on a line, signed towards its `line[to_bus]` bus — not chosen, but whatever
           the voltage law leaves
         dims: [snapshot, line]
       s_nom:
@@ -327,9 +324,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
-          + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
+          + sum(g, over=link, by=link[to_bus]) - sum(g, over=link, by=link[from_bus])
           == load
 
       kirchhoff_voltage_law:
@@ -344,7 +341,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           horizon's total stays inside the budget
         dims: []
         expression: >-
-          sum(sum(p * at(co2_per_mwh, by=gen_carrier[carrier]) / efficiency, over=generator), over=snapshot)
+          sum(sum(p * at(co2_per_mwh, by=generator[carrier]) / efficiency, over=generator), over=snapshot)
           <= co2_limit
 
     objective:
@@ -394,7 +391,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         generators = (
             tables['generator']
             .set_index('generator')
-            .join([tables['gen_bus'].set_index('generator'), tables['gen_carrier'].set_index('generator')])
+            .join([tables['generator.bus'].set_index('generator'), tables['generator.carrier'].set_index('generator')])
         )
         p_max_pu = _wide(tables['p_max_pu'], 'generator')
         for g, row in generators.iterrows():
@@ -412,8 +409,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
                 p_max_pu=p_max_pu[g],
             )
 
-        bus0_of = tables['line_from'].set_index('line')['bus']
-        bus1_of = tables['line_to'].set_index('line')['bus']
+        bus0_of = tables['line.from_bus'].set_index('line')['from_bus']
+        bus1_of = tables['line.to_bus'].set_index('line')['to_bus']
         for line in tables['line']['line']:
             bus0, bus1 = bus0_of[line], bus1_of[line]
             n.add(
@@ -428,8 +425,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
                 capital_cost=_series(tables['line_capital_cost'], 'line')[line],
             )
 
-        bus0_of = tables['link_from'].set_index('link')['bus']
-        bus1_of = tables['link_to'].set_index('link')['bus']
+        bus0_of = tables['link.from_bus'].set_index('link')['from_bus']
+        bus1_of = tables['link.to_bus'].set_index('link')['to_bus']
         for link in tables['link']['link']:
             bus0, bus1 = bus0_of[link], bus1_of[link]
             n.add(
@@ -462,7 +459,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **An emission rate is a property of the carrier, and `at()` is how a generator
 reads it.** `co2_per_mwh` is dimensioned over `carrier` alone: six generators,
-two rates. `at(co2_per_mwh, by=gen_carrier[carrier])` walks the map backwards to put
+two rates. `at(co2_per_mwh, by=generator[carrier])` walks the map backwards to put
 the right rate beside each generator's output. PyPSA does the same join
 through `n.carriers`.
 
@@ -474,7 +471,7 @@ outright, so the recorded figure is `n.objective + n.objective_constant`.
 
 ## What it exercises
 
-Two relations keyed over one dimension onto different dimensions, and `at()` reading a
+Two properties of one dimension that map into different dimensions, and `at()` reading a
 parameter that lives only on the coarse end. Beside them, the shapes the
 models above already established: `sum(by=)` on both ends of two different branch
 dimensions, and a cycle basis as a sparse `(cycle, line)` parameter.

@@ -141,15 +141,15 @@ absence is pushed into the operand first
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row const piece |
 | `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `missing: neutral` |
+| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, its `missing:` number at every absent slot |
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
 | `Multiply` | `x * y` | one-to-one | a join on the shared dims, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic piece |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
-| `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dims traded for the added ones, and a bare relation fans a member out to every group |
-| `Join` | `at(x, by=r[d])` | one-to-one | the relation's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
+| `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=s[p])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the subject's table on the columns the join matches, the dropped dims traded for the added ones, and a set read by its members fans a member out to every group |
+| `Join` | `at(x, by=s[p])` | one-to-one | the subject's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the piece lists concatenated |
@@ -160,7 +160,7 @@ upstream. The engine raises `DataError` about the data, and `SpecsolveError`
 for the one construct the language accepts and this lane cannot build (#1137).
 
 **Neither reduction aggregates.** A `Sum` drops columns or, through a
-relation, swaps them, and a `WindowSum` replicates rows. Every duplicate collapses once, in the
+set or a property, swaps them, and a `WindowSum` replicates rows. Every duplicate collapses once, in the
 terminal `SUM(coeff) GROUP BY row, col` at assembly.
 
 ## The relational lane
@@ -214,7 +214,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_sweep.py` | `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable frames built so far |
 | `_engine/compiler.py` | plan → lazy queries |
-| `_engine/relations.py` | a relation's table as a walk reads it |
+| `_engine/relations.py` | a set's or a property's table as a walk reads it; several properties of one subject read as the inner join of their tables |
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/predicates.py` | a `where:` mask as a boolean query |
 | `_engine/pieces.py` | the additive pieces an expression compiles to |

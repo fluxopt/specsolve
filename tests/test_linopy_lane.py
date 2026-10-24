@@ -123,7 +123,7 @@ class TestMasterCoords:
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 'neutral'}})
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 0}})
         labels = _master_coords(schema, {'x': ['z', 'a', 'm'], 'a': {'z': 1.0}})['x']
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
@@ -144,7 +144,7 @@ class TestMasterCoords:
             'a bare list': days,
         }
         schema = _schema(
-            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 'neutral'}}
+            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 0}}
         )
 
         labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
@@ -339,16 +339,6 @@ def _has_note(exc: BaseException, substring: str) -> bool:
     return any(substring in n for n in getattr(exc, '__notes__', []))
 
 
-#: A constant side the data does not cover, which only the *build* can see: the
-#: rows exist, the parameter has no row at one of them, and the fill would be
-#: the bound. The declaration it names is reached through `note()` rather than
-#: written into the message.
-_UNCOVERED_BOUND = (
-    "parameters:\n  cap: {dims: [g], missing: neutral}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
-)
-_NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
-
-
 @pytest.mark.parametrize(
     ('tail', 'data', 'error', 'match', 'context'),
     [
@@ -383,14 +373,6 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             'decides nothing',
             "Constraint 'c'",
             id='a-comparison-with-no-variable-in-it',
-        ),
-        pytest.param(
-            _UNCOVERED_BOUND,
-            _NO_ROWS,
-            DataError,
-            'fewer coordinates than the rows built here',
-            "while building constraint 'c'",
-            id='a-constant-side-the-data-misses-so-only-the-build-sees-it',
         ),
     ],
 )
@@ -431,7 +413,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
-              gate: {dims: [f], dtype: bool, missing: neutral}
+              gate: {dims: [f], dtype: bool, missing: false}
               relmax: {dims: [f]}
             variables:
               x: {dims: [f], bounds: {lower: 0, upper: 100}}
@@ -486,45 +468,6 @@ def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
         assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
 
-def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml_file):
-    """A bound the data does not cover is a ``DataError`` at build, as on the native lane (#313).
-
-    A coordinate the variable does not occupy needs no bound, so the gap is
-    refused and the masked one accepted.
-    """
-    spec = yaml_file("""
-        dimensions:
-          f: {dtype: str}
-        parameters:
-          ub: {dims: [f], missing: neutral}
-          live: {dims: [f], dtype: bool, missing: neutral}
-        variables:
-          x: {dims: [f], bounds: {lower: 0, upper: ub}}
-        constraints:
-          c:
-            dims: [f]
-            expression: x <= 100
-        objective:
-          sense: maximize
-          expression: sum(x)
-        """)
-    data = {
-        'f': ['a', 'b'],
-        'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),
-        'live': pd.Series([True], index=pd.Index(['a'], name='f')),
-    }
-
-    with pytest.raises(DataError, match='NULL bounds'):
-        specsolve_linopy.build(spec, data)
-
-    masked = yaml_file(
-        spec.read_text().replace('{dims: [f], bounds:', '{dims: [f], where: live, bounds:'),
-        'masked.yaml',
-    )
-    built = specsolve_linopy.build(masked, data)
-    assert 'x' in built.variables
-
-
 # ---------------------------------------------------------------------------
 # named expressions: one reader per lane, one answer (#562)
 # ---------------------------------------------------------------------------
@@ -569,11 +512,11 @@ EXPRESSION_DATA = {
 
 
 #: ``EXPRESSION_YAML`` with ``p`` masked out at the generator whose ``p_max`` is
-#: zero and declared ``missing: neutral``, plus one entry only a nonlinear read can
+#: zero and declared ``missing: 0``, plus one entry only a nonlinear read can
 #: tell apart from an affine one.
 ZERO_ABSENCE_YAML = EXPRESSION_YAML.replace(
     '    bounds: {lower: 0, upper: p_max}\n',
-    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: neutral\n',
+    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: 0\n',
 ).replace(
     '  spend: sum(p * cost, over=generator)\n',
     '  spend: sum(p * cost, over=generator)\n  grown: sum(0.5 ** p, over=generator)\n',
@@ -583,7 +526,7 @@ ZERO_ABSENCE_DATA = {**EXPRESSION_DATA, 'p_max': pd.Series({'g1': 200.0, 'g2': 0
 
 
 def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_read(yaml_file):
-    """`missing: neutral` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
+    """`missing: 0` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
     path = yaml_file(ZERO_ABSENCE_YAML, 'zero_absence.yaml')
     with differential(path, ZERO_ABSENCE_DATA) as run:
         tidy = run.result.evaluate('grown')
@@ -869,7 +812,6 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
     refuse, in the same sentence.
     """
     import specsolve as sps
-    from specsolve.errors import DataError
 
     spec = {
         'dimensions': {'g': {}},

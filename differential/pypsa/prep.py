@@ -121,15 +121,15 @@ def varying(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
     return table.astype({DIM[component]: str, 'value': float})
 
 
-def relation(n: pypsa.Network, component: str, attr: str, into: str = 'bus') -> pd.DataFrame:
-    """What a component's *attr* names, as the relation the file declares over it *into* a dimension.
+def prop(n: pypsa.Network, component: str, attr: str) -> pd.DataFrame:
+    """What a component's *attr* names, as the table of the property the file declares over the component's dimension.
 
     The file refuses a component with no row, so a blank is a label of its
     own, as PyPSA reads a blank carrier: one that matches no other.
     """
     table = first_scenario(n.static(component))
     named = table[attr].astype(str) if attr in table.columns else pd.Series('', index=table.index, dtype=str)
-    return pd.DataFrame({DIM[component]: table.index.astype(str), into: named.to_numpy()})
+    return pd.DataFrame({DIM[component]: table.index.astype(str), attr: named.to_numpy()})
 
 
 def per_component(component: str, values: pd.Series, dtype: object = float) -> pd.DataFrame:
@@ -274,8 +274,8 @@ def ports(n: pypsa.Network, component: str) -> dict[str, object]:
     prefix = component
     return {
         port_dim: pl.Series(port_dim, list(pd.unique(once[port_dim])), dtype=pl.String),
-        f'{prefix}_output_{dim}': once[[port_dim, dim]].reset_index(drop=True),
-        f'{prefix}_output_bus': once[[port_dim, 'bus']].reset_index(drop=True),
+        f'{port_dim}.{dim}': once[[port_dim, dim]].reset_index(drop=True),
+        f'{port_dim}.bus': once[[port_dim, 'bus']].reset_index(drop=True),
         f'{prefix}_output_delay': every[[*keys, 'delay']].rename(columns={'delay': 'value'}),
         f'{prefix}_output_cyclic_delay': every[[*keys, 'cyclic_delay']].rename(columns={'cyclic_delay': 'value'}),
         f'{prefix}_{"efficiency" if component == "Link" else "rate"}': pd.concat(coefficients, ignore_index=True),
@@ -803,13 +803,13 @@ def security(n: pypsa.Network, outages: object, multi: bool) -> dict[str, object
     labels = [outage_label(c, name) for c, name in taken]
     return {
         'outage': pl.Series('outage', labels, dtype=pl.String),
-        'Outage_line': pd.DataFrame(
+        'outage.line': pd.DataFrame(
             {
                 'outage': [outage_label(c, x) for c, x in taken if c == 'Line'],
                 'line': [x for c, x in taken if c == 'Line'],
             }
         ),
-        'Outage_transformer': pd.DataFrame(
+        'outage.transformer': pd.DataFrame(
             {
                 'outage': [outage_label(c, x) for c, x in taken if c == 'Transformer'],
                 'transformer': [x for c, x in taken if c == 'Transformer'],
@@ -853,8 +853,8 @@ def branches(n: pypsa.Network) -> dict[str, object]:
             f'{p}_capital_cost': capital_cost(n, component),
             f'{p}_s_nom_set': static(n, component, 's_nom_set').dropna(),
             f'{p}_s_set': varying(n, component, 's_set').dropna(),
-            f'{p}_bus0': relation(n, component, 'bus0'),
-            f'{p}_bus1': relation(n, component, 'bus1'),
+            f'{DIM[component]}.bus0': prop(n, component, 'bus0'),
+            f'{DIM[component]}.bus1': prop(n, component, 'bus1'),
             **standing(n, component),
         }
     return out
@@ -893,7 +893,7 @@ def periods(n: pypsa.Network, multi: bool) -> dict[str, object]:
         'period_weight_years': pd.DataFrame(
             {'period': labels, 'value': period_weights(n, 'years').to_numpy() if multi else [1.0]}
         ),
-        'snapshot_period': pd.DataFrame({'snapshot': timesteps(n), 'period': period_of(n)}),
+        'snapshot.period': pd.DataFrame({'snapshot': timesteps(n), 'period': period_of(n)}),
     }
 
 
@@ -909,18 +909,18 @@ def carriers(n: pypsa.Network, multi: bool) -> dict[str, object]:
     table = n.carriers[['max_growth', 'max_relative_growth']]
     if table.index.nlevels > 1:
         table = table.groupby(level='name').min()
-    relations = {
-        f'{component}_carrier': relation(n, component, 'carrier', into='carrier')
+    carriers_of = {
+        f'{DIM[component]}.carrier': prop(n, component, 'carrier')
         for component in ('Generator', 'Link', 'Process', 'StorageUnit', 'Store', 'Line')
     }
-    named = set().union(*(set(frame['carrier']) for frame in relations.values()))
+    named = set().union(*(set(frame['carrier']) for frame in carriers_of.values()))
     labels = list(table.index.astype(str)) + sorted(named - set(table.index.astype(str)))
     growth = table['max_growth']
     relative = table['max_relative_growth'].set_axis(table.index.astype(str))
     bounded = growth[(growth < float('inf')) & multi] if multi else growth.iloc[:0]
     return {
         'carrier': pl.Series('carrier', labels, dtype=pl.String),
-        **relations,
+        **carriers_of,
         'Carrier_max_growth': pd.DataFrame(
             {'carrier': bounded.index.astype(str), 'value': bounded.to_numpy(dtype=float)}
         ),
@@ -1191,15 +1191,15 @@ def sources(n: pypsa.Network, optimize: dict | None = None, outages: object = No
         **scenarios(n),
         **periods(n, multi),
         **carriers(n, multi),
-        'Generator_bus': relation(n, 'Generator', 'bus'),
+        'generator.bus': prop(n, 'Generator', 'bus'),
         'Generator_sign': per_component('Generator', first_scenario(n.generators['sign'])),
-        'Link_bus0': relation(n, 'Link', 'bus0'),
-        'Load_bus': relation(n, 'Load', 'bus'),
+        'link.bus0': prop(n, 'Link', 'bus0'),
+        'load.bus': prop(n, 'Load', 'bus'),
         'Load_sign': per_component('Load', first_scenario(loads['sign'])),
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
         'Load_p_set': varying(n, 'Load', 'p_set'),
-        'StorageUnit_bus': relation(n, 'StorageUnit', 'bus'),
-        'Store_bus': relation(n, 'Store', 'bus'),
+        'storage_unit.bus': prop(n, 'StorageUnit', 'bus'),
+        'store.bus': prop(n, 'Store', 'bus'),
         'snapshot_weightings_objective': weighting(n, 'objective'),
         'snapshot_weightings_stores': weighting(n, 'stores'),
         'snapshot_weightings_generators': weighting(n, 'generators'),

@@ -34,10 +34,10 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
-| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{build\_period}: \mathcal{G} \to \mathcal{E},\ \mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the axis capacity is built along |
-| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{gen\_carrier}: \mathcal{G} \to \mathcal{C}`$ — what a generator burns, and what a growth limit is a property of |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_carrier}: \mathcal{G} \to \mathcal{C},\ \mathrm{build\_period}: \mathcal{G} \to \mathcal{E}`$ — generating units, each built in one period and standing from then on |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
+| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{period}: \mathcal{G} \to \mathcal{E},\ \mathrm{period}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the axis capacity is built along |
+| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{carrier}: \mathcal{G} \to \mathcal{C}`$ — what a generator burns, and what a growth limit is a property of |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{carrier}: \mathcal{G} \to \mathcal{C},\ \mathrm{period}: \mathcal{G} \to \mathcal{E}`$ — generating units, each built in one period and standing from then on |
 
 #### Parameters
 
@@ -91,13 +91,13 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 **`new_capacity`**
 
 ```math
-\mathit{new\_capacity}_{e} = \sum_{g \in \mathcal{G} \,:\, \mathrm{build\_period}(g) = e} p^{\mathrm{nom}}_{g} \cdot \mathrm{capped\_carrier}_{\mathrm{gen\_carrier}(g)} \qquad \forall\, e \in \mathcal{E}
+\mathit{new\_capacity}_{e} = \sum_{g \in \mathcal{G} \,:\, \mathrm{period}(g) = e} p^{\mathrm{nom}}_{g} \cdot \mathrm{capped\_carrier}_{\mathrm{carrier}(g)} \qquad \forall\, e \in \mathcal{E}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}
+\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period}(t)} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}
 ```
 
 #### Subject to
@@ -105,7 +105,7 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 **`within_capacity`**
 
 ```math
-p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
 **`power_balance`**
@@ -151,19 +151,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: generating units, each built in one period and standing from then on
         dtype: str
 
-    relations:
-      gen_carrier:
-        description: the carrier a generator burns
-        key: generator
-        values: carrier
-      build_period:
-        description: the period a generator is first built in, and so counted as new in
-        key: generator
-        values: period
-      period_of:
-        description: the investment period a snapshot falls in
-        key: snapshot
-        values: period
+    properties:
+      generator:
+        carrier:
+          description: the carrier a generator burns
+          into: carrier
+        period:
+          description: the period a generator is first built in, and so counted as new in
+          into: period
+      snapshot:
+        period:
+          description: the investment period a snapshot falls in
+          into: period
 
     parameters:
       load:
@@ -203,7 +202,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: >-
           capacity of the capped carrier first standing in a period: each generator's
           capacity counted once, in the period it is built, and never again
-        expression: sum(p_nom * at(capped_carrier, by=gen_carrier[carrier]), over=generator, by=build_period[period])
+        expression: sum(p_nom * at(capped_carrier, by=generator[carrier]), over=generator, by=generator[period])
 
     variables:
       p:
@@ -224,7 +223,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           a generator produces no more than the capacity built for it, and nothing in
           a period it does not stand in
         dims: [snapshot, generator]
-        expression: p <= p_nom * at(activity, by=period_of[period])
+        expression: p <= p_nom * at(activity, by=snapshot[period])
 
       power_balance:
         dims: [snapshot]
@@ -247,7 +246,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         operating and capacity cost, each discounted by the weight of the period it
         falls in — capacity once per period the generator stands in
       expression: >-
-        sum(p * opex * at(period_weight, by=period_of[period]))
+        sum(p * opex * at(period_weight, by=snapshot[period]))
         + sum(p_nom * capex * activity * period_weight)
     ```
 
@@ -269,7 +268,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         ``tables`` is the same mapping the specsolve call attaches as ``sources``.
 
         ``growth_limit=False`` drops the two carrier attributes, which is how
-        ``main`` measures what the limit is worth. The port's ``build_period`` relation
+        ``main`` measures what the limit is worth. The port's ``generator[period]`` property
         is PyPSA's ``build_year``; its ``activity`` table is what ``build_year`` and
         ``lifetime`` derive.
         """
@@ -277,7 +276,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         snapshots: pd.DataFrame = tables['snapshot']
         n.set_snapshots(
             pd.MultiIndex.from_arrays(
-                [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+                [tables['snapshot.period'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
             )
         )
         n.investment_periods = list(tables['period']['period'])
@@ -299,9 +298,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
             'Generator',
             generators.index,
             bus='hub',
-            carrier=tables['gen_carrier'].set_index('generator')['carrier'],
+            carrier=tables['generator.carrier'].set_index('generator')['carrier'],
             p_nom_extendable=True,
-            build_year=tables['build_period'].set_index('generator')['period'],
+            build_year=tables['generator.period'].set_index('generator')['period'],
             lifetime=LIFETIME,
             p_nom_max=tables['p_nom_max'].set_index('generator')['value'],
             marginal_cost=tables['opex'].set_index('generator')['value'],
@@ -338,4 +337,4 @@ write it differently.
 
 `shift` over an investment-period axis rather than a snapshot one, a named
 expression used twice in one row, and a capacity grouped onto the period it is
-built in through a `build_period` relation.
+built in through the `generator[period]` property.

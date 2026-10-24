@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, in_memory
-from specsolve._messages import coordinate_text, missing_row_message
+from specsolve._messages import PARAMETER_WAYS, coordinate_text, missing_row_message, table_noun, table_ways
 from specsolve._names import VALUE
 from specsolve.errors import DataError
 
@@ -29,7 +29,8 @@ class AttachedSources:
     """The data a program is built against, after attaching.
 
     ``parameters`` are tidy ``(dims…, value)``, a parameter that declares a
-    value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    value for a missing row filled with it, unless the value is ``0`` or
+    ``false`` ([`Scope.reads_zero`][specsolve._engine.scope.Scope.reads_zero]); ``dimensions`` are ``(val, ord)``;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
@@ -60,8 +61,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     [`in_memory`][], since every read holds one table whole.
 
     Raises:
-        DataError: A parameter or a relation that refuses a missing row has none
-            at some coordinate.
+        DataError: A parameter, a set or a property of a dimension that refuses
+            a missing row has none at some coordinate.
     """
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
@@ -81,17 +82,18 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         parameters[name] = frame.with_columns(casts) if casts else frame
 
     for name, relation in program.relations.items():
-        if relation.missing == 'refused':
+        if relation.missing == 'refused' and relation.subject not in program.relations:
             key = relation.key or relation.roles
-            _refuse_a_missing_row(
-                'relation', name, relations[name].select(*key).unique(), key, relation.dim, dimensions
-            )
+            owner, ways = table_noun(name, relation), table_ways(relation)
+            _refuse_a_missing_row(owner, ways, relations[name].select(*key).unique(), key, relation.dim, dimensions)
     given: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        if p.missing in ('absent', 'neutral', None):
+        if p.missing == 'absent' or p.missing == 0:
             continue
         if p.missing == 'refused':
-            _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
+            _refuse_a_missing_row(
+                f"parameter '{name}'", PARAMETER_WAYS, parameters[name], p.dims, lambda d: d, dimensions
+            )
             continue
         frame = parameters[name]
         if frame.height < math.prod(dimensions[d].height for d in p.dims):
@@ -121,8 +123,8 @@ def _product(
 
 
 def _refuse_a_missing_row(
-    kind: str,
-    name: str,
+    owner: str,
+    ways: str,
     rows: pl.DataFrame,
     columns: tuple[str, ...],
     dim: Callable[[str], str],
@@ -140,7 +142,7 @@ def _refuse_a_missing_row(
         return
     gaps = _product(columns, dim, dimensions).join(rows.lazy().select(*columns), on=list(columns), how='anti')
     first = gaps.head(1).pipe(collected).row(0, named=True)
-    raise DataError(missing_row_message(kind, name, coordinate_text(first), missing))
+    raise DataError(missing_row_message(owner, coordinate_text(first), missing, ways))
 
 
 def _filled(

@@ -28,9 +28,9 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
 
 #### Parameters
 
@@ -81,7 +81,7 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 **`nodal_balance`**
 
 ```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{e \in \mathcal{E} \,:\, \mathrm{bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 </details>
@@ -115,19 +115,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: controllable connections, each joining two buses
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      link_from:
-        description: the bus a link leaves
-        key: link
-        values: bus
-      link_to:
-        description: the bus a link arrives at
-        key: link
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      link:
+        from_bus:
+          description: the bus a link leaves
+          into: bus
+        to_bus:
+          description: the bus a link arrives at
+          into: bus
 
     parameters:
       p_nom:
@@ -174,9 +173,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           snapshot to have taken anything in.
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link_to[bus])
-          - sum(g, over=link, by=link_from[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link[to_bus])
+          - sum(g, over=link, by=link[from_bus])
           == load
 
     objective:
@@ -215,7 +214,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -224,8 +223,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Link',
             links.index,
-            bus0=tables['link_from'].set_index('link')['bus'],
-            bus1=tables['link_to'].set_index('link')['bus'],
+            bus0=tables['link.from_bus'].set_index('link')['from_bus'],
+            bus1=tables['link.to_bus'].set_index('link')['to_bus'],
             p_nom=tables['link_p_nom'].set_index('link')['value'],
             efficiency=tables['efficiency'].set_index('link')['value'],
             delay=tables['delay'].set_index('link')['value'],

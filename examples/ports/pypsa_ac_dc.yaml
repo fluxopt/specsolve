@@ -32,31 +32,28 @@ dimensions:
     description: one independent loop per meshed sub-network
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  gen_carrier:
-    description: the carrier a generator burns
-    key: generator
-    values: carrier
-  line_from:
-    description: the bus a line leaves
-    key: line
-    values: bus
-  line_to:
-    description: the bus a line arrives at
-    key: line
-    values: bus
-  link_from:
-    description: the bus a link leaves
-    key: link
-    values: bus
-  link_to:
-    description: the bus a link arrives at
-    key: link
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+    carrier:
+      description: the carrier a generator burns
+      into: carrier
+  line:
+    from_bus:
+      description: the bus a line leaves
+      into: bus
+    to_bus:
+      description: the bus a line arrives at
+      into: bus
+  link:
+    from_bus:
+      description: the bus a link leaves
+      into: bus
+    to_bus:
+      description: the bus a link arrives at
+      into: bus
 
 parameters:
   load:
@@ -97,7 +94,7 @@ parameters:
       the cycle basis, as a sparse table of impedance times direction. A line
       may belong to several cycles, so this cannot be a coordinate.
     dims: [cycle, line]
-    missing: neutral
+    missing: 0
   co2_limit:
     description: emissions the whole horizon is allowed
     dims: []
@@ -115,7 +112,7 @@ variables:
       lower: p_nom_min
   f:
     description: >-
-      flow on a line, signed towards its `line_to` bus — not chosen, but whatever
+      flow on a line, signed towards its `line[to_bus]` bus — not chosen, but whatever
       the voltage law leaves
     dims: [snapshot, line]
   s_nom:
@@ -159,9 +156,9 @@ constraints:
       meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
-      + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
+      + sum(g, over=link, by=link[to_bus]) - sum(g, over=link, by=link[from_bus])
       == load
 
   kirchhoff_voltage_law:
@@ -176,7 +173,7 @@ constraints:
       horizon's total stays inside the budget
     dims: []
     expression: >-
-      sum(sum(p * at(co2_per_mwh, by=gen_carrier[carrier]) / efficiency, over=generator), over=snapshot)
+      sum(sum(p * at(co2_per_mwh, by=generator[carrier]) / efficiency, over=generator), over=snapshot)
       <= co2_limit
 
 objective:

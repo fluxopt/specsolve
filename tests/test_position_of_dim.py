@@ -18,7 +18,7 @@ import yaml as pyyaml
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from tests.conftest import EXAMPLES_DIR, by_coord, relation, schema_of
+from tests.conftest import EXAMPLES_DIR, by_coord, prop, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -206,7 +206,7 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
 
 
 # ---------------------------------------------------------------------------
-# by=relation — the boundary of each group
+# within=property — the boundary of each group
 # ---------------------------------------------------------------------------
 
 #: Irregular on purpose: two snapshots in the first period, three in the second,
@@ -220,8 +220,9 @@ dimensions:
   snapshot: {dtype: int, ordered: true}
   period: {dtype: int, ordered: true}
 
-relations:
-  period_of: {key: snapshot, values: period, missing: absent}
+properties:
+  snapshot:
+    period: {into: period, missing: absent}
 
 parameters:
   price: {dims: [snapshot]}
@@ -242,15 +243,15 @@ objective:
 
 
 def _grouped_sources():
-    """One mapping both lanes take, the relation arriving as a column of the index.
+    """One mapping both lanes take, the property arriving as its own table.
 
-    Arrow tables rather than pandas: a partial relation read out of a pandas frame
+    Arrow tables rather than pandas: a partial property read out of a pandas frame
     arrives as ``float64`` beside an ``i64`` target, which is an attaching question
     of its own and not the one under test here.
     """
     return {
         'snapshot': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS}),
-        'period_of': relation('snapshot', 'period', GROUPED_SNAPSHOTS, GROUPED_PERIODS),
+        'snapshot.period': prop('snapshot', 'period', GROUPED_SNAPSHOTS, GROUPED_PERIODS),
         'period': pl.DataFrame({'period': [0, 1]}),
         'price': pl.DataFrame({'snapshot': GROUPED_SNAPSHOTS, 'value': [1.0] * len(GROUPED_SNAPSHOTS)}),
     }
@@ -270,7 +271,7 @@ def _masked(where: str) -> list[int]:
 
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
-    assert _masked('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
+    assert _masked('position(snapshot, within=snapshot[period]) == 0') == [10, 20], (
         "each period's first snapshot, not just the horizon's"
     )
     assert _masked('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
@@ -282,7 +283,7 @@ def test_a_negative_position_is_each_group_s_last():
     With periods of different lengths there is no single position that is the
     last of both.
     """
-    assert _masked('position(snapshot, within=period_of[period]) == -1') == [11, 22]
+    assert _masked('position(snapshot, within=snapshot[period]) == -1') == [11, 22]
 
 
 def test_a_comparator_reads_the_same_grouped_as_ungrouped():
@@ -293,24 +294,24 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     wraps to a huge positive number instead — which `==` cannot see and every
     other comparator reads backwards.
     """
-    assert _masked('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
+    assert _masked('position(snapshot, within=snapshot[period]) >= 1') == [11, 21, 22], (
         "everything from each period's second snapshot on"
     )
-    assert _masked('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
+    assert _masked('position(snapshot, within=snapshot[period]) < 1') == [10, 20], 'and its complement'
 
 
 @pytest.mark.parametrize(
     'where',
     [
-        pytest.param('position(snapshot, within=period_of[period]) == 0', id='first'),
-        pytest.param('position(snapshot, within=period_of[period]) == -1', id='last'),
-        pytest.param('position(snapshot, within=period_of[period]) >= 0', id='everything'),
+        pytest.param('position(snapshot, within=snapshot[period]) == 0', id='first'),
+        pytest.param('position(snapshot, within=snapshot[period]) == -1', id='last'),
+        pytest.param('position(snapshot, within=snapshot[period]) >= 0', id='everything'),
     ],
 )
 def test_a_coordinate_in_no_group_has_no_boundary(where):
     """Snapshot 99 maps nowhere, so no group's boundary is its own.
 
-    The same reading a null relation value gets everywhere else — it belongs to
+    The same reading a missing property row gets everywhere else — it belongs to
     no group, so `sum(by=)` places its terms nowhere and this places no row.
     """
     assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
@@ -323,7 +324,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    spec = MASK.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
+    spec = MASK.replace('WHERE', 'position(snapshot, within=snapshot[period]) == 2')
     path = tmp_path / 'spec.yaml'
     path.write_text(spec)
     sources = _grouped_sources()
@@ -340,35 +341,36 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 @pytest.mark.parametrize(
     ('by', 'match'),
     [
-        pytest.param('price', r'position\(within=price\[\.\.\.\]\) does not name a relation', id='by-a-parameter'),
-        pytest.param('period', r"'period' is a dimension, not a relation", id='by-a-dimension'),
-        pytest.param('nowhere', r'position\(within=nowhere\[\.\.\.\]\) does not name a relation', id='by-nothing'),
+        pytest.param(
+            'price', r'position\(within=price\[\.\.\.\]\) does not name a set or a dimension', id='by-a-parameter'
+        ),
+        pytest.param('period', r"'period' is a dimension with no properties", id='by-a-dimension-with-no-properties'),
+        pytest.param(
+            'nowhere', r'position\(within=nowhere\[\.\.\.\]\) does not name a set or a dimension', id='by-nothing'
+        ),
     ],
 )
-def test_by_takes_a_relation(by, match):
-    """`within=` names a relation and its columns, as `by=` does in `sum(by=)` and `at(by=)`, or it is nothing."""
+def test_within_takes_a_subject_with_properties(by, match):
+    """`within=` names a subject and its properties, as `by=` does in `sum(by=)` and `at(by=)`, or it is nothing."""
     spec = MASK.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
     with pytest.raises(LanguageError, match=match):
         schema_of(spec)
 
 
-def test_a_relation_over_another_dimension_carries_no_position():
-    """Grouping needs a relation over the dimension being counted.
+def test_a_property_of_another_dimension_carries_no_position():
+    """Grouping needs a subject with a member over the dimension being counted.
 
-    A relation over something else names groups no row of this dimension is in,
+    A property of something else names groups no row of this dimension is in,
     so there is no position within a group for the clause to be about.
     """
     spec = (
-        MASK.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
+        MASK.replace('WHERE', 'position(snapshot, within=plant[period]) == 0')
         .replace(
             '  period: {dtype: int, ordered: true}', '  period: {dtype: int, ordered: true}\n  plant: {dtype: str}'
         )
-        .replace(
-            '  period_of: {key: snapshot, values: period, missing: absent}',
-            '  period_of: {key: snapshot, values: period, missing: absent}\n  plant_period: {key: plant, values: period}',
-        )
+        .replace('properties:\n', 'properties:\n  plant:\n    period: period\n')
     )
-    with pytest.raises(LanguageError, match=r"'plant_period' has no key column over 'snapshot'"):
+    with pytest.raises(LanguageError, match=r"'plant' has no member over 'snapshot'"):
         schema_of(spec)
 
 
@@ -390,7 +392,7 @@ def _seasons_sources():
     snapshots = [1, 2, 3, 4, 5, 6, 7]
     return {
         'snapshot': pl.DataFrame({'snapshot': snapshots}),
-        'season_of': relation('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3),
+        'snapshot.season': prop('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3),
         'season': pl.DataFrame({'season': ['winter', 'summer']}),
         'inflow': pl.DataFrame({'snapshot': snapshots, 'value': [0.0, 10.0, 0.0, 0.0, 0.0, 6.0, 0.0]}),
         'price': pl.DataFrame({'snapshot': snapshots, 'value': [1.0, 2.0, 5.0, 3.0, 4.0, 1.0, 2.0]}),
@@ -425,8 +427,9 @@ dimensions:
   snapshot: {dtype: int, ordered: true}
   season: {dtype: str}
 
-relations:
-  season_of: {key: snapshot, values: season, missing: absent}
+properties:
+  snapshot:
+    season: {into: season, missing: absent}
 
 parameters:
   inflow: {dims: [snapshot]}
@@ -457,7 +460,7 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
     Bare, the vacated position is absent and takes its row with it, and with
     `by=` the position vacated is each *season's* first rather than the axis's.
     """
-    spec = _partitioned('within=season_of[season]')
+    spec = _partitioned('within=snapshot[season]')
     with differential(spec, _seasons_sources()) as run:
         assert run.result.is_ok, 'both lanes reach the same answer with two rows missing from it'
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
@@ -467,7 +470,7 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
 
 def test_a_filled_partitioned_edge_builds_every_row():
     """`edge=0` per group: the row survives and its first snapshot starts empty."""
-    spec = _partitioned('edge=0, within=season_of[season]')
+    spec = _partitioned('edge=0, within=snapshot[season]')
     with differential(spec, _seasons_sources()) as run:
         held = by_coord(run.result, 'soc', 'snapshot')
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
@@ -486,20 +489,20 @@ def test_the_axis_wrap_is_a_different_model():
         held = by_coord(run.result, 'soc', 'snapshot')
     assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
 
-    with differential(_partitioned("edge='wrap', within=season_of[season]"), _seasons_sources()) as run:
+    with differential(_partitioned("edge='wrap', within=snapshot[season]"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(74.0, rel=RTOL), 'each season closed on itself, and 6 poorer for it'
 
 
 @pytest.mark.parametrize(
     ('edge', 'omissions'),
     [
-        pytest.param("edge='wrap', within=season_of[season]", 2, id='wrap'),
-        pytest.param('edge=0, within=season_of[season]', 2, id='zero'),
-        pytest.param('within=season_of[season]', 4, id='bare'),
+        pytest.param("edge='wrap', within=snapshot[season]", 2, id='wrap'),
+        pytest.param('edge=0, within=snapshot[season]', 2, id='zero'),
+        pytest.param('within=snapshot[season]', 4, id='bare'),
     ],
 )
 def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
-    """Snapshots the relation sends nowhere are in no group, so they reach nothing.
+    """Snapshots the property sends nowhere are in no group, so they reach nothing.
 
     **Two** of them, which is the case that separates "in no group" from "in a
     group of its own": a lane that let the nulls fall together would give the
@@ -513,7 +516,7 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
     sources = _seasons_sources()
     snapshots = [1, 2, 3, 4, 5, 6, 7, 98, 99]
     sources['snapshot'] = pl.DataFrame({'snapshot': snapshots})
-    sources['season_of'] = relation('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3 + [None, None])
+    sources['snapshot.season'] = prop('snapshot', 'season', snapshots, ['winter'] * 4 + ['summer'] * 3 + [None, None])
     for name in ('inflow', 'price'):
         sources[name] = pl.concat([sources[name], pl.DataFrame({'snapshot': [98, 99], 'value': [1.0, 1.0]})])
 
@@ -528,15 +531,12 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
     assert held[99] == pytest.approx(0.0), f'{edge}: neither reads the other'
 
 
-def test_a_relation_over_another_dimension_cannot_partition_a_translation():
-    """`by=` groups the axis being walked, or no coordinate has a neighbour in one."""
+def test_a_property_of_another_dimension_cannot_partition_a_translation():
+    """`within=` groups the axis being walked, or no coordinate has a neighbour in one."""
     spec = (
-        _partitioned("edge='wrap', within=plant_season[season]")
-        .replace(
-            'relations:\n  season_of:',
-            'relations:\n  plant_season: {key: plant, values: season}\n  season_of:',
-        )
+        _partitioned("edge='wrap', within=plant[season]")
+        .replace('properties:\n', 'properties:\n  plant:\n    season: season\n')
         .replace('  season: {dtype: str}', '  season: {dtype: str}\n  plant: {dtype: str}')
     )
-    with pytest.raises(SpecsolveError, match=r"'plant_season' has no key column over 'snapshot'"):
+    with pytest.raises(SpecsolveError, match=r"'plant' has no member over 'snapshot'"):
         schema_of(spec)

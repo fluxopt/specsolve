@@ -28,7 +28,7 @@
       200.0
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "cheap",
       "gas"
@@ -113,7 +113,7 @@
       "tank"
     ]
   },
-  "store_bus": {
+  "store.bus": {
     "store": [
       "tank"
     ],

@@ -27,13 +27,30 @@ dimensions:
     description: one generator's bid into one market at one tranche
     dtype: str
 
-relations:
-  gen_bus: {key: generator, values: bus, description: "the bus a generator sits on"}
-  line_from: {key: line, values: bus, description: "the bus a line leaves, null where the end is open", missing: absent}
-  line_to: {key: line, values: bus, description: "the bus a line arrives at, null where the end is open", missing: absent}
-  gen_of: {key: offer, values: generator, description: "the generator behind an offer"}
-  market_of: {key: offer, values: market, description: "the market an offer is made into"}
-  tranche_of: {key: offer, values: tranche, description: "the tranche an offer is made at"}
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  line:
+    from_bus:
+      description: the bus a line leaves, null where the end is open
+      into: bus
+      missing: absent
+    to_bus:
+      description: the bus a line arrives at, null where the end is open
+      into: bus
+      missing: absent
+  offer:
+    generator:
+      description: the generator behind an offer
+      into: generator
+    market:
+      description: the market an offer is made into
+      into: market
+    tranche:
+      description: the tranche an offer is made at
+      into: tranche
 
 parameters:
   p_max:
@@ -66,11 +83,11 @@ parameters:
   zone_share:
     description: >-
       how much of a generator's reserve counts towards a zone — a generator may
-      back several zones at a per-zone weight, so this cannot be a relation over
+      back several zones at a per-zone weight, so this cannot be a property of
       the generator, which is single-valued per label; rows are absent where a
       generator backs no part of a zone
     dims: [generator, zone]
-    missing: neutral
+    missing: 0
   zone_req:
     description: reserve a zone has to be covered by
     dims: [zone]
@@ -82,7 +99,7 @@ variables:
     bounds:
       lower: 0
   f:
-    description: flow on a line, signed towards its `line_to` bus
+    description: flow on a line, signed towards its `line[to_bus]` bus
     dims: [line]
     bounds:
       lower: neg_cap
@@ -95,7 +112,7 @@ variables:
 
 expressions:
   reserve_of:
-    expression: sum(r, over=offer, by=gen_of[generator])
+    expression: sum(r, over=offer, by=offer[generator])
     description: all the reserve a generator holds, across every offer it made
 
 constraints:
@@ -103,18 +120,18 @@ constraints:
     description: what is generated at a bus plus what arrives over the lines meets the load there
     dims: [bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(f, over=line, by=line_to[bus])
-      - sum(f, over=line, by=line_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(f, over=line, by=line[to_bus])
+      - sum(f, over=line, by=line[from_bus])
       == load
   export_cap:
     description: a line carries no more than the bus it leaves is allowed to export
     dims: [line]
-    expression: f <= at(bus_cap, by=line_from[bus])
+    expression: f <= at(bus_cap, by=line[from_bus])
   requirement:
     description: the offers made into a market fill its requirement
     dims: [market]
-    expression: sum(r, over=offer, by=market_of[market]) >= req
+    expression: sum(r, over=offer, by=offer[market]) >= req
   headroom:
     description: a generator's output plus the reserve it holds stays inside its capacity
     dims: [generator]
@@ -125,7 +142,7 @@ constraints:
       two other dimensions' parameters pulled back through two legs of one edge
       set
     dims: [offer]
-    expression: r <= at(tranche_frac, by=tranche_of[tranche]) * at(p_max, by=gen_of[generator])
+    expression: r <= at(tranche_frac, by=offer[tranche]) * at(p_max, by=offer[generator])
   zone_cover:
     description: the weighted reserve of the generators backing a zone covers its requirement
     dims: [zone]

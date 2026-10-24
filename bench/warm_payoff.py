@@ -200,7 +200,8 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
     def slice_for(spec: Any, **extra: Any) -> dict[str, Any]:
         """The part of *dispatch* this spec declares — `feasibility` reads no cost."""
         known = to_spec(spec)
-        names = {**known.parameters, **known.dimensions, **known.relations}
+        names = {*known.parameters, *known.dimensions, *known.sets}
+        names |= {f'{subject}.{name}' for subject, held in known.properties.items() for name in held}
         return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
 
     cuts = _empty_cuts()

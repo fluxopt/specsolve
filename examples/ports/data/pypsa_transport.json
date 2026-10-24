@@ -6,7 +6,7 @@
       "south"
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "wind",
       "gas",
@@ -31,22 +31,22 @@
       "mid_south"
     ]
   },
-  "link_from": {
+  "link.from_bus": {
     "link": [
       "north_mid",
       "mid_south"
     ],
-    "bus": [
+    "from_bus": [
       "north",
       "mid"
     ]
   },
-  "link_to": {
+  "link.to_bus": {
     "link": [
       "north_mid",
       "mid_south"
     ],
-    "bus": [
+    "to_bus": [
       "mid",
       "south"
     ]

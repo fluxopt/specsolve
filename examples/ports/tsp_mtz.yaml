@@ -14,9 +14,10 @@ dimensions:
     description: the city an arc arrives at
     dtype: str
 
-relations:
-  as_from: {key: city, values: from_city}
-  as_to: {key: city, values: to_city}
+properties:
+  city:
+    from_city: from_city
+    to_city: to_city
 
 parameters:
   distance:
@@ -62,8 +63,8 @@ constraints:
     dims: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, over=city, by=as_from[from_city])
-      - sum(u, over=city, by=as_to[to_city])
+      sum(u, over=city, by=city[from_city])
+      - sum(u, over=city, by=city[to_city])
       + n * travel
       <= n - 1
 

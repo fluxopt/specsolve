@@ -34,9 +34,9 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{from}: \mathcal{L} \to \mathcal{B},\ \mathrm{to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{from}: \mathcal{L} \to \mathcal{B},\ \mathrm{to}: \mathcal{L} \to \mathcal{B}`$ — passive branches, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — passive branches, each joining two buses |
 | $`\mathcal{S}`$ | index $`s`$ — `segment` — the tangent points the loss curve is approximated at |
 
 #### Parameters
@@ -58,7 +58,7 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow and its loss and so is a row rather than a bound |
-| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
+| $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, $`0`$ where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
 
 #### Variable domains
 
@@ -91,7 +91,7 @@ f_{t,l} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from}(l) = b} f_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from}(l) = b} \mathit{loss}_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{to}(l) = b} \mathit{loss}_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} f_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} \mathit{loss}_{t,l} \right) - 0.5 \cdot \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} \mathit{loss}_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`within_rating_forward`**
@@ -152,19 +152,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dtype: int
         ordered: true
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      from:
-        description: the bus a line leaves
-        key: line
-        values: bus
-      to:
-        description: the bus a line arrives at
-        key: line
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      line:
+        from_bus:
+          description: the bus a line leaves
+          into: bus
+        to_bus:
+          description: the bus a line arrives at
+          into: bus
 
     parameters:
       p_nom:
@@ -226,7 +225,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           their rows.
         dims: [snapshot, line]
         where: loss_max
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: loss_max
@@ -239,9 +238,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           a branch dissipates half at either end
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus])
-          - 0.5 * sum(loss, over=line, by=from[bus]) - 0.5 * sum(loss, over=line, by=to[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
+          - 0.5 * sum(loss, over=line, by=line[from_bus]) - 0.5 * sum(loss, over=line, by=line[to_bus])
           == load
 
       within_rating_forward:
@@ -309,8 +308,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Line',
             lines.index,
-            bus0=tables['from'].set_index('line')['bus'],
-            bus1=tables['to'].set_index('line')['bus'],
+            bus0=tables['line.from_bus'].set_index('line')['from_bus'],
+            bus1=tables['line.to_bus'].set_index('line')['to_bus'],
             r=tables['r'].set_index('line')['value'],
             x=tables['x'].set_index('line')['value'],
             s_nom=tables['s_nom'].set_index('line')['value'],
@@ -320,7 +319,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -342,15 +341,15 @@ climb `10.00 → 85.78 → 90.00`: power is worth more the further it travels,
 which no objective figure shows. Across the lossless line the price does not
 move. `b3` differs from `b2` only because the local generator sets it.
 
-**The mask needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
+**The mask needs `missing: 0`.** `loss` is declared `where: loss_max`, so
 the resistanceless line has no loss variable. `loss` also appears as a bare
 term in the rating rows, `f + loss <= s_nom`, and a constraint naming a masked
-variable loses its row. Without `missing: neutral` those two rows vanish for that
+variable loses its row. Without `missing: 0` those two rows vanish for that
 line, it becomes uncapacitated, and the model reports a cheaper answer:
 
 | spelling | rows | `omissions` | objective |
 |---|---|---|---|
-| `where:` + `missing: neutral` | 132 | 0 | **24114.24** ✔ |
+| `where:` + `missing: 0` | 132 | 0 | **24114.24** ✔ |
 | `where:` alone | 120 | **2** | 17514.24 ✘ |
 
 Twenty-seven per cent low, with an optimal status. `diagnostics().omissions`

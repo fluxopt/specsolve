@@ -15,6 +15,8 @@ from mathspec.errors import did_you_mean
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
+    from mathspec.program import Relation
+
 #: How a datetime label prints: without the ``.000000`` that polars casts a
 #: whole second to.
 _DATETIME = '%Y-%m-%d %H:%M:%S%.f'
@@ -49,19 +51,33 @@ def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> s
     return '; '.join(coordinate_text(dict(zip(dims, row, strict=True))) for row in rows)
 
 
-def missing_row_message(kind: str, name: str, coordinate: str, missing: int) -> str:
-    """The message for a parameter or a relation with no row at a coordinate, where the spec refuses a missing row."""
+def table_noun(name: str, relation: Relation) -> str:
+    """A set or a property table as a message names it: ``set 'link'``, ``property 'bus0' of 'line'``."""
+    if relation.subject is None:
+        return f"set '{name}'"
+    return f"property '{name.removeprefix(relation.subject + '.')}' of '{relation.subject}'"
+
+
+#: How a parameter short of a row is fixed in its spec.
+PARAMETER_WAYS = (
+    '  Declare `missing: absent`, if the parameter does not exist there.\n'
+    '  Declare `missing: 0`, if a missing row is zero.\n'
+    '  Declare `missing: <value>`, if a missing row reads as one value.'
+)
+
+
+def table_ways(relation: Relation) -> str:
+    """How a set or a property short of a row is fixed in its spec."""
+    if relation.subject is None:
+        return '  Declare `missing: absent` on the set, if a combination with no row is meant.'
+    return f"  Declare `missing: absent` on the property, if a row of '{relation.subject}' without it is meant."
+
+
+def missing_row_message(owner: str, coordinate: str, missing: int, ways: str) -> str:
+    """The message for a parameter, a set or a property with no row at a coordinate, where the spec refuses a missing row."""
     more = f', and {missing - 1} more coordinates have no row' if missing > 1 else ''
-    if kind == 'relation':
-        ways = '  Declare `missing: absent` on the relation, if a key with no row is meant.'
-    else:
-        ways = (
-            '  Declare `missing: absent`, if the parameter does not exist there.\n'
-            '  Declare `missing: neutral`, if a missing row contributes nothing.\n'
-            '  Declare `missing: <value>`, if a missing row reads as one value.'
-        )
     return (
-        f"{kind} '{name}' has no row at {coordinate}{more}. The spec does not declare `missing:` "
+        f'{owner} has no row at {coordinate}{more}. The spec does not declare `missing:` '
         f'for it, so a missing row is refused.\n'
         f'  Supply the missing rows, if the data lost them.\n{ways}'
     )
@@ -71,8 +87,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """The message for a constant side covering fewer coordinates than its rows."""
     return (
         f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
-        f'built here. A missing neutral row is read as 0, and on the constant side that zero is a '
-        f'bound rather than an absence — the row still exists, and it binds.\n'
+        f'built here, and on the constant side a missing row has no value to read.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
         f'  Drop the declaration, if the spec has no such quantity at all.'

@@ -32,24 +32,62 @@ dimensions:
       basis, so one label names a different cycle in another period'}
   global_constraint: {description: 'PyPSA''s `GlobalConstraint` rows, one label per declared limit'}
   period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
-relations:
-  snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-  Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-  Link_bus0: {description: the bus a link leaves, key: link, values: bus}
-  Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-  Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-      A link of three output ports is three labels here rather than a third relation, so the file states
-      any number of them', key: link_output, values: bus}
-  Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-  Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-      … columns. A process of three ports is three labels here rather than a third relation, so the file
-      states any number of them', key: process_output, values: bus}
-  Load_bus: {description: the bus a load sits on, key: load, values: bus}
-  StorageUnit_bus: {description: the bus a storage unit sits on, key: storage_unit, values: bus}
-  Line_bus0: {description: the bus a line's flow is measured at, key: line, values: bus}
-  Line_bus1: {description: the bus at a line's other end, key: line, values: bus}
-  Transformer_bus0: {description: the bus a transformer's flow is measured at, key: transformer, values: bus}
-  Transformer_bus1: {description: the bus at a transformer's other end, key: transformer, values: bus}
+properties:
+  snapshot:
+    period:
+      description: the investment period a snapshot falls in
+      into: period
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link:
+    bus0:
+      description: the bus a link leaves
+      into: bus
+  link_output:
+    link:
+      description: the link an output port belongs to
+      into: link
+    bus:
+      description: >-
+        the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
+        A link of three output ports is three labels here rather than a third
+        property, so the file states any number of them
+      into: bus
+  process_output:
+    process:
+      description: the process a port belongs to
+      into: process
+    bus:
+      description: >-
+        the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
+        columns. A process of three ports is three labels here rather than a
+        third property, so the file states any number of them
+      into: bus
+  load:
+    bus:
+      description: the bus a load sits on
+      into: bus
+  storage_unit:
+    bus:
+      description: the bus a storage unit sits on
+      into: bus
+  line:
+    bus0:
+      description: the bus a line's flow is measured at
+      into: bus
+    bus1:
+      description: the bus at a line's other end
+      into: bus
+  transformer:
+    bus0:
+      description: the bus a transformer's flow is measured at
+      into: bus
+    bus1:
+      description: the bus at a transformer's other end
+      into: bus
+
 parameters:
   snapshot_weightings_objective:
     description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -308,7 +346,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   Transformer_s_nom:
     description: nominal apparent power
     dims: [scenario, transformer]
@@ -324,14 +362,14 @@ parameters:
       orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
       has no row. From the first scenario only, as a line's
     dims: [period, transformer, cycle]
-    missing: neutral
+    missing: 0
   Transformer_phase_shift_weight:
     description: a fixed transformer's phase shift in radians at each snapshot, signed by its orientation
       in the cycle — a constant added to the cycle sum, data prep; zero for a varying transformer, whose
       shift is a decision instead, so the constant and the variable term never both count a shift. A transformer
       with no shift or in no cycle of its snapshot's period has no row
     dims: [snapshot, transformer, cycle]
-    missing: neutral
+    missing: 0
   GlobalConstraint_type:
     description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
       `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -356,20 +394,20 @@ parameters:
       without it (`global_constraints.py:364-369`)'
     dims: [scenario, global_constraint, snapshot]
     dtype: bool
-    missing: neutral
+    missing: false
   Generator_primary_energy_weight:
     description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
       over the generator's efficiency at the snapshot, data prep; a generator of an unweighted carrier
       has no row
     dims: [scenario, global_constraint, snapshot, generator]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_active
   Link_p:
-    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
       withdraws there and injects at every bus the link''s output ports deliver to'
     dims: [scenario, snapshot, link]
     where: Link_active
@@ -391,13 +429,13 @@ variables:
     dims: [scenario, snapshot, storage_unit]
     where: StorageUnit_active
   Line_s:
-    description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `Line_bus0` end: a positive value
-      withdraws there and injects at `Line_bus1`, lossless'
+    description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `line[bus0]` end: a positive value
+      withdraws there and injects at `line[bus1]`, lossless'
     dims: [scenario, snapshot, line]
     where: Line_active
   Transformer_s:
-    description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `Transformer_bus0` end: a
-      positive value withdraws there and injects at `Transformer_bus1`, lossless'
+    description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `transformer[bus0]` end: a
+      positive value withdraws there and injects at `transformer[bus1]`, lossless'
     dims: [scenario, snapshot, transformer]
     where: Transformer_active
 constraints:
@@ -538,9 +576,9 @@ expressions:
           AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
         expression: StorageUnit_state_of_charge_initial}
       period_cyclic: {when: StorageUnit_cyclic_state_of_charge_per_period, expression: 'StorageUnit_retention
-          * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot_period[period])'}
+          * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot[period])'}
       period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
-          AND position(snapshot, within=snapshot_period[period]) == 0', expression: StorageUnit_state_of_charge_initial}
+          AND position(snapshot, within=snapshot[period]) == 0', expression: StorageUnit_state_of_charge_initial}
     otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
   Link_output_arrival:
     description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
@@ -550,10 +588,10 @@ expressions:
       zero) delivers its flow unshifted, cyclic or not
     dims: [scenario, snapshot, link_output]
     cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-      edge=0, within=snapshot_period[period]) * Link_efficiency
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot[period]) * Link_efficiency
   Process_output_arrival:
     description: what a process transfers at a port at a snapshot — its internal power delayed by the
       port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -562,11 +600,11 @@ expressions:
       does not delay (`delay` zero) transfers at once, cyclic or not
     dims: [scenario, snapshot, process_output]
     cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
           * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-      edge=0, within=snapshot_period[period]) * Process_rate
+    otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot[period]) * Process_rate
   GlobalConstraint_energy_weight:
     description: what one unit of power at a snapshot counts for in a row — the generator weighting times
       the years of the snapshot's period, where the row counts the snapshot, and nothing where it does
@@ -574,7 +612,7 @@ expressions:
     dims: [scenario, global_constraint, snapshot]
     cases:
       counted: {when: GlobalConstraint_counts_snapshot, expression: 'snapshot_weightings_generators *
-          at(period_weight_years, by=snapshot_period[period])'}
+          at(period_weight_years, by=snapshot[period])'}
     otherwise: 0
   Generator_primary_energy: {expression: 'sum(sum((Generator_p * GlobalConstraint_energy_weight) * Generator_primary_energy_weight,
       over=snapshot), over=generator)'}
@@ -585,23 +623,23 @@ expressions:
       counts, less the charge left in weighted storage at the close; the initial charge it is compared
       against is folded into the row's constant
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
       * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=generator), over=snapshot)'}
+      by=snapshot[period]), over=generator), over=snapshot)'}
   Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      by=snapshot[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
       over=snapshot)'}
   Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * at(period_weight_objective, by=snapshot[period]), over=process), over=snapshot) + sum(sum((((Process_p
       * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=process), over=snapshot)'}
+      by=snapshot[period]), over=process), over=snapshot)'}
   StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
+      * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) +
       sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=storage_unit),
       over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
+      * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)'}
   scenario_opex:
     dims: [scenario]
     expression: ((Generator_opex + Link_opex) + Process_opex) + StorageUnit_opex
@@ -621,25 +659,25 @@ expressions:
     cases:
       active: {when: Load_active, expression: Load_sign * Load_p_set}
     otherwise: 0
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-  Line_injection: {expression: '(-sum(Line_s, over=line, by=Line_bus0[bus])) + sum(Line_s, over=line,
-      by=Line_bus1[bus])'}
-  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
-      over=link_output, by=Link_output_bus[bus])'}
-  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+  Line_injection: {expression: '(-sum(Line_s, over=line, by=line[bus0])) + sum(Line_s, over=line,
+      by=line[bus1])'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
+      over=link_output, by=link_output[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
   StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
-      over=storage_unit, by=StorageUnit_bus[bus])'}
-  Transformer_injection: {expression: '(-sum(Transformer_s, over=transformer, by=Transformer_bus0[bus]))
-      + sum(Transformer_s, over=transformer, by=Transformer_bus1[bus])'}
+      over=storage_unit, by=storage_unit[bus])'}
+  Transformer_injection: {expression: '(-sum(Transformer_s, over=transformer, by=transformer[bus0]))
+      + sum(Transformer_s, over=transformer, by=transformer[bus1])'}
   Bus_injection:
     dims: [scenario, snapshot, bus]
     expression: (((((Generator_injection + Line_injection) + Link_injection) + Load_injection) + Process_injection)
       + StorageUnit_injection) + Transformer_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-  Line_angle_sum: {expression: 'sum(Line_s * at(Line_cycle_weight, by=snapshot_period[period]), over=line)'}
-  Transformer_angle_sum: {expression: 'sum(Transformer_s * at(Transformer_cycle_weight, by=snapshot_period[period]),
+  Line_angle_sum: {expression: 'sum(Line_s * at(Line_cycle_weight, by=snapshot[period]), over=line)'}
+  Transformer_angle_sum: {expression: 'sum(Transformer_s * at(Transformer_cycle_weight, by=snapshot[period]),
       over=transformer) + sum(Transformer_phase_shift_weight, over=transformer)'}
   Cycle_angle_sum:
     dims: [scenario, snapshot, cycle]

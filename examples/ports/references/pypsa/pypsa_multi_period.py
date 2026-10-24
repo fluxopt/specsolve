@@ -57,7 +57,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
     ``tables`` is the same mapping the specsolve call attaches as ``sources``.
 
-    The port's flat ``snapshot`` axis carries a relation into ``period``; PyPSA
+    The port's flat ``snapshot`` axis carries a property into ``period``; PyPSA
     wants the same fact as a ``(period, timestep)`` MultiIndex, so the snapshots
     are paired with the period each falls in. ``investment_period_weightings``
     takes the port's ``period_weight`` as its ``objective`` column, and ``years``
@@ -69,7 +69,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
     periods = list(tables['period']['period'])
     n.set_snapshots(
         pd.MultiIndex.from_arrays(
-            [tables['period_of'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
+            [tables['snapshot.period'].set_index('snapshot')['period'][snapshots['snapshot']], snapshots['snapshot']]
         )
     )
     n.investment_periods = periods
@@ -99,7 +99,7 @@ def balance_duals(n: pypsa.Network) -> dict[str, list]:
     """The dual of the nodal balance per snapshot, keyed the way the port keys it.
 
     PyPSA's row index is ``(period, timestep)``; the port's is the flat snapshot
-    the relation maps into a period, so the pairs are collapsed back to the port's
+    the property maps into a period, so the pairs are collapsed back to the port's
     labels in the order the instance lists them.
     """
     dual = n.model.constraints['Bus-nodal_balance'].dual.to_series()

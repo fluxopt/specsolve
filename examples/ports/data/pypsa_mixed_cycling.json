@@ -14,7 +14,7 @@
       false
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "base",
       "peaker"
@@ -104,7 +104,7 @@
       "seasonal"
     ]
   },
-  "storage_bus": {
+  "storage.bus": {
     "storage": [
       "ring",
       "seasonal"

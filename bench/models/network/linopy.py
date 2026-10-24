@@ -1,15 +1,15 @@
 """`network` as a linopy user writes it.
 
 `mask=` is the YAML's `where: installed > 0`, as a bus x tech plane linopy
-broadcasts along the snapshot axis. The joins the YAML declares as relations
+broadcasts along the snapshot axis. The joins the YAML declares as properties
 are `groupby(...).sum()` into buses, as `transport`'s are.
 `shift(...).fillna(0)` gives the first snapshot an empty store, which is the
 YAML's `edge=0`, and `p.fillna(0)` makes an absent pair contribute zero, as in
 `nodal`.
 
-`pool_of` is pivoted to a bus x tech array of pool labels, as `installed` is,
+`bus_tech.pool` is pivoted to a bus x tech array of pool labels, as `installed` is,
 and `p.groupby(pool).sum()` is the YAML's
-`sum(p, over=[bus, tech], by=pool_of[pool])`. linopy refuses a NaN label,
+`sum(p, over=[bus, tech], by=bus_tech[pool])`. linopy refuses a NaN label,
 so a pair with no plant is labelled `''` and that group is dropped.
 """
 
@@ -51,13 +51,14 @@ def build(tables: Mapping[str, Any]) -> Any:
     p_store = tables['p_store'].set_index('store')['value'].reindex(stores)
     eta = tables['eta'].set_index('store')['value'].reindex(stores)
     pool = xr.DataArray(
-        tables['pool_of'].pivot(index='bus', columns='tech', values='pool').reindex(index=buses, columns=techs),
+        tables['bus_tech.pool'].pivot(index='bus', columns='tech', values='pool').reindex(index=buses, columns=techs),
         name='pool',
     ).fillna('')
     limit = tables['limit'].set_index('pool')['value']
 
-    def into_bus(x: Any, relation: str, key: str) -> Any:
-        by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
+    def into_bus(x: Any, prop: str) -> Any:
+        subject, column = prop.split('.')
+        by = xr.DataArray(tables[prop].set_index(subject)[column].reindex(x.indexes[subject]), name='bus')
         return x.groupby(by).sum().reindex(bus=buses).fillna(0)
 
     m = linopy.Model()
@@ -69,9 +70,9 @@ def build(tables: Mapping[str, Any]) -> Any:
 
     m.add_constraints(
         p.fillna(0).sum('tech')
-        + into_bus(f, 'line_to', 'line')
-        - into_bus(f, 'line_from', 'line')
-        + into_bus(discharge - charge, 'store_bus', 'store')
+        + into_bus(f, 'line.to_bus')
+        - into_bus(f, 'line.from_bus')
+        + into_bus(discharge - charge, 'store.bus')
         == load,
         name='balance',
     )

@@ -1,7 +1,7 @@
 """``reserves``: every many-to-many shape at once, each proven load-bearing.
 
 ``examples/reserves.yaml`` holds both many-to-many idioms: a pair set reified as
-a dimension with leg relations (lines bus-to-bus, offers as (generator, market,
+a dimension with leg properties (lines bus-to-bus, offers as (generator, market,
 tranche) triples), and weighted membership as an incidence parameter
 (overlapping reserve zones). Each shape gets the one data mutation that must
 move the optimum.
@@ -34,19 +34,19 @@ def test_both_lanes_and_the_lp_file_reach_the_hand_derived_optimum():
 
 
 def _drop_line(sources: dict, line: str) -> dict:
-    for key in ('line', 'cap', 'neg_cap', 'line_from', 'line_to'):
+    for key in ('line', 'cap', 'neg_cap', 'line.from_bus', 'line.to_bus'):
         sources[key] = sources[key].filter(pl.col('line') != line)
     return sources
 
 
 def _drop_offer(sources: dict, offer: str) -> dict:
-    for key in ('offer', 'offer_cost', 'gen_of', 'market_of', 'tranche_of'):
+    for key in ('offer', 'offer_cost', 'offer.generator', 'offer.market', 'offer.tranche'):
         sources[key] = sources[key].filter(pl.col('offer') != offer)
     return sources
 
 
 def _repoint_dangling(sources: dict) -> dict:
-    sources['line_to'] = pl.concat([sources['line_to'], pl.DataFrame({'line': ['l4'], 'bus': ['b1']})])
+    sources['line.to_bus'] = pl.concat([sources['line.to_bus'], pl.DataFrame({'line': ['l4'], 'to_bus': ['b1']})])
     return sources
 
 
@@ -87,16 +87,18 @@ def test_the_instance_actually_holds_every_shape():
     """The mutations above prove effect; this pins presence, so neither can rot alone."""
     program = sps.check(RESERVES_YAML)
     maps = {name for name, r in program.relations.items() if 'offer' in {r.dim(k) for k in r.key}}
-    assert maps == {'gen_of', 'market_of', 'tranche_of'}, 'the offer set is three-legged — the k-ary case'
+    assert maps == {'offer.generator', 'offer.market', 'offer.tranche'}, (
+        'the offer set is three-legged — the k-ary case'
+    )
     sources = port_sources('reserves')
     endpoints = (
-        sources['line_from']
-        .join(sources['line_to'], on='line', how='left', suffix='_to')
-        .select(pl.col('bus').alias('from'), pl.col('bus_to').alias('to'))
+        sources['line.from_bus']
+        .join(sources['line.to_bus'], on='line', how='left')
+        .select(pl.col('from_bus').alias('from'), pl.col('to_bus').alias('to'))
         .to_dicts()
     )
     assert endpoints.count({'from': 'b2', 'to': 'b1'}) == 2, 'l1 and l2 are parallel edges between one bus pair'
-    assert any(row['to'] is None for row in endpoints), 'l4 dangles: line_to has no row for it, so its leg is open'
+    assert any(row['to'] is None for row in endpoints), 'l4 dangles: line.to_bus has no row for it, so its leg is open'
     zones_of_g2 = port_sources('reserves')['zone_share'].filter(pl.col('generator') == 'g2')
     assert zones_of_g2.height == 2, 'g2 backs two zones — membership is many-to-many'
     assert set(zones_of_g2['value'].to_list()) == {0.5, 1.0}, 'and at different weights, so the value is a weight'
@@ -104,7 +106,7 @@ def test_the_instance_actually_holds_every_shape():
 
 def test_the_offer_cap_is_two_pullbacks_through_two_legs():
     """A per-offer number assembled from two other dimensions' parameters —
-    ``at()`` through ``tranche_of`` times ``at()`` through ``gen_of`` — priced
+    ``at()`` through ``offer[tranche]`` times ``at()`` through ``offer[generator]`` — priced
     into the linopy lane's own solution: o4 sits exactly at 0.25 * 80."""
     with differential(RESERVES_YAML, port_sources('reserves')) as run:
         r = run.result.primal('r')

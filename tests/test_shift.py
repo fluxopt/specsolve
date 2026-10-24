@@ -20,7 +20,7 @@ from tests.conftest import (
     by_coord,
     masked_operand_spec,
     override,
-    relation,
+    prop,
     schema_of,
 )
 from tests.differential import differential
@@ -184,19 +184,19 @@ BY_PARAMETER = {
 }
 
 IN_GROUPS = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=t[season])', grouped=True
 )
 
 #: The same, with nothing masked at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence frame of its own (#1061).
 IN_GROUPS_UNMASKED = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, masked=False
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=t[season])', grouped=True, masked=False
 )
 
-#: A fourth snapshot the relation sends nowhere, for both models above.
+#: A fourth snapshot the property sends nowhere, for both models above.
 GROUPLESS_SOURCES = {
     't': pd.DataFrame({'t': [0, 1, 2, 3]}),
-    'season_of': relation('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', None]),
+    't.season': prop('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', None]),
     'season': pd.Index(['s1', 's2'], name='season'),
 }
 
@@ -229,7 +229,7 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
     """
     sources = {
         't': pd.DataFrame({'t': [0, 1, 2, 3]}),
-        'season_of': relation('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', 's2']),
+        't.season': prop('t', 'season', [0, 1, 2, 3], ['s1', 's1', 's2', 's2']),
         'season': pd.Index(['s1', 's2'], name='season'),
         'usable': pd.Series([0.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
     }
@@ -238,16 +238,16 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
         assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is masked is capped by nothing'
 
 
-def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated():
+def test_a_coordinate_the_property_sends_nowhere_is_absent_rather_than_vacated():
     """A snapshot in no season at all: it reaches nothing for a reason the
     shift had nothing to do with, so `edge=0` does not speak for it (#1061).
 
     Off a group's start the shift vacated the slot and the edge fills it; a
-    coordinate the relation sends nowhere never had a predecessor to lose. It
-    is the null a partial relation gets everywhere else (#969, `sum(by=)`,
+    coordinate the property sends nowhere never had a predecessor to lose. It
+    is the reading a partial property gets everywhere else (#969, `sum(by=)`,
     `at()`).
     """
-    partial = override(IN_GROUPS_UNMASKED, **{'relations.season_of.missing': 'absent'})
+    partial = override(IN_GROUPS_UNMASKED, **{'properties.t.season': {'into': 'season', 'missing': 'absent'}})
     with differential(partial, GROUPLESS_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, (
             "each season's opening row and the one reading a live slot — not the group-less snapshot"
@@ -262,7 +262,7 @@ def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing(
     from the grouped labels; a mask removing nothing decides no row.
     """
     sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
-    partial = override(IN_GROUPS, **{'relations.season_of.missing': 'absent'})
+    partial = override(IN_GROUPS, **{'properties.t.season': {'into': 'season', 'missing': 'absent'}})
     with differential(partial, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'a mask that removes nothing changes no row'
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
@@ -302,24 +302,24 @@ def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
 #: A period's own construction lead time, on a flat snapshot axis (#1161).
 PER_GROUP_OFFSET = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'period': {'dtype': 'int', 'ordered': True}},
-    'relations': {'period_of': {'key': 't', 'values': 'period'}},
+    'properties': {'t': {'period': 'period'}},
     'parameters': {'lead': {'dims': ['period'], 'dtype': 'int'}, 'v': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': -100, 'upper': 100}}},
     'constraints': {
         'reads': {
             'dims': ['t'],
-            'expression': 'p == shift(v, along=t, offset=lead, within=period_of[period], edge=0)',
+            'expression': 'p == shift(v, along=t, offset=lead, within=t[period], edge=0)',
         }
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
 }
 
 #: The same lag over a *variable*, where the edge is a term that is not there
-#: rather than a number written into a frame — and one snapshot the relation
+#: rather than a number written into a frame — and one snapshot the property
 #: sends nowhere, which no lag reaches and no edge speaks for.
 PER_GROUP_OFFSET_TERMS = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
-    'relations': {'season_of': {'key': 't', 'values': 'season', 'missing': 'absent'}},
+    'properties': {'t': {'season': {'into': 'season', 'missing': 'absent'}}},
     'parameters': {'lead': {'dims': ['season'], 'dtype': 'int'}, 'cap': {'dims': ['t']}},
     'variables': {
         'level': {'dims': ['t'], 'bounds': {'lower': 'cap', 'upper': 'cap'}},
@@ -328,23 +328,23 @@ PER_GROUP_OFFSET_TERMS = {
     'constraints': {
         'link': {
             'dims': ['t'],
-            'expression': 'take <= shift(level, along=t, offset=lead, within=season_of[season], edge=0)',
+            'expression': 'take <= shift(level, along=t, offset=lead, within=t[season], edge=0)',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t)'},
 }
 
 #: Per entity *and* per group at once: one key the frame carries and one it
-#: reaches through the relation, in the same join.
+#: reaches through the property, in the same join.
 PER_ENTITY_AND_PER_GROUP = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
-    'relations': {'season_of': {'key': 't', 'values': 'season'}},
+    'properties': {'t': {'season': 'season'}},
     'parameters': {'lead': {'dims': ['g', 'season'], 'dtype': 'int'}, 'v': {'dims': ['g', 't']}},
     'variables': {'p': {'dims': ['g', 't'], 'bounds': {'lower': -100, 'upper': 100}}},
     'constraints': {
         'reads': {
             'dims': ['g', 't'],
-            'expression': 'p == shift(v, along=t, offset=lead, within=season_of[season], edge=0)',
+            'expression': 'p == shift(v, along=t, offset=lead, within=t[season], edge=0)',
         }
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -366,7 +366,7 @@ def test_a_per_group_offset_translates_each_group_by_its_own_lag():
     """
     sources = {
         't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5]}),
-        'period_of': relation('t', 'period', [0, 1, 2, 3, 4, 5], [2030] * 3 + [2050] * 3),
+        't.period': prop('t', 'period', [0, 1, 2, 3, 4, 5], [2030] * 3 + [2050] * 3),
         'period': pd.Index([2030, 2050], name='period'),
         'lead': pd.Series([1, 2], index=pd.Index([2030, 2050], name='period')),
         'v': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], index=pd.Index(range(6), name='t')),
@@ -395,7 +395,7 @@ def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
     """
     sources = {
         't': pd.DataFrame({'t': [0, 1, 2, 3, 4, 5, 6]}),
-        'season_of': relation('t', 'season', range(7), ['s1'] * 3 + ['s2'] * 3 + [None]),
+        't.season': prop('t', 'season', range(7), ['s1'] * 3 + ['s2'] * 3 + [None]),
         'season': pd.Index(['s1', 's2'], name='season'),
         'lead': pd.Series([1, 2], index=pd.Index(['s1', 's2'], name='season')),
         'cap': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], index=pd.Index(range(7), name='t')),
@@ -410,7 +410,7 @@ def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
 
 def test_an_offset_may_differ_per_entity_and_per_group_at_once():
     """Two keys, one join: the entity's own column and the group's, which the
-    frame carries only as the relation's value.
+    frame carries only as the property's value.
 
     The second unit leads by two in the second season and by one everywhere
     else, so it alone vacates both of that season's rows.
@@ -419,7 +419,7 @@ def test_an_offset_may_differ_per_entity_and_per_group_at_once():
     sources = {
         'g': pd.Index(units, name='g'),
         't': pd.DataFrame({'t': periods}),
-        'season_of': relation('t', 'season', periods, ['s1', 's1', 's2', 's2']),
+        't.season': prop('t', 'season', periods, ['s1', 's1', 's2', 's2']),
         'season': pd.Index(['s1', 's2'], name='season'),
         'lead': pd.DataFrame({'g': ['a', 'a', 'b', 'b'], 'season': ['s1', 's2'] * 2, 'value': [1, 1, 1, 2]}),
         'v': pd.DataFrame(

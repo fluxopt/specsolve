@@ -45,9 +45,9 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
@@ -114,7 +114,7 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`energy_balance_cyclic`**
@@ -165,15 +165,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: storage units, each sitting on one bus
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      storage_bus:
-        description: the bus a storage unit sits on
-        key: storage
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      storage:
+        bus:
+          description: the bus a storage unit sits on
+          into: bus
 
     parameters:
       cyclic:
@@ -234,9 +234,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus, plus what the stores give back, meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(p_dispatch, over=storage, by=storage_bus[bus])
-          - sum(p_store, over=storage, by=storage_bus[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(p_dispatch, over=storage, by=storage[bus])
+          - sum(p_store, over=storage, by=storage[bus])
           == load
 
       energy_balance_cyclic:
@@ -299,7 +299,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -307,7 +307,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'StorageUnit',
             storages.index,
-            bus=tables['storage_bus'].set_index('storage')['bus'],
+            bus=tables['storage.bus'].set_index('storage')['bus'],
             p_nom=p_nom,
             max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
             cyclic_state_of_charge=tables['cyclic'].set_index('storage')['value'],

@@ -23,7 +23,7 @@ import xarray as xr
 from mathspec import program as _program
 
 from specsolve._frames import to_pandas
-from specsolve._messages import coordinate_text, missing_row_message
+from specsolve._messages import PARAMETER_WAYS, coordinate_text, missing_row_message, table_noun, table_ways
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -48,16 +48,16 @@ def refuse_relations_the_lane_does_not_build(program: program.Program) -> None:
         if node.partition.joined:
             raise OracleCannotBuildError(
                 _relation_shape_message(
-                    f"a partition by '{node.partition.name}' groups by a map keyed by {list(node.partition.relation.key)}, "
-                    f'and this lane groups a shift, sum_back or position by a map keyed by the dimension it '
-                    f'walks alone'
+                    f"a partition by '{node.partition.written}[{', '.join(node.partition.grouped)}]' reads a "
+                    f'subject whose members are {list(node.partition.relation.key)}, and this lane groups a shift, '
+                    f'sum_back or position by a property of the dimension it walks alone'
                 )
             )
         if len(node.partition.grouped) != 1:
             raise OracleCannotBuildError(
                 _relation_shape_message(
-                    f"a partition by '{node.partition.name}' groups by {list(node.partition.grouped)}, and this "
-                    f'lane groups a shift, sum_back or position by one column'
+                    f"a partition by '{node.partition.written}' groups by {list(node.partition.grouped)}, and this "
+                    f'lane groups a shift, sum_back or position by one property'
                 )
             )
 
@@ -114,15 +114,16 @@ def dimension_coords(
     """
     master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
     for name, relation in program.relations.items():
-        if relation.missing == 'refused':
+        if relation.missing == 'refused' and relation.subject not in program.relations:
             key = relation.key or relation.roles
-            _refuse_a_missing_row('relation', name, tidy[name].select(*key).unique(), key, relation.dim, tidy)
+            owner, ways = table_noun(name, relation), table_ways(relation)
+            _refuse_a_missing_row(owner, ways, tidy[name].select(*key).unique(), key, relation.dim, tidy)
     return master, _relation_arrays(program, tidy, master)
 
 
 def _refuse_a_missing_row(
-    kind: str,
-    name: str,
+    owner: str,
+    ways: str,
     rows: pl.LazyFrame,
     columns: tuple[str, ...],
     dim: Callable[[str], str],
@@ -143,7 +144,7 @@ def _refuse_a_missing_row(
     held = rows.select(pl.col(column).cast(schema[column]) for column in columns)
     gaps = product.join(held, on=list(columns), how='anti').collect()
     if gaps.height:
-        raise DataError(missing_row_message(kind, name, coordinate_text(gaps.row(0, named=True)), gaps.height))
+        raise DataError(missing_row_message(owner, coordinate_text(gaps.row(0, named=True)), gaps.height, ways))
 
 
 def _relation_arrays(
@@ -201,7 +202,7 @@ def load_parameters(
     *tidy* is :func:`~specsolve._sources.tidy_sources`' output — one checked
     ``(dims…, value)`` frame per parameter — so what is left is the crossing
     into xarray, and what a missing row reads as. A value fills it; ``absent``
-    and ``neutral`` leave it NaN, which each position reads in its own way
+    leaves it NaN, which each position reads in its own way
     (:mod:`~tests.linopy_lane.absence`); a ``bool`` short of a row reads false
     there unless its value says otherwise.
 
@@ -221,7 +222,7 @@ def load_parameters(
         arr = _from_tidy(frame, pdef.dims)
         if pdef.dims:
             if pdef.missing == 'refused':
-                _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)
+                _refuse_a_missing_row(f"parameter '{pname}'", PARAMETER_WAYS, tidy[pname], pdef.dims, lambda d: d, tidy)
             onto = {d: master_coords[d] for d in pdef.dims}
             arr = arr.reindex(onto, fill_value=_fill(pdef, arr.dtype == bool))
         arrays[pname] = arr
@@ -238,7 +239,10 @@ def given_rows(
     """
     given: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        if not pdef.dims or pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+        if pdef.dtype == 'bool' or isinstance(pdef.missing, str):
+            continue
+        if not pdef.dims:
+            given[pname] = xr.DataArray(tidy[pname].select(pl.len()).collect().item() > 0)
             continue
         product = math.prod(len(master_coords[d]) for d in pdef.dims)
         if tidy[pname].select(pl.len()).collect().item() < product:
@@ -249,7 +253,7 @@ def given_rows(
 
 def _fill(pdef: program.Parameter, flag: bool) -> Any:
     """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
-    if not isinstance(pdef.missing, str) and pdef.missing is not None:
+    if not isinstance(pdef.missing, str):
         return pdef.missing
     return False if flag else np.nan
 

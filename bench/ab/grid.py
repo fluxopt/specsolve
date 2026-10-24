@@ -46,14 +46,14 @@ class Shape:
     terms: int = 2
     #: Whether the main constraint adds a variable over the first dimension only.
     broadcast: bool = False
-    #: Which rows or coordinates a ``where`` removes: on the main constraint (all, half, 1%, or by a relation's
+    #: Which rows or coordinates a ``where`` removes: on the main constraint (all, half, 1%, or by a property's
     #: label), on ``u`` (half, or where a sparse parameter has a row), or half on both.
     mask: Literal[
         'none',
         'constraint-all',
         'constraint-half',
         'constraint-sparse',
-        'constraint-relation',
+        'constraint-property',
         'variable-half',
         'variable-presence',
         'both',
@@ -72,7 +72,7 @@ class Shape:
     quadratic: bool = False
     #: The domain of ``u``.
     domain: Literal['continuous', 'binary', 'integer'] = 'continuous'
-    #: Whether a constraint sums ``p`` through a relation into a coarser dimension.
+    #: Whether a constraint sums ``p`` through a property into a coarser dimension.
     grouped: bool = False
     #: Whether a constraint over all dimensions but the last sums ``p`` along it.
     aggregate: bool = False
@@ -109,7 +109,7 @@ SHAPES: dict[str, Shape] = {
     'mask-constraint-all': replace(BASELINE, mask='constraint-all'),
     'mask-constraint-half': replace(BASELINE, mask='constraint-half'),
     'mask-constraint-sparse': replace(BASELINE, mask='constraint-sparse'),
-    'mask-constraint-relation': replace(BASELINE, mask='constraint-relation'),
+    'mask-constraint-property': replace(BASELINE, mask='constraint-property'),
     'mask-variable-half': replace(BASELINE, mask='variable-half'),
     'mask-variable-presence': replace(BASELINE, mask='variable-presence'),
     'mask-both': replace(BASELINE, mask='both'),
@@ -127,7 +127,7 @@ SHAPES: dict[str, Shape] = {
     'grouped': replace(BASELINE, grouped=True),
     'aggregate': replace(BASELINE, aggregate=True),
     'domain-binary-gated': replace(BASELINE, domain='binary', gated=True),
-    'milp': replace(BASELINE, dims=3, domain='binary', gated=True, grouped=True, mask='constraint-relation'),
+    'milp': replace(BASELINE, dims=3, domain='binary', gated=True, grouped=True, mask='constraint-property'),
     'worst': WORST,
 }
 
@@ -212,7 +212,7 @@ def spec(shape: Shape) -> dict:
 
     names = ['p', 'u', 'p_2', 'p_3'][: shape.terms]
     variables: dict[str, dict] = {v: {'dims': dims, 'bounds': dict(bounds)} for v in names}
-    relations: dict[str, dict] = {}
+    properties: dict[str, dict] = {}
     extra: dict[str, dict] = {}
     if shape.terms > 1:
         if shape.mask in ('variable-half', 'both'):
@@ -241,19 +241,19 @@ def spec(shape: Shape) -> dict:
         constraint['where'] = 'demand >= 0.5'
     elif shape.mask == 'constraint-sparse':
         constraint['where'] = 'demand >= 0.99'
-    elif shape.mask == 'constraint-relation':
+    elif shape.mask == 'constraint-property':
         extra['status'] = {'dtype': 'str'}
-        relations['status_of'] = {'key': 'snapshot', 'values': 'status'}
-        constraint['where'] = 'status_of == active'
+        properties.setdefault('snapshot', {})['status'] = 'status'
+        constraint['where'] = 'snapshot[status] == active'
     constraints = {'main': constraint}
     if shape.quadratic:
         constraints['curved'] = {'dims': dims, 'expression': 'p * p + p <= 200'}
     if shape.grouped:
         extra['region'] = {'dtype': 'str'}
-        relations['region_of'] = {'key': 'snapshot', 'values': 'region'}
+        properties.setdefault('snapshot', {})['region'] = 'region'
         constraints['regional'] = {
             'dims': ['region', *dims[1:]],
-            'expression': 'sum(p, over=snapshot, by=region_of[region]) <= 1000000',
+            'expression': 'sum(p, over=snapshot, by=snapshot[region]) <= 1000000',
         }
     if shape.gated and shape.terms > 1:
         cap = 'ub' if 'ub' in parameters else upper if upper is not None else 10
@@ -268,7 +268,7 @@ def spec(shape: Shape) -> dict:
             for d in dims
         }
         | extra,
-        'relations': relations,
+        'properties': properties,
         'parameters': parameters,
         'variables': variables,
         'constraints': constraints,
@@ -312,15 +312,15 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
         frames['built'] = table(rng.random(n) < 0.5)
     if shape.terms > 1 and shape.mask == 'variable-presence':
         frames['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
-    if shape.mask == 'constraint-relation':
+    if shape.mask == 'constraint-property':
         frames['status'] = pl.DataFrame({'status': ['active', 'idle']})
-        frames['status_of'] = pl.DataFrame(
+        frames['snapshot.status'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'status': np.where(rng.random(n0) < 0.5, 'active', 'idle')}
         )
     if shape.grouped:
         regions = np.array([f'r{i:05d}' for i in range(max(1, n0 // 10))])
         frames['region'] = pl.DataFrame({'region': regions})
-        frames['region_of'] = pl.DataFrame(
+        frames['snapshot.region'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'region': regions[rng.integers(0, regions.size, n0)]}
         )
     return frames

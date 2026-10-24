@@ -70,15 +70,15 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`\Xi`$ | index $`\xi`$ — `scenario` — the futures dispatch is chosen in, each with a weight |
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{snapshot\_period}: \mathcal{T} \to \mathcal{Y}`$ — dispatch periods |
-| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N},\ \mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{Generator\_bus}: \mathcal{G} \to \mathcal{N}`$ — generating units, each on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{Link\_bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L}`$ — controllable connections, each from one bus to the buses it delivers to |
-| $`\mathcal{O}`$ | index $`o`$ — `link_output` with $`\mathrm{Link\_output\_link}: \mathcal{O} \to \mathcal{L},\ \mathrm{Link\_output\_bus}: \mathcal{O} \to \mathcal{N}`$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
-| $`\mathcal{J}`$ | index $`j`$ — `process` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J}`$ — generalized multi-port converters, each with an internal power that every port draws or delivers at its own rate |
-| $`\mathcal{R}`$ | index $`r`$ — `process_output` with $`\mathrm{Process\_output\_process}: \mathcal{R} \to \mathcal{J},\ \mathrm{Process\_output\_bus}: \mathcal{R} \to \mathcal{N}`$ — a process's ports, one label per port a process declares — PyPSA's `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in the balance, data prep |
-| $`\mathcal{D}`$ | index $`d`$ — `load` with $`\mathrm{Load\_bus}: \mathcal{D} \to \mathcal{N}`$ — demands, each on one bus |
-| $`\mathcal{Y}`$ | index $`y`$ — `period` with $`\mathrm{snapshot\_period}: \mathcal{T} \to \mathcal{Y}`$ — investment periods — PyPSA's `investment_periods` |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period}: \mathcal{T} \to \mathcal{Y}`$ — dispatch periods |
+| $`\mathcal{N}`$ | index $`n`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{N},\ \mathrm{bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{bus}: \mathcal{O} \to \mathcal{N},\ \mathrm{bus}: \mathcal{R} \to \mathcal{N},\ \mathrm{bus}: \mathcal{D} \to \mathcal{N}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{N}`$ — generating units, each on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{bus0}: \mathcal{L} \to \mathcal{N},\ \mathrm{link}: \mathcal{O} \to \mathcal{L}`$ — controllable connections, each from one bus to the buses it delivers to |
+| $`\mathcal{O}`$ | index $`o`$ — `link_output` with $`\mathrm{link}: \mathcal{O} \to \mathcal{L},\ \mathrm{bus}: \mathcal{O} \to \mathcal{N}`$ — a link's output ports, one label per port a link declares — PyPSA's `bus1`, `bus2`, … columns read long, so a link of any number of output ports is one term in the balance, data prep |
+| $`\mathcal{J}`$ | index $`j`$ — `process` with $`\mathrm{process}: \mathcal{R} \to \mathcal{J}`$ — generalized multi-port converters, each with an internal power that every port draws or delivers at its own rate |
+| $`\mathcal{R}`$ | index $`r`$ — `process_output` with $`\mathrm{process}: \mathcal{R} \to \mathcal{J},\ \mathrm{bus}: \mathcal{R} \to \mathcal{N}`$ — a process's ports, one label per port a process declares — PyPSA's `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in the balance, data prep |
+| $`\mathcal{D}`$ | index $`d`$ — `load` with $`\mathrm{bus}: \mathcal{D} \to \mathcal{N}`$ — demands, each on one bus |
+| $`\mathcal{Y}`$ | index $`y`$ — `period` with $`\mathrm{period}: \mathcal{T} \to \mathcal{Y}`$ — investment periods — PyPSA's `investment_periods` |
 
 #### Parameters
 
@@ -93,8 +93,8 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{(2)}`$ | `Generator_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — cost of the square of one unit of output |
 | $`\mathrm{sgn}`$ | `Generator_sign` over $`\mathcal{G}`$ — the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`) |
 | $`\mathrm{com}`$ | `Generator_committable` over $`\mathcal{G}`$ — whether output is gated by an on/off status decision |
-| $`\mathrm{ru}^{f}`$ | `Link_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `neutral` where the data has no row — most a link may raise its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
-| $`\mathrm{rd}^{f}`$ | `Link_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `neutral` where the data has no row — most a link may lower its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{ru}^{f}`$ | `Link_ramp_limit_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, $`0`$ where the data has no row — most a link may raise its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
+| $`\mathrm{rd}^{f}`$ | `Link_ramp_limit_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, $`0`$ where the data has no row — most a link may lower its flow between snapshots, per unit of nominal power; no value means no limit — read at the later of the two snapshots, so the limit may change over time |
 | $`\mathrm{f}^{\mathrm{nom}}`$ | `Link_p_nom` over $`\Xi \times \mathcal{L}`$ — nominal power |
 | $`\mathrm{ext}^{f}`$ | `Link_p_nom_extendable` over $`\mathcal{L}`$ — whether the nominal power is a decision |
 | $`\underline{\mathrm{f}}`$ | `Link_p_min_pu` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — least flow, per unit of nominal power — negative for a link that carries both ways |
@@ -105,20 +105,20 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{c}^{f}`$ | `Link_marginal_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one unit of flow |
 | $`\mathrm{c}^{f,(2)}`$ | `Link_marginal_cost_quadratic` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of the square of one unit of flow |
 | $`\mathrm{com}^{f}`$ | `Link_committable` over $`\mathcal{L}`$ — whether flow is gated by an on/off status decision |
-| $`\mathrm{ru}^{f,\mathrm{up}}`$ | `Link_ramp_limit_start_up` over $`\Xi \times \mathcal{L}`$, `neutral` where the data has no row — most flow in the snapshot a link starts, per unit of nominal power; no value means no limit |
-| $`\mathrm{rd}^{f,\mathrm{dn}}`$ | `Link_ramp_limit_shut_down` over $`\Xi \times \mathcal{L}`$, `neutral` where the data has no row — most flow in the snapshot before a link stops, per unit of nominal power; no value means no limit |
+| $`\mathrm{ru}^{f,\mathrm{up}}`$ | `Link_ramp_limit_start_up` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — most flow in the snapshot a link starts, per unit of nominal power; no value means no limit |
+| $`\mathrm{rd}^{f,\mathrm{dn}}`$ | `Link_ramp_limit_shut_down` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — most flow in the snapshot before a link stops, per unit of nominal power; no value means no limit |
 | $`\mathrm{UT}^{f}`$ | `Link_min_up_time` over $`\Xi \times \mathcal{L}`$ — least snapshots a link stays on once started |
 | $`\mathrm{DT}^{f}`$ | `Link_min_down_time` over $`\Xi \times \mathcal{L}`$ — least snapshots a link stays off once stopped |
 | $`\mathrm{u}^{f,0}`$ | `Link_status_initial` over $`\Xi \times \mathcal{L}`$ — one where the link was on before the first snapshot, zero where off — PyPSA's `up_time_before > 0`, data prep |
-| $`\mathrm{f}^{0}`$ | `Link_p_init` over $`\Xi \times \mathcal{L}`$, `neutral` where the data has no row — the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot |
+| $`\mathrm{f}^{0}`$ | `Link_p_init` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot |
 | $`\mathrm{hold}^{f}`$ | `Link_must_stay_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — true while the up time a link brought into the horizon still binds — data prep, since `position()` compares against a literal rather than a parameter |
 | $`\mathrm{rest}^{f}`$ | `Link_must_stay_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — true while the down time a link brought into the horizon still binds — PyPSA's `min_down_time - down_time_before` snapshots, where `down_time_before > 0`, data prep for the same reason |
 | $`\mathrm{c}^{f,\mathrm{up}}`$ | `Link_start_up_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one start in this snapshot |
 | $`\mathrm{c}^{f,\mathrm{dn}}`$ | `Link_shut_down_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one stop in this snapshot |
 | $`\mathrm{c}^{f,\mathrm{on}}`$ | `Link_stand_by_cost` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — cost of one snapshot spent on |
-| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `neutral` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
+| $`\mathrm{f}^{\mathrm{mod}}`$ | `Link_p_nom_mod` over $`\mathcal{L}`$, `absent` where the data has no row — the module size a build comes in whole numbers of; no value means the build is continuous |
 | $`\mathrm{N}^{f,\mathrm{fix}}`$ | `Link_modules_installed` over $`\Xi \times \mathcal{L}`$ — how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod` where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build whose nominal power is not a whole number of modules |
-| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, `neutral` where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
+| $`\mathrm{M}^{f}`$ | `Link_big_m` over $`\Xi \times \mathcal{L}`$, $`0`$ where the data has no row — the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max` times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m` times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the peak total load and the component's largest finite `p_nom` and `p_nom_max`, or 1e6 where there is none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data prep |
 | $`\mathrm{nonneg}^{f}`$ | `Link_p_min_pu_nonneg` over $`\mathcal{L}`$ — true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep |
 | $`\alpha`$ | `Process_rate` over $`\Xi \times \mathcal{T} \times \mathcal{R}`$ — the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`, … read long — negative where the port withdraws, positive where it injects; a link is a process whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`) |
 | $`\mathrm{d}^{z}`$ | `Process_output_delay` over $`\mathcal{R}`$ — snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`, … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for a port that transfers at once. A port has the same delay in every scenario, as a link's port has |
@@ -150,7 +150,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
-| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
+| $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `link[bus0]` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`N^{f}`$ | `Link_n_mod` over $`\mathcal{L}`$ — `Link-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`u^{f}`$ | `Link_status` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-status` — how much of a committable link is on: an integer the rows below cap at one, or at the module count where the build is modular |
 | $`\mathit{up}^{f}`$ | `Link_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-start_up` — how much of a committable link turns on this snapshot, capped as the status is |
@@ -195,9 +195,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 |---|---|
 | $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 | $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
-| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
-| $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ | `position(within=relation[...])` — the position of $`t`$ inside its group |
+| $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
 #### Conditions
 
@@ -216,7 +216,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 **`Link_ramps_from_previous`**
 
 ```math
-\mathrm{Link\_ramps\_from\_previous}_{l,\xi,t} \iff \mathrm{pos}_{\mathrm{snapshot\_period}(t)}(t) > 0 \vee \mathrm{pos}(t) = 0 \wedge \left( \mathrm{u}^{f,0}_{\xi,l} = 0 \vee \mathrm{f}^{0}_{\xi,l} \text{ is defined} \right) \qquad \forall\, l \in \mathcal{L},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathrm{Link\_ramps\_from\_previous}_{l,\xi,t} \iff \mathrm{pos}_{\mathrm{period}(t)}(t) > 0 \vee \mathrm{pos}(t) = 0 \wedge \left( \mathrm{u}^{f,0}_{\xi,l} = 0 \vee \mathrm{f}^{0}_{\xi,l} \text{ is defined} \right) \qquad \forall\, l \in \mathcal{L},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 #### Variable domains
@@ -340,31 +340,31 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Link_output_arrival`**
 
 ```math
-\mathit{Link\_output\_arrival}_{\xi,t,o} = \begin{cases} f_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{if } \mathrm{cyc}^{f}_{o} \\ f_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{f},\mathrm{Link\_output\_link}(o)} \cdot \eta_{\xi,t,o} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ o \in \mathcal{O}
+\mathit{Link\_output\_arrival}_{\xi,t,o} = \begin{cases} f_{\xi,t \ominus^{\mathrm{period}(t)} \mathrm{d}^{f},\mathrm{link}(o)} \cdot \eta_{\xi,t,o} & \text{if } \mathrm{cyc}^{f}_{o} \\ f_{\xi,t \boxminus_{0}^{\mathrm{period}(t)} \mathrm{d}^{f},\mathrm{link}(o)} \cdot \eta_{\xi,t,o} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ o \in \mathcal{O}
 ```
 
 **`Process_output_arrival`**
 
 ```math
-\mathit{Process\_output\_arrival}_{\xi,t,r} = \begin{cases} z_{\xi,t \ominus^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{if } \mathrm{cyc}^{z}_{r} \\ z_{\xi,t \boxminus_{0}^{\mathrm{snapshot\_period}(t)} \mathrm{d}^{z},\mathrm{Process\_output\_process}(r)} \cdot \alpha_{\xi,t,r} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ r \in \mathcal{R}
+\mathit{Process\_output\_arrival}_{\xi,t,r} = \begin{cases} z_{\xi,t \ominus^{\mathrm{period}(t)} \mathrm{d}^{z},\mathrm{process}(r)} \cdot \alpha_{\xi,t,r} & \text{if } \mathrm{cyc}^{z}_{r} \\ z_{\xi,t \boxminus_{0}^{\mathrm{period}(t)} \mathrm{d}^{z},\mathrm{process}(r)} \cdot \alpha_{\xi,t,r} & \text{otherwise} \end{cases} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ r \in \mathcal{R}
 ```
 
 **`Generator_opex`**
 
 ```math
-\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Generator\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot \mathrm{c}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{\xi,t,g} \cdot p_{\xi,t,g} \cdot \mathrm{c}^{(2)}_{\xi,t,g} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`Link_opex`**
 
 ```math
-\mathit{Link\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot \mathrm{c}^{f}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot f_{\xi,t,l} \cdot \mathrm{c}^{f,(2)}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} \qquad \forall\, \xi \in \Xi
+\mathit{Link\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot \mathrm{c}^{f}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} f_{\xi,t,l} \cdot f_{\xi,t,l} \cdot \mathrm{c}^{f,(2)}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} \qquad \forall\, \xi \in \Xi
 ```
 
 **`Link_commitment_opex`**
 
 ```math
-\mathit{Link\_commitment\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} u^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{on}}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{snapshot\_period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} \mathit{up}^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{up}}_{\xi,t,l} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} \mathit{dn}^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{dn}}_{\xi,t,l} \qquad \forall\, \xi \in \Xi
+\mathit{Link\_commitment\_opex}_{\xi} = \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} u^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{on}}_{\xi,t,l} \cdot \mathrm{w}_{t} \cdot \mathrm{w}^{y}_{\mathrm{period}(t)} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} \mathit{up}^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{up}}_{\xi,t,l} + \sum_{t \in \mathcal{T}} \sum_{l \in \mathcal{L}} \mathit{dn}^{f}_{\xi,t,l} \cdot \mathrm{c}^{f,\mathrm{dn}}_{\xi,t,l} \qquad \forall\, \xi \in \Xi
 ```
 
 **`scenario_opex`**
@@ -400,25 +400,25 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
@@ -672,19 +672,44 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           the balance, data prep'}
       load: {description: 'demands, each on one bus'}
       period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
-    relations:
-      snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-      Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-      Link_bus0: {description: the bus a link leaves, key: link, values: bus}
-      Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-      Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-          A link of three output ports is three labels here rather than a third relation, so the file states
-          any number of them', key: link_output, values: bus}
-      Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-      Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-          … columns. A process of three ports is three labels here rather than a third relation, so the file
-          states any number of them', key: process_output, values: bus}
-      Load_bus: {description: the bus a load sits on, key: load, values: bus}
+    properties:
+      snapshot:
+        period:
+          description: the investment period a snapshot falls in
+          into: period
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      link:
+        bus0:
+          description: the bus a link leaves
+          into: bus
+      link_output:
+        link:
+          description: the link an output port belongs to
+          into: link
+        bus:
+          description: >-
+            the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
+            A link of three output ports is three labels here rather than a third
+            property, so the file states any number of them
+          into: bus
+      process_output:
+        process:
+          description: the process a port belongs to
+          into: process
+        bus:
+          description: >-
+            the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
+            columns. A process of three ports is three labels here rather than a
+            third property, so the file states any number of them
+          into: bus
+      load:
+        bus:
+          description: the bus a load sits on
+          into: bus
+
     parameters:
       snapshot_weightings_objective:
         description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -720,12 +745,12 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_down:
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_p_nom:
         description: nominal power
         dims: [scenario, link]
@@ -771,12 +796,12 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
           limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_shut_down:
         description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
           no limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_min_up_time:
         description: least snapshots a link stays on once started
         dims: [scenario, link]
@@ -794,7 +819,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
           came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_must_stay_up:
         description: true while the up time a link brought into the horizon still binds — data prep, since
           `position()` compares against a literal rather than a parameter
@@ -817,7 +842,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
       Link_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [link]
-        missing: neutral
+        missing: absent
       Link_modules_installed:
         description: 'how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -831,7 +856,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data
           prep
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_p_min_pu_nonneg:
         description: true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu
           >= 0).all()` over every snapshot and scenario, data prep
@@ -917,7 +942,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         dims: [scenario, snapshot, generator]
         where: Generator_active
       Link_p:
-        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+        description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
         dims: [scenario, snapshot, link]
         where: Link_active
@@ -1270,10 +1295,10 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           zero) delivers its flow unshifted, cyclic or not
         dims: [scenario, snapshot, link_output]
         cases:
-          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-              along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-        otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-          edge=0, within=snapshot_period[period]) * Link_efficiency
+          wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+              along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+        otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
+          edge=0, within=snapshot[period]) * Link_efficiency
       Process_output_arrival:
         description: what a process transfers at a port at a snapshot — its internal power delayed by the
           port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -1282,21 +1307,21 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           does not delay (`delay` zero) transfers at once, cyclic or not
         dims: [scenario, snapshot, process_output]
         cases:
-          wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+              along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
               * Process_rate'}
-        otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-          edge=0, within=snapshot_period[period]) * Process_rate
+        otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+          edge=0, within=snapshot[period]) * Process_rate
       Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+          * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
           * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period[period]), over=generator), over=snapshot)'}
+          by=snapshot[period]), over=generator), over=snapshot)'}
       Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-          by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
-          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+          by=snapshot[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+          * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
           over=snapshot)'}
       Link_commitment_opex: {expression: 'sum(sum(((Link_status * Link_stand_by_cost) * snapshot_weightings_objective)
-          * at(period_weight_objective, by=snapshot_period[period]), over=link), over=snapshot) + sum(sum(Link_start_up
+          * at(period_weight_objective, by=snapshot[period]), over=link), over=snapshot) + sum(sum(Link_start_up
           * Link_start_up_cost, over=link), over=snapshot) + sum(sum(Link_shut_down * Link_shut_down_cost,
           over=link), over=snapshot)'}
       scenario_opex:
@@ -1319,11 +1344,11 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         cases:
           active: {when: Load_active, expression: Load_sign * Load_p_set}
         otherwise: 0
-      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-      Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
-          over=link_output, by=Link_output_bus[bus])'}
-      Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-      Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+      Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+      Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival,
+          over=link_output, by=link_output[bus])'}
+      Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+      Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
       Bus_injection:
         dims: [scenario, snapshot, bus]
         expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
@@ -1337,7 +1362,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           row's set, condition: Link_committable AND Link_active}
       Link_ramps_from_previous: {description: 'a snapshot whose ramp reads a previous output — any snapshot
           but its period''s first, and the horizon''s first where the link comes in off or carries an initial
-          output', condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
+          output', condition: 'position(snapshot, within=snapshot[period]) > 0 OR (position(snapshot)
           == 0 AND (Link_status_initial == 0 OR Link_p_init))'}
     objective: {sense: minimize, expression: total_cost}
     ```
@@ -1345,7 +1370,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
     The prep — every table the spec declares, from the network — and the solve:
 
     ```python
-    from differential.pypsa.prep import relation, static, varying, weighting
+    from differential.pypsa.prep import prop, static, varying, weighting
 
 
     n = build()  # the network from the PyPSA tab
@@ -1360,9 +1385,9 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
             **scenarios(n),
             **periods(n, multi),
             **carriers(n, multi),
-        'Generator_bus': relation(n, 'Generator', 'bus'),
-        'Link_bus0': relation(n, 'Link', 'bus0'),
-        'Load_bus': relation(n, 'Load', 'bus'),
+        'generator.bus': prop(n, 'Generator', 'bus'),
+        'link.bus0': prop(n, 'Link', 'bus0'),
+        'load.bus': prop(n, 'Load', 'bus'),
         'snapshot_weightings_objective': weighting(n, 'objective'),
         'Generator_sign': per_component('Generator', first_scenario(n.generators['sign'])),
         'Load_p_set': varying(n, 'Load', 'p_set'),

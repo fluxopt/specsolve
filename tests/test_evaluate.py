@@ -24,12 +24,12 @@ SPEC = {
         'dispatch': {'dims': ['snapshot', 'generator']},
         'cost': {'dims': ['generator']},
     },
-    'relations': {'bus': {'key': 'generator', 'values': 'node'}},
+    'properties': {'generator': {'bus': 'node'}},
     'expressions': {
         'cost_by_gen': 'dispatch * cost',
         'total_cost': 'sum(dispatch * cost)',
         'served': 'sum(dispatch, over=generator)',
-        'by_node': 'sum(dispatch, over=generator, by=bus[node])',
+        'by_node': 'sum(dispatch, over=generator, by=generator[bus])',
     },
 }
 
@@ -49,7 +49,7 @@ def sources() -> dict[str, object]:
                 'value': [10.0, 2.0, 20.0, 3.0, 5.0, 7.0],
             }
         ),
-        'bus': pl.DataFrame({'generator': GENERATORS, 'node': ['n1', 'n2']}),
+        'generator.bus': pl.DataFrame({'generator': GENERATORS, 'bus': ['n1', 'n2']}),
     }
 
 
@@ -70,10 +70,10 @@ def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
     )
 
 
-def test_a_grouped_sum_relabels_through_a_relation():
+def test_a_grouped_sum_relabels_through_a_property():
     frame = evaluate('by_node').sort('snapshot', 'node')
     assert frame.columns == ['snapshot', 'node', 'value'], (
-        'sum(over=generator, by=bus[node]) replaces generator with the node it maps to'
+        'sum(over=generator, by=generator[bus]) replaces generator with the node it maps to'
     )
     got = {(s, n): v for s, n, v in frame.iter_rows()}
     assert got == pytest.approx(

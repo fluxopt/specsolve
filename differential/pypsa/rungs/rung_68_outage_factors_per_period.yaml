@@ -32,30 +32,56 @@ dimensions:
   outage: {description: 'the passive branches a security-constrained run takes out one at a time — PyPSA''s
       `branch_outages`, each a line or a transformer; none on a plain run'}
   period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
-relations:
-  snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-  Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-  Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-  Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-      A link of three output ports is three labels here rather than a third relation, so the file states
-      any number of them', key: link_output, values: bus}
-  Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-  Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-      … columns. A process of three ports is three labels here rather than a third relation, so the file
-      states any number of them', key: process_output, values: bus}
-  Load_bus: {description: the bus a load sits on, key: load, values: bus}
-  Line_bus0: {description: the bus a line's flow is measured at, key: line, values: bus}
-  Line_bus1: {description: the bus at a line's other end, key: line, values: bus}
-  Outage_line:
-    description: the line an outage takes out; an outage of a transformer has no row
-    key: outage
-    values: line
-    missing: absent
-  Outage_transformer:
-    description: the transformer an outage takes out; an outage of a line has no row
-    key: outage
-    values: transformer
-    missing: absent
+properties:
+  snapshot:
+    period:
+      description: the investment period a snapshot falls in
+      into: period
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link_output:
+    link:
+      description: the link an output port belongs to
+      into: link
+    bus:
+      description: >-
+        the bus an output port delivers to — PyPSA's `bus1`, `bus2`, … columns.
+        A link of three output ports is three labels here rather than a third
+        property, so the file states any number of them
+      into: bus
+  process_output:
+    process:
+      description: the process a port belongs to
+      into: process
+    bus:
+      description: >-
+        the bus a port draws from or delivers to — PyPSA's `bus0`, `bus1`, …
+        columns. A process of three ports is three labels here rather than a
+        third property, so the file states any number of them
+      into: bus
+  load:
+    bus:
+      description: the bus a load sits on
+      into: bus
+  line:
+    bus0:
+      description: the bus a line's flow is measured at
+      into: bus
+    bus1:
+      description: the bus at a line's other end
+      into: bus
+  outage:
+    line:
+      description: the line an outage takes out; an outage of a transformer has no row
+      into: line
+      missing: absent
+    transformer:
+      description: the transformer an outage takes out; an outage of a line has no row
+      into: transformer
+      missing: absent
+
 parameters:
   snapshot_weightings_objective:
     description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -180,7 +206,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   Line_BODF:
     description: the share of an outaged branch's flow a line takes on when that branch goes out — PyPSA's
       `BODF`, from the PTDF of the sub-network the period's active branches form, data prep; a row only
@@ -188,24 +214,24 @@ parameters:
       line itself. The factors are the same in every scenario, because PyPSA takes those of the first
       scenario (`abstract.py:534`)
     dims: [period, line, outage]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'
     dims: [scenario, snapshot, generator]
     where: Generator_active
   Line_s:
-    description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `Line_bus0` end: a positive value
-      withdraws there and injects at `Line_bus1`, lossless'
+    description: '`Line-s` — PyPSA''s `p0`, the flow measured at the `line[bus0]` end: a positive value
+      withdraws there and injects at `line[bus1]`, lossless'
     dims: [scenario, snapshot, line]
     where: Line_active
   Transformer_s:
-    description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `Transformer_bus0` end: a
-      positive value withdraws there and injects at `Transformer_bus1`, lossless'
+    description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `transformer[bus0]` end: a
+      positive value withdraws there and injects at `transformer[bus1]`, lossless'
     dims: [scenario, snapshot, transformer]
     where: Transformer_active
   Link_p:
-    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `link[bus0]` end: a positive value
       withdraws there and injects at every bus the link''s output ports deliver to'
     dims: [scenario, snapshot, link]
     where: Link_active
@@ -242,8 +268,8 @@ constraints:
       branch''s flow. PyPSA names one row per outaged component `c` and sub-network `n`, and under `multi_investment_periods`
       it appends `-period-{p}` for each period `p`. This entry states them all over the outage dimension'
     dims: [scenario, snapshot, line, outage]
-    where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot_period[period])
-    expression: Line_s_monitored + at(Line_BODF, by=snapshot_period[period]) * Outage_s >= -Line_s_max_pu
+    where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot[period])
+    expression: Line_s_monitored + at(Line_BODF, by=snapshot[period]) * Outage_s >= -Line_s_max_pu
       * Line_s_nom
   Line_fix_s_upper_security:
     description: '`Line-fix-s-upper-security-for-{c}-outage-in-sub-network-{n}` — after any one outage,
@@ -251,8 +277,8 @@ constraints:
       PyPSA names one row per outaged component `c` and sub-network `n`, and under `multi_investment_periods`
       it appends `-period-{p}` for each period `p`. This entry states them all over the outage dimension'
     dims: [scenario, snapshot, line, outage]
-    where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot_period[period])
-    expression: Line_s_monitored + at(Line_BODF, by=snapshot_period[period]) * Outage_s <= Line_s_max_pu
+    where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot[period])
+    expression: Line_s_monitored + at(Line_BODF, by=snapshot[period]) * Outage_s <= Line_s_max_pu
       * Line_s_nom
   Kirchhoff_Voltage_Law:
     description: '`Kirchhoff-Voltage-Law` — around every independent cycle the impedance-weighted flows
@@ -283,10 +309,10 @@ expressions:
       zero) delivers its flow unshifted, cyclic or not
     dims: [scenario, snapshot, link_output]
     cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-      edge=0, within=snapshot_period[period]) * Link_efficiency
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot[period]) * Link_efficiency
   Process_output_arrival:
     description: what a process transfers at a port at a snapshot — its internal power delayed by the
       port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -295,15 +321,15 @@ expressions:
       does not delay (`delay` zero) transfers at once, cyclic or not
     dims: [scenario, snapshot, process_output]
     cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period])
           * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-      edge=0, within=snapshot_period[period]) * Process_rate
+    otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot[period]) * Process_rate
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
       * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=generator), over=snapshot)'}
+      by=snapshot[period]), over=generator), over=snapshot)'}
   scenario_opex:
     dims: [scenario]
     expression: Generator_opex
@@ -341,20 +367,20 @@ expressions:
       it goes out
     dims: [scenario, snapshot, outage]
     cases:
-      line: {when: Outage_line, expression: 'at(Line_s_monitored, by=Outage_line[line])'}
-    otherwise: at(Transformer_s_monitored, by=Outage_transformer[transformer])
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-  Line_injection: {expression: '(-sum(Line_s, over=line, by=Line_bus0[bus])) + sum(Line_s, over=line,
-      by=Line_bus1[bus])'}
-  Link_injection: {expression: 'sum(Link_output_arrival, over=link_output, by=Link_output_bus[bus])'}
-  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+      line: {when: "outage[line]", expression: 'at(Line_s_monitored, by=outage[line])'}
+    otherwise: at(Transformer_s_monitored, by=outage[transformer])
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+  Line_injection: {expression: '(-sum(Line_s, over=line, by=line[bus0])) + sum(Line_s, over=line,
+      by=line[bus1])'}
+  Link_injection: {expression: 'sum(Link_output_arrival, over=link_output, by=link_output[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
   Bus_injection:
     dims: [scenario, snapshot, bus]
     expression: (((Generator_injection + Line_injection) + Link_injection) + Load_injection) + Process_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-  Line_angle_sum: {expression: 'sum(Line_s * at(Line_cycle_weight, by=snapshot_period[period]), over=line)'}
+  Line_angle_sum: {expression: 'sum(Line_s * at(Line_cycle_weight, by=snapshot[period]), over=line)'}
   Cycle_angle_sum:
     dims: [scenario, snapshot, cycle]
     expression: Line_angle_sum
