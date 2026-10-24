@@ -24,7 +24,10 @@ NETWORK: dict[str, Any] = {
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0}}},
     'constraints': {
         'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=generator[bus]) >= load'},
-        'fuel_cap': {'dims': ['bus', 'carrier'], 'expression': 'sum(p, over=generator, by=generator[bus, fuel]) <= cap'},
+        'fuel_cap': {
+            'dims': ['bus', 'carrier'],
+            'expression': 'sum(p, over=generator, by=generator[bus, fuel]) <= cap',
+        },
     },
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost, over=generator)'},
 }
@@ -58,11 +61,13 @@ def _wide_from_pandas() -> dict[str, Any]:
     import pandas as pd
 
     frame = pd.DataFrame({'bus': ['a', 'a', 'b'], 'fuel': ['gas', None, 'coal']}, index=pd.Index(GENERATORS))
-    return _network(**{
-        'generator': frame.rename_axis('generator').reset_index(),
-        'generator.bus': None,
-        'generator.fuel': None,
-    })
+    return _network(
+        **{
+            'generator': frame.rename_axis('generator').reset_index(),
+            'generator.bus': None,
+            'generator.fuel': None,
+        }
+    )
 
 
 @pytest.mark.parametrize(
