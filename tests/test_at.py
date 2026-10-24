@@ -1,6 +1,6 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
-`sum` walks a relation from the fine dim into the coarse one; `at` walks it
+`sum` walks a property from the fine dim into the coarse one; `at` walks it
 back out. `examples/multi_period.yaml` is ragged — four snapshots in 2030
 against two in 2050 — and its capacity bound reads a per-period variable at
 every snapshot.
@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from tests.conftest import EXAMPLES_DIR, by_coord, relation
+from tests.conftest import EXAMPLES_DIR, by_coord, prop
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
@@ -28,7 +28,7 @@ GENERATORS = ['wind', 'gas']
 def _sources(capex_2050_wind: float = 8.0):
     return {
         'snapshot': pl.DataFrame({'snapshot': SNAPSHOTS}),
-        'period_of': pl.DataFrame({'snapshot': SNAPSHOTS, 'period': PERIOD_OF}),
+        'snapshot.period': pl.DataFrame({'snapshot': SNAPSHOTS, 'period': PERIOD_OF}),
         'period': pl.DataFrame({'period': [2030, 2050]}),
         'generator': pl.DataFrame({'generator': GENERATORS}),
         'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 20.0, 40.0, 60.0]}),
@@ -76,7 +76,7 @@ COMPONENT_GATE = {
         'component': {'dtype': 'str'},
         't': {'dtype': 'int', 'ordered': True},
     },
-    'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+    'properties': {'flow': {'component': 'component'}},
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
     'variables': {
         'rate': {'dims': ['flow', 't'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -85,7 +85,7 @@ COMPONENT_GATE = {
     'constraints': {
         'gate': {
             'dims': ['flow', 't'],
-            'expression': 'rate <= at(on, by=component_of[component]) * 10',
+            'expression': 'rate <= at(on, by=flow[component]) * 10',
         },
         'need': {'dims': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
@@ -99,7 +99,7 @@ def test_one_binary_gates_every_flow_of_its_component():
     sources = {
         't': [0, 1],
         'flow': pl.DataFrame({'flow': flows}),
-        'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
+        'flow.component': prop('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pl.DataFrame({'component': components}),
         'cost': pl.DataFrame({'flow': flows, 'value': [1.0, 2.0, 1.5]}),
         'oncost': pl.DataFrame({'component': components, 'value': [5.0, 7.0]}),
@@ -131,7 +131,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
             'flow': {'dtype': 'str'},
             'component': {'dtype': 'str'},
         },
-        'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+        'properties': {'flow': {'component': 'component'}},
         'parameters': {'cost': {'dims': ['flow']}, 'share': {'dims': ['flow']}},
         'variables': {
             'level': {'dims': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -140,9 +140,9 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'constraints': {
             'draw': {
                 'dims': [],
-                'expression': 'sum(at(level, by=component_of[component]) * share, over=flow) >= 9',
+                'expression': 'sum(at(level, by=flow[component]) * share, over=flow) >= 9',
             },
-            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'},
+            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=flow[component])'},
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(level * 1.0) + sum(take * cost)'},
     }
@@ -153,7 +153,7 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
     }
     index = {
         'flow': pd.DataFrame({'flow': flows}),
-        'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
+        'flow.component': prop('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pd.Index(components, name='component'),
     }
     with differential(spec, data | index) as run:
@@ -177,7 +177,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             't': {'dtype': 'int', 'ordered': True},
             'tf': {'dtype': 'int', 'ordered': True},
         },
-        'relations': {'same_moment': {'key': 'tf', 'values': 't'}},
+        'properties': {'tf': {'t': 't'}},
         'parameters': {
             'window': {'dims': ['unit', 't', 'tf'], 'missing': 0},
             'load': {'dims': ['t']},
@@ -193,9 +193,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'constraints': {
             'a_start_turns_it_on': {
                 'dims': ['unit', 'tf'],
-                'expression': (
-                    'started >= at(on, by=same_moment[t]) - shift(at(on, by=same_moment[t]), along=tf, offset=1, edge=0)'
-                ),
+                'expression': ('started >= at(on, by=tf[t]) - shift(at(on, by=tf[t]), along=tf, offset=1, edge=0)'),
             },
             'stays_up_its_own_time': {
                 'dims': ['unit', 't'],
@@ -225,7 +223,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'unit': pl.DataFrame({'unit': list(up_time)}),
         't': pl.DataFrame({'t': hours}),
         'tf': pl.DataFrame({'tf': hours}),
-        'same_moment': relation('tf', 't', hours, hours),
+        'tf.t': prop('tf', 't', hours, hours),
     }
     with sps.solve(spec, sources) as solution:
         assert solution.objective == pytest.approx(13.0), (
@@ -240,12 +238,12 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
 #: the row built, its right-hand side is zero.
 DANGLING = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
-    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
+    'properties': {'flow': {'component': {'into': 'component', 'missing': 'absent'}}},
     'variables': {
         'level': {'dims': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'}},
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=flow[component])'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=flow) - 1000 * sum(level, over=component)'},
 }
 DANGLING_MAP = ['c1', 'c1', None]
@@ -258,13 +256,13 @@ def _dangling_sources(map_: list | None = None, **extra):
 
     return {
         'flow': pd.DataFrame({'flow': FLOWS}),
-        'component_of': relation('flow', 'component', FLOWS, DANGLING_MAP if map_ is None else map_),
+        'flow.component': prop('flow', 'component', FLOWS, DANGLING_MAP if map_ is None else map_),
         'component': pd.Index(COMPONENTS, name='component'),
         **extra,
     }
 
 
-def test_at_through_a_null_relation_takes_the_row_with_it():
+def test_at_through_a_missing_property_takes_the_row_with_it():
     """A label mapping nowhere has no value to read, so the row is not asserted (#897).
 
     Linopy lane only; the differential case below carries the relational lane.
@@ -282,7 +280,7 @@ def test_at_through_a_null_relation_takes_the_row_with_it():
     )
 
 
-def test_at_through_a_null_relation_agrees_between_lanes():
+def test_at_through_a_missing_property_agrees_between_lanes():
     """The same model on both lanes (#897, #968)."""
     from tests.differential import differential
 
@@ -291,15 +289,20 @@ def test_at_through_a_null_relation_agrees_between_lanes():
         assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
 
-#: Two columns read at once, through a relation that leaves `f3` out.
+#: Two properties read at once, one of which leaves `f3` out.
 DANGLING_PAIR = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}, 'kind': {'dtype': 'str'}},
-    'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind'], 'missing': 'absent'}},
+    'properties': {
+        'flow': {
+            'component': {'into': 'component', 'missing': 'absent'},
+            'kind': {'into': 'kind', 'missing': 'absent'},
+        }
+    },
     'variables': {
         'level': {'dims': ['component', 'kind'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=placed[component, kind])'}},
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=flow[component, kind])'}},
     'objective': {
         'sense': 'maximize',
         'expression': 'sum(take, over=flow) - 1000 * sum(sum(level, over=component), over=kind)',
@@ -307,8 +310,8 @@ DANGLING_PAIR = {
 }
 
 
-def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
-    """A pullback reads a tuple of labels, so one null anywhere leaves nothing."""
+def test_at_through_a_pair_one_property_leaves_out_takes_the_row_with_it():
+    """A pullback reads the inner join of its properties, so one missing row anywhere leaves nothing."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -317,17 +320,20 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
         DANGLING_PAIR,
         {
             'flow': pd.DataFrame({'flow': flows}),
-            'placed': pd.DataFrame({'flow': flows[:2], 'component': ['c1', 'c1'], 'kind': ['k1', 'k1']}),
+            'flow.component': pd.DataFrame({'flow': flows[:2], 'component': ['c1', 'c1']}),
+            'flow.kind': pd.DataFrame({'flow': flows, 'kind': ['k1', 'k1', 'k1']}),
             'component': pd.Index(['c1', 'c2'], name='component'),
             'kind': pd.Index(['k1'], name='kind'),
         },
         lp=True,
     ) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound, not by a row reading nothing'
-        assert run.engine.diagnostics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
+        assert run.engine.diagnostics().rows == 2, (
+            'the two flows with both properties have a row, and f3, with a kind and no component, has none'
+        )
 
 
-#: The same shape with a total relation; `level` is masked away at `c2`.
+#: The same shape with a total property; `level` is masked away at `c2`.
 MASKED = DANGLING | {
     'parameters': {'usable': {'dims': ['component']}},
     'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
@@ -335,7 +341,7 @@ MASKED = DANGLING | {
 
 
 def test_at_over_a_masked_variable_takes_the_row_with_it():
-    """A pullback carries the mask under it, not only the relation's own gaps (#968)."""
+    """A pullback carries the mask under it, not only the property's own gaps (#968)."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -353,7 +359,7 @@ DANGLING_SHIFTED = {
         't': {'dtype': 'int', 'ordered': True},
         'u': {'dtype': 'str'},
     },
-    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
+    'properties': {'flow': {'component': {'into': 'component', 'missing': 'absent'}}},
     'variables': {
         'level': {'dims': ['component', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -361,7 +367,7 @@ DANGLING_SHIFTED = {
     'constraints': {
         'link': {
             'dims': ['flow', 't', 'u'],
-            'expression': 'take <= shift(at(level, by=component_of[component]), along=t, offset=1, edge=0)',
+            'expression': 'take <= shift(at(level, by=flow[component]), along=t, offset=1, edge=0)',
         }
     },
     'objective': {
@@ -404,16 +410,16 @@ def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
 
     spec = {
         'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
-        'relations': {'on': {'key': 'g', 'values': 'k', 'missing': 'absent'}},
+        'properties': {'g': {'k': {'into': 'k', 'missing': 'absent'}}},
         'parameters': {'cap': {'dims': ['k']}},
         'variables': {'y': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}}},
-        'constraints': {'c': {'dims': ['g'], 'expression': 'y <= at(cap, by=on[k])'}},
+        'constraints': {'c': {'dims': ['g'], 'expression': 'y <= at(cap, by=g[k])'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
     }
     sources = {
         'g': ['a', 'b'],
         'k': pl.DataFrame({'k': []}, schema={'k': pl.String}),
-        'on': pl.DataFrame({'g': [], 'k': []}, schema={'g': pl.String, 'k': pl.String}),
+        'g.k': pl.DataFrame({'g': [], 'k': []}, schema={'g': pl.String, 'k': pl.String}),
         'cap': pl.DataFrame({'k': [], 'value': []}, schema={'k': pl.String, 'value': pl.Float64}),
     }
     with differential(spec, sources) as run:

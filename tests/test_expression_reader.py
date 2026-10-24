@@ -12,7 +12,7 @@ import pytest
 import specsolve as sps
 from specsolve import _api as api
 from specsolve._engine.compiler import Compiler
-from specsolve.errors import DataError, LanguageError, SpecsolveError
+from specsolve.errors import LanguageError, SpecsolveError
 from tests.fixtures import override
 
 SPEC = {

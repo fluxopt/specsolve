@@ -13,7 +13,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DimensionError, LanguageError
-from tests.conftest import masked_operand_spec, relation
+from tests.conftest import masked_operand_spec, prop
 from tests.differential import differential
 from tests.oracle import pd
 
@@ -184,29 +184,27 @@ def test_a_window_whose_every_width_is_zero_builds_no_row():
 
 
 #: A width declared over the group's own dimension, and one coordinate the
-#: relation sends nowhere: the width is read through the relation, so the unmapped
+#: property sends nowhere: the width is read through the property, so the unmapped
 #: snapshot carries no width at all.
 UNMAPPED_WIDTH = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
-    'relations': {'season_of': {'key': 't', 'values': 'season', 'missing': 'absent'}},
+    'properties': {'t': {'season': {'into': 'season', 'missing': 'absent'}}},
     'parameters': {'w': {'dims': ['season'], 'dtype': 'int'}, 'price': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
-    'constraints': {
-        'rolling': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w, within=season_of[season]) <= 4'}
-    },
+    'constraints': {'rolling': {'dims': ['t'], 'expression': 'sum_back(x, along=t, window=w, within=t[season]) <= 4'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * price, over=t)'},
 }
 
 UNMAPPED_WIDTH_SOURCES = {
     't': pd.Index([0, 1, 2, 3], name='t'),
     'season': pd.Index(['summer'], name='season'),
-    'season_of': pd.DataFrame({'t': [0, 1, 2], 'season': ['summer'] * 3}),
+    't.season': pd.DataFrame({'t': [0, 1, 2], 'season': ['summer'] * 3}),
     'w': pd.Series([2], index=pd.Index(['summer'], name='season')),
     'price': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
 }
 
 
-def test_a_width_read_through_a_relation_that_maps_nothing_there_builds_no_row():
+def test_a_width_read_through_a_property_that_maps_nothing_there_builds_no_row():
     """A coordinate in no group has no width, which is a window of nothing (#1535)."""
     with differential(UNMAPPED_WIDTH, UNMAPPED_WIDTH_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'the snapshot in no season carries no width, so it holds no row'
@@ -273,7 +271,7 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
 DAY_WINDOW = {
     'description': 'A minimum up time that stops at each representative day.',
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'day': {'dtype': 'str'}},
-    'relations': {'day_of': {'key': 't', 'values': 'day', 'missing': 'absent'}},
+    'properties': {'t': {'day': {'into': 'day', 'missing': 'absent'}}},
     'parameters': {'must_start': {'dims': ['t']}},
     'variables': {
         'started': {'dims': ['t'], 'domain': 'binary'},
@@ -296,7 +294,7 @@ def day_window(window: str, *, starts: list[float], days: list[str | None] = DAY
     sources = {
         't': pd.Index(range(6), name='t'),
         'day': pd.Index(['early', 'late'], name='day'),
-        'day_of': relation('t', 'day', range(6), days),
+        't.day': prop('t', 'day', range(6), days),
         'must_start': pd.Series(starts, index=pd.Index(range(6), name='t')),
     }
     return spec, sources
@@ -316,7 +314,7 @@ def test_a_window_stops_at_the_edge_of_the_group_it_is_partitioned_by():
     its own group the window reaches back over positions that are its
     neighbours, and only that hour is held.
     """
-    spec, sources = day_window('sum_back(started, along=t, window=3, within=day_of[day])', starts=[0, 0, 1, 0, 0, 0])
+    spec, sources = day_window('sum_back(started, along=t, window=3, within=t[day])', starts=[0, 0, 1, 0, 0, 0])
     with differential(spec, sources) as run:
         assert _on(run.result) == [0.0, 0.0, 1.0, 0.0, 0.0, 0.0], (
             'the start holds its own hour on, and no hour of the day after it'
@@ -333,7 +331,7 @@ def test_a_partitioned_window_wraps_inside_its_own_group():
     contrast with the acyclic run above visible in one number.
     """
     spec, sources = day_window(
-        "sum_back(started, along=t, window=3, within=day_of[day], edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
+        "sum_back(started, along=t, window=3, within=t[day], edge='wrap')", starts=[0, 0, 1, 0, 0, 0]
     )
     with differential(spec, sources) as run:
         assert _on(run.result) == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0], (
@@ -346,11 +344,11 @@ def test_a_window_width_may_be_read_per_group():
     """``window=`` over the dimension the partition groups into.
 
     No frame carries a column of `day`: what travels with an hour is the
-    relation's own value, so the width is read under the group's column and each
+    property's own value, so the width is read under the group's column and each
     group is reached by its own. The two days differ, which is what a single
     width cannot reproduce.
     """
-    spec, sources = day_window('sum_back(started, along=t, window=up, within=day_of[day])', starts=[0, 1, 0, 1, 0, 0])
+    spec, sources = day_window('sum_back(started, along=t, window=up, within=t[day])', starts=[0, 1, 0, 1, 0, 0])
     spec['parameters']['up'] = {'dims': ['day'], 'dtype': 'int'}
     sources['up'] = pd.Series([1, 3], index=pd.Index(['early', 'late'], name='day'))
     with differential(spec, sources) as run:
@@ -360,17 +358,17 @@ def test_a_window_width_may_be_read_per_group():
         assert run.oracle == pytest.approx(4.0), 'one hour held for the early day and three for the late one'
 
 
-def test_an_hour_the_relation_places_in_no_day_reaches_nothing():
+def test_an_hour_the_property_places_in_no_day_reaches_nothing():
     """A coordinate in no group is the one way a window loses a row.
 
     Unpartitioned a window always contains the position it sits at, so every
     row is built. A partitioned one reaches inside a group, and an hour that
     belongs to none reaches nothing at all — not even itself — so its row has
-    no terms and is not built, the reading a partial relation gets everywhere
+    no terms and is not built, the reading a partial property gets everywhere
     else.
     """
     spec, sources = day_window(
-        'sum_back(started, along=t, window=3, within=day_of[day])',
+        'sum_back(started, along=t, window=3, within=t[day])',
         starts=[0, 0, 1, 0, 0, 0],
         days=[*DAYS[:5], None],
     )
