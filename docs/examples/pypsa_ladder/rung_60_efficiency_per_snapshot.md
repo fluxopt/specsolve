@@ -172,7 +172,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`s`$ | `Line_s` over $`\Xi \times \mathcal{T} \times \mathcal{K}`$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `Line_bus1`, lossless |
 | $`\sigma`$ | `Transformer_s` over $`\Xi \times \mathcal{T} \times \mathcal{M}`$ — `Transformer-s` — PyPSA's `p0`, the flow measured at the `Transformer_bus0` end: a positive value withdraws there and injects at `Transformer_bus1`, lossless |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -212,7 +212,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 | $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
-#### Conditions
+#### Condition definitions
 
 **`StorageUnit_fix`**
 

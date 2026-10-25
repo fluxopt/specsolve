@@ -118,7 +118,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{dn}`$ | `Generator_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-shut_down` — how much of a committable unit turns off this snapshot, capped as the status is |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -148,7 +148,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
-#### Conditions
+#### Condition definitions
 
 **`Generator_committed`**
 

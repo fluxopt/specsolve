@@ -111,7 +111,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`CVaR`$ | `CVaR` (scalar), $`0`$ where the mask leaves it out — `CVaR` — the tail's average cost, what the objective prices at `omega` |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|

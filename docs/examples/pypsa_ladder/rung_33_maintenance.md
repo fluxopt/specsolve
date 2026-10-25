@@ -194,7 +194,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision, for a link that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision, for a process that is active; the parameter of the same PyPSA name carries the fixed regime |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -224,7 +224,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
 | $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 
-#### Conditions
+#### Condition definitions
 
 **`Generator_maint_ext`**
 

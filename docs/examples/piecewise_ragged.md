@@ -51,7 +51,7 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 
 | Symbol | Meaning |
 |---|---|
-| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`b \boxminus_{v} k`$ | `edge=v` — $`b-k`$, and $`v`$ past the edge |
 
 #### Variable domains
 

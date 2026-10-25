@@ -188,7 +188,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision, for a link that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision, for a process that is active; the parameter of the same PyPSA name carries the fixed regime |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -242,7 +242,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 | $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
-#### Conditions
+#### Condition definitions
 
 **`Link_com_ext`**
 

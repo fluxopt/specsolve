@@ -174,7 +174,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{dn}^{z}`$ | `Process_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-shut_down` — how much of a committable process turns off this snapshot, capped as the status is |
 | $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision, for a generator that is active; the parameter of the same PyPSA name carries the fixed regime |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -212,7 +212,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`t \ominus^{\mathrm{property}(t)} k`$ | `within=subject[...]` — $`t-k`$ inside the group of $`t`$ |
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
-#### Conditions
+#### Condition definitions
 
 **`Generator_com_ext`**
 

@@ -128,7 +128,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision, for a generator that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -168,7 +168,7 @@ One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/example
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 | $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
-#### Conditions
+#### Condition definitions
 
 **`Generator_committed`**
 

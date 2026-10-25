@@ -73,9 +73,9 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 
 | Symbol | Meaning |
 |---|---|
-| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
-| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
-| $`\lvert \mathcal{T} \rvert`$ | the size of $`\mathcal{T}`$; $`\lvert \mathcal{T} \rvert - 1`$ is the last position |
+| $`k \boxminus_{v} n`$ | `edge=v` — $`k-n`$, and $`v`$ past the edge |
+| $`\mathrm{pos}(k)`$ | `position()` — the position of $`k`$, counted from $`0`$; $`k`$ is the label |
+| $`\lvert \mathcal{K} \rvert`$ | the size of $`\mathcal{K}`$; $`\lvert \mathcal{K} \rvert - 1`$ is the last position |
 
 #### Variable domains
 

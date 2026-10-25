@@ -219,7 +219,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision, for a link that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision, for a process that is active; the parameter of the same PyPSA name carries the fixed regime |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -287,7 +287,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 | $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
-#### Conditions
+#### Condition definitions
 
 **`Generator_committed`**
 

@@ -212,7 +212,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`N^{e}`$ | `Store_n_mod` over $`\mathcal{V}`$ — `Store-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -252,7 +252,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 | $`\mathrm{pos}_{\mathrm{property}(t)}(t)`$ | `position(within=subject[...])` — the position of $`t`$ inside its group |
 
-#### Conditions
+#### Condition definitions
 
 **`StorageUnit_ext`**
 

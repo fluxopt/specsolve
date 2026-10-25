@@ -47,7 +47,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`f`$ | `f` over $`\mathcal{S} \times \mathcal{L}`$ — flow on a line, signed towards its `line[to_bus]` bus |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|

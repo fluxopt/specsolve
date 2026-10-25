@@ -50,7 +50,7 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 
 | Symbol | Meaning |
 |---|---|
-| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`s \ominus k`$ | `edge='wrap'` — $`s-k`$, cyclic |
 
 #### Variable domains
 

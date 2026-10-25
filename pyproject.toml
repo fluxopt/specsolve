@@ -25,7 +25,7 @@ dependencies = [
     # A direct reference to the head of the mathspec stack that adds sets and
     # properties, fluxopt/mathspec#5, until mathspec releases it. PyPI refuses
     # a direct reference, so this cannot publish: a floor replaces it on release.
-    "mathspec @ git+https://github.com/fluxopt/mathspec@24b66780a0e7bf4955dfc25c72132026b587f021",
+    "mathspec @ git+https://github.com/fluxopt/mathspec@85544c3db7f0c0958df8d920315f7acf95c75ae7",
     "polars>=1.33.1",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.

@@ -72,7 +72,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 | $`\mathit{shed}`$ | `shed` over $`\mathcal{T} \times \mathcal{H}`$ — demand shed out of a block in an hour |
 | $`\mathit{units}`$ | `units` over $`\mathcal{P}`$ — how many units of a plant stand available all day |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -83,7 +83,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 
 | Symbol | Meaning |
 |---|---|
-| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`h \ominus k`$ | `edge='wrap'` — $`h-k`$, cyclic |
 
 #### Variable domains
 

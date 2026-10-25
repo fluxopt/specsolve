@@ -62,7 +62,7 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 | $`\mathit{tail\_start}`$ | `tail_start` (scalar) — the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
 | $`\mathit{tail\_average}`$ | `tail_average` (scalar) — the average operating cost of the futures beyond that level |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|

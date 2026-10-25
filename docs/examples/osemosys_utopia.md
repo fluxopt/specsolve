@@ -57,7 +57,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 | $`\mathit{activity}`$ | `activity` over $`\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}`$ — how hard a technology runs, per timeslice and mode |
 | $`\mathit{build}`$ | `build` over $`\mathcal{T} \times \mathcal{V}`$ — how much capacity is built, and when |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|

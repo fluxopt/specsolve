@@ -60,7 +60,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot, zero where it does not yet stand |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -70,7 +70,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 
 | Symbol | Meaning |
 |---|---|
-| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`e \boxminus_{v} k`$ | `edge=v` — $`e-k`$, and $`v`$ past the edge |
 
 #### Variable domains
 

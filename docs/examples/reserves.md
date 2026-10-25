@@ -66,7 +66,7 @@ Energy and reserve co-optimization on a two-bus grid: an offer is a generator, m
 | $`f`$ | `f` over $`\mathcal{L}`$ — flow on a line, signed towards its `line[to_bus]` bus |
 | $`r`$ | `r` over $`\mathcal{O}`$ — reserve held against an offer |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
