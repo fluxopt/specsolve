@@ -60,10 +60,10 @@ class EvaluationContext:
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
-    #: How a ``missing: neutral`` parameter reads where the data has no row. A
-    #: coefficient is zero there, which is what the row multiplies by; the side
-    #: of a where comparison is absent there, which is the false the language
-    #: states for a comparison over a value that is not supplied.
+    #: How a parameter reads where its value is NaN. A coefficient is zero
+    #: there, which is what the row multiplies by; the side of a where
+    #: comparison is absent there, which is the false the language states for
+    #: a comparison over a value that is not supplied.
     absent_parameter: Callable[[Any], Any] = absence.coefficient
     #: Where the data gave a row, for each numeric parameter a declared value
     #: fills elsewhere (:func:`~tests.linopy_lane.loader.given_rows`).
@@ -147,7 +147,7 @@ def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
         if node.partition is not None:
             by = node.partition.name
             (column,) = node.partition.grouped
-            arr = _group_offsets(node, by, bound_relation(by, column, ctx.relations), np.asarray(labels))
+            arr = _group_offsets(node, by, bound_read(node.partition, column, ctx.relations), np.asarray(labels))
             return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
@@ -265,27 +265,47 @@ def _group_offsets(node: program.DimensionPosition, by: str, groups: xr.DataArra
 
 
 def _relation_has_a_row(node: program.RelationDefined, ctx: EvaluationContext) -> xr.DataArray:
-    """Where the relation holds a row at the frame's coordinates.
+    """Where the set or the property table holds a row at the frame's coordinates.
 
-    The arrays are padded to the key's whole product, so a key the table leaves
-    out is null in every column; a row it does hold carries at least one value,
-    a column left null in it being a value the model reads as absent.
+    A set arrives as one where its rows are, over its members. A property's
+    array is padded to its key's whole product, so a key the table leaves out
+    is null there.
     """
-    columns = ctx.program.relations[node.name].values
+    relation = ctx.program.relations[node.name]
+    columns = relation.values
+    if not columns:
+        held = bound_relation(node.name, '', ctx.relations) > 0
+        return held.rename({role: relation.dim(role) for role in relation.key if relation.dim(role) != role})
     return reduce(operator.or_, (bound_relation(node.name, column, ctx.relations).notnull() for column in columns))
 
 
 def unbound_relation_message(name: str) -> str:
-    """A declared relation read with no attached map."""
-    return f"relation '{name}' has no attached values. Pass it under key '{name}' as a table of the rows it holds."
+    """A declared set or property read with no attached table."""
+    return f"'{name}' has no attached values. Pass it under key '{name}' as a table of the rows it holds."
 
 
 def bound_relation(name: str, column: str, relations: Mapping[tuple[str, str], xr.DataArray]) -> xr.DataArray:
-    """One value column of a map as an array over the dimensions its key names."""
+    """One value column of a set or a property table as an array over the dimensions its key names."""
     try:
         return relations[name, column]
     except KeyError:
         raise DataError(unbound_relation_message(name)) from None
+
+
+def bound_read(
+    node: program.JoinColumns | program.Partition, column: str, relations: Mapping[tuple[str, str], xr.DataArray]
+) -> xr.DataArray:
+    """One value column as *node* reads it: null wherever a row of the subject lacks a property the call names.
+
+    A call that reads several properties names the subject, and each property
+    is a table of its own; the inner join of them is their arrays masked by
+    every one's presence.
+    """
+    if node.tables == (node.name,):
+        return bound_relation(node.name, column, relations)
+    arrays = {t: bound_relation(t, t.removeprefix(f'{node.name}.'), relations) for t in node.tables}
+    held = reduce(operator.and_, (array.notnull() for array in arrays.values()))
+    return arrays[f'{node.name}.{column}'].where(held)
 
 
 def as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:

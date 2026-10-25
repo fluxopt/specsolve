@@ -26,21 +26,29 @@ dimensions:
   storage_unit: {description: 'storage units, dispatch and store behind one bus connection'}
   store: {description: 'pure energy stores, each on one bus'}
   period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
-relations:
-  snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-  Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-  Link_bus0: {description: the bus a link leaves, key: link, values: bus}
-  Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-  Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-      A link of three output ports is three labels here rather than a third relation, so the file states
-      any number of them', key: link_output, values: bus}
-  Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-  Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-      … columns. A process of three ports is three labels here rather than a third relation, so the file
-      states any number of them', key: process_output, values: bus}
-  Load_bus: {description: the bus a load sits on, key: load, values: bus}
-  StorageUnit_bus: {description: the bus a storage unit sits on, key: storage_unit, values: bus}
-  Store_bus: {description: the bus a store sits on, key: store, values: bus}
+properties:
+  snapshot:
+    period: {description: the investment period a snapshot falls in, into: period}
+  generator:
+    bus: {description: the bus a generator sits on, into: bus}
+  link:
+    bus0: {description: the bus a link leaves, into: bus}
+  link_output:
+    link: {description: the link an output port belongs to, into: link}
+    bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns. A link
+        of three output ports is three labels here rather than a third relation, so the file states any
+        number of them', into: bus}
+  process_output:
+    process: {description: the process a port belongs to, into: process}
+    bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`, … columns.
+        A process of three ports is three labels here rather than a third relation, so the file states
+        any number of them', into: bus}
+  load:
+    bus: {description: the bus a load sits on, into: bus}
+  storage_unit:
+    bus: {description: the bus a storage unit sits on, into: bus}
+  store:
+    bus: {description: the bus a store sits on, into: bus}
 parameters:
   snapshot_weightings_objective:
     description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
@@ -483,9 +491,9 @@ expressions:
           AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
         expression: StorageUnit_state_of_charge_initial}
       period_cyclic: {when: StorageUnit_cyclic_state_of_charge_per_period, expression: 'StorageUnit_retention
-          * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot_period[period])'}
+          * shift(StorageUnit_state_of_charge, along=snapshot, offset=1, edge=''wrap'', within=snapshot[period])'}
       period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
-          AND position(snapshot, within=snapshot_period[period]) == 0', expression: StorageUnit_state_of_charge_initial}
+          AND position(snapshot, within=snapshot[period]) == 0', expression: StorageUnit_state_of_charge_initial}
     otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
   Store_energy_carried_in:
     description: the energy a store opens a snapshot with — at the first snapshot it stands in, its last
@@ -501,9 +509,9 @@ expressions:
       opening: {when: NOT Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
           AND (position(snapshot) == 0 OR Store_opens_late), expression: Store_e_initial}
       period_cyclic: {when: Store_e_cyclic_per_period, expression: 'Store_retention * shift(Store_e, along=snapshot,
-          offset=1, edge=''wrap'', within=snapshot_period[period])'}
+          offset=1, edge=''wrap'', within=snapshot[period])'}
       period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
-          within=snapshot_period[period]) == 0', expression: Store_e_initial}
+          within=snapshot[period]) == 0', expression: Store_e_initial}
     otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
   Link_output_arrival:
     description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
@@ -513,10 +521,10 @@ expressions:
       zero) delivers its flow unshifted, cyclic or not
     dims: [scenario, snapshot, link_output]
     cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-      edge=0, within=snapshot_period[period]) * Link_efficiency
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=link_output[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=link_output[link]), along=snapshot, offset=Link_output_delay, edge=0,
+      within=snapshot[period]) * Link_efficiency
   Process_output_arrival:
     description: what a process transfers at a port at a snapshot — its internal power delayed by the
       port's `delay` within its investment period, times the port's rate at the snapshot the transfer
@@ -525,34 +533,33 @@ expressions:
       does not delay (`delay` zero) transfers at once, cyclic or not
     dims: [scenario, snapshot, process_output]
     cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
-          * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-      edge=0, within=snapshot_period[period]) * Process_rate
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=process_output[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot[period]) * Process_rate'}
+    otherwise: shift(at(Process_p, by=process_output[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot[period]) * Process_rate
   Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
+      * at(period_weight_objective, by=snapshot[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
       * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=generator), over=snapshot)'}
+      by=snapshot[period]), over=generator), over=snapshot)'}
   Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      by=snapshot[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=link),
       over=snapshot)'}
   Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * at(period_weight_objective, by=snapshot[period]), over=process), over=snapshot) + sum(sum((((Process_p
       * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=process), over=snapshot)'}
+      by=snapshot[period]), over=process), over=snapshot)'}
   StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
-      sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
-      over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
+      * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot) + sum(sum((((StorageUnit_p_dispatch
+      * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot[period]), over=storage_unit), over=snapshot)) + sum(sum(((StorageUnit_state_of_charge
+      * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot[period]), over=storage_unit), over=snapshot)'}
   Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot) + sum(sum((((Store_p
+      * at(period_weight_objective, by=snapshot[period]), over=store), over=snapshot) + sum(sum((((Store_p
       * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=store),
+      by=snapshot[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot[period]), over=store),
       over=snapshot)'}
   scenario_opex:
     dims: [scenario]
@@ -573,14 +580,14 @@ expressions:
     cases:
       active: {when: Load_active, expression: Load_sign * Load_p_set}
     otherwise: 0
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
-      over=link_output, by=Link_output_bus[bus])'}
-  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=generator[bus])'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=link[bus0]) + sum(Link_output_arrival, over=link_output,
+      by=link_output[bus])'}
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=load[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=process_output[bus])'}
   StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
-      over=storage_unit, by=StorageUnit_bus[bus])'}
-  Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
+      over=storage_unit, by=storage_unit[bus])'}
+  Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=store[bus])'}
   Bus_injection:
     dims: [scenario, snapshot, bus]
     expression: ((((Generator_injection + Link_injection) + Load_injection) + Process_injection) + StorageUnit_injection)

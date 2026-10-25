@@ -42,6 +42,20 @@ def group_column(role: str) -> str:
     return f'__group {role}__'
 
 
+def rows(relations: Mapping[str, pl.LazyFrame], node: program.JoinColumns | program.Partition) -> pl.LazyFrame:
+    """The rows a call reads: its one table, or the inner join of the property tables it names.
+
+    A call that reads several properties of one subject names the subject;
+    each property is a table of its own, keyed by the subject's members, so
+    a row of the subject is read only where every one of them has it.
+    """
+    first, *rest = node.tables
+    table = relations[first]
+    for name in rest:
+        table = table.join(relations[name], on=list(node.relation.key), how='inner')
+    return table
+
+
 # ---------------------------------------------------------------------------
 # a join
 # ---------------------------------------------------------------------------
@@ -53,8 +67,7 @@ def mapping(relations: Mapping[str, pl.LazyFrame], columns: program.JoinColumns)
     The columns joined on arrive under their dimensions, the columns it adds
     under [`landing`][]. A key the relation has no row for has no row.
     """
-    table = relations[columns.name]
-    return table.select(
+    return rows(relations, columns).select(
         *(pl.col(role).alias(columns.dim(role)) for role in columns.joined),
         *(pl.col(role).alias(landing(columns.dim(role))) for role in columns.added),
     )
@@ -130,7 +143,7 @@ class Grouping:
         dimension = partition.along_dim
         joined = partition.joined_dims
         groups = tuple(group_column(role) for role in partition.grouped)
-        rows = data.relations[partition.name].select(
+        read = rows(data.relations, partition).select(
             pl.col(partition.along).alias('val'),
             *(pl.col(role).alias(dim) for role, dim in zip(partition.joined, joined, strict=True)),
             *(pl.col(role).alias(column) for role, column in zip(partition.grouped, groups, strict=True)),
@@ -138,7 +151,7 @@ class Grouping:
         key = [*joined, *groups]
         table = (
             data.dimensions[dimension]
-            .join(rows, on='val', how='inner')
+            .join(read, on='val', how='inner')
             .with_columns(
                 (pl.col('ord').rank('ordinal').over(key) - 1).cast(pl.Int64).alias(GROUP_RANK),
                 pl.len().over(key).cast(pl.Int64).alias(GROUP_SIZE),

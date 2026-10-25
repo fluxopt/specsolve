@@ -2,8 +2,8 @@
 
 The folder holds what ``docs/howto/warehouse.md`` writes into it: two single
 solves of one spec over different data, a scenario sweep, and a rolling
-horizon archived with and without its windows. The spec carries one relation
-of each kind a warehouse joins through. Every claim the page makes is asserted
+horizon archived with and without its windows. The spec carries one set or
+property of each kind a warehouse joins through. Every claim the page makes is asserted
 here, and every block on the page runs against this folder.
 """
 
@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 
 PAGE = Path(__file__).resolve().parent.parent / 'docs' / 'howto' / 'warehouse.md'
 
-#: One relation of each kind: keyed by one dimension (``sited``), keyed by a
-#: pair (``zone_of``), bare (``connection``), and two roles over one dimension
-#: (``ends``). ``reach`` sums through the bare relation, so a generator
-#: connected to two buses counts at both.
+#: One of each kind: a property of a dimension (``generator.bus``), a property
+#: of a set (``generator_t.zone``), a set (``connection``), and two properties
+#: into one dimension (``line.bus0`` and ``line.bus1``). ``reach`` sums through
+#: the set, so a generator connected to two buses counts at both.
 SPEC: dict[str, Any] = {
     'dimensions': {
         't': {'dtype': 'int', 'ordered': True},
@@ -38,11 +38,14 @@ SPEC: dict[str, Any] = {
         'line': {'dtype': 'str'},
         'zone': {'dtype': 'str'},
     },
-    'relations': {
-        'sited': {'key': 'generator', 'values': 'bus'},
-        'zone_of': {'key': ['generator', 't'], 'values': 'zone'},
-        'connection': {'key': ['generator', 'bus'], 'missing': 'absent'},
-        'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}},
+    'sets': {
+        'generator_t': {'dims': ['generator', 't']},
+        'connection': {'dims': ['generator', 'bus'], 'missing': 'absent'},
+    },
+    'properties': {
+        'generator': {'bus': 'bus'},
+        'generator_t': {'zone': 'zone'},
+        'line': {'bus0': 'bus', 'bus1': 'bus'},
     },
     'parameters': {
         'p_max': {'dims': ['generator']},
@@ -57,10 +60,10 @@ SPEC: dict[str, Any] = {
     'constraints': {
         'balance': {
             'dims': ['t', 'bus'],
-            'expression': 'sum(p, over=generator, by=sited[bus])'
-            ' + sum(f, over=line, by=ends[bus1]) - sum(f, over=line, by=ends[bus0]) == load',
+            'expression': 'sum(p, over=generator, by=generator[bus])'
+            ' + sum(f, over=line, by=line[bus1]) - sum(f, over=line, by=line[bus0]) == load',
         },
-        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, over=generator, by=zone_of[zone]) <= zone_cap'},
+        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, over=generator, by=generator_t[zone]) <= zone_cap'},
     },
     'expressions': {'reach': {'dims': ['t', 'bus'], 'expression': 'sum(p, over=generator, by=connection[bus])'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
@@ -82,8 +85,11 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
         'bus': BUSES,
         'line': ['l1'],
         'zone': ['z1', 'z2'],
-        'sited': pl.DataFrame({'generator': GENERATORS, 'bus': ['north', 'south', 'south']}),
-        'zone_of': pl.DataFrame(
+        'generator.bus': pl.DataFrame({'generator': GENERATORS, 'bus': ['north', 'south', 'south']}),
+        'generator_t': pl.DataFrame(
+            {'generator': GENERATORS * periods, time: [step for step in steps for _ in GENERATORS]}
+        ),
+        'generator_t.zone': pl.DataFrame(
             {
                 'generator': GENERATORS * periods,
                 time: [step for step in steps for _ in GENERATORS],
@@ -91,7 +97,8 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
             }
         ),
         'connection': pl.DataFrame({'generator': ['wind', 'wind', 'gas', 'coal'], 'bus': ['north', 'south'] * 2}),
-        'ends': pl.DataFrame({'line': ['l1'], 'bus0': ['north'], 'bus1': ['south']}),
+        'line.bus0': pl.DataFrame({'line': ['l1'], 'bus0': ['north']}),
+        'line.bus1': pl.DataFrame({'line': ['l1'], 'bus1': ['south']}),
         'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [15.0, 40.0, 40.0]}),
         'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 50.0, 30.0]}),
         'load': pl.DataFrame(
@@ -241,9 +248,10 @@ STRICT = {
     },
     'sources/generator.parquet': {'generator': pl.String, 'specsolve_position': pl.Int64, 'specsolve_run': pl.String},
     'sources/p_max.parquet': {'generator': pl.String, 'value': pl.Float64, 'specsolve_run': pl.String},
-    'sources/sited.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': pl.String},
+    'sources/generator.bus.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': pl.String},
     'sources/connection.parquet': {'generator': pl.String, 'bus': pl.String, 'specsolve_run': pl.String},
-    'sources/ends.parquet': {'line': pl.String, 'bus0': pl.String, 'bus1': pl.String, 'specsolve_run': pl.String},
+    'sources/line.bus0.parquet': {'line': pl.String, 'bus0': pl.String, 'specsolve_run': pl.String},
+    'sources/line.bus1.parquet': {'line': pl.String, 'bus1': pl.String, 'specsolve_run': pl.String},
 }
 
 
@@ -324,9 +332,9 @@ def test_a_value_table_joins_the_record_on_the_run(runs: Path) -> None:
     ], 'a sweep has one record row per slice, named in slice as text'
 
 
-def test_a_relation_keyed_by_one_dimension_joins_on_run_and_its_key(runs: Path) -> None:
-    """Output per bus, through ``sited``, balances the load less what the line moves."""
-    sited = _stacked(runs, 'sources/sited.parquet')
+def test_a_property_of_a_dimension_joins_on_run_and_its_subject(runs: Path) -> None:
+    """Output per bus, through ``generator.bus``, balances the load less what the line moves."""
+    sited = _stacked(runs, 'sources/generator.bus.parquet')
     p = pl.read_parquet(runs / 'base' / 'answer' / 'primal' / 'p.parquet')
     per_bus = p.join(sited, on=['specsolve_run', 'generator']).group_by('t', 'bus').agg(pl.col('value').sum())
     flow = pl.read_parquet(runs / 'base' / 'answer' / 'primal' / 'f.parquet')
@@ -337,11 +345,11 @@ def test_a_relation_keyed_by_one_dimension_joins_on_run_and_its_key(runs: Path) 
         .with_columns(moved=pl.when(pl.col('bus') == 'north').then(-pl.col('flow')).otherwise(pl.col('flow')))
     )
     assert (balance['value_made'] + balance['moved'] - balance['value']).abs().max() < 1e-9, (
-        'the join through sited reproduces the balance the model held, to solver precision'
+        'the join through generator.bus reproduces the balance the model held, to solver precision'
     )
 
 
-def test_a_total_through_a_bare_relation_counts_a_member_once_per_row_it_is_related_to(runs: Path) -> None:
+def test_a_total_through_a_set_counts_a_member_once_per_row_it_is_in(runs: Path) -> None:
     """``reach`` gives each bus every connected generator's output, so its total counts ``wind`` twice."""
     p = pl.read_parquet(runs / 'base' / 'answer' / 'primal' / 'p.parquet')
     reach = pl.read_parquet(runs / 'base' / 'answer' / 'expression' / 'reach.parquet')

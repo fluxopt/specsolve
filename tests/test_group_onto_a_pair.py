@@ -1,6 +1,6 @@
-"""``sum(x, over=c, by=r[l, m])``: one grouping onto a pair of dimensions.
+"""``sum(x, over=c, by=s[l, m])``: one grouping onto a pair of dimensions.
 
-The call walks to two columns of one relation and lands terms on a product of
+The call reads two properties of one subject and lands terms on a product of
 dimensions, as a capacity limit per location and technology asks (PyPSA's
 `tech_capacity_expansion_limit`). The lanes differ on the empty combination,
 which the linopy lane's unstack fills with ``const: nan``, and on label order,
@@ -25,11 +25,10 @@ dimensions:
   bus: {dtype: str, description: a node of the network}
   technology: {dtype: str, description: what a generator is built from}
 
-relations:
-  gen_placement:
-    key: generator
-    values: [bus, technology]
-    description: the bus a generator sits on and the technology it is
+properties:
+  generator:
+    bus: {into: bus, description: the bus a generator sits on}
+    technology: {into: technology, description: the technology a generator is}
 
 parameters:
   cost: {dims: [generator], description: marginal cost of a unit of output}
@@ -45,7 +44,7 @@ variables:
 constraints:
   technology_at_bus:
     dims: [bus, technology]
-    expression: sum(p, over=generator, by=gen_placement[bus, technology]) <= limit
+    expression: sum(p, over=generator, by=generator[bus, technology]) <= limit
     description: output of one technology at one bus stays under its limit
   meet_demand:
     dims: []
@@ -66,7 +65,7 @@ OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
 def _inputs():
-    index = pd.DataFrame({'generator': GENERATORS})
+    index = pd.DataFrame({'generator': GENERATORS, 'bus': OF_BUS, 'technology': OF_TECH})
     limits = pd.DataFrame(
         {
             'bus': ['a', 'a', 'b', 'b'],
@@ -79,7 +78,6 @@ def _inputs():
         'limit': limits,
         'demand': 20.0,
         'generator': index,
-        'gen_placement': pd.DataFrame({'generator': GENERATORS, 'bus': OF_BUS, 'technology': OF_TECH}),
         'bus': pd.Index(['a', 'b'], name='bus'),
         'technology': pd.Index(['wind', 'sun'], name='technology'),
     }
@@ -150,7 +148,7 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
                 'description': 'capacity left unused at one bus in one technology',
             },
             'constraints.technology_at_bus.expression': (
-                'sum(p, over=generator, by=gen_placement[bus, technology]) + headroom <= limit'
+                'sum(p, over=generator, by=generator[bus, technology]) + headroom <= limit'
             ),
             'objective.expression': 'sum(p * cost, over=generator) - sum(sum(headroom, over=bus), over=technology)',
         },
@@ -227,7 +225,7 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
     columns = limit.lhs.operand.columns
     assert (columns.dropped_dims, columns.name, columns.added_dims) == (
         ('generator',),
-        'gen_placement',
+        'generator',
         ('bus', 'technology'),
     ), 'one join carrying one set of columns, each column read paired with the dimension it lands on'
 
@@ -238,10 +236,7 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
 
 
 def test_a_call_walks_one_table_and_says_so():
-    """A pair of dimensions comes from one relation's two columns, not from two relations."""
-    patch = {
-        'relations.gen_bus': {'key': 'generator', 'values': 'bus'},
-        'constraints.technology_at_bus.expression': ('sum(p, over=generator, by=[gen_placement, gen_bus]) <= limit'),
-    }
-    with pytest.raises(SchemaError, match=r'takes columns of one relation'):
+    """A pair of dimensions comes from two properties of one subject, not from a bare list of dimensions."""
+    patch = {'constraints.technology_at_bus.expression': 'sum(p, over=generator, by=[bus, technology]) <= limit'}
+    with pytest.raises(SchemaError, match=r'takes what one subject reads'):
         schema_of(SPEC, **patch)

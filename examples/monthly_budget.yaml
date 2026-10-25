@@ -15,11 +15,11 @@ dimensions:
     description: generating units
     dtype: str
 
-relations:
-  month_of:
-    description: the month a snapshot falls in
-    key: snapshot
-    values: month
+properties:
+  snapshot:
+    month:
+      description: the month a snapshot falls in
+      into: month
 
 parameters:
   p_max:
@@ -50,7 +50,7 @@ constraints:
   monthly_budget:
     description: what a generator produces across a month stays inside that month's budget
     dims: [month, generator]
-    expression: sum(p, over=snapshot, by=month_of[month]) <= monthly_cap
+    expression: sum(p, over=snapshot, by=snapshot[month]) <= monthly_cap
 
 objective:
   sense: minimize

@@ -16,11 +16,11 @@ dimensions:
     description: one way of reaching one centre from one depot, by rail or by road
     dtype: str
 
-relations:
-  origin:
-    description: the depot a connection leaves
-    key: connection
-    values: depot
+properties:
+  connection:
+    depot:
+      description: the depot a connection leaves
+      into: depot
 
 parameters:
   stock:
@@ -54,7 +54,7 @@ variables:
 constraints:
   within_stock:
     dims: [depot]
-    expression: sum(moved, over=connection, by=origin[depot]) <= stock
+    expression: sum(moved, over=connection, by=connection[depot]) <= stock
 
   move_the_lot:
     dims: []

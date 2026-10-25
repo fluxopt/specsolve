@@ -3,9 +3,9 @@
 The file states every row PyPSA can emit; a rung's network builds some of
 them. Its projection keeps the constraints with rows built and the variables
 with columns built, drops from every kept expression the additive terms over
-variables the rung never builds or parameters and relations it never feeds —
-they contribute nothing — and keeps the parameters, relations and dimensions
-those blocks still name. The parity runner writes one per rung, solves it and
+variables the rung never builds or parameters and sets it never feeds —
+they contribute nothing — and keeps the parameters, sets, properties and
+dimensions those blocks still name. The parity runner writes one per rung, solves it and
 holds it to PyPSA's objective.
 """
 
@@ -29,20 +29,27 @@ from mathspec._expression_parser import (
 NAME = re.compile(r'\b[A-Za-z_][A-Za-z0-9_]*\b')
 
 
-def _relation_dims(relation: dict[str, Any]) -> set[str]:
-    """The dimensions a raw relation block names, in every spelling of a side."""
-    sides = (relation['key'], relation.get('values', ()))
-    return {d for side in sides for d in _side_dims(side)}
+READ = re.compile(r'\b([A-Za-z_][A-Za-z0-9_]*)\[([^\]]*)\]')
 
 
-def _side_dims(side: str | list[str] | dict[str, str]) -> set[str]:
-    if isinstance(side, dict):
-        return set(side.values())
-    return {side} if isinstance(side, str) else set(side)
+def _set_dims(entry: dict[str, Any]) -> set[str]:
+    """The dimensions a raw set block's members range over, in either spelling of ``dims``."""
+    dims = entry['dims']
+    return set(dims.values()) if isinstance(dims, dict) else set(dims)
+
+
+def _property_dim(entry: str | dict[str, Any]) -> str:
+    """The dimension a raw property maps into, in the short form or the long."""
+    return entry if isinstance(entry, str) else entry['into']
 
 
 def names(text: str) -> set[str]:
     return set(NAME.findall(text or ''))
+
+
+def reads(text: str) -> set[tuple[str, str]]:
+    """Every ``subject[property]`` the text reads, one pair per property named in the brackets."""
+    return {(s, c.strip()) for s, inside in READ.findall(text or '') for c in inside.split(',')}
 
 
 def _pruned(node: ArithmeticNode, dead: set[str]) -> ArithmeticNode | None:
@@ -107,16 +114,13 @@ def _cut(expression: str, dead: set[str]) -> str | None:
     return None if kept is None else str(kept)
 
 
-def _mentions(block: dict[str, Any]) -> set[str]:
-    """Every declared name a block reads — through a ``cases:`` block's regions as well as its own keys."""
-    found = names(str(block.get('expression', ''))) | names(str(block.get('where', '')))
-    found |= names(str(block.get('condition', '')))
-    found |= names(' '.join(str(v) for v in (block.get('bounds') or {}).values()))
-    if 'cases' in block:
-        found |= names(str(block.get('otherwise', '')))
-        for case in block['cases'].values():
-            found |= names(str(case.get('when', ''))) | names(str(case.get('expression', '')))
-    return found
+def _text(block: dict[str, Any]) -> str:
+    """Every piece of the language a block holds — through a ``cases:`` block's regions as well as its own keys."""
+    pieces = [str(block.get(key, '')) for key in ('expression', 'where', 'condition', 'otherwise')]
+    pieces += [str(v) for v in (block.get('bounds') or {}).values()]
+    for case in block.get('cases', {}).values():
+        pieces += [str(case.get('when', '')), str(case.get('expression', ''))]
+    return '\n'.join(pieces)
 
 
 def _surviving(expressions: dict[str, Any], dead: set[str]) -> dict[str, dict[str, Any]]:
@@ -154,11 +158,7 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
     fed = set(parity['attached_nonempty'])
-    dead = (
-        (set(raw['variables']) - set(variables))
-        | (set(raw['parameters']) - fed)
-        | (set(raw.get('relations', {})) - fed)
-    )
+    dead = (set(raw['variables']) - set(variables)) | (set(raw['parameters']) - fed) | (set(raw.get('sets', {})) - fed)
     survived = _surviving(raw.get('expressions', {}), dead)
     dead |= set(raw.get('expressions', {})) - set(survived)
     constraints = {}
@@ -171,8 +171,10 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     objective = {**raw['objective'], 'expression': _cut(raw['objective']['expression'], dead)}
 
     mentioned: set[str] = set()
+    read: set[tuple[str, str]] = set()
     for block in (*constraints.values(), *variables.values(), objective):
-        mentioned |= _mentions(block)
+        mentioned |= names(_text(block))
+        read |= reads(_text(block))
     conditions = raw.get('conditions', {})
     kept: dict[str, dict[str, Any]] = {'expressions': {}, 'conditions': {}, 'variables': variables}
     sources = {'expressions': survived, 'conditions': conditions, 'variables': raw['variables']}
@@ -181,23 +183,34 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     ]:
         for kind, name in reached:
             kept[kind][name] = sources[kind][name]
-            mentioned |= _mentions(sources[kind][name])
+            mentioned |= names(_text(sources[kind][name]))
+            read |= reads(_text(sources[kind][name]))
     expressions = {n: block for n, block in survived.items() if n in kept['expressions']}
     named_conditions = {n: block for n, block in conditions.items() if n in kept['conditions']}
     parameters = {n: p for n, p in raw['parameters'].items() if n in mentioned}
-    relations = {n: lk for n, lk in raw.get('relations', {}).items() if n in mentioned}
+    properties = {
+        subject: kept_here
+        for subject, held in raw.get('properties', {}).items()
+        if (kept_here := {p: e for p, e in held.items() if (subject, p) in read})
+    }
+    sets = {n: s for n, s in raw.get('sets', {}).items() if n in mentioned or n in properties}
     dims: set[str] = set()
     for block in (*variables.values(), *constraints.values()):
         dims |= set(block.get('dims', []))
     for p in parameters.values():
         dims |= set(p.get('dims', []))
-    for lk in relations.values():
-        dims |= _relation_dims(lk)
+    for entry in sets.values():
+        dims |= _set_dims(entry)
+    for subject, held in properties.items():
+        dims |= {subject} if subject not in sets else set()
+        dims |= {_property_dim(entry) for entry in held.values()}
     dimensions = {n: d for n, d in raw['dimensions'].items() if n in dims}
     out = {k: v for k, v in raw.items() if k in ('version', 'description')}
     out['dimensions'] = dimensions
-    if relations:
-        out['relations'] = relations
+    if sets:
+        out['sets'] = sets
+    if properties:
+        out['properties'] = properties
     out['parameters'] = parameters
     out['variables'] = variables
     out['constraints'] = constraints

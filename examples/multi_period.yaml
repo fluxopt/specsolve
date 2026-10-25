@@ -16,8 +16,9 @@ dimensions:
     description: generating units
     dtype: str
 
-relations:
-  period_of: {key: snapshot, values: period}
+properties:
+  snapshot:
+    period: period
 
 parameters:
   load:
@@ -53,7 +54,7 @@ constraints:
   within_cap:
     description: output in a snapshot is capped by the capacity of the period it falls in
     dims: [snapshot, generator]
-    expression: p <= at(p_nom, by=period_of[period])
+    expression: p <= at(p_nom, by=snapshot[period])
   balance:
     dims: [snapshot]
     expression: sum(p, over=generator) == load

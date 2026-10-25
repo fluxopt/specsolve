@@ -32,22 +32,22 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{still\_live}`$ | `still_live` over $`\mathcal{T} \times \mathcal{Y} \times \mathcal{V}`$, `neutral` where the data has no row — 1 where a vintage is still inside its technology's operational life in that year |
-| $`\mathrm{residual\_capacity}`$ | `residual_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — capacity that already stood in 1990 and has not yet retired |
-| $`\mathrm{build}^{\mathrm{cost}}`$ | `build_cost` over $`\mathcal{T} \times \mathcal{V}`$, `neutral` where the data has no row — discounted cost of building a unit of capacity in a vintage |
-| $`\mathrm{holding\_cost}`$ | `holding_cost` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — discounted fixed cost of holding a unit of capacity through a year |
+| $`\mathrm{still\_live}`$ | `still_live` over $`\mathcal{T} \times \mathcal{Y} \times \mathcal{V}`$, $`0`$ where the data has no row — 1 where a vintage is still inside its technology's operational life in that year |
+| $`\mathrm{residual\_capacity}`$ | `residual_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — capacity that already stood in 1990 and has not yet retired |
+| $`\mathrm{build}^{\mathrm{cost}}`$ | `build_cost` over $`\mathcal{T} \times \mathcal{V}`$, $`0`$ where the data has no row — discounted cost of building a unit of capacity in a vintage |
+| $`\mathrm{holding\_cost}`$ | `holding_cost` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — discounted fixed cost of holding a unit of capacity through a year |
 | $`\mathrm{running\_cost}`$ | `running_cost` over $`\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}`$ — discounted variable cost of a unit of activity |
 | $`\mathrm{year\_split}`$ | `year_split` over $`\mathcal{I} \times \mathcal{Y}`$ — share of the year a timeslice stands for |
 | $`\mathrm{capacity}^{\mathrm{available}}`$ | `capacity_available` over $`\mathcal{T} \times \mathcal{I} \times \mathcal{Y}`$ — share of its capacity a technology can offer in a timeslice |
-| $`\mathrm{input\_ratio}`$ | `input_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — fuel a technology consumes per unit of activity |
-| $`\mathrm{output\_ratio}`$ | `output_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — fuel a technology produces per unit of activity |
-| $`\mathrm{sliced\_demand}`$ | `sliced_demand` over $`\mathcal{F} \times \mathcal{I} \times \mathcal{Y}`$, `neutral` where the data has no row — demand for a fuel placed on one timeslice |
-| $`\mathrm{annual\_demand}`$ | `annual_demand` over $`\mathcal{F} \times \mathcal{Y}`$, `neutral` where the data has no row — demand for a fuel placed on the year as a whole |
+| $`\mathrm{input\_ratio}`$ | `input_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, $`0`$ where the data has no row — fuel a technology consumes per unit of activity |
+| $`\mathrm{output\_ratio}`$ | `output_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, $`0`$ where the data has no row — fuel a technology produces per unit of activity |
+| $`\mathrm{sliced\_demand}`$ | `sliced_demand` over $`\mathcal{F} \times \mathcal{I} \times \mathcal{Y}`$, $`0`$ where the data has no row — demand for a fuel placed on one timeslice |
+| $`\mathrm{annual\_demand}`$ | `annual_demand` over $`\mathcal{F} \times \mathcal{Y}`$, $`0`$ where the data has no row — demand for a fuel placed on the year as a whole |
 | $`\mathrm{max\_capacity}`$ | `max_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `absent` where the data has no row — most capacity a technology may stand at |
 | $`\mathrm{min\_capacity}`$ | `min_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `absent` where the data has no row — least capacity a technology must stand at |
 | $`\mathrm{reserve\_margin}`$ | `reserve_margin` over $`\mathcal{Y}`$ — how far firm capacity must exceed the demand of the moment |
-| $`\mathrm{reserve\_tagged}`$ | `reserve_tagged` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — 1 where a technology's capacity counts towards the reserve |
-| $`\mathrm{reserve\_demand}`$ | `reserve_demand` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — the activity the reserve margin is measured against |
+| $`\mathrm{reserve\_tagged}`$ | `reserve_tagged` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — 1 where a technology's capacity counts towards the reserve |
+| $`\mathrm{reserve\_demand}`$ | `reserve_demand` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, $`0`$ where the data has no row — the activity the reserve margin is measured against |
 | $`\mathrm{residual\_holding}`$ | `residual_holding` (scalar) — fixed operating cost owed on the capacity that already stood in 1990 |
 
 #### Variables
@@ -57,7 +57,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 | $`\mathit{activity}`$ | `activity` over $`\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}`$ — how hard a technology runs, per timeslice and mode |
 | $`\mathit{build}`$ | `build` over $`\mathcal{T} \times \mathcal{V}`$ — how much capacity is built, and when |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -180,20 +180,20 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       still_live:
         description: 1 where a vintage is still inside its technology's operational life in that year
         dims: [technology, year, vintage]
-        missing: neutral
+        missing: 0
       residual_capacity:
         description: capacity that already stood in 1990 and has not yet retired
         dims: [technology, year]
-        missing: neutral
+        missing: 0
 
       build_cost:
         description: discounted cost of building a unit of capacity in a vintage
         dims: [technology, vintage]
-        missing: neutral
+        missing: 0
       holding_cost:
         description: discounted fixed cost of holding a unit of capacity through a year
         dims: [technology, year]
-        missing: neutral
+        missing: 0
       running_cost:
         description: discounted variable cost of a unit of activity
         dims: [timeslice, technology, mode, year]
@@ -207,20 +207,20 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       input_ratio:
         description: fuel a technology consumes per unit of activity
         dims: [technology, fuel, mode, year]
-        missing: neutral
+        missing: 0
       output_ratio:
         description: fuel a technology produces per unit of activity
         dims: [technology, fuel, mode, year]
-        missing: neutral
+        missing: 0
 
       sliced_demand:
         description: demand for a fuel placed on one timeslice
         dims: [fuel, timeslice, year]
-        missing: neutral
+        missing: 0
       annual_demand:
         description: demand for a fuel placed on the year as a whole
         dims: [fuel, year]
-        missing: neutral
+        missing: 0
 
       max_capacity:
         description: most capacity a technology may stand at
@@ -237,11 +237,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       reserve_tagged:
         description: 1 where a technology's capacity counts towards the reserve
         dims: [technology, year]
-        missing: neutral
+        missing: 0
       reserve_demand:
         description: the activity the reserve margin is measured against
         dims: [technology, fuel, mode, year]
-        missing: neutral
+        missing: 0
 
       residual_holding:
         description: fixed operating cost owed on the capacity that already stood in 1990

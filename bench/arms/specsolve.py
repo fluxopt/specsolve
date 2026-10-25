@@ -31,11 +31,12 @@ def checked_sources(case: Case, size: str, paths: dict[str, str]) -> dict[str, s
 
     spec = case.spec_path(case.shape(size))
     schema = pyyaml.safe_load(spec.read_text())
-    declared = set().union(*(schema.get(block, {}) for block in ('parameters', 'dimensions', 'relations')))
+    declared = set().union(*(schema.get(block, {}) for block in ('parameters', 'dimensions', 'sets')))
+    declared |= {f'{subject}.{name}' for subject, held in schema.get('properties', {}).items() for name in held}
     undeclared = sorted(set(paths) - declared)
     if undeclared:
         raise ValueError(
-            f'{case.name}: {undeclared} declared as neither parameter, dimension nor relation in '
+            f'{case.name}: {undeclared} declared as neither parameter, dimension, set nor property in '
             f'{spec} — the build would not see it. Stale files under bench/.cache/?'
         )
     return dict(paths)

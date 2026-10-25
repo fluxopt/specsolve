@@ -46,9 +46,9 @@ def build(tables: Mapping[str, Any]) -> Lp:
 
     block = sparse.hstack(
         [
-            _incidence(buses, generators, tables['gen_bus']['bus'], 1.0, (n_bus, n_generator)),
-            _incidence(buses, lines, tables['line_to']['bus'], 1.0, (n_bus, n_line))
-            - _incidence(buses, lines, tables['line_from']['bus'], 1.0, (n_bus, n_line)),
+            _incidence(buses, generators, tables['generator.bus']['bus'], 1.0, (n_bus, n_generator)),
+            _incidence(buses, lines, tables['line.to_bus']['to_bus'], 1.0, (n_bus, n_line))
+            - _incidence(buses, lines, tables['line.from_bus']['from_bus'], 1.0, (n_bus, n_line)),
         ],
         format='csr',
     )

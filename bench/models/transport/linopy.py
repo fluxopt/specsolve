@@ -1,8 +1,8 @@
 """`transport` as a linopy user writes it.
 
-Each of the YAML's `sum(x, over=key, by=rel[bus])` is linopy's
-`x.groupby(rel).sum()`, with the relation as a key -> bus array. A grouped sum
-has a row only for a bus the relation reaches, so `reindex(bus=buses)` puts the
+Each of the YAML's `sum(x, over=key, by=key[prop])` is linopy's
+`x.groupby(prop).sum()`, with the property as a key -> bus array. A grouped sum
+has a row only for a bus the property reaches, so `reindex(bus=buses)` puts the
 other buses back and `fillna(0)` makes them contribute zero, as the YAML means.
 """
 
@@ -25,15 +25,16 @@ def build(tables: Mapping[str, Any]) -> Any:
     load = xr.DataArray(tables['load'].pivot(index='snapshot', columns='bus', values='value'))
     snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
-    def into_bus(x: Any, relation: str, key: str) -> Any:
-        by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
+    def into_bus(x: Any, prop: str) -> Any:
+        subject, column = prop.split('.')
+        by = xr.DataArray(tables[prop].set_index(subject)[column].reindex(x.indexes[subject]), name='bus')
         return x.groupby(by).sum().reindex(bus=buses).fillna(0)
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, p_max.index], name='p')
     f = m.add_variables(lower=neg_cap, upper=cap, coords=[snapshots, cap.index], name='f')
     m.add_constraints(
-        into_bus(p, 'gen_bus', 'generator') + into_bus(f, 'line_to', 'line') - into_bus(f, 'line_from', 'line') == load,
+        into_bus(p, 'generator.bus') + into_bus(f, 'line.to_bus') - into_bus(f, 'line.from_bus') == load,
         name='balance',
     )
     m.add_objective((p * cost).sum())

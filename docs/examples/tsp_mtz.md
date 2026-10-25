@@ -50,9 +50,9 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{C}`$ | index $`c`$ — `city` with $`\mathrm{as\_from}: \mathcal{C} \to \mathcal{F},\ \mathrm{as\_to}: \mathcal{C} \to \mathcal{T}`$ — the cities of the tour, each also read as an arc endpoint |
-| $`\mathcal{F}`$ | index $`f`$ — `from_city` with $`\mathrm{as\_from}: \mathcal{C} \to \mathcal{F}`$ — the city an arc leaves |
-| $`\mathcal{T}`$ | index $`t`$ — `to_city` with $`\mathrm{as\_to}: \mathcal{C} \to \mathcal{T}`$ — the city an arc arrives at |
+| $`\mathcal{C}`$ | index $`c`$ — `city` with $`\mathrm{from\_city}: \mathcal{C} \to \mathcal{F},\ \mathrm{to\_city}: \mathcal{C} \to \mathcal{T}`$ — the cities of the tour, each also read as an arc endpoint |
+| $`\mathcal{F}`$ | index $`f`$ — `from_city` with $`\mathrm{from\_city}: \mathcal{C} \to \mathcal{F}`$ — the city an arc leaves |
+| $`\mathcal{T}`$ | index $`t`$ — `to_city` with $`\mathrm{to\_city}: \mathcal{C} \to \mathcal{T}`$ — the city an arc arrives at |
 
 #### Parameters
 
@@ -105,7 +105,7 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 **`ordering`**
 
 ```math
-\sum_{c \in \mathcal{C} \,:\, \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \,:\, \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}
+\sum_{c \in \mathcal{C} \,:\, \mathrm{from\_city}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \,:\, \mathrm{to\_city}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}
 ```
 
 </details>
@@ -128,9 +128,10 @@ dimensions:
     description: the city an arc arrives at
     dtype: str
 
-relations:
-  as_from: {key: city, values: from_city}
-  as_to: {key: city, values: to_city}
+properties:
+  city:
+    from_city: from_city
+    to_city: to_city
 
 parameters:
   distance:
@@ -176,8 +177,8 @@ constraints:
     dims: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, over=city, by=as_from[from_city])
-      - sum(u, over=city, by=as_to[to_city])
+      sum(u, over=city, by=city[from_city])
+      - sum(u, over=city, by=city[to_city])
       + n * travel
       <= n - 1
 
@@ -195,15 +196,16 @@ it should need a primitive.
 It does not. Declare the identity map from `city` onto each end of the pair:
 
 ```yaml
-relations:
-  as_from: {key: city, values: from_city}
-  as_to: {key: city, values: to_city}
+properties:
+  city:
+    from_city: from_city
+    to_city: to_city
 ```
 
-and `sum(u, over=city, by=as_from[from_city])` becomes a **relabel** rather than a reduction. Each
+and `sum(u, over=city, by=city[from_city])` becomes a **relabel** rather than a reduction. Each
 city keys one row and each `from_city` is named once, so nothing is added up:
 `u` moves from the `city` axis onto the `from_city` axis. Doing it twice with
-different relations puts the same variable at both ends of one row. A relation
+different properties puts the same variable at both ends of one row. A property
 is a join, and a join does not care how many rows a group holds
 ([topology is data](pypsa_transport.md)).
 
@@ -232,7 +234,7 @@ the price of a small formulation and why nobody solves large instances this way.
 
 ## What it exercises
 
-`sum(by=)` as a relabel through a relation that names each label once, a `where`
+`sum(by=)` as a relabel through a property that names each label once, a `where`
 comparing a dimension against a string label, sparsity standing in for an
 `i ≠ j` guard, and `binary` over a two-dimensional index.
 

@@ -14,8 +14,8 @@ group, against a bound only some rows carry**.
 
 | PyPSA | what it selects | the port's row |
 |---|---|---|
-| `operational_limit` | generators burning a carrier | `sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap` |
-| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap` |
+| `operational_limit` | generators burning a carrier | `sum(sum(p, over=generator, by=generator[carrier]), over=snapshot) <= energy_cap` |
+| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom, over=generator, by=generator[bus, carrier]) <= bus_capacity_cap` |
 | `transmission_volume_expansion_limit` | extendable links, weighted by length | `sum(link_p_nom * link_length, over=link) <= volume_cap` |
 | `transmission_expansion_cost_limit` | the same links, weighted by money | `sum(link_p_nom * link_capital_cost, over=link) <= expansion_cost_cap` |
 
@@ -32,10 +32,10 @@ PyPSA's global constraints: four limits over four different selected sets — th
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C}`$ — what a generator burns, and what a global limit selects on |
-| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C}`$ — generating units, each sitting on a bus and burning a carrier |
-| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{carrier}: \mathcal{E} \to \mathcal{C}`$ — what a generator burns, and what a global limit selects on |
+| $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{carrier}: \mathcal{E} \to \mathcal{C}`$ — generating units, each sitting on a bus and burning a carrier |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
 
 #### Parameters
 
@@ -110,19 +110,19 @@ g_{t,l} \le \mathit{link\_p\_nom}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in
 **`nodal_balance`**
 
 ```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{e \in \mathcal{E} \,:\, \mathrm{bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} g_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`carrier_energy`**
 
 ```math
-\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.carrier}(e) = c} p_{t,e} \le \mathrm{energy\_cap}_{c} \qquad \forall\, c \in \mathcal{C} \,:\, \mathrm{energy\_cap}_{c} \text{ is defined}
+\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E} \,:\, \mathrm{carrier}(e) = c} p_{t,e} \le \mathrm{energy\_cap}_{c} \qquad \forall\, c \in \mathcal{C} \,:\, \mathrm{energy\_cap}_{c} \text{ is defined}
 ```
 
 **`carrier_capacity_at_bus`**
 
 ```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b \wedge \mathrm{gen\_placement.carrier}(e) = c} p^{\mathrm{nom}}_{e} \le \mathrm{bus\_capacity\_cap}_{b,c} \qquad \forall\, b \in \mathcal{B},\ c \in \mathcal{C} \,:\, \mathrm{bus\_capacity\_cap}_{b,c} \text{ is defined}
+\sum_{e \in \mathcal{E} \,:\, \mathrm{bus}(e) = b \wedge \mathrm{carrier}(e) = c} p^{\mathrm{nom}}_{e} \le \mathrm{bus\_capacity\_cap}_{b,c} \qquad \forall\, b \in \mathcal{B},\ c \in \mathcal{C} \,:\, \mathrm{bus\_capacity\_cap}_{b,c} \text{ is defined}
 ```
 
 **`transmission_volume`**
@@ -170,19 +170,21 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: controllable connections, each joining two buses
         dtype: str
 
-    relations:
-      gen_placement:
-        description: the bus a generator sits on and the carrier it burns
-        key: generator
-        values: [bus, carrier]
-      link_from:
-        description: the bus a link leaves
-        key: link
-        values: bus
-      link_to:
-        description: the bus a link arrives at
-        key: link
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on and the carrier it burns
+          into: bus
+        carrier:
+          description: the bus a generator sits on and the carrier it burns
+          into: carrier
+      link:
+        from_bus:
+          description: the bus a link leaves
+          into: bus
+        to_bus:
+          description: the bus a link arrives at
+          into: bus
 
     parameters:
       load:
@@ -259,8 +261,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the links meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_placement[bus])
-          + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(g, over=link, by=link[to_bus]) - sum(g, over=link, by=link[from_bus])
           == load
 
       carrier_energy:
@@ -270,7 +272,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           selection PyPSA makes by querying its own table
         dims: [carrier]
         where: energy_cap
-        expression: sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap
+        expression: sum(sum(p, over=generator, by=generator[carrier]), over=snapshot) <= energy_cap
 
       carrier_capacity_at_bus:
         description: >-
@@ -279,7 +281,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           so no selector column and no mask stand between the two
         dims: [bus, carrier]
         where: bus_capacity_cap
-        expression: sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap
+        expression: sum(p_nom, over=generator, by=generator[bus, carrier]) <= bus_capacity_cap
 
       transmission_volume:
         description: >-
@@ -337,7 +339,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add('Carrier', 'DC')
 
         generators: pd.DataFrame = (
-            tables['generator'].set_index('generator').join(tables['gen_placement'].set_index('generator'))
+            tables['generator']
+            .set_index('generator')
+            .join([tables['generator.bus'].set_index('generator'), tables['generator.carrier'].set_index('generator')])
         )
         p_max_pu: pd.DataFrame = tables['p_max_pu'].pivot(index='snapshot', columns='generator', values='value')
         n.add(
@@ -355,8 +359,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Link',
             links.index,
-            bus0=tables['link_from'].set_index('link')['bus'],
-            bus1=tables['link_to'].set_index('link')['bus'],
+            bus0=tables['link.from_bus'].set_index('link')['from_bus'],
+            bus1=tables['link.to_bus'].set_index('link')['to_bus'],
             carrier='DC',
             p_nom_extendable=True,
             length=tables['link_length'].set_index('link')['value'],
@@ -416,7 +420,7 @@ itself, where a period exists to name.
 
 ## What it exercises
 
-A reduction over two dimensions at once (`sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot)`),
-one grouping landing on a pair of dimensions (`sum(p_nom, over=generator, by=gen_placement[bus, carrier])`),
+A reduction over two dimensions at once (`sum(sum(p, over=generator, by=generator[carrier]), over=snapshot)`),
+one grouping landing on a pair of dimensions (`sum(p_nom, over=generator, by=generator[bus, carrier])`),
 and two scalar-bounded sums over one set with different weights. No construct
 here is new, for five constraints PyPSA implements in five functions.

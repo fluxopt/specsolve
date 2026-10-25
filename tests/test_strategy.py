@@ -675,22 +675,17 @@ def test_an_expression_the_sweep_does_not_hold_says_what_it_does_hold(priced):
 def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     """A failing evaluation is carried per name, never raised mid-fold.
 
-    `ratio` divides by a parameter with one row, so every slice's evaluation
-    fails on the sparse divisor — and the sweep must still complete, hold every
-    other frame, and hand the caller the divisor's own sentence on read.
+    `price` reads the duals of an integer model, so every slice's evaluation
+    fails — and the sweep must still complete, hold every other frame, and
+    hand the caller the dual's own sentence on read.
     """
-    spec = override(
-        SPENDING,
-        **{'parameters.scale': {'dims': ['t'], 'missing': 'neutral'}, 'expressions.ratio': 'load / scale'},
-    )
-    sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
-    with pytest.warns(sps.errors.SpecsolveWarning, match="'scale' has no rows for snapshot 1"):
-        runs = sps.solve_over(spec, sources, sps.EachWindow('snapshot', steps=6, lookahead=0, into='t'))
+    spec = override(SPENDING, **{'variables.charge.domain': 'integer', 'expressions.price': 'dual(balance)'})
+    runs = sps.solve_over(spec, horizon_sources(12), sps.EachWindow('snapshot', steps=6, lookahead=0, into='t'))
 
     assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
     assert runs.evaluate('spend').height > 0, 'nor take the healthy expression with it'
-    with pytest.raises(sps.errors.SpecsolveError, match='scale'):
-        runs.evaluate('ratio')
+    with pytest.raises(sps.errors.SpecsolveError, match='duals are undefined'):
+        runs.evaluate('price')
 
 
 #: Six coordinates, three windows of two, whatever the coordinates *are*:
@@ -1849,19 +1844,19 @@ def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
         assert len(sps.solve_over(spec, sources, axis)) == 2, 'every window solved'
 
 
-def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
-    """`shift(..., within=day_of[day])` reaches within the groups the relation makes, and
+def test_a_reach_a_property_decides_is_refused_with_the_property_named():
+    """`shift(..., within=t[day])` reaches within the groups the property makes, and
     whether a window cuts a group is nothing the driver computes."""
     spec = _horizon(
         {
             'dims': ['t', 'generator'],
-            'expression': 'p >= shift(p, along=t, offset=1, within=day_of[day], edge=0) - at(day_cap, by=day_of[day])',
+            'expression': 'p >= shift(p, along=t, offset=1, within=t[day], edge=0) - at(day_cap, by=t[day])',
         },
         day_cap={'dims': ['day']},
     )
     spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int', 'ordered': True}}
-    spec['relations'] = {'day_of': {'key': 't', 'values': 'day'}}
-    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 'day_of'"):
+    spec['properties'] = {'t': {'day': 'day'}}
+    with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through 't\.day'"):
         sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
 
 
@@ -1940,7 +1935,7 @@ def test_a_sweep_takes_every_source_shape_solve_takes(spec, sources, axis, plain
 
 
 def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
-    """`cost`, declared neutral, stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
+    """`cost`, declared `missing: 0`, stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
 
     The warning comes before a slice is taken, naming the source, the
     coordinate it lacks, and a source that has it.
@@ -1949,7 +1944,7 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
     with pytest.warns(sps.errors.SpecsolveWarning, match=r"'cost' has no rows for period 3, which 'demand' has"):
         runs = sps.solve_over(
-            override(MYOPIC, **{'parameters.cost.missing': 'neutral'}),
+            override(MYOPIC, **{'parameters.cost.missing': 0}),
             sources,
             sps.EachCoordinate('period', carry={'existing': 'total'}),
         )
@@ -2446,7 +2441,7 @@ CUT_INDEXES = [
 
 @pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_INDEXES)
 def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a_slice(spec, sources, axis, match):
-    """An index lists the labels every slice has; which of them a slice has is a parameter or a relation.
+    """An index lists the labels every slice has; which of them a slice has is a parameter or a set.
 
     Cut by the axis, the index would make each slice a model over other labels.
     """
@@ -2455,4 +2450,4 @@ def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a
         pytest.raises(sps.errors.DataError, match=re.escape(match)) as refused,
     ):
         sps.solve_over(spec, sources(), axis)
-    assert 'in a parameter or a relation over' in str(refused.value), 'the message names the rewrite'
+    assert 'in a parameter or a set over' in str(refused.value), 'the message names the rewrite'

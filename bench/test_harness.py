@@ -985,7 +985,7 @@ def test_the_model_table_has_a_column_per_published_model() -> None:
         ),
     ],
 )
-def test_a_model_names_the_sums_it_groups_through_a_relation(case: str, printed: str) -> None:
+def test_a_model_names_the_sums_it_groups_through_a_property(case: str, printed: str) -> None:
     assert report.grouped_sums(CASES[case].spec) == printed, f'{case} groups {printed!r}, once each, in spec order'
 
 

@@ -12,9 +12,9 @@ $\mathrm{month}$ is a **coordinate the snapshot dimension declares**, not a
 calendar the language understands. Its values arrive as a column in the
 snapshot index.
 
-Compare [transport](transport.md): there, $\mathrm{gen\_bus}$ is a relation over
-`generator` and the sum is over generators at a bus. Here $\mathrm{month\_of}$ is a
-relation over `snapshot` and the sum is over snapshots in a month. **It is the
+Compare [transport](transport.md): there, $\mathrm{bus}$ is a property of
+`generator` and the sum is over generators at a bus. Here $\mathrm{month}$ is a
+property of `snapshot` and the sum is over snapshots in a month. **It is the
 same construct** — `sum(by=)` — and time is not a special axis.
 
 ## The model
@@ -29,8 +29,8 @@ A cap on what each technology may generate per calendar month — an aggregate o
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — dispatch periods, each falling in one month |
-| $`\mathcal{M}`$ | index $`m`$ — `month` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — the grouping the budget is stated over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{month}: \mathcal{T} \to \mathcal{M}`$ — dispatch periods, each falling in one month |
+| $`\mathcal{M}`$ | index $`m`$ — `month` with $`\mathrm{month}: \mathcal{T} \to \mathcal{M}`$ — the grouping the budget is stated over |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
 
 #### Parameters
@@ -73,7 +73,7 @@ A cap on what each technology may generate per calendar month — an aggregate o
 **`monthly_budget`**
 
 ```math
-\sum_{t \in \mathcal{T} \,:\, \mathrm{month\_of}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\, m \in \mathcal{M},\ g \in \mathcal{G}
+\sum_{t \in \mathcal{T} \,:\, \mathrm{month}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\, m \in \mathcal{M},\ g \in \mathcal{G}
 ```
 
 </details>
@@ -101,11 +101,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: generating units
         dtype: str
 
-    relations:
-      month_of:
-        description: the month a snapshot falls in
-        key: snapshot
-        values: month
+    properties:
+      snapshot:
+        month:
+          description: the month a snapshot falls in
+          into: month
 
     parameters:
       p_max:
@@ -136,7 +136,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       monthly_budget:
         description: what a generator produces across a month stays inside that month's budget
         dims: [month, generator]
-        expression: sum(p, over=snapshot, by=month_of[month]) <= monthly_cap
+        expression: sum(p, over=snapshot, by=snapshot[month]) <= monthly_cap
 
     objective:
       sense: minimize
@@ -165,7 +165,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         cost: pd.Series = tables['cost'].set_index('generator')['value']
         load: pd.Series = tables['load'].set_index('snapshot')['value']
         cap = xr.DataArray(tables['monthly_cap'].pivot(index='month', columns='generator', values='value'))
-        month = xr.DataArray(tables['month_of'].set_index('snapshot')['month'])
+        month = xr.DataArray(tables['snapshot.month'].set_index('snapshot')['month'])
 
         m = linopy.Model()
         p = m.add_variables(lower=0, upper=p_max, coords=[load.index, p_max.index], name='p')
@@ -177,13 +177,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 ## The grouping is data
 
-You produce the `month_of` relation before the model, by whatever rule you want:
+You produce the `month` property of `snapshot` before the model, by whatever rule you want:
 
 ```python
-month_of = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
+snapshot_month = pl.DataFrame({'snapshot': hours}).with_columns(pl.col('snapshot').dt.strftime('%Y-%m').alias('month'))
 ```
 
-That produces the table the model attaches under `month_of`: every snapshot
+That produces the table the model attaches under `snapshot.month`: every snapshot
 beside the month it falls in, and nothing else:
 
 ```text
@@ -206,9 +206,9 @@ Three snapshots in January, one in February, two in March: `sum(by=)` needs a
 partition, not equal groups.
 
 That one expression is the only place a calendar appears. Swap it for
-`dt.quarter()`, a fiscal-year relation, a hand-built table of representative
+`dt.quarter()`, a fiscal-year property, a hand-built table of representative
 periods or peak/off-peak blocks, and the model is unchanged. The language has
-no `resample:` or `reduce_to_monthly()`: a relation covers all of those cases.
+no `resample:` or `reduce_to_monthly()`: a property covers all of those cases.
 
 ## Reading it back
 

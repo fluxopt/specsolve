@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -554,16 +554,12 @@ wheels = [
 
 [[package]]
 name = "mathspec"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.4.1.dev42+g85544c3db"
+source = { git = "https://github.com/fluxopt/mathspec?rev=85544c3db7f0c0958df8d920315f7acf95c75ae7#85544c3db7f0c0958df8d920315f7acf95c75ae7" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
     { name = "pyyaml" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/35/bb/1e366dafeb11858332d0e47e11b57aa6e61bc2b2f0be46a017dba6f4421a/mathspec-0.4.0.tar.gz", hash = "sha256:183822f956dcd3a0eb1aefba5bbdee2715ba5f5e9230fab301d9636fe26bc972", size = 180003, upload-time = "2026-10-22T11:52:28.679Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/b6/8b3c314d6124bf4b81289eb469fcb9e78c6e785374daf0c45686aa626924/mathspec-0.4.0-py3-none-any.whl", hash = "sha256:17f6c64ab0023b8d3f28e60438fea1e288c712a4e91055c8c9babad2f9f4edc8", size = 187812, upload-time = "2026-10-22T11:52:27.296Z" },
 ]
 
 [[package]]
@@ -1581,7 +1577,7 @@ docs = [
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
     { name = "highspy", specifier = ">=1.13" },
-    { name = "mathspec", specifier = ">=0.4.0,<0.5" },
+    { name = "mathspec", git = "https://github.com/fluxopt/mathspec?rev=85544c3db7f0c0958df8d920315f7acf95c75ae7" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.33.1" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },

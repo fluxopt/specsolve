@@ -29,15 +29,16 @@ dimensions:
     description: the ways a plant's fuel use may be read
     dtype: str
 
-relations:
-  commitment:
-    description: whether a plant is committed unit by unit or dispatched freely
-    key: plant
-    values: commitment_mode
-  fuel_use:
-    description: whether a plant's fuel use is read off the piecewise curve or a flat heat rate
-    key: plant
-    values: fuel_use_mode
+properties:
+  plant:
+    commitment_mode:
+      description: whether a plant is committed unit by unit or dispatched freely
+      into: commitment_mode
+    fuel_use_mode:
+      description: >-
+        whether a plant's fuel use is read off the piecewise curve or a flat
+        heat rate
+      into: fuel_use_mode
 
 parameters:
   unit_size:
@@ -83,7 +84,7 @@ parameters:
   start_cost:
     description: what starting one unit of capacity costs
     dims: [plant]
-    missing: neutral
+    missing: 0
   weight:
     description: how many real hours an hour of the representative day stands for
     dims: [hour]
@@ -188,49 +189,49 @@ constraints:
 
   committed_units_exist:
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: committed <= units
 
   thermal_ceiling:
     description: a committed unit produces no more than its available capacity
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: output <= committed * unit_size * availability
 
   thermal_floor:
     description: a committed unit produces no less than its minimum
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: output >= committed * unit_size * min_output
 
   variable_ceiling:
     description: a plant with no commitment produces no more than its available capacity
     dims: [plant, hour]
-    where: "commitment == free"
+    where: "plant[commitment_mode] == free"
     expression: output <= units * unit_size * availability
 
   commitment_tracks_starts:
     description: what is committed changes only by what starts and what shuts
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: committed - shift(committed, along=hour, offset=1, edge='wrap') == starting - shutting
 
   stay_up_once_started:
     description: a unit that started within the last six hours is still committed
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: committed >= started_recently
 
   stay_down_once_shut:
     description: a unit that shut within the last six hours is still down
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: units - committed >= shut_recently
 
   ramp_up:
     description: output rises no faster than the ramp allows, with extra room in the hour a unit starts
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: >-
       output - shift(output, along=hour, offset=1, edge='wrap')
       <= ramp * unit_size * (committed - starting)
@@ -239,7 +240,7 @@ constraints:
 
   ramp_down:
     dims: [plant, hour]
-    where: "commitment == unit"
+    where: "plant[commitment_mode] == unit"
     expression: >-
       shift(output, along=hour, offset=1, edge='wrap') - output
       <= ramp * unit_size * (committed - starting)
@@ -251,13 +252,13 @@ constraints:
       fuel use is above every piece of the curve, so at the optimum it sits on
       the binding one, and the no-load intercept is charged per committed unit
     dims: [plant, segment, hour]
-    where: "fuel_use == curve"
+    where: "plant[fuel_use_mode] == curve"
     expression: burned >= fuel_slope * output + fuel_intercept * committed
 
   fuel_at_the_heat_rate:
     description: a plant with no curve burns fuel at a flat heat rate
     dims: [plant, hour]
-    where: "fuel_use == flat"
+    where: "plant[fuel_use_mode] == flat"
     expression: burned == heat_rate * output
 
   fuel_to_start:

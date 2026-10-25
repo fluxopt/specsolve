@@ -25,9 +25,9 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
@@ -38,7 +38,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
 | $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
 | $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
-| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
+| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -49,7 +49,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
-| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
+| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
 #### Notation
 
@@ -100,7 +100,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 **`energy_balance_initial`**
@@ -144,15 +144,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: storage units, each sitting on one bus
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      storage_bus:
-        description: the bus a storage unit sits on
-        key: storage
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      storage:
+        bus:
+          description: the bus a storage unit sits on
+          into: bus
 
     parameters:
       p_nom:
@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           energy arriving at a storage unit whether or not it was wanted — zero for
           a unit that receives none
         dims: [snapshot, storage]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -213,7 +213,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           balance keeps its row there.
         dims: [snapshot, storage]
         where: "inflow != 0"
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: inflow
@@ -225,9 +225,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           goes into them, meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(p_dispatch, over=storage, by=storage_bus[bus])
-          - sum(p_store, over=storage, by=storage_bus[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(p_dispatch, over=storage, by=storage[bus])
+          - sum(p_store, over=storage, by=storage[bus])
           == load
 
       energy_balance_initial:
@@ -283,7 +283,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
@@ -292,7 +292,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'StorageUnit',
             storages.index,
-            bus=tables['storage_bus'].set_index('storage')['bus'],
+            bus=tables['storage.bus'].set_index('storage')['bus'],
             p_nom=p_nom,
             max_hours=tables['soc_max'].set_index('storage')['value'] / p_nom,
             state_of_charge_initial=tables['soc_initial'].set_index('storage')['value'],
@@ -322,7 +322,7 @@ only for units whose inflow is positive somewhere. The port matches that with
 The mask is safe only because of the line beside it. A constraint mentioning a
 masked variable loses its **row**, not only the term. On its own the mask would
 delete the battery's whole energy balance. Its stored energy would come from
-nowhere, and the model would report **0.0** instead of 3200. `missing: neutral`
+nowhere, and the model would report **0.0** instead of 3200. `missing: 0`
 says the missing coordinates hold a spill of zero rather than a quantity with no
 value, so the row stands without the term.
 
@@ -336,7 +336,7 @@ rather than an absence. The sparsity that matters is in the *value*, and
 
 ## What it exercises
 
-`missing: neutral` on a masked variable, the declaration that keeps a row whose
+`missing: 0` on a masked variable, the declaration that keeps a row whose
 term has gone, against an energy balance carrying two independent sinks. Also
 the asymmetry underneath it: a masked **variable** takes its row, while a sparse
 **parameter** on a constant side is refused. The two halves of this model's

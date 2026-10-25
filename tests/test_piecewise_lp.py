@@ -244,7 +244,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
             'dims': ['unit', 'bp'],
             'dtype': 'bool',
             'description': 'curve length',
-            'missing': 'neutral',
+            'missing': False,
         }
 
     with sps.solve(expanded(ragged), _per_unit_points(short=False, mask=mask)) as result:
@@ -277,7 +277,7 @@ def test_values_past_the_mask_are_not_part_of_the_curve():
                 'dims': ['unit', 'bp'],
                 'dtype': 'bool',
                 'description': 'curve length',
-                'missing': 'neutral',
+                'missing': False,
             },
             'piecewise.cost_curve.points': 'runs_to',
             'parameters.bp_x.missing': 'absent',

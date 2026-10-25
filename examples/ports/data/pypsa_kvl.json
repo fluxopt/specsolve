@@ -28,7 +28,7 @@
       0.3
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "wind",
       "gas",
@@ -54,25 +54,25 @@
       "south_north"
     ]
   },
-  "line_from": {
+  "line.from_bus": {
     "line": [
       "north_mid",
       "mid_south",
       "south_north"
     ],
-    "bus": [
+    "from_bus": [
       "north",
       "mid",
       "south"
     ]
   },
-  "line_to": {
+  "line.to_bus": {
     "line": [
       "north_mid",
       "mid_south",
       "south_north"
     ],
-    "bus": [
+    "to_bus": [
       "mid",
       "south",
       "north"

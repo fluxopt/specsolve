@@ -21,19 +21,18 @@ dimensions:
     description: controllable connections, each joining two buses
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  link_from:
-    description: the bus a link leaves
-    key: link
-    values: bus
-  link_to:
-    description: the bus a link arrives at
-    key: link
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  link:
+    from_bus:
+      description: the bus a link leaves
+      into: bus
+    to_bus:
+      description: the bus a link arrives at
+      into: bus
 
 parameters:
   p_nom:
@@ -80,9 +79,9 @@ constraints:
       snapshot to have taken anything in.
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_bus[bus])
-      + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link_to[bus])
-      - sum(g, over=link, by=link_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link[to_bus])
+      - sum(g, over=link, by=link[from_bus])
       == load
 
 objective:

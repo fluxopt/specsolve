@@ -83,7 +83,7 @@ def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together(
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g'], 'missing': 'neutral'}},
+        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g'], 'missing': 0}},
         'variables': {'p': {'dims': ['g'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 9}}},
         'constraints': {'cap': {'dims': ['g'], 'expression': 'k * p <= 5'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
@@ -261,7 +261,7 @@ def test_a_model_with_no_objective_has_no_objective_range():
 #: A coefficient short of its dims, and a bound that is not.
 SPARSE_SOURCE = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g'], 'missing': 'neutral'}},
+    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g'], 'missing': 0}},
     'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'capped': {'dims': ['t', 'g'], 'expression': 'p * avail <= 1'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -308,35 +308,43 @@ def test_the_sparsity_report_survives_the_model_being_released():
 #: the assembly refuses it, which is a raise *after* the attach has succeeded.
 UNDEFINED_DIVISOR = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f'], 'missing': 'neutral'}},
+    'parameters': {'d': {'dims': ['f']}, 'w': {'dims': ['f'], 'missing': 0}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'dims': ['f'], 'expression': 'x / d <= 10'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    'objective': {'sense': 'maximize', 'expression': 'sum(w * x)'},
 }
 
-DENSE_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
-HALF_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
+DENSE_DIVISOR = {
+    'f': ['a', 'b'],
+    'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]}),
+    'w': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 1.0]}),
+}
+#: `d` is zero at `b`, and `w` has no row there.
+ZERO_A_DIVISOR = {
+    'f': ['a', 'b'],
+    'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 0.0]}),
+    'w': pl.DataFrame({'f': ['a'], 'value': [1.0]}),
+}
 
 
 def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     """A build that raised reports no size, neither its own nor the previous build's.
 
-    What the attach measured is still true, and names the gap the build then
-    refused.
+    What the attach measured is still true, and names the gap it found.
     """
     with sps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
         built = model.diagnostics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
-        with pytest.raises(sps.errors.DataError, match='used as a divisor'):
-            model.update(HALF_A_DIVISOR)
+        with pytest.raises(sps.errors.DataError, match="not finite where the model divides by 'd'"):
+            model.update(ZERO_A_DIVISOR)
         after = model.diagnostics()
 
     assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
     )
-    assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
-        'the attach that succeeded is still reported, and it names the gap the assembly then refused'
+    assert after.sparse_parameters.to_dicts() == [{'parameter': 'w', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
+        'the attach that succeeded is still reported, with the gap it measured'
     )
 
 

@@ -2,7 +2,7 @@ description: >-
   Routing telephone calls over a five-city network: how many of the 425
   requested circuits can be carried at once. A path serves exactly one city
   pair — a coordinate — and traverses several arcs — an incidence parameter;
-  both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
+  two maps, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
   Applications of Optimization with Xpress-MP, section 12.3. Optimum 380
   circuits, published in section 12.3.3.
 
@@ -17,11 +17,11 @@ dimensions:
     description: a route end to end, serving one city pair
     dtype: str
 
-relations:
-  call_of:
-    description: the city pair a path serves, end to end
-    key: path
-    values: call
+properties:
+  path:
+    call:
+      description: the city pair a path serves, end to end
+      into: call
 
 parameters:
   capacity:
@@ -35,7 +35,7 @@ parameters:
       which arcs a path traverses — a path uses an arc or it does not, so the
       value is 1 and absence is 0
     dims: [path, arc]
-    missing: neutral
+    missing: 0
 
 variables:
   flow:
@@ -52,7 +52,7 @@ constraints:
   within_demand:
     description: a pair cannot be carried more than it asked for, however many paths serve it
     dims: [call]
-    expression: sum(flow, over=path, by=call_of[call]) <= demand
+    expression: sum(flow, over=path, by=path[call]) <= demand
 
   within_capacity:
     description: >-

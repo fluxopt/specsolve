@@ -95,23 +95,23 @@ generators = pl.read_parquet('runs/*/sources/generator.parquet')
 p.join(generators, on=['specsolve_run', 'generator'])
 ```
 
-**A relation joins on the run and the columns it shares:**
+**A set or a property joins on the run and the columns it shares:**
 
 ```python
-sited = pl.read_parquet('runs/*/sources/sited.parquet')
+sited = pl.read_parquet('runs/*/sources/generator.bus.parquet')
 p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 'bus').agg(pl.col('value').sum())
 ```
 
-| relation | example | join |
+| table | example | join |
 |---|---|---|
-| keyed by one dimension | `sited: {key: generator, values: bus}` | on the key |
-| keyed by a pair | `zone_of: {key: [generator, t], values: zone}` | on both key columns |
-| bare | `connection: {key: [generator, bus], missing: absent}` | on the columns the value table shares |
-| roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
+| a property of a dimension | `generator: {bus: bus}` | on the subject |
+| a property of a set | `generator_t: {zone: zone}` | on the members of the set |
+| a set | `connection: {dims: [generator, bus], missing: absent}` | on the columns the value table shares |
+| two properties into one dimension | `line: {bus0: bus, bus1: bus}` | each its own table, `line.bus0` and `line.bus1`, each on `line` |
 | a partition | `shift`, `sum_back` or `position` with `within=` | none |
 
-**A sum through a bare relation counts a member once per row it is related
-to.** `wind` is connected to both buses, so it counts twice:
+**A sum through a set counts a member once per row of the set it is in.**
+`wind` is connected to both buses, so it counts twice:
 
 ```python
 reach = pl.read_parquet('runs/base/answer/expression/reach.parquet')
@@ -197,7 +197,7 @@ Join values to their sources on the columns both carry:
 ```sql
 select p.t, p.generator, p.value, s.bus
 from read_parquet('runs/base/answer/primal/p.parquet') p
-join read_parquet('runs/base/sources/sited.parquet') s using (generator, specsolve_run);
+join read_parquet('runs/base/sources/generator.bus.parquet') s using (generator, specsolve_run);
 ```
 
 For Fabric Direct Lake or Unity Catalog, write one Delta Lake table per glob:

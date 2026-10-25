@@ -27,7 +27,7 @@ GENERATOR = {
         'bus': {'dtype': 'str'},
         'generator': {'dtype': 'str'},
     },
-    'relations': {'Generator_bus': {'key': 'generator', 'values': 'bus'}},
+    'properties': {'generator': {'bus': 'bus'}},
     'parameters': {'Generator_p_nom': {'dims': ['generator']}, 'Generator_marginal_cost': {'dims': ['generator']}},
     'variables': {
         'Generator_p': {'dims': ['snapshot', 'generator'], 'bounds': {'lower': 0, 'upper': 'Generator_p_nom'}},
@@ -35,7 +35,7 @@ GENERATOR = {
     'given': {'expressions': {'Bus_injection': {'dims': ['snapshot', 'bus']}, 'total_cost': {'dims': []}}},
     'expressions': {
         'Generator_injection': {
-            'expression': 'sum(Generator_p, over=generator, by=Generator_bus[bus])',
+            'expression': 'sum(Generator_p, over=generator, by=generator[bus])',
             'adds_to': 'Bus_injection',
         },
         'Generator_cost': {'expression': 'sum(Generator_p * Generator_marginal_cost)', 'adds_to': 'total_cost'},
@@ -44,12 +44,12 @@ GENERATOR = {
 
 LOAD = {
     'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
-    'relations': {'Load_bus': {'key': 'load', 'values': 'bus'}},
+    'properties': {'load': {'bus': 'bus'}},
     'parameters': {'Load_p_set': {'dims': ['snapshot', 'load']}},
     'given': {'expressions': {'Bus_injection': {'dims': ['snapshot', 'bus']}}},
     'expressions': {
         'Load_injection': {
-            'expression': '-sum(Load_p_set, over=load, by=Load_bus[bus])',
+            'expression': '-sum(Load_p_set, over=load, by=load[bus])',
             'adds_to': 'Bus_injection',
         },
     },
@@ -60,8 +60,8 @@ SOURCES = {
     'bus': ['n'],
     'generator': ['cheap', 'dear'],
     'load': ['town'],
-    'Generator_bus': pl.DataFrame({'generator': ['cheap', 'dear'], 'bus': ['n', 'n']}),
-    'Load_bus': pl.DataFrame({'load': ['town'], 'bus': ['n']}),
+    'generator.bus': pl.DataFrame({'generator': ['cheap', 'dear'], 'bus': ['n', 'n']}),
+    'load.bus': pl.DataFrame({'load': ['town'], 'bus': ['n']}),
     'Generator_p_nom': {'cheap': 10.0, 'dear': 10.0},
     'Generator_marginal_cost': {'cheap': 1.0, 'dear': 2.0},
     'Load_p_set': pl.DataFrame({'snapshot': [0, 1], 'load': ['town', 'town'], 'value': [15.0, 15.0]}),

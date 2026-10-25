@@ -13,7 +13,7 @@ The pool caps are ``kron(I, Q)`` over a pool x column block ``Q``, below both.
 
 `p_max`, `load` are read in file order, which `_network_data` writes
 snapshot-major, with the installed pairs and the buses in their tables' order.
-`pool_of` is joined to the installed pairs on (bus, tech).
+`bus_tech.pool` is joined to the installed pairs on (bus, tech).
 """
 
 from __future__ import annotations
@@ -52,9 +52,9 @@ def build(tables: Mapping[str, Any]) -> Lp:
 
     balance = np.zeros((n_bus, width))
     balance[[bus_at[b] for b in installed['bus']], np.arange(n_pair)] = 1.0
-    balance[[bus_at[b] for b in tables['line_to']['bus']], lines] += 1.0
-    balance[[bus_at[b] for b in tables['line_from']['bus']], lines] -= 1.0
-    store_bus = [bus_at[b] for b in tables['store_bus']['bus']]
+    balance[[bus_at[b] for b in tables['line.to_bus']['to_bus']], lines] += 1.0
+    balance[[bus_at[b] for b in tables['line.from_bus']['from_bus']], lines] -= 1.0
+    store_bus = [bus_at[b] for b in tables['store.bus']['bus']]
     balance[store_bus, discharge] = 1.0
     balance[store_bus, charge] = -1.0
 
@@ -67,7 +67,7 @@ def build(tables: Mapping[str, Any]) -> Lp:
 
     pair_at = {pair: i for i, pair in enumerate(zip(installed['bus'], installed['tech'], strict=True))}
     pool_at = {pool: i for i, pool in enumerate(tables['limit']['pool'])}
-    pool_of = tables['pool_of']
+    pool_of = tables['bus_tech.pool']
     pooled = np.zeros((len(pool_at), width))
     pooled[
         [pool_at[pool] for pool in pool_of['pool']],

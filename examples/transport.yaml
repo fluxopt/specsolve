@@ -18,19 +18,18 @@ dimensions:
     description: transmission lines, each joining two buses
     dtype: str
 
-relations:
-  gen_bus:
-    description: the bus a generator sits on
-    key: generator
-    values: bus
-  line_from:
-    description: the bus a line leaves
-    key: line
-    values: bus
-  line_to:
-    description: the bus a line arrives at
-    key: line
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on
+      into: bus
+  line:
+    from_bus:
+      description: the bus a line leaves
+      into: bus
+    to_bus:
+      description: the bus a line arrives at
+      into: bus
 
 parameters:
   p_max:
@@ -57,7 +56,7 @@ variables:
       lower: 0
       upper: p_max
   f:
-    description: flow on a line, signed towards its `line_to` bus
+    description: flow on a line, signed towards its `line[to_bus]` bus
     dims: [snapshot, line]
     bounds:
       lower: neg_cap
@@ -65,10 +64,10 @@ variables:
 
 expressions:
   gen_at_bus:
-    expression: sum(p, over=generator, by=gen_bus[bus])
+    expression: sum(p, over=generator, by=generator[bus])
     description: what the generators sitting on a bus produce there
   net_inflow:
-    expression: sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+    expression: sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
     description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
 constraints:

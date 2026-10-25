@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is ``within_cap``. The YAML reads a per-period
-variable at per-snapshot rows — ``at(p_nom, by=period_of[period])`` —
+variable at per-snapshot rows — ``at(p_nom, by=snapshot[period])`` —
 and linopy says the same with a vectorised selection,
 ``p_nom.sel(period=period)``, each snapshot picking its period's capacity.
 The ragged calendar (four snapshots in 2030, two in 2050) is just the values
@@ -44,7 +44,7 @@ def build(tables: dict[str, pd.DataFrame]) -> linopy.Model:
     weight: pd.Series = tables['weight'].set_index('snapshot')['value']
     opex: pd.Series = tables['opex'].set_index('generator')['value']
     capex = xr.DataArray(tables['capex'].pivot(index='period', columns='generator', values='value'))
-    period = xr.DataArray(tables['period_of'].set_index('snapshot')['period'])
+    period = xr.DataArray(tables['snapshot.period'].set_index('snapshot')['period'])
 
     m = linopy.Model()
     p = m.add_variables(lower=0, coords=[load.index, opex.index], name='p')

@@ -46,10 +46,10 @@ def build(tables: Mapping[str, Any]) -> Any:
     cost, cap, neg_cap = _by_name(tables['cost']), _by_name(tables['cap']), _by_name(tables['neg_cap'])
     e_max, p_store, eta = _by_name(tables['e_max']), _by_name(tables['p_store']), _by_name(tables['eta'])
     portfolio = _grouped(installed['tech'], installed['bus'])
-    into = _grouped(tables['line_to']['line'], tables['line_to']['bus'])
-    out_of = _grouped(tables['line_from']['line'], tables['line_from']['bus'])
-    stores_at = _grouped(tables['store_bus']['store'], tables['store_bus']['bus'])
-    pool_of = tables['pool_of']
+    into = _grouped(tables['line.to_bus']['line'], tables['line.to_bus']['to_bus'])
+    out_of = _grouped(tables['line.from_bus']['line'], tables['line.from_bus']['from_bus'])
+    stores_at = _grouped(tables['store.bus']['store'], tables['store.bus']['bus'])
+    pool_of = tables['bus_tech.pool']
     members = _grouped(zip(pool_of['bus'], pool_of['tech'], strict=True), pool_of['pool'])
     limit = _by_name(tables['limit'])
     snapshots = list(tables['snapshot']['snapshot'])

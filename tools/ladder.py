@@ -121,8 +121,10 @@ def prep_slice(declared: list[str]) -> str:
     """The lines of ``prep.sources`` that make *declared*, with the helpers they call — the rung's prep."""
     text = (LADDER / 'prep.py').read_text()
     body = text[text.index('def sources(') :]
-    entries = dict(re.findall(r"^        '(\w+)': (.+?),\n(?=        '|    \})", body, flags=re.DOTALL | re.MULTILINE))
-    tail = re.findall(r"^    tables\['(\w+)'\] = (.+)$", body, flags=re.MULTILINE)
+    entries = dict(
+        re.findall(r"^        '([\w.]+)': (.+?),\n(?=        '|    \})", body, flags=re.DOTALL | re.MULTILINE)
+    )
+    tail = re.findall(r"^    tables\['([\w.]+)'\] = (.+)$", body, flags=re.MULTILINE)
     entries.update(tail)
     helpers = {
         m.group(1): m.group(0).rstrip()
@@ -134,7 +136,7 @@ def prep_slice(declared: list[str]) -> str:
     for h in used:
         closure |= {g for g in helpers if f'{g}(' in helpers[h]}
     public = sorted(
-        name for name in ('relation', 'static', 'varying', 'weighting') if any(f'{name}(' in line for line in lines)
+        name for name in ('prop', 'static', 'varying', 'weighting') if any(f'{name}(' in line for line in lines)
     )
     imported = f'from differential.pypsa.prep import {", ".join(public)}\n\n\n' if public else ''
     return (
@@ -147,8 +149,14 @@ def prep_slice(declared: list[str]) -> str:
     )
 
 
+def _set_and_property_keys(projection: dict) -> list[str]:
+    """The data keys of the projection's sets and properties, a property's as ``subject.property``."""
+    held = projection.get('properties', {})
+    return [*projection.get('sets', {}), *(f'{s}.{p}' for s, props in held.items() for p in props)]
+
+
 def specsolve_tab(stem: str, projection: dict, record: dict) -> str:
-    declared = [*projection['dimensions'], *projection.get('relations', {}), *projection['parameters']]
+    declared = [*projection['dimensions'], *_set_and_property_keys(projection), *projection['parameters']]
     spec = (RUNGS / f'{stem}.yaml').read_text().rstrip()
     prep = prep_slice(declared)
     call = (
@@ -234,7 +242,7 @@ def _symbols(spec: str, projection: dict) -> SymbolTable | None:
     raw = yaml.safe_load(path.read_text())
     declared = {
         *projection['dimensions'],
-        *projection.get('relations', {}),
+        *projection.get('sets', {}),
         *projection['parameters'],
         *projection['variables'],
     }

@@ -4,11 +4,11 @@ How many of 425 requested circuits a five-city network can carry at once — and
 
 > **✔ Verified against the published optimum** — **380 circuits**, from Guéret, Prins, Sevaux & Heipcke, *Applications of Optimization with Xpress-MP* §12.3.3.
 
-**Both kinds of relation in one model.** A path serves
-exactly one city pair, so `call_of` is a coordinate and the demand limit groups
+**Both kinds of mapping in one model.** A path serves
+exactly one city pair, so `path[call]` is a property and the demand limit groups
 through it. A path traverses several arcs, so `uses` is a `(path, arc)` table
 and the capacity limit contracts against it. Neither could stand in for the
-other: a coordinate is single-valued, and an incidence table cannot be grouped
+other: a property is single-valued, and an incidence table cannot be grouped
 by.
 
 Five cities, six undirected links, five city pairs asking for circuits, and 17
@@ -21,15 +21,15 @@ it crosses, which is why the network is undirected and the flow carries no sign.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-Routing telephone calls over a five-city network: how many of the 425 requested circuits can be carried at once. A path serves exactly one city pair — a coordinate — and traverses several arcs — an incidence parameter; both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 12.3. Optimum 380 circuits, published in section 12.3.3.
+Routing telephone calls over a five-city network: how many of the 425 requested circuits can be carried at once. A path serves exactly one city pair — a coordinate — and traverses several arcs — an incidence parameter; two maps, each said the way it is. Guéret, Prins, Sevaux and Heipcke, Applications of Optimization with Xpress-MP, section 12.3. Optimum 380 circuits, published in section 12.3.3.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{A}`$ | index $`a`$ — `arc` — an undirected link between two cities, with capacity in circuits |
-| $`\mathcal{C}`$ | index $`c`$ — `call` with $`\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}`$ — a city pair with circuits to place |
-| $`\mathcal{P}`$ | index $`p`$ — `path` with $`\mathrm{call\_of}: \mathcal{P} \to \mathcal{C}`$ — a route end to end, serving one city pair |
+| $`\mathcal{C}`$ | index $`c`$ — `call` with $`\mathrm{call}: \mathcal{P} \to \mathcal{C}`$ — a city pair with circuits to place |
+| $`\mathcal{P}`$ | index $`p`$ — `path` with $`\mathrm{call}: \mathcal{P} \to \mathcal{C}`$ — a route end to end, serving one city pair |
 
 #### Parameters
 
@@ -37,7 +37,7 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 |---|---|
 | $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{A}`$ — circuits an arc can carry |
 | $`\mathrm{demand}`$ | `demand` over $`\mathcal{C}`$ — circuits a city pair asked for |
-| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, `neutral` where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, $`0`$ where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
@@ -64,7 +64,7 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 **`within_demand`**
 
 ```math
-\sum_{p \in \mathcal{P} \,:\, \mathrm{call\_of}(p) = c} \mathit{flow}_{p} \le \mathrm{demand}_{c} \qquad \forall\, c \in \mathcal{C}
+\sum_{p \in \mathcal{P} \,:\, \mathrm{call}(p) = c} \mathit{flow}_{p} \le \mathrm{demand}_{c} \qquad \forall\, c \in \mathcal{C}
 ```
 
 **`within_capacity`**
@@ -85,7 +85,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       Routing telephone calls over a five-city network: how many of the 425
       requested circuits can be carried at once. A path serves exactly one city
       pair — a coordinate — and traverses several arcs — an incidence parameter;
-      both relations, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
+      two maps, each said the way it is. Guéret, Prins, Sevaux and Heipcke,
       Applications of Optimization with Xpress-MP, section 12.3. Optimum 380
       circuits, published in section 12.3.3.
 
@@ -100,11 +100,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: a route end to end, serving one city pair
         dtype: str
 
-    relations:
-      call_of:
-        description: the city pair a path serves, end to end
-        key: path
-        values: call
+    properties:
+      path:
+        call:
+          description: the city pair a path serves, end to end
+          into: call
 
     parameters:
       capacity:
@@ -118,7 +118,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           which arcs a path traverses — a path uses an arc or it does not, so the
           value is 1 and absence is 0
         dims: [path, arc]
-        missing: neutral
+        missing: 0
 
     variables:
       flow:
@@ -135,7 +135,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       within_demand:
         description: a pair cannot be carried more than it asked for, however many paths serve it
         dims: [call]
-        expression: sum(flow, over=path, by=call_of[call]) <= demand
+        expression: sum(flow, over=path, by=path[call]) <= demand
 
       within_capacity:
         description: >-
@@ -163,7 +163,7 @@ before a solver runs.
 
 ## What it exercises
 
-A coordinate and an incidence parameter side by side, each carrying the relation
+A property and an incidence parameter side by side, each carrying the mapping
 it fits, in a model from outside the project. `reserves` proves both idioms on a
 model built to prove them. This is the outside witness.
 

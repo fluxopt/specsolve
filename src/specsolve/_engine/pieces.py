@@ -42,7 +42,7 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a piece exists, and what keys it.
 
-    Not which rows the piece's frame has: a neutral parameter's missing rows
+    Not which rows the piece's frame has: a ``missing: 0`` parameter's missing rows
     are a zero coefficient, a masked variable's are absence, and the frame
     cannot tell them apart.
 

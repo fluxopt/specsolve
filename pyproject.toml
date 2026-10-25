@@ -22,7 +22,10 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "mathspec>=0.4.0,<0.5",
+    # A direct reference to the head of the mathspec stack that adds sets and
+    # properties, fluxopt/mathspec#5, until mathspec releases it. PyPI refuses
+    # a direct reference, so this cannot publish: a floor replaces it on release.
+    "mathspec @ git+https://github.com/fluxopt/mathspec@85544c3db7f0c0958df8d920315f7acf95c75ae7",
     "polars>=1.33.1",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.
@@ -49,6 +52,9 @@ Changelog = "https://github.com/fluxopt/specsolve/blob/main/CHANGELOG.md"
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/specsolve"]
@@ -126,7 +132,6 @@ specsolve = { path = "." }
 polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
-mathspec = "==0.4.0"
 pytest = "*"
 pytest-xdist = "*"
 
@@ -228,7 +233,7 @@ depends-on = ["ladder", "density", "declarations", "report", "plot"]
 
 # 314.0.7 is the Pyodide the browser app loads. Its polars, 1.33.1, is the newest that builds for WebAssembly.
 [tool.pixi.feature.pyodide.tasks]
-test-pyodide = { cmd = "rm -rf dist/pyodide && python -m pip wheel --no-deps --wheel-dir dist/pyodide . && npm install --no-save --prefix tools/pyodide pyodide@314.0.7 && node tools/pyodide/run.mjs dist/pyodide/specsolve-*.whl", description = "A wheel of this tree installs, solves and sweeps in the browser's Python" }
+test-pyodide = { cmd = "rm -rf dist/pyodide && python -m pip wheel --no-deps --wheel-dir dist/pyodide . && python tools/pyodide/direct.py dist/pyodide/direct && npm install --no-save --prefix tools/pyodide pyodide@314.0.7 && node tools/pyodide/run.mjs dist/pyodide/specsolve-*.whl", description = "A wheel of this tree installs, solves and sweeps in the browser's Python" }
 
 [tool.pixi.feature.floors.tasks]
 test-floors = { cmd = "python -c \"import importlib.util as u, sys; sys.exit(u.find_spec('linopy') is not None)\" && pytest -q -n auto", description = "The suite on the shipped shape, at the declared floors" }

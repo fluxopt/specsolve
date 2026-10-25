@@ -103,7 +103,7 @@
       0.3516658529
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "manchester_wind",
       "manchester_gas",
@@ -139,7 +139,7 @@
       102.6769530076
     ]
   },
-  "gen_carrier": {
+  "generator.carrier": {
     "generator": [
       "manchester_wind",
       "manchester_gas",
@@ -216,7 +216,7 @@
       0.2
     ]
   },
-  "line_from": {
+  "line.from_bus": {
     "line": [
       "london_manchester",
       "manchester_norwich",
@@ -226,7 +226,7 @@
       "norwich_london",
       "bremen_frankfurt"
     ],
-    "bus": [
+    "from_bus": [
       "london",
       "manchester",
       "bremen_dc",
@@ -276,7 +276,7 @@
       40000.0
     ]
   },
-  "line_to": {
+  "line.to_bus": {
     "line": [
       "london_manchester",
       "manchester_norwich",
@@ -286,7 +286,7 @@
       "norwich_london",
       "bremen_frankfurt"
     ],
-    "bus": [
+    "to_bus": [
       "manchester",
       "norwich",
       "norwich_dc",
@@ -338,14 +338,14 @@
       0.8765342
     ]
   },
-  "link_from": {
+  "link.from_bus": {
     "link": [
       "norwich_converter",
       "norway_converter",
       "bremen_converter",
       "dc_link"
     ],
-    "bus": [
+    "from_bus": [
       "norwich",
       "norway",
       "bremen",
@@ -394,14 +394,14 @@
       1000.0
     ]
   },
-  "link_to": {
+  "link.to_bus": {
     "link": [
       "norwich_converter",
       "norway_converter",
       "bremen_converter",
       "dc_link"
     ],
-    "bus": [
+    "to_bus": [
       "norwich_dc",
       "norway_dc",
       "bremen_dc",

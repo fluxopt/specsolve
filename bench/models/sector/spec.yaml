@@ -29,10 +29,10 @@ dimensions:
 parameters:
   installed:            # capacity of `tech` at `node`; absent pairs are zero
     dims: [node, tech]
-    missing: neutral
+    missing: 0
   produces:             # unit of `tech` output arriving as `carrier`
     dims: [tech, carrier]
-    missing: neutral
+    missing: 0
   cost:
     dims: [tech]
   demand:

@@ -29,8 +29,8 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{D}`$ | index $`d`$ — `depot` with $`\mathrm{origin}: \mathcal{C} \to \mathcal{D}`$ — depots the chemicals leave from |
-| $`\mathcal{C}`$ | index $`c`$ — `connection` with $`\mathrm{origin}: \mathcal{C} \to \mathcal{D}`$ — one way of reaching one centre from one depot, by rail or by road |
+| $`\mathcal{D}`$ | index $`d`$ — `depot` with $`\mathrm{depot}: \mathcal{C} \to \mathcal{D}`$ — depots the chemicals leave from |
+| $`\mathcal{C}`$ | index $`c`$ — `connection` with $`\mathrm{depot}: \mathcal{C} \to \mathcal{D}`$ — one way of reaching one centre from one depot, by rail or by road |
 
 #### Parameters
 
@@ -67,7 +67,7 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 **`within_stock`**
 
 ```math
-\sum_{c \in \mathcal{C} \,:\, \mathrm{origin}(c) = d} \mathit{moved}_{c} \le \mathrm{stock}_{d} \qquad \forall\, d \in \mathcal{D}
+\sum_{c \in \mathcal{C} \,:\, \mathrm{depot}(c) = d} \mathit{moved}_{c} \le \mathrm{stock}_{d} \qquad \forall\, d \in \mathcal{D}
 ```
 
 **`move_the_lot`**
@@ -102,11 +102,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: one way of reaching one centre from one depot, by rail or by road
         dtype: str
 
-    relations:
-      origin:
-        description: the depot a connection leaves
-        key: connection
-        values: depot
+    properties:
+      connection:
+        depot:
+          description: the depot a connection leaves
+          into: depot
 
     parameters:
       stock:
@@ -140,7 +140,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     constraints:
       within_stock:
         dims: [depot]
-        expression: sum(moved, over=connection, by=origin[depot]) <= stock
+        expression: sum(moved, over=connection, by=connection[depot]) <= stock
 
       move_the_lot:
         dims: []
@@ -175,6 +175,6 @@ semi-continuous variant is
 
 ## What it exercises
 
-`sum(by=)` through a relation whose target carries a constraint of its own, and
+`sum(by=)` through a property whose target carries a constraint of its own, and
 per-label bounds read from data, where the *label* is a connection rather than
 a pair.

@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat!: a model's sets and properties attach, a property as its own table or as a column of its subject's table ([#2066](https://github.com/fluxopt/specsolve/pull/2066))
+- feat!: specsolve requires mathspec 0.4.0, where `missing: neutral` is gone and a file names the value that a missing row or a masked variable reads as ([#2054](https://github.com/fluxopt/specsolve/pull/2054))
 - feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
 - fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
 

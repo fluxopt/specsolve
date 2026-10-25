@@ -6,11 +6,11 @@ A network: generators sit on buses, lines connect buses, and power balances at e
 
 ## The problem
 
-$$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
+$$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to\_bus}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from\_bus}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
 
-Each sum runs over the generators or lines a relation sends to bus $b$.
-$\mathrm{bus}$, $\mathrm{to}$ and $\mathrm{from}$ are relations the dimensions
-declare, not sets in their own right. Load is $d$ here, because $\ell$ is
+Each sum runs over the generators or lines a property sends to bus $b$.
+$\mathrm{bus}$, $\mathrm{to\_bus}$ and $\mathrm{from\_bus}$ are properties of
+`generator` and `line`, not sets of their own. Load is $d$ here, because $\ell$ is
 already the line index.
 
 ## The model
@@ -26,9 +26,9 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{L}`$ | index $`\ell`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — transmission lines, each joining two buses |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{L}`$ | index $`\ell`$ — `line` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — transmission lines, each joining two buses |
 
 #### Parameters
 
@@ -45,9 +45,9 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{S} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus |
+| $`f`$ | `f` over $`\mathcal{S} \times \mathcal{L}`$ — flow on a line, signed towards its `line[to_bus]` bus |
 
-#### Definitions
+#### Expressions
 
 | Symbol | Meaning |
 |---|---|
@@ -73,13 +73,13 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 **`gen_at_bus`**
 
 ```math
-\mathit{gen\_at\_bus}_{b,s} = \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{s,g} \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
+\mathit{gen\_at\_bus}_{b,s} = \sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{s,g} \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 **`net_inflow`**
 
 ```math
-\mathit{net\_inflow}_{b,s} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
+\mathit{net\_inflow}_{b,s} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{to\_bus}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{from\_bus}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 #### Objective
@@ -124,19 +124,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: transmission lines, each joining two buses
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      line_from:
-        description: the bus a line leaves
-        key: line
-        values: bus
-      line_to:
-        description: the bus a line arrives at
-        key: line
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      line:
+        from_bus:
+          description: the bus a line leaves
+          into: bus
+        to_bus:
+          description: the bus a line arrives at
+          into: bus
 
     parameters:
       p_max:
@@ -163,7 +162,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           lower: 0
           upper: p_max
       f:
-        description: flow on a line, signed towards its `line_to` bus
+        description: flow on a line, signed towards its `line[to_bus]` bus
         dims: [snapshot, line]
         bounds:
           lower: neg_cap
@@ -171,10 +170,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     expressions:
       gen_at_bus:
-        expression: sum(p, over=generator, by=gen_bus[bus])
+        expression: sum(p, over=generator, by=generator[bus])
         description: what the generators sitting on a bus produce there
       net_inflow:
-        expression: sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+        expression: sum(f, over=line, by=line[to_bus]) - sum(f, over=line, by=line[from_bus])
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
@@ -214,11 +213,14 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         snapshots, buses = load.indexes['snapshot'], load.indexes['bus']
 
         gen_at = pd.DataFrame(0.0, index=buses, columns=p_max.index)
-        for gen, bus in zip(tables['gen_bus']['generator'], tables['gen_bus']['bus'], strict=True):
+        for gen, bus in zip(tables['generator.bus']['generator'], tables['generator.bus']['bus'], strict=True):
             gen_at.loc[bus, gen] = 1.0
         flow_in = pd.DataFrame(0.0, index=buses, columns=cap.index)
         for line, src, dst in zip(
-            tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
+            tables['line.from_bus']['line'],
+            tables['line.from_bus']['from_bus'],
+            tables['line.to_bus']['to_bus'],
+            strict=True,
         ):
             flow_in.loc[dst, line] += 1.0
             flow_in.loc[src, line] -= 1.0

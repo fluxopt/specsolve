@@ -4,7 +4,7 @@
       "hub"
     ]
   },
-  "gen_bus": {
+  "generator.bus": {
     "generator": [
       "gas"
     ],
@@ -139,7 +139,7 @@
       "bat"
     ]
   },
-  "storage_bus": {
+  "storage.bus": {
     "storage": [
       "res",
       "bat"

@@ -17,9 +17,9 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 | Symbol | Meaning |
 |---|---|
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
-| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{from\_bus}: \mathcal{L} \to \mathcal{B},\ \mathrm{to\_bus}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
 
 #### Parameters
 
@@ -27,7 +27,7 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 |---|---|
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
+| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link[to_bus]` bus |
 | $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
@@ -36,7 +36,7 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 | Symbol | Meaning |
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value withdraws there and injects at `link_to` |
+| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — PyPSA's p0 — flow measured at the link's `link[from_bus]` end, so a positive value withdraws there and injects at `link[to_bus]` |
 
 #### Variable domains
 
@@ -63,7 +63,7 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{to\_bus}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{from\_bus}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
 ```
 
 </details>
@@ -93,19 +93,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: controllable connections, each joining two buses
         dtype: str
 
-    relations:
-      gen_bus:
-        description: the bus a generator sits on
-        key: generator
-        values: bus
-      link_from:
-        description: the bus a link leaves
-        key: link
-        values: bus
-      link_to:
-        description: the bus a link arrives at
-        key: link
-        values: bus
+    properties:
+      generator:
+        bus:
+          description: the bus a generator sits on
+          into: bus
+      link:
+        from_bus:
+          description: the bus a link leaves
+          into: bus
+        to_bus:
+          description: the bus a link arrives at
+          into: bus
 
     parameters:
       p_nom:
@@ -115,7 +114,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: cost of one unit of output
         dims: [generator]
       rating:
-        description: most a link may carry towards its `link_to` bus
+        description: most a link may carry towards its `link[to_bus]` bus
         dims: [link]
       neg_rating:
         description: most a link may carry the other way, negative by convention
@@ -133,8 +132,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           upper: p_nom
       f:
         description: >-
-          PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value
-          withdraws there and injects at `link_to`
+          PyPSA's p0 — flow measured at the link's `link[from_bus]` end, so a positive value
+          withdraws there and injects at `link[to_bus]`
         dims: [snapshot, link]
         bounds:
           lower: neg_rating
@@ -145,9 +144,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the links meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, over=generator, by=gen_bus[bus])
-          + sum(f, over=link, by=link_to[bus])
-          - sum(f, over=link, by=link_from[bus])
+          sum(p, over=generator, by=generator[bus])
+          + sum(f, over=link, by=link[to_bus])
+          - sum(f, over=link, by=link[from_bus])
           == load
 
     objective:
@@ -187,15 +186,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         n.add(
             'Generator',
             generators.index,
-            bus=tables['gen_bus'].set_index('generator')['bus'],
+            bus=tables['generator.bus'].set_index('generator')['bus'],
             p_nom=tables['p_nom'].set_index('generator')['value'],
             marginal_cost=tables['marginal_cost'].set_index('generator')['value'],
         )
         n.add(
             'Link',
             links.index,
-            bus0=tables['link_from'].set_index('link')['bus'],
-            bus1=tables['link_to'].set_index('link')['bus'],
+            bus0=tables['link.from_bus'].set_index('link')['from_bus'],
+            bus1=tables['link.to_bus'].set_index('link')['to_bus'],
             p_nom=tables['rating'].set_index('link')['value'],
             p_min_pu=-1.0,
             efficiency=1.0,

@@ -23,19 +23,21 @@ dimensions:
     description: controllable connections, each joining two buses
     dtype: str
 
-relations:
-  gen_placement:
-    description: the bus a generator sits on and the carrier it burns
-    key: generator
-    values: [bus, carrier]
-  link_from:
-    description: the bus a link leaves
-    key: link
-    values: bus
-  link_to:
-    description: the bus a link arrives at
-    key: link
-    values: bus
+properties:
+  generator:
+    bus:
+      description: the bus a generator sits on and the carrier it burns
+      into: bus
+    carrier:
+      description: the bus a generator sits on and the carrier it burns
+      into: carrier
+  link:
+    from_bus:
+      description: the bus a link leaves
+      into: bus
+    to_bus:
+      description: the bus a link arrives at
+      into: bus
 
 parameters:
   load:
@@ -112,8 +114,8 @@ constraints:
     description: what is generated at a bus plus what arrives over the links meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, over=generator, by=gen_placement[bus])
-      + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
+      sum(p, over=generator, by=generator[bus])
+      + sum(g, over=link, by=link[to_bus]) - sum(g, over=link, by=link[from_bus])
       == load
 
   carrier_energy:
@@ -123,7 +125,7 @@ constraints:
       selection PyPSA makes by querying its own table
     dims: [carrier]
     where: energy_cap
-    expression: sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap
+    expression: sum(sum(p, over=generator, by=generator[carrier]), over=snapshot) <= energy_cap
 
   carrier_capacity_at_bus:
     description: >-
@@ -132,7 +134,7 @@ constraints:
       so no selector column and no mask stand between the two
     dims: [bus, carrier]
     where: bus_capacity_cap
-    expression: sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap
+    expression: sum(p_nom, over=generator, by=generator[bus, carrier]) <= bus_capacity_cap
 
   transmission_volume:
     description: >-

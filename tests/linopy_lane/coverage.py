@@ -1,9 +1,9 @@
 """Is the data there where a declaration needs it? The two positions that ask.
 
-Everything else in this lane reads a missing ``neutral`` parameter row as a
-zero coefficient (the absence rules). These are the two places that reading
-has no answer for: **a divisor**, where zero is not a divisor at all, and **a
-constant side**, where zero is the bound rather than the absence of one. Both
+A value fills a missing row when the data loads, and these are the two places
+a row with no value would have no answer: **a divisor**, where zero is not a
+divisor at all, and **a constant side**, where zero is the bound rather than
+the absence of one. Both
 are decided against the rows the declaration actually builds, so a ``where``
 that removed the coordinate has already answered. A ``missing: absent``
 parameter is never asked: its missing row removes the row it would have
@@ -69,7 +69,7 @@ def _constant_leaves(
     """Every parameter standing as a constant piece under *node*, with the rows it must cover.
 
     A constant piece is a parameter in a variable-free additive position — `hi`
-    in `x + hi`. Under a sum a missing neutral row is one summand fewer, so a
+    in `x + hi`. Under a sum a missing row is one summand fewer, so a
     reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
     absence rules allow, so ``coefficient`` records having passed through such a
