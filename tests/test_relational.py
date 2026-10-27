@@ -1532,13 +1532,14 @@ class TestThePositionalHandoff:
 
         The key is the coordinate's row-major position, read off the Enum or the
         run of integers. A dim whose labels have gaps has no such ordinal, so it
-        keeps the join on columns. Either way the file is the one the join on
+        keeps the join on columns, and so does a parameter over one dim, which
+        already joins on one column. Either way the file is the one the join on
         columns writes.
         """
         from specsolve._engine import scope as scope_module
 
         relabel = dict(zip([0, 1, 2], t_labels, strict=True))
-        spec = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0'})
+        spec = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0 and cost > 0'})
         avail = SHUFFLED_BOUND.with_columns(pl.col('t').replace_strict(relabel))
         data = {'t': t_labels, 'n': ['a', 'b'], 'avail': avail, 'cost': FLAT_COST}
 
@@ -1553,6 +1554,7 @@ class TestThePositionalHandoff:
         with sps.build(spec, data) as model:
             model.write(tmp_path / 'built.lp')
         assert decided.get(('t', 'n')) is keyed, f'the (t, n) bound join chose {decided}'
+        assert decided.get(('n',)) is False, f'the where on cost over n alone chose {decided}'
 
         monkeypatch.setattr(scope_module.Scope, '_keyed_by_position', lambda self, dims: False)
         with sps.build(spec, data) as model:
