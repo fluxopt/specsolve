@@ -1,0 +1,158 @@
+"""The messages two modules raise, written once.
+
+A message raised from one place stays beside its ``raise``. One raised from two
+lives here, so the two cannot drift. The engine may import this module: it is a
+leaf that knows no YAML, schema or AST.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import polars as pl
+from mathspec.errors import did_you_mean
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+
+#: How a datetime label prints: without the ``.000000`` that polars casts a
+#: whole second to.
+_DATETIME = '%Y-%m-%d %H:%M:%S%.f'
+
+
+def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
+    """``t=1, g=gas`` per row of a frame holding the columns *schema* names, in its order.
+
+    The one way specsolve writes a coordinate, in a printed row and in a
+    refusal alike. A missing label writes ``null``, and an empty *schema*
+    writes ``''``.
+    """
+    parts: list[pl.Expr] = []
+    for at, (dim, dtype) in enumerate(schema.items()):
+        label = pl.col(dim)
+        if isinstance(dtype, pl.Datetime):
+            label = label.dt.to_string(_DATETIME + ('%:z' if dtype.time_zone else ''))
+        parts += [pl.lit(f'{", " if at else ""}{dim}='), label.cast(pl.String).fill_null('null')]
+    return pl.concat_str(parts) if parts else pl.lit('')
+
+
+def coordinate_text(coordinate: Mapping[str, object]) -> str:
+    """One coordinate, ``dim: label`` in dim order, as [`coordinate_expr`][] writes it."""
+    if not coordinate:
+        return ''
+    frame = pl.DataFrame([dict(coordinate)])
+    return frame.select(coordinate_expr(frame.schema)).item()
+
+
+def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> str:
+    """Coordinates as a refusal lists them: ``f=b; f=c``."""
+    return '; '.join(coordinate_text(dict(zip(dims, row, strict=True))) for row in rows)
+
+
+def missing_row_message(kind: str, name: str, coordinate: str, missing: int) -> str:
+    """The message for a parameter or a relation with no row at a coordinate, where the spec refuses a missing row."""
+    more = f', and {missing - 1} more coordinates have no row' if missing > 1 else ''
+    if kind == 'relation':
+        ways = '  Declare `missing: absent` on the relation, if a key with no row is meant.'
+    else:
+        ways = (
+            '  Declare `missing: absent`, if the parameter does not exist there.\n'
+            '  Declare `missing: neutral`, if a missing row contributes nothing.\n'
+            '  Declare `missing: <value>`, if a missing row reads as one value.'
+        )
+    return (
+        f"{kind} '{name}' has no row at {coordinate}{more}. The spec does not declare `missing:` "
+        f'for it, so a missing row is refused.\n'
+        f'  Supply the missing rows, if the data lost them.\n{ways}'
+    )
+
+
+def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
+    """The message for a constant side covering fewer coordinates than its rows."""
+    return (
+        f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
+        f'built here. A missing neutral row is read as 0, and on the constant side that zero is a '
+        f'bound rather than an absence — the row still exists, and it binds.\n'
+        f'  Supply the missing rows, if the value is what was meant.\n'
+        f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
+        f'  Drop the declaration, if the spec has no such quantity at all.'
+    )
+
+
+def sparse_divisor_message(name: str, missing: int) -> str:
+    """The message for a divisor parameter that is sparse over its index."""
+    return (
+        f"parameter '{name}' is used as a divisor but covers {missing} fewer "
+        f'coordinates than it is indexed over. A missing row means a zero '
+        f'coefficient everywhere else, and zero is not a divisor: the term '
+        f'would drop and the constraint would silently stop constraining.\n'
+        f'  Supply the missing rows, or declare the parameter `missing: absent` to drop those rows.'
+    )
+
+
+def non_finite_message(divisors: str, count: int) -> str:
+    """The message for values that are not finite, where the model divides by *divisors* or reads a value."""
+    by = f" where the model divides by '{divisors}'" if divisors else ''
+    return (
+        f'{count} value(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
+        f'and the model needs a finite number.\n'
+        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
+    )
+
+
+def null_bounds_message(name: str, rows: int) -> str:
+    """The message for a bound parameter missing values at some coordinates."""
+    return (
+        f"variable '{name}': {rows} rows have NULL bounds — a bound parameter is missing "
+        f'values for some coordinates. The two ways out build different models, so the '
+        f'language will not pick one:\n'
+        f'  supply the value           the variable exists there, bounded (`inf` is a value)\n'
+        f'  missing: absent            the variable exists there, and that side is open\n'
+        f'  where: "<the parameter>"   the variable does not exist there at all'
+    )
+
+
+def no_model_behind_this_answer_message() -> str:
+    """An expression to read in an answer that has no model behind it."""
+    return (
+        'this answer has no model behind it, so a quantity the file never named cannot be read from '
+        'it: an answer read back off disk carries the values without the model to splice the '
+        'expression into. Re-ask with sps.solve(archive.spec, archive.sources), which reads any '
+        'expression; a name the spec declares is readable either way.'
+    )
+
+
+def position_out_of_range_message(name: str, op: str, position: int, at: int, cardinality: int) -> str:
+    """A ``position(dim)`` boundary naming no coordinate of the dimension."""
+    return (
+        f'where: position({name}) {op} {position} names position {at} of '
+        f"'{name}', which has {cardinality} coordinate(s). A boundary that "
+        f'names no coordinate leaves the rows it was to seed unseeded.'
+    )
+
+
+def short_groups_message(name: str, by: str, op: str, position: int, short: Sequence[str]) -> str:
+    """A grouped ``position(dim, by=)`` boundary that some group is too short to reach."""
+    return (
+        f'where: position({name}, by={by}) {op} {position} names position '
+        f'{position} within each group, and {len(short)} of them are shorter than '
+        f'that: {list(short[:5])}. A boundary that names no coordinate leaves the rows it '
+        f'was to seed unseeded.'
+    )
+
+
+def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
+    """``unknown <kind> '<name>'``, plus the near miss, or every declaration the name prefixes.
+
+    Single-line: it is raised as ``KeyError``, whose ``str`` reprs a newline.
+    """
+    candidates = sorted(known)
+
+    family = [c for c in candidates if c.startswith(f'{name}_')]
+    if family:
+        return (
+            f"unknown {kind} '{name}': no declaration has that name, but "
+            f'{len(family)} begin with it — {", ".join(family)}.'
+        )
+
+    return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"

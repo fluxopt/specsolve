@@ -6,12 +6,14 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: dispatchable units
     dtype: str
   bp:
     description: breakpoints of the cost curve
     dtype: int
+    ordered: true
 
 parameters:
   p_max:

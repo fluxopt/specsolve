@@ -9,7 +9,7 @@ YAML's `edge=0`, and `p.fillna(0)` makes an absent pair contribute zero, as in
 
 `pool_of` is pivoted to a bus x tech array of pool labels, as `installed` is,
 and `p.groupby(pool).sum()` is the YAML's
-`sum(p, by=pool_of, over=[bus, tech], into=pool)`. linopy refuses a NaN label,
+`sum(p, over=[bus, tech], by=pool_of[pool])`. linopy refuses a NaN label,
 so a pair with no plant is labelled `''` and that group is dropped.
 """
 

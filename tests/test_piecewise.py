@@ -13,11 +13,11 @@ import numpy as np
 import polars as pl
 import pytest
 import yaml as pyyaml
-from mathspec import DimensionError
+from mathspec.errors import DimensionError
 
 import specsolve as sps
+from specsolve._sources import attachable, tidy_sources
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.sources import attachable, tidy_sources
 from tests.conftest import EXAMPLES_DIR, by_coord, expanded, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import pd, specsolve_linopy
@@ -452,15 +452,16 @@ def ragged_inputs():
 
 
 def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
-    """A missing breakpoint row read as a zero coefficient is a vertex at the origin.
+    """A missing breakpoint row read as a zero coefficient is a vertex at the origin, so it is refused.
 
     On this fixture B would interpolate between its real (20, 130) and the
     (0, 0) it never declared, for an optimum of 147.5 where its own two points
-    put it at 195.
+    put it at 195. A curve with no `points:` reads its tables under the default
+    `missing: refused`, so the refusal names the breakpoint B has no row at.
     """
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    with pytest.raises(DataError, match='every breakpoint the curve runs through needs a row'):
+    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at generator=B, bp=2"):
         tidy_sources(schema.expand('piecewise').program, dict(ragged_inputs))
 
 
@@ -469,7 +470,7 @@ def test_the_curve_guard_fires_on_the_linopy_lane_too(ragged_inputs, tmp_path):
     path = tmp_path / 'two_dim.yaml'
     path.write_text(TWO_DIM_YAML)
 
-    with pytest.raises(DataError, match='every breakpoint the curve runs through needs a row'):
+    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at generator=B, bp=2"):
         specsolve_linopy.build(expanded(path), dict(ragged_inputs))
 
 
@@ -505,7 +506,7 @@ def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
         'bp_y': {0: 0.0, 1: 50.0},
     }
 
-    with pytest.raises(DataError, match='every breakpoint the curve runs through needs a row'):
+    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at bp=2"):
         specsolve_linopy.build(expanded(path), data)
 
 
@@ -533,14 +534,14 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 SHORT_CURVE = """
 dimensions:
   generator: {dtype: str}
-  bp: {dtype: int}
+  bp: {dtype: int, ordered: true}
 
 parameters:
   p_max: {dims: [generator]}
   load: {dims: []}
-  bp_x: {dims: [generator, bp]}
-  bp_y: {dims: [generator, bp]}
-  bp_present: {dims: [generator, bp], dtype: bool}
+  bp_x: {dims: [generator, bp], missing: absent}
+  bp_y: {dims: [generator, bp], missing: absent}
+  bp_present: {dims: [generator, bp], dtype: bool, missing: neutral}
 
 variables:
   p:
@@ -750,7 +751,14 @@ def _nominated_mask_spec():
     `points: bp_x` masks the weights by where `bp_x` has a row, which is what
     a bare parameter name means in any `where`.
     """
-    return override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.points': 'bp_x'})
+    return override(
+        raw_of(NONCONVEX_YAML),
+        **{
+            'piecewise.cost_curve.points': 'bp_x',
+            'parameters.bp_x.missing': 'absent',
+            'parameters.bp_y.missing': 'absent',
+        },
+    )
 
 
 def test_a_curve_masked_by_its_own_breakpoints_asks_for_nothing_extra():
@@ -795,7 +803,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     """
     raw = raw_of(GATED_YAML)
     raw['piecewise']['cost_curve']['method'] = method
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
     raw['variables']['u'] = {'dims': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'}
 
     gated = [True, False] * 6
@@ -818,16 +826,16 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
-    """`absence: zero` is the spelling the refusal above asks for, and it holds
+    """`missing: neutral` is the spelling the refusal above asks for, and it holds
     the formulation together: the row is built everywhere, reading
     ``sum(lam) == 0`` where the gate does not exist."""
     raw = raw_of(GATED_YAML)
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
     raw['variables']['u'] = {
         'dims': ['snapshot'],
         'domain': 'binary',
         'where': 'gate_rows',
-        'absence': 'zero',
+        'missing': 'neutral',
     }
 
     rows = dict(expanded(raw, 'piecewise').program.constraints)

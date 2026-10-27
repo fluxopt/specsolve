@@ -22,26 +22,32 @@ dimensions:
   year:
     description: the years the pathway covers
     dtype: int
+    ordered: true
   vintage:
     description: >-
       a second axis over the same years — capacity standing in a year was built
       in some vintage
     dtype: int
+    ordered: true
 
 parameters:
   still_live:
     description: 1 where a vintage is still inside its technology's operational life in that year
     dims: [technology, year, vintage]
+    missing: neutral
   residual_capacity:
     description: capacity that already stood in 1990 and has not yet retired
     dims: [technology, year]
+    missing: neutral
 
   build_cost:
     description: discounted cost of building a unit of capacity in a vintage
     dims: [technology, vintage]
+    missing: neutral
   holding_cost:
     description: discounted fixed cost of holding a unit of capacity through a year
     dims: [technology, year]
+    missing: neutral
   running_cost:
     description: discounted variable cost of a unit of activity
     dims: [timeslice, technology, mode, year]
@@ -55,23 +61,29 @@ parameters:
   input_ratio:
     description: fuel a technology consumes per unit of activity
     dims: [technology, fuel, mode, year]
+    missing: neutral
   output_ratio:
     description: fuel a technology produces per unit of activity
     dims: [technology, fuel, mode, year]
+    missing: neutral
 
   sliced_demand:
     description: demand for a fuel placed on one timeslice
     dims: [fuel, timeslice, year]
+    missing: neutral
   annual_demand:
     description: demand for a fuel placed on the year as a whole
     dims: [fuel, year]
+    missing: neutral
 
   max_capacity:
     description: most capacity a technology may stand at
     dims: [technology, year]
+    missing: absent
   min_capacity:
     description: least capacity a technology must stand at
     dims: [technology, year]
+    missing: absent
 
   reserve_margin:
     description: how far firm capacity must exceed the demand of the moment
@@ -79,9 +91,11 @@ parameters:
   reserve_tagged:
     description: 1 where a technology's capacity counts towards the reserve
     dims: [technology, year]
+    missing: neutral
   reserve_demand:
     description: the activity the reserve margin is measured against
     dims: [technology, fuel, mode, year]
+    missing: neutral
 
   residual_holding:
     description: fixed operating cost owed on the capacity that already stood in 1990

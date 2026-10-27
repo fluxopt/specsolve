@@ -38,8 +38,8 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 |---|---|
 | $`\mathrm{stock}`$ | `stock` over $`\mathcal{D}`$ — tonnes standing at a depot |
 | $`\mathrm{cost}`$ | `cost` over $`\mathcal{C}`$ — cost per tonne moved over a connection |
-| $`\mathrm{min\_load}`$ | `min_load` over $`\mathcal{C}`$ — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
-| $`\mathrm{max\_load}`$ | `max_load` over $`\mathcal{C}`$ — largest delivery a connection accepts |
+| $`\mathrm{min\_load}`$ | `min_load` over $`\mathcal{C}`$, `absent` where the data has no row — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
+| $`\mathrm{max\_load}`$ | `max_load` over $`\mathcal{C}`$, `absent` where the data has no row — largest delivery a connection accepts |
 | $`\mathrm{total\_to\_move}`$ | `total_to_move` (scalar) — tonnes that have to leave the depots altogether |
 
 #### Variables
@@ -49,6 +49,14 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 | $`\mathit{moved}`$ | `moved` over $`\mathcal{C}`$ — tonnes sent over a connection |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{stock}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{moved}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`moved`**
+
+```math
+\mathrm{min\_load}_{c} \le \mathit{moved}_{c} \le \mathrm{max\_load}_{c} \qquad \forall\, c \in \mathcal{C}
+```
 
 #### Objective
 
@@ -68,14 +76,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{stock}`$, a 
 
 ```math
 \sum_{c \in \mathcal{C}} \mathit{moved}_{c} = \mathrm{total\_to\_move}
-```
-
-#### Variable domains
-
-**`moved`**
-
-```math
-\mathrm{min\_load}_{c} \le \mathit{moved}_{c} \le \mathrm{max\_load}_{c} \qquad \forall\, c \in \mathcal{C}
 ```
 
 </details>
@@ -122,9 +122,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           smallest delivery a connection accepts — rail carries between 10 and 50
           tonnes per delivery, and road is unconstrained
         dims: [connection]
+        missing: absent
       max_load:
         description: largest delivery a connection accepts
         dims: [connection]
+        missing: absent
       total_to_move:
         description: tonnes that have to leave the depots altogether
         dims: []
@@ -140,7 +142,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     constraints:
       within_stock:
         dims: [depot]
-        expression: sum(moved, by=origin, over=connection, into=depot) <= stock
+        expression: sum(moved, over=connection, by=origin[depot]) <= stock
 
       move_the_lot:
         dims: []

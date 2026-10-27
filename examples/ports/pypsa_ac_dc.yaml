@@ -10,6 +10,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -96,6 +97,7 @@ parameters:
       the cycle basis, as a sparse table of impedance times direction. A line
       may belong to several cycles, so this cannot be a coordinate.
     dims: [cycle, line]
+    missing: neutral
   co2_limit:
     description: emissions the whole horizon is allowed
     dims: []
@@ -157,9 +159,9 @@ constraints:
       meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
-      + sum(g, by=link_to, over=link, into=bus) - sum(g, by=link_from, over=link, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+      + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
       == load
 
   kirchhoff_voltage_law:
@@ -174,7 +176,7 @@ constraints:
       horizon's total stays inside the budget
     dims: []
     expression: >-
-      sum(sum(p * at(co2_per_mwh, by=gen_carrier, over=carrier, into=generator) / efficiency, over=generator), over=snapshot)
+      sum(sum(p * at(co2_per_mwh, by=gen_carrier[carrier]) / efficiency, over=generator), over=snapshot)
       <= co2_limit
 
 objective:

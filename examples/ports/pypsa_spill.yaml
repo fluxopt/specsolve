@@ -8,6 +8,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -49,6 +50,7 @@ parameters:
       energy arriving at a storage unit whether or not it was wanted — zero for
       a unit that receives none
     dims: [snapshot, storage]
+    missing: neutral
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -86,7 +88,7 @@ variables:
       balance keeps its row there.
     dims: [snapshot, storage]
     where: "inflow != 0"
-    absence: zero
+    missing: neutral
     bounds:
       lower: 0
       upper: inflow
@@ -98,9 +100,9 @@ constraints:
       goes into them, meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-      - sum(p_store, by=storage_bus, over=storage, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(p_dispatch, over=storage, by=storage_bus[bus])
+      - sum(p_store, over=storage, by=storage_bus[bus])
       == load
 
   energy_balance_initial:

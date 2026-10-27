@@ -400,7 +400,7 @@ FRESH_SINK = 'highs'
 
 
 def fresh(rows: dict[Key, Row]) -> str:
-    """What a script that solves one model pays, launch to exit, on `FRESH_SINK`, as a heat table.
+    """What a script that builds one model pays, launch to exit, on `FRESH_SINK`, as a heat table.
 
     One row per arm and one column per case, each case at the largest rung the
     fresh phase measured, so a reader compares libraries down a column. Wall
@@ -419,7 +419,7 @@ def fresh(rows: dict[Key, Row]) -> str:
     columns = {
         c: next(r for (cc, s, _, _), r in rows.items() if (cc, s) == (c, rung[c]))['counts']['columns'] for c in cases
     }
-    head = ''.join(f'<th>{c}<br>{_si(columns[c])} variables</th>' for c in cases)
+    head = ''.join(f'<th>{c}<br>{_si(columns[c])} columns</th>' for c in cases)
     body = []
     marked = False
     for arm in arms_in(rows):
@@ -534,6 +534,92 @@ def declarations(rows: dict[Key, Row]) -> str:
 
 
 #: The published page, and the only file `--write` touches.
+def _span(values: list[float]) -> str:
+    """One count, or the range from the smallest to the largest, to three figures: a size, not a measurement."""
+
+    def short(n: float) -> str:
+        return next((f'{n / scale:.3g}{unit}' for unit, scale in (('M', 1e6), ('k', 1e3)) if n >= scale), f'{n:.3g}')
+
+    lo, hi = min(values), max(values)
+    return short(lo) if lo == hi else f'{short(lo)}\N{EN DASH}{short(hi)}'
+
+
+#: A sum that groups its terms through a relation, as a spec writes it: what is summed over, and into what.
+_GROUPED = re.compile(r'sum\(\s*[^,]+,\s*over=(\[[^\]]*\]|\w+),\s*by=\w+\[(\w+)\]\s*\)')
+
+
+def grouped_sums(spec: Path | None) -> str:
+    """Each distinct grouped sum in *spec*, as ``over → into``, or a dash where it has none."""
+    found = []
+    for over, into in _GROUPED.findall(spec.read_text() if spec else ''):
+        dims = ' \N{MULTIPLICATION SIGN} '.join(d.strip() for d in over.strip('[]').split(','))
+        if (pair := f'{dims} \N{RIGHTWARDS ARROW} {into}') not in found:
+            found.append(pair)
+    return ', '.join(found) or '\N{EM DASH}'
+
+
+def declared(spec: Path | None, kind: str) -> str:
+    """The *kind* (``variables`` or ``constraints``) a spec declares, each with its dimensions but ``snapshot``."""
+    import yaml
+
+    block = (yaml.safe_load(spec.read_text()) if spec else {}).get(kind) or {}
+    named = []
+    for name, body in block.items():
+        dims = [d for d in body.get('dims', []) if d != 'snapshot']
+        named.append(f'{name}[{", ".join(dims)}]' if dims else name)
+    return ', '.join(named) or '\N{EM DASH}'
+
+
+def models(rows: dict[Key, Row]) -> str:
+    """Each model on the size ladder as one column: what it declares, and what one snapshot sends to the solver.
+
+    Every ladder grows along ``snapshot`` alone, and every declaration runs over
+    it, so a model is its declarations, its fixed dimensions, its density and its
+    grouped sums, plus the columns, rows and nonzeros one snapshot adds: read off
+    `BASELINE`'s largest measurement, the model as built. The snapshots row is
+    the range the ladder measured. Declarations and grouped sums are read off the
+    case's spec. Nothing in the table is typed into the page.
+    """
+    from bench.cases import CASES
+
+    ours = {k: r for k, r in rows.items() if k[3] == BASELINE and _sweep_of(k[1]) is None}
+    cases = sorted({c for c, _, _, _ in ours})
+    if not cases:
+        return ''
+    cells: dict[str, list[str]] = {}
+    for case in cases:
+        counts = {k[1]: r['counts'] for k, r in ours.items() if k[0] == case}
+        shapes = {s.label: s for s in CASES[case].ladder if s.label in counts}
+        largest = max(counts, key=lambda size: counts[size]['columns'])
+        snapshots = shapes[largest].sizes['snapshot']
+        spec = CASES[case].spec
+        cells[case] = [
+            CASES[case].about or '\N{EM DASH}',
+            declared(spec, 'variables'),
+            declared(spec, 'constraints'),
+            grouped_sums(spec),
+            ', '.join(f'{d} {n}' for d, n in shapes[largest].sizes.items() if d != 'snapshot'),
+            f'{shapes[largest].density:.0%}',
+            _span([s.sizes['snapshot'] for s in shapes.values()]),
+            *(_span([counts[largest][n] / snapshots]) for n in ('columns', 'rows', 'nonzeros')),
+        ]
+    labels = (
+        'for',
+        'variables',
+        'constraints',
+        'grouped sums',
+        'dimensions',
+        'density',
+        'snapshots',
+        'columns per snapshot',
+        'rows per snapshot',
+        'nonzeros per snapshot',
+    )
+    lines = [f'| | {" | ".join(cases)} |', f'| --- |{" --- |" * len(cases)}']
+    lines += [f'| {label} | {" | ".join(cells[c][i] for c in cases)} |' for i, label in enumerate(labels)]
+    return '\n'.join(lines)
+
+
 PAGE = Path('docs/about/benchmarks.md')
 
 
@@ -630,6 +716,7 @@ def main(argv: list[str] | None = None) -> int:
         results.append(f'<!-- {" ".join(k for k in key if k)}: {error} -->')
 
     fragments = {
+        'models': models(rows),
         'results': '\n'.join(results),
         'fresh': fresh(best(started)),
         'marginal': marginal(loop),

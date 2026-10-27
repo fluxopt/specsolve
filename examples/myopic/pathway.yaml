@@ -7,7 +7,7 @@ version: 0
 
 dimensions:
   day: {dtype: str, description: "typical days, each standing for many real ones"}
-  hour: {dtype: int, description: "hours within a typical day"}
+  hour: {dtype: int, description: "hours within a typical day", ordered: true}
   generator: {dtype: str, description: "generating units"}
 
 parameters:

@@ -34,12 +34,12 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{bp\_rate}`$ | `bp_rate` over $`\mathcal{F} \times \mathcal{B}`$ — what each flow runs at, at each breakpoint of its converter's curve |
-| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{C} \times \mathcal{B}`$ — how far each converter's curve runs |
+| $`\mathrm{bp\_rate}`$ | `bp_rate` over $`\mathcal{F} \times \mathcal{B}`$, `absent` where the data has no row — what each flow runs at, at each breakpoint of its converter's curve |
+| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{C} \times \mathcal{B}`$, `neutral` where the data has no row — how far each converter's curve runs |
 | $`\mathrm{rate}^{\mathrm{max}}`$ | `rate_max` over $`\mathcal{F}`$ — what each flow runs at when its converter is at its last breakpoint |
-| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$ — which flows deliver heat |
-| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$ — which flows deliver power |
-| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$ — what a unit of each input flow costs |
+| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver heat |
+| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver power |
+| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$, `neutral` where the data has no row — what a unit of each input flow costs |
 | $`\mathrm{heat\_demand}`$ | `heat_demand` over $`\mathcal{T}`$ — heat to be delivered |
 | $`\mathrm{power\_demand}`$ | `power_demand` over $`\mathcal{T}`$ — power to be delivered |
 
@@ -51,6 +51,20 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | $`\mathit{weight}`$ | `weight` over $`\mathcal{C} \times \mathcal{T} \times \mathcal{B}`$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{bp\_rate}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{rate}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`rate`**
+
+```math
+0 \le \mathit{rate}_{f,t} \le \mathrm{rate}^{\mathrm{max}}_{f} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
+```
+
+**`weight`**
+
+```math
+0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T},\ b \in \mathcal{B} \,:\, \mathrm{bp\_present}_{c,b}
+```
 
 #### Objective
 
@@ -84,20 +98,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{bp\_rate}`$,
 \sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{is\_power}_{f} = \mathrm{power\_demand}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
-#### Variable domains
-
-**`rate`**
-
-```math
-0 \le \mathit{rate}_{f,t} \le \mathrm{rate}^{\mathrm{max}}_{f} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
-```
-
-**`weight`**
-
-```math
-0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T},\ b \in \mathcal{B} \,:\, \mathrm{bp\_present}_{c,b}
-```
-
 **`on_one_segment`**
 
 ```math
@@ -121,6 +121,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       time:
         description: dispatch periods
         dtype: int
+        ordered: true
       converter:
         description: units converting one carrier into others
         dtype: str
@@ -130,6 +131,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       bp:
         description: breakpoints, as many as the longest curve needs
         dtype: int
+        ordered: true
 
     relations:
       converter_of:
@@ -141,22 +143,27 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       bp_rate:
         description: what each flow runs at, at each breakpoint of its converter's curve
         dims: [flow, bp]
+        missing: absent
       bp_present:
         description: how far each converter's curve runs
         dims: [converter, bp]
         dtype: bool
+        missing: neutral
       rate_max:
         description: what each flow runs at when its converter is at its last breakpoint
         dims: [flow]
       is_heat:
         description: which flows deliver heat
         dims: [flow]
+        missing: neutral
       is_power:
         description: which flows deliver power
         dims: [flow]
+        missing: neutral
       fuel_price:
         description: what a unit of each input flow costs
         dims: [flow]
+        missing: neutral
       heat_demand:
         description: heat to be delivered
         dims: [time]
@@ -199,7 +206,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       on_the_curve:
         description: every flow reads its own value off its converter's weights
         dims: [flow, time]
-        expression: rate == sum(at(weight, by=converter_of, over=converter, into=flow) * bp_rate, over=bp)
+        expression: rate == sum(at(weight, by=converter_of[converter]) * bp_rate, over=bp)
       heat_balance:
         description: heat delivered meets the demand
         dims: [time]

@@ -23,9 +23,9 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._sinks import SOLVERS
+from specsolve._sinks.solver import Basis
 from specsolve.errors import NoSolutionError
-from specsolve.relational.sinks import SOLVERS
-from specsolve.relational.sinks.solvers.base import Basis
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 SNAPSHOTS = list(range(40))
 GENERATORS = [f'g{i}' for i in range(6)]
 DISPATCH = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['snapshot', 'generator']},
@@ -158,7 +158,7 @@ def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
 
 def _matched(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Every start the engine lays onto a build by coordinate, named by how."""
-    from specsolve.relational.engine import readback
+    from specsolve._engine import readback
 
     calls: list[str] = []
     for name in ('matched_basis', 'matched_values'):

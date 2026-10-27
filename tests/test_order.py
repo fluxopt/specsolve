@@ -20,7 +20,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.engine import assembly
+from specsolve._engine import assembly
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
@@ -116,7 +116,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
     rng = np.random.default_rng(0)
     items, periods = 2_000, 50
     spec = {
-        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int', 'ordered': True}},
         'parameters': {'cost': {'dims': ['i', 't']}},
         'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 1e6'}},

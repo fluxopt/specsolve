@@ -10,15 +10,16 @@ from __future__ import annotations
 import re
 import subprocess  # noqa: F401  — used by the typst compile check
 from pathlib import Path
+from typing import get_args
 
 import pytest
-from mathspec import FORMATS, SymbolTable, to_latex, to_markdown, to_spec, to_typst, typeset
+from mathspec import FormatName, SymbolTable, to_latex, to_markdown, to_spec, to_typst, typeset
 
 from tests.conftest import SPEC_PATHS
 from tools import gallery_math
 
 #: Every format, as a parametrize mark.
-EVERY_FORMAT = pytest.mark.parametrize('fmt', list(FORMATS))
+EVERY_FORMAT = pytest.mark.parametrize('fmt', get_args(FormatName))
 
 _OPERATORS = frozenset({r'\sum', r'\min', r'\max', r'\prod', r'\int'})
 _SUBSCRIPTED = re.compile(r'(\\[a-zA-Z]+|[A-Za-z])\s*_\s*(?:\{([^{}]*)\}|(\S))')

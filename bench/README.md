@@ -299,8 +299,8 @@ against each other. Publish a whole ladder or none of it.
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
-| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built before the clock | — |
-| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built before the clock | — | — |
+| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built in `prepare` | — |
+| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built in `prepare` | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
@@ -308,12 +308,16 @@ CSR, a sense per row, right-hand side — and the arm pushes that into its own
 solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
 
-**The two matrix arms time the handoff alone.** Every other arm reads the
-parquet inside the clock. A matrix arm instead has `load_setup`, which reads the
-parquet and builds the finished arrays in the spawned child before the clock
-starts, and `test_emit` times its `load`: a new solver, one bulk call, and the
-teardown. So the published floor is what handing a finished model to the
-solver costs, and nothing before it. `test_fresh` skips both arms, because a
+**The two matrix arms measure the handoff alone.** Every other arm reads the
+parquet inside the clock. A matrix arm builds the finished arrays in `prepare`,
+in the pytest process, and writes them beside the parquet as one `.npz` per
+arm. Its `load_setup` reads them back in the spawned child, and `test_emit`
+times its `load`: a new solver, one bulk call, and the teardown. So the
+published floor is what handing a finished model to the solver costs, and
+nothing before it. The same holds for its peak. The child never reads the
+parquet or runs the formulation, so its peak holds the interpreter, the
+arrays and the solver's copy of them, and no garbage from a build. Every array
+is read in whole, so all of it is resident, as a caller's arrays would be. `test_fresh` skips both arms, because a
 process launched for them has to build the arrays first. Their other verbs,
 `build_only`, `objective` and `written`, still read and build inside the call.
 
@@ -390,6 +394,12 @@ because a measurement nobody took is an absent row rather than a null. The
 reasons print together under `over budget` when the run ends, which is the one
 place a skipped cell can still say something. `--budget 0` measures everything,
 which is what to pass when the slow number is the point.
+
+**`test_rebuild` has no peak of its own.** It builds in the pytest process,
+with no isolated pass, so the memory budget has nothing to project from. It
+skips every rung above one where any sink of the same arm ran out of memory.
+A rebuild too large for the box would otherwise be killed with the pytest
+process, and every cell of its results file with it.
 
 **A number the run cannot stand behind is marked, not dropped.** Every
 measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
@@ -542,7 +552,7 @@ across a session, and this machine has drifted 2x on wall time between the
 start of a session and the end of one. Check out A, measure, check out B,
 measure, and go back — not A once and B once an hour later. A second arm used
 to be the tell — if it moved too, the machine moved, because nothing in
-`src/specsolve/relational/` can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
+the engine can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
 wall time and is usually the honest half of a before/after claim.
 
 ## The cases
@@ -822,7 +832,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve.relational.engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._engine.compiler:Compiler._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```

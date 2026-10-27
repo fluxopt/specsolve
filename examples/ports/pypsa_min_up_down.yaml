@@ -8,6 +8,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: generating units, each either committed or off
     dtype: str
@@ -25,9 +26,11 @@ parameters:
   start_up_cost:
     description: what bringing a unit up costs, once per start
     dims: [generator]
+    missing: neutral
   shut_down_cost:
     description: what taking a unit down costs, once per stop
     dims: [generator]
+    missing: neutral
   min_up_time:
     description: how many snapshots a unit must stay on once it has started
     dims: [generator]

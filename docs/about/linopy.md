@@ -53,7 +53,7 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
 
 - **The model is a file.** There is no Python API that builds math.
   `sps.check` validates the file with no data.
-- **Data is attached by name, and a missing row is a missing coordinate.**
+- **Data is attached by name, and the spec says what a missing row means.**
   A model holds only the rows that exist, which is what keeps a sparse model
   small.
 - **linopy is not a dependency.** Only the test suite uses it, to build every

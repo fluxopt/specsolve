@@ -18,6 +18,7 @@
 dimensions:
   snapshot:
     dtype: int
+    ordered: true
   node:
     dtype: str
   tech:
@@ -26,6 +27,7 @@ dimensions:
 parameters:
   installed:            # capacity of `tech` at `node`; absent pairs are zero
     dims: [node, tech]
+    missing: neutral
   cost:
     dims: [tech]
   demand:

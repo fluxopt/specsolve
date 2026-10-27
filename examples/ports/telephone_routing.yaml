@@ -35,6 +35,7 @@ parameters:
       which arcs a path traverses — a path uses an arc or it does not, so the
       value is 1 and absence is 0
     dims: [path, arc]
+    missing: neutral
 
 variables:
   flow:
@@ -51,7 +52,7 @@ constraints:
   within_demand:
     description: a pair cannot be carried more than it asked for, however many paths serve it
     dims: [call]
-    expression: sum(flow, by=call_of, over=path, into=call) <= demand
+    expression: sum(flow, over=path, by=call_of[call]) <= demand
 
   within_capacity:
     description: >-

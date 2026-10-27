@@ -10,9 +10,11 @@ dimensions:
   snapshot:
     description: dispatch periods, each falling in one investment period
     dtype: int
+    ordered: true
   period:
     description: investment periods, the grouping capacity is decided and paid over
     dtype: int
+    ordered: true
   generator:
     description: generating units, each existing in some periods and not others
     dtype: str
@@ -70,7 +72,7 @@ constraints:
       all in a period it does not exist in — the activity is read down onto the
       snapshot through the period relation
     dims: [snapshot, generator]
-    expression: p <= p_nom * at(activity, by=period_of, over=period, into=snapshot)
+    expression: p <= p_nom * at(activity, by=period_of[period])
 
   power_balance:
     description: what exists in this snapshot meets the load
@@ -84,5 +86,5 @@ objective:
     period it falls in — capacity once per period the asset stands in, which is
     why an asset alive in both is paid for twice
   expression: >-
-    sum(p * opex * at(period_weight, by=period_of, over=period, into=snapshot))
+    sum(p * opex * at(period_weight, by=period_of[period]))
     + sum(p_nom * capex * activity * period_weight)

@@ -38,8 +38,8 @@ which states the math and checks it before any data exists.
   reads it where it lies and solves the same question again, and a directory
   of runs reads as one set of tables.
   [Archiving a solve →](https://specsolve.readthedocs.io/en/latest/howto/archiving/)
-- **Fast from the first call.** A script that solves one small model finishes
-  in about half a second, about half of linopy's time
+- **Fast from the first call.** A script that builds one small model and hands
+  it to the solver finishes in about half a second, about half of linopy's time
   ([#2031](https://github.com/fluxopt/specsolve/pull/2031)). The solver stays
   loaded: `update()` puts new numbers on it, and the next solve carries on from
   where the last one ended.
@@ -65,7 +65,7 @@ which states the math and checks it before any data exists.
 ```yaml
 # dispatch.yaml
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}

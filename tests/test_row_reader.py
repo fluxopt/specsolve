@@ -18,7 +18,7 @@ from specsolve.errors import SpecsolveError
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
-    from specsolve.relational.result import ConstraintRow
+    from specsolve._result import ConstraintRow
 
 DATA = {
     'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
@@ -31,7 +31,7 @@ DATA = {
 #: Two variables in one row, and a coefficient that only data knows — the two
 #: things a rendered coordinate and a built read exist for.
 COMMITMENT: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
     'parameters': {'p_max': {'dims': ['g']}, 'load': {'dims': ['t']}},
     'variables': {
         'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}},
@@ -102,7 +102,7 @@ def test_a_term_prints_its_coordinate_as_the_row_prints_its_own(
     `2026-01-01 01:00:00.000000` beside `2026-01-01 01:00:00`, `1e-7` beside `1e-07`.
     """
     spec = {
-        'dimensions': {'t': {'dtype': dtype}},
+        'dimensions': {'t': {'dtype': dtype, 'ordered': True}},
         'parameters': {'need': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'demand': {'dims': ['t'], 'expression': 'p >= need'}},
@@ -121,7 +121,7 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     """
     generators = [f'g{i}' for i in range(300)]
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
         'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
         'variables': {
             'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 100}},
@@ -255,7 +255,7 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
 #: cannot tell apart from their neighbours, and a scalar declaration — the
 #: cases where the *rendering* is what makes a row readable or not.
 PRECISE: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['g']}, 'load': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0}}},
     'constraints': {'balance': {'dims': ['t'], 'expression': 'sum(p * cost, over=g) >= load'}},

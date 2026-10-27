@@ -90,7 +90,7 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
 
 
 RAMP_BLOCK = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lim': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
@@ -143,7 +143,7 @@ WRITTEN = [
 
 def _floor_model(row: str, sense: str) -> dict[str, object]:
     return {
-        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
         'parameters': {'b': {'dims': ['snapshot']}},
         'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {'floor': {'dims': ['snapshot'], 'expression': row}},

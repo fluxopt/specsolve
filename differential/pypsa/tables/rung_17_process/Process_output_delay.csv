@@ -1,7 +1,7 @@
-scenario,process_output,value
-base,conv_ext_bus0,0
-base,conv_ext_bus1,0
-base,conv_fix_bus0,0
-base,conv_fix_bus1,0
-base,conv_set_bus0,0
-base,conv_set_bus1,0
+process_output,value
+conv_ext_bus0,0
+conv_ext_bus1,0
+conv_fix_bus0,0
+conv_fix_bus1,0
+conv_set_bus0,0
+conv_set_bus1,0

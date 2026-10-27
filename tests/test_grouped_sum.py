@@ -22,16 +22,17 @@ import polars as pl
 import pytest
 from mathspec.program import (
     Add,
-    GroupSum,
-    Named,
+    Join,
+    NamedExpression,
     Negate,
+    Sum,
     Variable,
 )
 
 import specsolve as sps
+from specsolve._engine.engine import Engine
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd, specsolve_linopy, transport_linopy_objective
@@ -79,7 +80,7 @@ def _flatten(expr):
         return _flatten(expr.left) + _flatten(expr.right)
     if isinstance(expr, Negate):
         return _flatten(expr.operand)
-    if isinstance(expr, Named):
+    if isinstance(expr, NamedExpression):
         return _flatten(expr.body)
     return [expr]
 
@@ -91,9 +92,9 @@ def test_sum_lowers_to_one_node_per_injection_term():
     assert c.dims == ('snapshot', 'bus')
     terms = _flatten(c.lhs)
     grouped = {
-        (t.operand, t.direction.consumed_dims, t.direction.name, t.direction.produced_dims)
+        (t.operand.operand, t.operand.columns.dropped_dims, t.operand.columns.name, t.operand.columns.added_dims)
         for t in terms
-        if isinstance(t, GroupSum)
+        if isinstance(t, Sum) and isinstance(t.operand, Join)
     }
     assert (Variable('p'), ('generator',), 'gen_bus', ('bus',)) in grouped, (
         'generation is grouped out of generator onto bus, through gen_bus and nothing else'
@@ -178,7 +179,7 @@ dimensions:
   g: {dtype: str}
   item: {dtype: str}
 relations:
-  grp: {key: item, values: g}
+  grp: {key: item, values: g, missing: absent}
 parameters:
   cap: {dims: [item]}
   target: {dims: [g]}
@@ -189,7 +190,7 @@ variables:
 constraints:
   meet:
     dims: [g]
-    expression: sum(x, by=grp, over=item, into=g) >= target
+    expression: sum(x, over=item, by=grp[g]) >= target
 objective:
   sense: minimize
   expression: sum(x, over=item)
@@ -246,7 +247,7 @@ GROUPED_ONTO_BUS = {
     'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
     'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
     'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, by=gen_bus, over=generator, into=bus) >= load'}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=gen_bus[bus]) >= load'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
 }
 
@@ -289,7 +290,7 @@ def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
 
 BROADCAST_GROUP_SUM = {
     'dimensions': {
-        'snapshot': {'dtype': 'int'},
+        'snapshot': {'dtype': 'int', 'ordered': True},
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
     },
@@ -299,7 +300,7 @@ BROADCAST_GROUP_SUM = {
     'constraints': {
         'cap': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'sum(x * w, by=gen_bus, over=generator, into=bus) <= limit',
+            'expression': 'sum(x * w, over=generator, by=gen_bus[bus]) <= limit',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -321,7 +322,7 @@ BROADCAST_SOURCES = {
 def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """The variable does not carry the grouped dim, so a group holds it twice.
 
-    `sum(x * w, by=gen_bus, over=generator, into=bus)` with `x` indexed by snapshot
+    `sum(x * w, over=generator, by=gen_bus[bus])` with `x` indexed by snapshot
     alone: `generator` reaches the piece by broadcast from `w`, so two
     generators on one bus put the *same* `var_label` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
@@ -345,7 +346,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
         BROADCAST_GROUP_SUM,
         **{
             'variables.x.dims': ['snapshot', 'generator'],
-            'constraints.cap.expression': 'sum(x * w, by=gen_bus, over=generator, into=bus) <= limit',
+            'constraints.cap.expression': 'sum(x * w, over=generator, by=gen_bus[bus]) <= limit',
         },
     )
     with sps.build(spec, BROADCAST_SOURCES) as model:
@@ -363,7 +364,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
 #: (bus, snapshot) and one *column* per bus. It is the objective's projection
 #: down to `(col, coeff)` that drops the dims and merges those rows.
 BROADCAST_OBJECTIVE = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'bus': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'bus': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
     'variables': {'y': {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'atleast': {'dims': ['bus'], 'expression': 'y >= floor'}},
@@ -549,12 +550,12 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
 DEMAND_BY_REGION = {
     'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
     'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
-    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': 'neutral'}},
     'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
     'expressions': {
         'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},
     },
-    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, by=load_bus, over=load, into=bus)'}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'g == sum(demand, over=load, by=load_bus[bus])'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(g)'},
 }
 

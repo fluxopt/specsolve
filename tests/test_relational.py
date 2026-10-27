@@ -14,14 +14,15 @@ from dataclasses import replace
 import numpy as np
 import polars as pl
 import pytest
-from mathspec import Spec
 from mathspec.program import (
     Add,
+    Axis,
     Constant,
     ConstraintDeclaration,
     DimensionDeclaration,
-    Direction,
-    GroupSum,
+    Expression,
+    Join,
+    JoinColumns,
     Mask,
     Multiply,
     Negate,
@@ -35,17 +36,18 @@ from mathspec.program import (
     Variable,
     VariableDeclaration,
 )
+from mathspec.spec import Spec
 
 import specsolve as sps
+from specsolve._engine.assembly import _sorted
+from specsolve._engine.compiler import Compiler
+from specsolve._engine.engine import Engine
+from specsolve._engine.scope import Scope
+from specsolve._sinks import SOLVERS
+from specsolve._sinks.handoff import ranges
+from specsolve._sinks.highs import Highs
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engine.assembly import _sorted
-from specsolve.relational.engine.compiler import Compiler
-from specsolve.relational.engine.engine import Engine
-from specsolve.relational.engine.scope import Scope
-from specsolve.relational.sinks import SOLVERS
-from specsolve.relational.sinks.handoff import ranges
-from specsolve.relational.sinks.solvers.highs import Highs
-from specsolve.sources import tidy_sources
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, by_coord, override, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, specsolve_linopy, transport_linopy_objective, xr
@@ -98,15 +100,15 @@ def dispatch_program() -> Program:
         constraints={
             'power_balance': ConstraintDeclaration(
                 ('snapshot',),
-                lhs=Sum(Variable('p'), over=('generator',)),
+                lhs=Sum(Variable('p'), over=(Axis('generator'),)),
                 sense='==',
                 rhs=Parameter('load'),
             )
         },
         objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=('generator', 'snapshot'))
+            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
         ),
-        dimensions={'snapshot': DimensionDeclaration(dtype='int'), 'generator': DimensionDeclaration()},
+        dimensions={'snapshot': DimensionDeclaration(dtype='int', ordered=True), 'generator': DimensionDeclaration()},
     )
 
 
@@ -145,7 +147,7 @@ NODE_CAP_SPEC = {
 
 LABEL_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
+    'parameters': {'cost': {'dims': ['f'], 'missing': 'neutral'}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['f'], 'expression': 'x <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
@@ -160,7 +162,7 @@ _CAP = pl.DataFrame({'f': ['a', 'b'], 'value': [5.0, 5.0]})
 #: and the linopy lane builds and solves it — so the file is sayable and only this
 #: lane is short (#1137).
 CONSTANT_BESIDE_A_TERM = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'k': {'dims': ['t']}, 'd': {'dims': []}, 'load': {'dims': []}},
     'variables': {'x': {'dims': ['t'], 'where': 't != 2', 'bounds': {'lower': 0}}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},
@@ -171,7 +173,7 @@ CONSTANT_BESIDE_A_TERM = {
 #: reaches from the file *as written* — which is the number the rewrite owes.
 CONSTANT_BESIDE_A_TERM_CASES = [
     ('sum(x * k + d, over=t) >= load', 8.0, 'sum-over'),
-    ('sum(sum(x * k + d, by=r_of, over=t, into=r), over=r) >= load', 8.0, 'sum-by'),
+    ('sum(sum(x * k + d, over=t, by=r_of[r]), over=r) >= load', 8.0, 'sum-by'),
     ('sum(shift(x * k + d, along=t, offset=1, edge=0), over=t) >= load', 8.0, 'shift'),
     ('sum(sum_back(x * k + d, along=t, window=2), over=t) >= load', 3.0, 'sum-back'),
 ]
@@ -205,19 +207,20 @@ WIRING = {
 }
 
 
-def _onto_bus(name: str) -> Direction:
-    """Relation *name* read the way a nodal balance reads it: out of its key, onto the bus."""
+def _onto_bus(operand: Expression, name: str) -> Sum:
+    """*operand* summed through relation *name* the way a nodal balance reads it: out of its key, onto the bus."""
     relation = WIRING[name]
-    return Direction(name, relation, relation.key, relation.values, ())
+    columns = JoinColumns(name, relation, joined=relation.key, grouped=relation.values)
+    return Sum(Join(operand, columns), columns.axes)
 
 
 def transport_program() -> Program:
     injection = Add(
         Add(
-            GroupSum(Variable('p'), _onto_bus('gen_bus')),
-            GroupSum(Variable('f'), _onto_bus('to')),
+            _onto_bus(Variable('p'), 'gen_bus'),
+            _onto_bus(Variable('f'), 'to'),
         ),
-        Negate(GroupSum(Variable('f'), _onto_bus('from'))),
+        Negate(_onto_bus(Variable('f'), 'from')),
     )
     return Program(
         parameters={
@@ -248,10 +251,10 @@ def transport_program() -> Program:
             )
         },
         objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=('generator', 'snapshot'))
+            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
         ),
         dimensions={
-            'snapshot': DimensionDeclaration(dtype='int'),
+            'snapshot': DimensionDeclaration(dtype='int', ordered=True),
             'bus': DimensionDeclaration(),
             'generator': DimensionDeclaration(),
             'line': DimensionDeclaration(),
@@ -365,17 +368,17 @@ class TestWhatBindRefusesAndWhatItTakes:
     def test_a_bound_parameter_short_of_a_coordinate_is_refused_with_the_count(self):
         """The refusal nothing else in the suite reaches.
 
-        A bound whose *value* is null is refused at attach, so the only way to
-        a null bound is a parameter with no row for a coordinate the variable
-        has a column at — which attach cannot see, absence being ordinary
-        everywhere else. The count is asserted because it is what the message
+        A bound whose *value* is null is refused at attach, and so is a
+        missing row of a parameter that does not declare `missing:`, so the
+        only way to a null bound is a `missing: neutral` parameter with no row
+        for a coordinate the variable has a column at. The count is asserted because it is what the message
         exists to carry: it is read off the two bound columns before the frame
         that carries them is filtered, and a probe that looked at one of them
         would report every model as sound.
         """
         spec = {
             'dimensions': {'i': {'dtype': 'int'}},
-            'parameters': {'cap': {'dims': ['i']}},
+            'parameters': {'cap': {'dims': ['i'], 'missing': 'neutral'}},
             'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
             'constraints': {'c': {'dims': ['i'], 'expression': 'x >= 0'}},
             'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
@@ -437,7 +440,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         pl.DataFrame({'snapshot': [0, 1]}).write_parquet(odd / 'index.parquet')
 
         spec = {
-            'dimensions': {'snapshot': {'dtype': 'int'}},
+            'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
             'parameters': {'load': {'dims': ['snapshot']}},
             'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
             'constraints': {'meet': {'dims': ['snapshot'], 'expression': 'p >= load'}},
@@ -520,7 +523,7 @@ class TestTheLabelSpace:
         """
         spec = {
             'dimensions': {
-                'snapshot': {'dtype': 'int'},
+                'snapshot': {'dtype': 'int', 'ordered': True},
                 'node': {'dtype': 'str'},
                 'tech': {'dtype': 'str'},
             },
@@ -606,7 +609,7 @@ class TestTheLabelSpace:
         order, or each ``x`` lands on the row of another label's ``cap``.
         """
         spec = {
-            'dimensions': {'t': {'dtype': 'int'}},
+            'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
             'parameters': {'cap': {'dims': ['t']}},
             'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
             'constraints': {'k': {'dims': ['t'], 'expression': 'x <= cap'}},
@@ -679,7 +682,7 @@ class TestTheLabelSpace:
         """
         spec = {
             'dimensions': {'i': {'dtype': 'int'}},
-            'parameters': {'a': {'dims': ['i']}, 'b': {'dims': ['i']}},
+            'parameters': {'a': {'dims': ['i'], 'missing': 'absent'}, 'b': {'dims': ['i'], 'missing': 'absent'}},
             'variables': {
                 'absent': {'dims': ['i'], 'where': 'not a', 'bounds': {'lower': 0, 'upper': 1}},
                 'either': {'dims': ['i'], 'where': 'a > 0 or b > 0', 'bounds': {'lower': 0, 'upper': 1}},
@@ -897,7 +900,7 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
     """A balance of flows in minus flows out; `ends` is the second line's endpoints."""
     spec = {
         'dimensions': {
-            'snapshot': {'dtype': 'int'},
+            'snapshot': {'dtype': 'int', 'ordered': True},
             'bus': {'dtype': 'str'},
             'line': {},
         },
@@ -910,7 +913,7 @@ def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
         'constraints': {
             'balance': {
                 'dims': ['snapshot', 'bus'],
-                'expression': 'sum(f, by=to, over=line, into=bus) - sum(f, by=from, over=line, into=bus) == load',
+                'expression': 'sum(f, over=line, by=to[bus]) - sum(f, over=line, by=from[bus]) == load',
             }
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(sum(f, over=line), over=snapshot)'},
@@ -948,7 +951,7 @@ SPELLED_ZEROS_INDEX = {'i': [0, 1], 'j': [0, 1, 2, 3]}
 
 SPELLED_ZEROS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
-    'parameters': {'a': {'dims': ['i', 'j']}},
+    'parameters': {'a': {'dims': ['i', 'j'], 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'c': {'dims': ['i'], 'expression': 'sum(a * x, over=j) >= 10'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=j)'},
@@ -1102,7 +1105,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         sink would hand the solver more columns than the model has.
         """
         spec = {
-            'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+            'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
             'parameters': {'price': {'dims': ['snapshot', 'generator']}, 'load': {'dims': ['snapshot']}},
             'variables': {'q': {'dims': ['snapshot'], 'bounds': {'lower': 0, 'upper': 10}}},
             'constraints': {'floor': {'dims': ['snapshot'], 'expression': 'q >= load'}},
@@ -1151,7 +1154,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         """A cost of zero and no cost at all are the same instruction."""
         a = _spelled_zeros([[1.0, 1.0]])
         spec = override(SPELLED_ZEROS_SPEC, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
-        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j']}}
+        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 'neutral'}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
             tables = model._engine._model.handoff
@@ -1202,7 +1205,7 @@ POSITIONAL_COLS_SPEC = {
 #: node, per hour. `p`'s upper bound spans exactly `p`'s dims, so alignment
 #: is positional rather than a join (compiler `_aligned_bound`).
 DENSE_BOUND_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}, 'n': {'dtype': 'str'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'n': {'dtype': 'str'}},
     'parameters': {'avail': {'dims': ['t', 'n']}, 'cost': {'dims': ['n']}},
     'variables': {'p': {'dims': ['t', 'n'], 'bounds': {'lower': 0, 'upper': 'avail'}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'sum(p, over=n) <= 100'}},
@@ -1231,7 +1234,7 @@ FLAT_INDEX = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve.relational.engine import compiler as compiler_module
+    from specsolve._engine import compiler as compiler_module
 
     real = compiler_module.Compiler._aligned_bound
     seen = {}
@@ -1278,7 +1281,7 @@ class TestThePositionalHandoff:
         of the coordinates while the solver's own model is still resident.
         """
         spec = {
-            'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+            'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
             'parameters': {'cap': {'dims': ['g']}, 'load': {'dims': ['t']}},
             'variables': {'p': {'dims': ['t', 'g'], 'where': 'cap > 0', 'bounds': {'lower': 0, 'upper': 'cap'}}},
             'constraints': {'meet': {'dims': ['t'], 'where': 'load > 0', 'expression': 'sum(p, over=g) >= load'}},
@@ -1517,7 +1520,8 @@ class TestThePositionalHandoff:
         assert _aligned_for(masked, shuffled, monkeypatch) == {'avail': False}
 
         holey = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
-        assert _aligned_for(DENSE_BOUND_SPEC, holey, monkeypatch) == {'avail': False}
+        neutral = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'neutral'})
+        assert _aligned_for(neutral, holey, monkeypatch) == {'avail': False}
 
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
@@ -1573,11 +1577,11 @@ def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> d
 #: that slot; the powers of ten make a disagreement name the slot it kept.
 ABSENT_SLOT_CASES = [
     pytest.param('sum(x * k + d, over=t) >= load', id='sum-over'),
-    pytest.param('sum(sum(x * k + d, by=r_of, over=t, into=r), over=r) >= load', id='sum-by'),
+    pytest.param('sum(sum(x * k + d, over=t, by=r_of[r]), over=r) >= load', id='sum-by'),
     pytest.param('sum(shift(x * k + d, along=t, offset=1, edge=0), over=t) >= load', id='shift-forward'),
     pytest.param('sum(shift(x * k + d, along=t, offset=-1, edge=0), over=t) >= load', id='shift-back'),
     pytest.param("sum(shift(x * k + d, along=t, offset=1, edge='wrap'), over=t) >= load", id='shift-wrap'),
-    pytest.param('sum(at(sum(x * k + d, by=r_of, over=t, into=r), by=r_of, over=r, into=t), over=t) >= load', id='at'),
+    pytest.param('sum(at(sum(x * k + d, over=t, by=r_of[r]), by=r_of[r]), over=t) >= load', id='at'),
     pytest.param('sum(sum_back(x * k + d, along=t, window=2), over=t) >= load', id='sum-back'),
 ]
 
@@ -1594,7 +1598,7 @@ ABSENT_SLOT_SOURCES = {
 
 def _absent_slot_spec(expression: str) -> dict:
     return {
-        'dimensions': {'t': {'dtype': 'int'}, 'r': {'dtype': 'str'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'r': {'dtype': 'str'}},
         'relations': {'r_of': {'key': 't', 'values': 'r'}},
         'parameters': {'k': {'dims': ['t']}, 'd': {'dims': ['t']}, 'load': {'dims': []}},
         'variables': {'x': {'dims': ['t'], 'where': 't != 2', 'bounds': {'lower': 0}}},
@@ -1725,7 +1729,7 @@ MAPPED = {
     'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, by=gen_bus, over=g, into=b) <= 10'}},
+    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 

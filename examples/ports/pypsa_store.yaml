@@ -9,6 +9,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -80,7 +81,7 @@ constraints:
   nodal_balance:
     description: what is generated at a bus, plus what the stores supply, meets the load there
     dims: [snapshot, bus]
-    expression: sum(p, by=gen_bus, over=generator, into=bus) + sum(store_p, by=store_bus, over=store, into=bus) == load
+    expression: sum(p, over=generator, by=gen_bus[bus]) + sum(store_p, over=store, by=store_bus[bus]) == load
 
   within_capacity:
     description: a store holds no more energy than the capacity built for it

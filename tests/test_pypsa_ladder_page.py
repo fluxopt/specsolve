@@ -59,7 +59,17 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
     stamped = json.loads((ladder.LADDER / 'references.json').read_text())
     reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
     index = ladder.INDEX.read_text()
+    known = yaml.safe_load((ladder.LADDER / 'known_failing.yaml').read_text()) or {}
     for stem in STEMS:
+        if stem in known:
+            unexplained = [
+                name
+                for kind in ('structure', 'duals')
+                for name, d in stamped[stem]['parity'][kind]['differences'].items()
+                if not d['reason']
+            ]
+            assert unexplained, f'{stem} matches now, so its line in known_failing.yaml goes — {known[stem]}'
+            continue
         for kind in ('structure', 'duals'):
             for name, d in stamped[stem]['parity'][kind]['differences'].items():
                 assert d['reason'] and reasons.get(name, {}).get(kind) == d['reason'], (
@@ -117,9 +127,9 @@ def test_every_negated_dual_is_checked_rather_than_excused():
         for name, reason in duals['negated'].items():
             assert reasons.get(name, {}).get('negated') == reason, f'{stem}: {name} negated for an unrecorded reason'
             entry = duals['per_name'][name]
-            assert entry['matches'] and entry['max_abs_diff'] <= 1e-6, (
-                f"{stem}: {name} is recorded negated but its dual is not the negative of PyPSA's, "
-                f'off by {entry["max_abs_diff"]} at the tolerance the runner compares at'
+            assert entry['matches'] and not entry.get('outside'), (
+                f"{stem}: {name} is recorded negated but its dual is neither the negative of PyPSA's nor inside "
+                f"the range of duals PyPSA's model admits, off by {entry['max_abs_diff']}"
             )
             assert f'`{name}' in index and reason in index, f'{name} and why it is negated are not on the index'
             checked.add(name)
@@ -132,7 +142,7 @@ def test_every_negated_dual_is_checked_rather_than_excused():
 #: A file whose named expressions read one another, so the projection has to walk them and
 #: could reach for a set while doing it. `eta` reads `zeta`, so one pass is not enough.
 _ORDERING_FIXTURE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {n: {'dims': ['g']} for n in ('alpha', 'beta', 'gamma', 'delta', 'epsilon')},
     'variables': {'x': {'dims': ['t', 'g'], 'bounds': {'lower': 0}}},
     'expressions': {

@@ -22,6 +22,7 @@
 dimensions:
   snapshot:
     dtype: int
+    ordered: true
   bus:
     dtype: str
   tech:
@@ -37,13 +38,15 @@ relations:
   line_from: {key: line, values: bus}
   line_to: {key: line, values: bus}
   store_bus: {key: store, values: bus}
-  pool_of: {key: [bus, tech], values: pool}
+  pool_of: {key: [bus, tech], values: pool, missing: absent}
 
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
     dims: [bus, tech]
+    missing: neutral
   p_max:                # installed capacity times availability
     dims: [snapshot, bus, tech]
+    missing: absent
   cost:
     dims: [tech]
   cap:
@@ -94,15 +97,15 @@ constraints:
     dims: [snapshot, bus]
     expression: >-
       sum(p, over=tech)
-      + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
-      + sum(discharge, by=store_bus, over=store, into=bus) - sum(charge, by=store_bus, over=store, into=bus)
+      + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+      + sum(discharge, over=store, by=store_bus[bus]) - sum(charge, over=store, by=store_bus[bus])
       == load
   soc_balance:
     dims: [snapshot, store]
     expression: soc == shift(soc, along=snapshot, offset=1, edge=0) + charge * eta - discharge
   pool_cap:
     dims: [snapshot, pool]
-    expression: sum(p, by=pool_of, over=[bus, tech], into=pool) <= limit
+    expression: sum(p, over=[bus, tech], by=pool_of[pool]) <= limit
 
 objective:
   sense: minimize

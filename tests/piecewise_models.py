@@ -12,8 +12,8 @@ from tests.fixtures import override, raw_of
 
 NONCONVEX_YAML = """
 dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
+  bp: {dtype: int, ordered: true}
 
 parameters:
   load: {dims: [snapshot]}
@@ -49,9 +49,9 @@ SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': '
 #: two dims in the frame, so the emitted ``dims`` has an order to get wrong.
 TWO_DIM_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
-  bp: {dtype: int}
+  bp: {dtype: int, ordered: true}
 
 parameters:
   load: {dims: [snapshot]}
@@ -84,8 +84,8 @@ objective:
 """
 CHP_YAML = """
 dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
+  bp: {dtype: int, ordered: true}
 
 parameters:
   load: {dims: [snapshot]}
@@ -123,8 +123,8 @@ objective:
 """
 GATED_YAML = """
 dimensions:
-  snapshot: {dtype: int}
-  bp: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
+  bp: {dtype: int, ordered: true}
 
 parameters:
   load: {dims: [snapshot]}
@@ -169,8 +169,8 @@ LP_SPEC = """
 description: dispatch whose cost is read off a convex curve, stated as its segment lines
 
 dimensions:
-  snapshot: {dtype: int, description: dispatch periods}
-  bp: {dtype: int, description: breakpoints of the cost curve}
+  snapshot: {dtype: int, description: dispatch periods, ordered: true}
+  bp: {dtype: int, description: breakpoints of the cost curve, ordered: true}
 
 parameters:
   load: {dims: [snapshot], description: demand to be met}

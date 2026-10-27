@@ -41,6 +41,14 @@ Dantzig's transportation problem, the first model of the GAMS library: ship cann
 |---|---|
 | $`x`$ | `shipment` over $`\mathcal{I} \times \mathcal{J}`$ — cases shipped from a plant to a market |
 
+#### Variable domains
+
+**`shipment`**
+
+```math
+x_{i,j} \ge 0 \qquad \forall\, i \in \mathcal{I},\ j \in \mathcal{J}
+```
+
 #### Objective
 
 ```math
@@ -59,14 +67,6 @@ Dantzig's transportation problem, the first model of the GAMS library: ship cann
 
 ```math
 \sum_{i \in \mathcal{I}} x_{i,j} \ge b_{j} \qquad \forall\, j \in \mathcal{J}
-```
-
-#### Variable domains
-
-**`shipment`**
-
-```math
-x_{i,j} \ge 0 \qquad \forall\, i \in \mathcal{I},\ j \in \mathcal{J}
 ```
 
 </details>

@@ -5,7 +5,7 @@
 # never rebuilds. The subproblem is therefore *not* the case this module
 # measures — it is what makes the loop expensive enough to be worth a master.
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 
 parameters:

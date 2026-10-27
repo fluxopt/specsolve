@@ -9,6 +9,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -60,12 +61,14 @@ parameters:
       energy a carrier may deliver over the whole horizon, for the carriers that
       have such a limit
     dims: [carrier]
+    missing: absent
   bus_capacity_cap:
     description: >-
       capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA
       writes the carrier into a column name (`nom_max_wind`), so the pair is the
       limit's own key
     dims: [bus, carrier]
+    missing: absent
   volume_cap:
     description: capacity times length the whole network may build
     dims: []
@@ -109,8 +112,8 @@ constraints:
     description: what is generated at a bus plus what arrives over the links meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_placement, over=generator, into=bus)
-      + sum(g, by=link_to, over=link, into=bus) - sum(g, by=link_from, over=link, into=bus)
+      sum(p, over=generator, by=gen_placement[bus])
+      + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
       == load
 
   carrier_energy:
@@ -120,7 +123,7 @@ constraints:
       selection PyPSA makes by querying its own table
     dims: [carrier]
     where: energy_cap
-    expression: sum(sum(p, by=gen_placement, over=generator, into=carrier), over=snapshot) <= energy_cap
+    expression: sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap
 
   carrier_capacity_at_bus:
     description: >-
@@ -129,7 +132,7 @@ constraints:
       so no selector column and no mask stand between the two
     dims: [bus, carrier]
     where: bus_capacity_cap
-    expression: sum(p_nom, by=gen_placement, over=generator, into=[bus, carrier]) <= bus_capacity_cap
+    expression: sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap
 
   transmission_volume:
     description: >-

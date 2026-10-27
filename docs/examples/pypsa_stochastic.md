@@ -64,6 +64,20 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 Upright is what the data supplies — a parameter such as $`\mathrm{probability}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p^{\mathrm{nom}}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`p_nom`**
+
+```math
+p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
+```
+
+**`p`**
+
+```math
+p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
 #### Objective
 
 ```math
@@ -82,20 +96,6 @@ p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \m
 
 ```math
 \sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
-```
-
-#### Variable domains
-
-**`p_nom`**
-
-```math
-p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
-```
-
-**`p`**
-
-```math
-p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
 </details>
@@ -121,6 +121,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, the same in every future
         dtype: int
+        ordered: true
       generator:
         description: generating units, each built once and run in every future
         dtype: str

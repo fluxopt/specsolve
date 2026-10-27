@@ -7,8 +7,9 @@ what it may contain is
 ## Reference
 
 `specsolve` holds what you call, `specsolve.types` what a call hands back,
-and `specsolve.errors` what a call raises or warns. Any other name under
-`specsolve.` is internal. The [glossary](glossary.md) defines the house terms.
+and `specsolve.errors` what a call raises or warns. Every other module starts
+with an underscore, and any other name under `specsolve.` is internal. The
+[glossary](glossary.md) defines the house terms.
 
 ### Run a spec
 
