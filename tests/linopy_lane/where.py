@@ -1,7 +1,7 @@
 """A ``where:`` predicate as a boolean array over the coordinates it masks.
 
 The other half of what a declaration says: ``builder.py`` builds the thing,
-this decides where it exists. A :class:`~mathspec.program.Predicate` in, one
+this decides where it exists. A :class:`~mathspec.program.Condition` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes. Both lanes read the same node kinds, and
 ``_engine/predicates.py`` answers each with a polars
@@ -86,7 +86,7 @@ def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.Data
     return _eval_node(mask.root, ctx)
 
 
-def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
+def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
     """One predicate node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
@@ -100,7 +100,7 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
     """
     dataset, master_coords = ctx.dataset, ctx.master_coords
 
-    def evaluate(child: program.Predicate) -> xr.DataArray:
+    def evaluate(child: program.Condition) -> xr.DataArray:
         return _eval_node(child, ctx)
 
     if isinstance(node, program.BooleanLiteral):
@@ -132,14 +132,14 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
         return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, program.CountComparison):
-        admitted = _along(evaluate(node.predicate.root), node.over, master_coords)
+        admitted = _along(evaluate(node.condition.root), node.over, master_coords)
         return _PREDICATE_OPS[node.op](admitted.sum(node.over), node.value).astype(bool)
 
-    if isinstance(node, program.TranslatedPredicate):
+    if isinstance(node, program.TranslatedCondition):
         operand = _along(evaluate(node.operand.root), node.along, master_coords)
         return operand.shift({node.along: node.offset}, fill_value=False)
 
-    if isinstance(node, program.JoinedPredicate):
+    if isinstance(node, program.JoinedCondition):
         return _joined(node, ctx)
 
     if isinstance(node, program.DimensionPosition):
@@ -168,7 +168,7 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)
 
-    if isinstance(node, program.NamedMask):
+    if isinstance(node, program.ConditionReference):
         return evaluate(node.body)
 
     if isinstance(node, program.Not):
@@ -202,7 +202,7 @@ def _value(side: program.Expression, ctx: EvaluationContext) -> xr.DataArray:
     return value if isinstance(value, xr.DataArray) else xr.DataArray(value)
 
 
-def _joined(node: program.JoinedPredicate, ctx: EvaluationContext) -> xr.DataArray:
+def _joined(node: program.JoinedCondition, ctx: EvaluationContext) -> xr.DataArray:
     """Where the operand holds at the coordinate the relation's row reads, for each row of the relation.
 
     The expression ``at`` answers, so the predicate is read through the relation

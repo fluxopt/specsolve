@@ -45,8 +45,6 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 |---|---|
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{weighting}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

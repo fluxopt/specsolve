@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a model with many variables and constraints builds about a fifth faster ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
+- feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
 - fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
 
 ## 0.10.0 (2026-10-19)
@@ -56,7 +58,6 @@ The benchmarks:
 - docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
 - docs: the published benchmarks are re-measured with the network and sparse models, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005))
 - docs: the published benchmarks are re-measured with the sector-coupled model ([#2024](https://github.com/fluxopt/specsolve/pull/2024))
-- perf: a model with many variables and constraints builds about a fifth faster ([#2022](https://github.com/fluxopt/specsolve/pull/2022))
 - docs: the published benchmarks are re-measured with the network model's pooled plants ([#2031](https://github.com/fluxopt/specsolve/pull/2031))
 - docs(benchmarks): the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
 - docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))

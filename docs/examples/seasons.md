@@ -57,11 +57,12 @@ A store that cycles inside each season rather than across the horizon, with seas
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T}`$ — energy held at the end of a snapshot |
 | $`\mathit{release}`$ | `release` over $`\mathcal{T}`$ — energy released in a snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{inflow}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{soc}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
-
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
 
 #### Variable domains
 

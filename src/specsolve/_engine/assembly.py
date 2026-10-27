@@ -106,14 +106,14 @@ class _Constraint:
     """
 
     name: str
-    declaration: program.ConstraintDeclaration
+    declaration: program.Constraint
     terms: list[tuple[Piece, float]]
     quads: list[tuple[Piece, float]]
     consts: list[tuple[Piece, float]]
     restrictions: list[Presence]
 
     @classmethod
-    def compiled(cls, compiler: Compiler, name: str, c: program.ConstraintDeclaration) -> _Constraint:
+    def compiled(cls, compiler: Compiler, name: str, c: program.Constraint) -> _Constraint:
         """*c*'s two sides compiled, the right-hand side negated."""
         quadratic = declares_quadratic(c)
         lhs = compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
@@ -256,7 +256,7 @@ class Assembly:
             for (name, v), bounded in zip(declared.items(), bounds, strict=True)
         ]
 
-    def _columns(self, name: str, v: program.VariableDeclaration, bounded: pl.DataFrame) -> pl.DataFrame:
+    def _columns(self, name: str, v: program.Variable, bounded: pl.DataFrame) -> pl.DataFrame:
         """One variable's share of ``cols``, from its bounds in label order.
 
         Raises:
@@ -271,7 +271,7 @@ class Assembly:
             self.measured.bounds[name] = spread
         return cols
 
-    def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
+    def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
         """One declaration's sets as ``(set, type, col, weight)``, over *v*.
 
         A set and a weight are the two halves of a coordinate's row-major
@@ -310,7 +310,7 @@ class Assembly:
         return built
 
     def _build_constraints(
-        self, ordered: list[tuple[str, program.ConstraintDeclaration]]
+        self, ordered: list[tuple[str, program.Constraint]]
     ) -> list[tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]]:
         """Each constraint as [`_block`][] gives it, in *ordered*'s order.
 
@@ -395,7 +395,7 @@ class Assembly:
         return self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.DataFrame, quads: list[tuple[Piece, float]], name: str, c: program.ConstraintDeclaration
+        self, frame: pl.DataFrame, quads: list[tuple[Piece, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -448,7 +448,7 @@ class Assembly:
         frame = frame.filter(pl.col('row').is_in(kept)).with_columns(renumbered)
         return frame, rows, matrix, qmatrix
 
-    def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
+    def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
@@ -513,7 +513,7 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
     return short
 
 
-def declares_quadratic(c: program.ConstraintDeclaration) -> bool:
+def declares_quadratic(c: program.Constraint) -> bool:
     """Whether constraint *c* multiplies two variable-carrying operands, either side."""
     return program.is_quadratic(c.lhs) or program.is_quadratic(c.rhs)
 

@@ -45,8 +45,6 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 |---|---|
 | $`\mathit{flow}`$ | `flow` over $`\mathcal{P}`$ — circuits carried on a path — integral because a multi-commodity flow is not integral by nature, even though this instance's relaxation happens to be |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{flow}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`flow`**

@@ -51,8 +51,8 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{gen\_at\_bus}`$ | `gen_at_bus` over $`\mathcal{S} \times \mathcal{B}`$ — what the generators sitting on a bus produce there |
-| $`\mathit{net\_inflow}`$ | `net_inflow` over $`\mathcal{S} \times \mathcal{B}`$ — flow arriving at a bus minus flow leaving it, so a negative value is a net export |
+| $`\mathit{gen\_at\_bus}`$ | `gen_at_bus` over $`\mathcal{B} \times \mathcal{S}`$ — what the generators sitting on a bus produce there |
+| $`\mathit{net\_inflow}`$ | `net_inflow` over $`\mathcal{B} \times \mathcal{S}`$ — flow arriving at a bus minus flow leaving it, so a negative value is a net export |
 
 #### Variable domains
 
@@ -73,13 +73,13 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 **`gen_at_bus`**
 
 ```math
-\mathit{gen\_at\_bus}_{s,b} = \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{s,g} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\mathit{gen\_at\_bus}_{b,s} = \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{s,g} \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 **`net_inflow`**
 
 ```math
-\mathit{net\_inflow}_{s,b} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\mathit{net\_inflow}_{b,s} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 #### Objective
@@ -93,7 +93,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 **`balance`**
 
 ```math
-\mathit{gen\_at\_bus}_{s,b} + \mathit{net\_inflow}_{s,b} = d_{s,b} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\mathit{gen\_at\_bus}_{b,s} + \mathit{net\_inflow}_{b,s} = d_{s,b} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
 ```
 
 </details>
