@@ -219,7 +219,7 @@ def spec(shape: Shape) -> dict:
             parameters['built'] = {'dims': dims, 'dtype': 'bool'}
             variables['u']['where'] = 'built'
         elif shape.mask == 'variable-presence':
-            parameters['avail'] = {'dims': dims}
+            parameters['avail'] = {'dims': dims, 'missing': 'absent'}
             variables['u']['where'] = 'avail'
         if shape.domain == 'binary':
             variables['u'] = {k: v for k, v in variables['u'].items() if k != 'bounds'} | {'domain': 'binary'}
@@ -253,7 +253,7 @@ def spec(shape: Shape) -> dict:
         relations['region_of'] = {'key': 'snapshot', 'values': 'region'}
         constraints['regional'] = {
             'dims': ['region', *dims[1:]],
-            'expression': 'sum(p, by=region_of, over=snapshot, into=region) <= 1000000',
+            'expression': 'sum(p, over=snapshot, by=region_of[region]) <= 1000000',
         }
     if shape.gated and shape.terms > 1:
         cap = 'ub' if 'ub' in parameters else upper if upper is not None else 10
@@ -262,7 +262,11 @@ def spec(shape: Shape) -> dict:
         constraints['total'] = {'dims': dims[:-1], 'expression': f'sum(p, over={dims[-1]}) >= 0'}
 
     return {
-        'dimensions': {d: {'dtype': 'int' if d == 'snapshot' and shape.labels == 'int' else 'str'} for d in dims}
+        'dimensions': {
+            d: {'dtype': 'int' if d == 'snapshot' and shape.labels == 'int' else 'str'}
+            | ({'ordered': True} if d == 'snapshot' else {})
+            for d in dims
+        }
         | extra,
         'relations': relations,
         'parameters': parameters,

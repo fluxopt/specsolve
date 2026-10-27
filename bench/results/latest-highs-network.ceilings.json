@@ -5,11 +5,11 @@
   "case": "network",
   "ladder": "size",
   "sink": "highs",
-  "size": "s",
+  "size": "s5",
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.89 s on network/s, so the next rung projects to 38.9 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 29.7 s on network/s5, so the next rung projects to 59.4 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "memory",
-  "reason": "linopy took 1.76 GB on network/m, so the next rung projects to 35.2 GB \u2014 over the 16 GB budget"
+  "reason": "linopy took 1.75 GB on network/m, so the next rung projects to 17.5 GB \u2014 over the 16 GB budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 8.87 s on network/m, so the next rung projects to 88.7 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 8.95 s on network/m, so the next rung projects to 89.5 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -45,6 +45,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 7.89 s on network/m, so the next rung projects to 78.9 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 7.98 s on network/m, so the next rung projects to 79.8 s \u2014 over the 30 s budget"
  }
 ]

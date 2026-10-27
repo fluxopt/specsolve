@@ -74,7 +74,7 @@ COMPONENT_GATE = {
     'dimensions': {
         'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
     },
     'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
@@ -85,7 +85,7 @@ COMPONENT_GATE = {
     'constraints': {
         'gate': {
             'dims': ['flow', 't'],
-            'expression': 'rate <= at(on, by=component_of, over=component, into=flow) * 10',
+            'expression': 'rate <= at(on, by=component_of[component]) * 10',
         },
         'need': {'dims': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
@@ -140,9 +140,9 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'constraints': {
             'draw': {
                 'dims': [],
-                'expression': 'sum(at(level, by=component_of, over=component, into=flow) * share, over=flow) >= 9',
+                'expression': 'sum(at(level, by=component_of[component]) * share, over=flow) >= 9',
             },
-            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of, over=component, into=flow)'},
+            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'},
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(level * 1.0) + sum(take * cost)'},
     }
@@ -172,10 +172,14 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     up_time = {'slow': 3, 'fast': 1}
     hours = list(range(6))
     spec = {
-        'dimensions': {'unit': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'tf': {'dtype': 'int'}},
+        'dimensions': {
+            'unit': {'dtype': 'str'},
+            't': {'dtype': 'int', 'ordered': True},
+            'tf': {'dtype': 'int', 'ordered': True},
+        },
         'relations': {'same_moment': {'key': 'tf', 'values': 't'}},
         'parameters': {
-            'window': {'dims': ['unit', 't', 'tf']},
+            'window': {'dims': ['unit', 't', 'tf'], 'missing': 'neutral'},
             'load': {'dims': ['t']},
             'cap': {'dims': ['unit']},
             'run_cost': {'dims': ['unit']},
@@ -190,7 +194,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             'a_start_turns_it_on': {
                 'dims': ['unit', 'tf'],
                 'expression': (
-                    'started >= at(on, by=same_moment, over=t, into=tf) - shift(at(on, by=same_moment, over=t, into=tf), along=tf, offset=1, edge=0)'
+                    'started >= at(on, by=same_moment[t]) - shift(at(on, by=same_moment[t]), along=tf, offset=1, edge=0)'
                 ),
             },
             'stays_up_its_own_time': {
@@ -236,14 +240,12 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
 #: the row built, its right-hand side is zero.
 DANGLING = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
-    'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {
-        'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of, over=component, into=flow)'}
-    },
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=flow) - 1000 * sum(level, over=component)'},
 }
 DANGLING_MAP = ['c1', 'c1', None]
@@ -292,14 +294,12 @@ def test_at_through_a_null_relation_agrees_between_lanes():
 #: Two columns read at once, through a relation that leaves `f3` out.
 DANGLING_PAIR = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}, 'kind': {'dtype': 'str'}},
-    'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind']}},
+    'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind'], 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component', 'kind'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {
-        'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=placed, over=[component, kind], into=flow)'}
-    },
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=placed[component, kind])'}},
     'objective': {
         'sense': 'maximize',
         'expression': 'sum(take, over=flow) - 1000 * sum(sum(level, over=component), over=kind)',
@@ -350,10 +350,10 @@ DANGLING_SHIFTED = {
     'dimensions': {
         'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
         'u': {'dtype': 'str'},
     },
-    'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -361,7 +361,7 @@ DANGLING_SHIFTED = {
     'constraints': {
         'link': {
             'dims': ['flow', 't', 'u'],
-            'expression': 'take <= shift(at(level, by=component_of, over=component, into=flow), along=t, offset=1, edge=0)',
+            'expression': 'take <= shift(at(level, by=component_of[component]), along=t, offset=1, edge=0)',
         }
     },
     'objective': {
@@ -391,3 +391,30 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
         assert run.oracle == pytest.approx(40.0), (
             "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
         )
+
+
+def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
+    """A dimension with no labels gives the lookup nothing to read, so every row that reads it is absent.
+
+    A network with no transformers reads its outage factors this way. The oracle
+    once indexed the dimension's first label to stand in for the null reads, and
+    raised where there is none.
+    """
+    from tests.differential import differential
+
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
+        'relations': {'on': {'key': 'g', 'values': 'k', 'missing': 'absent'}},
+        'parameters': {'cap': {'dims': ['k']}},
+        'variables': {'y': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': {'dims': ['g'], 'expression': 'y <= at(cap, by=on[k])'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
+    }
+    sources = {
+        'g': ['a', 'b'],
+        'k': pl.DataFrame({'k': []}, schema={'k': pl.String}),
+        'on': pl.DataFrame({'g': [], 'k': []}, schema={'g': pl.String, 'k': pl.String}),
+        'cap': pl.DataFrame({'k': [], 'value': []}, schema={'k': pl.String, 'value': pl.Float64}),
+    }
+    with differential(spec, sources) as run:
+        assert run.oracle == pytest.approx(10.0), 'no row reads a cap, so each y runs to its bound of 5'

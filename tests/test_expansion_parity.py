@@ -17,7 +17,7 @@ from tests.oracle import pd
 #: than imported: that suite travels with the language and this one does not.
 EXPANSION_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}

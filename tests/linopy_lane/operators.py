@@ -66,7 +66,7 @@ def operator_grouped_sum(
 ) -> Any:
     """Sum *array* through a declared relation, producing dimensions *into*.
 
-    YAML: ``sum(p, by=gen_bus, over=generator, into=bus)``. *mappings* are the
+    YAML: ``sum(p, over=generator, by=gen_bus[bus])``. *mappings* are the
     walked columns' values as arrays over the dimensions the relation's key
     names — one dimension for a plain map, and one more per condition where the
     key is several columns. The walked dimension is summed out and *into* holds
@@ -133,7 +133,7 @@ def _into_nothing(
 def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:
     """Read *array* through a declared relation — the adjoint of a group.
 
-    YAML: ``at(on, by=component, over=bus, into=line)``. *mappings* are the same
+    YAML: ``at(on, by=component[bus])``. *mappings* are the same
     arrays ``sum`` takes; grouping sums *along* them, this indexes *through*
     them, so the operand must carry every dim in ``into`` and the result carries
     the mappings' own dims. xarray's vectorised selection is the pullback exactly
@@ -141,8 +141,8 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     along a condition the operand already carries.
 
     A null value reads nothing and its row is absent, the same reading
-    ``sum`` gives a null group. It cannot be selected, so a declared label
-    stands in for it and the result is masked back out at exactly those
+    ``sum`` gives a null group. It cannot be selected, so a declared label, or
+    one made up where the dimension has none, stands in for it and the result is masked back out at exactly those
     coordinates, which leaves them holding the operand's own **absence**
     rather than a zero: absence propagates and takes the row with it, where a
     zero would leave a row asserting ``x <= 0`` at a coordinate the model said
@@ -160,9 +160,17 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     if bool(present.all()):
         return array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine)
 
+    for t in into:
+        if not array.sizes[t]:
+            array = array.reindex({t: [_STAND_IN]})
     stood_in = tuple(m.fillna(array.coords[t].to_numpy()[0]) for m, t in zip(mappings, into, strict=True))
     picked = array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine)
     return picked.where(present)
+
+
+#: The label a dimension with no labels takes for :func:`operator_at`, which reads it only at
+#: coordinates the mask then removes: with no label to read, every read is absent.
+_STAND_IN = '__no label__'
 
 
 @dataclass(frozen=True)

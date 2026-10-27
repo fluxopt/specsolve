@@ -26,9 +26,9 @@ PER_UNIT_SPEC = """
 description: the same curve, one per unit — the shape a corpus of cost curves arrives in
 
 dimensions:
-  snapshot: {dtype: int, description: dispatch periods}
+  snapshot: {dtype: int, description: dispatch periods, ordered: true}
   unit: {dtype: str, description: dispatchable units}
-  bp: {dtype: int, description: breakpoints of the cost curve}
+  bp: {dtype: int, description: breakpoints of the cost curve, ordered: true}
 
 parameters:
   load: {dims: [snapshot], description: demand to be met}
@@ -231,9 +231,21 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     of the rows that carry a value gets the first right and the second wrong.
     """
     mask = spelling == 'boolean-mask'
-    ragged = override(pyyaml.safe_load(PER_UNIT_SPEC), **{'piecewise.cost_curve.points': 'runs_to' if mask else 'bp_x'})
+    ragged = override(
+        pyyaml.safe_load(PER_UNIT_SPEC),
+        **{
+            'piecewise.cost_curve.points': 'runs_to' if mask else 'bp_x',
+            'parameters.bp_x.missing': 'absent',
+            'parameters.bp_y.missing': 'absent',
+        },
+    )
     if mask:
-        ragged['parameters']['runs_to'] = {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'}
+        ragged['parameters']['runs_to'] = {
+            'dims': ['unit', 'bp'],
+            'dtype': 'bool',
+            'description': 'curve length',
+            'missing': 'neutral',
+        }
 
     with sps.solve(expanded(ragged), _per_unit_points(short=False, mask=mask)) as result:
         assert result.objective == pytest.approx(25.0, rel=RTOL), 'two points is one segment, and that is enough'
@@ -261,8 +273,15 @@ def test_values_past_the_mask_are_not_part_of_the_curve():
     ragged = override(
         pyyaml.safe_load(PER_UNIT_SPEC),
         **{
-            'parameters.runs_to': {'dims': ['unit', 'bp'], 'dtype': 'bool', 'description': 'curve length'},
+            'parameters.runs_to': {
+                'dims': ['unit', 'bp'],
+                'dtype': 'bool',
+                'description': 'curve length',
+                'missing': 'neutral',
+            },
             'piecewise.cost_curve.points': 'runs_to',
+            'parameters.bp_x.missing': 'absent',
+            'parameters.bp_y.missing': 'absent',
         },
     )
 

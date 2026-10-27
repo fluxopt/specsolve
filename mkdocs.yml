@@ -40,6 +40,7 @@ nav:
       - The data contract: reference/data.md
       - Sweeps and rolling horizons: reference/sweeps.md
       - Glossary: reference/glossary.md
+      - Changelog: reference/changelog.md
       - Examples:
           - examples/index.md
           - Published optima:
@@ -68,7 +69,6 @@ nav:
       - Coming from linopy: about/linopy.md
       - Benchmarks: about/benchmarks.md
       - Prior art and credit: about/prior-art.md
-      - Changelog: about/changelog.md
   # What a user does not need: how the package is built, and the PyPSA models
   # that prove it works. The PyPSA pages stay in docs/examples/, where
   # tools/ladder.py writes them and tools/constructs.py reads them.
@@ -155,12 +155,20 @@ nav:
           - Rung 51: examples/pypsa_ladder/rung_51_growth_retired_asset.md
           - Rung 52: examples/pypsa_ladder/rung_52_scenario_cost_limit.md
           - Rung 53: examples/pypsa_ladder/rung_53_scenario_period_volume_limit.md
-          - Rung 54: examples/pypsa_ladder/rung_54_scenario_delay.md
           - Rung 55: examples/pypsa_ladder/rung_55_scenario_transformer_cycle.md
           - Rung 56: examples/pypsa_ladder/rung_56_scenario_security_constrained.md
           - Rung 57: examples/pypsa_ladder/rung_57_scenario_nom_set.md
           - Rung 58: examples/pypsa_ladder/rung_58_scenario_committable.md
           - Rung 60: examples/pypsa_ladder/rung_60_efficiency_per_snapshot.md
+          - Rung 61: examples/pypsa_ladder/rung_61_voltage_angle_limits.md
+          - Rung 62: examples/pypsa_ladder/rung_62_startup_cost_per_snapshot.md
+          - Rung 63: examples/pypsa_ladder/rung_63_modular_branches_and_storage.md
+          - Rung 64: examples/pypsa_ladder/rung_64_commitment_edges.md
+          - Rung 66: examples/pypsa_ladder/rung_66_cycles_per_period.md
+          - Rung 67: examples/pypsa_ladder/rung_67_linearized_link_process.md
+          - Rung 68: examples/pypsa_ladder/rung_68_outage_factors_per_period.md
+          - Rung 69: examples/pypsa_ladder/rung_69_storage_retires_before_close.md
+          - Rung 70: examples/pypsa_ladder/rung_70_risk_preference_zero.md
       - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
 
 theme:

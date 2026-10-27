@@ -236,7 +236,7 @@ def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
     piece goes through, and both lanes still agree."""
     cyclic = {
         'parameters': {'need': {'dims': []}},
-        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
         'variables': {
             'p': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
             'q': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},

@@ -6,7 +6,7 @@ description: >-
 version: 0
 
 dimensions:
-  t: {dtype: int, description: "local index of a snapshot inside the window"}
+  t: {dtype: int, description: "local index of a snapshot inside the window", ordered: true}
   generator: {dtype: str, description: "generating units"}
 
 parameters:

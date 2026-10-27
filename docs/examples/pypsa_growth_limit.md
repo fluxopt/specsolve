@@ -70,6 +70,28 @@ Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a c
 
 $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
 
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`p_nom`**
+
+```math
+0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
+```
+
+#### Definitions
+
+**`new_capacity`**
+
+```math
+\mathit{new\_capacity}_{e} = \sum_{g \in \mathcal{G} \,:\, \mathrm{build\_period}(g) = e} p^{\mathrm{nom}}_{g} \cdot \mathrm{capped\_carrier}_{\mathrm{gen\_carrier}(g)} \qquad \forall\, e \in \mathcal{E}
+```
+
 #### Objective
 
 ```math
@@ -96,28 +118,6 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 \mathit{new\_capacity}_{e} - \mathit{new\_capacity}_{e \boxminus_{0} 1} \cdot \mathrm{max\_relative\_growth} \le \mathrm{max\_growth} \qquad \forall\, e \in \mathcal{E}
 ```
 
-#### Definitions
-
-**`new_capacity`**
-
-```math
-\mathit{new\_capacity}_{e} = \sum_{g \in \mathcal{G} \,:\, \mathrm{build\_period}(g) = e} p^{\mathrm{nom}}_{g} \cdot \mathrm{capped\_carrier}_{\mathrm{gen\_carrier}(g)} \qquad \forall\, e \in \mathcal{E}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`p_nom`**
-
-```math
-0 \le p^{\mathrm{nom}}_{g} \le \mathrm{p}^{\mathrm{nom,max}}_{g} \qquad \forall\, g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -137,9 +137,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, each falling in one investment period
         dtype: int
+        ordered: true
       period:
         description: investment periods, the axis capacity is built along
         dtype: int
+        ordered: true
       carrier:
         description: what a generator burns, and what a growth limit is a property of
         dtype: str
@@ -199,7 +201,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: >-
           capacity of the capped carrier first standing in a period: each generator's
           capacity counted once, in the period it is built, and never again
-        expression: sum(p_nom * at(capped_carrier, by=gen_carrier, over=carrier, into=generator), by=build_period, over=generator, into=period)
+        expression: sum(p_nom * at(capped_carrier, by=gen_carrier[carrier]), over=generator, by=build_period[period])
 
     variables:
       p:
@@ -220,7 +222,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           a generator produces no more than the capacity built for it, and nothing in
           a period it does not stand in
         dims: [snapshot, generator]
-        expression: p <= p_nom * at(activity, by=period_of, over=period, into=snapshot)
+        expression: p <= p_nom * at(activity, by=period_of[period])
 
       power_balance:
         dims: [snapshot]
@@ -243,7 +245,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         operating and capacity cost, each discounted by the weight of the period it
         falls in — capacity once per period the generator stands in
       expression: >-
-        sum(p * opex * at(period_weight, by=period_of, over=period, into=snapshot))
+        sum(p * opex * at(period_weight, by=period_of[period]))
         + sum(p_nom * capex * activity * period_weight)
     ```
 

@@ -34,10 +34,10 @@ def main(argv: list[str] | None = None) -> int:
 
     from mathspec import to_spec
 
-    from specsolve.relational.engine import engine as executor_module
-    from specsolve.relational.engine.assembly import Assembly
-    from specsolve.relational.engine.engine import Engine
-    from specsolve.sources import tidy_sources
+    from specsolve._engine import engine as executor_module
+    from specsolve._engine.assembly import Assembly
+    from specsolve._engine.engine import Engine
+    from specsolve._sources import tidy_sources
 
     spent: dict[str, list[float]] = collections.defaultdict(list)
     for name in PHASES:

@@ -16,15 +16,15 @@ import polars as pl
 import pytest
 from mathspec import program
 
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, pd, specsolve_linopy, where, xr
 from tests.piecewise_models import curve_frame
 
 if TYPE_CHECKING:
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def test_a_side_the_program_leaves_open_builds_as_linopy_s_open_bound():
         variables={'p': program.VariableDeclaration(('snapshot',), lower=None, upper=None)},
         constraints={},
         objective=None,
-        dimensions={'snapshot': program.DimensionDeclaration()},
+        dimensions={'snapshot': program.DimensionDeclaration(ordered=True)},
     )
     model = linopy.Model()
     builder.build_model(model, declared, xr.Dataset(), {'snapshot': pd.Index([0, 1], name='snapshot')}, {})
@@ -68,7 +68,7 @@ def test_nothing_is_patched_onto_linopy_model():
 
 
 def test_the_lane_takes_sources_as_the_one_type():
-    """The lane's two verbs annotate ``sources`` the way every door in ``api.py`` does."""
+    """The lane's two verbs annotate ``sources`` the way every door in ``_api.py`` does."""
     from tests.test_architecture import sources_annotations
 
     doors = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
@@ -123,7 +123,7 @@ class TestMasterCoords:
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 'neutral'}})
         labels = _master_coords(schema, {'x': ['z', 'a', 'm'], 'a': {'z': 1.0}})['x']
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
@@ -143,7 +143,9 @@ class TestMasterCoords:
             'polars': pl.DataFrame({'t': days}),
             'a bare list': days,
         }
-        schema = _schema(dims={'t': {'dtype': 'datetime'}}, params={'a': {'dims': ['t']}})
+        schema = _schema(
+            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 'neutral'}}
+        )
 
         labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
 
@@ -277,7 +279,7 @@ def _lowered(text, parameters=('p_max',), dimensions=('g',)):
     from mathspec import to_spec
 
     spec = {
-        'dimensions': {d: {'dtype': 'int' if d == 't' else 'str'} for d in dimensions},
+        'dimensions': {d: {'dtype': 'int', 'ordered': True} if d == 't' else {'dtype': 'str'} for d in dimensions},
         'parameters': {name: {'dims': list(dimensions)} for name in parameters},
         'variables': {'x': {'dims': list(dimensions), 'where': text, 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
@@ -341,7 +343,9 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 #: rows exist, the parameter has no row at one of them, and the fill would be
 #: the bound. The declaration it names is reached through `note()` rather than
 #: written into the message.
-_UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+_UNCOVERED_BOUND = (
+    "parameters:\n  cap: {dims: [g], missing: neutral}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+)
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
 
@@ -352,7 +356,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "    where: '<<<'\n",
             {},
             ValueError,
-            'Failed to parse where string',
+            'Cannot parse the where string',
             "Variable 'p'",
             id='malformed-where',
         ),
@@ -360,7 +364,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "constraints:\n  c:\n    dims: [g]\n    expression: 'p + 1'\n",
             {},
             ValueError,
-            'exactly one comparison',
+            'has no comparison operator',
             "Constraint 'c'",
             id='constraint-without-comparison',
         ),
@@ -368,7 +372,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "objective:\n  expression: 'p == 1'\n",
             {},
             ValueError,
-            'must not contain a comparison',
+            'holds a comparison operator',
             'The objective',
             id='objective-with-comparison',
         ),
@@ -427,7 +431,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
-              gate: {dims: [f], dtype: bool}
+              gate: {dims: [f], dtype: bool, missing: neutral}
               relmax: {dims: [f]}
             variables:
               x: {dims: [f], bounds: {lower: 0, upper: 100}}
@@ -492,8 +496,8 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
         dimensions:
           f: {dtype: str}
         parameters:
-          ub: {dims: [f]}
-          live: {dims: [f], dtype: bool}
+          ub: {dims: [f], missing: neutral}
+          live: {dims: [f], dtype: bool, missing: neutral}
         variables:
           x: {dims: [f], bounds: {lower: 0, upper: ub}}
         constraints:
@@ -527,7 +531,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
 
 EXPRESSION_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
@@ -565,11 +569,11 @@ EXPRESSION_DATA = {
 
 
 #: ``EXPRESSION_YAML`` with ``p`` masked out at the generator whose ``p_max`` is
-#: zero and declared ``absence: zero``, plus one entry only a nonlinear read can
+#: zero and declared ``missing: neutral``, plus one entry only a nonlinear read can
 #: tell apart from an affine one.
 ZERO_ABSENCE_YAML = EXPRESSION_YAML.replace(
     '    bounds: {lower: 0, upper: p_max}\n',
-    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    absence: zero\n',
+    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: neutral\n',
 ).replace(
     '  spend: sum(p * cost, over=generator)\n',
     '  spend: sum(p * cost, over=generator)\n  grown: sum(0.5 ** p, over=generator)\n',
@@ -579,7 +583,7 @@ ZERO_ABSENCE_DATA = {**EXPRESSION_DATA, 'p_max': pd.Series({'g1': 200.0, 'g2': 0
 
 
 def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_read(yaml_file):
-    """`absence: zero` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
+    """`missing: neutral` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
     path = yaml_file(ZERO_ABSENCE_YAML, 'zero_absence.yaml')
     with differential(path, ZERO_ABSENCE_DATA) as run:
         tidy = run.result.evaluate('grown')
@@ -639,14 +643,14 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
 #: purpose: hydro states two breakpoints where the axis has four.
 MASKED_CURVE_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
-  bp: {dtype: int}
+  bp: {dtype: int, ordered: true}
 parameters:
   p_max: {dims: [generator]}
   load: {dims: [snapshot]}
-  bp_x: {dims: [generator, bp]}
-  bp_y: {dims: [generator, bp]}
+  bp_x: {dims: [generator, bp], missing: absent}
+  bp_y: {dims: [generator, bp], missing: absent}
 variables:
   p:
     dims: [snapshot, generator]
@@ -779,7 +783,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
 #: A shift over a variable-free expression: the vacated positions have no
 #: value, and inventing one silently pins a bound to zero.
 _BARE_SHIFT = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'eff': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
     'constraints': {'c': {'dims': ['t'], 'expression': 'x <= shift(eff, along=t, offset=1)'}},
@@ -803,7 +807,7 @@ def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
 #: in the objective, which linopy has no slot for. `osemosys_utopia` owes one
 #: as the fixed cost of capacity that already stood in 1990.
 OBJECTIVE_CONSTANT = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'standing': {'dims': []}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x) + standing'},

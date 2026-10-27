@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 #: One dimension, one variable, a coefficient and a bound.
 SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f']}, 'cap': {'dims': ['f']}},
+    'parameters': {'cost': {'dims': ['f'], 'missing': 'neutral'}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['f'], 'expression': 'x <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
@@ -221,7 +221,7 @@ def test_a_hole_in_a_scalar_parameter_is_refused_on_both_lanes(tmp_path: Path):
 
 #: A model reading a parameter as a position.
 POSITION_SPEC = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'demand': {'dims': ['g', 't']}},
     'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0}}},
     'constraints': {'c': {'dims': ['g', 't'], 'expression': 'shift(x, along=t, offset=lead, edge=0) >= demand'}},
@@ -264,7 +264,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
 #: A flag. Only a boolean column satisfies `dtype: bool`.
 FLAG_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
-    'parameters': {'active': {'dims': ['g'], 'dtype': 'bool'}},
+    'parameters': {'active': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'k': {'dims': [], 'expression': 'sum(x, over=g) <= 9'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -295,7 +295,7 @@ def test_a_bare_where_on_a_string_parameter_asks_whether_it_has_a_row(tmp_path: 
     """A string parameter is defined wherever it has a row."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str'}},
+        'parameters': {'fuel': {'dims': ['g'], 'dtype': 'str', 'missing': 'absent'}},
         'variables': {'x': {'dims': ['g'], 'where': 'fuel', 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'k': {'dims': [], 'expression': 'sum(x, over=g) <= 9'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -313,7 +313,7 @@ RELATION_SPEC = {
     'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
     'parameters': {'p_max': {'dims': ['g']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, by=gen_bus, over=g, into=b) <= 10'}},
+    'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
@@ -383,7 +383,7 @@ def test_a_relation_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_
     spec = {
         **RELATION_SPEC,
         'dimensions': {'g': {}, 'b': {'dtype': 'str'}},
-        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, by=gen_bus, over=g, into=b) <= 3'}},
+        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 3'}},
     }
     path = _written(tmp_path, spec)
     clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
@@ -427,11 +427,11 @@ def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monke
 
 #: A relation whose target is a temporal dimension.
 TEMPORAL_RELATION_SPEC = {
-    'dimensions': {'g': {}, 'd': {'dtype': 'datetime'}},
+    'dimensions': {'g': {}, 'd': {'dtype': 'datetime', 'ordered': True}},
     'relations': {'day_of': {'key': 'g', 'values': 'd'}},
     'parameters': {'p_max': {'dims': ['g']}, 'cap': {'dims': ['d']}},
     'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
-    'constraints': {'k': {'dims': ['d'], 'expression': 'sum(x, by=day_of, over=g, into=d) <= cap'}},
+    'constraints': {'k': {'dims': ['d'], 'expression': 'sum(x, over=g, by=day_of[d]) <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
 }
 
@@ -445,7 +445,7 @@ def _days() -> list[Any]:
 def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lanes(tmp_path):
     """Only a ``datetime`` dimension reads a date as the instant its day starts on; another keeps what it was given."""
     days = _days()
-    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {}}}
+    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {'ordered': True}}}
     sources = {
         **_P_MAX,
         'd': days,
@@ -570,7 +570,7 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         'relations': {'gen_bus': {'key': 'g', 'values': 'b'}},
         'parameters': {'cap': {'dims': ['g']}},
         'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, by=gen_bus, over=g, into=b) <= 100'}},
+        'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 100'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     path = _written(tmp_path, spec)
@@ -649,7 +649,7 @@ def test_an_index_holding_a_null_label_is_refused(spec_path: Path, index: Any):
 
 #: A temporal dimension whose index bounds a variable.
 TEMPORAL_BOUND_SPEC = {
-    'dimensions': {'t': {'dtype': 'datetime'}},
+    'dimensions': {'t': {'dtype': 'datetime', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},

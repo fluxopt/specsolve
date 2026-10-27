@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._sinks import mps_file
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks.writers import mps_file
 from tests.conftest import (
     DISPATCH_SPEC,
     PORT_REFERENCES,
@@ -72,7 +72,7 @@ COMMITMENT_DATA = {
 #: names; and ``idle``, which nothing names at all — the column MPS could drop
 #: without the file looking wrong.
 FREE_SPEC: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {
         'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}},

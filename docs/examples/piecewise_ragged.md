@@ -37,8 +37,8 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 |---|---|
 | $`\mathrm{p}^{\mathrm{max}}`$ | `p_max` over $`\mathcal{G}`$ — maximum dispatch |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{bp\_x}`$ | `bp_x` over $`\mathcal{G} \times \mathcal{B}`$ — breakpoint dispatch levels, one curve per generator and no two the same length |
-| $`\mathrm{bp\_y}`$ | `bp_y` over $`\mathcal{G} \times \mathcal{B}`$ — cost at each breakpoint |
+| $`\mathrm{bp\_x}`$ | `bp_x` over $`\mathcal{G} \times \mathcal{B}`$, `absent` where the data has no row — breakpoint dispatch levels, one curve per generator and no two the same length |
+| $`\mathrm{bp\_y}`$ | `bp_y` over $`\mathcal{G} \times \mathcal{B}`$, `absent` where the data has no row — cost at each breakpoint |
 
 #### Variables
 
@@ -50,6 +50,20 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`op_cost`**
+
+```math
+\mathit{op\_cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
 
 #### Objective
 
@@ -69,20 +83,6 @@ $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`
 
 ```math
 \mathit{op\_cost}_{t,g} \ge \mathrm{conv}_{b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined}}(\mathrm{bp\_x}_{g,b},\ \mathrm{bp\_y}_{g,b})(p_{t,g}) \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`op_cost`**
-
-```math
-\mathit{op\_cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
 #### Assumptions
@@ -128,12 +128,14 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: dispatchable units
         dtype: str
       bp:
         description: breakpoints, as many as the longest curve needs
         dtype: int
+        ordered: true
 
     parameters:
       p_max:
@@ -145,9 +147,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       bp_x:
         description: breakpoint dispatch levels, one curve per generator and no two the same length
         dims: [generator, bp]
+        missing: absent
       bp_y:
         description: cost at each breakpoint
         dims: [generator, bp]
+        missing: absent
 
     variables:
       p:

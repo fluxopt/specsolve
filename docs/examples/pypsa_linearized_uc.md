@@ -34,8 +34,8 @@ PyPSA linearized unit commitment: commitment with the status continuous in \[0, 
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{p}^{\mathrm{min,pu}}`$ | `p_min_pu` over $`\mathcal{G}`$ — share of capacity a committed unit must produce at least |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$ — what bringing a unit up costs, once per start |
-| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$ — what taking a unit down costs, once per stop |
+| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$, `neutral` where the data has no row — what bringing a unit up costs, once per start |
+| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$, `neutral` where the data has no row — what taking a unit down costs, once per stop |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
 
 #### Variables
@@ -50,6 +50,32 @@ PyPSA linearized unit commitment: commitment with the status continuous in \[0, 
 Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
 $`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`status`**
+
+```math
+0 \le \mathit{status}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`start_up`**
+
+```math
+0 \le \mathit{start\_up}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
+
+**`shut_down`**
+
+```math
+0 \le \mathit{shut\_down}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+```
 
 #### Objective
 
@@ -89,32 +115,6 @@ p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \
 \mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} - \mathit{status}_{t - 1,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`status`**
-
-```math
-0 \le \mathit{status}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`start_up`**
-
-```math
-0 \le \mathit{start\_up}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`shut_down`**
-
-```math
-0 \le \mathit{shut\_down}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 </details>
 <!-- math:end -->
 
@@ -133,6 +133,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units, each committed to some degree or not at all
         dtype: str
@@ -150,9 +151,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_up_cost:
         description: what bringing a unit up costs, once per start
         dims: [generator]
+        missing: neutral
       shut_down_cost:
         description: what taking a unit down costs, once per stop
         dims: [generator]
+        missing: neutral
       load:
         description: demand to be met
         dims: [snapshot]

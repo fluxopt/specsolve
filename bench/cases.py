@@ -40,6 +40,7 @@ reads the same parquet files. Every generator is feasible by construction.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -88,6 +89,8 @@ class Case:
     generate_spec: Callable[[Shape], str] | None = None
     #: A parameter that multiplies a variable inside a constraint, so new values of it move the matrix.
     coefficient: str | None = None
+    #: What the model is for, in one line on the benchmarks page; a case the page does not publish has none.
+    about: str = ''
 
     def spec_path(self, shape: Shape, cache: Path = DEFAULT_CACHE) -> Path:
         """The YAML *shape* builds — ``spec``, unless the case generates one per rung.
@@ -747,15 +750,26 @@ def _ladder(
     small enough to read in full. Both keep two snapshots at least, so a window
     one snapshot shorter still has one; a ``3xs`` that two snapshots would make
     as large as ``2xs`` is left out.
+
+    Between two rungs ten times apart or more, one more sits at five times the
+    lower one, named after it — ``s5`` between ``s`` and ``m`` — so a scaling
+    curve has a point every factor of two to five.
     """
     labels = ('xs', 's', 'm', 'l', 'xl', '2xl')
     first = snapshots[0]
-    rungs = [('3xs', max(2, first // 100)), ('2xs', max(2, first // 10)), *zip(labels, snapshots, strict=False)]
-    return tuple(
-        Shape(label, {**sizes, 'snapshot': n}, n * per_snapshot, density)
-        for i, (label, n) in enumerate(rungs)
-        if i + 1 == len(rungs) or n < rungs[i + 1][1]
-    )
+    named = [('3xs', max(2, first // 100)), ('2xs', max(2, first // 10)), *zip(labels, snapshots, strict=False)]
+    rungs = [(label, n) for i, (label, n) in enumerate(named) if i + 1 == len(named) or n < named[i + 1][1]]
+    filled = []
+    for (label, n), (_, above) in zip(rungs, [*rungs[1:], (None, 0)], strict=True):
+        filled.append((label, n))
+        if above >= 10 * n:
+            filled.append((f'{label}5', 5 * n))
+    return tuple(Shape(label, {**sizes, 'snapshot': n}, n * per_snapshot, density) for label, n in filled)
+
+
+def between_decades(label: str) -> bool:
+    """Whether *label* is a rung `_ladder` adds between two that are ten times apart."""
+    return re.fullmatch(r'(3xs|2xs|xs|s|m|l|xl)5', label) is not None
 
 
 def _width_ladder(
@@ -814,6 +828,7 @@ CASES: dict[str, Case] = {
         spec=MODELS / 'dispatch' / 'spec.yaml',
         ladder=_ladder({'generator': 100}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
         write=_dispatch_data,
+        about='bounds and one balance: the shape an array library suits best',
     ),
     'commitment': Case(
         name='commitment',
@@ -844,6 +859,7 @@ CASES: dict[str, Case] = {
             *_density_sweep({'node': 50, 'tech': 12}, 2_000, 600, (1.0, 0.5, 0.25, 0.083)),
         ),
         write=_nodal_data,
+        about='dispatch at nodes, where a technology exists only where it is installed',
     ),
     'sector': Case(
         name='sector',
@@ -856,6 +872,7 @@ CASES: dict[str, Case] = {
         ),
         write=_sector_data,
         coefficient='produces',
+        about='each technology delivers one of five carriers, such as heat or hydrogen',
     ),
     'profiled': Case(
         name='profiled',
@@ -885,6 +902,7 @@ CASES: dict[str, Case] = {
         ),
         write=_network_data,
         coefficient='eta',
+        about='a small PyPSA model: lines, stores, solar and wind, and pooled caps',
     ),
     'milp': Case(
         name='milp',

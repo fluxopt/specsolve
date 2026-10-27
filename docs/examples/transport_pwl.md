@@ -60,6 +60,20 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 
 Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{shipment}`$. An index is italic too, being what a quantifier chooses, and a set is script.
 
+#### Variable domains
+
+**`shipment`**
+
+```math
+\mathit{shipment}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
+```
+
+**`scaled`**
+
+```math
+\mathit{scaled}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
+```
+
 #### Objective
 
 ```math
@@ -84,20 +98,6 @@ Upright is what the data supplies — a parameter such as $`\mathrm{capacity}`$,
 
 ```math
 \left( \mathit{shipment}_{p,m},\ \mathit{scaled}_{p,m} \right) \in \mathrm{pwl}_{b \in \mathcal{B}}(\mathrm{bp\_x}_{b},\ \mathrm{bp\_y}_{b}) \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
-```
-
-#### Variable domains
-
-**`shipment`**
-
-```math
-\mathit{shipment}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
-```
-
-**`scaled`**
-
-```math
-\mathit{scaled}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
 ```
 
 #### Assumptions
@@ -130,6 +130,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       bp:
         description: breakpoints of the discretised square-root curve
         dtype: int
+        ordered: true
 
     parameters:
       capacity:

@@ -50,7 +50,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{I}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_p\_max\_pu}`$ | `link_p_max_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry forwards |
 | $`\mathrm{link\_p\_min\_pu}`$ | `link_p_min_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry backwards, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$ — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
+| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
 | $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
 
 #### Variables
@@ -65,6 +65,44 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathit{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{I}`$ — link capacity to build |
 
 Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+
+#### Variable domains
+
+**`p`**
+
+```math
+p_{t,e} \ge 0 \qquad \forall\, t \in \mathcal{T},\ e \in \mathcal{E}
+```
+
+**`p_nom`**
+
+```math
+p^{\mathrm{nom}}_{e} \ge \mathrm{p}^{\mathrm{nom,min}}_{e} \qquad \forall\, e \in \mathcal{E}
+```
+
+**`f`**
+
+```math
+f_{t,l} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+```
+
+**`s_nom`**
+
+```math
+s^{\mathrm{nom}}_{l} \ge 0 \qquad \forall\, l \in \mathcal{L}
+```
+
+**`g`**
+
+```math
+g_{t,i} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ i \in \mathcal{I}
+```
+
+**`link_p_nom`**
+
+```math
+\mathit{link\_p\_nom}_{i} \ge 0 \qquad \forall\, i \in \mathcal{I}
+```
 
 #### Objective
 
@@ -122,44 +160,6 @@ g_{t,i} \ge \mathit{link\_p\_nom}_{i} \cdot \mathrm{link\_p\_min\_pu}_{i} \qquad
 \sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E}} \frac{p_{t,e} \cdot \mathrm{co2\_per\_mwh}_{\mathrm{gen\_carrier}(e)}}{\mathrm{efficiency}_{e}} \le \mathrm{co2\_limit}
 ```
 
-#### Variable domains
-
-**`p`**
-
-```math
-p_{t,e} \ge 0 \qquad \forall\, t \in \mathcal{T},\ e \in \mathcal{E}
-```
-
-**`p_nom`**
-
-```math
-p^{\mathrm{nom}}_{e} \ge \mathrm{p}^{\mathrm{nom,min}}_{e} \qquad \forall\, e \in \mathcal{E}
-```
-
-**`f`**
-
-```math
-f_{t,l} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
-```
-
-**`s_nom`**
-
-```math
-s^{\mathrm{nom}}_{l} \ge 0 \qquad \forall\, l \in \mathcal{L}
-```
-
-**`g`**
-
-```math
-g_{t,i} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ i \in \mathcal{I}
-```
-
-**`link_p_nom`**
-
-```math
-\mathit{link\_p\_nom}_{i} \ge 0 \qquad \forall\, i \in \mathcal{I}
-```
-
 </details>
 <!-- math:end -->
 
@@ -180,6 +180,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -266,6 +267,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the cycle basis, as a sparse table of impedance times direction. A line
           may belong to several cycles, so this cannot be a coordinate.
         dims: [cycle, line]
+        missing: neutral
       co2_limit:
         description: emissions the whole horizon is allowed
         dims: []
@@ -327,9 +329,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
-          + sum(g, by=link_to, over=link, into=bus) - sum(g, by=link_from, over=link, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+          + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
           == load
 
       kirchhoff_voltage_law:
@@ -344,7 +346,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           horizon's total stays inside the budget
         dims: []
         expression: >-
-          sum(sum(p * at(co2_per_mwh, by=gen_carrier, over=carrier, into=generator) / efficiency, over=generator), over=snapshot)
+          sum(sum(p * at(co2_per_mwh, by=gen_carrier[carrier]) / efficiency, over=generator), over=snapshot)
           <= co2_limit
 
     objective:
@@ -462,7 +464,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **An emission rate is a property of the carrier, and `at()` is how a generator
 reads it.** `co2_per_mwh` is dimensioned over `carrier` alone: six generators,
-two rates. `at(co2_per_mwh, by=gen_carrier, over=carrier, into=generator)` walks the map backwards to put
+two rates. `at(co2_per_mwh, by=gen_carrier[carrier])` walks the map backwards to put
 the right rate beside each generator's output. PyPSA does the same join
 through `n.carriers`.
 

@@ -18,6 +18,7 @@ parameters:
   nutrient_per_dollar:
     description: how much of each nutrient a dollar of each food buys
     dims: [food, nutrient]
+    missing: neutral
   daily_minimum:
     description: how much of a nutrient a day has to supply
     dims: [nutrient]

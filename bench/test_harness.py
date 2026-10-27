@@ -33,17 +33,18 @@ from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdic
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
-from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, rescaled, shortened
+from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
-    MIN_ROUNDS,
     _holder_if_alive,
-    flag_passed,
+    expected_seconds,
     pytest_benchmark_update_machine_info,
     refuse_unless_idle,
+    remember,
+    rounds_for,
     take_lock,
 )
 from bench.test_ladder import RELOADS, _fresh
-from specsolve.relational.engine.engine import Engine
+from specsolve._engine.engine import Engine
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -215,12 +216,12 @@ def test_the_guard_names_the_files_the_published_run_actually_writes() -> None:
         for sink in ('highs', 'gurobi')
         for case in ('dispatch', 'nodal', 'network', 'sector')
     ), 'every published case through both sinks, one file each'
-    assert published['latest-highs-dispatch.json'] == {'3xs', '2xs', 'xs', 's', 'm', 'l'}, (
-        'a case holds every rung of the size ladder it has'
-    )
-    assert published['latest-highs-network.json'] == {'2xs', 'xs', 's', 'm', 'l'}, (
-        'a rung the case does not have is left out of its file'
-    )
+    assert published['latest-highs-dispatch.json'] == {
+        *('3xs', '2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
+    }, 'a case holds every rung of the size ladder it has'
+    assert published['latest-highs-network.json'] == {
+        *('2xs', '2xs5', 'xs', 'xs5', 's', 's5', 'm', 'm5', 'l'),
+    }, 'a rung the case does not have is left out of its file'
     assert 'latest.json' not in published, 'no run has written that name since ladder-ci'
 
 
@@ -303,15 +304,24 @@ def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
     assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
-def test_the_ci_ladder_defaults_to_the_published_memory_budget() -> None:
-    """`ladder-ci` falls back to the published memory budget, which therefore
-    exists twice and must not drift."""
+@pytest.mark.parametrize(
+    ('arg', 'variable'),
+    [
+        pytest.param('memory', 'BENCH_MEMORY_BUDGET', id='memory-budget'),
+        pytest.param('sizes', 'BENCH_SIZES', id='sizes'),
+    ],
+)
+def test_the_ci_ladder_defaults_to_the_published_ladder(arg: str, variable: str) -> None:
+    """`ladder-ci` falls back to the published memory budget and rungs, which
+    therefore exist twice and must not drift."""
 
     tasks = tomllib.loads((Path(__file__).resolve().parents[1] / 'pyproject.toml').read_text())
     tasks = tasks['tool']['pixi']['feature']['bench']['tasks']
-    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == 'memory')
-    fallback = tasks['ladder-ci']['cmd'].split('BENCH_MEMORY_BUDGET:-', 1)[1].split('}', 1)[0]
-    assert fallback == published, f'ladder-ci falls back to {fallback} GB, the published ladder is {published} GB'
+    published = next(a['default'] for a in tasks['ladder']['args'] if a['arg'] == arg)
+    fallback = tasks['ladder-ci']['cmd'].split(f'{variable}:-', 1)[1].split('}', 1)[0]
+    assert fallback == published, (
+        f'ladder-ci falls back to {fallback!r} for {arg}, the published ladder to {published!r}'
+    )
 
 
 def _committed(path: str) -> list[str]:
@@ -608,6 +618,36 @@ def test_a_rung_that_projects_over_the_memory_budget_stops_the_ladder() -> None:
     assert '60 GB' in reason and '3 GB' in reason, 'the reason carries the measurement and the projection'
 
 
+@pytest.mark.parametrize(
+    ('library', 'size', 'destination', 'refused'),
+    [
+        pytest.param('linopy', 'm', '', True, id='above-the-ceiling'),
+        pytest.param('linopy', 's', '', False, id='the-rung-that-was-measured'),
+        pytest.param('specsolve', 'm', '', False, id='another-arm'),
+        pytest.param('linopy', 'm', 'lp', False, id='another-sink-keeps-its-own-ceiling'),
+    ],
+)
+def test_a_rebuild_above_a_memory_ceiling_is_refused(library: str, size: str, destination: str, refused: bool) -> None:
+    """`test_rebuild` runs in the pytest process, so a rebuild too big for the box takes every result with it.
+
+    It has no isolated pass and so no peak of its own. A memory ceiling that
+    any sink of the arm hit on the same ladder refuses the rungs above it.
+    Without that, `linopy` built `network/l` in the pytest process after
+    `test_emit` had refused every rung above `m`.
+    """
+    ceiling = _ceiling(0.0, memory=16.0)
+    ceiling.record('linopy', 'dispatch', 's', 'highs', 1.0, 3e9)
+    reason = ceiling.reached(library, 'dispatch', size, destination)
+    assert (reason is not None) == refused, f'{library} at {size} on {destination!r}: refused={refused}, got {reason!r}'
+
+
+def test_a_time_ceiling_does_not_refuse_a_rebuild() -> None:
+    """A rebuild has its own time ceiling, so only memory carries over from the other cells."""
+    ceiling = _ceiling(1.0)
+    ceiling.record('pyomo', 'dispatch', 's', 'highs', 20.0)
+    assert ceiling.reached('pyomo', 'dispatch', 'm', '') is None, 'a time ceiling is no reason to fear memory'
+
+
 def test_a_measurement_over_the_memory_budget_stops_without_projecting() -> None:
     ceiling = _ceiling(0.0, memory=16.0)
     ceiling.record('linopy', 'dispatch', 'xs', 'lp', 1.0, 31e9)
@@ -635,6 +675,42 @@ def test_a_rung_that_projects_over_budget_stops_the_ladder() -> None:
     reason = ceiling.reached('pyomo', 'dispatch', 'xs', 'lp')
     assert reason is not None, 'a projection over budget stops the ladder'
     assert '200 s' in reason and '20 s' in reason, 'the reason carries the measurement and the projection'
+
+
+@pytest.mark.parametrize(
+    ('rungs', 'stops'),
+    [
+        pytest.param(None, False, id='every-rung-climbs-to-s5'),
+        pytest.param(('xs', 's', 'm'), True, id='decades-only-climb-to-m'),
+    ],
+)
+def test_a_measurement_that_leaves_rungs_out_projects_to_the_next_it_takes(
+    rungs: tuple[str, ...] | None, stops: bool
+) -> None:
+    """`test_rebuild` skips `s5`, so after `s` its next rung is `m`, ten times wider, not `s5`."""
+    ceiling = _ceiling(120.0, selected=('xs', 's', 's5', 'm'))
+    ceiling.record('pyomo', 'dispatch', 's', '', 20.0, rungs=rungs)
+    assert (ceiling.reached('pyomo', 'dispatch', 's', '') is not None) == stops, (
+        '20 s projects to 100 s at s5, inside 120 s, and to 200 s at m, over it'
+    )
+
+
+@pytest.mark.parametrize(
+    ('label', 'between'),
+    [
+        *(pytest.param(s, True, id=s) for s in ('3xs5', '2xs5', 'xs5', 's5', 'm5')),
+        *(pytest.param(s, False, id=s) for s in ('3xs', '2xs', 'xs', 'm', 'l', '2xl', 'xs2', 'd25', 'w10', 'n032')),
+    ],
+)
+def test_the_rungs_between_decades_are_named_by_their_label(label: str, between: bool) -> None:
+    assert between_decades(label) is between, f'{label} is {"" if between else "not "}a rung between two decades'
+
+
+def test_every_rung_between_decades_is_one_the_ladder_made() -> None:
+    made = {s.label for case in CASES.values() for s in case.ladder if between_decades(s.label)}
+    assert made == {'3xs5', '2xs5', 'xs5', 's5', 'm5'}, (
+        'a rung five times every decade from 3xs to m, and none elsewhere'
+    )
 
 
 def test_a_rung_inside_budget_lets_the_ladder_continue() -> None:
@@ -858,6 +934,77 @@ def test_the_report_renders_from_the_committed_results() -> None:
     assert '| variables |' in out.getvalue(), 'the default target is bench/results, and it renders a table'
 
 
+@pytest.mark.parametrize(
+    ('values', 'printed'),
+    [
+        pytest.param([50, 50], '50', id='a-dimension-that-stays'),
+        pytest.param([2, 100_000], '2\N{EN DASH}100k', id='a-dimension-that-grows'),
+        pytest.param([1_550, 19_999_900], '1.55k\N{EN DASH}20M', id='three-figures-not-six'),
+    ],
+)
+def test_a_model_size_prints_as_one_count_or_its_range(values: list[float], printed: str) -> None:
+    assert report._span(values) == printed, f'{values} prints as {printed!r}'
+
+
+def test_the_model_table_has_a_column_per_published_model() -> None:
+    """The table is read off the committed results, the case ladders and the specs, so nothing is typed into the page."""
+    timings = [r for path in bench_results.files(Path('bench/results')) for r in report.load(path)[2]]
+    lines = report.models(report.best(timings)).splitlines()
+    assert lines[0] == '| | dispatch | network | nodal | sector |', 'one column per published model, sorted by name'
+    table = {line.split('|')[1].strip(): [c.strip() for c in line.split('|')[2:-1]] for line in lines[2:]}
+    assert list(table) == [
+        'for',
+        'variables',
+        'constraints',
+        'grouped sums',
+        'dimensions',
+        'density',
+        'snapshots',
+        'columns per snapshot',
+        'rows per snapshot',
+        'nonzeros per snapshot',
+    ], 'what a model declares, then what one snapshot sends to the solver'
+    assert all(table['for']) and '\N{EM DASH}' not in table['for'], 'every published model says what it is for'
+    assert table['variables'][0] == 'p[generator]', 'dispatch declares one variable, shown without snapshot'
+    assert table['constraints'][1] == 'balance[bus], soc_balance[store], pool_cap[pool]', 'network declares three'
+    assert (table['columns per snapshot'][1], table['rows per snapshot'][1]) == ('400', '150'), (
+        'network sends 400 columns and 150 rows to the solver per snapshot, at every size'
+    )
+    assert table['density'][2] == '25%', "nodal's density is its ladder's"
+
+
+@pytest.mark.parametrize(
+    ('case', 'printed'),
+    [
+        pytest.param('dispatch', '\N{EM DASH}', id='no-grouping'),
+        pytest.param(
+            'network',
+            'line \N{RIGHTWARDS ARROW} bus, store \N{RIGHTWARDS ARROW} bus, '
+            'bus \N{MULTIPLICATION SIGN} tech \N{RIGHTWARDS ARROW} pool',
+            id='lines-stores-and-pools',
+        ),
+    ],
+)
+def test_a_model_names_the_sums_it_groups_through_a_relation(case: str, printed: str) -> None:
+    assert report.grouped_sums(CASES[case].spec) == printed, f'{case} groups {printed!r}, once each, in spec order'
+
+
+@pytest.mark.parametrize(
+    ('case', 'kind', 'printed'),
+    [
+        pytest.param('dispatch', 'constraints', 'power_balance', id='a-constraint-over-snapshot-alone'),
+        pytest.param(
+            'network',
+            'variables',
+            'p[bus, tech], f[line], charge[store], discharge[store], soc[store]',
+            id='five-variables',
+        ),
+    ],
+)
+def test_a_model_lists_what_it_declares_without_snapshot(case: str, kind: str, printed: str) -> None:
+    assert report.declared(CASES[case].spec, kind) == printed, f'{case} declares {printed!r} as its {kind}'
+
+
 def test_the_long_table_renders_from_the_committed_results() -> None:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
@@ -872,7 +1019,7 @@ def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
     can retire them without touching `bench/` (#1245)."""
     import importlib
 
-    from specsolve.relational.engine.assembly import Assembly
+    from specsolve._engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
@@ -1176,7 +1323,7 @@ def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     assert [r['arm'] for r in fresh] == ['specsolve', 'linopy'], 'both fresh walls reach their own table'
 
     table = report.fresh(report.best(fresh))
-    assert '<th>dispatch<br>1k variables</th>' in table, 'one column per case, at the rung it was measured'
+    assert '<th>dispatch<br>1k columns</th>' in table, 'one column per case, at the rung it was measured'
     assert '<tr><td>specsolve</td><td class="own">1.20 s</td></tr>' in table, 'the baseline row shows its own wall'
     assert '<tr><td>linopy</td><td data-ratio="1.583">1.90 s · 1.6x</td></tr>' in table, (
         'every other library shows its wall and its ratio, which the page shades'
@@ -1265,42 +1412,70 @@ def test_a_ceiling_on_a_rung_no_line_could_plot_bounds_nothing() -> None:
 
 
 @pytest.mark.parametrize(
-    ('args', 'given', 'expected'),
+    ('seconds', 'expected'),
     [
-        pytest.param((), 5, MIN_ROUNDS, id='the-plugin-default-becomes-the-documented-nine'),
-        pytest.param(('--benchmark-min-rounds=3',), 3, 3, id='an-explicit-flag-wins'),
-        pytest.param(('--benchmark-min-rounds', '3'), 3, 3, id='an-explicit-flag-wins-when-spaced'),
+        pytest.param(None, 9, id='nothing-measured-yet'),
+        pytest.param(0.01, 9, id='a-fast-round'),
+        pytest.param(1.0, 5, id='a-second'),
+        pytest.param(120.0, 5, id='two-minutes'),
     ],
 )
-def test_the_rounds_default_is_the_documented_one_and_an_explicit_flag_wins(
-    args: tuple[str, ...], given: int, expected: int
-) -> None:
-    config = SimpleNamespace(
-        invocation_params=SimpleNamespace(args=args),
-        option=SimpleNamespace(benchmark_min_rounds=given),
+def test_a_slower_round_gets_fewer_rounds(seconds: float | None, expected: int) -> None:
+    assert rounds_for(seconds) == expected, f'a round expected to take {seconds} s gets {expected} rounds'
+
+
+def _node(size: str, arm: str = 'specsolve', stash: pytest.Stash | None = None) -> SimpleNamespace:
+    """What `expected_seconds` reads off a collected `test_emit` cell."""
+    return SimpleNamespace(
+        originalname='test_emit',
+        callspec=SimpleNamespace(params={'case_name': 'dispatch', 'size': size, 'arm': arm, 'sink': 'highs'}),
+        config=SimpleNamespace(stash=pytest.Stash() if stash is None else stash),
     )
-    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
-    assert config.option.benchmark_min_rounds == expected, (
-        'docs/about/benchmarks.md publishes nine rounds per measurement; a run that asks for another count keeps it'
-    )
 
 
-def test_the_rounds_default_is_silent_where_the_plugin_is_absent() -> None:
-    """The CodSpeed job runs this same suite under a plugin with no such option."""
-    config = SimpleNamespace(invocation_params=SimpleNamespace(args=()), option=SimpleNamespace())
-    harness.pytest_configure(config)  # pyrefly: ignore[bad-argument-type]
-    assert not hasattr(config.option, 'benchmark_min_rounds'), 'nothing to set, so nothing is set'
+def test_a_rung_expects_the_rung_below_grown_by_its_width() -> None:
+    stash = pytest.Stash()
+    assert expected_seconds(_node('xs', stash=stash)) is None, 'the first rung of a ladder has nothing to go on'
+    remember(_node('xs', stash=stash), 0.4)
+    assert expected_seconds(_node('xs5', stash=stash)) == pytest.approx(2.0), 'xs5 is five times as wide as xs'
+    remember(_node('xs5', stash=stash), 2.0)
+    assert expected_seconds(_node('s', stash=stash)) == pytest.approx(4.0), 'and s twice as wide as xs5'
+    assert expected_seconds(_node('xs5', arm='linopy', stash=stash)) is None, 'another arm is another cell'
 
 
-def test_the_rounds_default_is_wired_into_the_session(request: pytest.FixtureRequest) -> None:
-    """The session applies the default."""
-    if not hasattr(request.config.option, 'benchmark_min_rounds'):
-        pytest.skip('pytest-benchmark is not installed — bench/ runs through `pixi run -e bench`')
-    if flag_passed(request.config, '--benchmark-min-rounds'):
-        pytest.skip('this session asked for a round count of its own')
-    assert request.config.option.benchmark_min_rounds == MIN_ROUNDS, (
-        'the documented command has to reproduce the documented method'
-    )
+class _Benchmark:
+    """The part of pytest-benchmark's fixture `_rounds` uses, keeping the rounds it was asked for."""
+
+    def __init__(self, median: float) -> None:
+        self.asked: int | None = None
+        self.stats = SimpleNamespace(stats=SimpleNamespace(median=median))
+
+    def pedantic(self, fn: Any, **kwargs: Any) -> Any:
+        self.asked = kwargs['rounds']
+        return fn(*kwargs['args'])
+
+
+@pytest.mark.parametrize(
+    ('args', 'expected'),
+    [
+        pytest.param((), [9, 5], id='by-how-long-the-rung-below-took'),
+        pytest.param(('--benchmark-min-rounds=7',), [7, 7], id='an-explicit-flag-wins'),
+        pytest.param(('--benchmark-min-rounds', '7'), [7, 7], id='an-explicit-flag-wins-when-spaced'),
+    ],
+)
+def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[str, ...], expected: list[int]) -> None:
+    from bench.test_ladder import _rounds
+
+    stash = pytest.Stash()
+    asked = []
+    for size in ('xs', 's'):
+        node = _node(size, stash=stash)
+        node.config.invocation_params = SimpleNamespace(args=args)
+        node.config.option = SimpleNamespace(benchmark_min_rounds=7)
+        benchmark = _Benchmark(median=2.0)
+        _rounds(benchmark, SimpleNamespace(config=node.config, node=node), lambda: None)
+        asked.append(benchmark.asked)
+    assert asked == expected, 'xs knows nothing and gets nine; s is ten times a 2 s xs, so it gets five'
 
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
@@ -1537,7 +1712,7 @@ def test_the_window_verb_is_split_so_the_build_stays_out_of_the_clock() -> None:
             f'outside the clock, `read` is what is timed, and neither means anything alone'
         )
         assert hasattr(module, 'load') == hasattr(module, 'load_setup'), (
-            f'the {name} arm offers one half of the load pair — `load_setup` builds the arrays '
+            f'the {name} arm offers one half of the load pair — `load_setup` reads the finished arrays '
             f'outside the clock, `load` is what is timed, and neither means anything alone'
         )
 
@@ -1579,7 +1754,7 @@ def test_the_floor_arms_are_the_ones_that_time_a_load_alone() -> None:
 
 @pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
 def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -> None:
-    """`load_setup` runs in the spawned child, so the arrays are built there and never pickled (#1617)."""
+    """`load_setup` runs in the spawned child, so the arrays are read there and never pickled (#1617)."""
     plugin = pytest.importorskip(
         'pytest_benchmem.pytest_plugin',
         reason='pytest-benchmem is not installed — bench/ runs through `pixi run -e bench`',
@@ -1597,6 +1772,25 @@ def test_the_load_payload_an_isolated_pass_ships_carries_no_arrays(floor: str) -
         f'the {floor} arm ships {len(blob)} bytes to the child, so the arrays travel pickled and the '
         f'isolated rss measures deserializing them'
     )
+
+
+@pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
+def test_a_floor_child_reads_its_arrays_and_not_the_parquet(floor: str, tmp_path: Path) -> None:
+    """The isolated pass's peak is the published floor, so nothing of the build may run in its child.
+
+    A `load_setup` that read the parquet and ran the formulation put that
+    build's peak, and the garbage it left in the allocator, under the floor's
+    published memory. Deleting the parquet after `prepare` leaves `load_setup`
+    nothing to build from.
+    """
+    module = ARMS[floor]
+    case = CASES['dispatch']
+    paths = case.data(case.shape('3xs'), cache=tmp_path)
+    prepared = module.prepare('dispatch', '3xs', paths, {})
+    for path in paths.values():
+        Path(path).unlink()
+    (arrays,), _ = module.load_setup(module.SINKS[0], prepared)
+    assert all(len(field) for field in arrays), 'every array of the model came back from the file alone'
 
 
 @pytest.mark.parametrize('floor', ['gurobipy-matrix', 'highspy-matrix'])
@@ -1970,7 +2164,7 @@ def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
         AB_ROOT,
         AB_ROOT,
         rounds=1,
-        focus='specsolve.relational.engine.compiler:Compiler._aligned_bound',
+        focus='specsolve._engine.compiler:Compiler._aligned_bound',
     )
     assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
     assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'
@@ -1978,7 +2172,7 @@ def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
 
 
 def test_a_focus_on_a_name_the_checkout_lacks_is_an_error() -> None:
-    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, focus='specsolve.api:no_such_function')
+    [row] = compare(['grid-baseline-tiny'], AB_ROOT, AB_ROOT, rounds=1, focus='specsolve._api:no_such_function')
     assert row.verdict == 'error'
     assert 'no such function' in (row.error or '')
 

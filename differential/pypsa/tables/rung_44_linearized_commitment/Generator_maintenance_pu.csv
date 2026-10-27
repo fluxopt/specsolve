@@ -1,8 +1,8 @@
-generator,value
-coal,1.0
-down44,1.0
-fixed44,1.0
-gas,1.0
-maint44,1.0
-pulse44,1.0
-ramp44,1.0
+scenario,generator,value
+base,coal,1.0
+base,down44,1.0
+base,fixed44,1.0
+base,gas,1.0
+base,maint44,1.0
+base,pulse44,1.0
+base,ramp44,1.0

@@ -9,9 +9,11 @@ dimensions:
   snapshot:
     description: dispatch periods, each falling in one investment period
     dtype: int
+    ordered: true
   period:
     description: investment periods, the axis capacity is built along
     dtype: int
+    ordered: true
   carrier:
     description: what a generator burns, and what a growth limit is a property of
     dtype: str
@@ -71,7 +73,7 @@ expressions:
     description: >-
       capacity of the capped carrier first standing in a period: each generator's
       capacity counted once, in the period it is built, and never again
-    expression: sum(p_nom * at(capped_carrier, by=gen_carrier, over=carrier, into=generator), by=build_period, over=generator, into=period)
+    expression: sum(p_nom * at(capped_carrier, by=gen_carrier[carrier]), over=generator, by=build_period[period])
 
 variables:
   p:
@@ -92,7 +94,7 @@ constraints:
       a generator produces no more than the capacity built for it, and nothing in
       a period it does not stand in
     dims: [snapshot, generator]
-    expression: p <= p_nom * at(activity, by=period_of, over=period, into=snapshot)
+    expression: p <= p_nom * at(activity, by=period_of[period])
 
   power_balance:
     dims: [snapshot]
@@ -115,5 +117,5 @@ objective:
     operating and capacity cost, each discounted by the weight of the period it
     falls in — capacity once per period the generator stands in
   expression: >-
-    sum(p * opex * at(period_weight, by=period_of, over=period, into=snapshot))
+    sum(p * opex * at(period_weight, by=period_of[period]))
     + sum(p_nom * capex * activity * period_weight)

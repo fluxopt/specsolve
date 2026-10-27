@@ -1,18 +1,37 @@
 """The positions an absent value is spelled differently in.
 
-Absence is **positional** in this lane: one missing parameter row is a zero in
-a coefficient, an error in ``bounds:``, and false in a ``where`` operand — so
-there is no single fill to apply once at load, and each position states its own
-answer. The convention underneath is linopy v1's, which the lane selects on
-import.
+Absence is **positional** in this lane: one missing row of a ``missing:
+neutral`` parameter is a zero in a coefficient, an error in ``bounds:``, and
+false in a ``where`` operand — so there is no single fill to apply once at
+load, and each position states its own answer. A ``missing: absent`` row stays
+NaN everywhere, and :func:`combined` carries it onto a linopy term as the
+absence linopy v1 propagates. The convention underneath is linopy v1's, which
+the lane selects on import.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Any
+import operator
+from functools import reduce
+from typing import TYPE_CHECKING, Any
 
-__all__ = ['coefficient', 'divisor', 'filled', 'present', 'unmapped', 'vacated', 'variable_term']
+import xarray as xr
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+__all__ = [
+    'coefficient',
+    'combined',
+    'divisor',
+    'filled',
+    'holes',
+    'present',
+    'unmapped',
+    'vacated',
+    'variable_term',
+]
 
 
 def present(model: Any, name: str) -> Any:
@@ -25,27 +44,27 @@ def unmapped(key: object) -> bool:
     return key is None or key != key
 
 
-def variable_term(variable: Any, absence: str) -> Any:
-    """The variable as it enters an expression, carrying its declared ``absence:``.
+def variable_term(variable: Any, missing: str) -> Any:
+    """The variable as it enters an expression, carrying its declared ``missing:``.
 
     The mask stays on the variable either way — it is what keeps the absent
     coordinates out of the model. Under v1 an absent slot propagates and takes
-    its row, which is ``absence: undefined``; ``fillna(0)`` is linopy's own
+    its row, which is ``missing: absent``; ``fillna(0)`` is linopy's own
     per-expression escape back to the other reading: the slot contributes
     nothing and the row stands.
     """
-    return variable.fillna(0) if absence == 'zero' else variable
+    return variable.fillna(0) if missing == 'neutral' else variable
 
 
-def variable_value(variable: Any, absence: str) -> Any:
-    """The variable's primal as it enters a read, carrying its declared ``absence:``.
+def variable_value(variable: Any, missing: str) -> Any:
+    """The variable's primal as it enters a read, carrying its declared ``missing:``.
 
     :func:`variable_term`'s two readings over values: a masked slot is NaN,
     which propagates through the arithmetic the way the absent term takes its
-    row, and ``absence: zero`` fills it.
+    row, and ``missing: neutral`` fills it.
     """
     solution = variable.solution
-    return solution.fillna(0.0) if absence == 'zero' else solution
+    return solution.fillna(0.0) if missing == 'neutral' else solution
 
 
 def coefficient(parameter: Any) -> Any:
@@ -55,6 +74,40 @@ def coefficient(parameter: Any) -> Any:
     slot arrives as NaN, which linopy refuses in a user-supplied constant.
     """
     return parameter.fillna(0.0)
+
+
+def holes(side: Any) -> xr.DataArray | None:
+    """Where *side*, a value rather than a linopy term, is absent; ``None`` where it holds no absence.
+
+    A ``missing: absent`` parameter is the one value that arrives NaN at a
+    build, and linopy refuses a NaN beside a term, so it is asked before the
+    two meet.
+    """
+    if not isinstance(side, xr.DataArray) or side.dtype.kind not in 'fc':
+        return None
+    null = side.isnull()
+    return null if bool(null.any()) else None
+
+
+def combined(op: Callable[[Any, Any], Any], left: Any, right: Any, *, neutral: float = 0.0) -> Any:
+    """``op(left, right)``, a NaN on a value side beside a linopy term carried as the term's absence.
+
+    Two values meet in xarray, where NaN propagates on its own; a value and a
+    term meet in linopy, which refuses NaN in a constant. So the value's NaN
+    is filled with *neutral* — whatever leaves ``op`` defined there — and the
+    result is masked back to absent at exactly those coordinates, which takes
+    the row as any absent term does.
+    """
+    terms = [hasattr(side, 'to_linexpr') or hasattr(side, 'nterm') for side in (left, right)]
+    gaps = [holes(side) for side in (left, right)]
+    if not any(terms) or all(gap is None for gap in gaps):
+        return op(left, right)
+    absent = reduce(operator.or_, (gap for gap in gaps if gap is not None))
+    sides = [side.fillna(neutral) if gap is not None else side for side, gap in zip((left, right), gaps, strict=True)]
+    result = op(*sides)
+    if hasattr(result, 'to_linexpr'):
+        result = result.to_linexpr()
+    return result.where(~absent)
 
 
 def divisor(value: Any) -> Any:

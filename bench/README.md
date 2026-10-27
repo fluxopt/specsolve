@@ -23,7 +23,7 @@ a selection out of it: `--cases / --sizes / --arms / --sinks`, plus `-k`.
 pixi run refresh
 
 # or a rung at a time — the same five tasks `refresh` depends on, in order
-pixi run ladder        # --sizes 3xs 2xs xs s m l  -> bench/results/latest.json
+pixi run ladder        # --sizes 3xs 2xs 2xs5 xs xs5 … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
 pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
@@ -299,8 +299,8 @@ against each other. Publish a whole ladder or none of it.
 | `linopy` | `Model.to_file(...)`, `io_api='lp-polars'` for LP | `Model.to_highspy(set_names=False)` | `Model.to_gurobipy(set_names=False)` | — |
 | `pyomo` | `ConcreteModel.write(...)` | appsi `Highs().set_instance(...)` | appsi `Gurobi().set_instance(...)` | — |
 | `gurobipy-loop` | — | — | `addVar` per entity, `addConstrs(quicksum(...))`, then `update()` | — |
-| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built before the clock | — |
-| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built before the clock | — | — |
+| `gurobipy-matrix` | — | — | one `loadModel` over the same CSR, as CSC; the arrays are built in `prepare` | — |
+| `highspy-matrix` | — | one `passModel` over the same CSR; the arrays are built in `prepare` | — | — |
 
 **The two matrix arms build one matrix, not two.** Each case writes it once in
 `bench/models/<case>/matrix.py`, which hands back an `Lp` — bounds, objective,
@@ -308,12 +308,16 @@ CSR, a sense per row, right-hand side — and the arm pushes that into its own
 solver's bulk API. A second copy per arm is the copy that drifts, and it would
 take a published floor down with it.
 
-**The two matrix arms time the handoff alone.** Every other arm reads the
-parquet inside the clock. A matrix arm instead has `load_setup`, which reads the
-parquet and builds the finished arrays in the spawned child before the clock
-starts, and `test_emit` times its `load`: a new solver, one bulk call, and the
-teardown. So the published floor is what handing a finished model to the
-solver costs, and nothing before it. `test_fresh` skips both arms, because a
+**The two matrix arms measure the handoff alone.** Every other arm reads the
+parquet inside the clock. A matrix arm builds the finished arrays in `prepare`,
+in the pytest process, and writes them beside the parquet as one `.npz` per
+arm. Its `load_setup` reads them back in the spawned child, and `test_emit`
+times its `load`: a new solver, one bulk call, and the teardown. So the
+published floor is what handing a finished model to the solver costs, and
+nothing before it. The same holds for its peak. The child never reads the
+parquet or runs the formulation, so its peak holds the interpreter, the
+arrays and the solver's copy of them, and no garbage from a build. Every array
+is read in whole, so all of it is resident, as a caller's arrays would be. `test_fresh` skips both arms, because a
 process launched for them has to build the arrays first. Their other verbs,
 `build_only`, `objective` and `written`, still read and build inside the call.
 
@@ -377,11 +381,11 @@ Not measured, deliberately: solve time (that is the solver, identical either
 way, and it would swamp the build), and anything about expressiveness.
 
 **An arm stops climbing a ladder it cannot afford.** A library that builds per
-entity costs about what the rung is wide, and the rungs grow tenfold — so one
-measurement settles the next one. After every cell the harness projects the rung
-above it, and if that projection is over `--budget` (120 s by default) the arm
-skips the rest of that ladder with a sentence saying what it measured and what
-it projected. *That a library is far slower is the finding*; an hour spent
+entity costs about what the rung is wide, and each rung is two to five times
+the one below — so one measurement settles the next one. After every cell
+the harness projects the rung above it, and if that projection is over
+`--budget` (120 s by default) the arm skips the rest of that ladder with a
+sentence saying what it measured and what it projected. *That a library is far slower is the finding*; an hour spent
 measuring it again to two decimal places is a machine kept busy for nothing.
 
 The projection is never recorded as a measurement — it is arithmetic on one
@@ -390,6 +394,12 @@ because a measurement nobody took is an absent row rather than a null. The
 reasons print together under `over budget` when the run ends, which is the one
 place a skipped cell can still say something. `--budget 0` measures everything,
 which is what to pass when the slow number is the point.
+
+**`test_rebuild` has no peak of its own.** It builds in the pytest process,
+with no isolated pass, so the memory budget has nothing to project from. It
+skips every rung above one where any sink of the same arm ran out of memory.
+A rebuild too large for the box would otherwise be killed with the pytest
+process, and every cell of its results file with it.
 
 **A number the run cannot stand behind is marked, not dropped.** Every
 measurement's distribution — `iqr`, `median`, `rounds` — is carried into the
@@ -401,10 +411,17 @@ slow, which leaves no clean one to fall back on — #797 is the cell that was
 publication-ready at 2.33x wrong. A marked cell is one to re-take on an idle
 machine, never one to quote.
 
-**Nine rounds is the floor, and the harness sets it.** pytest-benchmark's own
-default is 5, and its calibration gives the fewest rounds to the slowest cells —
-exactly where sustained interference is most likely and a clean round hardest
-to come by. `--benchmark-min-rounds` still wins where a run wants more.
+**A cell gets nine rounds, or five where a round is slow, and the harness
+decides.** `rounds_for` in `conftest.py` reads what the same cell took on the
+last rung it measured, scales it by how much wider this rung is, and gives nine
+rounds below a second and five above. The slow cells are where the run spends
+its hours, and where a median moves least: on
+[#2031](https://github.com/fluxopt/specsolve/pull/2031)'s results, the median
+of the first five rounds of a cell over a second is within 1.2% of its
+nine-round median in nine cells of ten, and 2.4% at worst. Five is the floor,
+because with three the whisker's middle half is three quarters of the range.
+The first rung of a ladder has nothing to go on and gets nine.
+`--benchmark-min-rounds` gives every cell the count it names.
 
 **Every round starts with a full garbage collection.** A round otherwise
 inherits the last one's garbage, and on the gurobi sink that is a million
@@ -417,10 +434,9 @@ build.
 
 ### Why the median
 
-Every published number is the median of nine rounds. Every measurement gets
-the same nine, pinned rather than calibrated by duration, so no cell is a
-best-of-nine beside a neighbour's best-of-forty. The median beats
-the fastest round because a cell whose nine rounds all ran slow has no clean
+Every published number is the median of its rounds: nine, or five where a
+round takes over a second. The median beats
+the fastest round because a cell whose rounds all ran slow has no clean
 round to pick. It beats the mean because one slow round moves a mean and
 leaves a median where it was. On this run
 ([#2031](https://github.com/fluxopt/specsolve/pull/2031)) 41 of 218 published
@@ -536,7 +552,7 @@ across a session, and this machine has drifted 2x on wall time between the
 start of a session and the end of one. Check out A, measure, check out B,
 measure, and go back — not A once and B once an hour later. A second arm used
 to be the tell — if it moved too, the machine moved, because nothing in
-`src/specsolve/relational/` can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
+the engine can reach it — and `bench/floor.py` is that tell now. Peak RSS is far steadier than
 wall time and is usually the honest half of a before/after claim.
 
 ## The cases
@@ -816,7 +832,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve.relational.engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._engine.compiler:Compiler._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```

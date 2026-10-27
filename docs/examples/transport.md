@@ -54,18 +54,18 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 | $`\mathit{gen\_at\_bus}`$ | `gen_at_bus` over $`\mathcal{S} \times \mathcal{B}`$ — what the generators sitting on a bus produce there |
 | $`\mathit{net\_inflow}`$ | `net_inflow` over $`\mathcal{S} \times \mathcal{B}`$ — flow arriving at a bus minus flow leaving it, so a negative value is a net export |
 
-#### Objective
+#### Variable domains
+
+**`p`**
 
 ```math
-\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G}
 ```
 
-#### Subject to
-
-**`balance`**
+**`f`**
 
 ```math
-\mathit{gen\_at\_bus}_{s,b} + \mathit{net\_inflow}_{s,b} = d_{s,b} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\, s \in \mathcal{S},\ \ell \in \mathcal{L}
 ```
 
 #### Definitions
@@ -82,18 +82,18 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 \mathit{net\_inflow}_{s,b} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
 ```
 
-#### Variable domains
-
-**`p`**
+#### Objective
 
 ```math
-0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G}
+\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
 ```
 
-**`f`**
+#### Subject to
+
+**`balance`**
 
 ```math
-\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\, s \in \mathcal{S},\ \ell \in \mathcal{L}
+\mathit{gen\_at\_bus}_{s,b} + \mathit{net\_inflow}_{s,b} = d_{s,b} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
 ```
 
 </details>
@@ -113,6 +113,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units, each sitting on one bus
         dtype: str
@@ -170,10 +171,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     expressions:
       gen_at_bus:
-        expression: sum(p, by=gen_bus, over=generator, into=bus)
+        expression: sum(p, over=generator, by=gen_bus[bus])
         description: what the generators sitting on a bus produce there
       net_inflow:
-        expression: sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
+        expression: sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:

@@ -23,8 +23,8 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
-from specsolve.relational.sinks import SOLVERS
-from specsolve.sources import attachable
+from specsolve._sinks import SOLVERS
+from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
     expanded,
@@ -108,7 +108,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet."""
     if config.getoption('--parquet-via-pyarrow'):
-        from specsolve.relational import parquet
+        from specsolve import _parquet as parquet
 
         parquet._polars_has_parquet = cache(lambda: False)
 
@@ -293,7 +293,7 @@ def commitment_inputs():
 # ---------------------------------------------------------------------------
 
 #: The two dimensions every expression in the law and sweep tests is written over.
-LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int'}}
+LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}}
 
 
 def law_data() -> dict[str, Any]:
@@ -325,7 +325,7 @@ def law_spec(
     """
     return {
         'dimensions': dict(LAW_DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'w': {'dims': ['f']}},
+        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'}, 'w': {'dims': ['f']}},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'dims': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -344,7 +344,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     separable from the objective alone. ``grouped`` adds ``season_of``.
     """
     spec: dict[str, Any] = {
-        'dimensions': {'t': {'dtype': 'int'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'usable': {'dims': ['t']}},
         'variables': {
             'level': {'dims': ['t'], 'where': 'usable > 0', 'bounds': {'lower': 0, 'upper': 10}},
@@ -426,7 +426,7 @@ def recomputed_row_values(engine, result) -> Any:
 
 #: Three columns and three rows, every declared row built.
 SOLVER_VECTOR_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'meet': {'dims': ['t'], 'expression': 'x >= load'}},
@@ -442,7 +442,7 @@ SOLVER_VECTOR_LOAD = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'val
 # ---------------------------------------------------------------------------
 
 LP = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}, 'price': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
@@ -470,7 +470,7 @@ QP_SOURCES = {
 
 #: Maximisation and an objective constant, the two things a sink states outside the frames.
 MAX = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'lim': {'dims': ['t'], 'expression': 'p <= cap'}},
@@ -486,7 +486,7 @@ MIP = {
 }
 
 INFEASIBLE = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'meet': {'dims': ['t'], 'expression': 'p == load'}},

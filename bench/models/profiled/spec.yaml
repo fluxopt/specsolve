@@ -21,6 +21,7 @@
 dimensions:
   snapshot:
     dtype: int
+    ordered: true
   node:
     dtype: str
   tech:

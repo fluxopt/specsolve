@@ -7,12 +7,14 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: dispatchable units
     dtype: str
   bp:
     description: breakpoints, as many as the longest curve needs
     dtype: int
+    ordered: true
 
 parameters:
   p_max:
@@ -24,9 +26,11 @@ parameters:
   bp_x:
     description: breakpoint dispatch levels, one curve per generator and no two the same length
     dims: [generator, bp]
+    missing: absent
   bp_y:
     description: cost at each breakpoint
     dims: [generator, bp]
+    missing: absent
 
 variables:
   p:

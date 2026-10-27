@@ -22,7 +22,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "mathspec>=0.2.1,<0.3",
+    "mathspec>=0.3.0,<0.4",
     "polars>=1.33.1",
     "numpy>=1.26",
     # 1.13 is the first highspy with the bulk `changeRowsBounds`.
@@ -126,7 +126,7 @@ specsolve = { path = "." }
 polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
-mathspec = "==0.2.1"
+mathspec = "==0.3.0"
 pytest = "*"
 pytest-xdist = "*"
 
@@ -189,7 +189,7 @@ table = { cmd = "python -m bench.tidy bench/results", description = "Every measu
 description = "Every model the page publishes, in every library that can express it"
 args = [
     { arg = "cases", default = "dispatch nodal network sector" },
-    { arg = "sizes", default = "3xs 2xs xs s m l" },
+    { arg = "sizes", default = "3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l" },
     { arg = "sinks", default = "highs gurobi" },
     { arg = "arms", default = "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" },
     { arg = "out", default = "bench/results/latest.json" },
@@ -209,7 +209,7 @@ description = "One sink of the published ladder, a process per case and ladder"
 args = [{ arg = "sink" }, { arg = "cases", default = "dispatch nodal network sector" }]
 # `bash -c` because the pixi shell has no `for`.
 # `--builds` only on highs, because `test_rebuild` does not vary by sink.
-cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 2xs xs s m l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
 
 [tool.pixi.feature.bench.tasks.ladder-smoke]
 description = "One rung, to prove the machinery rather than to measure anything"
@@ -342,6 +342,6 @@ matches = "tests/linopy_lane/**"
 errors = { explicit-any = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "src/specsolve/relational/sinks/solvers/**"
+matches = "src/specsolve/_sinks/**"
 errors = { explicit-any = false }
 

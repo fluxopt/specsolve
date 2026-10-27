@@ -13,19 +13,22 @@ admits.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import pandas as pd
+import polars as pl
 import xarray as xr
 from mathspec import program as _program
 
-from specsolve.errors import SpecsolveError
-from specsolve.frames import to_pandas
+from specsolve._frames import to_pandas
+from specsolve._messages import coordinate_text, missing_row_message
+from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
-    import polars as pl
     from mathspec import program
 
 
@@ -50,22 +53,13 @@ def refuse_relations_the_lane_does_not_build(program: program.Program) -> None:
                     f'walks alone'
                 )
             )
-        if len(node.partition.group) != 1:
+        if len(node.partition.grouped) != 1:
             raise OracleCannotBuildError(
                 _relation_shape_message(
-                    f"a partition by '{node.partition.name}' groups by {list(node.partition.group)}, and this "
+                    f"a partition by '{node.partition.name}' groups by {list(node.partition.grouped)}, and this "
                     f'lane groups a shift, sum_back or position by one column'
                 )
             )
-
-
-def read_column(node: program.GroupSum | program.Pullback | program.PulledBackPredicate) -> tuple[str, ...]:
-    """The relation's columns a read takes at the key: what a group lands on, what a pullback reads from.
-
-    Both are the far end of the direction, so one lookup serves the group and
-    its adjoint.
-    """
-    return node.direction.produced if isinstance(node, _program.GroupSum) else node.direction.consumed
 
 
 def _relation_shape_message(what: str) -> str:
@@ -107,15 +101,49 @@ def dimension_coords(
 ) -> tuple[dict[str, pd.Index], dict[tuple[str, str], xr.DataArray]]:
     """Every dimension's labels, and each relation's value columns as arrays over the dimensions it is keyed by.
 
-    *tidy* is :func:`~specsolve.sources.tidy_sources`' output, so every index and
+    *tidy* is :func:`~specsolve._sources.tidy_sources`' output, so every index and
     map has been read and checked; what happens here is the conversion.
 
     Returns:
         The master coordinates by dimension, and one array per value column,
         by the relation's name and the column's.
+
+    Raises:
+        DataError: A relation that refuses a missing row has none at some
+            combination of its key's labels.
     """
     master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
+    for name, relation in program.relations.items():
+        if relation.missing == 'refused':
+            key = relation.key or relation.roles
+            _refuse_a_missing_row('relation', name, tidy[name].select(*key).unique(), key, relation.dim, tidy)
     return master, _relation_arrays(program, tidy, master)
+
+
+def _refuse_a_missing_row(
+    kind: str,
+    name: str,
+    rows: pl.LazyFrame,
+    columns: tuple[str, ...],
+    dim: Callable[[str], str],
+    tidy: Mapping[str, pl.LazyFrame],
+) -> None:
+    """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
+
+    The first in the order of the labels' product, read off the tidy frames
+    with the relational lane's own joins, so both lanes name one coordinate.
+    """
+    if not columns:
+        return
+    labels = [tidy[dim(column)].select(pl.col(dim(column)).alias(column)) for column in columns]
+    product = labels[0]
+    for frame in labels[1:]:
+        product = product.join(frame, how='cross')
+    schema = product.collect_schema()
+    held = rows.select(pl.col(column).cast(schema[column]) for column in columns)
+    gaps = product.join(held, on=list(columns), how='anti').collect()
+    if gaps.height:
+        raise DataError(missing_row_message(kind, name, coordinate_text(gaps.row(0, named=True)), gaps.height))
 
 
 def _relation_arrays(
@@ -168,23 +196,62 @@ def load_parameters(
     tidy: Mapping[str, pl.LazyFrame],
     master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:
-    """Every declared parameter as the dataset this lane builds against.
+    """Every declared parameter as the dataset this lane builds against, its ``missing:`` applied.
 
-    *tidy* is :func:`~specsolve.sources.tidy_sources`' output — one checked
+    *tidy* is :func:`~specsolve._sources.tidy_sources`' output — one checked
     ``(dims…, value)`` frame per parameter — so what is left is the crossing
-    into xarray.
+    into xarray, and what a missing row reads as. A value fills it; ``absent``
+    and ``neutral`` leave it NaN, which each position reads in its own way
+    (:mod:`~tests.linopy_lane.absence`); a ``bool`` short of a row reads false
+    there unless its value says otherwise.
 
     Returns:
         One DataArray per parameter, reindexed onto the master coordinates.
+
+    Raises:
+        DataError: A parameter that refuses a missing row has none at some
+            coordinate of its dims.
     """
     arrays: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        arr = _from_tidy(tidy[pname].collect(), pdef.dims)
+        frame = tidy[pname].collect()
+        if not pdef.dims and frame.is_empty():
+            arrays[pname] = xr.DataArray(_fill(pdef, pdef.dtype == 'bool'))
+            continue
+        arr = _from_tidy(frame, pdef.dims)
         if pdef.dims:
+            if pdef.missing == 'refused':
+                _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)
             onto = {d: master_coords[d] for d in pdef.dims}
-            arr = arr.reindex(onto, fill_value=False) if arr.dtype == bool else arr.reindex(onto)
+            arr = arr.reindex(onto, fill_value=_fill(pdef, arr.dtype == bool))
         arrays[pname] = arr
     return xr.Dataset(arrays)
+
+
+def given_rows(
+    program: program.Program, tidy: Mapping[str, pl.LazyFrame], master_coords: Mapping[str, pd.Index]
+) -> dict[str, xr.DataArray]:
+    """Where the data gave a row, for each numeric parameter that a value fills where it gave none.
+
+    What a bare numeric name in a ``where`` asks whatever the ``missing:``:
+    the fill is a value to read, and not a row the data holds.
+    """
+    given: dict[str, xr.DataArray] = {}
+    for pname, pdef in program.parameters.items():
+        if not pdef.dims or pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+            continue
+        product = math.prod(len(master_coords[d]) for d in pdef.dims)
+        if tidy[pname].select(pl.len()).collect().item() < product:
+            held = _from_tidy(tidy[pname].collect(), pdef.dims).reindex({d: master_coords[d] for d in pdef.dims})
+            given[pname] = held.notnull()
+    return given
+
+
+def _fill(pdef: program.ParameterDeclaration, flag: bool) -> Any:
+    """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
+    if not isinstance(pdef.missing, str) and pdef.missing is not None:
+        return pdef.missing
+    return False if flag else np.nan
 
 
 def _from_tidy(frame: pl.DataFrame, dims: Sequence[str]) -> xr.DataArray:

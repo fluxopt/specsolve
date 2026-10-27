@@ -25,7 +25,7 @@ BROADCAST_MASK_SPEC = {
         'carrier': {'dtype': 'str'},
     },
     'parameters': {
-        'produces': {'dims': ['tech', 'carrier']},
+        'produces': {'dims': ['tech', 'carrier'], 'missing': 'neutral'},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
         'installed': {'dims': ['node', 'tech']},
@@ -47,8 +47,8 @@ def _grid(dims, labels, values):
 
 
 SPARSE_COEFFICIENT_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'c': {'dims': ['t'], 'missing': 'neutral'}, 'w': {'dims': ['t'], 'missing': 'neutral'}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -84,7 +84,6 @@ def test_a_sparse_constant_side_is_refused_on_both_lanes():
     'constraint',
     [
         pytest.param({'dims': ['t'], 'expression': 'w * x <= c'}, id='at the row key'),
-        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, id='under a sum'),
         pytest.param({'dims': ['t'], 'expression': 'w * x <= c + sum(c, over=t)'}, id='beside a sum of itself'),
     ],
 )
@@ -92,6 +91,23 @@ def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint)
     """A reduction between the parameter and the row does not hide the hole (#1465)."""
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'objective'),
+    [
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, 9.0, id='under-a-sum'),
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
+    ],
+)
+def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
+    """Inside a sum a missing `neutral` row contributes nothing, so the row is built from the rows the data has.
+
+    `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
+    """
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
+    with differential(spec, SPARSE_CONSTANT_DATA) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), f'the sum of c is 4 + 5, so {objective}'
 
 
 def test_a_where_is_the_escape_from_the_constant_side_check():
@@ -114,15 +130,6 @@ def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     `w * x <= 100 - c`.
     """
     spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
-
-
-def test_a_constant_piece_beside_a_term_is_refused_through_a_reduction():
-    """The same piece under a sum, which would sum the gap away (#1521)."""
-    spec = override(
-        SPARSE_COEFFICIENT_SPEC,
-        **{'constraints.cap': {'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 100'}},
-    )
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
@@ -150,7 +157,7 @@ GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
@@ -182,13 +189,13 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
 #: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
-    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int'}},
+    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
     'variables': {'imports': {'dims': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
         'import_limit': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=snapshot)'},
@@ -223,7 +230,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus', 'technology'],
-            'expression': 'imports <= sum(capacity, by=gen_placement, over=generator, into=[bus, technology])',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_placement[bus, technology])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=technology)'},
@@ -250,22 +257,23 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_member_with_no_value_is_still_refused_through_a_group():
-    """A group short of a member's value keeps the refusal.
+def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
+    """A group short of a member's value sums the members it has, when the parameter is `neutral`.
 
-    Dropping `g2`'s row leaves `north`'s group with one member and a hole, not
-    with no members.
+    Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
-    with (
-        pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
-        differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(capacity=('g1',))),
-    ):
-        pass
+    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'})
+    with differential(spec, _grouped_constant_sources(capacity=('g1',))) as run:
+        assert run.oracle == pytest.approx(3.0, rel=RTOL), 'north imports up to 3 and south up to 0'
 
 
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -297,7 +305,11 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 #: One rule per block, so the two regimes are two named constraints.
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -329,7 +341,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'dims': ['f'], 'missing': 'neutral'}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 50}},

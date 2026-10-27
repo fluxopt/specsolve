@@ -10,14 +10,14 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import api
+from specsolve import _api as api
+from specsolve._engine.compiler import Compiler
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engine.compiler import Compiler
 from tests.fixtures import override
 
 SPEC = {
     'dimensions': {
-        'snapshot': {'dtype': 'int'},
+        'snapshot': {'dtype': 'int', 'ordered': True},
         'generator': {'dtype': 'str'},
     },
     'parameters': {
@@ -210,8 +210,8 @@ def test_a_divisor_that_adds_keeps_its_hole():
     spec = override(
         SPEC,
         **{
-            'parameters.scale': {'dims': ['snapshot']},
-            'parameters.other': {'dims': ['snapshot']},
+            'parameters.scale': {'dims': ['snapshot'], 'missing': 'neutral'},
+            'parameters.other': {'dims': ['snapshot'], 'missing': 'neutral'},
             'expressions.holed': '1 / (scale + other)',
         },
     )
@@ -224,8 +224,8 @@ def test_a_divisor_that_adds_keeps_its_hole():
 SIZED = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {
-        'fixed': {'dims': ['g']},
-        'sizable': {'dims': ['g'], 'dtype': 'bool'},
+        'fixed': {'dims': ['g'], 'missing': 'absent'},
+        'sizable': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'},
         'out': {'dims': ['g']},
     },
     'variables': {'chosen': {'dims': ['g'], 'where': 'sizable', 'bounds': {'lower': 0, 'upper': 10}}},
@@ -298,13 +298,13 @@ def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
     [pytest.param('out / fixed', id='the-parameter'), pytest.param('out / (fixed * chosen)', id='beside-a-variable')],
 )
 def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions_words(expression):
-    """A missing parameter row is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
+    """A missing row of a neutral divisor is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
 
     Before #1775 it read a constraint's message: that the constraint would stop
     constraining, and to mask the coordinates out with a `where`. It also named
     the variable in the divisor as a parameter.
     """
-    spec = override(SIZED, **{'expressions.q': expression})
+    spec = override(SIZED, **{'expressions.q': expression, 'parameters.fixed.missing': 'neutral'})
     with pytest.raises(DataError, match="named expression 'q': parameter 'fixed'") as refused:
         sps.solve(spec, ABSENT_AT_C).evaluate('q')
     assert 'where' not in str(refused.value), 'a named expression takes no where, so the message cannot advise one'
@@ -344,7 +344,7 @@ def test_a_product_is_absent_where_either_factor_is(crossed):
 
 
 def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
-    """`absence: zero` says the quantity *is* zero where the variable has no row.
+    """`missing: neutral` says the quantity *is* zero where the variable has no row.
 
     Affine arithmetic cannot tell no row from a zero, and neither can a sum a
     constant reaches — `1 + p` lands the 1 on every coordinate. `0.5 ** p`
@@ -355,7 +355,7 @@ def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
         SPEC,
         **{
             'variables.p.where': 'p_max > 0',
-            'variables.p.absence': 'zero',
+            'variables.p.missing': 'neutral',
             'expressions.grown': 'sum(0.5 ** p, over=generator)',
         },
     )
@@ -365,7 +365,7 @@ def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
     assert p['generator'].unique().to_list() == ['g1'], 'g2 is masked out, so only g1 has a primal'
     want = [0.5**v + 1.0 for v in p['value']]
     assert result.evaluate('grown')['value'].to_list() == pytest.approx(want), (
-        'the absent generator is a zero under absence: zero, so 0.5 ** 0 counts as 1 in the sum'
+        'the absent generator is a zero under missing: neutral, so 0.5 ** 0 counts as 1 in the sum'
     )
 
 
@@ -438,7 +438,7 @@ def test_a_mapping_carries_the_cases_a_string_cannot_say():
     """`cases:` is why the mapping form is not sugar: a region-varying quantity has no spelling as one string."""
     spec = {
         **SPEC,
-        'parameters': {**SPEC['parameters'], 'peak': {'dims': ['snapshot'], 'dtype': 'bool'}},
+        'parameters': {**SPEC['parameters'], 'peak': {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}},
     }
     data = sources() | {'peak': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [False, True, False]})}
     frame = sps.solve(spec, data).evaluate(

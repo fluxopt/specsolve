@@ -3,7 +3,7 @@ description: >-
   nothing. Below some capacity there is no feasible dispatch at all, and this
   model says so by being infeasible rather than by pricing unserved energy.
 dimensions:
-  snapshot: {dtype: int, description: "dispatch periods"}
+  snapshot: {dtype: int, description: "dispatch periods", ordered: true}
   generator: {dtype: str, description: "generating units"}
 parameters:
   cost: {dims: [generator], description: "marginal cost"}

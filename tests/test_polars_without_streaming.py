@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational import collect
+from specsolve import _collect as collect
 
 
 class PanicException(BaseException):

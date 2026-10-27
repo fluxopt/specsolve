@@ -106,7 +106,7 @@ p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 
 |---|---|---|
 | keyed by one dimension | `sited: {key: generator, values: bus}` | on the key |
 | keyed by a pair | `zone_of: {key: [generator, t], values: zone}` | on both key columns |
-| bare | `connection: {key: [generator, bus]}` | on the columns the value table shares |
+| bare | `connection: {key: [generator, bus], missing: absent}` | on the columns the value table shares |
 | roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
 | a partition | `shift`, `sum_back` or `position` with `within=` | none |
 

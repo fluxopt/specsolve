@@ -8,6 +8,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -36,11 +37,13 @@ parameters:
       the capacity a generator is to hold, for the generators whose capacity is
       already decided
     dims: [generator]
+    missing: absent
   p_set:
     description: >-
       the output a generator is to deliver, for the snapshots in which it is
       scheduled rather than chosen
     dims: [snapshot, generator]
+    missing: absent
   load:
     description: demand at each bus in each snapshot
     dims: [snapshot, bus]
@@ -83,7 +86,7 @@ constraints:
   nodal_balance:
     description: what is generated at a bus meets the load there
     dims: [snapshot, bus]
-    expression: sum(p, by=gen_bus, over=generator, into=bus) == load
+    expression: sum(p, over=generator, by=gen_bus[bus]) == load
 
 objective:
   sense: minimize
