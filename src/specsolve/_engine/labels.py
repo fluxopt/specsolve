@@ -105,7 +105,7 @@ def frames(scope: Scope, domains: Sequence[Domain], label: str) -> list[pl.DataF
 def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> int:
     """How many rows a declaration asks for: its coord product under its own mask.
 
-    Less [`frame`][]'s height, it is the rows a propagated absence removed.
+    Less the height [`frames`][] numbers for it, it is the rows a propagated absence removed.
     With a mask it costs a pass over the masked product.
     """
     if where is None:
