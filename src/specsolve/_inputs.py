@@ -151,7 +151,7 @@ def lowered(spec: Buildable) -> Program:
     program = declared(spec).program
     if program.given:
         given = program.given
-        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions, *given.masks})
+        read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions, *given.conditions})
         raise LanguageError(
             f'this spec reads {", ".join(repr(name) for name in read)} under given:, which another file declares, '
             f'so it is a fragment of a model rather than the whole of one. Compose it with the files that declare '

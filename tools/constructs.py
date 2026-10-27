@@ -82,7 +82,7 @@ def constructs(spec: Path) -> set[str]:
         elif isinstance(node, program.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
-    if any(isinstance(n, program.Predicate) for n in nodes):
+    if any(isinstance(n, program.Condition) for n in nodes):
         used.add('where')
     if lowered.footprint.domains - {'continuous'}:
         used.add('MILP')
@@ -95,7 +95,7 @@ def constructs(spec: Path) -> set[str]:
     return used
 
 
-def _bounded(v: program.VariableDeclaration) -> bool:
+def _bounded(v: program.Variable) -> bool:
     open_at = {float('-inf'): 'lower', float('inf'): 'upper'}
     for side in ('lower', 'upper'):
         bound = getattr(v, side)

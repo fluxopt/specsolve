@@ -46,8 +46,6 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom,max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**
