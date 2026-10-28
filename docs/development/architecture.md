@@ -278,8 +278,9 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Structure digest**
 : A digest of everything a re-solve may not change. A loaded solver keeps its
-  model while the digest holds and every coefficient is within 1e-12 relative
-  of the one it holds (`handoff.py`).
+  model while the digest holds and a quadratic constraint's linear part is
+  within 1e-12 relative of the one it holds, and takes a linear row's moved
+  coefficients in place (`handoff.py`, `solver.py`).
 
 **Kind**
 : One frame family of an answer: `primal`, `dual`, `expression`, and each

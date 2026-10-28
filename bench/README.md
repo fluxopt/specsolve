@@ -681,7 +681,7 @@ parametrized by what the window moves:
 | `values` | re-attaches the same sources | push |
 | `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
 | `one` | updates the first declared parameter alone, as `update` is usually called | push |
-| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
+| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | push |
 | `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
@@ -689,8 +689,8 @@ Values are not varied, because a push sends whole vectors whatever they hold.
 coordinates it had, rebuilds only the declarations it feeds; anything else
 builds in full. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
-multiplies a variable: the matrix moves, so every such update loads the solver
-again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
+multiplies a variable: the matrix's entries move, and the loaded solver takes
+them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
 name one; the other cases skip it. A `start=` changes only what the solver
 begins from, which moves the solve and not anything timed here;
 `bench/warm_payoff.py` is where a carried basis is weighed.
