@@ -685,8 +685,9 @@ parametrized by what the window moves:
 | `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
-`one` costs a whole rebuild all the same — `update` re-reads every source — so
-it is the baseline an incremental build would have to beat. `coefficient` is
+`one` reads that parameter again and, where it moves only numbers at the
+coordinates it had, rebuilds only the declarations it feeds; anything else
+builds in full. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix moves, so every such update loads the solver
 again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
