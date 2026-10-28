@@ -66,7 +66,8 @@ the axis that is short of a coordinate another table has warns, naming both.
 **Every reader returns the answer**, with the names and shapes of
 [`Result`](api.md#specsolve.types.Result): `primal`, `dual`, `evaluate`,
 `activity`, `reduced_cost`, `slack`, `variable_basis`, `constraint_basis`,
-`scan`, `to_pandas`, `to_dataarray` and `to_dataset`. An `EachWindow`
+`cost_lower`, `cost_upper`, `rhs_lower`, `rhs_upper`, `scan`, `to_pandas`,
+`to_dataarray` and `to_dataset`. An `EachWindow`
 answer is over the real labels of the sliced dimension, each from the window
 that owns it. Any other answer is keyed by slice.
 

@@ -152,6 +152,20 @@ class Gurobi(Solver):
             return None
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
+    def _ranging(self) -> tuple[Any, Any, Any, Any] | None:
+        """``SAObjLow``, ``SAObjUp``, ``SARHSLow`` and ``SARHSUp``, which Gurobi refuses on a model that is not an LP."""
+        import numpy as np
+
+        gurobipy = _gurobipy()
+        try:
+            low, up, rhs_low, rhs_up = (
+                np.asarray(self._m.getAttr(attribute), dtype=np.float64)
+                for attribute in ('SAObjLow', 'SAObjUp', 'SARHSLow', 'SARHSUp')
+            )
+        except (AttributeError, gurobipy.GurobiError):
+            return None
+        return low, up, rhs_low, rhs_up
+
     def _warm(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
         self._m.setAttr(

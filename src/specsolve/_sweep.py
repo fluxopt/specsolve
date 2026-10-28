@@ -23,8 +23,10 @@ from specsolve._answer_layout import (
     METRICS_FILE,
     METRICS_SCHEMA,
     NO_BASIS,
+    NO_RANGING,
     OUTPUT_KINDS,
     PRICED,
+    RANGES,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
@@ -592,6 +594,66 @@ class Sweep:
         """
         return self._named('constraint_basis', name, per_window=per_window).pipe(collected)
 
+    def cost_lower(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One variable's lowest cost with every slice's basis still optimal.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.cost_lower`][specsolve._result.Result.cost_lower]'s terms.
+        Carried only where the sweep was asked for it with
+        ``outputs={'ranging'}``. A slice that did not end optimal on the
+        basis of an LP contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its ranging, no slice
+                ended optimal on a basis, or as [`primal`][] raises.
+        """
+        return self._named('cost_lower', name, per_window=per_window).pipe(collected)
+
+    def cost_upper(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One variable's highest cost with every slice's basis still optimal.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.cost_upper`][specsolve._result.Result.cost_upper]'s terms.
+        Carried only where the sweep was asked for it with
+        ``outputs={'ranging'}``. A slice that did not end optimal on the
+        basis of an LP contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its ranging, no slice
+                ended optimal on a basis, or as [`primal`][] raises.
+        """
+        return self._named('cost_upper', name, per_window=per_window).pipe(collected)
+
+    def rhs_lower(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One constraint's lowest right-hand side with every slice's basis still optimal.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.rhs_lower`][specsolve._result.Result.rhs_lower]'s terms.
+        Carried only where the sweep was asked for it with
+        ``outputs={'ranging'}``. A slice that did not end optimal on the
+        basis of an LP contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its ranging, no slice
+                ended optimal on a basis, or as [`primal`][] raises.
+        """
+        return self._named('rhs_lower', name, per_window=per_window).pipe(collected)
+
+    def rhs_upper(self, name: str, *, per_window: bool = False) -> pl.DataFrame:
+        """One constraint's highest right-hand side with every slice's basis still optimal.
+
+        [`primal`][]'s shape and arguments, and
+        [`Result.rhs_upper`][specsolve._result.Result.rhs_upper]'s terms.
+        Carried only where the sweep was asked for it with
+        ``outputs={'ranging'}``. A slice that did not end optimal on the
+        basis of an LP contributes none.
+
+        Raises:
+            SpecsolveError: The sweep was not asked for its ranging, no slice
+                ended optimal on a basis, or as [`primal`][] raises.
+        """
+        return self._named('rhs_upper', name, per_window=per_window).pipe(collected)
+
     def evaluate(self, expression: str | Mapping[str, object], *, per_window: bool = False) -> pl.DataFrame:
         """The value of *expression* at every slice's solution, as an answer.
 
@@ -794,11 +856,14 @@ WINDOWS_DIR = 'windows'
 
 
 def _whole_kind_absent(kind: str, held: Mapping[str, object], no_duals: str | None, record: pl.DataFrame) -> str | None:
-    """Why no slice holds *kind*: the duals' reason for a priced kind, or [`NO_BASIS`][] where slices solved and none ended on a basis."""
+    """Why no slice holds *kind*: the duals' reason for a priced kind, or [`NO_BASIS`][] or [`NO_RANGING`][] where slices solved and none left one."""
     if kind in PRICED:
         return no_duals
-    if kind in BASES and not held and record['has_primal'].any():
-        return NO_BASIS
+    if not held and record['has_primal'].any():
+        if kind in BASES:
+            return NO_BASIS
+        if kind in RANGES:
+            return NO_RANGING
     return None
 
 

@@ -33,7 +33,7 @@ from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, Diagnostics, Result
-from specsolve._sinks.solver import Basis
+from specsolve._sinks.solver import Basis, solver_vector
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -265,7 +265,7 @@ class Engine:
         if reloaded:
             self._loads += 1
         with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff, basis='basis' in outputs)
+            answer = solver.run(handoff, basis='basis' in outputs, ranging='ranging' in outputs)
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
 
@@ -422,6 +422,12 @@ class Engine:
                 return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))
             case 'constraint_basis':
                 return {} if answer.basis is None else self._per_constraint(_statuses(answer.basis.rows))
+            case 'cost_lower' | 'cost_upper':
+                ranging = answer.ranging
+                return {} if ranging is None else self._per_variable(solver_vector(getattr(ranging, kind)))
+            case 'rhs_lower' | 'rhs_upper':
+                ranging = answer.ranging
+                return {} if ranging is None else self._per_constraint(solver_vector(getattr(ranging, kind)))
             case _:
                 raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
 

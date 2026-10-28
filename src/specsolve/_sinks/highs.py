@@ -248,6 +248,33 @@ class Highs(Solver):
             basis_codes(_values(basis.row_status), codes),
         )
 
+    def _ranging(self) -> tuple[Any, Any, Any, Any] | None:
+        """``getRanging``, with each row that ended basic ranged off its activity.
+
+        HiGHS ranges a basic row's activity rather than its bound. The bound of
+        a row that does not bind can move to the activity, and on without
+        limit on the side its sense leaves open: what Gurobi and Xpress
+        report. A cost vector spans the rows too, so it is cut to the columns.
+        """
+        import highspy
+        import numpy as np
+
+        status, ranging = self._handle.getRanging()
+        if status == highspy.HighsStatus.kError or not ranging.valid:
+            return None
+        columns = self._handle.getNumCol()
+        basic = _values(self._handle.getBasis().row_status) == int(highspy.HighsBasisStatus.kBasic)
+        activity = np.asarray(self._handle.getSolution().row_value, dtype=np.float64)
+        sense = self._row_vectors.sense
+        lower = np.where(sense == SENSE_CODES['>='], -np.inf, activity)
+        upper = np.where(sense == SENSE_CODES['<='], np.inf, activity)
+        return (
+            np.asarray(ranging.col_cost_dn.value_, dtype=np.float64)[:columns],
+            np.asarray(ranging.col_cost_up.value_, dtype=np.float64)[:columns],
+            np.where(basic, lower, np.asarray(ranging.row_bound_dn.value_, dtype=np.float64)),
+            np.where(basic, upper, np.asarray(ranging.row_bound_up.value_, dtype=np.float64)),
+        )
+
     def _warm(self, basis: Basis) -> None:
         """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``.
 

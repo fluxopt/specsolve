@@ -40,6 +40,21 @@ class Basis:
 
 
 @dataclass(frozen=True)
+class Ranging:
+    """How far each cost and each right-hand side can move, one at a time, with the basis the solve ended on still optimal.
+
+    Each is the value at that end, in label order, and ``-inf`` or ``inf``
+    where that end has no limit. A right-hand side is the row's as the solver
+    holds it, with every term on the left.
+    """
+
+    cost_lower: np.ndarray[tuple[int], np.dtype[np.float64]]
+    cost_upper: np.ndarray[tuple[int], np.dtype[np.float64]]
+    rhs_lower: np.ndarray[tuple[int], np.dtype[np.float64]]
+    rhs_upper: np.ndarray[tuple[int], np.dtype[np.float64]]
+
+
+@dataclass(frozen=True)
 class SolveAnswer:
     """What a solve concluded, and the vectors it left.
 
@@ -59,6 +74,9 @@ class SolveAnswer:
     #: The basis the solve ended on, read only where [`Solver.run`][] was asked
     #: for it, and ``None`` wherever the solve ended at no vertex.
     basis: Basis | None = None
+    #: The ranges around the optimal basis, read only where [`Solver.run`][]
+    #: was asked for them, and ``None`` wherever the solve did not end on one.
+    ranging: Ranging | None = None
 
     @classmethod
     def unreadable(cls, status: SolveStatus, dual_ray: pl.Series | None = None) -> SolveAnswer:
@@ -223,8 +241,11 @@ class Solver(ABC):
                 f'— please report it.'
             )
 
-    def run(self, handoff: Handoff, *, basis: bool = False) -> SolveAnswer:
-        """Solve what is loaded and read it back, with the [`Basis`][] it ended on where *basis* asks.
+    def run(self, handoff: Handoff, *, basis: bool = False, ranging: bool = False) -> SolveAnswer:
+        """Solve what is loaded and read it back, with the [`Basis`][] it ended on where *basis* asks, and its [`Ranging`][] where *ranging* does.
+
+        A range is read only off a solve that terminated optimal: the basis of
+        a run a limit stopped is not the one a range is around.
 
         Raises:
             SpecsolveError: A solver vector that does not span the model.
@@ -232,6 +253,8 @@ class Solver(ABC):
         answer = self._run(handoff)
         if basis and answer.primal is not None:
             answer = replace(answer, basis=self._settled(handoff))
+        if ranging and answer.status.termination_condition == 'optimal':
+            answer = replace(answer, ranging=self._ranged(handoff))
         self._check_span('primal', answer.primal, handoff.column_count)
         self._check_span('dual', answer.dual, handoff.row_count)
         self._check_span('activity', answer.activity, handoff.row_count)
@@ -256,6 +279,34 @@ class Solver(ABC):
         no vertex: a mixed-integer model, an interior-point run without
         crossover. A nonbasic row may carry any nonbasic code, and a column at
         equal bounds either bound's: [`_settled`][] reads both off the model.
+        """
+
+    def _ranged(self, handoff: Handoff) -> Ranging | None:
+        """[`_ranging`][], read only where the run ended on a [`_basis`][], after its spans are checked.
+
+        The basis is asked first because a member may range off none: after an
+        interior-point run without crossover, Xpress reports each cost as both
+        ends of its own range.
+        """
+        read = None if self._basis() is None else self._ranging()
+        if read is None:
+            return None
+        for quantity, values, expected in zip(
+            ('cost lower', 'cost upper', 'right-hand side lower', 'right-hand side upper'),
+            read,
+            (handoff.column_count, handoff.column_count, handoff.row_count, handoff.row_count),
+            strict=True,
+        ):
+            self._check_span(quantity, values, expected)
+        return Ranging(*read)
+
+    @abstractmethod
+    def _ranging(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+        """The [`Ranging`][] of the last [`run`][], as its four vectors in field order, or ``None`` where the solver has none.
+
+        Called only after a run that terminated optimal on a basis. ``None``
+        where that basis is not an LP's: a mixed-integer model, a quadratic
+        objective or constraint.
         """
 
     def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:

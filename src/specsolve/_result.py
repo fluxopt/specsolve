@@ -17,8 +17,10 @@ from specsolve._answer_layout import (
     BASES,
     NO_BASIS,
     NO_PROVENANCE,
+    NO_RANGING,
     OUTPUT_KINDS,
     PRICED,
+    RANGES,
     RECORD_FILE,
     RECORD_SCHEMA,
     Metrics,
@@ -668,6 +670,81 @@ class Result:
         """
         return self._output('constraint_basis', name)
 
+    def cost_lower(self, name: str) -> pl.DataFrame:
+        """The lowest cost each column of variable *name* can take with the solve's basis still optimal — ``(dims…, value)``, [`primal`][]'s shape and order.
+
+        A column's cost is what the objective multiplies it by, summed over
+        every term it appears in: ``cost * weight`` for
+        ``sum(p * cost * weight)``, in the objective's own sense. Each column
+        moves alone, every other number held. ``-inf`` where the cost can fall
+        without limit, as it can for a column held at its upper bound under
+        ``minimize``. [`cost_upper`][] is the other end of the range.
+
+        The range is around the basis the solve ended on. At a degenerate
+        vertex, which more than one basis describes, another solver may end
+        on another basis and report another range. On the same basis, Xpress
+        widens each finite end by its tolerances, so its range holds the one
+        HiGHS and Gurobi report. Carried only where the
+        solve was asked for it with ``outputs={'ranging'}``, and only an LP
+        solved to optimality on a basis has one.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its ranging, or it did not end optimal on a basis.
+            KeyError: No variable is called *name*.
+        """
+        return self._output('cost_lower', name)
+
+    def cost_upper(self, name: str) -> pl.DataFrame:
+        """The highest cost each column of variable *name* can take with the solve's basis still optimal — [`cost_lower`][]'s shape, and its terms.
+
+        ``inf`` where the cost can rise without limit.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its ranging, or it did not end optimal on a basis.
+            KeyError: No variable is called *name*.
+        """
+        return self._output('cost_upper', name)
+
+    def rhs_lower(self, name: str) -> pl.DataFrame:
+        """The lowest right-hand side each row of constraint *name* can take with the solve's basis still optimal — ``(dims…, value)``, [`dual`][]'s shape and order.
+
+        The right-hand side is the row's as
+        [`Model.row`][specsolve._api.Model.row] prints it, every variable
+        term on the left and every constant on the right. Each row moves alone,
+        every other number held; within the range the row's [`dual`][] stays
+        its price. A row that does not bind ranges from its activity, and
+        without limit on the side its sense leaves open: ``-inf`` for ``>=``.
+        [`rhs_upper`][] is the other end of the range.
+
+        The range is around the basis the solve ended on, as
+        [`cost_lower`][]'s is, and carried only where it is.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its ranging, or it did not end optimal on a basis.
+            KeyError: No constraint is called *name*.
+        """
+        return self._output('rhs_lower', name)
+
+    def rhs_upper(self, name: str) -> pl.DataFrame:
+        """The highest right-hand side each row of constraint *name* can take with the solve's basis still optimal — [`rhs_lower`][]'s shape, and its terms.
+
+        ``inf`` where it can rise without limit, as it can for a ``<=`` row
+        that does not bind.
+
+        Raises:
+            NoSolutionError: The solve left no values to read.
+            SpecsolveError: This result was closed, the solve was not asked for
+                its ranging, or it did not end optimal on a basis.
+            KeyError: No constraint is called *name*.
+        """
+        return self._output('rhs_upper', name)
+
     def _start(self) -> dict[str, Mapping[str, pl.LazyFrame]]:
         """What this answer gives a solve to start from, keyed as [`Start`][] is: its primal, and its basis where it carries one.
 
@@ -689,9 +766,11 @@ class Result:
         """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
-        that exists only where the duals do, the duals' reason, and for a basis,
+        that exists only where the duals do, the duals' reason, for a basis,
         [`NO_BASIS`][specsolve._answer_layout.NO_BASIS] where the
-        solve ended on none.
+        solve ended on none, and for a range,
+        [`NO_RANGING`][specsolve._answer_layout.NO_RANGING] where it
+        left none.
         """
         what = f"the {kind.replace('_', ' ')} of '{name}'"
         self._unclosed(what)
@@ -703,6 +782,8 @@ class Result:
             raise SpecsolveError(self._no_duals)
         if kind in BASES and not frames:
             raise SpecsolveError(NO_BASIS)
+        if kind in RANGES and not frames:
+            raise SpecsolveError(NO_RANGING)
         return frames
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:

@@ -37,9 +37,10 @@ if TYPE_CHECKING:
 #: beside the primal, the duals and the declared expressions it always
 #: carries. ``activity`` is each constraint's left-hand side at the solution,
 #: ``reduced_cost`` each variable's reduced cost, ``slack`` each
-#: constraint's distance to binding, and ``basis`` the basis status the solve
-#: ended on, of each variable and each constraint.
-Output = Literal['activity', 'reduced_cost', 'slack', 'basis']
+#: constraint's distance to binding, ``basis`` the basis status the solve
+#: ended on, of each variable and each constraint, and ``ranging`` how far each
+#: cost and each right-hand side can move with that basis still optimal.
+Output = Literal['activity', 'reduced_cost', 'slack', 'basis', 'ranging']
 
 #: Every [`Output`][], in the order a message lists them.
 OUTPUTS: tuple[Output, ...] = get_args(Output)
@@ -59,7 +60,8 @@ class OutputKind(NamedTuple):
 
 #: Each kind of frame the [`OUTPUTS`][] carry, named after the reader it comes
 #: back through: ``basis`` carries two, ``variable_basis`` and
-#: ``constraint_basis``, and every other output one, of its own name.
+#: ``constraint_basis``, ``ranging`` four, each end of each range, and every
+#: other output one, of its own name.
 OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
     {
         'activity': OutputKind('activity', 'constraint'),
@@ -67,6 +69,10 @@ OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
         'slack': OutputKind('slack', 'constraint'),
         'variable_basis': OutputKind('basis', 'variable'),
         'constraint_basis': OutputKind('basis', 'constraint'),
+        'cost_lower': OutputKind('ranging', 'variable'),
+        'cost_upper': OutputKind('ranging', 'variable'),
+        'rhs_lower': OutputKind('ranging', 'constraint'),
+        'rhs_upper': OutputKind('ranging', 'constraint'),
     }
 )
 
@@ -78,11 +84,29 @@ PRICED = frozenset({'dual', 'reduced_cost'})
 #: basis. Where it did not, each carries [`NO_BASIS`][].
 BASES = frozenset(kind for kind, carried in OUTPUT_KINDS.items() if carried.output == 'basis')
 
+#: How to make an LP's solve end on a basis, in each solver's own option.
+_CROSSOVER = (
+    "Solve with crossover on — HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or "
+    'with a simplex method.'
+)
+
 NO_BASIS = (
     'the solve ended on no basis, so there is no basis status to read. Only an LP solved by simplex, or by '
     'an interior-point method followed by crossover, ends on one: a mixed-integer model, a model with a '
-    'quadratic constraint, and an interior-point run with crossover off do not. Solve with crossover on — '
-    "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
+    f'quadratic constraint, and an interior-point run with crossover off do not. {_CROSSOVER}'
+)
+
+#: The kinds ``ranging`` carries, which exist only where the solve ended
+#: optimal on the basis of an LP. Where it did not, each carries
+#: [`NO_RANGING`][].
+RANGES = frozenset(kind for kind, carried in OUTPUT_KINDS.items() if carried.output == 'ranging')
+
+NO_RANGING = (
+    'the solve did not end optimal on the basis of an LP, so there is no range to read. A range says how '
+    'far one number can move before that basis stops being optimal, so only an LP solved to optimality by '
+    'simplex, or by an interior-point method followed by crossover, has one: a mixed-integer model, a '
+    'quadratic objective or constraint, a run a limit stopped, and an interior-point run with crossover '
+    f'off do not. {_CROSSOVER}'
 )
 
 #: A basis status in the one vocabulary every solver's is read into, each at

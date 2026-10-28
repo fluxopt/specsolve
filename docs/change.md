@@ -64,6 +64,32 @@ fresh = sps.solve('dispatch.yaml', sources | {'p_max': p_max})
 print(fresh.objective)
 ```
 
+## How far a number can move
+
+A loop answers one what-if at a time. Ranging answers one question for every
+number at once: how far can it move, alone, before a different generator sets
+the price? Ask for it with `outputs={'ranging'}`. We read how far the load of
+each snapshot can move:
+
+```python exec="true" source="material-block" result="text" session="change" workdir="examples"
+ranged = sps.solve('dispatch.yaml', sources, outputs={'ranging'})
+
+lower = ranged.rhs_lower('power_balance').rename({'value': 'lower'})
+upper = ranged.rhs_upper('power_balance').rename({'value': 'upper'})
+price = ranged.dual('power_balance').rename({'value': 'price'})
+print(load.rename({'value': 'load'}).join(lower, on='snapshot').join(upper, on='snapshot').join(price, on='snapshot'))
+```
+
+In snapshot 0, wind alone serves the load at a price of 10. The price stays 10
+while the load stays at or below 80, wind's capacity. In the other snapshots,
+gas is the marginal generator at a price of 50. The price stays 50 while the
+load stays between 80 and 280, the capacity of both generators together.
+
+`cost_lower` and `cost_upper` do the same for each cost. Wind keeps its share
+of the load while it costs no more than 50, the cost of gas
+([`Result.cost_lower`](reference/api.md#specsolve.types.Result.cost_lower)).
+Only an LP solved to optimality has ranges.
+
 ## A longer horizon
 
 Now solve two days. The `snapshot` labels and the `load` grow to eight rows,

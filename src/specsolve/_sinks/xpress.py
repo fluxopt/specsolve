@@ -122,6 +122,22 @@ class Xpress(Solver):
         codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC)
         return basis_codes(columns, codes), basis_codes(rows, codes)
 
+    def _ranging(self) -> tuple[Any, Any, Any, Any] | None:
+        """``objSA`` and ``rhsSA``, with an end at ``xpress.infinity`` read as unlimited."""
+        import numpy as np
+
+        xpress = _xpress()
+        try:
+            (low, up), (rhs_low, rhs_up) = self._p.objSA(range(self._columns)), self._p.rhsSA(range(self._rows))
+        except (xpress.SolverError, xpress.ModelError):
+            return None
+
+        def unlimited(end: Any) -> np.ndarray:
+            values = np.asarray(end, dtype=np.float64)
+            return np.where(np.abs(values) >= xpress.infinity, np.copysign(np.inf, values), values)
+
+        return unlimited(low), unlimited(up), unlimited(rhs_low), unlimited(rhs_up)
+
     def _warm(self, basis: Basis) -> None:
         """``loadBasis``, which takes rows first, with ``keepbasis`` back on.
 
