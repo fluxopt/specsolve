@@ -37,6 +37,8 @@ SOURCES = {
     'p_min': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 0.0, 0.0]}),
     'tight': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 1.0, 1.0]}),
     'retire': pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 1.0, 0.0]}),
+    'ramp': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 2.0, 0.0]}),
+    'keep': pl.DataFrame({'generator': GENERATORS, 'value': [True, True, True]}),
 }
 
 
@@ -48,10 +50,11 @@ def fleet(
     sense: str = 'minimize',
 ) -> dict:
     """The fleet, its mask, bound and extra rows as given, minimising cost or maximising its negative."""
-    per_generator = ('p_max', 'cost', 'avail', 'p_min', 'tight', 'retire')
+    per_generator = ('p_max', 'cost', 'avail', 'p_min', 'tight', 'retire', 'ramp')
     return {
         'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
-        'parameters': {name: {'dims': ['generator']} for name in per_generator} | {'load': {'dims': ['snapshot']}},
+        'parameters': {name: {'dims': ['generator']} for name in per_generator}
+        | {'load': {'dims': ['snapshot']}, 'keep': {'dims': ['generator'], 'dtype': 'bool'}},
         'variables': {'p': {'dims': ['snapshot', 'generator'], 'where': where, 'bounds': {'lower': 0, 'upper': upper}}},
         'constraints': {
             'balance': {'dims': ['snapshot'], 'expression': 'sum(p, over=generator) == load'},
@@ -94,6 +97,16 @@ FLOOR = {'floor': {'dims': ['snapshot', 'generator'], 'where': 'p_min > 0', 'exp
         pytest.param(fleet(), 'p_max', 'solar', -75.0, id='a-column-whose-bound-is-the-value'),
         pytest.param(fleet(sense='maximize'), 'p_max', 'solar', 75.0, id='the-same-maximized'),
         pytest.param(fleet(upper=None, rows=CAP), 'p_max', 'solar', -30.0, id='a-zero-slack-row-caps-the-column'),
+        pytest.param(
+            fleet(
+                upper=None,
+                rows={'cap': {'dims': ['snapshot', 'generator'], 'expression': '2 * p <= 2 * avail * p_max'}},
+            ),
+            'p_max',
+            'solar',
+            -30.0,
+            id='a-cap-is-read-per-unit-of-its-column',
+        ),
         pytest.param(fleet(rows=FLOOR), 'p_min', 'gas', 40.0, id='a-zero-slack-row-forces-a-column-up'),
         pytest.param(fleet(rows=FLOOR), 'p_min', 'wind', 0.0, id='a-row-a-running-column-already-meets'),
     ],
@@ -124,6 +137,13 @@ def test_a_value_on_a_threshold_is_priced_past_it(model: dict, name: str, genera
             id='a-row-with-a-dual-switched-off',
         ),
         pytest.param(fleet(where='retire <= 0'), 'retire', 'gas', 1, id='a-column-the-solve-uses-switched-off'),
+        pytest.param(
+            fleet(rows={'floor': {'dims': ['snapshot', 'generator'], 'expression': 'p >= ramp * p_max'}}),
+            'p_max',
+            'solar',
+            1,
+            id='a-floor-that-rises-past-its-cap',
+        ),
     ],
 )
 def test_a_rise_that_jumps_the_objective_is_an_infinite_rate(model: dict, name: str, generator: str, sign: int) -> None:
@@ -167,3 +187,42 @@ def test_a_value_on_no_threshold_warns_of_nothing(recwarn: pytest.WarningsRecord
     with sps.solve(fleet(), SOURCES) as answer:
         answer.marginal('cost')
     assert not [w for w in recwarn if issubclass(w.category, SpecsolveWarning)], 'no threshold, no warning'
+
+
+def test_a_mask_on_the_column_that_sums_the_parameter_is_held_as_built() -> None:
+    """The sum reads every generator's row, so which one a flip belongs to is not one row: nothing is charged."""
+    model = fleet(where='p_max > 0 and sum(p_min, over=generator) <= 0')
+    with sps.solve(model, SOURCES) as answer, pytest.warns(SpecsolveWarning, match='through a shift, a sum'):
+        rates = answer.marginal('p_min')['value'].to_list()
+    assert rates == [0.0, 0.0, 0.0], 'held as built: p_min is read nowhere else'
+
+
+def test_a_when_on_a_threshold_is_named() -> None:
+    model = fleet(rows={'roomy': {'dims': ['snapshot', 'generator'], 'expression': 'p <= room'}})
+    model['expressions'] = {
+        'room': {
+            'dims': ['generator'],
+            'cases': {'tight': {'when': 'p_min > 0', 'expression': 'p_max'}},
+            'otherwise': 1000,
+        }
+    }
+    with sps.solve(model, SOURCES) as answer, pytest.warns(SpecsolveWarning, match='a when: reads'):
+        answer.marginal('p_min')
+
+
+def test_a_quadratic_row_a_rise_switches_on_is_held_as_built() -> None:
+    """Only gurobi takes a quadratic row, and leaves its duals only when asked."""
+    pytest.importorskip('gurobipy', reason='a quadratic constraint has no other solver sink')
+    model = fleet(rows={'q': {'dims': ['snapshot', 'generator'], 'where': 'p_min > 0', 'expression': 'p * p <= 1e6'}})
+    with (
+        sps.solve(model, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}) as answer,
+        pytest.warns(SpecsolveWarning, match='is quadratic'),
+    ):
+        answer.marginal('p_min')
+
+
+def test_a_bool_parameter_in_a_mask_is_read_nowhere_in_the_math(recwarn: pytest.WarningsRecorder) -> None:
+    with sps.solve(fleet(where='p_max > 0 and keep'), SOURCES) as answer:
+        rates = answer.marginal('keep')['value'].to_list()
+    assert rates == [0.0, 0.0, 0.0], 'a bool has no rise, so nothing crosses'
+    assert not [w for w in recwarn if issubclass(w.category, SpecsolveWarning)], 'and nothing is warned'
