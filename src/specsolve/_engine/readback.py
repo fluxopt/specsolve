@@ -500,17 +500,14 @@ def marginal(compiler: Compiler, name: str) -> pl.DataFrame:
 
     Raises:
         KeyError: No parameter is called *name*.
-        SpecsolveError: The solve left no duals, or *name* stands where its
-            rate is not one coefficient per row.
+        SpecsolveError: *name* stands where its rate is not one coefficient
+            per row.
     """
     declared = compiler.scope.program.parameters
     if name not in declared:
         raise KeyError(unknown_name_message('parameter', name, declared))
     solution = compiler.solution
-    assert solution is not None, 'a marginal reads a solve'
-    if solution.dual is None:
-        assert solution.no_duals is not None, 'a solve without duals says why'
-        raise SpecsolveError(solution.no_duals)
+    assert solution is not None and solution.dual is not None, 'a result refuses a marginal its solve left no duals for'
     _refuse_a_nonlinear_read(compiler.scope.program, name)
 
     dims = declared[name].dims
