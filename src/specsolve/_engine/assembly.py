@@ -561,6 +561,9 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
             constant = assembly.obj_const
 
     measured.nonzeros = matrix.height
+    measured.bounds = _in_build_order(measured.bounds, built.variables)
+    measured.coefficients = _in_build_order(measured.coefficients, built.constraints)
+    measured.rhs = _in_build_order(measured.rhs, built.constraints)
     refreshed = replace(
         handoff,
         cols=cols,
@@ -640,6 +643,13 @@ def _same_coordinates(before: AttachedSources, now: AttachedSources, name: str, 
         return True
     new = now.parameters[name].select(*dims).join(before.parameters[name].select(*dims), on=list(dims), how='anti')
     return new.select(pl.len()).pipe(collected).item() == 0
+
+
+def _in_build_order(
+    ranges: dict[str, tuple[float, float]], built: Mapping[str, object]
+) -> dict[str, tuple[float, float]]:
+    """*ranges* keyed as *built* is ordered: a range read again goes back to its block's place in the diagnostics."""
+    return {name: ranges[name] for name in built if name in ranges}
 
 
 def _spliced(frame: pl.DataFrame, lo: int, hi: int, share: pl.DataFrame) -> pl.DataFrame:
