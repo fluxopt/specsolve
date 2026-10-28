@@ -53,7 +53,9 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
         raise DataError(_unknown_source_keys_message(unknown, known))
 
 
-def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def tidy_sources(
+    program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.LazyFrame] | None = None
+) -> dict[str, pl.LazyFrame]:
     """Read the caller's ``sources`` into the frames both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
@@ -61,6 +63,14 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     under its own name in the order they arrived, a relation as one column
     per declared column. A datetime label is held in microseconds, and a date
     under a ``datetime`` dimension as the microsecond its day starts on.
+
+    Args:
+        program: The plan whose declarations the sources are read against.
+        data: Each declared name's source.
+        kept: Parameters this function returned before, for sources and
+            indices that have not changed since ([`kept_parameters`][]). They
+            are taken as they are, neither read nor checked again; the
+            assumptions are still checked over every source.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -76,13 +86,29 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             method's conditions on its breakpoints among them.
     """
     refuse_unknown_sources(program, data)
-    sources = _read(program, data)
+    sources = _read(program, data, kept or {})
     validate_assumptions(program, sources)
     return sources
 
 
+def kept_parameters(
+    program: Program, tidied: Mapping[str, pl.LazyFrame], changed: Collection[str]
+) -> dict[str, pl.LazyFrame]:
+    """The parameters of *tidied* that a change of the sources named *changed* leaves as the door checked them.
+
+    A parameter's checks read its own source and the index of each of its
+    dims, a positional source included, so it is kept only where none of
+    them is in *changed*.
+    """
+    return {
+        name: tidied[name]
+        for name, p in program.parameters.items()
+        if name in tidied and name not in changed and not set(p.dims) & set(changed)
+    }
+
+
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
     [`validate_assumptions`][] runs
@@ -90,7 +116,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
-    data = _read_paths_at_once(program, data)
+    data = {**data, **_read_paths_at_once(program, {name: s for name, s in data.items() if name not in kept})}
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
@@ -107,9 +133,10 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
+        if pname not in kept:
+            sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        sources[pname] = kept[pname] if pname in kept else _checked_parameter(pname, pdef, sources[pname], sources)
 
     for dname in program.dimensions:
         if dname not in sources:

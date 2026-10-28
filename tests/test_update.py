@@ -563,6 +563,44 @@ def test_a_dimension_index_updates_as_a_source(model):
     assert model.update(change).solve().primal('p').height > 0, 'a dimension index is a source, and updates as one'
 
 
+@pytest.mark.parametrize(
+    ('change', 'checked'),
+    [
+        pytest.param(
+            {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [41.0, 81.0, 56.0, 96.0]})},
+            {'load'},
+            id='a parameter alone',
+        ),
+        pytest.param({'snapshot': SNAPSHOTS}, {'load'}, id='an index and the parameter over it'),
+        pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='an index and the parameters over it'),
+    ],
+)
+def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked):
+    """A parameter whose own source and whose dims' indices an update leaves alone is not read or checked again."""
+    from specsolve import _sources
+
+    real = _sources._checked_parameter
+    seen: list[str] = []
+
+    def spy(name, *args, **kwargs):
+        seen.append(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(_sources, '_checked_parameter', spy)
+    model.update(change)
+    assert set(seen) == checked, f'the update checked {sorted(seen)} again'
+
+
+def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over_it(model):
+    """A parameter kept from the last build is still checked against an index the update changed.
+
+    `load` is not in the update, but its rows at snapshot 3 now name a label
+    the index no longer has.
+    """
+    with pytest.raises(sps.errors.DataError, match="parameter 'load' has label"):
+        model.update({'snapshot': [0, 1, 2]})
+
+
 def test_a_update_can_grow_a_dimension():
     """Appending rows is an update — the Benders master, in three lines.
 
