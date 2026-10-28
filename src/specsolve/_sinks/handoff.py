@@ -211,8 +211,10 @@ class Handoff:
 
         The question a loaded solver asks of a rebuilt model: may I keep what
         I hold and take the new numbers by value? Bounds, costs and right-hand
-        sides go in that way. The matrix's coefficients are the solver's own
-        question ([`keeps`][specsolve._sinks.solver.Solver.keeps]).
+        sides go in that way, and so do a linear row's coefficients
+        ([`push`][specsolve._sinks.solver.Solver.push]); a quadratic
+        constraint's linear part is the solver's own question
+        ([`keeps`][specsolve._sinks.solver.Solver.keeps]).
         The counts, which column each matrix entry sits in, each row's comparison,
         each column's type, every SOS member, the quadratic objective's
         pattern and each quadratic *constraint* whole — coefficients and

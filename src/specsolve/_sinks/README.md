@@ -33,8 +33,10 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
 | `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
+| `Solver.push(handoff)` | only after `loaded` matched the digest: `_change_coefficients` for the matrix entries that moved, then `_push` |
 | `_load(handoff)` | hand the model over and hold what reads it back |
-| `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
+| `_push(handoff)` | new bounds, costs and right-hand sides |
+| `_change_coefficients(rows, cols, values)` | set existing matrix entries to new values |
 | `_run(handoff)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
 | `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
@@ -43,7 +45,7 @@ that evidence at the load; a subclass owns **the hand-off**:
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
-The first three are the family's and identical for everyone; the last nine are a
+The first four are the family's and identical for everyone; the last ten are a
 member's, and are its own library's shape. Nothing above the family decides
 which solver to keep or checks what one returned — an engine hands over a `Handoff`
 and is given an answer.
@@ -71,7 +73,10 @@ not change, recorded by the solver at its load and cached on the handoff. **Valu
 (`persistent/diff.py`) computes a delta against a snapshot of the previous
 model, where here the previous model is released before the new one exists, that
 release being what keeps an updated build at one model's peak. What a diff would
-need is exactly what is not kept.
+need is exactly what is not kept. The one exception is the matrix's
+coefficients, which the solver keeps a copy of at its load: a linear row takes
+the entries that moved in place, and a quadratic constraint, loaded whole, is
+loaded again.
 
 `handoff.py` is what both read. Neither family imports the other and no member
 imports a sibling — `tests/test_architecture.py` reads all of that off the

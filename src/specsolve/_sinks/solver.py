@@ -100,7 +100,7 @@ class Solver(ABC):
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The matrix's coefficients as loaded, in entry order, for [`keeps`][].
+        #: The matrix's coefficients the loaded model holds, in entry order, for [`keeps`][] and [`push`][].
         self._coefficients = handoff.matrix['coeff'].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
@@ -138,17 +138,32 @@ class Solver(ABC):
     def keeps(self, handoff: Handoff, solver_options: Mapping[str, Any] | None) -> bool:
         """Whether this held solver may keep its load and take *handoff* by value.
 
-        The same options and [`structure`][], and every matrix coefficient
-        within 1e-12 relative of the one loaded, which stays: a coefficient
-        summed over rows in another order moves in its last bits.
+        The same options and [`structure`][], and every coefficient of a
+        quadratic constraint's linear part as loaded: a sink loads that row
+        whole, so only a linear row takes a coefficient in place ([`push`][]).
+        """
+        if self._options != dict(solver_options or {}) or self.structure() != handoff.structure:
+            return False
+        tail = int(handoff.row_starts[handoff.linear_row_count])
+        return bool(_unmoved(handoff.matrix['coeff'].to_numpy()[tail:], self._coefficients[tail:]).all())
+
+    def push(self, handoff: Handoff) -> None:
+        """*handoff*'s bounds, costs, right-hand sides and moved coefficients onto the loaded model.
+
+        Called only after [`keeps`][] said yes. A coefficient within 1e-12
+        relative of the one loaded stays: a coefficient summed over rows in
+        another order moves in its last bits.
         """
         import numpy as np
 
-        return (
-            self._options == dict(solver_options or {})
-            and self.structure() == handoff.structure
-            and np.allclose(handoff.matrix['coeff'].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
-        )
+        new = handoff.matrix['coeff'].to_numpy()
+        unmoved = _unmoved(new, self._coefficients)
+        if not unmoved.all():
+            moved = np.flatnonzero(~unmoved)
+            rows = np.searchsorted(handoff.row_starts, moved, side='right') - 1
+            self._change_coefficients(rows, handoff.matrix['col'].to_numpy()[moved], new[moved])
+            self._coefficients = np.where(unmoved, self._coefficients, new)
+        self._push(handoff)
 
     @classmethod
     def imported(cls) -> Any:
@@ -176,11 +191,14 @@ class Solver(ABC):
         """Hand *handoff* to the solver and hold whatever reads it back. Called by ``__init__``."""
 
     @abstractmethod
-    def push(self, handoff: Handoff) -> None:
-        """*handoff*'s bounds, costs and right-hand sides onto the loaded model, as whole vectors.
+    def _push(self, handoff: Handoff) -> None:
+        """*handoff*'s bounds, costs and right-hand sides onto the loaded model. Called by [`push`][], after the coefficients."""
 
-        Called only after *handoff*'s digest matched the loaded one.
-        """
+    @abstractmethod
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """Set the loaded matrix entry at each ``(rows[i], cols[i])``, one that exists, to ``values[i]``."""
 
     def warm(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.
@@ -396,3 +414,12 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     declaration's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)
+
+
+def _unmoved(
+    new: np.ndarray[tuple[int], np.dtype[np.float64]], held: np.ndarray[tuple[int], np.dtype[np.float64]]
+) -> np.ndarray[tuple[int], np.dtype[np.bool_]]:
+    """Which of *new* is within 1e-12 relative of the coefficient *held* in its place."""
+    import numpy as np
+
+    return np.isclose(new, held, rtol=1e-12, atol=0.0)

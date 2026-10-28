@@ -28,9 +28,10 @@ from specsolve.errors import SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    import numpy as np
     import polars as pl
 
-    from specsolve._sinks.handoff import Handoff, RowVectors
+    from specsolve._sinks.handoff import Handoff, Ints, RowVectors
 
 
 #: Gurobi status -> termination condition: linopy's ``Gurobi.CONDITION_MAP``
@@ -128,7 +129,20 @@ class Gurobi(Solver):
     def handle(self) -> Any:
         return self._m
 
-    def push(self, handoff: Handoff) -> None:
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """``chgCoeff``, one call per entry, which the ``update`` that [`_push`][] ends with applies.
+
+        A row here is a linear constraint, so its index is its ``Constr``'s:
+        [`keeps`][specsolve._sinks.solver.Solver.keeps] reloads a model whose
+        quadratic constraint moved.
+        """
+        constraints, variables = self._m.getConstrs(), self._m.getVars()
+        for row, col, value in zip(rows.tolist(), cols.tolist(), values.tolist(), strict=True):
+            self._m.chgCoeff(constraints[row], variables[col], value)
+
+    def _push(self, handoff: Handoff) -> None:
         """Whole vectors, one call each."""
         gurobipy = _gurobipy()
         cols = handoff.dense_columns(gurobipy.GRB.INFINITY)

@@ -27,9 +27,10 @@ from specsolve._status import SolveStatus
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    import numpy as np
     import polars as pl
 
-    from specsolve._sinks.handoff import Handoff
+    from specsolve._sinks.handoff import Handoff, Ints
 
 
 #: Xpress solution status -> termination condition, copied from linopy's
@@ -91,7 +92,13 @@ class Xpress(Solver):
     def handle(self) -> Any:
         return self._p
 
-    def push(self, handoff: Handoff) -> None:
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """``chgMCoef``, every entry in one call."""
+        self._p.chgMCoef(rows, cols, values)
+
+    def _push(self, handoff: Handoff) -> None:
         """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per entry."""
         import numpy as np
 

@@ -182,7 +182,8 @@ the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position. Where an update changes only such numbers,
 or a linear constraint's coefficients, at the coordinates they had, the engine
 keeps the labels and reads again only the declarations they feed
-(`assembly.refilled`). A changed coefficient still loads the solver again.
+(`assembly.refilled`). A loaded solver takes a linear row's changed
+coefficients in place.
 
 **The plan is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes

@@ -30,8 +30,8 @@ An `update` that moves a mask or adds a label builds and loads again. An
 `update` that gives a parameter new numbers at the coordinates it already
 has, where the parameter is only a bound, a right-hand side, a cost or a
 coefficient of a linear constraint, also skips most of the build: only the
-declarations it feeds are read again. A new coefficient still loads the
-solver again. [Change it and solve again](../change.md) shows the
+declarations it feeds are read again, and the solver takes the new numbers
+in place. [Change it and solve again](../change.md) shows the
 loop and how to check that it stays loaded.
 
 ## Start from an earlier answer
