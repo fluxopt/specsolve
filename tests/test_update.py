@@ -339,8 +339,16 @@ def _same_handoff(got: Any, want: Any, where: str) -> None:
     assert got.objective_constant == pytest.approx(want.objective_constant, rel=1e-12), f'{where}: another constant'
 
 
+def _same_diagnostics(got: Any, want: Any, where: str) -> None:
+    """Two models report the same shape and the same ranges, a block at a time in build order."""
+    assert (got.columns, got.rows, got.nonzeros) == (want.columns, want.rows, want.nonzeros), f'{where}: another shape'
+    for frame in ('omissions', 'sparse_parameters', 'coefficient_range', 'bound_range', 'rhs_range'):
+        assert_frame_equal(getattr(got, frame), getattr(want, frame), rel_tol=1e-12, abs_tol=0.0)
+    assert got.objective_range == pytest.approx(want.objective_range, rel=1e-12), f'{where}: another objective range'
+
+
 def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monkeypatch):
-    """Each real-valued parameter of a port, its numbers moved alone, gives the hand-off a fresh build of that data gives.
+    """Each real-valued parameter of a port, its numbers moved alone, gives the hand-off and diagnostics a fresh build gives.
 
     Whichever way the update went: a parameter that feeds only bounds,
     constant sides and the objective is read again on the old labels
@@ -373,7 +381,9 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
                 continue
             with reference:
                 model.update(change)
-                _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, f'{port["name"]} {name}')
+                where = f'{port["name"]} {name}'
+                _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, where)
+                _same_diagnostics(model.diagnostics(), reference.diagnostics(), where)
             model.update({name: value})
 
 
