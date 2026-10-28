@@ -531,6 +531,26 @@ def test_a_parameter_that_picks_which_entries_exist_is_built_again(monkeypatch, 
     assert not took, 'a parameter that decides which entries exist was read again on the old labels'
 
 
+def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
+    """A bound moved from one generator to another keeps its height, and still moves which side is open.
+
+    `cap` declares `missing: absent`, so a generator it has no row for has no
+    upper bound; the new table names `b` where the old named `a`.
+    """
+    from specsolve._engine import engine as engine_module
+
+    spec = override(ROLES, **{'parameters.cap.missing': 'absent'})
+    before = ROLE_DATA | {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})}
+    change = {'cap': pl.DataFrame({'generator': ['b'], 'value': [8.0]})}
+    real = engine_module.refilled
+    took: list[bool] = []
+    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
+    with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
+        model.update(change)
+        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'cap moved to b')
+    assert not took, 'other coordinates were read again on the old labels'
+
+
 def test_new_numbers_on_a_row_the_build_dropped_are_refused_as_a_fresh_build_refuses_them():
     """A constraint that dropped a row with no terms builds in full, because its checks read the rows it labelled.
 
