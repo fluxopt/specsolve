@@ -141,8 +141,9 @@ class Engine:
 
         A second call rebuilds over the same object. With *changed*, the names
         whose sources differ from the last build's, a change of numbers alone
-        ([`numbers_only`][]) reads again only the bounds, constant sides and
-        objective they feed ([`refilled`][]); anything else builds in full.
+        ([`numbers_only`][]) reads again only the bounds, constant sides,
+        linear coefficients and objective they feed ([`refilled`][]); anything
+        else builds in full.
         The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
