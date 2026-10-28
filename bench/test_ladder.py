@@ -192,7 +192,7 @@ def test_window(
     `test_emit` prices the first window. *change* is what the second one moves:
     ``values`` re-attaches the same data, which a loaded solver takes by value;
     ``shape`` attaches the rung one snapshot shorter, which it cannot; ``one``
-    updates one parameter alone, which costs a whole rebuild all the same;
+    updates one parameter alone, which rebuilds only what it feeds where it moves only numbers;
     ``coefficient`` updates the case's parameter inside the matrix, which moves
     the digest and loads the solver again, so only a case that names one has
     it; and ``cold`` re-attaches the same data after dropping the loaded solver. An arm carries
