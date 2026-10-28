@@ -275,9 +275,13 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
     frames = answer._primals
     dual_frames = answer._duals
     no_duals = answer._no_duals
-    built: list[tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]] = []
+    built: list[
+        tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], tuple[pl.DataFrame, list[str]]]]
+    ] = []
 
-    def readers() -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]:
+    def readers() -> tuple[
+        Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], tuple[pl.DataFrame, list[str]]]
+    ]:
         if not built:
             primals = {name: frame.pipe(collected) for name, frame in frames.items()}
             duals = (

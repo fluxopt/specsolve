@@ -82,9 +82,10 @@ in each of them a unit of wind saves the 40 between the two costs. One more
 unit of load costs the price of its snapshot, which is the dual of
 `power_balance` there.
 
-Solar has a rate of 0, though it is cheaper than gas. The file builds no
-output for a generator with no capacity, and a marginal holds the model as it
-was built. To price the first unit of solar, use `update` and solve again.
+Solar has no capacity, so the file builds no output for it, yet its rate is
+-75. Its first unit replaces gas in the same three snapshots, at 25 less each.
+A marginal reads that off this solve: it prices the output a rise would
+switch on against the snapshot prices it already has.
 
 ## A longer horizon
 
