@@ -31,7 +31,7 @@ from specsolve._engine.assembly import (
 )
 from specsolve._engine.attaching import attach
 from specsolve._engine.compiler import Compiler, Solution
-from specsolve._engine.marginal import marginal
+from specsolve._engine.parameter_dual import parameter_dual
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, Diagnostics, Result
@@ -324,7 +324,7 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
-        expressions, evaluate, marginal = self._readers(answer.primal, answer.dual, no_duals, lower)
+        expressions, evaluate, parameter_dual = self._readers(answer.primal, answer.dual, no_duals, lower)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
@@ -333,7 +333,7 @@ class Engine:
             _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
             _expressions=expressions,
             _evaluate=evaluate,
-            _marginal=marginal,
+            _parameter_dual=parameter_dual,
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
@@ -455,7 +455,7 @@ class Engine:
         Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
         Callable[[str], tuple[pl.DataFrame, list[str]]] | None,
     ]:
-        """What a result reads through: a reader per declared name, the ad-hoc evaluator, and the marginal.
+        """What a result reads through: a reader per declared name, the ad-hoc evaluator, and the parameter dual.
 
         All three close over a snapshot the result owns, including a copy of
         the variable registry, so they keep answering after an update or
@@ -467,7 +467,7 @@ class Engine:
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
         compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
         expressions, evaluate = readback.readers(compiler, model.program.expressions, lower)
-        return expressions, evaluate, partial(marginal, compiler)
+        return expressions, evaluate, partial(parameter_dual, compiler)
 
     def reconstruct(
         self,
@@ -478,7 +478,7 @@ class Engine:
     ) -> tuple[
         Callable[[str | Mapping[str, object]], pl.DataFrame] | None, Callable[[str], tuple[pl.DataFrame, list[str]]]
     ]:
-        """The ad-hoc evaluator and the marginal for a saved solution, over this rebuilt model.
+        """The ad-hoc evaluator and the parameter dual for a saved solution, over this rebuilt model.
 
         This build supplies the labels that put the saved values back in vector
         order. The evaluator comes back where *lower* is given.
@@ -496,9 +496,9 @@ class Engine:
             if duals is not None
             else None
         )
-        _, evaluate, marginal = self._readers(primal, dual, no_duals, lower)
-        assert marginal is not None, 'a saved solution has a primal'
-        return evaluate, marginal
+        _, evaluate, parameter_dual = self._readers(primal, dual, no_duals, lower)
+        assert parameter_dual is not None, 'a saved solution has a primal'
+        return evaluate, parameter_dual
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""

@@ -58,7 +58,7 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
   small.
 - **A rate comes back per row of the data.** The model keeps the parameter
   behind each coefficient, so
-  [`result.marginal('p_max')`](../reference/api.md#specsolve.types.Result.marginal)
+  [`result.parameter_dual('p_max')`](../reference/api.md#specsolve.types.Result.parameter_dual)
   is the rate of the objective in each row of `p_max`. linopy sees only the
   numbers, so the same answer is a sum you build from the duals by hand
   ([what a change is worth](../howto/prices.md)).

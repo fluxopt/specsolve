@@ -1,7 +1,7 @@
-"""``Result.marginal`` where a value sits on a ``where:`` threshold: the rate as it rises past it, from one solve.
+"""``Result.parameter_dual`` where a value sits on a ``where:`` threshold: the rate as it rises past it, from one solve.
 
 The oracle is a forward re-solve: raise one row by a step and solve again. A
-finite marginal matches the step's rate; an infinite one is a jump, so the
+finite parameter_dual matches the step's rate; an infinite one is a jump, so the
 re-solve moves the objective the same way by far more than the step. The
 fleet is ``dispatch.yaml``'s, with solar at zero capacity: wind runs alone in
 snapshot 0, and gas sets the price in the other three.
@@ -82,9 +82,9 @@ def risen(model: dict, name: str, generator: str) -> float:
         return (answer.objective - base) / STEP if answer.has_primal else math.inf
 
 
-def marginal_of(model: dict, name: str, generator: str) -> float:
+def parameter_dual_of(model: dict, name: str, generator: str) -> float:
     with sps.solve(model, SOURCES) as answer:
-        return answer.marginal(name).filter(pl.col('generator') == generator)['value'].item()
+        return answer.parameter_dual(name).filter(pl.col('generator') == generator)['value'].item()
 
 
 CAP = {'cap': {'dims': ['snapshot', 'generator'], 'expression': 'p <= avail * p_max'}}
@@ -113,7 +113,7 @@ FLOOR = {'floor': {'dims': ['snapshot', 'generator'], 'where': 'p_min > 0', 'exp
 )
 def test_a_value_on_a_threshold_is_priced_past_it(model: dict, name: str, generator: str, expected: float) -> None:
     """Solar is cheaper than gas in the three snapshots gas sets the price in, by 25 each, and so on per case."""
-    rate = marginal_of(model, name, generator)
+    rate = parameter_dual_of(model, name, generator)
     assert rate == pytest.approx(expected, rel=RTOL), f"{generator}'s row of '{name}' is priced past its threshold"
     assert risen(model, name, generator) == pytest.approx(rate, rel=RTOL, abs=RTOL), 'a forward re-solve agrees'
 
@@ -147,7 +147,7 @@ def test_a_value_on_a_threshold_is_priced_past_it(model: dict, name: str, genera
     ],
 )
 def test_a_rise_that_jumps_the_objective_is_an_infinite_rate(model: dict, name: str, generator: str, sign: int) -> None:
-    rate = marginal_of(model, name, generator)
+    rate = parameter_dual_of(model, name, generator)
     assert rate == sign * math.inf, f"{generator}'s row of '{name}' jumps the objective"
     assert sign * risen(model, name, generator) > JUMP, 'a forward re-solve jumps the same way'
 
@@ -165,7 +165,7 @@ def test_a_zero_slack_row_across_several_columns_is_held_as_built_and_named() ->
         sps.solve(model, sources) as answer,
         pytest.warns(SpecsolveWarning, match='several columns, which only a solve decides'),
     ):
-        rate = answer.marginal('p_min')['value'].item()
+        rate = answer.parameter_dual('p_min')['value'].item()
     assert rate == 0.0, 'held as built: the row is redundant beside the balance'
 
 
@@ -180,12 +180,12 @@ def test_a_mask_read_through_a_sum_is_held_as_built_and_named() -> None:
         }
     )
     with sps.solve(model, SOURCES) as answer, pytest.warns(SpecsolveWarning, match='through a shift, a sum'):
-        answer.marginal('p_min')
+        answer.parameter_dual('p_min')
 
 
 def test_a_value_on_no_threshold_warns_of_nothing(recwarn: pytest.WarningsRecorder) -> None:
     with sps.solve(fleet(), SOURCES) as answer:
-        answer.marginal('cost')
+        answer.parameter_dual('cost')
     assert not [w for w in recwarn if issubclass(w.category, SpecsolveWarning)], 'no threshold, no warning'
 
 
@@ -193,7 +193,7 @@ def test_a_mask_on_the_column_that_sums_the_parameter_is_held_as_built() -> None
     """The sum reads every generator's row, so which one a flip belongs to is not one row: nothing is charged."""
     model = fleet(where='p_max > 0 and sum(p_min, over=generator) <= 0')
     with sps.solve(model, SOURCES) as answer, pytest.warns(SpecsolveWarning, match='through a shift, a sum'):
-        rates = answer.marginal('p_min')['value'].to_list()
+        rates = answer.parameter_dual('p_min')['value'].to_list()
     assert rates == [0.0, 0.0, 0.0], 'held as built: p_min is read nowhere else'
 
 
@@ -207,7 +207,7 @@ def test_a_when_on_a_threshold_is_named() -> None:
         }
     }
     with sps.solve(model, SOURCES) as answer, pytest.warns(SpecsolveWarning, match='a when: reads'):
-        answer.marginal('p_min')
+        answer.parameter_dual('p_min')
 
 
 def test_a_quadratic_row_a_rise_switches_on_is_held_as_built() -> None:
@@ -218,11 +218,11 @@ def test_a_quadratic_row_a_rise_switches_on_is_held_as_built() -> None:
         sps.solve(model, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1}) as answer,
         pytest.warns(SpecsolveWarning, match='is quadratic'),
     ):
-        answer.marginal('p_min')
+        answer.parameter_dual('p_min')
 
 
 def test_a_bool_parameter_in_a_mask_is_read_nowhere_in_the_math(recwarn: pytest.WarningsRecorder) -> None:
     with sps.solve(fleet(where='p_max > 0 and keep'), SOURCES) as answer:
-        rates = answer.marginal('keep')['value'].to_list()
+        rates = answer.parameter_dual('keep')['value'].to_list()
     assert rates == [0.0, 0.0, 0.0], 'a bool has no rise, so nothing crosses'
     assert not [w for w in recwarn if issubclass(w.category, SpecsolveWarning)], 'and nothing is warned'

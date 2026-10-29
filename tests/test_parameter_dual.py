@@ -1,8 +1,8 @@
-"""``Result.marginal``: the rate at which the optimal objective rises with each value of a parameter.
+"""``Result.parameter_dual``: the rate at which the optimal objective rises with each value of a parameter.
 
 The oracle is a finite difference, with no solver's convention in the loop:
 move one row of the parameter by a step either way, re-solve, and the
-objective moves by the marginal times the step. Every model here is non-degenerate at its data, so
+objective moves by the parameter dual times the step. Every model here is non-degenerate at its data, so
 the rate is two-sided and the step stays inside the basis. Two rates are
 also checked by hand, against ``dual`` and ``primal``.
 """
@@ -154,25 +154,25 @@ def test_the_marginal_is_what_the_objective_pays_per_unit_of_each_value(
     if model is QUADRATIC and solver_name == 'xpress':
         pytest.skip('the xpress sink takes no quadratic objective')
     with sps.solve(model, sources, solver_name=solver_name) as answer:
-        marginal = answer.marginal(name)
+        parameter_dual = answer.parameter_dual(name)
     expected = finite_differences(model, sources, name, solver_name)
     dims = [c for c in expected.columns if c != 'rate']
-    assert marginal.columns == [*dims, 'value'], "a marginal is keyed like the parameter's own table"
-    joined = marginal.join(expected, on=dims) if dims else marginal.hstack(expected)
-    assert joined.height == sources[name].height, "a marginal has one row per row of the parameter's table"
+    assert parameter_dual.columns == [*dims, 'value'], "a parameter dual is keyed like the parameter's own table"
+    joined = parameter_dual.join(expected, on=dims) if dims else parameter_dual.hstack(expected)
+    assert joined.height == sources[name].height, "a parameter dual has one row per row of the parameter's table"
     assert joined['value'].to_list() == pytest.approx(joined['rate'].to_list(), rel=RTOL, abs=RTOL), (
-        f"each row of '{name}' moves the objective at its marginal"
+        f"each row of '{name}' moves the objective at its parameter dual"
     )
 
 
 def test_a_right_side_is_priced_at_its_dual_and_a_cost_at_its_primal() -> None:
     """By hand, on ``FLEET``: the load is read once per row on the right, and the cost once per column in the objective."""
     with sps.solve(FLEET, FLEET_SOURCES) as answer:
-        assert answer.marginal('load')['value'].to_list() == pytest.approx(answer.dual('balance')['value'].to_list()), (
-            "a right side's rate is its row's dual"
-        )
+        assert answer.parameter_dual('load')['value'].to_list() == pytest.approx(
+            answer.dual('balance')['value'].to_list()
+        ), "a right side's rate is its row's dual"
         used = answer.primal('p').group_by('g', maintain_order=True).agg(pl.col('value').sum())
-        assert answer.marginal('cost').equals(used), "a cost's rate is the output it is paid on"
+        assert answer.parameter_dual('cost').equals(used), "a cost's rate is the output it is paid on"
 
 
 @pytest.mark.parametrize(
@@ -186,45 +186,45 @@ def test_a_right_side_is_priced_at_its_dual_and_a_cost_at_its_primal() -> None:
 def test_a_parameter_read_other_than_linearly_is_refused_with_the_rewrite(expression: str, refusal: str) -> None:
     model = {**FLEET, 'constraints': {'balance': {'dims': ['t'], 'expression': expression}}}
     with sps.solve(model, FLEET_SOURCES) as answer, pytest.raises(SpecsolveError, match=refusal) as refused:
-        answer.marginal('scale')
+        answer.parameter_dual('scale')
     assert 'as a parameter of its own' in str(refused.value), 'the refusal names the rewrite'
 
 
 def test_an_unknown_parameter_is_a_key_error_that_names_the_near_miss() -> None:
     with sps.solve(FLEET, FLEET_SOURCES) as answer, pytest.raises(KeyError, match=r"'loads'.*'load'"):
-        answer.marginal('loads')
+        answer.parameter_dual('loads')
 
 
 def test_an_integer_variable_leaves_no_marginal_and_says_why() -> None:
-    """A marginal is read off the duals, so it is refused where they are, with their message."""
+    """A parameter dual is read off the duals, so it is refused where they are, with their message."""
     integer = bound_spec('minimize', 'sum(p, over=g) >= total', domain='integer')
     with sps.solve(integer, BOUND_SOURCES) as answer, pytest.raises(SpecsolveError, match='mixed-integer'):
-        answer.marginal('cap')
+        answer.parameter_dual('cap')
 
 
 def test_a_closed_result_refuses_a_marginal() -> None:
     answer = sps.solve(FLEET, FLEET_SOURCES)
     answer.close()
     with pytest.raises(SpecsolveError, match='closed'):
-        answer.marginal('load')
+        answer.parameter_dual('load')
 
 
 def test_a_result_keeps_its_marginal_after_the_model_is_updated() -> None:
     with sps.build(FLEET, FLEET_SOURCES) as model:
         answer = model.solve()
-        before = answer.marginal('cap')
+        before = answer.parameter_dual('cap')
         model.update({'load': FLEET_SOURCES['load'].with_columns(pl.col('value') * 2)}).solve()
-        assert answer.marginal('cap').equals(before), 'a result reads the build it answered'
+        assert answer.parameter_dual('cap').equals(before), 'a result reads the build it answered'
 
 
 def test_an_archive_reads_the_marginal_a_live_solve_gives(tmp_path: Path) -> None:
     with sps.solve(STORAGE, STORAGE_SOURCES, archive=tmp_path / 'run') as answer:
-        live = answer.marginal('eta')
-    assert sps.scan_archive(tmp_path / 'run').result.marginal('eta').equals(live)
+        live = answer.parameter_dual('eta')
+    assert sps.scan_archive(tmp_path / 'run').result.parameter_dual('eta').equals(live)
 
 
 def test_a_saved_answer_without_its_model_says_where_to_ask(tmp_path: Path) -> None:
     with sps.solve(FLEET, FLEET_SOURCES) as answer:
         answer.save(tmp_path)
     with pytest.raises(SpecsolveError, match='no model behind it'):
-        sps.load_result(tmp_path).marginal('load')
+        sps.load_result(tmp_path).parameter_dual('load')

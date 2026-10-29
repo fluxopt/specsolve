@@ -1,4 +1,4 @@
-"""A parameter's marginal: the rate of the optimal objective in each of its rows, read off one solve.
+"""A parameter's dual: the rate of the optimal objective in each of its rows, read off one solve.
 
 Every leaf but the varied one is held at the solve ([`Compiler`][]), so a rate
 is a term's coefficient in the Lagrangian. A value on a ``where:`` threshold
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from specsolve._engine.pieces import CompiledExpression, Piece
 
-#: The varied leaf's label while a marginal adds up its rates.
+#: The varied leaf's label while a parameter dual adds up its rates.
 _VARIED = '__varied label__'
 
 _NO_RATES = pl.LazyFrame(schema={_VARIED: pl.Int64, VALUE: pl.Float64})
@@ -49,7 +49,7 @@ _ZERO = 1e-9
 _FEASIBLE = 1e-6
 
 
-def marginal(compiler: Compiler, name: str) -> tuple[pl.DataFrame, list[str]]:
+def parameter_dual(compiler: Compiler, name: str) -> tuple[pl.DataFrame, list[str]]:
     """Parameter *name*'s rate at the solve *compiler* reads — ``(dims…, value)`` — and what the caller is warned of.
 
     The rate in each row is the one at which the optimal objective moves as
@@ -67,7 +67,7 @@ def marginal(compiler: Compiler, name: str) -> tuple[pl.DataFrame, list[str]]:
     if name not in declared:
         raise KeyError(unknown_name_message('parameter', name, declared))
     assert compiler.solution is not None and compiler.solution.dual is not None, (
-        'a result refuses a marginal its solve left no duals for'
+        'a result refuses a parameter dual its solve left no duals for'
     )
     _refuse_a_nonlinear_read(compiler.scope.program, name)
 
@@ -116,7 +116,7 @@ def _refuse_a_nonlinear_read(model: program.Program, name: str) -> None:
             raise SpecsolveError(
                 f"{where} {how}, so the rate of parameter '{name}' is not one number per row and "
                 f'specsolve does not compute it. Declare the quantity the model reads, such as the '
-                f"reciprocal of '{name}', as a parameter of its own, and ask the marginal of that."
+                f"reciprocal of '{name}', as a parameter of its own, and ask the parameter dual of that."
             )
 
 
@@ -187,7 +187,7 @@ def _toward(model: program.Program) -> float:
 
 def _primal(compiler: Compiler) -> pl.LazyFrame:
     """The solve's primal as ``(label, value)``."""
-    assert compiler.solution is not None, 'a marginal reads a solve'
+    assert compiler.solution is not None, 'a parameter dual reads a solve'
     primal = compiler.solution.primal
     return pl.LazyFrame({_VARIED: pl.int_range(primal.len(), dtype=pl.Int64, eager=True), VALUE: primal})
 
@@ -255,7 +255,7 @@ def _bound_rates(
 
 @dataclass
 class _Crossed:
-    """What a rise past the thresholds adds to a marginal."""
+    """What a rise past the thresholds adds to a parameter dual."""
 
     #: ``(label, value)`` parts: a finite rate, or ``±inf`` where the objective jumps.
     rates: list[pl.LazyFrame] = field(default_factory=list)
@@ -336,7 +336,7 @@ def _crossings(compiler: Compiler, name: str, table: pl.LazyFrame, values: pl.La
     if not variables and not masked_rows:
         return crossed
 
-    assert compiler.solution is not None, 'a marginal reads a solve'
+    assert compiler.solution is not None, 'a parameter dual reads a solve'
     toward = _toward(model)
     p_dims = model.parameters[name].dims
     labels_of = table.pipe(collected)
@@ -413,7 +413,7 @@ def _crossings(compiler: Compiler, name: str, table: pl.LazyFrame, values: pl.La
 
 
 def _held_as_built(scope: Scope, risen: Scope, name: str) -> list[str]:
-    """A note for each mask a rise of *name* flips somewhere that a marginal cannot charge to one row."""
+    """A note for each mask a rise of *name* flips somewhere that a parameter dual cannot charge to one row."""
     model = scope.program
     notes = []
     for kind, declarations in (('variable', model.variables), ('constraint', model.constraints)):
@@ -508,7 +508,7 @@ def _rows_switched(
     where the parameter has a dim the constraint lacks, to the one its
     single switched-on column is charged to.
     """
-    assert compiler.solution is not None, 'a marginal reads a solve'
+    assert compiler.solution is not None, 'a parameter dual reads a solve'
     toward = _toward(compiler.scope.program)
     keys = list(c.dims or (UNIT,))
     p_dims = compiler.scope.program.parameters[name].dims

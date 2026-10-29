@@ -265,7 +265,7 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
 
 
 def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression and a marginal readable, through [`evaluate`][specsolve._result.Result.evaluate] and [`marginal`][specsolve._result.Result.marginal].
+    """*answer* with an undeclared expression and a parameter dual readable, through [`evaluate`][specsolve._result.Result.evaluate] and [`parameter_dual`][specsolve._result.Result.parameter_dual].
 
     *spec* is rebuilt over *sources* at the first such read, never solved, and
     cached. *answer* comes back unchanged where the solve left no values.
@@ -292,7 +292,9 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
             built.append(build(spec, sources)._readers(primals, duals, no_duals))
         return built[0]
 
-    return replace(answer, _evaluate=lambda written: readers()[0](written), _marginal=lambda name: readers()[1](name))
+    return replace(
+        answer, _evaluate=lambda written: readers()[0](written), _parameter_dual=lambda name: readers()[1](name)
+    )
 
 
 def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
