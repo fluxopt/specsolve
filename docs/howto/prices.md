@@ -8,7 +8,7 @@ a rate, in objective units per unit of the thing you change.
 |---|---|---|
 | What does one more unit of load cost in each snapshot? | a constraint | [`dual`](../reference/api.md#specsolve.types.Result.dual) |
 | How much cheaper would gas have to be to run? | a variable at its bound | [`reduced_cost`](../reference/api.md#specsolve.types.Result.reduced_cost) |
-| Where is more capacity worth most? Which input matters? | a value in your data | [`marginal`](../reference/api.md#specsolve.types.Result.marginal) |
+| Where is more capacity worth most? Which input matters? | a value in your data | [`parameter_dual`](../reference/api.md#specsolve.types.Result.parameter_dual) |
 
 The examples solve [dispatch](../examples/dispatch.md) with the data of
 [Your data](../tables.md). A reduced cost is read only where the solve asks for
@@ -59,26 +59,26 @@ each unit of room there saves 40.
 
 ## What a value in your data is worth
 
-`marginal` gives the rate at which the objective rises with each value of a
-parameter, in the shape of its own table:
+`parameter_dual` gives the dual of each value of a parameter: the rate at
+which the objective rises with it, in the shape of the parameter's own table:
 
 ```python exec="true" source="material-block" result="text" session="prices"
-print(result.marginal('p_max'))
-print(result.marginal('cost'))
+print(result.parameter_dual('p_max'))
+print(result.parameter_dual('cost'))
 ```
 
 One more unit of wind capacity saves 120: 40 in each of the three snapshots
 where it runs at its limit. A rise of one in a generator's cost adds its
 output: 300 for wind and 150 for gas.
 
-A marginal reads every place the model uses the value: an objective
+A parameter dual reads every place the model uses the value: an objective
 coefficient, a bound, a coefficient in a row, a right side. Where the value
-stands alone on a right side, it is the dual: `marginal('load')` equals
+stands alone on a right side, it is the dual: `parameter_dual('load')` equals
 `dual('power_balance')`.
 
 Solar has a rate of 0, though it is cheaper than gas. The file builds no
-output for a generator with no capacity, and a marginal holds the model as it
-was built. To price the first unit of solar, use
+output for a generator with no capacity, and a parameter dual holds the model
+as it was built. To price the first unit of solar, use
 [`update`](../reference/api.md#specsolve.types.Model.update) and solve again.
 
 ## Which input matters most
@@ -90,7 +90,7 @@ rise of every value of that input changes the objective by.
 ```python exec="true" source="material-block" result="text" session="prices"
 rows = []
 for name in ('cost', 'load', 'p_max'):
-    rate = result.marginal(name)
+    rate = result.parameter_dual(name)
     keys = [c for c in rate.columns if c != 'value']
     data = sources[name].rename({'value': 'data'})
     one_percent = rate.join(data, on=keys).select(pl.col('value') * pl.col('data')).sum().item() / 100

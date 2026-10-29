@@ -489,7 +489,7 @@ def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndar
     return columns, rows
 
 
-def marginal(compiler: Compiler, name: str) -> pl.DataFrame:
+def parameter_dual(compiler: Compiler, name: str) -> pl.DataFrame:
     """Parameter *name*'s rate at the solve *compiler* reads — ``(dims…, value)``, one row per row of its table.
 
     The Lagrangian's derivative in each row, every other leaf held at the
@@ -507,7 +507,9 @@ def marginal(compiler: Compiler, name: str) -> pl.DataFrame:
     if name not in declared:
         raise KeyError(unknown_name_message('parameter', name, declared))
     solution = compiler.solution
-    assert solution is not None and solution.dual is not None, 'a result refuses a marginal its solve left no duals for'
+    assert solution is not None and solution.dual is not None, (
+        'a result refuses a parameter dual its solve left no duals for'
+    )
     _refuse_a_nonlinear_read(compiler.scope.program, name)
 
     dims = declared[name].dims
@@ -527,7 +529,7 @@ def marginal(compiler: Compiler, name: str) -> pl.DataFrame:
     return _as_strings(out, compiler.scope.data, dims)
 
 
-#: The varied leaf's label while a marginal adds up its rates.
+#: The varied leaf's label while a parameter dual adds up its rates.
 _VARIED = '__varied label__'
 
 _NO_RATES = pl.LazyFrame(schema={_VARIED: pl.Int64, VALUE: pl.Float64})
@@ -560,7 +562,7 @@ def _refuse_a_nonlinear_read(model: program.Program, name: str) -> None:
             raise SpecsolveError(
                 f"{where} {how}, so the rate of parameter '{name}' is not one number per row and "
                 f'specsolve does not compute it. Declare the quantity the model reads, such as the '
-                f"reciprocal of '{name}', as a parameter of its own, and ask the marginal of that."
+                f"reciprocal of '{name}', as a parameter of its own, and ask the parameter dual of that."
             )
 
 
@@ -636,7 +638,7 @@ def _bound_rates(compiler: Compiler, name: str, table: pl.LazyFrame) -> list[pl.
     """
     model = compiler.scope.program
     solution = compiler.solution
-    assert solution is not None, 'a marginal reads a solve'
+    assert solution is not None, 'a parameter dual reads a solve'
     toward = -1.0 if model.objective is not None and model.objective.sense == 'maximize' else 1.0
     primal = pl.LazyFrame(
         {_VARIED: pl.int_range(solution.primal.len(), dtype=pl.Int64, eager=True), VALUE: solution.primal}

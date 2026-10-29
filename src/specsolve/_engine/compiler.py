@@ -98,7 +98,7 @@ class Compiler:
 
     ``solution`` is set on the compiler a read builds and on no other: with it
     every variable and every ``dual(c)`` compiles to a value. ``varied`` is set
-    beside it by a marginal, and names the one leaf that stays a term: a
+    beside it by a parameter dual, and names the one leaf that stays a term: a
     variable at its own columns, or a parameter with each of its rows a column
     of its own ([`_varied_piece`][]).
     """
@@ -356,7 +356,7 @@ class Compiler:
     def _varied_piece(self, name: str) -> Piece:
         """A parameter as a term with unit coefficients, its label each row's [`varied_label`][].
 
-        Every other leaf of a marginal's read is a value, so the coefficient a
+        Every other leaf of a parameter dual's read is a value, so the coefficient a
         term adds up to is the expression's rate in that row. Present only at
         its rows under ``missing: absent``, as [`_parameter_piece`][] is.
         """
@@ -598,7 +598,7 @@ class Compiler:
 
 
 def varied_label(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
-    """A parameter row's label as a marginal's term: its row-major position, unique because duplicates are refused at the door."""
+    """A parameter row's label as a parameter dual's term: its row-major position, unique because duplicates are refused at the door."""
     return scope.row_major(dims, scope.ordinal_of)
 
 
