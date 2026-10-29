@@ -60,7 +60,8 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
   behind each coefficient, so
   [`result.marginal('p_max')`](../reference/api.md#specsolve.types.Result.marginal)
   is the rate of the objective in each row of `p_max`. linopy sees only the
-  numbers, so the same answer is a sum you build from the duals by hand.
+  numbers, so the same answer is a sum you build from the duals by hand
+  ([what a change is worth](../howto/prices.md)).
 - **linopy is not a dependency.** Only the test suite uses it, to build every
   file a second time and compare
   ([verification](../development/verification.md#the-oracle)).

@@ -47,7 +47,8 @@ print(pl.DataFrame(rows))
 ```
 
 Each step of 40 saves less than the one before, because more of the wind is
-left over when the load is low.
+left over when the load is low. The saving of a small step needs no re-solve:
+[What a change is worth](howto/prices.md) reads it off one solve.
 
 `diagnostics` counts what the model did:
 
@@ -63,29 +64,6 @@ one a new `solve` gives:
 fresh = sps.solve('dispatch.yaml', sources | {'p_max': p_max})
 print(fresh.objective)
 ```
-
-## The rate of each number
-
-A re-solve answers one what-if at a time.
-[`marginal`](reference/api.md#specsolve.types.Result.marginal) answers a small
-step of every value at once: how fast the cost moves with each row of a
-parameter. We ask it of one solve with the data as it was:
-
-```python exec="true" source="material-block" result="text" session="change" workdir="examples"
-first = sps.solve('dispatch.yaml', sources)
-print(first.marginal('p_max'))
-print(first.marginal('load'))
-```
-
-One more unit of wind saves 120. Gas sets the price in three snapshots, and
-in each of them a unit of wind saves the 40 between the two costs. One more
-unit of load costs the price of its snapshot, which is the dual of
-`power_balance` there.
-
-Solar has no capacity, so the file builds no output for it, yet its rate is
--75. Its first unit replaces gas in the same three snapshots, at 25 less each.
-A marginal reads that off this solve: it prices the output a rise would
-switch on against the snapshot prices it already has.
 
 ## A longer horizon
 
