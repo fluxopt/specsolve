@@ -32,6 +32,7 @@ nav:
       - Running a sweep in parallel: howto/parallel.md
       - Fixing, relaxing and removing: howto/fix-relax-remove.md
       - Reading an answer into pandas or xarray: howto/pandas-xarray.md
+      - What a change is worth: howto/prices.md
       - Archiving a solve: howto/archiving.md
       - Reading a directory of runs: howto/warehouse.md
       - Debugging a wrong answer: howto/debug.md
