@@ -106,6 +106,35 @@ def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], s
     )
 
 
+def test_a_parameter_filled_with_its_declared_value_builds_the_same_model() -> None:
+    """A parameter that declares a value for a missing row builds the same model at every build.
+
+    The rows that fill it came back from two joins in no fixed order, so a sum
+    over them added the same numbers in another order with several polars
+    threads, and the cost of an ``x`` differed in its last bit between builds.
+    """
+    rng = np.random.default_rng(0)
+    items, periods = 200, 50
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i', 't'], 'missing': 1}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(x) <= 10'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(cost * x)'},
+    }
+    rows = rng.random(items * periods) < 0.5
+    cost = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods)[rows],
+            't': np.tile(np.arange(periods), items)[rows],
+            'value': rng.uniform(0.0, 1e3, rows.sum()) * 10.0 ** rng.integers(-6, 6, rows.sum()),
+        }
+    )
+    given = {'i': list(range(items)), 't': list(range(periods)), 'cost': cost}
+    builds = {_built({'spec': spec}, given) for _ in range(5)}
+    assert len(builds) == 1, 'five builds from the same sources gave more than one model'
+
+
 def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
     """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
 
