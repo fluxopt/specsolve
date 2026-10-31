@@ -237,8 +237,8 @@ class Model:
         read again. A failure forgets what was read, so the next update reads
         every source again, the refused one included.
         """
-        kept = kept_parameters(self._program, self._tidied, changed) if changed is not None else None
         try:
+            kept = kept_parameters(self._program, self._tidied, changed) if changed is not None else None
             self._tidied = tidy_sources(self._program, self._sources, kept)
             self._engine.build(self._program, self._tidied)
         except BaseException:

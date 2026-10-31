@@ -695,13 +695,14 @@ def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
         model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})})
 
 
-@pytest.mark.xfail(strict=True, reason='a failure choosing what to keep leaves the old tables beside the new sources')
 def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_again(model, dispatch_yaml, monkeypatch):
     """`model.update(x)` answers what a fresh build of every source given so far answers.
 
     The first update of `load` stops while it chooses what to keep, after the
     new `load` is attached. The next update, of `cost` alone, must still read
-    that `load` rather than keep the tables of the build before it.
+    that `load` rather than keep the tables of the build before it. The choice
+    ran before the cleanup that forgets the last build's tables, so the next
+    update kept the `load` built before the attached one.
     """
     import specsolve._api as api
 
