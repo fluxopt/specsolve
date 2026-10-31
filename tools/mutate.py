@@ -1,6 +1,6 @@
 """Delete a guard, run the tests, and record whether anything went red.
 
-    pixi run python -m tools.mutate src/specsolve/sources.py:98-99
+    pixi run python -m tools.mutate src/specsolve/_sources.py:98-99
     pixi run python -m tools.mutate 'src/a.py:98-99#the empty-parameter guard' src/b.py:88
     pixi run python -m tools.mutate src/a.py:98-99 --tests tests/test_relational.py
 

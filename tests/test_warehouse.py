@@ -19,7 +19,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.archive_layout import _with_run
+from specsolve._archive_layout import _with_run
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

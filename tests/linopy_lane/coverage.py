@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Any
 import xarray as xr
 from mathspec import program
 
-from specsolve.errors import DataError
-from specsolve.messages import (
+from specsolve._messages import (
     non_finite_message,
     reported_divisor_message,
     sparse_divisor_message,
     uncovered_constant_message,
 )
+from specsolve.errors import DataError
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
 
@@ -49,9 +49,7 @@ def gaps_under(array: Any, mask: Any) -> int:
     return int(missing.sum())
 
 
-def check_constant_side_covers(
-    name: str, row: program.ConstraintDeclaration, ctx: EvaluationContext, mask: Any
-) -> None:
+def check_constant_side_covers(name: str, row: program.Constraint, ctx: EvaluationContext, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
     A missing row is read as 0, and where that zero is a constant piece it *is*
@@ -85,9 +83,9 @@ def _constant_leaves(
     structure, a reduction and a division by it leave the flag as it was; a
     ``cases:`` region narrows the mask as it does for the whole walk.
     """
-    if isinstance(node, (program.Variable, program.Sum, program.WindowSum)):
+    if isinstance(node, (program.VariableReference, program.Sum, program.WindowSum)):
         return
-    if isinstance(node, program.Parameter):
+    if isinstance(node, program.ParameterReference):
         if not coefficient:
             yield node.name, mask
         return

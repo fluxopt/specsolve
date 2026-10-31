@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 from mathspec import program
 
-from specsolve.relational.sinks.solvers.highs import Highs
+from specsolve._sinks.highs import Highs
 from tests.differential import differential
 
 COMMITMENT_YAML = """

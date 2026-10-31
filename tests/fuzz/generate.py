@@ -147,7 +147,7 @@ class Generator:
         if self.relations:
             spec['relations'] = {name: _relation_entry(rel) for name, rel in self.relations.items()}
         if self.masks:
-            spec['masks'] = {name: text for name, (text, _) in self.masks.items()}
+            spec['conditions'] = {name: text for name, (text, _) in self.masks.items()}
         if self.params:
             spec['parameters'] = {name: self._parameter_entry(p) for name, p in self.params.items()}
         if self.named_entries:

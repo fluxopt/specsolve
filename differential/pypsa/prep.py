@@ -175,7 +175,11 @@ def active_by_snapshot(n: pypsa.Network, component: str) -> pd.DataFrame:
 
 
 def standing(n: pypsa.Network, component: str) -> dict[str, object]:
-    """``active``, ``capital_weight`` and ``first_active`` of one component — where it stands, and what that weighs."""
+    """``active``, ``active_asset``, ``capital_weight`` and ``first_active`` of one component — where it stands, and what that weighs.
+
+    ``active_asset`` is the static ``active`` flag alone, PyPSA's ``active_assets``,
+    so a unit that stands in no snapshot of the horizon still counts.
+    """
     prefix = component
     by_period = active_by_period(n, component)
     weight = period_weights(n, 'objective')
@@ -186,6 +190,7 @@ def standing(n: pypsa.Network, component: str) -> dict[str, object]:
     first.columns = pd.Index(first.columns.astype(str), name=DIM[component])
     return {
         f'{prefix}_active': long(component, active_by_snapshot(n, component), bool),
+        f'{prefix}_active_asset': per_component(component, first_scenario(n.static(component)['active']), bool),
         f'{prefix}_capital_weight': per_component(component, capital),
         f'{prefix}_first_active': first.melt(ignore_index=False).reset_index().astype({'value': float}),
     }

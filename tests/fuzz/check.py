@@ -39,10 +39,10 @@ from mathspec import advice, to_spec, typeset
 from mathspec.errors import MathSpecError
 
 import specsolve as sps
+from specsolve._engine.engine import Engine
+from specsolve._inputs import lowered
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.inputs import lowered
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
 from tests.differential import RTOL, _frame, _hold, by_coordinate
 from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.oracle import specsolve_linopy

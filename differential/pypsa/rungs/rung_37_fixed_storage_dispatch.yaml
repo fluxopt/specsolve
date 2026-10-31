@@ -576,7 +576,7 @@ expressions:
       + Store_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-masks:
+conditions:
   StorageUnit_fix: {description: a storage unit with a fixed build that stands in the snapshot's period
-      — PyPSA's `fix` rows, where: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
+      — PyPSA's `fix` rows, condition: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
 objective: {sense: minimize, expression: total_cost}

@@ -4,7 +4,7 @@ A test dependency, not part of the package: linopy and xarray come with the
 ``dev`` group, and nothing under ``src/`` imports this.
 
 One language, two lanes: the same file either attaches relationally and solves
-through :mod:`specsolve.api`, or is constructed here as a ``linopy.Model``.
+through :mod:`specsolve._api`, or is constructed here as a ``linopy.Model``.
 Both accept *exactly* the same language, which is what makes the differential
 tests an oracle rather than a comparison of dialects.
 
@@ -48,8 +48,8 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from specsolve.inputs import declared, lower, lowered
-from specsolve.sources import tidy_sources
+from specsolve._inputs import declared, lower, lowered
+from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
 from tests.linopy_lane.coverage import check_read_divisors_cover
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from specsolve.inputs import Buildable, Source
+    from specsolve._inputs import Buildable, Source
 
 linopy.options['semantics'] = 'v1'
 
