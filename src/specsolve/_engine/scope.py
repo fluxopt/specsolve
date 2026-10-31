@@ -39,8 +39,9 @@ def join_on(
     return left.join(right, how='cross', maintain_order=maintain_order)
 
 
-#: The column a join keyed by row-major position ([`Scope.parameter_join`][]) carries its key in.
-_POSITION = '__position__'
+#: The column a join keyed by row-major position ([`Scope.parameter_join`][]) carries its key in,
+#: named with a space so no dimension a file declares can share it.
+_POSITION = '__row-major position__'
 
 #: Carries the single row of the empty coordinate product, since polars cannot
 #: hold a frame with one row and no columns.

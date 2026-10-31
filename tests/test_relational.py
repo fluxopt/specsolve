@@ -1563,12 +1563,13 @@ class TestThePositionalHandoff:
             'the join on one key wrote another model than the join on columns'
         )
 
-    @pytest.mark.xfail(strict=True, reason='the join key replaces, then drops, a dimension of its own name')
     def test_a_dimension_named_like_the_join_key_keeps_its_column(self, monkeypatch):
         """A bound joined on one key, over a dimension whose name is any a file may write.
 
         `p` is masked, so its bound `c` is joined, and both dims are runs of
-        integers, so the join takes the one key.
+        integers, so the join takes the one key. The key's column was named
+        `__position__`, a name a file may give a dimension: the join replaced
+        that dimension's column and then dropped it.
         """
         from specsolve._engine import scope as scope_module
 
