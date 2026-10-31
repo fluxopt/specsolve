@@ -36,8 +36,8 @@ gurobi = [
     "scipy>=1.11",
 ]
 xpress = [
-    # 9.6 is the release that added `ObjSense`, which Xpress 10 requires in place of `xpress.maximize`.
-    "xpress>=9.6",
+    # 9.8 is the first release whose problem has `chgObjSense`, which the sink calls with `ObjSense`.
+    "xpress>=9.8",
 ]
 
 [project.urls]
@@ -103,6 +103,10 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # `choices` on a task argument arrived in 0.65.
 requires-pixi = ">=0.65"
+
+[tool.pixi.system-requirements]
+# Xpress 9.8, the floor of the `xpress` extra, ships its macOS arm64 libraries for macOS 14 and later.
+macos = "14.0"
 
 [tool.pixi.dependencies]
 python = "3.12.*"
