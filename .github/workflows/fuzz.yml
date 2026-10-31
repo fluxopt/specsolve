@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -50,10 +50,10 @@ jobs:
           path: ~/.cache/rattler/cache
           key: pixi-fuzz-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pixi-fuzz-${{ runner.os }}-
-      # The day of the year picks the range, so each night runs seeds no earlier night ran.
+      # The day since 1970 picks the range, so each night runs seeds no earlier night ran.
       - name: Ten thousand seeds the baseline never ran
         run: |
-          start=$(( 1000000 + 10#$(date -u +%j) * 10000 ))
+          start=$(( 1000000 + $(date -u +%s) / 86400 * 10000 ))
           pixi run fuzz-fresh "$start:$(( start + 10000 ))"
       - if: always()
         uses: actions/upload-artifact@v7
