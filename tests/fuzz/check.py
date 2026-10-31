@@ -120,18 +120,21 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
         try:
             solve_findings, solved = _solve(expanded, case.sources)
         except Exception as e:
-            solve_findings = [_crash('solve', e)]
+            solve_findings = [] if _is_gap(e) else [_crash('solve', e)]
         findings += solve_findings
         findings += _guarded('shuffle', lambda: _shuffled(expanded, case))
     return Outcome('checked', findings, solved=solved)
 
 
 def _guarded(oracle: str, run: Callable[[], list[Finding]]) -> list[Finding]:
-    """*run*'s findings, or the crash it raised: one oracle that raises does not hide the others' findings."""
+    """*run*'s findings, or the crash it raised: one oracle that raises does not hide the others' findings.
+
+    An oracle gap is no finding here either, as everywhere else in this module.
+    """
     try:
         return run()
     except Exception as e:
-        return [_crash(oracle, e)]
+        return [] if _is_gap(e) else [_crash(oracle, e)]
 
 
 # ---------------------------------------------------------------------------
