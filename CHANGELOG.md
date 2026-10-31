@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - perf(engine): a constant side whose values line up with the constraint's rows is read without a join ([#2036](https://github.com/fluxopt/specsolve/pull/2036))
+- fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
 - feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
 - fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
 
