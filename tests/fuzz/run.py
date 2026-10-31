@@ -94,7 +94,7 @@ def _reduce(seeds: range, *, verbose: bool) -> int:
         for signature in signatures:
             found += 1
             with contextlib.redirect_stdout(io.StringIO()):
-                small = reduce(case, signature, log=print if verbose else lambda _: None)
+                small = reduce(case, signature, log=_to_stderr if verbose else lambda _: None)
                 findings = [f for f in check(small).findings if f.signature == signature]
             data = _jsonable(small.sources)
             print(f'=== seed {seed}: {signature}')
@@ -105,20 +105,35 @@ def _reduce(seeds: range, *, verbose: bool) -> int:
     return int(bool(found))
 
 
+def _to_stderr(message: str) -> None:
+    """The reducer's log, past the ``redirect_stdout`` that silences what the checks print."""
+    print(message, file=sys.stderr)
+
+
 def _campaign(seeds: range, jobs: int, solve: bool) -> dict[int, dict[str, Any]]:
-    """Every seed's record, each checked in a worker of its own."""
-    records = {}
-    with multiprocessing.get_context('spawn').Pool(jobs, maxtasksperchild=50) as pool:
-        pending = {seed: pool.apply_async(_one, (seed, solve)) for seed in seeds}
-        for seed, job in pending.items():
-            try:
-                records[seed] = job.get(timeout=TIMEOUT_S)
-            except multiprocessing.TimeoutError:
-                records[seed] = _failed(seed, 'hang', f'no verdict within {TIMEOUT_S} s', 'hang')
-            except Exception as e:
-                records[seed] = _failed(
-                    seed, 'harness', f'{type(e).__name__}: {e}'[:200], f'harness: {type(e).__name__}'
-                )
+    """Every seed's record, each checked in a worker of its own.
+
+    A seed that hangs keeps its worker busy, so after a hang the pool is ended,
+    which kills that worker, and the seeds still without a record go to a new
+    pool. Otherwise every seed queued behind stuck workers would be reported as
+    a hang of its own.
+    """
+    records: dict[int, dict[str, Any]] = {}
+    remaining = list(seeds)
+    while remaining:
+        with multiprocessing.get_context('spawn').Pool(jobs, maxtasksperchild=50) as pool:
+            pending = {seed: pool.apply_async(_one, (seed, solve)) for seed in remaining}
+            for seed, job in pending.items():
+                try:
+                    records[seed] = job.get(timeout=TIMEOUT_S)
+                except multiprocessing.TimeoutError:
+                    records[seed] = _failed(seed, 'hang', f'no verdict within {TIMEOUT_S} s', 'hang')
+                    break
+                except Exception as e:
+                    records[seed] = _failed(
+                        seed, 'harness', f'{type(e).__name__}: {e}'[:200], f'harness: {type(e).__name__}'
+                    )
+        remaining = [seed for seed in remaining if seed not in records]
     return records
 
 

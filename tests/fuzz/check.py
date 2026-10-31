@@ -99,8 +99,8 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
     except Exception as e:
         return Outcome('rejected', [_crash('load', e)])
 
-    findings += _round_trip(spec)
-    findings += _typesets(spec)
+    findings += _guarded('round-trip', lambda: _round_trip(spec))
+    findings += _guarded('typeset', lambda: _typesets(spec))
 
     try:
         expanded = spec.expand()
@@ -114,13 +114,27 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
         return Outcome('refused' if refusal == [] else 'checked', findings)
     model, relational = built
     with relational:
-        findings += _reads(expanded, case, model, relational)
+        findings += _guarded('read', lambda: _reads(expanded, case, model, relational))
     solved = False
     if solve and case.linear and expanded.objective is not None:
-        solve_findings, solved = _solve(expanded, case.sources)
+        try:
+            solve_findings, solved = _solve(expanded, case.sources)
+        except Exception as e:
+            solve_findings = [] if _is_gap(e) else [_crash('solve', e)]
         findings += solve_findings
-        findings += _shuffled(expanded, case)
+        findings += _guarded('shuffle', lambda: _shuffled(expanded, case))
     return Outcome('checked', findings, solved=solved)
+
+
+def _guarded(oracle: str, run: Callable[[], list[Finding]]) -> list[Finding]:
+    """*run*'s findings, or the crash it raised: one oracle that raises does not hide the others' findings.
+
+    An oracle gap is no finding here either, as everywhere else in this module.
+    """
+    try:
+        return run()
+    except Exception as e:
+        return [] if _is_gap(e) else [_crash(oracle, e)]
 
 
 # ---------------------------------------------------------------------------
