@@ -175,32 +175,6 @@ def test_a_right_side_is_priced_at_its_dual_and_a_cost_at_its_primal() -> None:
         assert answer.parameter_dual('cost').equals(used), "a cost's rate is the output it is paid on"
 
 
-def test_a_value_a_mask_reads_is_held_where_the_mask_put_it() -> None:
-    """The model is held as built: a value that switches a variable on prices the model where it is still off.
-
-    ``dispatch.yaml`` builds no ``p`` for a generator without capacity. Its
-    parameter_dual is that of the model without it, though a re-solve with any
-    capacity at all is cheaper.
-    """
-    generators = ['wind', 'gas']
-    sources = {
-        'generator': generators,
-        'snapshot': [0, 1],
-        'p_max': pl.DataFrame({'generator': generators, 'value': [0.0, 100.0]}),
-        'cost': pl.DataFrame({'generator': generators, 'value': [1.0, 50.0]}),
-        'load': pl.DataFrame({'snapshot': [0, 1], 'value': [40.0, 60.0]}),
-    }
-    with sps.solve('examples/dispatch.yaml', sources) as answer:
-        held = answer.parameter_dual('p_max').filter(pl.col('generator') == 'wind')['value'].item()
-        base = answer.objective
-    some_wind = sources['p_max'].with_columns(
-        pl.when(pl.col('generator') == 'wind').then(1.0).otherwise('value').alias('value')
-    )
-    with sps.solve('examples/dispatch.yaml', {**sources, 'p_max': some_wind}) as answer:
-        assert answer.objective < base, 'a re-solve with wind built is cheaper'
-    assert held == 0.0, 'the parameter dual is that of the model as built, where wind has no column'
-
-
 @pytest.mark.parametrize(
     ('expression', 'refusal'),
     [

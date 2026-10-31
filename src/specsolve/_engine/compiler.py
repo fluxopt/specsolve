@@ -598,8 +598,12 @@ class Compiler:
 
 
 def varied_label(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
-    """A parameter row's label as a parameter dual's term: its row-major position, unique because duplicates are refused at the door."""
-    return scope.row_major(dims, scope.ordinal_of)
+    """A parameter row's label as a parameter dual's term: one less than minus its row-major position.
+
+    Unique because duplicates are refused at the door, and negative so that a
+    compile holding both this term and a variable's never confuses the two.
+    """
+    return -1 - scope.row_major(dims, scope.ordinal_of)
 
 
 def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:

@@ -223,7 +223,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
 | `_engine/assembly.py` | one build: every declaration into the model tables |
 | `_engine/coverage.py` | is the data there where a declaration reads it |
-| `_engine/readback.py` | a row, a solve, a named expression and a parameter's dual, read back by label |
+| `_engine/readback.py` | a row, a solve and a named expression, read back by label |
+| `_engine/parameter_dual.py` | a parameter's rate in the objective, past its `where:` thresholds too |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
 | `_result.py` | what a solve returned |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |

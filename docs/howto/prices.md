@@ -76,10 +76,17 @@ coefficient, a bound, a coefficient in a row, a right side. Where the value
 stands alone on a right side, it is the dual: `parameter_dual('load')` equals
 `dual('power_balance')`.
 
-Solar has a rate of 0, though it is cheaper than gas. The file builds no
-output for a generator with no capacity, and a parameter dual holds the model
-as it was built. To price the first unit of solar, use
-[`update`](../reference/api.md#specsolve.types.Model.update) and solve again.
+Solar has no capacity, so the file builds no output for it, yet its rate is
+-75. Its first unit replaces gas in the same three snapshots, at 25 less each.
+A parameter dual prices what a rise would switch on against the prices this
+solve already has, and needs no second solve.
+
+A rise can also switch on something that moves the objective at once, such
+as a generator whose bound is a fixed 100 rather than its `p_max`. The rate is
+then `-inf` or `inf`, and a warning names the rows. One solve cannot decide
+every threshold. Where it cannot, the rate is that of the model as built, and
+a warning names the threshold. Ask that one with
+[`update`](../reference/api.md#specsolve.types.Model.update) and a re-solve.
 
 ## Which input matters most
 

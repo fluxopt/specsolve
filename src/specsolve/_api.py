@@ -522,7 +522,7 @@ class Model:
         primals: Mapping[str, pl.DataFrame],
         duals: Mapping[str, pl.DataFrame] | None,
         no_duals: str | None,
-    ) -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]:
+    ) -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], tuple[pl.DataFrame, list[str]]]]:
         """An ad-hoc expression reader and a parameter dual over a *saved* solution, put back against this build.
 
         What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]

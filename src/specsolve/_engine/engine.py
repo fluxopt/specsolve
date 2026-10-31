@@ -31,6 +31,7 @@ from specsolve._engine.assembly import (
 )
 from specsolve._engine.attaching import attach
 from specsolve._engine.compiler import Compiler, Solution
+from specsolve._engine.parameter_dual import parameter_dual
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, Diagnostics, Result
@@ -452,7 +453,7 @@ class Engine:
     ) -> tuple[
         dict[str, Callable[[], pl.DataFrame]],
         Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
-        Callable[[str], pl.DataFrame] | None,
+        Callable[[str], tuple[pl.DataFrame, list[str]]] | None,
     ]:
         """What a result reads through: a reader per declared name, the ad-hoc evaluator, and the parameter dual.
 
@@ -466,7 +467,7 @@ class Engine:
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
         compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
         expressions, evaluate = readback.readers(compiler, model.program.expressions, lower)
-        return expressions, evaluate, partial(readback.parameter_dual, compiler)
+        return expressions, evaluate, partial(parameter_dual, compiler)
 
     def reconstruct(
         self,
@@ -474,7 +475,9 @@ class Engine:
         duals: Mapping[str, pl.DataFrame] | None,
         no_duals: str | None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-    ) -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame] | None, Callable[[str], pl.DataFrame]]:
+    ) -> tuple[
+        Callable[[str | Mapping[str, object]], pl.DataFrame] | None, Callable[[str], tuple[pl.DataFrame, list[str]]]
+    ]:
         """The ad-hoc evaluator and the parameter dual for a saved solution, over this rebuilt model.
 
         This build supplies the labels that put the saved values back in vector

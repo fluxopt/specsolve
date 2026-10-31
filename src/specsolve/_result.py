@@ -7,6 +7,7 @@ laid out over the build's coordinates.
 from __future__ import annotations
 
 import importlib.util
+import warnings
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
 from pathlib import Path
@@ -36,7 +37,7 @@ from specsolve._answer_layout import (
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve._names import VALUE
-from specsolve.errors import NoSolutionError, SpecsolveError
+from specsolve.errors import NoSolutionError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -393,7 +394,7 @@ class Result:
     _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
     #: The reader behind [`parameter_dual`][], ``None`` where there is no model
     #: behind this answer to read the parameter's place in.
-    _parameter_dual: Callable[[str], pl.DataFrame] | None = None
+    _parameter_dual: Callable[[str], tuple[pl.DataFrame, list[str]]] | None = None
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever [`_duals`][] holds them.
     _no_duals: str | None = None
@@ -580,12 +581,18 @@ class Result:
         ``d`` of ``v + d``, for every sense and sink. A value the model reads
         nowhere has zero.
 
-        The model is held as built. A ``where:`` or ``when:`` that reads the
-        parameter keeps the rows it chose, so where a rise would switch a row
-        on or off, the rate is that of the model before the switch; ask that
-        question with [`Model.update`][specsolve._api.Model.update] and a
-        re-solve. As with [`dual`][], the rate is one-sided where the solve is
-        degenerate.
+        A value on a ``where:`` threshold gets the rate past it, from this
+        solve and no other: a generator with no capacity under ``where: p_max
+        > 0`` is priced at what its first unit saves. Where a rise switches on
+        or off something that moves the objective at once, the rate is
+        ``inf`` or ``-inf``, and a warning names the rows. A threshold this
+        solve cannot decide keeps the rate of the model as built, and a
+        [`SpecsolveWarning`][specsolve.errors.SpecsolveWarning] names it:
+        a ``when:``, a mask that reads the parameter through a shift, a sum,
+        a lookup or a count, and a row switched on at zero slack across
+        several columns. Ask those with
+        [`Model.update`][specsolve._api.Model.update] and a re-solve. As
+        with [`dual`][], the rate is one-sided where the solve is degenerate.
 
         Raises:
             NoSolutionError: The solve left no values at all.
@@ -601,7 +608,10 @@ class Result:
             raise SpecsolveError(self._no_duals)
         if self._parameter_dual is None:
             raise SpecsolveError(no_model_behind_this_answer_message())
-        return self._parameter_dual(name)
+        frame, notes = self._parameter_dual(name)
+        for note in notes:
+            warnings.warn(note, SpecsolveWarning, stacklevel=2)
+        return frame
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
