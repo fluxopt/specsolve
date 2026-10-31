@@ -143,8 +143,11 @@ def constant_side(
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: list[str] = []
     built_rows = rows.pipe(collected)
-    pieces = [replace(p, frame=p.frame.pipe(collected).lazy()) for p, _ in consts]
-    aligned = [_aligned(built_rows, p) if set(p.dims) == set(c.dims) else None for p in pieces]
+    whole = [set(p.dims) == set(c.dims) for p, _ in consts]
+    pieces = [
+        replace(p, frame=p.frame.pipe(collected).lazy()) if w else p for (p, _), w in zip(consts, whole, strict=True)
+    ]
+    aligned = [_aligned(built_rows, p) if w else None for p, w in zip(pieces, whole, strict=True)]
     carrier = built_rows.lazy().with_columns(
         values.alias(f'__const {i}__') for i, values in enumerate(aligned) if values is not None
     )
