@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -10,7 +11,9 @@ from mathspec import program
 from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve._collect import collected
 from specsolve._engine import coverage, labels
+from specsolve._engine.compiler import varied_label
 from specsolve._engine.pieces import absence_restrictions
+from specsolve._engine.scope import UNIT, join_on
 from specsolve._messages import coordinate_expr, unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, InfeasibleSubsystem
@@ -26,6 +29,7 @@ if TYPE_CHECKING:
     from specsolve._engine.assembly import BuiltModel
     from specsolve._engine.attaching import AttachedSources
     from specsolve._engine.compiler import Compiler
+    from specsolve._engine.pieces import CompiledExpression, Piece
     from specsolve._sinks.handoff import Handoff
     from specsolve._sinks.solver import Basis, InfeasibleSubsystemIndices
 
@@ -483,3 +487,185 @@ def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndar
         entering = np.flatnonzero(rows != BASIC)[surplus:]
         rows[entering] = BASIC
     return columns, rows
+
+
+def parameter_dual(compiler: Compiler, name: str) -> pl.DataFrame:
+    """Parameter *name*'s rate at the solve *compiler* reads — ``(dims…, value)``, one row per row of its table.
+
+    The Lagrangian's derivative in each row, every other leaf held at the
+    solve: the objective's rate, less each constraint row's rate times its
+    dual, plus a column's reduced cost where *name* sets the bound that binds.
+    Masks are not differentiated, so the model is held as built. Rows come
+    in label order; a row nothing reads has zero.
+
+    Raises:
+        KeyError: No parameter is called *name*.
+        SpecsolveError: *name* stands where its rate is not one coefficient
+            per row.
+    """
+    declared = compiler.scope.program.parameters
+    if name not in declared:
+        raise KeyError(unknown_name_message('parameter', name, declared))
+    solution = compiler.solution
+    assert solution is not None and solution.dual is not None, (
+        'a result refuses a parameter dual its solve left no duals for'
+    )
+    _refuse_a_nonlinear_read(compiler.scope.program, name)
+
+    dims = declared[name].dims
+    rows = compiler.scope.data.parameters[name].with_columns(varied_label(compiler.scope, dims).alias(_VARIED))
+    table = rows.select(*dims, _VARIED)
+    rates = _lagrangian_rates(
+        replace(compiler, varied=name), name, rows.select(_VARIED, pl.col(VALUE).cast(pl.Float64))
+    )
+    rates += _bound_rates(compiler, name, table)
+    summed = pl.concat(rates).group_by(_VARIED).agg(pl.col(VALUE).sum()) if rates else _NO_RATES
+    out = (
+        table.join(summed, on=_VARIED, how='left')
+        .sort(_VARIED)
+        .select(*dims, pl.col(VALUE).fill_null(0.0))
+        .pipe(collected)
+    )
+    return _as_strings(out, compiler.scope.data, dims)
+
+
+#: The varied leaf's label while a parameter dual adds up its rates.
+_VARIED = '__varied label__'
+
+_NO_RATES = pl.LazyFrame(schema={_VARIED: pl.Int64, VALUE: pl.Float64})
+
+
+def _refuse_a_nonlinear_read(model: program.Program, name: str) -> None:
+    """Refuse a parameter the math reads other than linearly, where a rate is not one coefficient per row.
+
+    Raises:
+        SpecsolveError: *name* stands under a divisor, in a power, or on both
+            sides of a product.
+    """
+    declarations: dict[str, tuple[program.Expression, ...]] = {
+        f"constraint '{c}'": (d.lhs, d.rhs) for c, d in model.constraints.items()
+    }
+    if model.objective is not None:
+        declarations['the objective'] = (model.objective.expression,)
+    for where, expressions in declarations.items():
+        for node in program.walk(*expressions):
+            if isinstance(node, program.Divide) and name in program.parameters_of(node.divisor):
+                how = 'divides by it'
+            elif isinstance(node, program.Power) and name in program.parameters_of(node):
+                how = 'raises it to a power'
+            elif isinstance(node, program.Multiply) and name in (
+                program.parameters_of(node.left) & program.parameters_of(node.right)
+            ):
+                how = 'multiplies it by itself'
+            else:
+                continue
+            raise SpecsolveError(
+                f"{where} {how}, so the rate of parameter '{name}' is not one number per row and "
+                f'specsolve does not compute it. Declare the quantity the model reads, such as the '
+                f"reciprocal of '{name}', as a parameter of its own, and ask the parameter dual of that."
+            )
+
+
+def _reads(name: str, *expressions: program.Expression) -> bool:
+    """Whether a parameter or variable called *name* stands anywhere under *expressions*."""
+    return name in program.parameters_of(*expressions) | program.variables_of(*expressions)
+
+
+def _lagrangian_rates(compiler: Compiler, name: str, values: pl.LazyFrame) -> list[pl.LazyFrame]:
+    """``(label, value)`` parts of the Lagrangian's rate in each label of the leaf *compiler* varies.
+
+    The Lagrangian is the objective less each row's ``lhs - rhs`` times its
+    dual, which is the sign [`Result.dual`][specsolve._result.Result.dual]
+    gives a rate in the objective. Only *compiler*'s varied leaf compiles to a
+    term, so a term's coefficient is its rate, and a quadratic term's rate in
+    each label is its coefficient times the other label's value in *values*.
+    Constraints are compiled as quadratic positions: the only term is the
+    varied leaf, so a product of two is the square a quadratic row declares.
+    """
+    model = compiler.scope.program
+    parts: list[pl.LazyFrame] = []
+    if model.objective is not None and _reads(name, model.objective.expression):
+        compiled = compiler.expression(model.objective.expression, 'the objective', quadratic=True)
+        parts += _gradient(compiled, None, 1.0, values)
+    for constraint, c in model.constraints.items():
+        if not _reads(name, c.lhs, c.rhs):
+            continue
+        dual = compiler.expression(program.Dual(constraint, dims=c.dims), f"the dual of '{constraint}'").consts[0]
+        for side, sign in ((c.lhs, -1.0), (c.rhs, 1.0)):
+            compiled = compiler.expression(side, f"constraint '{constraint}'", quadratic=True)
+            parts += _gradient(compiled, dual, sign, values)
+    return parts
+
+
+def _gradient(
+    compiled: CompiledExpression, weight: Piece | None, sign: float, values: pl.LazyFrame
+) -> list[pl.LazyFrame]:
+    """*compiled*'s rate in each label of its terms, times *weight* where it lands and *sign*, as ``(label, value)``.
+
+    *weight* is a row's dual, joined on the dims the term carries so that a
+    term narrower than its row is owed at every row it lands on.
+    """
+    parts = []
+    for piece in (*compiled.terms, *compiled.quads):
+        frame = piece.frame
+        rate = sign * pl.col('coeff')
+        if weight is not None:
+            frame = join_on(weight.frame, frame, piece.dims, 'inner')
+            rate = rate * pl.col('cval')
+        if piece.kind == 'term':
+            parts.append(frame.select(pl.col('var_label').cast(pl.Int64).alias(_VARIED), rate.alias(VALUE)))
+            continue
+        for label, other in (('var_label', 'var_label_2'), ('var_label_2', 'var_label')):
+            at = values.rename({_VARIED: other, VALUE: '__other value__'})
+            paired = frame.with_columns(pl.col(other).cast(pl.Int64)).join(at, on=other, how='inner')
+            parts.append(
+                paired.select(
+                    pl.col(label).cast(pl.Int64).alias(_VARIED), (rate * pl.col('__other value__')).alias(VALUE)
+                )
+            )
+    return parts
+
+
+def _bound_rates(compiler: Compiler, name: str, table: pl.LazyFrame) -> list[pl.LazyFrame]:
+    """``(label, value)``: each column's reduced cost, owed to *name*'s row where *name* is the bound that binds.
+
+    The reduced cost is the rate in the binding bound
+    ([`Result.reduced_cost`][specsolve._result.Result.reduced_cost]), and
+    its sign says which bound binds: under ``minimize`` a positive one holds a
+    column up at its lower bound and a negative one down at its upper, and
+    ``maximize`` flips both. It is the Lagrangian's rate in the column,
+    computed by varying the variable, which leaves no handoff to hold.
+    """
+    model = compiler.scope.program
+    solution = compiler.solution
+    assert solution is not None, 'a parameter dual reads a solve'
+    toward = -1.0 if model.objective is not None and model.objective.sense == 'maximize' else 1.0
+    primal = pl.LazyFrame(
+        {_VARIED: pl.int_range(solution.primal.len(), dtype=pl.Int64, eager=True), VALUE: solution.primal}
+    )
+    dims = model.parameters[name].dims
+    parts = []
+    for variable, v in model.variables.items():
+        sides = {
+            side
+            for side, bound in (('lower', v.lower), ('upper', v.upper))
+            if isinstance(bound, program.ParameterReference) and bound.name == name
+        }
+        if not sides:
+            continue
+        rates = _lagrangian_rates(replace(compiler, varied=variable), variable, primal)
+        reduced = pl.concat(rates).group_by(_VARIED).agg(pl.col(VALUE).sum()) if rates else _NO_RATES
+        held = compiler.scope.variables[variable]
+        keys = v.dims or (UNIT,)
+        columns = held.frame.select(*keys, pl.col('var_label').cast(pl.Int64).alias('__column__'))
+        reduced_at = columns.join(reduced.rename({_VARIED: '__column__'}), on='__column__', how='left').with_columns(
+            pl.col(VALUE).fill_null(0.0)
+        )
+        held_by = pl.lit(False)
+        if 'lower' in sides:
+            held_by = held_by | (pl.col(VALUE) * toward > 0)
+        if 'upper' in sides:
+            held_by = held_by | (pl.col(VALUE) * toward < 0)
+        owed = reduced_at.filter(held_by)
+        parts.append(join_on(owed, table, dims, 'inner').select(_VARIED, VALUE))
+    return parts

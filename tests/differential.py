@@ -141,7 +141,7 @@ def at_a_point(
     m = specsolve_linopy.build(model, dict(sources))
     point = _hold(m)
     with sps.build(model, dict(sources)) as built:
-        relational = built._evaluator(point, None, 'a chosen point has no duals')
+        relational = built._readers(point, None, 'a chosen point has no duals')[0]
 
         def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
             ours = relational(expression)

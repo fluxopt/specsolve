@@ -265,20 +265,19 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
 
 
 def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._result.Result.evaluate].
+    """*answer* with an undeclared expression and a parameter dual readable, through [`evaluate`][specsolve._result.Result.evaluate] and [`parameter_dual`][specsolve._result.Result.parameter_dual].
 
-    *spec* is rebuilt over *sources* at the first undeclared read, never
-    solved, and cached. *answer* comes back unchanged where the solve left no
-    values.
+    *spec* is rebuilt over *sources* at the first such read, never solved, and
+    cached. *answer* comes back unchanged where the solve left no values.
     """
     if not answer._primals:
         return answer
     frames = answer._primals
     dual_frames = answer._duals
     no_duals = answer._no_duals
-    built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
+    built: list[tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]] = []
 
-    def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
+    def readers() -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]:
         if not built:
             primals = {name: frame.pipe(collected) for name, frame in frames.items()}
             duals = (
@@ -286,10 +285,12 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
                 if no_duals is None and dual_frames
                 else None
             )
-            built.append(build(spec, sources)._evaluator(primals, duals, no_duals))
-        return built[0](written)
+            built.append(build(spec, sources)._readers(primals, duals, no_duals))
+        return built[0]
 
-    return replace(answer, _evaluate=evaluate)
+    return replace(
+        answer, _evaluate=lambda written: readers()[0](written), _parameter_dual=lambda name: readers()[1](name)
+    )
 
 
 def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
@@ -336,7 +337,7 @@ def _per_slice(
         if not slice_primals:
             continue
         slice_duals = {name: by_key[key] for name, by_key in dual.items() if key in by_key} or None
-        yield key, build(spec, slice_sources)._evaluator(slice_primals, slice_duals, sweep._no_duals)
+        yield key, build(spec, slice_sources)._readers(slice_primals, slice_duals, sweep._no_duals)[0]
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

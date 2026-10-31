@@ -114,6 +114,8 @@ print(result.dual('power_balance'))
 
 In snapshot 0, wind alone meets the load, so one more unit costs 10. In the
 other snapshots gas is the last generator on, and one more unit costs 50.
+[What a change is worth](howto/prices.md) reads the other prices an answer
+holds.
 
 ## Next
 

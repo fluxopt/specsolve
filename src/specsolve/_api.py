@@ -517,27 +517,28 @@ class Model:
         """
         return self._engine.infeasible_subsystem()
 
-    def _evaluator(
+    def _readers(
         self,
         primals: Mapping[str, pl.DataFrame],
         duals: Mapping[str, pl.DataFrame] | None,
         no_duals: str | None,
-    ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
-        """An ad-hoc expression reader over a *saved* solution, put back against this build.
+    ) -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame], Callable[[str], pl.DataFrame]]:
+        """An ad-hoc expression reader and a parameter dual over a *saved* solution, put back against this build.
 
         What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]
-        for a quantity the file never named: the saved frames are laid back in
-        this build's label order, and the reader is the one a live solve gives.
-        A build, never a solve.
+        for a quantity the file never named, and an archive hands
+        [`parameter_dual`][specsolve._result.Result.parameter_dual]: the saved frames are
+        laid back in this build's label order, and the readers are the ones a
+        live solve gives. A build, never a solve.
 
         Args:
             primals: The saved ``(dims…, value)`` frame per variable.
             duals: The same per constraint, or ``None`` where the solve left none.
             no_duals: Why there are no duals, raised at a dual read.
         """
-        evaluate = self._engine.reconstruct(primals, duals, no_duals, self._lower)
+        evaluate, parameter_dual = self._engine.reconstruct(primals, duals, no_duals, self._lower)
         assert evaluate is not None, 'a model built from a spec as written lowers an ad-hoc expression'
-        return evaluate
+        return evaluate, parameter_dual
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show.

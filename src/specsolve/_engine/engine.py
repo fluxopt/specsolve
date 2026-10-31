@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import warnings
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -322,7 +323,7 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
-        expressions, evaluate = self._readers(answer.primal, answer.dual, no_duals, lower)
+        expressions, evaluate, parameter_dual = self._readers(answer.primal, answer.dual, no_duals, lower)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
@@ -331,6 +332,7 @@ class Engine:
             _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
             _expressions=expressions,
             _evaluate=evaluate,
+            _parameter_dual=parameter_dual,
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
@@ -450,18 +452,21 @@ class Engine:
     ) -> tuple[
         dict[str, Callable[[], pl.DataFrame]],
         Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
+        Callable[[str], pl.DataFrame] | None,
     ]:
-        """What [`evaluate`][specsolve._result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
+        """What a result reads through: a reader per declared name, the ad-hoc evaluator, and the parameter dual.
 
-        Both close over a snapshot the result owns, including a copy of the
-        variable registry, so they keep answering after an update or ``close()``.
+        All three close over a snapshot the result owns, including a copy of
+        the variable registry, so they keep answering after an update or
+        ``close()``.
         """
         if primal is None:
-            return {}, None
+            return {}, None, None
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
         compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
-        return readback.readers(compiler, model.program.expressions, lower)
+        expressions, evaluate = readback.readers(compiler, model.program.expressions, lower)
+        return expressions, evaluate, partial(readback.parameter_dual, compiler)
 
     def reconstruct(
         self,
@@ -469,11 +474,11 @@ class Engine:
         duals: Mapping[str, pl.DataFrame] | None,
         no_duals: str | None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-    ) -> Callable[[str | Mapping[str, object]], pl.DataFrame] | None:
-        """The ad-hoc evaluator for a saved solution, over this rebuilt model.
+    ) -> tuple[Callable[[str | Mapping[str, object]], pl.DataFrame] | None, Callable[[str], pl.DataFrame]]:
+        """The ad-hoc evaluator and the parameter dual for a saved solution, over this rebuilt model.
 
         This build supplies the labels that put the saved values back in vector
-        order. It comes back where *lower* is given.
+        order. The evaluator comes back where *lower* is given.
 
         Args:
             primals: The saved ``(dims…, value)`` frame per variable.
@@ -488,8 +493,9 @@ class Engine:
             if duals is not None
             else None
         )
-        _, evaluate = self._readers(primal, dual, no_duals, lower)
-        return evaluate
+        _, evaluate, parameter_dual = self._readers(primal, dual, no_duals, lower)
+        assert parameter_dual is not None, 'a saved solution has a primal'
+        return evaluate, parameter_dual
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""

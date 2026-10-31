@@ -391,6 +391,9 @@ class Result:
     #: a build off an already-lowered ``Program``, or an answer read off disk.
     _expressions: Mapping[str, Callable[[], pl.DataFrame]] | None = None
     _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
+    #: The reader behind [`parameter_dual`][], ``None`` where there is no model
+    #: behind this answer to read the parameter's place in.
+    _parameter_dual: Callable[[str], pl.DataFrame] | None = None
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever [`_duals`][] holds them.
     _no_duals: str | None = None
@@ -567,6 +570,38 @@ class Result:
             KeyError: No variable is called *name*.
         """
         return self._output('reduced_cost', name)
+
+    def parameter_dual(self, name: str) -> pl.DataFrame:
+        """The dual of each value of parameter *name*: the rate the optimal objective rises with it — ``(dims…, value)``.
+
+        One row per row of the parameter's table, in the order of its
+        coordinates, in objective units per unit of the parameter. It carries
+        [`dual`][]'s convention over to the data: of a value ``v``, the rate in
+        ``d`` of ``v + d``, for every sense and sink. A value the model reads
+        nowhere has zero.
+
+        The model is held as built. A ``where:`` or ``when:`` that reads the
+        parameter keeps the rows it chose, so where a rise would switch a row
+        on or off, the rate is that of the model before the switch; ask that
+        question with [`Model.update`][specsolve._api.Model.update] and a
+        re-solve. As with [`dual`][], the rate is one-sided where the solve is
+        degenerate.
+
+        Raises:
+            NoSolutionError: The solve left no values at all.
+            SpecsolveError: This result was closed; it left primals but no
+                duals, as [`dual`][] raises; it has no model behind it; or the
+                model divides by the parameter, raises it to a power or
+                multiplies it by itself, where its rate is not one number per
+                row.
+            KeyError: No parameter is called *name*.
+        """
+        self._readable(self._primals, f"the parameter dual of '{name}'")
+        if self._no_duals is not None:
+            raise SpecsolveError(self._no_duals)
+        if self._parameter_dual is None:
+            raise SpecsolveError(no_model_behind_this_answer_message())
+        return self._parameter_dual(name)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -858,7 +893,7 @@ class Result:
         """
         self._primals = self._duals = self._outputs = self._expressions = None
         self._dual_rays = None
-        self._evaluate = None
+        self._evaluate = self._parameter_dual = None
 
     def __enter__(self) -> Result:
         return self
