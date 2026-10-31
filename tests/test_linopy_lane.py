@@ -16,8 +16,8 @@ import polars as pl
 import pytest
 from mathspec import program
 
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, pd, specsolve_linopy, where, xr
@@ -48,10 +48,10 @@ def test_a_side_the_program_leaves_open_builds_as_linopy_s_open_bound():
     """A program says an open side is `None`, and linopy takes an infinity there."""
     declared = program.Program(
         parameters={},
-        variables={'p': program.VariableDeclaration(('snapshot',), lower=None, upper=None)},
+        variables={'p': program.Variable(('snapshot',), lower=None, upper=None)},
         constraints={},
         objective=None,
-        dimensions={'snapshot': program.DimensionDeclaration(ordered=True)},
+        dimensions={'snapshot': program.Dimension(ordered=True)},
     )
     model = linopy.Model()
     builder.build_model(model, declared, xr.Dataset(), {'snapshot': pd.Index([0, 1], name='snapshot')}, {})
@@ -68,7 +68,7 @@ def test_nothing_is_patched_onto_linopy_model():
 
 
 def test_the_lane_takes_sources_as_the_one_type():
-    """The lane's two verbs annotate ``sources`` the way every door in ``api.py`` does."""
+    """The lane's two verbs annotate ``sources`` the way every door in ``_api.py`` does."""
     from tests.test_architecture import sources_annotations
 
     doors = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
@@ -356,7 +356,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "    where: '<<<'\n",
             {},
             ValueError,
-            'Cannot parse the where string',
+            'Cannot parse the condition',
             "Variable 'p'",
             id='malformed-where',
         ),

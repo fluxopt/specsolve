@@ -18170,84 +18170,15 @@
       "structure": {
         "columns": [
           52,
-          55
+          52
         ],
-        "differences": {
-          "Generator-ext-p_nom-lower": {
-            "kind": "rows",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Generator_ext_p_nom_lower": 1
-            }
-          },
-          "Generator-p_nom": {
-            "kind": "columns",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Generator_p_nom_ext": 1
-            }
-          },
-          "Link-ext-p_nom-lower": {
-            "kind": "rows",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Link_ext_p_nom_lower": 1
-            }
-          },
-          "Link-p_nom": {
-            "kind": "columns",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Link_p_nom_ext": 1
-            }
-          },
-          "Process-ext-p_nom-lower": {
-            "kind": "rows",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Process_ext_p_nom_lower": 1
-            }
-          },
-          "Process-p_nom": {
-            "kind": "columns",
-            "pypsa": 0,
-            "reason": null,
-            "specsolve": {
-              "Process_p_nom_ext": 1
-            }
-          },
-          "solver model": {
-            "kind": "solver",
-            "pypsa": {
-              "columns": 52,
-              "nonzeros": 200,
-              "rows": 108
-            },
-            "reason": "what the file states otherwise than PyPSA writes it \u2014 the objective_constant variable's column and row (rungs 11, 13), the build's floor and cap once rather than once per scenario (rung 14), a fixed build's pin once rather than once per scenario (rung 57)",
-            "specsolve": {
-              "columns": 55,
-              "nonzeros": 203,
-              "rows": 111
-            }
-          }
-        },
+        "differences": {},
         "per_name": {
           "columns": {
             "Generator-p": {
               "pypsa": 12,
               "specsolve": {
                 "Generator_p": 12
-              }
-            },
-            "Generator-p_nom": {
-              "pypsa": 0,
-              "specsolve": {
-                "Generator_p_nom_ext": 1
               }
             },
             "Line-n_mod": {
@@ -18272,18 +18203,6 @@
               "pypsa": 4,
               "specsolve": {
                 "Link_p": 4
-              }
-            },
-            "Link-p_nom": {
-              "pypsa": 0,
-              "specsolve": {
-                "Link_p_nom_ext": 1
-              }
-            },
-            "Process-p_nom": {
-              "pypsa": 0,
-              "specsolve": {
-                "Process_p_nom_ext": 1
               }
             },
             "StorageUnit-n_mod": {
@@ -18366,12 +18285,6 @@
                 "Bus_nodal_balance": 12
               }
             },
-            "Generator-ext-p_nom-lower": {
-              "pypsa": 0,
-              "specsolve": {
-                "Generator_ext_p_nom_lower": 1
-              }
-            },
             "Generator-fix-p-lower": {
               "pypsa": 12,
               "specsolve": {
@@ -18408,12 +18321,6 @@
                 "Line_s_nom_modularity": 1
               }
             },
-            "Link-ext-p_nom-lower": {
-              "pypsa": 0,
-              "specsolve": {
-                "Link_ext_p_nom_lower": 1
-              }
-            },
             "Link-fix-p-lower": {
               "pypsa": 4,
               "specsolve": {
@@ -18424,12 +18331,6 @@
               "pypsa": 4,
               "specsolve": {
                 "Link_fix_p_upper": 4
-              }
-            },
-            "Process-ext-p_nom-lower": {
-              "pypsa": 0,
-              "specsolve": {
-                "Process_ext_p_nom_lower": 1
               }
             },
             "StorageUnit-energy_balance": {
@@ -18544,7 +18445,7 @@
         },
         "rows": [
           108,
-          111
+          108
         ],
         "solver": {
           "pypsa": {
@@ -18553,9 +18454,9 @@
             "rows": 108
           },
           "specsolve": {
-            "columns": 55,
-            "nonzeros": 203,
-            "rows": 111
+            "columns": 52,
+            "nonzeros": 200,
+            "rows": 108
           }
         }
       }
@@ -18607,14 +18508,7 @@
         "Transformer-s_nom",
         "Transformer-s_nom_modularity"
       ],
-      "mismatch": [
-        "Generator-ext-p_nom-lower",
-        "Generator-p_nom",
-        "Link-ext-p_nom-lower",
-        "Link-p_nom",
-        "Process-ext-p_nom-lower",
-        "Process-p_nom"
-      ],
+      "mismatch": [],
       "recorded": {
         "objective": "PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it"
       },

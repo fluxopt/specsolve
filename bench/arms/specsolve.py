@@ -101,7 +101,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
 
 def _loaded(sink: str, model: Any) -> Any:
     """A solver holding *model*, for a sink that has one: its class, or the ``build_<sink>`` an older checkout loads through."""
-    module = importlib.import_module(f'specsolve.relational.sinks.solvers.{sink}')
+    module = importlib.import_module(f'specsolve._sinks.{sink}')
     load = getattr(module, f'build_{sink}', None) or getattr(module, sink.capitalize())
     return load(_handoff(model))
 
@@ -117,7 +117,7 @@ def unsupported(verb: str) -> str | None:
     older than the method a verb is timed through has none of it. Its cells are
     skipped there, and the gate compares only what both runs measured.
     """
-    from specsolve.relational.engine.engine import Engine
+    from specsolve._engine.engine import Engine
 
     method = TIMED_THROUGH.get(verb)
     if method is None or hasattr(Engine, method):
@@ -224,8 +224,8 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
     import polars as pl
 
     import specsolve as sps
-    from specsolve.relational.sinks.solvers.base import SolveAnswer
-    from specsolve.relational.status import SolveStatus
+    from specsolve._sinks.solver import SolveAnswer
+    from specsolve._status import SolveStatus
 
     spec, sources = prepared
     model = sps.build(spec, sources)

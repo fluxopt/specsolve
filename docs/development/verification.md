@@ -14,8 +14,8 @@ convincing. Each one catches what the one before cannot.
 
 The test suite builds every file twice: through the relational engine, and as
 a `linopy.Model` in `tests/linopy_lane/`. The differential tests compare the
-two. Both builds pass the same `inputs.lowered` gate and read data through
-`sources.tidy_sources`, so both refuse the same constructs and the same
+two. Both builds pass the same `_inputs.lowered` gate and read data through
+`_sources.tidy_sources`, so both refuse the same constructs and the same
 malformed sources ([#60](https://github.com/fluxopt/specsolve/issues/60)).
 
 **Where a concept is already linopy's, specsolve copies its name**: solve

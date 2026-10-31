@@ -84,7 +84,7 @@ def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_lengt
 
 def test_a_string_is_a_parquet_path_at_every_door(tmp_path):
     """Every reader of a source goes through `as_frame`, so a path attaches the same everywhere."""
-    from specsolve.frames import as_frame
+    from specsolve._frames import as_frame
 
     frame = pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})
     frame.write_parquet(tmp_path / 'load.parquet')
@@ -332,7 +332,7 @@ def test_error_hierarchy_is_one_catchable_tree():
 
 def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
     """The set of solvers is closed, and a name outside it never falls back to the default."""
-    from specsolve.relational.sinks import SOLVERS
+    from specsolve._sinks import SOLVERS
 
     sources = dispatch_frame_inputs
     with pytest.raises(sps.errors.SpecsolveError, match='unknown solver'):
@@ -348,8 +348,8 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     Faked by naming a package nothing has, so the real probe runs wherever the
     suite does.
     """
-    from specsolve import api
-    from specsolve.relational.sinks import SOLVERS
+    from specsolve import _api as api
+    from specsolve._sinks import SOLVERS
 
     sources = dispatch_frame_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
@@ -361,7 +361,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models."""
-    with pytest.raises(sps.errors.LanguageError, match='Merge the declarations'):
+    with pytest.raises(sps.errors.LanguageError, match='Merge the entries'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
 

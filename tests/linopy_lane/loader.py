@@ -22,9 +22,9 @@ import polars as pl
 import xarray as xr
 from mathspec import program as _program
 
+from specsolve._frames import to_pandas
+from specsolve._messages import coordinate_text, missing_row_message
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.frames import to_pandas
-from specsolve.messages import coordinate_text, missing_row_message
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -101,7 +101,7 @@ def dimension_coords(
 ) -> tuple[dict[str, pd.Index], dict[tuple[str, str], xr.DataArray]]:
     """Every dimension's labels, and each relation's value columns as arrays over the dimensions it is keyed by.
 
-    *tidy* is :func:`~specsolve.sources.tidy_sources`' output, so every index and
+    *tidy* is :func:`~specsolve._sources.tidy_sources`' output, so every index and
     map has been read and checked; what happens here is the conversion.
 
     Returns:
@@ -198,7 +198,7 @@ def load_parameters(
 ) -> xr.Dataset:
     """Every declared parameter as the dataset this lane builds against, its ``missing:`` applied.
 
-    *tidy* is :func:`~specsolve.sources.tidy_sources`' output — one checked
+    *tidy* is :func:`~specsolve._sources.tidy_sources`' output — one checked
     ``(dims…, value)`` frame per parameter — so what is left is the crossing
     into xarray, and what a missing row reads as. A value fills it; ``absent``
     and ``neutral`` leave it NaN, which each position reads in its own way
@@ -247,7 +247,7 @@ def given_rows(
     return given
 
 
-def _fill(pdef: program.ParameterDeclaration, flag: bool) -> Any:
+def _fill(pdef: program.Parameter, flag: bool) -> Any:
     """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
     if not isinstance(pdef.missing, str) and pdef.missing is not None:
         return pdef.missing

@@ -16,8 +16,8 @@ import yaml as pyyaml
 from mathspec.errors import DimensionError
 
 import specsolve as sps
+from specsolve._sources import attachable, tidy_sources
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.sources import attachable, tidy_sources
 from tests.conftest import EXAMPLES_DIR, by_coord, expanded, override, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import pd, specsolve_linopy

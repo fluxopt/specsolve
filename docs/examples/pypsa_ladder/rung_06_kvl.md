@@ -98,6 +98,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{on}^{f}`$ | `Link_active` over $`\mathcal{T} \times \mathcal{L}`$ — whether a link stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{s}`$ | `Line_active` over $`\mathcal{T} \times \mathcal{K}`$ — whether a line stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{z}`$ | `Process_active` over $`\mathcal{T} \times \mathcal{J}`$ — whether a process stands in a snapshot's period — PyPSA's `active`, data prep |
+| $`\mathrm{act}^{s}`$ | `Line_active_asset` over $`\mathcal{K}`$ — whether a line is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\mathrm{W}^{s}`$ | `Line_capital_weight` over $`\mathcal{K}`$ — the sum of period weights a line stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{s}^{\mathrm{nom}}`$ | `Line_s_nom` over $`\Xi \times \mathcal{K}`$ — nominal apparent power |
 | $`\mathrm{ext}^{s}`$ | `Line_s_nom_extendable` over $`\mathcal{K}`$ — whether the nominal apparent power is a decision |
@@ -122,7 +123,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
 | $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`s`$ | `Line_s` over $`\Xi \times \mathcal{T} \times \mathcal{K}`$ — `Line-s` — PyPSA's `p0`, the flow measured at the `Line_bus0` end: a positive value withdraws there and injects at `Line_bus1`, lossless |
-| $`S`$ | `Line_s_nom_ext` over $`\mathcal{K}`$ — `Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+| $`S`$ | `Line_s_nom_ext` over $`\mathcal{K}`$ — `Line-s_nom` — nominal apparent power where it is a decision, for a line that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
 #### Definitions
@@ -131,9 +132,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 |---|---|
 | $`\mathit{Link\_output\_arrival}`$ | `Link_output_arrival` over $`\Xi \times \mathcal{T} \times \mathcal{O}`$ — what a link delivers to an output port at a snapshot — its flow delayed by the port's `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives; where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay` zero) delivers its flow unshifted, cyclic or not |
 | $`\mathit{Process\_output\_arrival}`$ | `Process_output_arrival` over $`\Xi \times \mathcal{T} \times \mathcal{R}`$ — what a process transfers at a port at a snapshot — its internal power delayed by the port's `delay` within its investment period, times the port's rate at the snapshot the transfer arrives; where the port is `cyclic_delay` the delayed transfer wraps from the period's end, and where it is not the energy still in transit at the period's first snapshots is lost. A port that does not delay (`delay` zero) transfers at once, cyclic or not |
-| $`\mathit{Line\_transmission\_volume\_expansion}`$ | `Line_transmission_volume_expansion` over $`\Xi \times \mathcal{B}`$ |
+| $`\mathit{Line\_transmission\_volume\_expansion}`$ | `Line_transmission_volume_expansion` over $`\mathcal{B} \times \Xi`$ |
 | $`\mathit{transmission\_volume\_expansion}`$ | `transmission_volume_expansion` over $`\Xi \times \mathcal{B}`$ — what a `transmission_volume_expansion_limit` row totals — length times the chosen build of the row's branches |
-| $`\mathit{Line\_transmission\_expansion\_cost}`$ | `Line_transmission_expansion_cost` over $`\Xi \times \mathcal{B}`$ |
+| $`\mathit{Line\_transmission\_expansion\_cost}`$ | `Line_transmission_expansion_cost` over $`\mathcal{B} \times \Xi`$ |
 | $`\mathit{transmission\_expansion\_cost}`$ | `transmission_expansion_cost` over $`\Xi \times \mathcal{B}`$ — what a `transmission_expansion_cost_limit` row totals — capital cost times the chosen build of the row's branches |
 | $`\mathit{Line\_tech\_capacity\_expansion}`$ | `Line_tech_capacity_expansion` over $`\mathcal{B}`$ |
 | $`\mathit{tech\_capacity\_expansion}`$ | `tech_capacity_expansion` over $`\mathcal{B}`$ — what a `tech_capacity_expansion_limit` row totals — the chosen build of the row's carrier-and-bus set |
@@ -144,20 +145,22 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
 | $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Line\_injection}`$ | `Line_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Line\_injection}`$ | `Line_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
-| $`\mathit{Line\_angle\_sum}`$ | `Line_angle_sum` over $`\Xi \times \mathcal{T} \times \mathcal{C}`$ |
+| $`\mathit{Line\_angle\_sum}`$ | `Line_angle_sum` over $`\mathcal{C} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Cycle\_angle\_sum}`$ | `Cycle_angle_sum` over $`\Xi \times \mathcal{T} \times \mathcal{C}`$ — the voltage angle differences around a cycle: every branch flow times its cycle weight, and every transformer phase shift |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
-
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
 
 #### Variable domains
 
@@ -182,7 +185,7 @@ s_{\xi,t,k} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ k 
 **`Line_s_nom_ext`**
 
 ```math
-S_{k} \in \mathbb{R} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k}
+S_{k} \in \mathbb{R} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Process_p`**
@@ -208,25 +211,25 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Line_transmission_volume_expansion`**
 
 ```math
-\mathit{Line\_transmission\_volume\_expansion}_{\xi,b} = \sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{\xi,b,k} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{Line\_transmission\_volume\_expansion}_{b,\xi} = \sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{len}_{\xi,b,k} \qquad \forall\, b \in \mathcal{B},\ \xi \in \Xi
 ```
 
 **`transmission_volume_expansion`**
 
 ```math
-\mathit{transmission\_volume\_expansion}_{\xi,b} = \mathit{Line\_transmission\_volume\_expansion}_{\xi,b} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{transmission\_volume\_expansion}_{\xi,b} = \mathit{Line\_transmission\_volume\_expansion}_{b,\xi} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
 ```
 
 **`Line_transmission_expansion_cost`**
 
 ```math
-\mathit{Line\_transmission\_expansion\_cost}_{\xi,b} = \sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{\xi,b,k} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{Line\_transmission\_expansion\_cost}_{b,\xi} = \sum_{k \in \mathcal{K}} S_{k} \cdot \mathrm{cc}_{\xi,b,k} \qquad \forall\, b \in \mathcal{B},\ \xi \in \Xi
 ```
 
 **`transmission_expansion_cost`**
 
 ```math
-\mathit{transmission\_expansion\_cost}_{\xi,b} = \mathit{Line\_transmission\_expansion\_cost}_{\xi,b} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{transmission\_expansion\_cost}_{\xi,b} = \mathit{Line\_transmission\_expansion\_cost}_{b,\xi} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
 ```
 
 **`Line_tech_capacity_expansion`**
@@ -286,49 +289,49 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Line_injection`**
 
 ```math
-\mathit{Line\_injection}_{\xi,t,n} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Line\_injection}_{n,\xi,t} = -\left( \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus0}(k) = n} s_{\xi,t,k} \right) + \sum_{k \in \mathcal{K} \,:\, \mathrm{Line\_bus1}(k) = n} s_{\xi,t,k} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{\xi,t,n} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
 
 ```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Line\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{n,\xi,t} + \mathit{Line\_injection}_{n,\xi,t} + \mathit{Link\_injection}_{n,\xi,t} + \mathrm{Load\_injection}_{n,\xi,t} + \mathit{Process\_injection}_{n,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 **`Line_angle_sum`**
 
 ```math
-\mathit{Line\_angle\_sum}_{\xi,t,c} = \sum_{k \in \mathcal{K}} s_{\xi,t,k} \cdot \mathrm{x}_{\mathrm{snapshot\_period}(t),k,c} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ c \in \mathcal{C}
+\mathit{Line\_angle\_sum}_{c,\xi,t} = \sum_{k \in \mathcal{K}} s_{\xi,t,k} \cdot \mathrm{x}_{\mathrm{snapshot\_period}(t),k,c} \qquad \forall\, c \in \mathcal{C},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Cycle_angle_sum`**
 
 ```math
-\mathit{Cycle\_angle\_sum}_{\xi,t,c} = \mathit{Line\_angle\_sum}_{\xi,t,c} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ c \in \mathcal{C}
+\mathit{Cycle\_angle\_sum}_{\xi,t,c} = \mathit{Line\_angle\_sum}_{c,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ c \in \mathcal{C}
 ```
 
 #### Objective
@@ -390,19 +393,19 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot S_{k} \qquad \forall\, \xi
 **`Line_ext_s_nom_lower`**
 
 ```math
-S_{k} \ge \underline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k}
+S_{k} \ge \underline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k}
 ```
 
 **`Line_ext_s_nom_upper`**
 
 ```math
-S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \text{ is defined}
+S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in \Xi,\ k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k} \wedge \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \text{ is defined}
 ```
 
 **`Line_s_nom_set`**
 
 ```math
-S_{k} = \mathrm{s}^{\mathrm{nom,set}}_{k} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{s}^{\mathrm{nom,set}}_{k} \text{ is defined}
+S_{k} = \mathrm{s}^{\mathrm{nom,set}}_{k} \qquad \forall\, k \in \mathcal{K} \,:\, \mathrm{ext}^{s}_{k} \wedge \mathrm{act}^{s}_{k} \wedge \mathrm{s}^{\mathrm{nom,set}}_{k} \text{ is defined}
 ```
 
 **`Line_s_set`**
@@ -634,6 +637,12 @@ s_{\xi,t,k} = \mathrm{s}^{\mathrm{set}}_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\
         description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
         dims: [snapshot, process]
         dtype: bool
+      Line_active_asset:
+        description: whether a line is one of PyPSA's `active_assets` — its `active` flag alone, without build
+          year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses
+          one that differs by scenario (`constants.py:51`)
+        dims: [line]
+        dtype: bool
       Line_capital_weight:
         description: the sum of period weights a line stands in — PyPSA's `active * period_weighting`, summed,
           data prep
@@ -726,10 +735,10 @@ s_{\xi,t,k} = \mathrm{s}^{\mathrm{set}}_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\
         dims: [scenario, snapshot, line]
         where: Line_active
       Line_s_nom_ext:
-        description: '`Line-s_nom` — nominal apparent power where it is a decision; the parameter of the same
-          PyPSA name carries the fixed regime'
+        description: '`Line-s_nom` — nominal apparent power where it is a decision, for a line that is active;
+          the parameter of the same PyPSA name carries the fixed regime'
         dims: [line]
-        where: Line_s_nom_extendable
+        where: Line_s_nom_extendable AND Line_active_asset
       Process_p:
         description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its
           own rate, withdrawing where the rate is negative and injecting where it is positive'
@@ -783,18 +792,18 @@ s_{\xi,t,k} = \mathrm{s}^{\mathrm{set}}_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\
       Line_ext_s_nom_lower:
         description: '`Line-ext-s_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, line]
-        where: Line_s_nom_extendable
+        where: Line_s_nom_extendable AND Line_active_asset
         expression: Line_s_nom_ext >= Line_s_nom_min
       Line_ext_s_nom_upper:
         description: '`Line-ext-s_nom-upper` — the chosen build is at most its cap in every scenario; a cap
           of infinity is no row'
         dims: [scenario, line]
-        where: Line_s_nom_extendable AND Line_s_nom_max
+        where: Line_s_nom_extendable AND Line_active_asset AND Line_s_nom_max
         expression: Line_s_nom_ext <= Line_s_nom_max
       Line_s_nom_set:
         description: '`Line-s_nom_set` — the chosen build pinned, wherever a value is given'
         dims: [line]
-        where: Line_s_nom_extendable AND Line_s_nom_set
+        where: Line_s_nom_extendable AND Line_active_asset AND Line_s_nom_set
         expression: Line_s_nom_ext == Line_s_nom_set
       Line_s_set:
         description: '`Line-s_set` — flow pinned to the given schedule, wherever one is given'
@@ -1079,7 +1088,7 @@ s_{\xi,t,k} = \mathrm{s}^{\mathrm{set}}_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\
 
 ## The data
 
-The tables this rung is the first to declare (18), as the prep produced them:
+The tables this rung is the first to declare (19), as the prep produced them:
 
 `Line_active.csv`
 
@@ -1105,6 +1114,17 @@ snapshot,line,value
 2015-01-01T03:00:00.000000,ca,true
 2015-01-01T03:00:00.000000,ca2,true
 2015-01-01T03:00:00.000000,ca3,true
+```
+
+`Line_active_asset.csv`
+
+```csv
+line,value
+ab,true
+bc,true
+ca,true
+ca2,true
+ca3,true
 ```
 
 `Line_bus0.csv`

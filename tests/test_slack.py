@@ -15,8 +15,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._engine import readback
 from specsolve.errors import SpecsolveError
-from specsolve.relational.engine import readback
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -113,7 +113,7 @@ def _swept(tmp_path: Path, how: str) -> Sweep:
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.archive.SweepArchive)
+        assert isinstance(archive, sps.types.SweepArchive)
         return archive.sweep
     spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
     return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, **spill)

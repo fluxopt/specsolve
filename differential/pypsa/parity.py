@@ -28,7 +28,7 @@ Per rung, from the same network:
    **recorded**; ``mismatch`` fails the run. A rung whose file
    `tests.linopy_lane` cannot build yet stamps the error instead.
 2. **One solved objective across the fence** — PyPSA's solve against
-   `specsolve.relational`'s, both HiGHS, rtol 1e-9 on the generic spine.
+   specsolve's, both HiGHS, rtol 1e-9 on the generic spine.
 3. **Coverage** — what the relational lane built per block, each
    dimension's size, the tables attached non-empty; and, over the ladder, that
    every block is built, every mask is partially true and every parameter is
@@ -100,9 +100,9 @@ from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
-from specsolve.relational.engine.predicates import masked  # noqa: E402
-from specsolve.relational.engine.scope import Scope  # noqa: E402
-from specsolve.sources import tidy_sources  # noqa: E402
+from specsolve._engine.predicates import masked  # noqa: E402
+from specsolve._engine.scope import Scope  # noqa: E402
+from specsolve._sources import tidy_sources  # noqa: E402
 
 
 def rungs() -> list[str]:

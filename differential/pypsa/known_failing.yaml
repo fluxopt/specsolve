@@ -1,4 +1,3 @@
 # Rungs the pinned corpus gets wrong, each with the issue that fixes it. The
 # gate and tests/test_pypsa_ladder_page.py expect these to differ and fail when
 # one matches, so an entry goes with the corpus move that carries its fix.
-rung_63_modular_branches_and_storage: energy-models/mathspec#883
