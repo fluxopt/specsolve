@@ -1563,6 +1563,41 @@ class TestThePositionalHandoff:
             'the join on one key wrote another model than the join on columns'
         )
 
+    @pytest.mark.xfail(strict=True, reason='the join key replaces, then drops, a dimension of its own name')
+    def test_a_dimension_named_like_the_join_key_keeps_its_column(self, monkeypatch):
+        """A bound joined on one key, over a dimension whose name is any a file may write.
+
+        `p` is masked, so its bound `c` is joined, and both dims are runs of
+        integers, so the join takes the one key.
+        """
+        from specsolve._engine import scope as scope_module
+
+        spec = {
+            'dimensions': {'__position__': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+            'parameters': {'c': {'dims': ['__position__', 't']}, 'on': {'dims': ['__position__', 't']}},
+            'variables': {
+                'p': {'dims': ['__position__', 't'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 'c'}}
+            },
+            'objective': {'sense': 'maximize', 'expression': 'sum(sum(p, over=t), over=__position__)'},
+        }
+        coordinates = {'__position__': [0, 1, 0, 1], 't': [1, 0, 0, 1]}
+        data = {
+            '__position__': [0, 1],
+            't': [0, 1],
+            'c': pl.DataFrame(coordinates | {'value': [3.0, 4.0, 5.0, 6.0]}),
+            'on': pl.DataFrame(coordinates | {'value': [0.0, 1.0, 1.0, 1.0]}),
+        }
+        real = scope_module.Scope._keyed_by_position
+        keyed = []
+        monkeypatch.setattr(
+            scope_module.Scope, '_keyed_by_position', lambda self, dims: keyed.append(real(self, dims)) or keyed[-1]
+        )
+        with sps.solve(spec, data) as result:
+            assert result.objective == pytest.approx(4.0 + 5.0 + 6.0, rel=RTOL), (
+                'the three kept coordinates at their own bounds'
+            )
+        assert any(keyed), 'the bound join took the one key'
+
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
     """Data for the model above, carrying only what that model declares.
